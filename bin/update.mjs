@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // `status`, `update`, `upgrade`: version detection and upgrade. The package manager and the
 // release source are both injectable because on this machine `npm` on PATH is a pnpm shim.
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -44,6 +43,20 @@ export function resolveSpec({ source, latest }) {
   return source ? latest.file : `${PKG_NAME}@${latest.version}`;
 }
 
+/** The upgraded binary's path under `--prefix`: npm's Windows vs POSIX --prefix layout differ. */
+function upgradedBinPath(prefix, platform) {
+  return platform === 'win32'
+    ? path.join(prefix, 'node_modules', PKG_NAME, 'bin', 'js-harness.mjs')
+    : path.join(prefix, 'lib', 'node_modules', PKG_NAME, 'bin', 'js-harness.mjs');
+}
+
+/** Quotes a value for a shell command line built by joining tokens with spaces (see `shell: true`
+ * in `child_process.spawn`, which does not escape array elements on its own). Simple, not
+ * bulletproof: assumes the value has no embedded quote of its own platform's kind. */
+function quoteForShell(value, platform) {
+  return platform === 'win32' ? `"${value}"` : `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 export async function statusMain(argv, env = process.env, spawn = spawnSync) {
   const opts = parseArgs(argv);
   const installed = currentVersion();
@@ -78,7 +91,7 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   return 0;
 }
 
-export async function upgradeMain(argv, env = process.env, spawn = spawnSync) {
+export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   const opts = parseArgs(argv);
   const latest = resolveLatest(opts, env, spawn);
   if (!latest) {
@@ -95,18 +108,32 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync) {
   }
 
   // Re-run the NEWLY installed binary's own sync, so files on disk match the new release
-  // rather than whatever this (old) process would have written.
-  const binPath = opts.prefix
-    ? path.join(opts.prefix, 'node_modules', PKG_NAME, 'bin', 'js-harness.mjs')
-    : null;
-  if (binPath && fs.existsSync(binPath)) {
-    const syncResult = spawn(process.execPath, [binPath, 'sync', '--home', opts.home], { encoding: 'utf8' });
-    if (syncResult.status !== 0) {
-      console.error(`sync after upgrade failed: exited ${syncResult.status}`);
-      return syncResult.status ?? 1;
-    }
-  } else {
-    console.log('no --prefix given; skipping post-upgrade sync (run `js-harness sync` manually)');
+  // rather than whatever this (old) process would have written. With --prefix we know exactly
+  // where npm put it; without one, run whatever `js-harness` the shell resolves on PATH.
+  const syncResult = opts.prefix
+    ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home], {
+        encoding: 'utf8',
+      })
+    : spawn('js-harness', ['sync', '--home', quoteForShell(opts.home, platform)], {
+        shell: true,
+        encoding: 'utf8',
+      });
+
+  if (syncResult.status !== 0) {
+    console.error(`sync after upgrade failed: exited ${syncResult.status}`);
+    return syncResult.status ?? 1;
+  }
+
+  // Verify the sync we just ran actually belonged to the upgraded version: a stale `js-harness`
+  // still on PATH (or a --prefix bin that never landed) would silently sync the wrong release.
+  const manifest = readManifest(opts.home);
+  if (!manifest || manifest.version !== latest.version) {
+    console.error(
+      `sync ran, but the manifest under ${opts.home} reports ` +
+        `${manifest ? manifest.version : '(not installed)'}, not ${latest.version}: the js-harness ` +
+        'found is not the upgraded one — run `js-harness sync` with the upgraded binary',
+    );
+    return 1;
   }
 
   console.log(`upgraded to ${latest.version}`);

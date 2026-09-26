@@ -133,7 +133,7 @@ test('updateMain reports an available update and still exits 0', async () => {
   assert.match(lines.join('\n'), /update available: 99\.0\.0/);
 });
 
-test('upgradeMain installs the resolved spec and syncs the newly installed binary', async () => {
+test('upgradeMain installs the resolved spec and syncs the newly installed binary (win32 layout)', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-');
   const prefix = makeTmpDir('js-harness-upgrade-prefix-');
   const source = makeTmpDir('js-harness-upgrade-src-');
@@ -142,6 +142,8 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
     const binDir = path.join(prefix, 'node_modules', 'js-harness', 'bin');
     fs.mkdirSync(binDir, { recursive: true });
     fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
+    // The mocked spawn never actually runs sync, so seed the manifest it would have written.
+    install(home, '0.9.0');
 
     const calls = [];
     const spawn = (cmd, args) => {
@@ -153,6 +155,7 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
       ['--source', source, '--prefix', prefix, '--home', home],
       {},
       spawn,
+      'win32',
     );
 
     assert.equal(code, 0);
@@ -173,19 +176,90 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
   }
 });
 
-test('upgradeMain skips sync and still succeeds when no --prefix is given', async () => {
-  const home = makeTmpDir('js-harness-upgrade-home2-');
-  const source = makeTmpDir('js-harness-upgrade-src2-');
+test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the synced bin', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-posix-');
+  const prefix = makeTmpDir('js-harness-upgrade-prefix-posix-');
+  const source = makeTmpDir('js-harness-upgrade-src-posix-');
   try {
     fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    const binDir = path.join(prefix, 'lib', 'node_modules', 'js-harness', 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
+    install(home, '0.9.0');
+
     const calls = [];
     const spawn = (cmd, args) => {
       calls.push({ cmd, args });
       return { status: 0, stdout: '', stderr: '' };
     };
+
+    const code = await upgradeMain(
+      ['--source', source, '--prefix', prefix, '--home', home],
+      {},
+      spawn,
+      'linux',
+    );
+
+    assert.equal(code, 0);
+    assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
+    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(prefix, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgradeMain spawns the PATH js-harness sync via a shell when no --prefix is given', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home2-');
+  const source = makeTmpDir('js-harness-upgrade-src2-');
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    // The mocked spawn never actually runs sync, so seed the manifest it would have written.
+    install(home, '0.9.0');
+    const calls = [];
+    const spawn = (cmd, args, opts) => {
+      calls.push({ cmd, args, opts });
+      return { status: 0, stdout: '', stderr: '' };
+    };
     const code = await upgradeMain(['--source', source, '--home', home], {}, spawn);
     assert.equal(code, 0);
-    assert.equal(calls.length, 1, 'no --prefix means no known bin path to sync');
+    assert.equal(calls.length, 2, 'expected one install call and one sync call');
+    assert.equal(calls[1].cmd, 'js-harness');
+    assert.equal(calls[1].args[0], 'sync');
+    assert.equal(calls[1].args[1], '--home');
+    const expectedHome = process.platform === 'win32' ? `"${home}"` : `'${home}'`;
+    assert.equal(calls[1].args[2], expectedHome, 'the home path must be quoted for the shell');
+    assert.equal(calls[1].opts.shell, true, 'shell is required so .cmd shims resolve on Windows');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgradeMain reports a mismatch and returns 1 when the synced manifest is not the upgraded version', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-mismatch-');
+  const source = makeTmpDir('js-harness-upgrade-src-mismatch-');
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    // No manifest written under home: simulates sync silently running some other js-harness.
+    const calls = [];
+    const spawn = (cmd, args) => {
+      calls.push({ cmd, args });
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const lines = [];
+    const original = console.error;
+    console.error = (line) => lines.push(String(line));
+    let code;
+    try {
+      code = await upgradeMain(['--source', source, '--home', home], {}, spawn);
+    } finally {
+      console.error = original;
+    }
+    assert.equal(code, 1);
+    assert.match(lines.join('\n'), /not the upgraded one/);
+    assert.match(lines.join('\n'), /js-harness sync/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(source, { recursive: true, force: true });
