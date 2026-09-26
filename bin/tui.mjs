@@ -88,10 +88,19 @@ function screenText(state) {
 /** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. */
 export function runTui({ installedVersion, updateAvailable, commands, stdin = process.stdin, stdout = process.stdout }) {
   let state = initialState({ installedVersion, updateAvailable });
+  // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
+  // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
+  let drawn = 0;
+  const draw = () => {
+    const erase = drawn > 0 ? `[${drawn}A[0J` : '';
+    stdout.write(erase + screenText(state));
+    drawn = render(state).length;
+  };
+
   stdin.setRawMode?.(true);
   stdin.setEncoding('utf8');
   stdin.resume();
-  stdout.write(screenText(state));
+  draw();
 
   return new Promise((resolve) => {
     async function onData(chunk) {
@@ -103,9 +112,10 @@ export function runTui({ installedVersion, updateAvailable, commands, stdin = pr
         stdin.pause();
         await commands[effect.command]();
         stdin.resume();
+        drawn = 0; // keep the command's output; redraw the menu below it
       }
 
-      stdout.write(screenText(state));
+      draw();
 
       if (effect?.type === 'quit') {
         stdin.setRawMode?.(false);

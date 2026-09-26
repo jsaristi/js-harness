@@ -222,3 +222,44 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// Redraw in place: bytes measured 2026-09-26 on Windows (PowerShell 7.6 -> cmd -> node, raw mode):
+// down = ESC [ B, up = ESC [ A, Enter = \r.
+const noCommands = {
+  status: async () => {}, install: async () => {}, update: async () => {},
+  upgrade: async () => {}, uninstall: async () => {},
+};
+const MENU_HEIGHT = 2 + MENU_ITEMS.length; // header, blank line, one line per item
+
+test('runTui redraws the menu in place when the selection moves', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout });
+
+  const before = stdout.chunks.length;
+  stdin.emit('data', '\u001b[B');
+  await flush();
+  const redraw = stdout.chunks.slice(before).join('');
+  assert.ok(redraw.startsWith(`\u001b[${MENU_HEIGHT}A\u001b[0J`), `expected a cursor-up redraw, got ${JSON.stringify(redraw.slice(0, 12))}`);
+  assert.match(redraw, /> Install/);
+
+  stdin.emit('data', 'q');
+  await done;
+});
+
+test('runTui keeps a command\'s output on screen and draws the menu below it', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const commands = { ...noCommands, status: async () => stdout.write('status output\n') };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+
+  stdin.emit('data', '\r'); // run Status
+  await flush();
+  const all = stdout.chunks.join('');
+  const afterOutput = all.slice(all.indexOf('status output\n') + 'status output\n'.length);
+  assert.ok(!afterOutput.startsWith('\u001b['), 'the menu after a command must not erase the command output');
+  assert.match(afterOutput, /js-harness 0\.1\.0/);
+
+  stdin.emit('data', 'q');
+  await done;
+});

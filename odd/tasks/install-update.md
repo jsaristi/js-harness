@@ -148,3 +148,10 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 All four tasks and the review are done on `feat/install-update`. Merging into `main`, the GitHub
 remote and its visibility, and publishing to npm are Sebastián's decisions. A manual TUI try in a
 real terminal is the one check an agent cannot run (it needs a TTY).
+- 2026-09-26 manual TUI try by Sebastián (sandbox): Status showed "update available: 0.2.0" (works).
+  Defect found by hand: every key press printed a fresh copy of the menu below the last, so the
+  menu looked frozen. Measured raw-mode bytes in his terminal (PowerShell 7.6 → cmd → node):
+  down `1b 5b 42`, up `1b 5b 41`, Enter `0d` — key parsing was already right. RED
+  `runTui redraws the menu in place when the selection moves` (got "js-harness 0", no cursor-up);
+  fixed by moving the cursor back over the last draw and clearing it, except after a command,
+  whose output stays on screen. GREEN `node --test` → 70 pass.
