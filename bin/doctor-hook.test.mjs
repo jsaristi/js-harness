@@ -169,11 +169,10 @@ test('doctor --hook prints nothing and stores an empty digest when there are no 
   }
 });
 
-test('doctor --hook exits 0 with empty stdout and stderr even when something inside throws', async () => {
-  // A `--home` that is a *file*, not a directory: every local probe reads it as simply absent (no
-  // throw — `fs.existsSync` just returns false), but the cache write at the end genuinely throws
-  // (`mkdirSync` under a file parent), which is exactly the "anything else throws" case T3 must
-  // fail open on.
+// R3-101 (accepted T2/T3 review follow-up) made `writeCache` itself best-effort, so a `--home`
+// that is a file no longer throws there — the hook now computes and reports its (very real: an
+// unreadable home reads every dimension as missing) gaps normally instead of going silent.
+test('doctor --hook still reports gaps and exits 0 when the cache cannot be written (home is a file)', async () => {
   const parentDir = makeTmpHome();
   const home = path.join(parentDir, 'not-a-directory');
   fs.writeFileSync(home, '', 'utf8');
@@ -185,10 +184,40 @@ test('doctor --hook exits 0 with empty stdout and stderr even when something ins
       { spawn: fakeSpawnMissing(), fetch: failFetch },
     );
     assert.equal(code, 0);
-    assert.equal(stdout, '');
+    const parsed = JSON.parse(stdout.trim());
+    assert.match(parsed.systemMessage, /^js-harness: \d+ stack gaps? — run js-harness doctor$/);
     assert.equal(stderr, '');
   } finally {
     fs.rmSync(parentDir, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctor --hook exits 0 with empty stdout and stderr even when something inside throws', async () => {
+  // An injected `now()` that throws simulates a genuinely unexpected internal failure (as opposed
+  // to a probe's own documented fail-open path), reaching hookMain's outer catch-all — the backstop
+  // T3 added so a `SessionStart` hook can never break a session, no matter what throws underneath.
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    // `isStale` only calls `now()` once it has a real checkedAt to compare against.
+    writeJson(path.join(home, '.js-harness', 'doctor.json'), {
+      latest: { checkedAt: new Date().toISOString(), versions: {} },
+      notified: null,
+    });
+    const throwingNow = () => {
+      throw new Error('clock unavailable');
+    };
+    const { code, stdout, stderr } = await runHook(
+      ['--hook', '--home', home, '--cwd', project],
+      {},
+      { spawn: fakeSpawnMissing(), fetch: failFetch, now: throwingNow },
+    );
+    assert.equal(code, 0);
+    assert.equal(stdout, '');
+    assert.equal(stderr, '');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
   }
 });

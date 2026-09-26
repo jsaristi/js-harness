@@ -371,6 +371,71 @@ test('a malformed cache file is treated as absent, not a crash', async () => {
   }
 });
 
+// --- R3-101 (accepted T2/T3 review follow-up): the report survives a cache write failure ---
+
+test('doctorMain still prints the report and exits 0 when the cache cannot be written (home is a file)', async () => {
+  const parent = makeTmpHome();
+  const home = path.join(parent, 'not-a-directory');
+  const project = makeTmpHome();
+  try {
+    fs.writeFileSync(home, 'this is a file, not a home directory', 'utf8');
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const fetchImpl = async (url) =>
+      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v3.7.0' }) } : { ok: false };
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(code, 0);
+    assert.match(output, /gentle-ai/);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- R3-102 (accepted T2/T3 review follow-up): a refetch where everything fails must not reset
+// checkedAt to now, or the next run would wait out a fresh 6h window instead of retrying ---
+
+test('doctorMain keeps the old checkedAt (and retries next run) when a refetch fails for every tool', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, {
+      latest: { checkedAt: staleCheckedAt, versions: { 'gentle-ai': '1.0.0' } },
+      notified: null,
+    });
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const alwaysFailFetch = async () => {
+      throw new Error('offline');
+    };
+
+    const first = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: alwaysFailFetch });
+    assert.equal(first.code, 0);
+
+    const afterFirstRun = readCache(home);
+    assert.equal(afterFirstRun.latest.checkedAt, staleCheckedAt, 'checkedAt must not move on a total failure');
+    assert.equal(afterFirstRun.latest.versions['gentle-ai'], '1.0.0', 'the last-known version must survive');
+
+    // The next run must still see the cache as stale and try the network again.
+    let secondRunFetchCalled = false;
+    const fetchImpl = async (url) => {
+      secondRunFetchCalled = true;
+      return url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.0.0' }) } : { ok: false };
+    };
+    const second = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(second.code, 0);
+    assert.equal(secondRunFetchCalled, true, 'a run after a total failure must retry the network');
+    const rows = JSON.parse(second.output);
+    assert.equal(readCache(home).latest.versions['gentle-ai'], '4.0.0', 'the retried fetch must now be reflected');
+    assert.equal(rows.find((r) => r.id === 'gentle-ai').upToDate, 'outdated');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- R3-003: a flag missing its value, or immediately followed by another flag, is an error ---
 
 async function runDoctorExpectingError(argv) {

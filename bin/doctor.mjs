@@ -77,11 +77,22 @@ async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, no
 
   const fetched = await fetchLatestVersions(rows, { fetch: fetchImpl, home });
   const versions = { ...cache.latest.versions };
+  let anySucceeded = false;
   for (const [id, version] of Object.entries(fetched)) {
-    if (version !== null) versions[id] = version;
-    else if (!(id in versions)) versions[id] = null;
+    if (version !== null) {
+      versions[id] = version;
+      anySucceeded = true;
+    } else if (!(id in versions)) {
+      versions[id] = null;
+    }
   }
-  writeCache(home, { ...cache, latest: { checkedAt: new Date().toISOString(), versions } });
+  // R3-102 (accepted T2/T3 review follow-up): when every lookup in this refetch failed (e.g. no
+  // network at all), do not stamp checkedAt as "now" — that would make the cache read as fresh for
+  // a full 6h and hide a real outage from the next run. The simplest fix is to leave checkedAt
+  // exactly as it was: it was already stale enough to trigger this refetch, so the next run's
+  // `isStale` check stays true and tries the network again immediately instead of waiting 6h.
+  const checkedAt = anySucceeded ? new Date().toISOString() : cache.latest.checkedAt;
+  writeCache(home, { ...cache, latest: { checkedAt, versions } });
   return versions;
 }
 
