@@ -5,8 +5,8 @@ Where js-harness came from, what is decided, and what is next. Feature-level pro
 
 ## Origin
 
-js-harness is the rebuild of an earlier harness (`D:\harness`, now a read-only reference; its
-`PLAN.md` decision 14 and `docs/harness-v2-preplan.md` hold the full reasoning and sources). The
+js-harness is the rebuild of an earlier harness (`D:\harness`, now a read-only reference). The
+founding pre-plan, with the full reasoning and sources, is [preplan.md](preplan.md). The
 bet: a stronger model needs a smaller harness — little instruction, many executable checks — on
 top of gentle-ai (workflow, TDD, review), engram (memory), codegraph (code graph), context7 (docs)
 and native `/goal` (autonomy loop). This repo builds only what those leave open.
