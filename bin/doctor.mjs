@@ -11,6 +11,7 @@ import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions } from './lib/latest.mjs';
+import { gapList, gapDigest } from './lib/digest.mjs';
 
 const GAP_STATES = new Set(['missing', 'outdated']);
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
@@ -84,15 +85,10 @@ async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, no
   return versions;
 }
 
-export async function doctorMain(argv, env = process.env, deps = {}) {
-  let parsed;
-  try {
-    parsed = parseArgs(argv, env);
-  } catch (err) {
-    console.error(`${err.message}\n\n${USAGE}`);
-    return 2;
-  }
-  const { home, cwd, json, offline } = parsed;
+/** Builds one full report: local probes plus `upToDate`, resolving latest versions per
+ * `resolveLatestVersions`'s caching/offline rules above. Shared by the interactive report and the
+ * hook, so both ever compute `upToDate` the same way. */
+async function buildReport({ home, cwd, offline }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const fetchImpl = deps.fetch ?? fetch;
@@ -101,7 +97,21 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
 
   const localRows = probeStack({ home, project, spawn, platform });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
-  const rows = localRows.map((row) => ({ ...row, upToDate: computeUpToDate(row, latestVersions[row.id]) }));
+  return localRows.map((row) => ({ ...row, upToDate: computeUpToDate(row, latestVersions[row.id]) }));
+}
+
+export async function doctorMain(argv, env = process.env, deps = {}) {
+  if (argv.includes('--hook')) return hookMain(argv, env, deps);
+
+  let parsed;
+  try {
+    parsed = parseArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { home, cwd, json, offline } = parsed;
+  const rows = await buildReport({ home, cwd, offline }, deps);
 
   if (json) {
     console.log(JSON.stringify(rows, null, 2));
@@ -116,5 +126,33 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     for (const row of gaps) console.log(`  ${row.id}: ${row.fix.join('; ')}`);
   }
 
+  return 0;
+}
+
+/** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the
+ * same report as the interactive command (network allowed only when the cache is stale), digests
+ * its gap list, and prints exactly one `{"systemMessage": ...}` line only when gaps exist and that
+ * digest differs from the last one stored — never plain text, never anything on stderr, and always
+ * exit 0, even if something above throws: a `SessionStart` hook must never break a session. */
+export async function hookMain(argv, env = process.env, deps = {}) {
+  try {
+    const { home, cwd } = parseArgs(argv, env);
+    const rows = await buildReport({ home, cwd, offline: false }, deps);
+
+    const gaps = gapList(rows);
+    const digest = gapDigest(rows);
+    const cache = readCache(home);
+    const shouldNotify = gaps.length > 0 && digest !== cache.notified;
+    writeCache(home, { ...cache, notified: digest });
+
+    if (shouldNotify) {
+      const plural = gaps.length === 1 ? '' : 's';
+      console.log(
+        JSON.stringify({ systemMessage: `js-harness: ${gaps.length} stack gap${plural} — run js-harness doctor` }),
+      );
+    }
+  } catch {
+    // Fail open: see the doc comment above — never a crash, never stderr, never non-zero.
+  }
   return 0;
 }
