@@ -162,5 +162,8 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   (lineage `review-7800d48135d84342`, authority burned).
 
 ## Next step
-Feature done and reviewed on `feat/install-update` (sandbox removed). Merging into `main`, the GitHub
-remote and its visibility, and publishing to npm are Sebastián's decisions.
+Remote created 2026-09-26 by Sebastián's decision: `github.com/jsaristi/js-harness`, PRIVATE, with
+`main` and `feat/install-update` pushed. Start the next session in `D:js-harness` from this file.
+1. Merge `feat/install-update` into `main` — his call (a PR or a local merge).
+2. Releases: decide where upgrades come from (npm publish, or GitHub releases on the private repo).
+3. F2 context diet, per `D:harnessdocsharness-v2-preplan.md` (read-only reference).
