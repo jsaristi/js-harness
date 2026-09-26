@@ -33,7 +33,7 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists install, sync, uninstall, status, update and upgrade', () => {
+test('--help lists install, sync, uninstall, status, update, upgrade and doctor', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /install/);
   assert.match(result.stdout, /sync/);
@@ -41,6 +41,7 @@ test('--help lists install, sync, uninstall, status, update and upgrade', () => 
   assert.match(result.stdout, /status/);
   assert.match(result.stdout, /update/);
   assert.match(result.stdout, /upgrade/);
+  assert.match(result.stdout, /doctor/);
 });
 
 test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {
@@ -82,6 +83,17 @@ test('install dispatches to a temp home and exits 0', () => {
     const result = run(['install', '--home', home]);
     assert.equal(result.status, 0);
     assert.match(result.stdout, /installed js-harness/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('doctor dispatches to a temp home and exits 0', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-'));
+  try {
+    const result = run(['doctor', '--home', home]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /gentle-ai/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
