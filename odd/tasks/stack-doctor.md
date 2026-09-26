@@ -77,8 +77,8 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
 
 ## Tasks
 - [x] T1 Tool registry and local probes (installed, configured, project) + `doctor` / `doctor --json` — route: delegated writer (2+ non-trivial files)
-- [ ] T2 Latest-version lookup (GitHub, npm, local marketplace), 6 h cache, fail-open, `outdated` — route: delegated writer
-- [ ] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
+- [x] T2 Latest-version lookup (GitHub, npm, local marketplace), 6 h cache, fail-open, `outdated` — route: delegated writer
+- [x] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
 - [ ] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
 - [ ] T5 TUI stack block above the menu — route: delegated writer
 - [ ] T6 Run `doctor` on this machine, record the output here, update the roadmap — route: inline
@@ -115,6 +115,60 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   carries both `type: "http"` + `url` and the legacy pinned `npx` args, and per the Design table's
   precedence the hosted fields win, so context7 reads `ok`/`hosted` with no gap — an `outdated`
   comparison needs T2's version lookup regardless, since T1 does no network calls.
+- 2026-09-26: T1's native review (lineage `review-4b5c3ac3e23878a8`) was approved and acknowledged.
+  Its 4 advisory findings (R3-001..R3-004) were accepted and folded into T2 rather than filed as
+  separate follow-up work:
+  - R3-001: every version-probe spawn was missing a timeout; a hung probe could hang `doctor`.
+  - R3-002: the dispatcher's `doctor` test depended on the host's real tool binaries.
+  - R3-003: a flag with no value silently consumed the next token instead of erroring.
+  - R3-004: the Claude MCP "configured" check missed project-scoped registrations.
+- 2026-09-26: T2 done, commit `6519280`. Added `bin/lib/cache.mjs` (`<home>/.js-harness/doctor.json`
+  read/write, 6h `isStale`), `bin/lib/cache.test.mjs`, `bin/lib/latest.mjs` (per-tool latest-version
+  sources: GitHub releases for gentle-ai/engram, npm for codegraph/context7 — skipped when context7
+  is hosted — and the offline plugin marketplace for typescript-lsp, all parallel and timeout-bound
+  via `AbortSignal.timeout(5000)`), `bin/lib/latest.test.mjs`; wired `upToDate` computation and
+  `--offline` into `doctor.mjs`; applied R3-001 (5000ms `spawnSync` `timeout`, signal/ETIMEDOUT →
+  `unknown`) and R3-004 (`projects[<root>].mcpServers` fallback) to `bin/lib/stack.mjs`; applied
+  R3-003 (flag-without-value → usage on stderr, exit 2) to `doctor.mjs`'s `parseArgs`; applied
+  R3-002 to the dispatcher's `doctor` test (temp `--home`/`--cwd`, `--offline`, `--json`, asserts
+  five ids).
+  RED: `node --test bin/lib/cache.test.mjs bin/lib/latest.test.mjs` before either module existed →
+  `Cannot find module '...bin/lib/cache.mjs'` / `'...bin/lib/latest.mjs'`, 2 failing. Then, against
+  the still-unmodified `stack.mjs`/`doctor.mjs`: the new R3-001/R3-004 rows in `stack.test.mjs`
+  failed (`5000 !== undefined`, timed-out probe read `missing` not `unknown`, project-scoped
+  registration read `missing` not `ok`); the new `doctor.test.mjs` rows failed (`outdated`/`ok`
+  never appeared, `--offline` still called fetch, flag-validation exits stayed `0`); the dispatcher
+  test's `--offline --json` output parsed to 0 ids since `--offline` did not exist yet.
+  GREEN: `bin/lib/cache.test.mjs` + `bin/lib/latest.test.mjs` → 22/22; `bin/lib/stack.test.mjs` →
+  36/36; `bin/doctor.test.mjs` → 16/16; `bin/js-harness.test.mjs` → 10/10.
+  Full suite: `node --test` → `tests 146 / pass 146 / fail 0`.
+  `npm run check` → `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test passed`.
+- 2026-09-26: T3 done, commit `96cd7f4`. Added `bin/lib/digest.mjs` (`gapList`/`gapDigest`: a
+  sorted, stable digest of every `(tool id, dimension, state)` gap) and `bin/lib/digest.test.mjs`;
+  added `hookMain` to `doctor.mjs`, routed from `doctorMain` on `--hook`, sharing the same
+  `buildReport` as the interactive path; added `bin/doctor-hook.test.mjs`.
+  RED: `node --test bin/lib/digest.test.mjs` before the module existed → `Cannot find module
+  '...bin/lib/digest.mjs'`, 1 failing. Then, against `doctor.mjs` before `--hook` was wired: all 6
+  `bin/doctor-hook.test.mjs` rows failed — the plain (non-hook) report printed to stdout instead of
+  the hook's JSON line, so "prints nothing on the second run" and "no gaps → empty stdout" both saw
+  the full table instead of `''`, and the unusable-arguments row exited `2` instead of `0`.
+  GREEN: `bin/lib/digest.test.mjs` → 7/7; `bin/doctor-hook.test.mjs` → 6/6.
+  Full suite: `node --test` → `tests 159 / pass 159 / fail 0`.
+  `npm run check` → `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test passed`.
+  Real machine (read-only except its own cache), `node bin/js-harness.mjs doctor` twice:
+  ```
+  gentle-ai       3.7.0     ok        ok        n/a       ok
+  engram          2.2.1     ok        ok        n/a       ok
+  codegraph       1.6.0     ok        missing   ok        ok
+  context7        hosted    ok        ok        n/a       n/a
+  typescript-lsp  1.0.0     ok        n/a       n/a       ok
+
+  Fix:
+    codegraph: npm i -g @colbymchenry/codegraph; gentle-ai codegraph init --cwd <root>
+  ```
+  (identical both runs). `node bin/js-harness.mjs doctor --hook` twice: first run printed
+  `{"systemMessage":"js-harness: 1 stack gap — run js-harness doctor"}` and exited 0; second run
+  printed nothing and exited 0 — matching the one real gap (codegraph missing in Codex).
 
 ## Next step
-T2.
+T4.
