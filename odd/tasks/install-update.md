@@ -162,7 +162,7 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   (lineage `review-7800d48135d84342`, authority burned).
 
 ## Next step
-Remote created 2026-09-26 by Sebastián's decision: `github.com/jsaristi/js-harness`, PRIVATE, with
+Big picture (phases, decisions, baseline): `docs/ROADMAP.md`. Remote created 2026-09-26 by Sebastián's decision: `github.com/jsaristi/js-harness`, PRIVATE, with
 `main` and `feat/install-update` pushed. Start the next session in `D:js-harness` from this file.
 1. Merge `feat/install-update` into `main` — his call (a PR or a local merge).
 2. Releases: decide where upgrades come from (npm publish, or GitHub releases on the private repo).
