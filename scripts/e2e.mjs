@@ -4,52 +4,11 @@
 // every npm invocation here goes through the resolved npm-cli.js instead of PATH `npm`.
 // NOT part of `npm run check` — this is slow (spawns two real global installs).
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-function resolveNpmCli() {
-  return (
-    process.env.JS_HARNESS_E2E_NPM_CLI ??
-    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-  );
-}
-
-function run(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { encoding: 'utf8', ...opts });
-}
-
-function npm(npmCli, args, opts = {}) {
-  return run(process.execPath, [npmCli, ...args], opts);
-}
+import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from './lib.mjs';
 
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);
-}
-
-function mkTmp(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
-
-/** Copies the repo into a staging dir so version bumps never touch the real package.json. */
-function copyRepoToStaging(dest) {
-  fs.cpSync(REPO_ROOT, dest, {
-    recursive: true,
-    filter: (src) => {
-      const rel = path.relative(REPO_ROOT, src);
-      return rel !== '.git' && !rel.startsWith(`.git${path.sep}`) && !rel.startsWith('node_modules');
-    },
-  });
-}
-
-function bumpVersion(dir, version) {
-  const pkgPath = path.join(dir, 'package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  pkg.version = version;
-  fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
 }
 
 async function main() {

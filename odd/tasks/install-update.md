@@ -95,6 +95,54 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - RDD over `f43ca3e..0e99cf5` (16 files, 1571 lines): risk high ("the update path in `bin/update.mjs`"),
   consent granted by standing preference, four lenses → approved with no correction, acknowledged
   (lineage `review-7ea42eeec8fb82a2`, authority burned).
+- 2026-09-26 post-review fix-up (690451f, f1cdee1, next): the approved review's own follow-up —
+  `upgradeMain` skipped the post-upgrade sync whenever no `--prefix` was given (the real-world
+  case: pnpm's global store has no stable path to derive a bin from) and hardcoded the Windows
+  `--prefix` layout. Also added: env-var fallbacks for `--home`/`--source`/`--prefix` (so the
+  no-flag TUI can be pointed elsewhere), and `scripts/sandbox.mjs` for trying the TUI by hand.
+  - **fix(update)** (690451f): RED — added `upgradeMain uses the POSIX --prefix layout...`,
+    `...spawns the PATH js-harness sync via a shell...`, `...reports a mismatch and returns 1...`
+    to `bin/update.test.mjs`; `node --test bin/update.test.mjs` → 3 failing (`TypeError: Cannot
+    read properties of undefined (reading 'args')`; `expected one install call and one sync call:
+    1 !== 2`; `0 !== 1`). GREEN — `upgradeMain` now always re-syncs (via a platform-aware
+    `<prefix>/node_modules/...` vs `<prefix>/lib/node_modules/...` bin path with `--prefix`, or
+    `spawn('js-harness', ['sync', ...], { shell: true })` on PATH without one) and reads the
+    manifest back afterward, refusing with exit 1 if it doesn't match the version just installed.
+    Full `node --test` → 62 pass, 0 fail; `node bin/check.mjs` → PASS/PASS, exit 0.
+  - **feat(cli)** (f1cdee1): RED — added env-fallback tests to `install.test.mjs`,
+    `update.test.mjs`, `tui.test.mjs`, `js-harness.test.mjs`; `node --test` on those files → 4
+    failing (home/source fell through to the real `os.homedir()` instead of the injected env —
+    caught and reversed via `uninstall()` before it could pollute the real machine, see below;
+    `--prefix` env fallback not yet wired; `--help` missing the env-var line). GREEN — `--home` is
+    now `--home ?? JS_HARNESS_HOME ?? os.homedir()` in `install.mjs`/`update.mjs`/`tui.mjs`;
+    `--source` is `--source ?? JS_HARNESS_SOURCE`; `--prefix` is `--prefix ?? JS_HARNESS_PREFIX`
+    (both in `update.mjs`); the TUI's bound commands inherit these for free by forwarding the same
+    `env` object. Full `node --test` → 68 pass, 0 fail; `node bin/check.mjs` → PASS/PASS, exit 0.
+  - **Safety incident, self-caught**: the first RED run for `installMain`/`syncMain`'s env
+    fallback tests omitted a safety net — before the env fallback existed, `--home` absent and no
+    env var set fell through to the *real* `os.homedir()`, and the test actually wrote
+    `C:\Users\Oficina\.js-harness\manifest.json` and both real skill files. Caught immediately from
+    the RED run's own console output (`installed js-harness 0.1.0 ... into C:\Users\Oficina`),
+    reversed with `uninstall(os.homedir())` from `bin/lib/manifest.mjs` (removed exactly the two
+    skill files it had written, left every pre-existing file under `.claude/`, `.codex/` and the
+    home root untouched), and verified clean before continuing.
+  - **feat(scripts)** (this commit): moved npm-CLI resolution, `run`/`npm` spawn wrappers,
+    `mkTmp`, `copyRepoToStaging` and `bumpVersion` out of `scripts/e2e.mjs` into `scripts/lib.mjs`;
+    `scripts/e2e.mjs` now imports them — re-ran `node scripts/e2e.mjs` after the move: still 9/9
+    PASS, exit 0, unchanged. No RED/GREEN cycle here — like T4, this is the integration proof
+    itself, not new unit-tested source. Added `scripts/sandbox.mjs` (+ `npm run sandbox`): packs
+    the repo at 0.1.0, real `npm install -g --prefix` into a temp prefix, bumps a staged copy to
+    0.2.0 and packs it into a temp releases dir, writes `launch.cmd`/`launch.sh` that set
+    `JS_HARNESS_HOME`/`JS_HARNESS_SOURCE`/`JS_HARNESS_PREFIX`/`JS_HARNESS_PM` and then run the
+    installed bin with no arguments (opens the TUI). `JS_HARNESS_PM` is built unquoted as
+    `"<node> <npm-cli>"` (matching how `splitCommand` actually parses it — whitespace-split, no
+    quote-awareness); the script prints a warning if either path contains a space, which would
+    break that parsing. Neither path contains one on this machine, so no warning fired. Ran
+    `node scripts/sandbox.mjs`, then proved the wiring end-to-end by running the *installed*
+    bin's `status` with only the three env vars set (no flags): reported
+    `installed package version: 0.1.0` / `latest available: 0.2.0` / `update available: 0.2.0`.
+    Sandbox kept (not deleted) at
+    `C:\Users\Oficina\AppData\Local\Temp\js-harness-sandbox-XvnJEC` for a manual TUI try.
 
 ## Next step
 All four tasks and the review are done on `feat/install-update`. Merging into `main`, the GitHub

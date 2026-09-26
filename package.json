@@ -14,6 +14,7 @@
     "check": "node bin/check.mjs",
     "test": "node --test",
     "e2e": "node scripts/e2e.mjs",
+    "sandbox": "node scripts/sandbox.mjs",
     "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "engines": {
