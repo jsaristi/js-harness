@@ -51,7 +51,7 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 - [x] T1 Manifest-based install / sync / uninstall engine — route: delegated writer
 - [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
 - [x] T3 Zero-dependency TUI over the same commands — route: delegated writer
-- [ ] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
+- [x] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real
@@ -75,3 +75,12 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   `TypeError: stdin.setEncoding is not a function` (real `tuiMain` ran because `run` did not yet
   accept an injectable `tui`). GREEN: full `node --test` → 59 pass, 0 fail; `node bin/check.mjs` →
   PASS budget (691/1500), PASS tests, exit 0.
+- 2026-09-26 T4: `scripts/e2e.mjs` + `package.json` `"e2e"` script (not part of `check`). Resolves
+  the real npm CLI via `JS_HARNESS_E2E_NPM_CLI` or `<dirname(process.execPath)>/node_modules/npm/
+  bin/npm-cli.js` (on this machine `npm` on PATH is a pnpm shim, so every step invokes that
+  resolved CLI directly, never PATH `npm`); stages a repo copy so version bumps never touch the
+  real `package.json`; runs entirely under temp prefix/home/release/staging dirs. All 9 steps
+  passed on the first run against the real `npm install -g`, both via `node scripts/e2e.mjs` and
+  via `npm run e2e` (through the pnpm shim, which passed the script through unmodified). No
+  RED/GREEN cycle applied here — T4 is the integration proof itself, not new unit-tested source;
+  `node --test` stayed at 59 pass, 0 fail throughout, and `node bin/check.mjs` stayed green.
