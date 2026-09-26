@@ -48,11 +48,22 @@ Strategy: ask-on-risk. Forecast: ~500–700 authored lines — above the ~400 sl
 exists yet, so no PR chain applies; slices are work-unit commits, reviewed per commit.
 
 ## Tasks
-- [ ] T1 Manifest-based install / sync / uninstall engine — route: delegated writer
-- [ ] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
+- [x] T1 Manifest-based install / sync / uninstall engine — route: delegated writer
+- [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
 - [ ] T3 Zero-dependency TUI over the same commands — route: delegated writer
 - [ ] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
 
 ## Progress
 - 2026-09-26: document created. Measured: `npm` on PATH is `exec pnpm "$@"` (pnpm 12.6.0); the real
   npm CLI 11.12.1 lives at `C:\nvm4w\nodejs\node_modules\npm\bin\npm-cli.js`.
+- 2026-09-26 T1 (a1c3063): `bin/lib/manifest.mjs` (components as data, sha256, install/sync/uninstall)
+  + `bin/install.mjs` (CLI wrapper, `--home` injectable) + dispatcher wiring in `bin/js-harness.mjs`.
+  RED: `node --test bin/lib/manifest.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./manifest.mjs`; then
+  `node --test bin/install.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./install.mjs`. GREEN: full
+  `node --test` → 23 pass, 0 fail; `node bin/check.mjs` → PASS budget (691/1500), PASS tests, exit 0.
+- 2026-09-26 T2: `bin/lib/version.mjs` (pure semver compare, tarball-source listing, command-arg
+  builders) + `bin/update.mjs` (`status`/`update`/`upgrade`, package manager and source injectable,
+  spawn injectable so tests never invoke a real package manager) + dispatcher wiring. RED:
+  `node --test bin/lib/version.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./version.mjs`; then
+  `node --test bin/update.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./update.mjs`. GREEN: full
+  `node --test` → 44 pass, 0 fail; `node bin/check.mjs` → PASS budget (691/1500), PASS tests, exit 0.

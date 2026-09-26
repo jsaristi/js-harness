@@ -32,11 +32,14 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists install, sync and uninstall', () => {
+test('--help lists install, sync, uninstall, status, update and upgrade', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /install/);
   assert.match(result.stdout, /sync/);
   assert.match(result.stdout, /uninstall/);
+  assert.match(result.stdout, /status/);
+  assert.match(result.stdout, /update/);
+  assert.match(result.stdout, /upgrade/);
 });
 
 test('install dispatches to a temp home and exits 0', () => {
