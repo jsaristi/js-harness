@@ -6,7 +6,7 @@ Locator: `odd/tasks/f1-skeleton.md` · Engram mirror: `odd/f1-skeleton/tasks`
 A new, minimal `js-harness` repo that can grow into an installable, versioned package.
 
 ## Why
-Harness v2 is rebuilt from scratch (founding pre-plan: `docs/preplan.md`).
+Harness v2 is rebuilt from scratch (its origin: `docs/origin.md`).
 A stronger model needs a smaller harness: little instruction, executable checks.
 
 ## Scope

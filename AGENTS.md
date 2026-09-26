@@ -19,7 +19,7 @@ without an install step. Each command sits next to its `*.test.mjs`; `node --tes
 The pre-commit hook runs the same gate, so a red check means the commit is not ready yet.
 
 The plan is `docs/ROADMAP.md`: what is decided, done, next and still open. A session starts there;
-`docs/preplan.md` is its frozen origin, kept for the reasoning. Feature work is tracked in
+`docs/origin.md`, frozen, keeps the reasoning it came from. Feature work is tracked in
 `odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram. Read it before resuming
 a feature; together with the roadmap it is the handoff, and nothing else is.
 

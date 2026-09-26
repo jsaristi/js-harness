@@ -4,8 +4,8 @@ The one living plan of js-harness: what is decided, what is done, what is next, 
 decisions are still open. Each fact lives in one place:
 
 - **This file** — the plan. What comes next is read here and nowhere else.
-- [preplan.md](preplan.md) — the founding pre-plan, frozen: the reasoning and sources behind the
-  plan. It is not edited; what changed since is recorded here.
+- [origin.md](origin.md) — where the plan came from, frozen: the founding pre-plan with the
+  reasoning and sources behind it. It is not edited; what changed since is recorded here.
 - `odd/tasks/<feature>.md` — one feature's tasks, progress and evidence. Its next step covers
   only that feature.
 
@@ -61,7 +61,7 @@ First request of a one-word prompt, estimated tokens:
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done and reviewed; merge PR `jsaristi/js-harness#1` open (`odd/tasks/install-update.md`) |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Next |
-| F3 Task contract | The contract template in [preplan.md](preplan.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
+| F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
