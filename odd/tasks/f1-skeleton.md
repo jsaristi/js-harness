@@ -6,7 +6,7 @@ Locator: `odd/tasks/f1-skeleton.md` · Engram mirror: `odd/f1-skeleton/tasks`
 A new, minimal `js-harness` repo that can grow into an installable, versioned package.
 
 ## Why
-Harness v2 is rebuilt from scratch (`D:\harness` PLAN.md decision 14, `docs/harness-v2-preplan.md`).
+Harness v2 is rebuilt from scratch (founding pre-plan: `docs/preplan.md`).
 A stronger model needs a smaller harness: little instruction, executable checks.
 
 ## Scope
@@ -46,4 +46,5 @@ Strategy: ask-on-risk. Forecast: well under 400 authored lines — one slice.
 - RDD: `gentle-ai review assess` over `38d502e..4c29d6f` → risk high (executable permission change in the hook). Consent granted by Sebastián, who made it the default for every future candidate. Four lenses (risk, resilience, readability, reliability) → approved, no correction; acknowledgement burned the authority (lineage `review-0e56cae151a3fa1c`).
 
 ## Next step
-F1 is done. Next decision is his: create the GitHub remote `jsaristi/js-harness` and its visibility.
+F1 is done; the remote `jsaristi/js-harness` was created 2026-09-26. What comes next for the
+project lives only in `docs/ROADMAP.md`.

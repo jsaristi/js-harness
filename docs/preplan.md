@@ -5,6 +5,9 @@
 > decision 1 (location and name) is resolved as `js-harness` in `D:\js-harness`; F0, F1 and
 > install/update are done, per [ROADMAP.md](ROADMAP.md). Paths below that point into `D:\harness`
 > (`PLAN.md`, `bin/payload-probe.mjs`, `npm run budget:wire`) belong to that read-only repo.
+>
+> **Frozen.** This file is history — the reasoning and sources behind the plan — and is not edited.
+> The living plan, including what is next and every open decision, is [ROADMAP.md](ROADMAP.md).
 
 Decided 2026-09-25/26 with Sebastián. The harness is rebuilt **from scratch**, for Claude Opus 5.5
 and the models after it, on top of gentle-ai (ODD), engram, codegraph and context7. The thesis,
