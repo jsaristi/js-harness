@@ -43,7 +43,7 @@ Strategy: ask-on-risk. Forecast: well under 400 authored lines — one slice.
 
 ## Verification evidence
 - `node bin/check.mjs` → PASS budget, PASS tests, exit 0.
-- RDD: `gentle-ai review assess` over `38d502e..7cc6b31` → risk high (`high_risk`, executable permission change in the hook); consent relayed to Sebastián.
+- RDD: `gentle-ai review assess` over `38d502e..4c29d6f` → risk high (executable permission change in the hook). Consent granted by Sebastián, who made it the default for every future candidate. Four lenses (risk, resilience, readability, reliability) → approved, no correction; acknowledgement burned the authority (lineage `review-0e56cae151a3fa1c`).
 
 ## Next step
-Review consent for the F1 range, then the GitHub remote (creation and visibility are his call).
+F1 is done. Next decision is his: create the GitHub remote `jsaristi/js-harness` and its visibility.
