@@ -76,7 +76,7 @@ Strategy: `single-pr`, chosen by the orchestrator following the precedent of `js
 budget. Sebastián can switch to a chained strategy before the PR opens.
 
 ## Tasks
-- [ ] T1 Tool registry and local probes (installed, configured, project) + `doctor` / `doctor --json` — route: delegated writer (2+ non-trivial files)
+- [x] T1 Tool registry and local probes (installed, configured, project) + `doctor` / `doctor --json` — route: delegated writer (2+ non-trivial files)
 - [ ] T2 Latest-version lookup (GitHub, npm, local marketplace), 6 h cache, fail-open, `outdated` — route: delegated writer
 - [ ] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
 - [ ] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
@@ -89,6 +89,32 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   `ccstatusline` 2.2.30 ships a `custom-command` widget (`commandPath` in its dist), so a zero-token
   status-line indicator is possible later; `~/.codex/config.toml` `[features]` has no hooks flag and
   whether Codex 0.157.1 fires `~/.codex/hooks.json` without one is unverified — check in T4.
+- 2026-09-26: T1 done, commit `86419ad`. Added `bin/lib/stack.mjs` (the five tools as data plus
+  injectable `installed`/`configured`/`project` probes), `bin/lib/stack.test.mjs`,
+  `bin/doctor.mjs` (`doctorMain`, `doctor` + `doctor --json`), `bin/doctor.test.mjs`, and wired
+  `doctor` into `bin/js-harness.mjs` + its help test.
+  RED (before implementation existed): `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs`
+  failed both files with `Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+  'D:\js-harness\bin\doctor.mjs'` and `'...\bin\lib\stack.mjs'` — 2 failing, 0 passing.
+  GREEN (after implementation): same command → `tests 36 / pass 36 / fail 0`.
+  Full suite: `node --test` → `tests 108 / pass 108 / fail 0`.
+  `npm run check` → `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test passed`.
+  `node bin/js-harness.mjs doctor` on this machine (real, read-only):
+  ```
+  gentle-ai       3.7.0     ok        ok        n/a       unknown
+  engram          2.2.1     ok        ok        n/a       unknown
+  codegraph       1.6.0     ok        missing   ok        unknown
+  context7        hosted    ok        ok        n/a       unknown
+  typescript-lsp  1.0.0     ok        n/a       n/a       unknown
+
+  Fix:
+    codegraph: npm i -g @colbymchenry/codegraph; gentle-ai codegraph init --cwd <root>
+  ```
+  This reproduces one of the two gaps named in Why (codegraph missing in Codex). The other
+  (context7 pinned vs hosted) does not reproduce today: this machine's `~/.claude.json` now
+  carries both `type: "http"` + `url` and the legacy pinned `npx` args, and per the Design table's
+  precedence the hosted fields win, so context7 reads `ok`/`hosted` with no gap — an `outdated`
+  comparison needs T2's version lookup regardless, since T1 does no network calls.
 
 ## Next step
-T1.
+T2.
