@@ -79,7 +79,7 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
 - [x] T1 Tool registry and local probes (installed, configured, project) + `doctor` / `doctor --json` — route: delegated writer (2+ non-trivial files)
 - [x] T2 Latest-version lookup (GitHub, npm, local marketplace), 6 h cache, fail-open, `outdated` — route: delegated writer
 - [x] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
-- [ ] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
+- [x] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
 - [ ] T5 TUI stack block above the menu — route: delegated writer
 - [ ] T6 Run `doctor` on this machine, record the output here, update the roadmap — route: inline
 
@@ -170,5 +170,69 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   `{"systemMessage":"js-harness: 1 stack gap — run js-harness doctor"}` and exited 0; second run
   printed nothing and exited 0 — matching the one real gap (codegraph missing in Codex).
 
+- 2026-09-26: T2-T3's native review (lineage `review-54d5dc2aa277cd15`) was approved and
+  acknowledged. Its advisory findings R3-101..R3-103 were accepted and folded into T4 rather than
+  filed as separate follow-up work (see below). Separately, `.atl/` (gentle-ai's local skill
+  registry cache) was added to `.git/info/exclude` on this machine: the untracked-file-selection
+  step of that review's submission dropped the `--base-ref` selector and widened the candidate to
+  the whole branch, which would otherwise have pulled `.atl/`'s generated contents into review.
+- 2026-09-26: T4 done, commits `bf64286` and `c15922f`.
+  `bf64286` — `bin/lib/manifest.mjs` gains `entryComponents` (the T3 `js-harness doctor --hook`
+  `SessionStart` entry for `~/.claude/settings.json` and `~/.codex/hooks.json`) and the JSON-patch
+  engine behind it: `install`/`sync` read the target file (missing -> `{}`, `createdFile: true`;
+  malformed -> left untouched and reported `skipped`), graft the entry onto its `pointer` path only
+  if an equal one is not already there (idempotent, and a repeat call does not even rewrite the
+  file), and preserve 2-space indent, a trailing newline, and CRLF line endings. `sync` prunes an
+  entry a previous manifest declared but the current release no longer does; `uninstall` removes
+  only the exact deep-equal entry, leaves a user-edited file completely untouched and reports it
+  kept, and deletes a file only when js-harness created it and removing the entry leaves nothing
+  but empty containers behind. `uninstall` also removes `<home>/.js-harness/doctor.json` and the
+  `.js-harness` dir once empty. Old manifests without an `entries` field still load. `bin/install.mjs`
+  reports each entry's registration or skip.
+  `c15922f` — accepted T2-T3 review follow-ups: R3-101 (`writeCache` is now best-effort, so an
+  unwritable/file-as-home never crashes the plain `doctor` report path or the hook), R3-102 (a
+  refetch where every tool's lookup failed keeps the old `checkedAt` instead of stamping "now", so
+  the next run retries immediately instead of waiting out a fresh 6h window), R3-103 (`readCache`
+  drops any version entry that is not a string or `null`). Also extended `scripts/e2e.mjs`: seeds
+  the temp home with one unrelated `SessionStart` entry per host before installing, then proves
+  install adds exactly one entry to each without disturbing the seeded one, a second install and
+  the `sync` inside `upgrade` add no duplicates, and `uninstall` restores both host files
+  byte-for-byte.
+  RED (`bin/lib/manifest.test.mjs`, before `entryComponents` existed): `node --test
+  bin/lib/manifest.test.mjs` failed to load at all — `SyntaxError: The requested module
+  './manifest.mjs' does not provide an export named 'entryComponents'` (1 failing at the module
+  level, collapsing all 21 tests in that file, old and new). RED (`bin/lib/cache.test.mjs`, before
+  R3-101/R3-103): `writeCache is best-effort...` failed with an uncaught `ENOTDIR` from `mkdirSync`;
+  `readCache drops a non-string...` failed asserting the sanitized map still had `codegraph: 42`,
+  `context7: {bad:true}`, `typescript-lsp: ['1.0.0']`. RED (`bin/doctor.test.mjs`, before R3-102):
+  `doctorMain keeps the old checkedAt...` failed asserting `checkedAt` had moved to `'2026-...'`
+  instead of staying at the seeded stale `'1970-01-01T00:00:00.000Z'`. Unplanned RED
+  (`bin/doctor-hook.test.mjs`, a regression the R3-101 fix caused in a pre-existing T3 test): once
+  `writeCache` became best-effort, its "exits 0 with empty stdout even when something inside throws"
+  fixture (`--home` pointed at a plain file) stopped throwing at all, so the hook now legitimately
+  computed and printed its gap report instead of going silent — the full-suite run caught this as
+  `actual: '{"systemMessage":"js-harness: 15 stack gaps — run js-harness doctor"}\n' !== expected:
+  ''`. Fixed by re-pointing that test at a case that still exercises the generic catch-all (an
+  injected `now()` that throws) and adding a new test asserting the hook now correctly still reports
+  gaps when only its cache write fails.
+  GREEN: `bin/lib/manifest.test.mjs` -> 21/21; `bin/lib/cache.test.mjs` -> 12/12;
+  `bin/doctor.test.mjs` -> 18/18; `bin/doctor-hook.test.mjs` -> 7/7.
+  Full suite: `node --test` -> `tests 177 / pass 177 / fail 0`.
+  `npm run check` -> `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `npm run e2e` -> all 13 steps `PASS`, including the three new ones: "install added exactly one
+  SessionStart entry to each seeded host file", "a second `install --home` adds no duplicate
+  SessionStart entries", "the `sync` run inside upgrade also added no duplicate SessionStart
+  entries", and the rewritten "`js-harness uninstall` removes what it wrote and restores both hook
+  files byte-for-byte".
+  Codex hooks check (read-only, this machine, Codex 0.157.1): `codex features list` lists `hooks
+  stable true` (and `plugin_hooks removed false`) — hooks are a stable, enabled-by-default feature
+  on this build, not gated behind a flag, so no `--enable hooks` or config change is needed for
+  `~/.codex/hooks.json` to fire. `codex --help` does show a separate
+  `--dangerously-bypass-hook-trust` flag ("Run enabled hooks without requiring persisted hook trust
+  for this invocation"), implying Codex may prompt for one-time hook trust before actually running a
+  newly-added hook command; verifying that trust prompt requires an interactive session and is left
+  as an open item rather than blocking T4 on it — read-only evidence only, no config was changed.
+
 ## Next step
-T4.
+T5.
