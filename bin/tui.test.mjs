@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   MENU_ITEMS,
   initialState,
@@ -194,4 +197,28 @@ test('tuiMain shows an available update from the injected spawn, then quits clea
 
   assert.equal(code, 0);
   assert.ok(stdout.chunks[0].includes('update available: 99.0.0'));
+});
+
+test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-envhome-'));
+  try {
+    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
+    await flush();
+    stdin.emit('data', 'j'); // down to Install
+    stdin.emit('data', '\r'); // run it
+    await flush();
+    stdin.emit('data', 'q');
+    const code = await done;
+
+    assert.equal(code, 0);
+    assert.ok(
+      fs.existsSync(path.join(home, '.js-harness', 'manifest.json')),
+      'install bound by the TUI should have written into the JS_HARNESS_HOME directory',
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

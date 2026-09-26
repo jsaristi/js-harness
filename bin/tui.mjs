@@ -124,12 +124,13 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     const i = argv.indexOf(flag);
     return i !== -1 ? argv[i + 1] : undefined;
   };
-  const home = get('--home') ?? os.homedir();
+  const home = get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir();
   const installedVersion = currentVersion();
 
   let updateAvailable = null;
   try {
-    const latest = resolveLatest({ source: get('--source'), pm: get('--pm') }, env, spawn);
+    const source = get('--source') ?? env.JS_HARNESS_SOURCE;
+    const latest = resolveLatest({ source, pm: get('--pm') }, env, spawn);
     if (latest && isNewer(latest.version, installedVersion)) updateAvailable = latest.version;
   } catch {
     updateAvailable = null;

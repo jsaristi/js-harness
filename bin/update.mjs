@@ -10,15 +10,15 @@ import { latestFromSource, splitCommand, viewArgs, installArgs, isNewer } from '
 
 const PKG_NAME = 'js-harness';
 
-function parseArgs(argv) {
+function parseArgs(argv, env) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? argv[i + 1] : undefined;
   };
   return {
-    home: get('--home') ?? os.homedir(),
-    source: get('--source'),
-    prefix: get('--prefix'),
+    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    source: get('--source') ?? env.JS_HARNESS_SOURCE,
+    prefix: get('--prefix') ?? env.JS_HARNESS_PREFIX,
     pm: get('--pm'),
   };
 }
@@ -58,7 +58,7 @@ function quoteForShell(value, platform) {
 }
 
 export async function statusMain(argv, env = process.env, spawn = spawnSync) {
-  const opts = parseArgs(argv);
+  const opts = parseArgs(argv, env);
   const installed = currentVersion();
   const manifest = readManifest(opts.home);
   const latest = resolveLatest(opts, env, spawn);
@@ -75,7 +75,7 @@ export async function statusMain(argv, env = process.env, spawn = spawnSync) {
 }
 
 export async function updateMain(argv, env = process.env, spawn = spawnSync) {
-  const opts = parseArgs(argv);
+  const opts = parseArgs(argv, env);
   const installed = currentVersion();
   const latest = resolveLatest(opts, env, spawn);
 
@@ -92,7 +92,7 @@ export async function updateMain(argv, env = process.env, spawn = spawnSync) {
 }
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
-  const opts = parseArgs(argv);
+  const opts = parseArgs(argv, env);
   const latest = resolveLatest(opts, env, spawn);
   if (!latest) {
     console.error('could not determine the latest version to upgrade to');

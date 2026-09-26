@@ -43,6 +43,13 @@ test('--help lists install, sync, uninstall, status, update and upgrade', () => 
   assert.match(result.stdout, /upgrade/);
 });
 
+test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {
+  const result = run(['--help']);
+  assert.match(result.stdout, /JS_HARNESS_HOME/);
+  assert.match(result.stdout, /JS_HARNESS_SOURCE/);
+  assert.match(result.stdout, /JS_HARNESS_PREFIX/);
+});
+
 test('no args on a real TTY opens the TUI instead of printing help', async () => {
   const calls = [];
   const stdin = { isTTY: true };

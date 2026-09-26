@@ -237,6 +237,65 @@ test('upgradeMain spawns the PATH js-harness sync via a shell when no --prefix i
   }
 });
 
+test('statusMain resolves home and source from JS_HARNESS_HOME / JS_HARNESS_SOURCE when the flags are absent', async () => {
+  const home = makeTmpDir('js-harness-status-envhome-');
+  const source = makeTmpDir('js-harness-status-envsource-');
+  try {
+    install(home, currentVersion());
+    fs.writeFileSync(path.join(source, 'js-harness-7.0.0.tgz'), '');
+    const lines = [];
+    const original = console.log;
+    console.log = (line) => lines.push(String(line));
+    const spawn = () => {
+      throw new Error('must not spawn a package manager when JS_HARNESS_SOURCE is given');
+    };
+    try {
+      await statusMain([], { JS_HARNESS_HOME: home, JS_HARNESS_SOURCE: source }, spawn);
+    } finally {
+      console.log = original;
+    }
+    const text = lines.join('\n');
+    assert.match(text, new RegExp(`manifest version: ${currentVersion()}`));
+    assert.match(text, /latest available: 7\.0\.0/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgradeMain resolves --prefix from JS_HARNESS_PREFIX when the flag is absent', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-envprefix-');
+  const prefix = makeTmpDir('js-harness-upgrade-prefix-envprefix-');
+  const source = makeTmpDir('js-harness-upgrade-src-envprefix-');
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    const binDir = path.join(prefix, 'node_modules', 'js-harness', 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
+    install(home, '0.9.0');
+
+    const calls = [];
+    const spawn = (cmd, args) => {
+      calls.push({ cmd, args });
+      return { status: 0, stdout: '', stderr: '' };
+    };
+
+    const code = await upgradeMain(
+      ['--source', source, '--home', home],
+      { JS_HARNESS_PREFIX: prefix },
+      spawn,
+      'win32',
+    );
+
+    assert.equal(code, 0);
+    assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(prefix, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
 test('upgradeMain reports a mismatch and returns 1 when the synced manifest is not the upgraded version', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-mismatch-');
   const source = makeTmpDir('js-harness-upgrade-src-mismatch-');

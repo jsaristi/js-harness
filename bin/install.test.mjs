@@ -51,3 +51,30 @@ test('uninstallMain removes the manifest under --home and exits 0', async () => 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('installMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {
+  const home = makeTmpHome();
+  try {
+    const code = await installMain([], { JS_HARNESS_HOME: home });
+    assert.equal(code, 0);
+    assert.equal(readManifest(home).version, currentVersion());
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --home is not given', async () => {
+  const home = makeTmpHome();
+  try {
+    await installMain([], { JS_HARNESS_HOME: home });
+    const syncCode = await syncMain([], { JS_HARNESS_HOME: home });
+    assert.equal(syncCode, 0);
+    assert.equal(readManifest(home).version, currentVersion());
+
+    const uninstallCode = await uninstallMain([], { JS_HARNESS_HOME: home });
+    assert.equal(uninstallCode, 0);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

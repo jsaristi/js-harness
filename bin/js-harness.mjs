@@ -17,6 +17,8 @@ Commands:
   status      Show installed, manifest and latest available versions.
   update      Check whether a newer release exists.
   upgrade     Install the newer release, then sync.
+
+Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;
 
 const commands = {
