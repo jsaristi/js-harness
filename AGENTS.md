@@ -18,8 +18,10 @@ without an install step. Each command sits next to its `*.test.mjs`; `node --tes
 `npm run check` is the single gate: it runs the tests and holds this file to its token budget.
 The pre-commit hook runs the same gate, so a red check means the commit is not ready yet.
 
-Feature work is tracked in `odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram.
-Read it before resuming a feature; it is the handoff, and nothing else is.
+The plan is `docs/ROADMAP.md`: what is decided, done, next and still open. A session starts there;
+`docs/preplan.md` is its frozen origin, kept for the reasoning. Feature work is tracked in
+`odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram. Read it before resuming
+a feature; together with the roadmap it is the handoff, and nothing else is.
 
 ## What good looks like
 
@@ -43,6 +45,12 @@ He decides spend, anything irreversible, and product choices; ask those one at a
 Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain-language summary and close with a recap of
 the whole stretch, including what was spent.
+
+A session holds one task, because the conversation is lost on a new session or a compaction and
+only files survive. So every decision made in the conversation is written to the roadmap or the
+feature document and committed in the same session. Tell him when to cut: a new session when a
+feature closes, a PR merges or a phase starts; `/compact` with what to keep when a task is still
+open but the conversation has grown long.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.
