@@ -45,6 +45,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai (ODD, RDD review, strict TDD), engram v2 binary only, codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
+| Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, and a TUI over the same commands |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
@@ -65,7 +66,7 @@ First request of a one-word prompt, estimated tokens:
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
 | Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Next |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
-| Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size) and open decision 1 (where versions come from) |
+| Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size); first verify that a git-spec global install works through the pnpm shim |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
@@ -74,9 +75,9 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Open decision 1 below: where upgrades come from — it blocks Project init.
-2. Stack doctor — buildable now, and it gives F2 a view of what is installed and configured.
-3. F2 Context diet.
+1. Stack doctor — in progress on `feat/stack-doctor` (`odd/tasks/stack-doctor.md`).
+2. F2 Context diet.
+3. Project init.
 
 ## Stack doctor notes
 
@@ -105,11 +106,10 @@ To resolve while building:
 
 ## Open decisions (Sebastián's, asked one at a time)
 
-1. Where upgrades come from: npm publish, or GitHub releases (a private repo needs auth to download).
-2. Disconnecting the unused Magnific connector (the largest single per-turn item).
-3. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
-4. Whether the Gentleman persona stays part of the stack.
-5. Spend ceiling for F5.
+1. Disconnecting the unused Magnific connector (the largest single per-turn item).
+2. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
+3. Whether the Gentleman persona stays part of the stack.
+4. Spend ceiling for F5.
 
 ## Risks
 
