@@ -45,9 +45,12 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai (ODD, RDD review, strict TDD), engram v2 binary only, codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
-| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, and a TUI |
+| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, and a TUI over the same commands |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
-| Per project | A project pins its version in a `harness.json` it commits (not built yet) |
+| Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
+| Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile |
+| Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
+| Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
 | Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent |
 | Effort | `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
@@ -60,7 +63,9 @@ First request of a one-word prompt, estimated tokens:
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
-| F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Next |
+| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Next |
+| F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
+| Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size) and open decision 1 (where versions come from) |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
@@ -69,9 +74,34 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Develop the full plan in this file, from [origin.md](origin.md) — in a new session.
-2. Open decision 1 below: where upgrades come from.
+1. Open decision 1 below: where upgrades come from — it blocks Project init.
+2. Stack doctor — buildable now, and it gives F2 a view of what is installed and configured.
 3. F2 Context diet.
+
+## Stack doctor notes
+
+Evidence gathered 2026-09-26 for the design:
+
+- gentle-ai 3.7.0 checks itself, engram and two more tools against the GitHub releases API, at
+  most once every 6 h (`~/.gentle-ai/state.json`), 5 s timeout, fail-open; it shows the result
+  only when its TUI opens, and it does not check whether MCP servers are registered in a host.
+  Its own skills and agents ship inside its binary and are reconciled by `gentle-ai sync`
+  (`internal/update/registry.go`, `cooldown.go`, `github.go` in Gentleman-Programming/gentle-ai).
+- Claude Code `SessionStart` fires on `startup` and `resume` (also `--continue`). A hook's
+  `systemMessage` is shown to the user and not added to the model's context; plain stdout on
+  `SessionStart` is added to it and costs tokens. Hooks can run `async`. A command status line
+  costs no tokens and can refresh on an interval ([hooks](https://code.claude.com/docs/en/hooks.md),
+  [status line](https://code.claude.com/docs/en/statusline.md)).
+- Codex has `SessionStart` with `systemMessage` too, but no command-backed status line, so on
+  Codex the notice arrives only on start or resume ([hooks](https://learn.chatgpt.com/docs/hooks)).
+
+To resolve while building:
+
+- The status line is taken by `ccstatusline`, and Claude Code runs one status line command.
+  An "updates available" indicator needs `ccstatusline` to accept a command widget — unverified.
+- Registering a hook edits `~/.claude/settings.json` and the Codex config, which are the user's
+  files, not ours. The manifest records whole files, so it needs a way to record and remove one
+  entry exactly.
 
 ## Open decisions (Sebastián's, asked one at a time)
 
