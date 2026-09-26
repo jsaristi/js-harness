@@ -84,3 +84,11 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   via `npm run e2e` (through the pnpm shim, which passed the script through unmodified). No
   RED/GREEN cycle applied here — T4 is the integration proof itself, not new unit-tested source;
   `node --test` stayed at 59 pass, 0 fail throughout, and `node bin/check.mjs` stayed green.
+- 2026-09-26 parent spot check: `node scripts/e2e.mjs` re-run independently → 9/9 PASS, exit 0.
+  Found a bug the e2e cannot see: the bin's direct-run guard compared `process.argv[1]` with
+  `import.meta.url`, so reaching `bin/js-harness.mjs` through a link (how npm installs a global bin
+  on macOS/Linux) made every command a silent no-op, exit 0. Reproduced through a Windows junction;
+  RED test `runs when invoked through a linked directory` (stdout `''`); fixed by comparing real
+  paths; GREEN `node --test` → 60 pass. Lockfiles the pnpm shim writes during e2e are now ignored.
+- Known limitation (from the writer): `--pm` is split on whitespace, so a package-manager path
+  containing a space (e.g. under `Program Files`) is not supported yet.

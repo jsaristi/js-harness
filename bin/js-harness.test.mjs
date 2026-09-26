@@ -79,3 +79,19 @@ test('install dispatches to a temp home and exits 0', () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.
+test('runs when invoked through a linked directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));
+  const link = path.join(dir, 'bin');
+  try {
+    fs.symlinkSync(path.dirname(dispatcher), link, 'junction');
+    const result = spawnSync(process.execPath, [path.join(link, 'js-harness.mjs'), '--help'], { encoding: 'utf8' });
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /Usage: js-harness/);
+  } finally {
+    // Remove the link itself first so cleanup can never reach through it into bin/.
+    if (fs.existsSync(link)) fs.unlinkSync(link);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

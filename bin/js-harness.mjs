@@ -4,6 +4,7 @@ import { main as checkMain } from './check.mjs';
 import { installMain, syncMain, uninstallMain } from './install.mjs';
 import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { tuiMain } from './tui.mjs';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const USAGE = `Usage: js-harness <command>
@@ -53,7 +54,8 @@ async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui =
   return 2;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare real paths: a global install reaches this file through a symlink on macOS/Linux.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   run(process.argv.slice(2)).then((code) => process.exit(code));
 }
 
