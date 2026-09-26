@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { run as dispatch } from './js-harness.mjs';
 
 const dispatcher = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
 
@@ -40,6 +41,32 @@ test('--help lists install, sync, uninstall, status, update and upgrade', () => 
   assert.match(result.stdout, /status/);
   assert.match(result.stdout, /update/);
   assert.match(result.stdout, /upgrade/);
+});
+
+test('no args on a real TTY opens the TUI instead of printing help', async () => {
+  const calls = [];
+  const stdin = { isTTY: true };
+  const stdout = { isTTY: true, write: () => {} };
+  const tui = async (...args) => {
+    calls.push(args);
+    return 0;
+  };
+
+  const code = await dispatch([], { stdin, stdout, tui });
+
+  assert.equal(code, 0);
+  assert.equal(calls.length, 1);
+});
+
+test('--help prints usage even on a real TTY', async () => {
+  const stdin = { isTTY: true };
+  const stdout = { isTTY: true, write: () => {} };
+  const tui = async () => {
+    throw new Error('must not open the TUI for --help');
+  };
+
+  const code = await dispatch(['--help'], { stdin, stdout, tui });
+  assert.equal(code, 0);
 });
 
 test('install dispatches to a temp home and exits 0', () => {

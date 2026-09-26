@@ -50,7 +50,7 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
 ## Tasks
 - [x] T1 Manifest-based install / sync / uninstall engine — route: delegated writer
 - [x] T2 Version check and upgrade with injectable source and package manager — route: delegated writer
-- [ ] T3 Zero-dependency TUI over the same commands — route: delegated writer
+- [x] T3 Zero-dependency TUI over the same commands — route: delegated writer
 - [ ] T4 End-to-end proof (`npm run e2e`) — route: delegated writer
 
 ## Progress
@@ -61,9 +61,17 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   RED: `node --test bin/lib/manifest.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./manifest.mjs`; then
   `node --test bin/install.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./install.mjs`. GREEN: full
   `node --test` → 23 pass, 0 fail; `node bin/check.mjs` → PASS budget (691/1500), PASS tests, exit 0.
-- 2026-09-26 T2: `bin/lib/version.mjs` (pure semver compare, tarball-source listing, command-arg
-  builders) + `bin/update.mjs` (`status`/`update`/`upgrade`, package manager and source injectable,
-  spawn injectable so tests never invoke a real package manager) + dispatcher wiring. RED:
-  `node --test bin/lib/version.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./version.mjs`; then
+- 2026-09-26 T2 (ed0e4b6): `bin/lib/version.mjs` (pure semver compare, tarball-source listing,
+  command-arg builders) + `bin/update.mjs` (`status`/`update`/`upgrade`, package manager and source
+  injectable, spawn injectable so tests never invoke a real package manager) + dispatcher wiring.
+  RED: `node --test bin/lib/version.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./version.mjs`; then
   `node --test bin/update.test.mjs` → `ERR_MODULE_NOT_FOUND` for `./update.mjs`. GREEN: full
   `node --test` → 44 pass, 0 fail; `node bin/check.mjs` → PASS budget (691/1500), PASS tests, exit 0.
+- 2026-09-26 T3: `bin/tui.mjs` — pure `initialState`/`handleKey`/`render`/`normalizeKey`, plus the
+  thin `runTui` I/O shell and `tuiMain` CLI entry (spawn and stdin/stdout injectable). Dispatcher's
+  no-arg branch opens the TUI when both `stdin.isTTY` and `stdout.isTTY`, else prints the existing
+  help; `--help` always prints help regardless of TTY. RED: `node --test bin/tui.test.mjs` →
+  `ERR_MODULE_NOT_FOUND` for `./tui.mjs`; then the dispatcher's own TTY-branch test failed with
+  `TypeError: stdin.setEncoding is not a function` (real `tuiMain` ran because `run` did not yet
+  accept an injectable `tui`). GREEN: full `node --test` → 59 pass, 0 fail; `node bin/check.mjs` →
+  PASS budget (691/1500), PASS tests, exit 0.

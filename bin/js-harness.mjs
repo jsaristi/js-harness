@@ -3,6 +3,8 @@
 import { main as checkMain } from './check.mjs';
 import { installMain, syncMain, uninstallMain } from './install.mjs';
 import { statusMain, updateMain, upgradeMain } from './update.mjs';
+import { tuiMain } from './tui.mjs';
+import { pathToFileURL } from 'node:url';
 
 const USAGE = `Usage: js-harness <command>
 
@@ -26,10 +28,19 @@ const commands = {
   upgrade: upgradeMain,
 };
 
-async function run(argv) {
+async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui = tuiMain } = {}) {
   const [command, ...rest] = argv;
 
-  if (!command || command === '--help' || command === '-h') {
+  if (!command) {
+    // A real terminal on both ends opens the menu; anything else (a pipe, a script) gets help.
+    if (stdin.isTTY && stdout.isTTY) {
+      return tui(rest, process.env, undefined, { stdin, stdout });
+    }
+    console.log(USAGE);
+    return 0;
+  }
+
+  if (command === '--help' || command === '-h') {
     console.log(USAGE);
     return 0;
   }
@@ -42,4 +53,8 @@ async function run(argv) {
   return 2;
 }
 
-run(process.argv.slice(2)).then((code) => process.exit(code));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  run(process.argv.slice(2)).then((code) => process.exit(code));
+}
+
+export { run };
