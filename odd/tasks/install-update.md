@@ -144,14 +144,6 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
     Sandbox kept (not deleted) at
     `C:\Users\Oficina\AppData\Local\Temp\js-harness-sandbox-XvnJEC` for a manual TUI try.
 
-- RDD over `b09d46f..59b18cb` (15 files, 670 lines): risk high ("the update path in `bin/update.mjs`"),
-  consent granted by standing preference, four lenses → approved with no correction, acknowledged
-  (lineage `review-7800d48135d84342`, authority burned).
-
-## Next step
-All four tasks and the review are done on `feat/install-update`. Merging into `main`, the GitHub
-remote and its visibility, and publishing to npm are Sebastián's decisions. A manual TUI try in a
-real terminal is the one check an agent cannot run (it needs a TTY).
 - 2026-09-26 manual TUI try by Sebastián (sandbox): Status showed "update available: 0.2.0" (works).
   Defect found by hand: every key press printed a fresh copy of the menu below the last, so the
   menu looked frozen. Measured raw-mode bytes in his terminal (PowerShell 7.6 → cmd → node):
@@ -165,3 +157,10 @@ real terminal is the one check an agent cannot run (it needs a TTY).
   suite with the home directory pointed at a throwaway directory` (ENOENT — the nested runner
   inherited `NODE_TEST_CONTEXT` and skipped the fixture, a second defect, also fixed). GREEN 71 pass.
   Note: plain `node --test` outside `check` is not isolated; the pre-commit hook always is.
+- RDD over `b09d46f..59b18cb` (15 files, 670 lines): risk high ("the update path in `bin/update.mjs`"),
+  consent granted by standing preference, four lenses → approved with no correction, acknowledged
+  (lineage `review-7800d48135d84342`, authority burned).
+
+## Next step
+Feature done and reviewed on `feat/install-update` (sandbox removed). Merging into `main`, the GitHub
+remote and its visibility, and publishing to npm are Sebastián's decisions.
