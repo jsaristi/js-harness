@@ -1,0 +1,25 @@
+{
+  "name": "js-harness",
+  "version": "0.1.0",
+  "description": "A small, evidence-first harness for AI-assisted development on Claude Code and Codex.",
+  "type": "module",
+  "bin": {
+    "js-harness": "bin/js-harness.mjs"
+  },
+  "files": [
+    "bin/",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "check": "node bin/check.mjs",
+    "test": "node --test",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jsaristi/js-harness.git"
+  }
+}
