@@ -92,3 +92,11 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   paths; GREEN `node --test` → 60 pass. Lockfiles the pnpm shim writes during e2e are now ignored.
 - Known limitation (from the writer): `--pm` is split on whitespace, so a package-manager path
   containing a space (e.g. under `Program Files`) is not supported yet.
+- RDD over `f43ca3e..0e99cf5` (16 files, 1571 lines): risk high ("the update path in `bin/update.mjs`"),
+  consent granted by standing preference, four lenses → approved with no correction, acknowledged
+  (lineage `review-7ea42eeec8fb82a2`, authority burned).
+
+## Next step
+All four tasks and the review are done on `feat/install-update`. Merging into `main`, the GitHub
+remote and its visibility, and publishing to npm are Sebastián's decisions. A manual TUI try in a
+real terminal is the one check an agent cannot run (it needs a TTY).
