@@ -93,6 +93,35 @@ test('a version-command tool does not use a shell off win32', () => {
   assert.equal(calls[0].opts.shell, false);
 });
 
+// --- R3-001: every version-probe spawn gets a 5s timeout; a timed-out probe is `unknown` ---
+
+test('a version-command tool passes a 5000ms timeout to spawn', () => {
+  const tool = findTool('gentle-ai');
+  const calls = [];
+  const spawn = (cmd, args, opts) => {
+    calls.push(opts);
+    return { status: 0, stdout: '3.7.0', stderr: '' };
+  };
+  tool.installed({ spawn });
+  assert.equal(calls[0].timeout, 5000);
+});
+
+test('a timed-out (killed by signal) probe reports unknown, not missing', () => {
+  const tool = findTool('engram');
+  // This is the shape Node's own spawnSync returns when it kills the child after `timeout` elapses:
+  // no exit status, a signal, and whatever partial stdout it had.
+  const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: '', stderr: '' });
+  assert.deepEqual(tool.installed({ spawn }), { state: 'unknown', version: null });
+});
+
+test('a probe whose spawn result carries an ETIMEDOUT error reports unknown, not missing', () => {
+  const tool = findTool('codegraph');
+  const error = new Error('spawnSync codegraph ETIMEDOUT');
+  error.code = 'ETIMEDOUT';
+  const spawn = () => ({ status: null, error, stdout: '', stderr: '' });
+  assert.deepEqual(tool.installed({ spawn }), { state: 'unknown', version: null });
+});
+
 // --- installed + version: context7 (no CLI, derived from host config) ---
 
 test('context7 reports version "hosted" when Claude Code has a type: http entry with a url', () => {
@@ -254,6 +283,50 @@ test('typescript-lsp configured reads Claude from settings.json enabledPlugins a
     });
     const tool = findTool('typescript-lsp');
     assert.deepEqual(tool.configured({ home }), { claude: 'ok', codex: 'n/a' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- R3-004: Claude MCP configured also reads a project-scoped registration ---
+
+test('engram configured.claude reads a project-scoped registration from projects[<root>].mcpServers', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude.json'), {
+      mcpServers: {},
+      projects: { '/repo/root': { mcpServers: { engram: { command: 'engram' } } } },
+    });
+    const tool = findTool('engram');
+    assert.equal(tool.configured({ home, project: '/repo/root' }).claude, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a global mcpServers registration still wins when there is no matching project scope', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude.json'), {
+      mcpServers: { codegraph: { command: 'codegraph' } },
+      projects: { '/some/other/root': { mcpServers: {} } },
+    });
+    const tool = findTool('codegraph');
+    assert.equal(tool.configured({ home, project: '/repo/root' }).claude, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('neither global nor the current project scope registered is still missing', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude.json'), {
+      mcpServers: {},
+      projects: { '/some/other/root': { mcpServers: { context7: { type: 'http', url: 'x' } } } },
+    });
+    const tool = findTool('context7');
+    assert.equal(tool.configured({ home, project: '/repo/root' }).claude, 'missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

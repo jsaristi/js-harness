@@ -8,19 +8,28 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
+// R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
+// report `unknown`, the same as any other unreadable result, rather than leaving it to hang.
+const PROBE_TIMEOUT_MS = 5000;
 
 /** Runs `<command> <args>` and extracts the first semver from stdout. Never throws: a missing
- * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version is
- * `unknown`. `shell` is needed on win32 because npm-installed global binaries are `.cmd` shims
- * (see how `upgradeMain` in update.mjs spawns `js-harness` itself for the same reason). */
+ * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version, or a probe
+ * that had to be killed after `PROBE_TIMEOUT_MS`, is `unknown`. `shell` is needed on win32 because
+ * npm-installed global binaries are `.cmd` shims (see how `upgradeMain` in update.mjs spawns
+ * `js-harness` itself for the same reason). */
 function probeVersionCommand(command, args, { spawn = spawnSync, platform = process.platform } = {}) {
   let result;
   try {
-    result = spawn(command, args, { encoding: 'utf8', shell: platform === 'win32' });
+    result = spawn(command, args, { encoding: 'utf8', shell: platform === 'win32', timeout: PROBE_TIMEOUT_MS });
   } catch {
     return { state: 'missing', version: null };
   }
-  if (!result || result.error || result.status !== 0) return { state: 'missing', version: null };
+  if (!result) return { state: 'missing', version: null };
+  // Node kills a timed-out spawnSync child with a signal (status becomes null); it may also carry
+  // an ETIMEDOUT error instead, depending on where the timeout was detected. Either shape means
+  // the tool could not be reached in time, not that it is missing.
+  if (result.signal || result.error?.code === 'ETIMEDOUT') return { state: 'unknown', version: null };
+  if (result.error || result.status !== 0) return { state: 'missing', version: null };
   const match = SEMVER_RE.exec(result.stdout ?? '');
   return match ? { state: 'ok', version: match[1] } : { state: 'unknown', version: null };
 }
@@ -53,12 +62,17 @@ function hasCodexMcpServer(home, name) {
 }
 
 /** `<home>/.claude.json` `mcpServers.<name>`: `missing` file, `unknown` malformed JSON, else
- * `ok`/`missing` on the key plus the raw entry (context7 needs its shape, not just presence). */
-function claudeJsonMcpServer(home, name) {
+ * `ok`/`missing` on the key plus the raw entry (context7 needs its shape, not just presence).
+ * R3-004 (accepted T1 review follow-up): Claude Code can also register an MCP server scoped to one
+ * project, under `projects[<project root>].mcpServers`, instead of (or as well as) globally — so a
+ * project-scoped registration for the resolved project root counts as configured too. */
+function claudeJsonMcpServer(home, name, projectRoot) {
   const { found, data } = readJsonFile(path.join(home, '.claude.json'));
   if (!found) return { state: 'missing', entry: undefined };
   if (data === undefined) return { state: 'unknown', entry: undefined };
-  const entry = data?.mcpServers?.[name];
+  const globalEntry = data?.mcpServers?.[name];
+  const projectEntry = projectRoot ? data?.projects?.[projectRoot]?.mcpServers?.[name] : undefined;
+  const entry = globalEntry ?? projectEntry;
   return { state: entry ? 'ok' : 'missing', entry };
 }
 
@@ -124,8 +138,8 @@ export const tools = [
   {
     id: 'engram',
     installed: (deps) => probeVersionCommand('engram', ['version'], deps),
-    configured: ({ home }) => ({
-      claude: claudeJsonMcpServer(home, 'engram').state,
+    configured: ({ home, project }) => ({
+      claude: claudeJsonMcpServer(home, 'engram', project).state,
       codex: hasCodexMcpServer(home, 'engram') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
@@ -134,8 +148,8 @@ export const tools = [
   {
     id: 'codegraph',
     installed: (deps) => probeVersionCommand('codegraph', ['--version'], deps),
-    configured: ({ home }) => ({
-      claude: claudeJsonMcpServer(home, 'codegraph').state,
+    configured: ({ home, project }) => ({
+      claude: claudeJsonMcpServer(home, 'codegraph', project).state,
       codex: hasCodexMcpServer(home, 'codegraph') ? 'ok' : 'missing',
     }),
     // Never `codegraph upgrade` (user rule): codegraph's own fix is its npm install.
@@ -145,8 +159,8 @@ export const tools = [
   {
     id: 'context7',
     installed: ({ home }) => context7InstalledVersion(home),
-    configured: ({ home }) => ({
-      claude: claudeJsonMcpServer(home, 'context7').state,
+    configured: ({ home, project }) => ({
+      claude: claudeJsonMcpServer(home, 'context7', project).state,
       codex: hasCodexMcpServer(home, 'context7') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
