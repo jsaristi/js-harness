@@ -1,0 +1,3 @@
+#!/bin/sh
+# The same gate CI and humans run; a red check means the commit is not ready.
+exec node "$(git rev-parse --show-toplevel)/bin/check.mjs"
