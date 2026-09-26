@@ -59,7 +59,7 @@ First request of a one-word prompt, estimated tokens:
 |-------|-----------|-------|
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
-| Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done and reviewed; merge PR `jsaristi/js-harness#1` open (`odd/tasks/install-update.md`) |
+| Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Next |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
@@ -69,7 +69,7 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Sebastián merges `jsaristi/js-harness#1`.
+1. Develop the full plan in this file, from [origin.md](origin.md) — in a new session.
 2. Open decision 1 below: where upgrades come from.
 3. F2 Context diet.
 

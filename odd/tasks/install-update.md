@@ -162,6 +162,6 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
   (lineage `review-7800d48135d84342`, authority burned).
 
 ## Next step
-This feature's last step: Sebastián merges `jsaristi/js-harness#1` (`feat/install-update` into
-`main`; opened 2026-09-26, mergeable, no CI configured). After that the feature is closed.
-What comes next for the project lives only in `docs/ROADMAP.md` — read it there, not here.
+None — the feature is closed. `jsaristi/js-harness#1` was merged into `main` on 2026-09-26 with a
+merge commit (`8f8e268`), so every commit cited above keeps its hash. What comes next for the
+project lives only in `docs/ROADMAP.md`.
