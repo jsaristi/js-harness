@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The one gate a pre-commit hook and CI both run. Zero deps, plain Node.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -27,11 +28,18 @@ export function checkBudget(cwd) {
 
 /** Runs `node --test` in `cwd` as a child process and reports pass/fail. */
 export function checkTests(cwd) {
-  const result = spawnSync(process.execPath, ['--test'], {
-    cwd,
-    env: { ...process.env, JS_HARNESS_CHECK_INNER: '1' },
-    encoding: 'utf8',
-  });
+  // The suite runs against a throwaway home, so a test that forgets `--home` cannot write into
+  // the real one — that happened once, and a rule in prose would not have stopped it.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
+  const env = { ...process.env, JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home };
+  // Set when check itself runs under `node --test`; the nested runner would act as a child and skip files.
+  delete env.NODE_TEST_CONTEXT;
+  let result;
+  try {
+    result = spawnSync(process.execPath, ['--test'], { cwd, env, encoding: 'utf8' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
   const pass = result.status === 0;
   const detail = pass ? 'node --test passed' : `node --test exited ${result.status}`;
   // Keep the runner's own report so a red row says which test failed, not just that one did.

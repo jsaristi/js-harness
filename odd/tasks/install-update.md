@@ -155,3 +155,9 @@ real terminal is the one check an agent cannot run (it needs a TTY).
   `runTui redraws the menu in place when the selection moves` (got "js-harness 0", no cursor-up);
   fixed by moving the cursor back over the last draw and clearing it, except after a command,
   whose output stays on screen. GREEN `node --test` → 70 pass.
+- 2026-09-26 Sebastián confirmed the TUI works end to end in the sandbox. Sensor for the earlier
+  safety incident: `check` now runs the suite with `HOME`/`USERPROFILE` pointed at a throwaway
+  directory, so a test that forgets `--home` cannot reach the real one. RED `checkTests runs the
+  suite with the home directory pointed at a throwaway directory` (ENOENT — the nested runner
+  inherited `NODE_TEST_CONTEXT` and skipped the fixture, a second defect, also fixed). GREEN 71 pass.
+  Note: plain `node --test` outside `check` is not isolated; the pre-commit hook always is.
