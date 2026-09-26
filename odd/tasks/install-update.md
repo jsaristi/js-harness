@@ -144,6 +144,10 @@ exists yet, so no PR chain applies; slices are work-unit commits, reviewed per c
     Sandbox kept (not deleted) at
     `C:\Users\Oficina\AppData\Local\Temp\js-harness-sandbox-XvnJEC` for a manual TUI try.
 
+- RDD over `b09d46f..59b18cb` (15 files, 670 lines): risk high ("the update path in `bin/update.mjs`"),
+  consent granted by standing preference, four lenses → approved with no correction, acknowledged
+  (lineage `review-7800d48135d84342`, authority burned).
+
 ## Next step
 All four tasks and the review are done on `feat/install-update`. Merging into `main`, the GitHub
 remote and its visibility, and publishing to npm are Sebastián's decisions. A manual TUI try in a
