@@ -374,5 +374,53 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   e2e script exercises beyond the existing install/sync/uninstall path, which still round-trips
   byte-for-byte).
 
+- 2026-09-27: Per-dimension fixes done, commit `983fa59`. The gap this closes: `doctor` printed one
+  flat `fix` array per tool regardless of which dimension actually gapped, so a codegraph-missing-
+  only-in-Codex gap printed the npm install fix instead of the Codex registration command, and the
+  table had no header. `bin/lib/stack.mjs`'s `tools[].fix` is now a function of the same `deps` bag
+  the other probes take (`(deps) => ({ installed, claude, codex, project, upToDate })`, omitting a
+  dimension a tool has no meaning for), so codegraph's `project` fix can carry the actual resolved
+  project root instead of a literal `<root>`. `bin/doctor.mjs` gained `headerRow()` (printed above
+  the table) and `rowGaps(row)` (every `{ dimension, state, fix }` gap on a row); the plain-text
+  report now prints one `  <tool> (<dimension>): <command>` line per gap dimension instead of one
+  flat `<tool>: <commands>` line, and `--json` rows gained a `gaps` array alongside the existing
+  `fix` map. `bin/lib/digest.mjs` needed no change: `gapList`/`gapDigest` already key off `(id,
+  dimension, state)` from the row itself, never `fix`, so the hook's digest is unaffected by the fix
+  map's shape. `bin/tui.mjs` needed no change either: it never reads `row.fix` (only
+  `installed`/`claude`/`codex`/`project`/`upToDate` via `worstState`/`summarizeStackRow`).
+  Commands verified read-only before use: `claude plugin --help` confirmed `plugin enable` exists
+  (`Enable a disabled plugin`), so typescript-lsp's `claude` fix uses it as specified rather than a
+  fallback.
+  RED: `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs` after rewriting both files' tests for
+  the per-dimension shape, before touching `stack.mjs`/`doctor.mjs` → `tests 67 / pass 53 / fail 14`
+  (`TypeError: tool.fix is not a function` / `findTool(...).fix is not a function` for every new or
+  updated fix-shape test, plus the two updated Fix-text assertions failing against the still-flat
+  `codegraph: npm i -g @colbymchenry/codegraph; gentle-ai codegraph init --cwd <root>` /
+  `gentle-ai: gentle-ai upgrade; gentle-ai sync` output).
+  GREEN: `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs bin/doctor-hook.test.mjs
+  bin/lib/digest.test.mjs bin/tui.test.mjs` → `tests 111 / pass 111 / fail 0`.
+  Full suite: `node --test` → `tests 220 / pass 220 / fail 0`.
+  `npm run check` → `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `npm run e2e` → all 14 steps `PASS`, unchanged (this change touches no behavior e2e exercises).
+  `node bin/js-harness.mjs doctor` on this machine (real, read-only):
+  ```
+  tool            version   claude    codex     project   up to date
+  gentle-ai       3.7.0     ok        ok        n/a       ok
+  engram          2.2.1     ok        ok        n/a       ok
+  codegraph       1.6.0     ok        missing   ok        ok
+  context7        hosted    ok        ok        n/a       n/a
+  typescript-lsp  1.0.0     ok        n/a       n/a       ok
+
+  Fix:
+    codegraph (codex): codex mcp add codegraph -- codegraph serve --mcp
+  ```
+  This is the fix this change set out to produce: exactly the Codex registration command for the one
+  real gap on this machine, not the npm install fix, and a header row makes the table readable.
+  `doctor --json`'s codegraph row (read-only, same run) confirmed `fix.project` reads
+  `"gentle-ai codegraph init --cwd D:/js-harness"` (the actual resolved root) and `gaps` holds
+  exactly one entry, `{ dimension: "codex", state: "missing", fix: "codex mcp add codegraph --
+  codegraph serve --mcp" }`.
+
 ## Next step
 T6.
