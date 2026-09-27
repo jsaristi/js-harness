@@ -10,9 +10,10 @@ date, or `unknown` when it cannot tell, and prints that tool's own fix command f
 
 ## Why
 F2 (context diet) needs a view of what is installed and configured before it can cut anything, and
-today a gap is found only by accident: the probe for this document found context7 pinned to
-`@upstash/context7-mcp@2.2.5` while npm has 4.1.1, and codegraph registered in Claude Code but not
-in Codex.
+today a gap is found only by accident: the probe for this document found codegraph registered in
+Claude Code but not in Codex. (It also looked like context7 was pinned to an old
+`@upstash/context7-mcp@2.2.5`, but that entry is `type: "http"` with a `url`, so Claude Code uses
+the hosted server and the stale arg is inert — not a gap. Corrected during T1.)
 
 ## Scope
 - In: `bin/lib/stack.mjs` (tools as data + read-only probes), `bin/doctor.mjs` (`doctor`,
@@ -61,8 +62,8 @@ host and per project, where its latest version comes from, and its fix commands.
 
 ## Acceptance criteria (done when)
 - `npm run check` passes; every behavior above has a fixture test written first.
-- `js-harness doctor` on this machine prints the five tools with real versions and at least the two
-  known gaps (context7 pinned arg vs hosted, codegraph missing in Codex).
+- `js-harness doctor` on this machine prints the five tools with real versions and the known gap
+  (codegraph missing in Codex) with that dimension's own fix command.
 - `npm run e2e` still passes, now also proving that install adds exactly one `SessionStart` entry to
   a temp home's Claude and Codex files and uninstall restores them byte-for-byte.
 - The hook prints nothing on a second run with the same state, and never plain text.
@@ -81,7 +82,7 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
 - [x] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
 - [x] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
 - [x] T5 TUI stack block above the menu — route: delegated writer
-- [ ] T6 Run `doctor` on this machine, record the output here, update the roadmap — route: inline
+- [x] T6 Run `doctor` on this machine, record the output here, update the roadmap — route: inline
 
 ## Progress
 - 2026-09-26: document created after a delegated read-only probe of the repo and this machine.
@@ -421,6 +422,35 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   `"gentle-ai codegraph init --cwd D:/js-harness"` (the actual resolved root) and `gaps` holds
   exactly one entry, `{ dimension: "codex", state: "missing", fix: "codex mcp add codegraph --
   codegraph serve --mcp" }`.
+- 2026-09-27 native review of the pending slice (8b4437f..e3c8350, 657 lines, medium): lineage
+  review-c4503b3d023526ef granted, approved and acknowledged (authority burned). Advisory findings
+  fixed inline in c6b67b3: R3-001 the codegraph project fix printed `--cwd undefined` with no
+  resolved root (now `<project root>`); R3-002 a gap with no fix command was dropped from `--json`
+  `gaps` and the Fix section (now reported with `fix: null` / `no fix command known`); R3-003 the
+  install/sync summary counted carried-forward records as written. RED: `node --test
+  bin/install.test.mjs bin/lib/stack.test.mjs bin/doctor.test.mjs` → 3 failing (`'gentle-ai
+  codegraph init --cwd undefined'`; `actual: undefined` for the context7 `installed` gap;
+  `(2 files)` where `(1 files)` was expected). GREEN: 77/77 on those files, `node --test` 223/223,
+  `npm run check` PASS budget 858/1500 + PASS tests. c6b67b3 is 3 files of code under the slice
+  budget; it is reviewed with the PR.
+- 2026-09-27 T6: `node bin/js-harness.mjs doctor` on this machine (exit 0):
+  ```
+  tool            version   claude    codex     project   up to date
+  gentle-ai       3.7.0     ok        ok        n/a       ok
+  engram          2.2.1     ok        ok        n/a       ok
+  codegraph       1.6.0     ok        missing   ok        ok
+  context7        hosted    ok        ok        n/a       n/a
+  typescript-lsp  1.0.0     ok        n/a       n/a       ok
+
+  Fix:
+    codegraph (codex): codex mcp add codegraph -- codegraph serve --mcp
+  ```
+  `doctor --hook` printed nothing on a repeat run (digest unchanged). The hook is NOT registered on
+  this machine's real home yet: that happens on the first real `js-harness install` after merge.
+  Open items for later: Codex shows a one-time hook-trust prompt for a new command
+  (`--dangerously-bypass-hook-trust` exists), unverified live; the `ccstatusline` custom-command
+  widget for a status-line indicator; the `.atl/` untracked-selection submission drops `--base-ref`
+  (worked around with `.git/info/exclude`).
 
 ## Next step
-T6.
+Feature complete on `feat/stack-doctor`. Push and PR are Sebastián's decision.

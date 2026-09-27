@@ -64,7 +64,7 @@ First request of a one-word prompt, estimated tokens:
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
-| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Next |
+| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Built and reviewed on `feat/stack-doctor` 2026-09-27, PR pending (`odd/tasks/stack-doctor.md`) |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size); first verify that a git-spec global install works through the pnpm shim |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
@@ -75,7 +75,8 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Stack doctor — in progress on `feat/stack-doctor` (`odd/tasks/stack-doctor.md`).
+1. Stack doctor — push `feat/stack-doctor` and open its PR (Sebastián's call), then a real
+   `js-harness install` to register the hook on this machine.
 2. F2 Context diet.
 3. Project init.
 
@@ -96,13 +97,14 @@ Evidence gathered 2026-09-26 for the design:
 - Codex has `SessionStart` with `systemMessage` too, but no command-backed status line, so on
   Codex the notice arrives only on start or resume ([hooks](https://learn.chatgpt.com/docs/hooks)).
 
-To resolve while building:
+Resolved while building (details in `odd/tasks/stack-doctor.md`):
 
-- The status line is taken by `ccstatusline`, and Claude Code runs one status line command.
-  An "updates available" indicator needs `ccstatusline` to accept a command widget — unverified.
-- Registering a hook edits `~/.claude/settings.json` and the Codex config, which are the user's
-  files, not ours. The manifest records whole files, so it needs a way to record and remove one
-  entry exactly.
+- The manifest now records entries as well as whole files: one hook entry inside
+  `~/.claude/settings.json` and `~/.codex/hooks.json`, removed exactly on uninstall, never
+  overwriting a value of unexpected shape, and preserving the file's indent and line endings.
+- `ccstatusline` 2.2.30 ships a `custom-command` widget, so a zero-token status-line indicator is
+  possible; left for later. Codex 0.157.1 has hooks on by default (`codex features list`), but a
+  new hook command may need a one-time trust prompt — unverified live.
 
 ## Open decisions (Sebastián's, asked one at a time)
 
