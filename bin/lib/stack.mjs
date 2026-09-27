@@ -122,8 +122,14 @@ function typescriptLspInstalledVersion(home) {
 }
 
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
- * configured state for the current project, and its own fix commands for a gap. Adding a tool
- * never touches `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. */
+ * configured state for the current project, and its own fix command per dimension that can gap
+ * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
+ * for, e.g. context7 has no CLI to `installed`-fix, typescript-lsp has no Codex equivalent). `fix`
+ * takes the same `deps` bag as the other probes, since codegraph's `project` fix must carry the
+ * actual resolved project root, not a placeholder. Adding a tool never touches
+ * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
+ * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`, `gentle-ai
+ * --help`) — see odd/tasks/stack-doctor.md. */
 export const tools = [
   {
     id: 'gentle-ai',
@@ -133,7 +139,12 @@ export const tools = [
       codex: gentleAiInstalledAgent(home, 'codex'),
     }),
     project: () => 'n/a',
-    fix: ['gentle-ai upgrade', 'gentle-ai sync'],
+    fix: () => ({
+      installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
+      claude: 'gentle-ai install',
+      codex: 'gentle-ai install',
+      upToDate: 'gentle-ai upgrade; gentle-ai sync',
+    }),
   },
   {
     id: 'engram',
@@ -143,7 +154,12 @@ export const tools = [
       codex: hasCodexMcpServer(home, 'engram') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
-    fix: ['gentle-ai upgrade'],
+    fix: () => ({
+      installed: 'gentle-ai upgrade',
+      claude: 'gentle-ai sync',
+      codex: 'gentle-ai sync',
+      upToDate: 'gentle-ai upgrade',
+    }),
   },
   {
     id: 'codegraph',
@@ -152,9 +168,18 @@ export const tools = [
       claude: claudeJsonMcpServer(home, 'codegraph', project).state,
       codex: hasCodexMcpServer(home, 'codegraph') ? 'ok' : 'missing',
     }),
-    // Never `codegraph upgrade` (user rule): codegraph's own fix is its npm install.
     project: ({ project }) => (project && fs.existsSync(path.join(project, '.codegraph')) ? 'ok' : 'missing'),
-    fix: ['npm i -g @colbymchenry/codegraph', 'gentle-ai codegraph init --cwd <root>'],
+    // Never `codegraph upgrade` (user rule): codegraph's own fix is its npm install, both for
+    // `installed` and `upToDate` — npm is also how an outdated codegraph gets upgraded. `project`
+    // carries the actual resolved root (`deps.project`, already resolved by `resolveProjectRoot`
+    // before `probeStack` runs), not a literal `<root>` placeholder.
+    fix: ({ project }) => ({
+      installed: 'npm i -g @colbymchenry/codegraph',
+      claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
+      codex: 'codex mcp add codegraph -- codegraph serve --mcp',
+      project: `gentle-ai codegraph init --cwd ${project}`,
+      upToDate: 'npm i -g @colbymchenry/codegraph',
+    }),
   },
   {
     id: 'context7',
@@ -164,7 +189,15 @@ export const tools = [
       codex: hasCodexMcpServer(home, 'context7') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
-    fix: ['claude mcp add', 'codex mcp add'],
+    // No `installed` fix: context7 has no CLI of its own to install — being registered nowhere
+    // already shows up as both `claude` and `codex` gaps, each with its own registration command.
+    fix: () => ({
+      claude: 'claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp',
+      codex: 'codex mcp add context7 --url https://mcp.context7.com/mcp',
+      // Hosted context7 is never `outdated` (see doctor.mjs's computeUpToDate) — this only fires
+      // for a self-run registration, whose fix is reinstalling pinned to npm's newest version.
+      upToDate: 'claude mcp add -s user context7 -- npx -y @upstash/context7-mcp@latest',
+    }),
   },
   {
     id: 'typescript-lsp',
@@ -174,7 +207,13 @@ export const tools = [
       codex: 'n/a',
     }),
     project: () => 'n/a',
-    fix: ['claude plugin update typescript-lsp@claude-plugins-official'],
+    // No `codex` fix: Claude Code plugins have no Codex equivalent, so `codex` is always `n/a`,
+    // never a gap.
+    fix: () => ({
+      installed: 'claude plugin install typescript-lsp@claude-plugins-official',
+      claude: 'claude plugin enable typescript-lsp@claude-plugins-official',
+      upToDate: 'claude plugin update typescript-lsp@claude-plugins-official',
+    }),
   },
 ];
 
@@ -191,7 +230,7 @@ export function resolveProjectRoot(cwd, spawn = spawnSync) {
 }
 
 /** One tool's full doctor row: installed state + version, configured per host, configured for the
- * project, `upToDate` left `unknown` for T2, and the tool's own fix commands. */
+ * project, `upToDate` left `unknown` for T2, and the tool's own fix command per dimension. */
 export function probeTool(tool, deps) {
   const { state: installed, version } = tool.installed(deps);
   const configured = tool.configured(deps);
@@ -203,7 +242,7 @@ export function probeTool(tool, deps) {
     codex: configured.codex,
     project: tool.project(deps),
     upToDate: 'unknown',
-    fix: tool.fix,
+    fix: tool.fix(deps),
   };
 }
 

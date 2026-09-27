@@ -37,10 +37,45 @@ test('tools carries exactly the five stack tools, in Design-table order', () => 
 
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
   for (const tool of tools) {
-    for (const fix of tool.fix) {
+    for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
       assert.doesNotMatch(fix, /codegraph upgrade/);
     }
   }
+});
+
+// --- per-dimension fix maps ---
+
+test('gentle-ai fix covers installed, claude, codex and upToDate but not project', () => {
+  const fix = findTool('gentle-ai').fix({});
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
+});
+
+test('engram fix covers installed, claude, codex and upToDate but not project', () => {
+  const fix = findTool('engram').fix({});
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
+});
+
+test('codegraph fix covers all five dimensions, and its project fix carries the resolved project root', () => {
+  const fix = findTool('codegraph').fix({ project: 'D:/some/resolved/root' });
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'project', 'upToDate']);
+  assert.match(fix.project, /D:\/some\/resolved\/root/);
+  assert.doesNotMatch(fix.installed, /codegraph upgrade/);
+});
+
+test('codegraph registers Claude and Codex through their own mcp add commands, not the npm install', () => {
+  const fix = findTool('codegraph').fix({ project: '/root' });
+  assert.match(fix.claude, /^claude mcp add /);
+  assert.match(fix.codex, /^codex mcp add /);
+});
+
+test('context7 fix covers claude, codex and upToDate but has no installed or project fix', () => {
+  const fix = findTool('context7').fix({});
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'upToDate']);
+});
+
+test('typescript-lsp fix covers installed, claude and upToDate but has no codex or project fix', () => {
+  const fix = findTool('typescript-lsp').fix({});
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'installed', 'upToDate']);
 });
 
 // --- installed + version: version-command tools (gentle-ai, engram, codegraph) ---
@@ -400,7 +435,8 @@ test('probeTool assembles one full row, leaving upToDate unknown for T2', () => 
   try {
     writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
     const tool = findTool('gentle-ai');
-    const row = probeTool(tool, { home, project, spawn: fakeSpawnOk('gentle-ai 3.7.0') });
+    const deps = { home, project, spawn: fakeSpawnOk('gentle-ai 3.7.0') };
+    const row = probeTool(tool, deps);
     assert.deepEqual(row, {
       id: 'gentle-ai',
       version: '3.7.0',
@@ -409,7 +445,7 @@ test('probeTool assembles one full row, leaving upToDate unknown for T2', () => 
       codex: 'ok',
       project: 'n/a',
       upToDate: 'unknown',
-      fix: tool.fix,
+      fix: tool.fix(deps),
     });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

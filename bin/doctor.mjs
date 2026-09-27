@@ -15,6 +15,8 @@ import { gapList, gapDigest } from './lib/digest.mjs';
 
 const GAP_STATES = new Set(['missing', 'outdated']);
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
+const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
+const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
 const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
@@ -51,10 +53,23 @@ function formatRow(row) {
   return cells.map((cell, i) => String(cell).padEnd(COLUMN_WIDTHS[i])).join('') + row.upToDate;
 }
 
-/** A row has a gap when any dimension — including `upToDate` — is `missing` or `outdated`.
- * `unknown` and `n/a` are not actionable the same way, so they never trigger a fix command. */
-function hasGap(row) {
-  return [row.installed, row.claude, row.codex, row.project, row.upToDate].some((state) => GAP_STATES.has(state));
+/** The column header, aligned with `formatRow`'s widths the same way its own cells are. */
+function headerRow() {
+  return HEADER_LABELS.map((label, i) => label.padEnd(COLUMN_WIDTHS[i])).join('') + 'up to date';
+}
+
+/** Every `{ dimension, state, fix }` gap on one row — only a dimension that is both `missing`/
+ * `outdated` (`unknown` and `n/a` are not actionable the same way) and has a fix command defined
+ * for it (every gap dimension the five tools actually reach today does; the guard just keeps a
+ * future tool from throwing instead of silently printing "undefined"). */
+function rowGaps(row) {
+  const gaps = [];
+  for (const dimension of DIMENSIONS) {
+    const state = row[dimension];
+    const fix = row.fix?.[dimension];
+    if (GAP_STATES.has(state) && fix) gaps.push({ dimension, state, fix });
+  }
+  return gaps;
 }
 
 /** context7 hosted has no version of its own to compare against npm, so it is never `outdated` —
@@ -140,16 +155,17 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   const rows = await buildReport({ home, cwd, offline }, deps);
 
   if (json) {
-    console.log(JSON.stringify(rows, null, 2));
+    console.log(JSON.stringify(rows.map((row) => ({ ...row, gaps: rowGaps(row) })), null, 2));
     return 0;
   }
 
+  console.log(headerRow());
   for (const row of rows) console.log(formatRow(row));
 
-  const gaps = rows.filter(hasGap);
-  if (gaps.length > 0) {
+  const gapLines = rows.flatMap((row) => rowGaps(row).map((gap) => ({ id: row.id, ...gap })));
+  if (gapLines.length > 0) {
     console.log('\nFix:');
-    for (const row of gaps) console.log(`  ${row.id}: ${row.fix.join('; ')}`);
+    for (const gap of gapLines) console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix}`);
   }
 
   return 0;

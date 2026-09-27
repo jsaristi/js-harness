@@ -140,9 +140,117 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
 
     assert.equal(code, 0);
     assert.match(output, /Fix:/);
-    assert.match(output, /codegraph: npm i -g @colbymchenry\/codegraph/);
+    assert.match(output, /codegraph \(installed\): npm i -g @colbymchenry\/codegraph/);
     assert.doesNotMatch(output, /codegraph upgrade/);
-    assert.match(output, /gentle-ai: gentle-ai upgrade/);
+    assert.match(output, /gentle-ai \(claude\): gentle-ai install/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain prints a header row above the tool table, aligned with the column widths', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    const expectedHeader =
+      'tool'.padEnd(16) + 'version'.padEnd(10) + 'claude'.padEnd(10) + 'codex'.padEnd(10) + 'project'.padEnd(10) +
+      'up to date';
+    assert.equal(output.split('\n')[0], expectedHeader);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain prints exactly the Codex mcp add command when codegraph is missing only in Codex, not the npm install', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    // Codex config lacks the codegraph section: registered everywhere except Codex.
+    fs.writeFileSync(
+      path.join(home, '.codex', 'config.toml'),
+      '[mcp_servers.engram]\ncommand = "engram"\n\n[mcp_servers.context7]\nurl = "x"\n',
+      'utf8',
+    );
+    const spawn = fakeSpawn({
+      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      gitToplevel: project,
+    });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /codegraph \(codex\): codex mcp add codegraph -- codegraph serve --mcp/);
+    assert.doesNotMatch(output, /codegraph \(installed\)/);
+    assert.doesNotMatch(output, /codegraph \(claude\)/);
+    assert.doesNotMatch(output, /codegraph \(project\)/);
+    assert.doesNotMatch(output, /npm i -g @colbymchenry\/codegraph/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("doctorMain's codegraph project fix carries the actual resolved project root, not a literal placeholder", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    // No .codegraph/ in the project: codegraph's project dimension is a gap.
+    const spawn = fakeSpawn({
+      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      gitToplevel: project,
+    });
+
+    const { code, output } = await runDoctor(
+      ['--home', home, '--cwd', project, '--json'],
+      {},
+      { spawn, fetch: noopFetch },
+    );
+
+    assert.equal(code, 0);
+    const rows = JSON.parse(output);
+    const codegraphRow = rows.find((r) => r.id === 'codegraph');
+    assert.equal(codegraphRow.project, 'missing');
+    assert.doesNotMatch(codegraphRow.fix.project, /<root>/);
+    assert.ok(codegraphRow.fix.project.includes(project), 'expected the fix text to carry the resolved root');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain --json exposes each row\'s fix map and a gaps array of {dimension, state, fix}', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    // Empty home + no git repo: gentle-ai's installed/claude/codex are all `missing`.
+    const spawn = fakeSpawn({});
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    const rows = JSON.parse(output);
+    const gentleAi = rows.find((r) => r.id === 'gentle-ai');
+    assert.equal(typeof gentleAi.fix, 'object');
+    assert.ok(Array.isArray(gentleAi.gaps));
+    assert.deepEqual(
+      gentleAi.gaps.map((g) => g.dimension).sort(),
+      ['claude', 'codex', 'installed'],
+    );
+    for (const gap of gentleAi.gaps) {
+      assert.equal(gap.state, 'missing');
+      assert.equal(gap.fix, gentleAi.fix[gap.dimension]);
+    }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -237,7 +345,7 @@ test('doctorMain marks a tool outdated and lists its fix when the fetched latest
 
     assert.equal(code, 0);
     assert.match(output, /gentle-ai\s.*outdated/);
-    assert.match(output, /Fix:\n +gentle-ai: gentle-ai upgrade/);
+    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\): gentle-ai upgrade; gentle-ai sync/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
