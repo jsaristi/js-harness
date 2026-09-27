@@ -55,13 +55,13 @@ unpushed docs commits), so the PR carries them too.
 
 ## Tasks
 - [x] T1 `bin/lib/progress.mjs`: parse checkboxes (fences, bullets, indent), group roadmap steps by phase, read a feature doc's title and steps — route: delegated writer (2 non-trivial files with T2)
-- [ ] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
+- [x] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
 - [ ] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
 
 ## Progress
 - 2026-09-27: document created after reading `bin/js-harness.mjs`, `bin/doctor.mjs` and the
   existing feature docs (all use `- [x] Tn ...` under `## Tasks`).
-- 2026-09-27: T1 done, commit `<pending>`. Added `bin/lib/progress.mjs` (`parseSteps`,
+- 2026-09-27: T1 done, commit `65a121b`. Added `bin/lib/progress.mjs` (`parseSteps`,
   `parseRoadmap`, `parseFeature`, all pure over markdown text, no fs) and
   `bin/lib/progress.test.mjs` (20 inline-fixture cases: fences, bullets, indent, `X`, Checklist
   section boundaries, empty phases, `(unassigned)`, missing title, text trim, CRLF).
@@ -71,3 +71,32 @@ unpushed docs commits), so the PR carries them too.
   GREEN (after implementation): same command → `tests 20 / pass 20 / fail 0`.
   `npm run check` → `PASS budget 1026 estimated tokens (budget 1500)` / `PASS tests node --test
   passed`.
+- 2026-09-27: T2 done, commit `3e76aa2`. Added `bin/progress.mjs` (`progressMain`: `--cwd`,
+  `--json`, reads `docs/ROADMAP.md` and `odd/tasks/*.md` via `bin/lib/progress.mjs`, repo-relative
+  forward-slash paths, exit 1 only when neither is found) and `bin/progress.test.mjs` (12 cases:
+  usage errors, missing roadmap/`odd/tasks`, sorted features, the documented JSON shape, text
+  rendering incl. the em-dash/never-100% rule, and the injected-vs-real default `--cwd`). Wired
+  `progress` into `bin/js-harness.mjs`'s `commands` map and `USAGE`, and extended
+  `bin/js-harness.test.mjs`'s help test plus a new hermetic dispatch test.
+  RED (before implementation existed): `node --test bin/progress.test.mjs` failed with `Error
+  [ERR_MODULE_NOT_FOUND]: Cannot find module 'D:\js-harness\bin\progress.mjs' imported from
+  D:\js-harness\bin\progress.test.mjs'` — 1 failing (the whole file), 0 passing.
+  GREEN (after implementation, one intermediate red for a wrong percentage/spacing expectation in
+  a test I wrote — fixed in the test, not the implementation): `node --test
+  bin/lib/progress.test.mjs bin/progress.test.mjs bin/js-harness.test.mjs` → `tests 43 / pass 43 /
+  fail 0`.
+  `npm run check` → `PASS budget 1026 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `node bin/js-harness.mjs progress --cwd D:/js-harness` → exit 0; roadmap `0/0` (no `## Checklist`
+  yet — T3 adds it), features `15/17` `88%` across the four feature docs, one still open
+  (`Progress view` `1/3`, this task's own doc, current as of T2).
+  `node bin/js-harness.mjs progress --cwd D:/js-harness --json` → exit 0; parses to the documented
+  shape (`root`, `roadmap: { path, done, total, phases }`, `features: [{ id, title, path, done,
+  total, steps }]`, top-level `done`/`total`).
+  Assumptions (not settled by the doc, picked as the simplest option): the `cwd` field in
+  `progressMain`'s options is the injectable fallback used only when `--cwd` is absent (so tests
+  can avoid depending on the real `process.cwd()`), not a bypass of the flag; the title column
+  width is computed per run from the longest phase/feature title (`+2`), rather than a fixed
+  constant, since titles vary far more here than doctor's five known tool ids; a blank line
+  separates the Roadmap and Features sections (and precedes `Total`) for readability, matching no
+  explicit spec line but no explicit spec line forbids it either.

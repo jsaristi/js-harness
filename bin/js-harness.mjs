@@ -4,6 +4,7 @@ import { main as checkMain } from './check.mjs';
 import { installMain, syncMain, uninstallMain } from './install.mjs';
 import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { doctorMain } from './doctor.mjs';
+import { progressMain } from './progress.mjs';
 import { tuiMain } from './tui.mjs';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -19,6 +20,7 @@ Commands:
   update      Check whether a newer release exists.
   upgrade     Install the newer release, then sync.
   doctor      Report the stack's tools: installed, configured, up to date.
+  progress    Show roadmap and feature progress from their checkboxes.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;
@@ -32,6 +34,7 @@ const commands = {
   update: updateMain,
   upgrade: upgradeMain,
   doctor: doctorMain,
+  progress: progressMain,
 };
 
 async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui = tuiMain } = {}) {

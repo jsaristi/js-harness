@@ -33,7 +33,7 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists install, sync, uninstall, status, update, upgrade and doctor', () => {
+test('--help lists install, sync, uninstall, status, update, upgrade, doctor and progress', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /install/);
   assert.match(result.stdout, /sync/);
@@ -42,6 +42,7 @@ test('--help lists install, sync, uninstall, status, update, upgrade and doctor'
   assert.match(result.stdout, /update/);
   assert.match(result.stdout, /upgrade/);
   assert.match(result.stdout, /doctor/);
+  assert.match(result.stdout, /progress/);
 });
 
 test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {
@@ -105,6 +106,23 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('progress dispatches to a temp cwd and exits 0, hermetically (never this repo\'s real docs)', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-progress-cwd-'));
+  try {
+    fs.mkdirSync(path.join(cwd, 'odd', 'tasks'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'odd', 'tasks', 'a-feature.md'), '# A feature\n- [x] T1\n', 'utf8');
+
+    const result = run(['progress', '--cwd', cwd, '--json']);
+
+    assert.equal(result.status, 0);
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.roadmap, null);
+    assert.deepEqual(data.features.map((f) => f.id), ['a-feature']);
+  } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
