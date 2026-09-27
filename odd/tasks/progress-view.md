@@ -185,9 +185,6 @@ unpushed docs commits), so the PR carries them too.
   `node bin/js-harness.mjs progress` (default `--cwd`, this repo) → exit 0, `Total  38/62  61%`
   (Roadmap `20/43` `47%`, Features `18/19` `95%` — T4's own line in this doc is the one pending
   step now).
-- Next: push `feat/progress-view` and open the PR (it carries the two `docs/codex-review`
-  commits); a final review of `8bf53a7..HEAD` (T4) before that; merge after Sebastián's
-  go-ahead.
 - 2026-09-27: the two real-symlink tests from T4 skip on this machine (`fs.symlinkSync` → `EPERM`
   without Windows developer mode), so the symlink branch of `readFeatures` was never observed
   running. Added two tests that inject a symlink-typed entry through `readdir`/`stat`/`readFile`
