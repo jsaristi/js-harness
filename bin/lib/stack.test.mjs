@@ -112,7 +112,9 @@ test('a version-command tool reports unknown when stdout has no parseable semver
   assert.deepEqual(result, { state: 'unknown', version: null });
 });
 
-test('a version-command tool spawns through a shell on win32 (npm .cmd shims)', () => {
+test('a version-command tool spawns through a shell on win32 as one command line, no args array', () => {
+  // Node 24 warns (DEP0190) on stderr when a shell spawn also gets an args array, and the hook
+  // path must never write to stderr. The probe args are fixed literals, so joining is safe.
   const tool = findTool('codegraph');
   const calls = [];
   const spawn = (cmd, args, opts) => {
@@ -120,8 +122,8 @@ test('a version-command tool spawns through a shell on win32 (npm .cmd shims)', 
     return { status: 0, stdout: '1.6.0', stderr: '' };
   };
   tool.installed({ spawn, platform: 'win32' });
-  assert.equal(calls[0].cmd, 'codegraph');
-  assert.deepEqual(calls[0].args, ['--version']);
+  assert.equal(calls[0].cmd, 'codegraph --version');
+  assert.deepEqual(calls[0].args, []);
   assert.equal(calls[0].opts.shell, true);
 });
 

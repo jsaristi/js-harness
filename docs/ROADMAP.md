@@ -65,7 +65,7 @@ First request of a one-word prompt, estimated tokens:
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
-| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Built and reviewed on `feat/stack-doctor` 2026-09-27, PR pending (`odd/tasks/stack-doctor.md`) |
+| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Done, reviewed, merged to `main` 2026-09-27 via `jsaristi/js-harness#4`; installed on this machine, hook registered in Claude Code and Codex; a Windows exit crash found by that install fixed on `fix/doctor-windows-exit` (`odd/tasks/stack-doctor.md`) |
 | Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | — after the Stack doctor merge, before F2, so every later phase is tracked with it |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size); first verify that a git-spec global install works through the pnpm shim |
@@ -77,8 +77,8 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Stack doctor — merge `jsaristi/js-harness#4` (Sebastián's call), then a real
-   `js-harness install` to register the hook on this machine.
+1. Merge `fix/doctor-windows-exit`, then reinstall the global package from `main` and run
+   `js-harness sync` — until then the installed hook exits 127 whenever its 6 h cache is stale.
 2. Progress view.
 3. F2 Context diet.
 4. Project init.

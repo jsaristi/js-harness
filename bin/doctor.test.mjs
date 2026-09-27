@@ -57,7 +57,9 @@ function fakeSpawn({ versions = {}, gitToplevel } = {}) {
         ? { status: 0, stdout: `${gitToplevel}\n`, stderr: '' }
         : { status: 128, stdout: '', stderr: 'not a git repository' };
     }
-    if (versions[cmd]) return { status: 0, stdout: versions[cmd], stderr: '' };
+    // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
+    const binary = cmd.split(' ')[0];
+    if (versions[binary]) return { status: 0, stdout: versions[binary], stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
