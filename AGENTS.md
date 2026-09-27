@@ -45,7 +45,10 @@ He decides spend, anything irreversible, and product choices; ask those one at a
 Review is not one of them: he has pre-granted gentle-ai review consent for every candidate here,
 so when `gentle-ai review start` returns its consent envelope, run the `granted` invocation
 without asking. The review itself always runs; only the question is skipped, because his answer
-is always yes and the question only stalls the work. Everything else, keep moving: name the next few units of work and do them without stopping to
+is always yes and the question only stalls the work. If the envelope has no `granted` choice or
+does not parse, ask him instead.
+
+Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain-language summary and close with a recap of
 the whole stretch, including what was spent.
 
