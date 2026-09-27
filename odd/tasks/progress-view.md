@@ -58,6 +58,7 @@ unpushed docs commits), so the PR carries them too.
 - [x] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
 - [x] T2b Accepted review follow-ups: close a fence only on the same character and at least the opening length (R3-fence-mismatch, Codex P2); skip non-file `.md` entries and turn read errors into the documented exit codes (R3-unreadable-entry-crash); unknown flags and positionals are usage errors, exit 2 (R3-unknown-args-ignored) — route: delegated writer (2 non-trivial files)
 - [x] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
+- [ ] T4 Accepted final-slice review follow-ups: a symlinked `odd/tasks/*.md` counts when its target is a file (R3-symlinked-feature-dropped, a T2b regression); only ENOENT means absent, every other discovery error on `odd/tasks` or `docs/ROADMAP.md` is reported on stderr (R3-unreadable-tasks-dir-silent, Codex P2); a backtick opener whose info string contains a backtick is not a fence (R3-backtick-info-string) — route: delegated writer (2 non-trivial files)
 
 ## Progress
 - 2026-09-27: document created after reading `bin/js-harness.mjs`, `bin/doctor.mjs` and the
@@ -146,5 +147,9 @@ unpushed docs commits), so the PR carries them too.
   `37/61`, 12 phases, 4 features. `node --test` → `tests 269 / pass 269 / fail 0`.
   Review state: T2b assessed `medium`, `under_budget` (352 lines from `5117e79`), so the slice
   `5117e79..HEAD` is reviewed once at feature close, before the PR.
-- Next: review the slice from `5117e79` (gentle-ai, then Codex), push `feat/progress-view`, open
-  the PR (it carries the two `docs/codex-review` commits), merge after Sebastián's go-ahead.
+- 2026-09-27: slice `5117e79..8bf53a7` (T2b, T3) reviewed. gentle-ai lineage
+  `review-17fd24ad8241643d`, reliability lens: approved and acknowledged, three advisory findings
+  accepted into T4. Codex (`gpt-6-sol`, `xhigh`): one P2, "report directory-read failures instead
+  of treating features as absent", which duplicates R3-unreadable-tasks-dir-silent.
+- Next: T4, its review, then push `feat/progress-view` and open the PR (it carries the two
+  `docs/codex-review` commits); merge after Sebastián's go-ahead.
