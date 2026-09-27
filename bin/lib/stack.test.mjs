@@ -62,6 +62,14 @@ test('codegraph fix covers all five dimensions, and its project fix carries the 
   assert.doesNotMatch(fix.installed, /codegraph upgrade/);
 });
 
+test('codegraph project fix never prints a null or undefined root when no project resolved', () => {
+  for (const project of [undefined, null, '']) {
+    const fix = findTool('codegraph').fix({ project });
+    assert.doesNotMatch(fix.project, /null|undefined|--cwd\s*$/);
+    assert.match(fix.project, /^gentle-ai codegraph init --cwd <project root>$/);
+  }
+});
+
 test('codegraph registers Claude and Codex through their own mcp add commands, not the npm install', () => {
   const fix = findTool('codegraph').fix({ project: '/root' });
   assert.match(fix.claude, /^claude mcp add /);

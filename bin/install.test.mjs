@@ -99,6 +99,35 @@ test('syncMain prints a stderr skip line when a component write fails, naming th
   }
 });
 
+test('syncMain counts only the files it actually wrote, not records carried forward after a failed write', async () => {
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+    const total = readManifest(home).files.length;
+    const target = readManifest(home).files[0].path;
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+
+    const outLines = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (line) => outLines.push(String(line));
+    console.error = () => {};
+    try {
+      await syncMain(['--home', home], process.env, { writeFile: failingWriteFile });
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    assert.match(outLines[0], new RegExp(`\\(${total - 1} files\\)`));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --home is not given', async () => {
   const home = makeTmpHome();
   try {

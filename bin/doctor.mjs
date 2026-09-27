@@ -58,16 +58,14 @@ function headerRow() {
   return HEADER_LABELS.map((label, i) => label.padEnd(COLUMN_WIDTHS[i])).join('') + 'up to date';
 }
 
-/** Every `{ dimension, state, fix }` gap on one row — only a dimension that is both `missing`/
- * `outdated` (`unknown` and `n/a` are not actionable the same way) and has a fix command defined
- * for it (every gap dimension the five tools actually reach today does; the guard just keeps a
- * future tool from throwing instead of silently printing "undefined"). */
+/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing` or `outdated`
+ * (`unknown` and `n/a` are not actionable the same way). A gap with no fix command defined is still
+ * a gap — `fix` is `null` — so `gaps` always agrees with the row states and the hook's digest. */
 function rowGaps(row) {
   const gaps = [];
   for (const dimension of DIMENSIONS) {
     const state = row[dimension];
-    const fix = row.fix?.[dimension];
-    if (GAP_STATES.has(state) && fix) gaps.push({ dimension, state, fix });
+    if (GAP_STATES.has(state)) gaps.push({ dimension, state, fix: row.fix?.[dimension] ?? null });
   }
   return gaps;
 }
@@ -165,7 +163,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   const gapLines = rows.flatMap((row) => rowGaps(row).map((gap) => ({ id: row.id, ...gap })));
   if (gapLines.length > 0) {
     console.log('\nFix:');
-    for (const gap of gapLines) console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix}`);
+    for (const gap of gapLines) console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix ?? 'no fix command known'}`);
   }
 
   return 0;

@@ -312,6 +312,28 @@ test('doctorMain never throws and always exits 0, even on a completely empty hom
   }
 });
 
+test('a gap with no known fix command is still reported, in --json gaps and in the Fix section', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    // Empty home: context7 is registered nowhere, so `installed` is missing, and context7 has no
+    // CLI to install, so that dimension has no fix command.
+    const spawn = fakeSpawn({});
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    const context7 = JSON.parse(json.output).find((row) => row.id === 'context7');
+    assert.deepEqual(
+      context7.gaps.find((gap) => gap.dimension === 'installed'),
+      { dimension: 'installed', state: 'missing', fix: null },
+    );
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.match(text.output, /context7 \(installed\): no fix command known/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- T2: latest-version lookup, cache, `outdated`, `--offline` ---
 
 test('doctorMain marks a tool ok when its installed version is at least the fetched latest', async () => {

@@ -177,7 +177,7 @@ export const tools = [
       installed: 'npm i -g @colbymchenry/codegraph',
       claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
       codex: 'codex mcp add codegraph -- codegraph serve --mcp',
-      project: `gentle-ai codegraph init --cwd ${project}`,
+      project: `gentle-ai codegraph init --cwd ${project || '<project root>'}`,
       upToDate: 'npm i -g @colbymchenry/codegraph',
     }),
   },

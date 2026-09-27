@@ -37,11 +37,17 @@ function logEntries(entries) {
   }
 }
 
+/** Files this run actually wrote: a record carried forward after a failed write is still in the
+ * manifest (so uninstall can undo it) but was not written now. */
+function writtenCount(manifest) {
+  return manifest.files.filter((file) => !file.skipped).length;
+}
+
 export async function installMain(argv, env = process.env, deps = {}) {
   const home = parseHome(argv, env);
   const version = currentVersion();
   const manifest = install(home, version, deps);
-  console.log(`installed js-harness ${version} (${manifest.files.length} files) into ${home}`);
+  console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   return 0;
@@ -51,7 +57,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   const home = parseHome(argv, env);
   const version = currentVersion();
   const manifest = sync(home, version, deps);
-  console.log(`synced js-harness ${version} (${manifest.files.length} files) into ${home}`);
+  console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   return 0;
