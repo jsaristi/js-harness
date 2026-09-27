@@ -58,7 +58,9 @@ A session holds one task, because the conversation is lost on a new session or a
 only files survive. So every decision made in the conversation is written to the roadmap or the
 feature document and committed in the same session. Tell him when to cut: a new session when a
 feature closes, a PR merges or a phase starts; `/compact` with what to keep when a task is still
-open but the conversation has grown long.
+open but the conversation has grown long. Every time, close with the exact text to paste: the
+opening prompt for the new session, or the full `/compact` command, in a code block, so he never
+has to write the handoff himself.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.
