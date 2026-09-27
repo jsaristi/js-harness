@@ -195,3 +195,12 @@ unpushed docs commits), so the PR carries them too.
   stderr). Checked they discriminate: with the T2b regression restored (`if (!entry.isFile())
   continue;`), `node --test --test-name-pattern="injected symlink" bin/progress.test.mjs` →
   `pass 0 / fail 2`; with the fix → `pass 2 / fail 0`.
+- 2026-09-27: slice `33fb9e0..95131c4` (T4 and its tests) reviewed. gentle-ai lineage
+  `review-b581d5d6640a35a3`, reliability lens: approved and acknowledged, one SUGGESTION (R3-001: a
+  dangling `docs/ROADMAP.md` symlink is dropped silently, while a dangling feature symlink is
+  reported). Not fixed here: it needs a symlinked roadmap that points nowhere, and one more round
+  for an edge that rare is not worth a new slice; left as a known follow-up. Codex (`gpt-6-sol`,
+  `xhigh`): no actionable regression.
+- Known follow-up: R3-001 above.
+- Next: push `feat/progress-view`, open the PR (it carries the two `docs/codex-review` commits),
+  merge after Sebastián's go-ahead, then tick "Reviewed and merged" in the roadmap checklist.
