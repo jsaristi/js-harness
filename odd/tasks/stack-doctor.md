@@ -311,5 +311,68 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
     codegraph: npm i -g @colbymchenry/codegraph; gentle-ai codegraph init --cwd <root>
   ```
 
+- 2026-09-26: The final native review (lineage `review-cef5637e2884c12a`) was approved and
+  acknowledged. R3-001..R3-003 were accepted and applied directly, commit `1573bf1`; R3-004 needed
+  no change — it is already covered by the 5 s per-probe timeout at `bin/lib/stack.mjs:23` (worst
+  case the TUI's offline stack block waits ~5 s per probe, never longer, since every spawn call
+  there already carries that timeout).
+  - R3-001: `install()` in `bin/lib/manifest.mjs` was dropping a component's manifest record
+    outright when a write failed, even when a previous manifest already had that file recorded —
+    orphaning it (`sync`'s pruning loop would then delete the still-good previous copy, reading it
+    as "no longer shipped"; `uninstall` would forget the file existed at all). Fixed: `install` now
+    carries the previous `{ path, sha256 }` record forward on a write failure (marked
+    `skipped: true`, with the failure's `reason`), and `sync`'s pruning loop now compares against
+    `components`' own currently-declared targets rather than this run's successful writes, so a
+    component that is still declared but merely failed to (re)write this run is never pruned. Added
+    a `deps.writeFile` seam to `install`/`sync` (default `fs.writeFileSync`) so tests can force a
+    write failure without relying on real file permissions (chmod is unreliable on Windows).
+    `bin/install.mjs`'s `install`/`sync` CLIs now print one `skipped <path>: <reason>` line per
+    skipped component or entry to stderr; entries also gained a real `reason` (`appendEntryToFile`
+    now returns one for every skip branch) instead of the old hardcoded `(malformed JSON)` text that
+    was wrong for the other skip causes R3-002 (T4) had already added.
+  - R3-002: `bin/lib/manifest.test.mjs`'s "uninstall keeps a hook file js-harness created when an
+    unrelated key is left in the document" test had a tautological final assertion
+    (`!result.entriesRemoved.includes(target) || fs.existsSync(target)`) — always true once the
+    preceding assertion had already proven `fs.existsSync(target)`, regardless of
+    `entriesRemoved`'s contents. Replaced with a real assertion
+    (`result.entriesRemoved.includes(target)`), which was already true under the unmodified code
+    (this is a currently-true behavior the old assertion should have proven and did not — not a
+    behavior change).
+  - R3-003: `bin/doctor.mjs`'s `resolveLatestVersions` computed its own inline `attemptedIds` filter
+    (`row.id === 'context7' && row.version === 'hosted'`), duplicating — incompletely — the rule
+    `bin/lib/latest.mjs`'s `fetchLatestVersions` already applies (which also skips a row id with no
+    `SOURCES` entry, a case the doctor.mjs copy did not know about). Extracted a shared
+    `isLookupAttempted(row)` predicate into `latest.mjs`, exported it, and reused it in both
+    `fetchLatestVersions` and `resolveLatestVersions`.
+  RED: `node --test bin/lib/manifest.test.mjs` before any manifest.mjs change → 4 failing (the
+  "malformed JSON hook file" test's new `record.reason` assertion, plus the three new R3-001 tests:
+  `next.files.find(...)` missing the failed component's `sha256`/`skipped`/`reason` fields entirely
+  since nothing carried it forward, "sync does not delete" asserting `v0.1.0` content but getting
+  `v0.2.0` since the injected `writeFile` seam did not exist yet and the real write succeeded, and
+  the "no record for a component that has never been written" case reading `true` where `false` was
+  expected). `node --test bin/lib/latest.test.mjs` before the export existed → the whole file failed
+  to load (`SyntaxError: The requested module './latest.mjs' does not provide an export named
+  'isLookupAttempted'`), 1 failing (the module-load failure itself, collapsing all 22 tests in that
+  file). Separately: the new R3-003 mixed-row-set (`bin/doctor.test.mjs`) and `isLookupAttempted`
+  unit (`bin/lib/latest.test.mjs`) tests were also run against the *old*, unmodified
+  `doctor.mjs`/`latest.mjs` predicate logic before touching it, to check for a real RED — both
+  already passed, since the two real production ids in that mixed-row-set test (`context7` hosted,
+  `gentle-ai` attempted-and-failed) were already handled correctly by the old duplicated predicate.
+  This fix is a de-duplication/drift-prevention refactor (the old copy only mishandled a row id with
+  no registered source, not present among the five real tools today), not a fix for an active bug in
+  the five real tools — recorded here plainly per the "claim carries its evidence" rule rather than
+  overstating a RED that did not occur. `node --test bin/install.test.mjs` before `installMain`/
+  `syncMain` accepted `deps`
+  → the new stderr-skip-line test failed asserting the skip line was present (empty stderr, since the
+  injected `writeFile` was silently ignored and the real write succeeded).
+  GREEN: `bin/lib/manifest.test.mjs` -> 34/34; `bin/lib/latest.test.mjs` -> 12/12;
+  `bin/doctor.test.mjs` -> included in the full run; `bin/install.test.mjs` -> 7/7.
+  Full suite: `node --test` -> `tests 210 / pass 210 / fail 0`.
+  `npm run check` -> `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `npm run e2e` -> all 14 steps `PASS`, unchanged from T4's run (this change touches no behavior the
+  e2e script exercises beyond the existing install/sync/uninstall path, which still round-trips
+  byte-for-byte).
+
 ## Next step
 T6.
