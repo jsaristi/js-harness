@@ -16,11 +16,14 @@ const PROBE_TIMEOUT_MS = 5000;
  * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version, or a probe
  * that had to be killed after `PROBE_TIMEOUT_MS`, is `unknown`. `shell` is needed on win32 because
  * npm-installed global binaries are `.cmd` shims (see how `upgradeMain` in update.mjs spawns
- * `js-harness` itself for the same reason). */
+ * `js-harness` itself for the same reason). Through a shell the command goes as one line with no
+ * args array: Node 24 warns (DEP0190) on stderr otherwise, and the probe args are fixed literals. */
 function probeVersionCommand(command, args, { spawn = spawnSync, platform = process.platform } = {}) {
+  const shell = platform === 'win32';
+  const [file, argv] = shell ? [[command, ...args].join(' '), []] : [command, args];
   let result;
   try {
-    result = spawn(command, args, { encoding: 'utf8', shell: platform === 'win32', timeout: PROBE_TIMEOUT_MS });
+    result = spawn(file, argv, { encoding: 'utf8', shell, timeout: PROBE_TIMEOUT_MS });
   } catch {
     return { state: 'missing', version: null };
   }

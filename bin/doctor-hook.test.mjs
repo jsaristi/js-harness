@@ -54,7 +54,9 @@ function seedHealthyHome(home, project) {
 function healthySpawn(project) {
   return (cmd, args) => {
     if (cmd === 'git' && args[0] === 'rev-parse') return { status: 0, stdout: `${project}\n`, stderr: '' };
-    if (['gentle-ai', 'engram', 'codegraph'].includes(cmd)) return { status: 0, stdout: `${cmd} 9.9.9\n`, stderr: '' };
+    // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
+    const binary = cmd.split(' ')[0];
+    if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
