@@ -80,7 +80,7 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
 - [x] T2 Latest-version lookup (GitHub, npm, local marketplace), 6 h cache, fail-open, `outdated` — route: delegated writer
 - [x] T3 `doctor --hook`: digest, `systemMessage` only on change, never plain stdout — route: delegated writer
 - [x] T4 Entry-level manifest records; install registers the hook in Claude and Codex; exact uninstall; e2e extended — route: delegated writer
-- [ ] T5 TUI stack block above the menu — route: delegated writer
+- [x] T5 TUI stack block above the menu — route: delegated writer
 - [ ] T6 Run `doctor` on this machine, record the output here, update the roadmap — route: inline
 
 ## Progress
@@ -234,5 +234,82 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   newly-added hook command; verifying that trust prompt requires an interactive session and is left
   as an open item rather than blocking T4 on it — read-only evidence only, no config was changed.
 
+- 2026-09-26: T4's native review (lineage `review-41e6050d1d54018f`) was approved and acknowledged.
+  Its 5 advisory findings, R3-001..R3-005 (these ids restart per review — not the same numbering as
+  T1's or T2/T3's own R3-00x/R3-10x follow-ups above), were accepted and applied directly as this
+  session's two work units rather than filed as separate follow-up work:
+  - R3-001: `appendEntryToFile` could overwrite a user value of an unexpected shape along the
+    pointer path (an intermediate key that wasn't a plain object, or a leaf that wasn't an array).
+  - R3-002: an fs failure on an entry target (unreadable file, a directory at the path,
+    `.claude`/`.codex` being a plain file, unwritable) could throw out of install/sync instead of
+    being reported `skipped`.
+  - R3-003: `isEmptyJsonDoc` ignored key names entirely, so uninstall could delete a file it created
+    even when the document still held unrelated content, as long as every value looked "empty".
+  - R3-004: `resolveLatestVersions` conflated "nothing needed checking" (context7 hosted, or an
+    empty row set) with "every lookup failed", so the doctor cache could stay stale forever with
+    nothing left to fetch.
+  - R3-005: install/uninstall always reformatted a rewritten host file to 2-space indentation,
+    discarding whatever indentation (tabs, 4 spaces, compact) it already used.
+- 2026-09-26: Unit A done, commit `f209adc`. Fixed R3-001..R3-005 in `bin/lib/manifest.mjs`:
+  `appendEntryToFile` now treats an unexpected-shaped intermediate/leaf value the same as a
+  malformed file (`skipped`, byte-for-byte untouched); both `appendEntryToFile` and the top-level
+  `install()` component-writing loop catch fs failures and report/skip rather than throw (verified
+  this never lets `sync` prune a healthy previous file: the same broken ancestor makes
+  `fs.existsSync` on that path read `false` too, so its pruning guard never fires);
+  `isEmptyJsonDoc` was replaced with `isOnlyOurPointerPath`, which requires every key along the
+  pointer path to be the *only* key at that level; `bin/doctor.mjs`'s `resolveLatestVersions` (now
+  exported for its own test) computes an `attemptedIds` list (excluding hosted-context7) and marks
+  the cache fresh when nothing was attempted, not only when something succeeded; `detectIndent` (new)
+  reads the existing indent unit (tabs, N spaces, or `null` for compact) from the raw file text and
+  `serializeJson` uses it instead of a hardcoded 2. `scripts/e2e.mjs`'s two seed files were changed
+  to 4-space (Claude) and tab (Codex) indentation, with a new step asserting install preserves each,
+  on top of the existing byte-for-byte uninstall restoration proving the round trip end to end.
+  RED: `node --test bin/lib/manifest.test.mjs bin/doctor.test.mjs` before any implementation change
+  (new tests only) -> `bin/doctor.test.mjs` failed to load at all (`SyntaxError: The requested module
+  './doctor.mjs' does not provide an export named 'resolveLatestVersions'`, collapsing its whole
+  file); 9 of the new `manifest.test.mjs` tests failed on their own assertions (the R3-001 shape
+  guards, the R3-002 fs-failure guards, the R3-003 unrelated-key guard, and all three R3-005
+  indentation cases) — 32 tests, 21 pass, 11 fail.
+  GREEN: `bin/lib/manifest.test.mjs` -> 31/31; `bin/doctor.test.mjs` -> included in the full run.
+  Full suite: `node --test` -> `tests 189 / pass 189 / fail 0`.
+  `npm run check` -> `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `npm run e2e` -> all 14 steps `PASS` (13 previous + the new indentation-preservation step),
+  including uninstall restoring both the 4-space and the tab-indented seed byte-for-byte.
+- 2026-09-26: Unit B (T5) done, commit `7327499`. `bin/tui.mjs` gains `worstState` (the worst state
+  across a doctor row's dimensions as a short label — bare `ok`/`missing`/`outdated` for the tool's
+  own installed/up-to-date state, `<state> <dimension>` such as `missing codex` for a per-host/
+  per-project gap, ties breaking toward the first dimension), `summarizeStackRow` (one doctor row ->
+  `{ id, version, state }`), and `computeStackState` (calls `bin/doctor.mjs`'s newly-exported
+  `buildReport` with `offline: true` so opening the TUI never touches the network, falling back to
+  the string `'unknown'` on any probe failure). `render` stays pure: it draws `state.stack` (an
+  array of rows, `'unknown'`, or omitted entirely) above the menu without probing anything itself.
+  `tuiMain` computes the stack via `computeStackState` with its injected `spawn`/`fetch`/`now`
+  before opening the TUI, and wires a new `doctor` menu item (`MENU_ITEMS` gained `'doctor'` right
+  after `'status'`) to the full `doctorMain` — with real network per the normal 6h cache rules,
+  unlike the offline startup block. Two pre-existing tests that hardcoded the old menu order (a
+  single down-press landing on Install, a redraw assertion for `> Install`) were updated for the new
+  item at index 1.
+  RED: `node --test bin/tui.test.mjs` before any implementation change -> the whole file failed to
+  load (`SyntaxError: The requested module './tui.mjs' does not provide an export named
+  'computeStackState'`), 1 failing (collapsing all 34 tests in the file, old and new).
+  GREEN: `bin/tui.test.mjs` -> 30/30 (after fixing the two pre-existing menu-order-dependent tests).
+  Full suite: `node --test` -> `tests 203 / pass 203 / fail 0`.
+  `npm run check` -> `PASS budget 858 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `npm run e2e` -> all 14 steps still `PASS` (the TUI is not exercised by e2e; re-run to confirm no
+  regression from the doctor.mjs/tui.mjs changes).
+  `node bin/js-harness.mjs doctor` on this machine (real, read-only):
+  ```
+  gentle-ai       3.7.0     ok        ok        n/a       ok
+  engram          2.2.1     ok        ok        n/a       ok
+  codegraph       1.6.0     ok        missing   ok        ok
+  context7        hosted    ok        ok        n/a       n/a
+  typescript-lsp  1.0.0     ok        n/a       n/a       ok
+
+  Fix:
+    codegraph: npm i -g @colbymchenry/codegraph; gentle-ai codegraph init --cwd <root>
+  ```
+
 ## Next step
-T5.
+T6.
