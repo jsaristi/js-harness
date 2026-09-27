@@ -71,7 +71,7 @@ unpushed docs commits), so the PR carries them too.
   GREEN (after implementation): same command → `tests 20 / pass 20 / fail 0`.
   `npm run check` → `PASS budget 1026 estimated tokens (budget 1500)` / `PASS tests node --test
   passed`.
-- 2026-09-27: T2 done, commit `3e76aa2`. Added `bin/progress.mjs` (`progressMain`: `--cwd`,
+- 2026-09-27: T2 done, commit `f54aced`. Added `bin/progress.mjs` (`progressMain`: `--cwd`,
   `--json`, reads `docs/ROADMAP.md` and `odd/tasks/*.md` via `bin/lib/progress.mjs`, repo-relative
   forward-slash paths, exit 1 only when neither is found) and `bin/progress.test.mjs` (12 cases:
   usage errors, missing roadmap/`odd/tasks`, sorted features, the documented JSON shape, text
