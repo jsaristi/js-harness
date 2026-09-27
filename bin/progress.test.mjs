@@ -401,6 +401,55 @@ test('progressMain reports a dangling symlinked feature doc on stderr (path + co
   }
 });
 
+// The two tests above need real symlinks, which Windows refuses without developer mode. These
+// inject a symlink-typed entry instead, so the symlink branch of readFeatures runs on every machine.
+
+function symlinkEntry(name) {
+  return { name, isFile: () => false, isSymbolicLink: () => true };
+}
+
+test('progressMain reads an injected symlink entry whose target is a file', async () => {
+  const project = makeTmpProject();
+  try {
+    const tasks = path.join(project, 'odd', 'tasks');
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], {
+      readdir: (dir) => (dir === tasks ? [symlinkEntry('linked.md')] : fs.readdirSync(dir, { withFileTypes: true })),
+      stat: (absolute) => (absolute === path.join(tasks, 'linked.md') ? { isFile: () => true } : fs.statSync(absolute)),
+      readFile: (absolute) => (absolute === path.join(tasks, 'linked.md') ? FEATURE_A : fs.readFileSync(absolute, 'utf8')),
+    });
+    assert.equal(code, 0);
+    assert.equal(stderr, '');
+    const data = JSON.parse(stdout);
+    assert.deepEqual(data.features.map((f) => [f.id, f.done, f.total]), [['linked', 1, 2]]);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain skips an injected symlink entry whose target is a directory, and reports a dangling one', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    const tasks = path.join(project, 'odd', 'tasks');
+    const dangling = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], {
+      readdir: (dir) =>
+        dir === tasks ? [symlinkEntry('to-dir.md'), symlinkEntry('dangling.md')] : fs.readdirSync(dir, { withFileTypes: true }),
+      stat: (absolute) => {
+        if (absolute === path.join(tasks, 'to-dir.md')) return { isFile: () => false };
+        if (absolute === path.join(tasks, 'dangling.md')) throw dangling;
+        return fs.statSync(absolute);
+      },
+    });
+    assert.equal(code, 0);
+    assert.match(stderr, /odd\/tasks\/dangling\.md: ENOENT/);
+    assert.doesNotMatch(stderr, /to-dir/);
+    assert.deepEqual(JSON.parse(stdout).features, []);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- R3-unreadable-tasks-dir-silent / Codex P2: only ENOENT means absent; any other discovery
 // error on docs/ROADMAP.md or odd/tasks is reported on stderr, and that source is skipped ---
 

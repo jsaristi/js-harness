@@ -151,7 +151,7 @@ unpushed docs commits), so the PR carries them too.
   `review-17fd24ad8241643d`, reliability lens: approved and acknowledged, three advisory findings
   accepted into T4. Codex (`gpt-6-sol`, `xhigh`): one P2, "report directory-read failures instead
   of treating features as absent", which duplicates R3-unreadable-tasks-dir-silent.
-- 2026-09-27: T4 done, commit `this commit`. Fixed the three accepted findings:
+- 2026-09-27: T4 done, commit `fdecd2e`. Fixed the three accepted findings:
   `bin/progress.mjs`'s `readFeatures` no longer filters `odd/tasks` entries on `Dirent.isFile()`
   alone (a T2b regression that silently dropped every symlinked feature doc, since `isFile()`
   reflects the link itself, not its target); a `.md` entry that is a symlink now gets its own
@@ -188,3 +188,10 @@ unpushed docs commits), so the PR carries them too.
 - Next: push `feat/progress-view` and open the PR (it carries the two `docs/codex-review`
   commits); a final review of `8bf53a7..HEAD` (T4) before that; merge after Sebastián's
   go-ahead.
+- 2026-09-27: the two real-symlink tests from T4 skip on this machine (`fs.symlinkSync` → `EPERM`
+  without Windows developer mode), so the symlink branch of `readFeatures` was never observed
+  running. Added two tests that inject a symlink-typed entry through `readdir`/`stat`/`readFile`
+  (target is a file → read; target is a directory → skipped silently; dangling → `ENOENT` on
+  stderr). Checked they discriminate: with the T2b regression restored (`if (!entry.isFile())
+  continue;`), `node --test --test-name-pattern="injected symlink" bin/progress.test.mjs` →
+  `pass 0 / fail 2`; with the fix → `pass 2 / fail 0`.
