@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { doctorMain } from './doctor.mjs';
+import { doctorMain, resolveLatestVersions } from './doctor.mjs';
 import { readCache, writeCache } from './lib/cache.mjs';
 
 // T2 introduces a real default `fetch` for latest-version lookups. Every test below that does not
@@ -468,4 +468,44 @@ test('doctorMain errors with usage on stderr and exits 2 when --cwd is missing i
   const { code, errOutput } = await runDoctorExpectingError(['--cwd']);
   assert.equal(code, 2);
   assert.match(errOutput, /Usage: js-harness doctor/);
+});
+
+// --- R3-004 (accepted T4 native review follow-up): a successful lookup that legitimately has
+// nothing to check (context7 hosted, or no rows at all) must mark the cache fresh, not stale.
+// Stale must still mean "at least one attempted lookup failed" (R3-102's own scenario keeps
+// working: some tools do get attempted, and either succeed or genuinely fail).
+
+test('R3-004: resolveLatestVersions marks the cache fresh when the only row is hosted context7 (nothing to check)', async () => {
+  const home = makeTmpHome();
+  try {
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
+    const rows = [{ id: 'context7', version: 'hosted' }];
+
+    await resolveLatestVersions(rows, { home, offline: false, fetch: noopFetch, now: () => new Date() });
+
+    const cache = readCache(home);
+    assert.notEqual(
+      cache.latest.checkedAt,
+      staleCheckedAt,
+      'expected the cache to become fresh when nothing needed checking',
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-004: resolveLatestVersions marks the cache fresh for a genuinely empty row set', async () => {
+  const home = makeTmpHome();
+  try {
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
+
+    await resolveLatestVersions([], { home, offline: false, fetch: noopFetch, now: () => new Date() });
+
+    const cache = readCache(home);
+    assert.notEqual(cache.latest.checkedAt, staleCheckedAt);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

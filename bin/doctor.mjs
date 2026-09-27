@@ -70,10 +70,16 @@ function computeUpToDate(row, latestVersion) {
 /** Resolves each row's latest version: from the cache alone in `--offline` mode or while it is
  * still fresh (checked within the last 6h), else refetched. A refetch is fail-open per tool: one
  * that could not be resolved this time keeps whatever was cached for it before (`null` if there
- * was nothing), so a partial outage never wipes out data that was fine an hour ago. */
-async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
+ * was nothing), so a partial outage never wipes out data that was fine an hour ago. Exported for
+ * its own tests (R3-004 below needs a row set smaller than the real five-tool stack). */
+export async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
   const cache = readCache(home);
   if (offline || !isStale(cache.latest.checkedAt, now)) return cache.latest.versions;
+
+  // R3-004 (accepted T4 review follow-up): a row never even attempted (context7 hosted has no
+  // version of its own to look up) is not a failure — only a row that was actually looked up and
+  // still came back null counts as "attempted and failed" for the check below.
+  const attemptedIds = rows.filter((row) => !(row.id === 'context7' && row.version === 'hosted')).map((r) => r.id);
 
   const fetched = await fetchLatestVersions(rows, { fetch: fetchImpl, home });
   const versions = { ...cache.latest.versions };
@@ -86,20 +92,25 @@ async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, no
       versions[id] = null;
     }
   }
-  // R3-102 (accepted T2/T3 review follow-up): when every lookup in this refetch failed (e.g. no
-  // network at all), do not stamp checkedAt as "now" — that would make the cache read as fresh for
-  // a full 6h and hide a real outage from the next run. The simplest fix is to leave checkedAt
-  // exactly as it was: it was already stale enough to trigger this refetch, so the next run's
-  // `isStale` check stays true and tries the network again immediately instead of waiting 6h.
-  const checkedAt = anySucceeded ? new Date().toISOString() : cache.latest.checkedAt;
+  // R3-102 (accepted T2/T3 review follow-up): when every attempted lookup in this refetch failed
+  // (e.g. no network at all), do not stamp checkedAt as "now" — that would make the cache read as
+  // fresh for a full 6h and hide a real outage from the next run. The simplest fix is to leave
+  // checkedAt exactly as it was: it was already stale enough to trigger this refetch, so the next
+  // run's `isStale` check stays true and tries the network again immediately instead of waiting 6h.
+  // R3-004 extends this: when nothing was attempted at all (an empty row set, or every row skipped
+  // like a hosted-only context7), there was nothing to fail either, so the cache becomes fresh too
+  // — otherwise a home with nothing left to check would stay "stale" and retry forever.
+  const nothingAttempted = attemptedIds.length === 0;
+  const checkedAt = anySucceeded || nothingAttempted ? new Date().toISOString() : cache.latest.checkedAt;
   writeCache(home, { ...cache, latest: { checkedAt, versions } });
   return versions;
 }
 
 /** Builds one full report: local probes plus `upToDate`, resolving latest versions per
- * `resolveLatestVersions`'s caching/offline rules above. Shared by the interactive report and the
- * hook, so both ever compute `upToDate` the same way. */
-async function buildReport({ home, cwd, offline }, deps) {
+ * `resolveLatestVersions`'s caching/offline rules above. Shared by the interactive report, the
+ * hook, and (T5, `offline: true`) the TUI's stack block, so all three ever compute `upToDate` the
+ * same way. */
+export async function buildReport({ home, cwd, offline }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const fetchImpl = deps.fetch ?? fetch;

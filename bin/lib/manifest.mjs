@@ -85,17 +85,36 @@ function deepEqual(a, b) {
   return false;
 }
 
-/** True when every container in a JSON value is empty — an object we created (or its parents) is
- * safe to delete only once removing our entry leaves nothing else behind. */
-function isEmptyJsonDoc(value) {
-  if (value === null) return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.values(value).every(isEmptyJsonDoc);
-  return false;
+/** R3-003 (accepted T4 review follow-up): true when `value`, restricted to exactly our own
+ * `pointer` path, has nothing else in it — at every level along the pointer that key must be the
+ * *only* key present (any other key, even one with an empty-looking value like `{}` or `null`,
+ * means this document is not ours alone to delete), and the value at the end of the pointer must
+ * be the empty array we left behind after removing our entry. */
+function isOnlyOurPointerPath(value, pointer) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.length === 0) return true;
+  const [head, ...rest] = pointer;
+  if (keys.length !== 1 || keys[0] !== head) return false;
+  if (rest.length === 0) return Array.isArray(value[head]) && value[head].length === 0;
+  return isOnlyOurPointerPath(value[head], rest);
 }
 
-function serializeJson(data, { trailingNewline, useCRLF }) {
-  let text = JSON.stringify(data, null, 2);
+/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a
+ * rewrite matches it instead of always reformatting to 2 spaces. `null` means compact single-line
+ * JSON (no newlines besides, at most, one trailing one) and must stay compact; a tab or space run
+ * right after the first real newline becomes the indent unit; anything else (a multi-line document
+ * with no indented line, which should not normally happen) falls back to the historical default. */
+function detectIndent(raw) {
+  const body = raw.replace(/\r?\n$/, '');
+  if (!body.includes('\n')) return null;
+  const match = /\n([\t ]+)\S/.exec(body);
+  if (!match) return 2;
+  return match[1].includes('\t') ? '\t' : match[1].length;
+}
+
+function serializeJson(data, { trailingNewline, useCRLF, indent }) {
+  let text = indent === null ? JSON.stringify(data) : JSON.stringify(data, null, indent);
   if (trailingNewline) text += '\n';
   if (useCRLF) text = text.replace(/\n/g, '\r\n');
   return text;
@@ -103,13 +122,23 @@ function serializeJson(data, { trailingNewline, useCRLF }) {
 
 /** Appends `entry` at `pointer` inside the JSON file at `target`, creating intermediate objects
  * and the array itself as needed. Missing file -> starts from `{}` (`createdFile: true`).
- * Malformed JSON, or a root/pointer shape that is not the object/array we expect -> left
- * completely untouched and reported `skipped`, never overwritten. Idempotent: an entry that is
- * already there (by deep equality) is left alone and the file is not rewritten at all, so a
- * repeat install/sync never reformats a file that already has what it needs. */
+ * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure
+ * reading or writing the target (R3-002: an unreadable file, a directory sitting at the path, an
+ * unwritable or missing-as-a-directory host dir, ...) all leave the file completely untouched and
+ * report `skipped`, never overwritten and never thrown out of install/sync. R3-001: an intermediate
+ * key that already exists but is not a plain object, or a leaf that already exists but is not an
+ * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
+ * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
+ * all, so a repeat install/sync never reformats a file that already has what it needs. */
 function appendEntryToFile(target, pointer, entry) {
-  const fileExisted = fs.existsSync(target);
-  const raw = fileExisted ? fs.readFileSync(target, 'utf8') : '{}';
+  let fileExisted;
+  let raw;
+  try {
+    fileExisted = fs.existsSync(target);
+    raw = fileExisted ? fs.readFileSync(target, 'utf8') : '{}';
+  } catch {
+    return { skipped: true, createdFile: false };
+  }
 
   let data;
   try {
@@ -123,16 +152,25 @@ function appendEntryToFile(target, pointer, entry) {
 
   const trailingNewline = raw.endsWith('\n');
   const useCRLF = raw.includes('\r\n');
+  const indent = fileExisted ? detectIndent(raw) : 2;
 
   let cursor = data;
   for (const key of pointer.slice(0, -1)) {
-    if (typeof cursor[key] !== 'object' || cursor[key] === null || Array.isArray(cursor[key])) {
+    const existing = cursor[key];
+    if (existing === undefined) {
       cursor[key] = {};
+    } else if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) {
+      return { skipped: true, createdFile: false };
     }
     cursor = cursor[key];
   }
   const lastKey = pointer[pointer.length - 1];
-  if (!Array.isArray(cursor[lastKey])) cursor[lastKey] = [];
+  const existingLeaf = cursor[lastKey];
+  if (existingLeaf === undefined) {
+    cursor[lastKey] = [];
+  } else if (!Array.isArray(existingLeaf)) {
+    return { skipped: true, createdFile: false };
+  }
   const arr = cursor[lastKey];
 
   if (arr.some((item) => deepEqual(item, entry))) {
@@ -140,8 +178,12 @@ function appendEntryToFile(target, pointer, entry) {
   }
 
   arr.push(entry);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF }), 'utf8');
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+  } catch {
+    return { skipped: true, createdFile: false };
+  }
   return { skipped: false, createdFile: !fileExisted };
 }
 
@@ -167,6 +209,7 @@ function removeEntryFromFile(target, pointer, entry, createdFile) {
 
   const trailingNewline = raw.endsWith('\n');
   const useCRLF = raw.includes('\r\n');
+  const indent = detectIndent(raw);
 
   let cursor = data;
   for (const key of pointer.slice(0, -1)) {
@@ -183,12 +226,14 @@ function removeEntryFromFile(target, pointer, entry, createdFile) {
   if (idx === -1) return { status: 'kept' };
   arr.splice(idx, 1);
 
-  if (createdFile && isEmptyJsonDoc(data)) {
+  // R3-003: only delete a file we created when nothing but empty containers along our own pointer
+  // path remains — any other key, even one with an empty-looking value, keeps the file.
+  if (createdFile && isOnlyOurPointerPath(data, pointer)) {
     fs.rmSync(target, { force: true });
     return { status: 'removed' };
   }
 
-  fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF }), 'utf8');
+  fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
   return { status: 'removed' };
 }
 
@@ -244,16 +289,26 @@ function removeEmptyDirsUpTo(dir, home) {
 /** Writes every component for `version`, grafts every entry component, and records the resulting
  * manifest. Reads any previous manifest first (still on disk, since `writeManifest` below is the
  * last thing this does) so entry `createdFile` flags survive a repeat install — see
- * `installEntries`. */
+ * `installEntries`. R3-002 (accepted T4 review follow-up): a component whose host directory cannot
+ * be reached (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run
+ * rather than throwing out of install/sync — the manifest still records whatever else was actually
+ * written, and a later, healthy run picks the missing component back up. This never risks `sync`
+ * pruning a perfectly good previous copy as "no longer shipped": the same broken ancestor makes
+ * `fs.existsSync` on that path read `false` too, so its pruning guard never fires. */
 export function install(home, version) {
   const previous = readManifest(home);
-  const files = components.map((component) => {
+  const files = [];
+  for (const component of components) {
     const target = component.target(home);
     const content = component.content(version);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, content, 'utf8');
-    return { path: target, sha256: sha256(content) };
-  });
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, content, 'utf8');
+      files.push({ path: target, sha256: sha256(content) });
+    } catch {
+      // See the doc comment above: skip this component for this run rather than throwing.
+    }
+  }
   const entries = installEntries(home, previous);
   const manifest = { version, files, entries };
   writeManifest(home, manifest);

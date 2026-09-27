@@ -403,3 +403,208 @@ test('uninstall also removes the doctor cache and the now-empty .js-harness dire
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- T4 native review follow-ups (lineage review-41e6050d1d54018f) ---
+
+// R3-001: never overwrite a user value of an unexpected shape along the pointer path.
+
+test('R3-001: install leaves the file untouched and reports skipped when an intermediate key is not an object', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const original = JSON.stringify({ hooks: 'not-an-object' });
+    fs.writeFileSync(target, original, 'utf8');
+
+    const manifest = install(home, '0.1.0');
+
+    assert.equal(fs.readFileSync(target, 'utf8'), original, 'expected the file to be byte-for-byte untouched');
+    const record = manifest.entries.find((e) => e.path === target);
+    assert.equal(record.skipped, true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-001: install leaves the file untouched and reports skipped when the leaf is not an array', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const original = JSON.stringify({ hooks: { SessionStart: 'oops' } });
+    fs.writeFileSync(target, original, 'utf8');
+
+    const manifest = install(home, '0.1.0');
+
+    assert.equal(fs.readFileSync(target, 'utf8'), original, 'expected the file to be byte-for-byte untouched');
+    const record = manifest.entries.find((e) => e.path === target);
+    assert.equal(record.skipped, true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// R3-002: an fs failure on an entry target must not throw out of install/sync; the manifest must
+// still be written for whatever was actually written, and createdFile survives a re-install.
+
+test('R3-002: install reports an entry skipped without throwing when the target path is itself a directory', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(target, { recursive: true }); // a directory sits where the file should be
+
+    let manifest;
+    assert.doesNotThrow(() => {
+      manifest = install(home, '0.1.0');
+    });
+
+    const record = manifest.entries.find((e) => e.path === target);
+    assert.equal(record.skipped, true);
+    // The other entry component (codex-hook) must still be written normally.
+    const codexRecord = manifest.entries.find((e) => e.path === codexHook.target(home));
+    assert.equal(codexRecord.skipped, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-002: install reports an entry skipped without throwing when the host directory is itself a plain file', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.rmSync(path.join(home, '.claude'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(home, '.claude'), 'this is a file, not a directory', 'utf8');
+
+    let manifest;
+    assert.doesNotThrow(() => {
+      manifest = install(home, '0.1.0');
+    });
+
+    const target = claudeHook.target(home);
+    const record = manifest.entries.find((e) => e.path === target);
+    assert.equal(record.skipped, true);
+    assert.equal(fs.readFileSync(path.join(home, '.claude'), 'utf8'), 'this is a file, not a directory');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-002: createdFile from a previous manifest survives a re-install where the entry target fails', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const target = claudeHook.target(home);
+    assert.ok(fs.existsSync(target));
+    // Simulate the target becoming unreachable between installs (e.g. replaced by a directory).
+    fs.rmSync(target, { force: true });
+    fs.mkdirSync(target, { recursive: true });
+
+    const manifest = install(home, '0.1.0');
+
+    const record = manifest.entries.find((e) => e.path === target);
+    assert.equal(record.skipped, true, 'this install call could not reach the target');
+    assert.equal(record.createdFile, true, 'createdFile must be carried forward from the previous manifest');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// R3-003: uninstall deletes a file it created only when nothing but empty containers along our own
+// pointer path remain; any other key, even an empty-valued one, keeps the file.
+
+test('R3-003: uninstall keeps a hook file js-harness created when an unrelated key is left in the document', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const target = claudeHook.target(home);
+    const data = readJson(target);
+    data.unrelated = {}; // any other key, even an empty-valued one, must keep the file
+    fs.writeFileSync(target, JSON.stringify(data, null, 2), 'utf8');
+
+    const result = uninstall(home);
+
+    assert.ok(fs.existsSync(target), 'expected the file to survive because of the unrelated key');
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: [] }, unrelated: {} });
+    assert.ok(!result.entriesRemoved.includes(target) || fs.existsSync(target));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// R3-005: preserve the original file's indentation (and its trailing-newline/CRLF handling) when
+// rewriting, rather than always reformatting to 2 spaces.
+
+test('R3-005: install preserves 4-space indentation when appending to an existing hook file', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const seeded = { hooks: { SessionStart: [] } };
+    fs.writeFileSync(target, `${JSON.stringify(seeded, null, 4)}\n`, 'utf8');
+
+    install(home, '0.1.0');
+
+    const raw = fs.readFileSync(target, 'utf8');
+    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }, null, 4)}\n`);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-005: install preserves tab indentation when appending to an existing hook file', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const seeded = { hooks: { SessionStart: [] } };
+    fs.writeFileSync(target, `${JSON.stringify(seeded, null, '\t')}\n`, 'utf8');
+
+    install(home, '0.1.0');
+
+    const raw = fs.readFileSync(target, 'utf8');
+    assert.equal(raw, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }, null, '\t')}\n`);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-005: install keeps compact single-line JSON compact when appending', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify({ hooks: { SessionStart: [] } }), 'utf8');
+
+    install(home, '0.1.0');
+
+    const raw = fs.readFileSync(target, 'utf8');
+    assert.equal(raw, JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }));
+    assert.ok(!raw.includes('\n'), 'expected the rewritten file to stay on one line');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-005: uninstall preserves 4-space indentation when it rewrites (rather than deletes) the file', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const seeded = {
+      hooks: {
+        SessionStart: [
+          { matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command: 'echo unrelated', timeout: 5 }] },
+        ],
+      },
+    };
+    fs.writeFileSync(target, `${JSON.stringify(seeded, null, 4)}\n`, 'utf8');
+
+    install(home, '0.1.0');
+    uninstall(home);
+
+    const raw = fs.readFileSync(target, 'utf8');
+    assert.equal(raw, `${JSON.stringify(seeded, null, 4)}\n`);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

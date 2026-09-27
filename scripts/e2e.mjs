@@ -72,7 +72,10 @@ async function main() {
       assertThat(fs.existsSync(binPath), `expected the installed bin at ${binPath}`);
     });
 
-    step('seed the temp home with one unrelated SessionStart entry per host', () => {
+    // R3-005 (accepted T4 native review follow-up): one seed uses 4-space indentation, the other
+    // tabs, so install/uninstall proves it preserves whatever indentation a host file already has
+    // instead of always reformatting to 2 spaces.
+    step('seed the temp home with one unrelated SessionStart entry per host, in two different indent styles', () => {
       fs.mkdirSync(path.dirname(claudeSettingsPath), { recursive: true });
       fs.mkdirSync(path.dirname(codexHooksPath), { recursive: true });
       seededClaudeSettings = `${JSON.stringify(
@@ -87,7 +90,7 @@ async function main() {
           },
         },
         null,
-        2,
+        4,
       )}\n`;
       seededCodexHooks = `${JSON.stringify(
         {
@@ -101,7 +104,7 @@ async function main() {
           },
         },
         null,
-        2,
+        '\t',
       )}\n`;
       fs.writeFileSync(claudeSettingsPath, seededClaudeSettings, 'utf8');
       fs.writeFileSync(codexHooksPath, seededCodexHooks, 'utf8');
@@ -141,6 +144,13 @@ async function main() {
         codexData.hooks.SessionStart[0].hooks[0].command === 'echo unrelated-codex-hook',
         'expected the seeded Codex entry to still be first and untouched',
       );
+    });
+
+    step('install preserved each seeded file\'s own indentation (4-space Claude, tab Codex)', () => {
+      const claudeRaw = fs.readFileSync(claudeSettingsPath, 'utf8');
+      assertThat(claudeRaw.includes('\n    "hooks"'), `expected 4-space indentation in:\n${claudeRaw}`);
+      const codexRaw = fs.readFileSync(codexHooksPath, 'utf8');
+      assertThat(codexRaw.includes('\n\t"hooks"'), `expected tab indentation in:\n${codexRaw}`);
     });
 
     step('a second `install --home` adds no duplicate SessionStart entries', () => {
