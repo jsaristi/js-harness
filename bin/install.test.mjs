@@ -63,6 +63,71 @@ test('installMain resolves home from JS_HARNESS_HOME when --home is not given', 
   }
 });
 
+// R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): a component write that
+// fails on an already-installed target is reported to the user, not silently dropped. Injected
+// through the `deps.writeFile` seam manifest.mjs's `install`/`sync` now accept (chmod is unreliable
+// on Windows, so a real permission failure is not how this is simulated).
+
+test('syncMain prints a stderr skip line when a component write fails, naming the path and reason', async () => {
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+    const manifest = readManifest(home);
+    const target = manifest.files[0].path;
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+
+    const errLines = [];
+    const originalError = console.error;
+    console.error = (line) => errLines.push(String(line));
+    let code;
+    try {
+      code = await syncMain(['--home', home], process.env, { writeFile: failingWriteFile });
+    } finally {
+      console.error = originalError;
+    }
+
+    assert.equal(code, 0);
+    assert.ok(
+      errLines.includes(`skipped ${target}: EACCES: permission denied`),
+      `expected a skip line for ${target}, got:\n${errLines.join('\n')}`,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain counts only the files it actually wrote, not records carried forward after a failed write', async () => {
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+    const total = readManifest(home).files.length;
+    const target = readManifest(home).files[0].path;
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+
+    const outLines = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (line) => outLines.push(String(line));
+    console.error = () => {};
+    try {
+      await syncMain(['--home', home], process.env, { writeFile: failingWriteFile });
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    assert.match(outLines[0], new RegExp(`\\(${total - 1} files\\)`));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --home is not given', async () => {
   const home = makeTmpHome();
   try {

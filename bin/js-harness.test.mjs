@@ -33,7 +33,7 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists install, sync, uninstall, status, update and upgrade', () => {
+test('--help lists install, sync, uninstall, status, update, upgrade and doctor', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /install/);
   assert.match(result.stdout, /sync/);
@@ -41,6 +41,7 @@ test('--help lists install, sync, uninstall, status, update and upgrade', () => 
   assert.match(result.stdout, /status/);
   assert.match(result.stdout, /update/);
   assert.match(result.stdout, /upgrade/);
+  assert.match(result.stdout, /doctor/);
 });
 
 test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {
@@ -84,6 +85,27 @@ test('install dispatches to a temp home and exits 0', () => {
     assert.match(result.stdout, /installed js-harness/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// R3-002 (accepted T1 review follow-up): this must not depend on the host's real binaries or on
+// network access (T2 adds a real latest-version fetch) — a temp `--home`, a temp `--cwd` outside
+// any repo, and `--offline` keep it hermetic, while `--json` parsing to the five known ids is what
+// actually proves dispatch reached `doctorMain`, not just that *something* printed.
+test('doctor dispatches to a temp home and exits 0, hermetically (no host binaries or network)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-cwd-'));
+  try {
+    const result = run(['doctor', '--home', home, '--cwd', cwd, '--offline', '--json']);
+    assert.equal(result.status, 0);
+    const rows = JSON.parse(result.stdout);
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
 

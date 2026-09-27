@@ -45,6 +45,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack | gentle-ai (ODD, RDD review, strict TDD), engram v2 binary only, codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only |
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
+| Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, and a TUI over the same commands |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
@@ -52,6 +53,7 @@ First request of a one-word prompt, estimated tokens:
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
 | Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent |
+| Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Effort | `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
@@ -63,9 +65,10 @@ First request of a one-word prompt, estimated tokens:
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
-| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Next |
+| Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Built and reviewed on `feat/stack-doctor` 2026-09-27, PR pending (`odd/tasks/stack-doctor.md`) |
+| Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | — after the Stack doctor merge, before F2, so every later phase is tracked with it |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
-| Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size) and open decision 1 (where versions come from) |
+| Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size); first verify that a git-spec global install works through the pnpm shim |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
@@ -74,9 +77,11 @@ First request of a one-word prompt, estimated tokens:
 
 ## Next
 
-1. Open decision 1 below: where upgrades come from — it blocks Project init.
-2. Stack doctor — buildable now, and it gives F2 a view of what is installed and configured.
+1. Stack doctor — merge `jsaristi/js-harness#4` (Sebastián's call), then a real
+   `js-harness install` to register the hook on this machine.
+2. Progress view.
 3. F2 Context diet.
+4. Project init.
 
 ## Stack doctor notes
 
@@ -95,21 +100,21 @@ Evidence gathered 2026-09-26 for the design:
 - Codex has `SessionStart` with `systemMessage` too, but no command-backed status line, so on
   Codex the notice arrives only on start or resume ([hooks](https://learn.chatgpt.com/docs/hooks)).
 
-To resolve while building:
+Resolved while building (details in `odd/tasks/stack-doctor.md`):
 
-- The status line is taken by `ccstatusline`, and Claude Code runs one status line command.
-  An "updates available" indicator needs `ccstatusline` to accept a command widget — unverified.
-- Registering a hook edits `~/.claude/settings.json` and the Codex config, which are the user's
-  files, not ours. The manifest records whole files, so it needs a way to record and remove one
-  entry exactly.
+- The manifest now records entries as well as whole files: one hook entry inside
+  `~/.claude/settings.json` and `~/.codex/hooks.json`, removed exactly on uninstall, never
+  overwriting a value of unexpected shape, and preserving the file's indent and line endings.
+- `ccstatusline` 2.2.30 ships a `custom-command` widget, so a zero-token status-line indicator is
+  possible; left for later. Codex 0.157.1 has hooks on by default (`codex features list`), but a
+  new hook command may need a one-time trust prompt — unverified live.
 
 ## Open decisions (Sebastián's, asked one at a time)
 
-1. Where upgrades come from: npm publish, or GitHub releases (a private repo needs auth to download).
-2. Disconnecting the unused Magnific connector (the largest single per-turn item).
-3. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
-4. Whether the Gentleman persona stays part of the stack.
-5. Spend ceiling for F5.
+1. Disconnecting the unused Magnific connector (the largest single per-turn item).
+2. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
+3. Whether the Gentleman persona stays part of the stack.
+4. Spend ceiling for F5.
 
 ## Risks
 

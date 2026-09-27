@@ -28,6 +28,15 @@ async function main() {
   const prefix = mkTmp('js-harness-e2e-prefix-');
   const home = mkTmp('js-harness-e2e-home-');
   const binPath = path.join(prefix, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs');
+  const claudeSettingsPath = path.join(home, '.claude', 'settings.json');
+  const codexHooksPath = path.join(home, '.codex', 'hooks.json');
+  let seededClaudeSettings = '';
+  let seededCodexHooks = '';
+
+  function sessionStartCount(filePath) {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return data.hooks.SessionStart.length;
+  }
 
   let failed = false;
   function step(name, fn) {
@@ -63,6 +72,44 @@ async function main() {
       assertThat(fs.existsSync(binPath), `expected the installed bin at ${binPath}`);
     });
 
+    // R3-005 (accepted T4 native review follow-up): one seed uses 4-space indentation, the other
+    // tabs, so install/uninstall proves it preserves whatever indentation a host file already has
+    // instead of always reformatting to 2 spaces.
+    step('seed the temp home with one unrelated SessionStart entry per host, in two different indent styles', () => {
+      fs.mkdirSync(path.dirname(claudeSettingsPath), { recursive: true });
+      fs.mkdirSync(path.dirname(codexHooksPath), { recursive: true });
+      seededClaudeSettings = `${JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: 'startup|resume|clear|compact',
+                hooks: [{ type: 'command', command: 'echo unrelated-claude-hook', timeout: 5 }],
+              },
+            ],
+          },
+        },
+        null,
+        4,
+      )}\n`;
+      seededCodexHooks = `${JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                hooks: [{ type: 'command', command: 'echo unrelated-codex-hook', timeout: 5 }],
+                matcher: 'startup|resume|clear|compact',
+              },
+            ],
+          },
+        },
+        null,
+        '\t',
+      )}\n`;
+      fs.writeFileSync(claudeSettingsPath, seededClaudeSettings, 'utf8');
+      fs.writeFileSync(codexHooksPath, seededCodexHooks, 'utf8');
+    });
+
     step('installed `js-harness install --home` writes the manifest and skill files', () => {
       const result = run(process.execPath, [binPath, 'install', '--home', home]);
       assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
@@ -75,6 +122,47 @@ async function main() {
       assertThat(
         fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness', 'SKILL.md')),
         'missing the Codex skill file',
+      );
+    });
+
+    step('install added exactly one SessionStart entry to each seeded host file', () => {
+      assertThat(
+        sessionStartCount(claudeSettingsPath) === 2,
+        `expected 2 Claude SessionStart entries (1 seeded + 1 ours), got ${sessionStartCount(claudeSettingsPath)}`,
+      );
+      assertThat(
+        sessionStartCount(codexHooksPath) === 2,
+        `expected 2 Codex SessionStart entries (1 seeded + 1 ours), got ${sessionStartCount(codexHooksPath)}`,
+      );
+      const claudeData = JSON.parse(fs.readFileSync(claudeSettingsPath, 'utf8'));
+      assertThat(
+        claudeData.hooks.SessionStart[0].hooks[0].command === 'echo unrelated-claude-hook',
+        'expected the seeded Claude entry to still be first and untouched',
+      );
+      const codexData = JSON.parse(fs.readFileSync(codexHooksPath, 'utf8'));
+      assertThat(
+        codexData.hooks.SessionStart[0].hooks[0].command === 'echo unrelated-codex-hook',
+        'expected the seeded Codex entry to still be first and untouched',
+      );
+    });
+
+    step('install preserved each seeded file\'s own indentation (4-space Claude, tab Codex)', () => {
+      const claudeRaw = fs.readFileSync(claudeSettingsPath, 'utf8');
+      assertThat(claudeRaw.includes('\n    "hooks"'), `expected 4-space indentation in:\n${claudeRaw}`);
+      const codexRaw = fs.readFileSync(codexHooksPath, 'utf8');
+      assertThat(codexRaw.includes('\n\t"hooks"'), `expected tab indentation in:\n${codexRaw}`);
+    });
+
+    step('a second `install --home` adds no duplicate SessionStart entries', () => {
+      const result = run(process.execPath, [binPath, 'install', '--home', home]);
+      assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
+      assertThat(
+        sessionStartCount(claudeSettingsPath) === 2,
+        `expected still 2 Claude SessionStart entries after a repeat install, got ${sessionStartCount(claudeSettingsPath)}`,
+      );
+      assertThat(
+        sessionStartCount(codexHooksPath) === 2,
+        `expected still 2 Codex SessionStart entries after a repeat install, got ${sessionStartCount(codexHooksPath)}`,
       );
     });
 
@@ -128,11 +216,39 @@ async function main() {
       assertThat(manifest.version === '0.2.0', `expected manifest version 0.2.0, got ${manifest.version}`);
     });
 
-    step('`js-harness uninstall` leaves the temp home exactly as it was', () => {
+    step('the `sync` run inside upgrade also added no duplicate SessionStart entries', () => {
+      assertThat(
+        sessionStartCount(claudeSettingsPath) === 2,
+        `expected still 2 Claude SessionStart entries after upgrade's sync, got ${sessionStartCount(claudeSettingsPath)}`,
+      );
+      assertThat(
+        sessionStartCount(codexHooksPath) === 2,
+        `expected still 2 Codex SessionStart entries after upgrade's sync, got ${sessionStartCount(codexHooksPath)}`,
+      );
+    });
+
+    step('`js-harness uninstall` removes what it wrote and restores both hook files byte-for-byte', () => {
       const result = run(process.execPath, [binPath, 'uninstall', '--home', home]);
       assertThat(result.status === 0, `uninstall exited ${result.status}: ${result.stderr}`);
-      const remaining = fs.readdirSync(home);
-      assertThat(remaining.length === 0, `expected an empty home, found: ${remaining.join(', ')}`);
+      assertThat(!fs.existsSync(path.join(home, '.js-harness')), 'expected .js-harness to be removed');
+      assertThat(
+        !fs.existsSync(path.join(home, '.claude', 'skills')),
+        'expected the Claude skill dir to be removed',
+      );
+      assertThat(
+        !fs.existsSync(path.join(home, '.codex', 'skills')),
+        'expected the Codex skill dir to be removed',
+      );
+      const claudeAfter = fs.readFileSync(claudeSettingsPath, 'utf8');
+      assertThat(
+        claudeAfter === seededClaudeSettings,
+        `expected Claude settings.json restored byte-for-byte, got:\n${claudeAfter}`,
+      );
+      const codexAfter = fs.readFileSync(codexHooksPath, 'utf8');
+      assertThat(
+        codexAfter === seededCodexHooks,
+        `expected Codex hooks.json restored byte-for-byte, got:\n${codexAfter}`,
+      );
     });
   } finally {
     for (const dir of [staging, pack01Dir, releasesDir, prefix, home]) {
