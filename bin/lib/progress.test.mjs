@@ -111,6 +111,41 @@ test('parseSteps: a longer closing fence than the opener still closes it', () =>
   assert.deepEqual(parseSteps(md), [{ text: 'real step after (longer closer still closes)', done: true }]);
 });
 
+// --- a backtick fence opener's info string may not contain a backtick (R3-backtick-info-string) ---
+
+test('parseSteps: a line with backticks after a leading ``` is not a fence opener, so it does not fence what follows', () => {
+  const md = [
+    "```inline``` text",
+    "- [x] counted, not fenced (the opener's info string contains a backtick)",
+    '# Heading still seen',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseSteps(md), [
+    { text: "counted, not fenced (the opener's info string contains a backtick)", done: true },
+  ]);
+});
+
+test('parseSteps: a plain ```js opener (no backtick in its info string) still fences normally', () => {
+  const md = ['```js', '- [ ] fenced (a valid opener, no backtick in the info string)', '```', '- [x] real step after', ''].join(
+    '\n',
+  );
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+});
+
+test('parseSteps: a ~~~ opener may contain backticks in its info string and still fences', () => {
+  const md = ['~~~ a`b`', '- [ ] fenced (tilde openers may contain backticks)', '~~~', '- [x] real step after', ''].join(
+    '\n',
+  );
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+});
+
+test('parseFeature: a heading is still seen after a line whose backtick-info disqualifies it as a fence opener', () => {
+  const md = ["# My feature", '', "```inline``` text", '- [x] a real step', ''].join('\n');
+  const result = parseFeature(md, 'my-feature');
+  assert.equal(result.title, 'My feature');
+  assert.deepEqual(result.steps, [{ text: 'a real step', done: true }]);
+});
+
 test('parseSteps works on CRLF input', () => {
   const md = '- [ ] first\r\n- [x] second\r\n';
   assert.deepEqual(parseSteps(md), [

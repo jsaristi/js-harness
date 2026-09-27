@@ -64,16 +64,20 @@ function tryReadFile(absolute, relative, readFile, stderr) {
 /** `docs/ROADMAP.md` under `root`, parsed into `{ path, done, total, phases }` — `null` when the
  * file does not exist (a missing roadmap is not an error, odd/tasks/progress-view.md), when it is
  * not a regular file (e.g. a directory at that path), or when reading it fails (see
- * `tryReadFile` above). */
-function readRoadmap(root, readFile, stderr) {
+ * `tryReadFile` above). R3-unreadable-tasks-dir-silent (accepted review follow-up, Codex P2): only
+ * `ENOENT` means "genuinely absent" and stays silent — any other `stat` failure (`EACCES`,
+ * `ENOTDIR`, ...) is a real discovery error and is reported on stderr, not treated the same as "no
+ * roadmap here". */
+function readRoadmap(root, readFile, stat, stderr) {
   const absolute = path.join(root, 'docs', 'ROADMAP.md');
-  let stat;
+  let info;
   try {
-    stat = fs.statSync(absolute);
-  } catch {
+    info = stat(absolute);
+  } catch (err) {
+    if (err.code !== 'ENOENT') stderr(`js-harness progress: docs/ROADMAP.md: ${err.code ?? err.message}`);
     return null;
   }
-  if (!stat.isFile()) return null;
+  if (!info.isFile()) return null;
   const relative = toRepoRelative(root, absolute);
   const markdown = tryReadFile(absolute, relative, readFile, stderr);
   if (markdown === null) return null;
@@ -82,29 +86,48 @@ function readRoadmap(root, readFile, stderr) {
 }
 
 /** Every `odd/tasks/*.md` under `root`, sorted by filename, as `{ id, title, path, done, total,
- * steps }` — `[]` when the directory does not exist (a missing `odd/tasks/` is not an error).
- * Only regular files count (R3-unreadable-entry-crash): a directory named `x.md` is skipped, not
- * read. A file that exists but fails to read is skipped the same way, via `tryReadFile`. */
-function readFeatures(root, readFile, stderr) {
+ * steps }` — `[]` when the directory does not exist (`ENOENT`; a missing `odd/tasks/` is not an
+ * error). Any other `readdirSync` failure (R3-unreadable-tasks-dir-silent, Codex P2) is reported on
+ * stderr instead of being treated the same as "there is no odd/tasks here". Only a regular file, or
+ * a symlink whose target is one, counts as a feature doc (R3-unreadable-entry-crash /
+ * R3-symlinked-feature-dropped): a directory named `x.md` is skipped silently, but a *symlinked*
+ * `x.md` — dropped entirely by a T2b regression that filtered on `Dirent.isFile()` alone, which
+ * reflects the link itself, never its target — is now followed, and a dangling one is reported and
+ * skipped exactly like any other unreadable source. */
+function readFeatures(root, readFile, readdir, stat, stderr) {
   const dir = path.join(root, 'odd', 'tasks');
   let entries;
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
+    entries = readdir(dir);
+  } catch (err) {
+    if (err.code !== 'ENOENT') stderr(`js-harness progress: odd/tasks: ${err.code ?? err.message}`);
     return [];
   }
-  const files = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => entry.name)
-    .sort();
+
+  const mdEntries = entries
+    .filter((entry) => entry.name.endsWith('.md'))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   const features = [];
-  for (const file of files) {
-    const absolute = path.join(dir, file);
+  for (const entry of mdEntries) {
+    const absolute = path.join(dir, entry.name);
     const relative = toRepoRelative(root, absolute);
+
+    if (!entry.isFile()) {
+      if (!entry.isSymbolicLink()) continue; // e.g. a directory named `x.md` — never a feature doc
+      let target;
+      try {
+        target = stat(absolute);
+      } catch (err) {
+        stderr(`js-harness progress: ${relative}: ${err.code ?? err.message}`);
+        continue;
+      }
+      if (!target.isFile()) continue;
+    }
+
     const markdown = tryReadFile(absolute, relative, readFile, stderr);
     if (markdown === null) continue;
-    const id = file.slice(0, -'.md'.length);
+    const id = entry.name.slice(0, -'.md'.length);
     const { title, done, total, steps } = parseFeature(markdown, id);
     features.push({ id, title, path: relative, done, total, steps });
   }
@@ -174,9 +197,12 @@ export async function progressMain(
     cwd: defaultCwd = process.cwd(),
     stdout = console.log,
     stderr = console.error,
-    // Injectable so tests can exercise a read error (R3-unreadable-entry-crash) without depending
-    // on OS-specific permission bits; real runs default to a plain `fs.readFileSync`.
+    // Injectable so tests can exercise a read/discovery error (R3-unreadable-entry-crash,
+    // R3-unreadable-tasks-dir-silent) without depending on OS-specific permission bits; real runs
+    // default to plain `fs` calls.
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
+    stat = (absolute) => fs.statSync(absolute),
+    readdir = (absolute) => fs.readdirSync(absolute, { withFileTypes: true }),
   } = {},
 ) {
   let parsed;
@@ -188,11 +214,23 @@ export async function progressMain(
   }
 
   const root = path.resolve(parsed.cwd ?? defaultCwd);
-  const roadmap = readRoadmap(root, readFile, stderr);
-  const features = readFeatures(root, readFile, stderr);
+  // Tracks whether any real discovery/read error was reported (as opposed to a source that is
+  // simply, silently absent), so the exit-1 message below never claims "no docs/ROADMAP.md or
+  // odd/tasks/*.md" when one of them exists but failed to read.
+  let errorReported = false;
+  const reportError = (line) => {
+    errorReported = true;
+    stderr(line);
+  };
+  const roadmap = readRoadmap(root, readFile, stat, reportError);
+  const features = readFeatures(root, readFile, readdir, stat, reportError);
 
   if (!roadmap && features.length === 0) {
-    stderr(`js-harness progress: no docs/ROADMAP.md or odd/tasks/*.md under ${root}`);
+    stderr(
+      errorReported
+        ? `js-harness progress: nothing could be read under ${root}`
+        : `js-harness progress: no docs/ROADMAP.md or odd/tasks/*.md under ${root}`,
+    );
     return 1;
   }
 

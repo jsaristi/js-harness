@@ -6,22 +6,34 @@ const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})/;
 const HEADING_PATTERN = /^ {0,3}(#{1,6})\s+(.*)$/;
 const STEP_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s*(.*)$/;
 
-/** A line's fence marker, if it opens one: its character (`` ` `` or `~`) and length (3+). Used
- * both to detect a fresh opener and, while inside a fence, to test whether a line's marker
- * qualifies as *that* fence's closer. */
-function matchFence(line) {
+/** A line's fence marker, whether or not it is valid as an *opener*: its character (`` ` `` or
+ * `~`) and length (3+), plus whatever follows it (the info string, for an opener; must be
+ * whitespace-only, for a closer). Used by both `matchFenceOpen` and `isFenceClose` below. */
+function matchFenceMarker(line) {
   const m = line.match(FENCE_OPEN_PATTERN);
   if (!m) return null;
   const marker = m[1];
   return { char: marker[0], length: marker.length, rest: line.slice(m[0].length) };
 }
 
+/** A line that opens a fence. Per CommonMark, a backtick fence's info string must not itself
+ * contain a backtick (R3-backtick-info-string) — otherwise inline code like `` ```inline``` text ``
+ * would be misread as opening a code block instead of being read as ordinary text. A tilde fence's
+ * info string has no such restriction, since a tilde fence can safely contain backticks inside it. */
+function matchFenceOpen(line) {
+  const marker = matchFenceMarker(line);
+  if (!marker) return null;
+  if (marker.char === '`' && marker.rest.includes('`')) return null;
+  return marker;
+}
+
 /** CommonMark's closing rule: a fence closes only on a line whose marker is the *same character*
  * as the opener, *at least as long*, and followed by nothing but whitespace — R3-fence-mismatch
  * (Codex P2). A shorter marker, a different character (` ``` ` never closes `~~~`, and vice versa),
- * or trailing text after the marker is just more fenced content, not a closer. */
+ * or trailing text after the marker is just more fenced content, not a closer. (The backtick/info
+ * -string restriction above does not apply here: a closer's `rest` must already be blank.) */
 function isFenceClose(line, fence) {
-  const marker = matchFence(line);
+  const marker = matchFenceMarker(line);
   return (
     marker !== null && marker.char === fence.char && marker.length >= fence.length && marker.rest.trim() === ''
   );
@@ -41,7 +53,7 @@ function tokenize(markdown) {
       tokens.push({ fence: true });
       continue;
     }
-    const opened = matchFence(raw);
+    const opened = matchFenceOpen(raw);
     if (opened) {
       fence = opened;
       tokens.push({ fence: true });

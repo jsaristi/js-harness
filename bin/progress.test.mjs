@@ -345,3 +345,156 @@ test('progressMain errors with usage on stderr and exits 2 for a positional argu
   assert.equal(code, 2);
   assert.match(stderr, /Usage: js-harness progress/);
 });
+
+// --- R3-symlinked-feature-dropped: a symlinked odd/tasks/*.md counts when its target is a file ---
+
+function trySymlink(target, link, t) {
+  try {
+    fs.symlinkSync(target, link, 'file');
+    return true;
+  } catch (err) {
+    if (err.code === 'EPERM') {
+      t.skip('symlinks need privileges on this machine');
+      return false;
+    }
+    throw err;
+  }
+}
+
+test('progressMain follows a symlinked feature doc when its target is a real file', async (t) => {
+  const project = makeTmpProject();
+  const targetDir = makeTmpProject();
+  try {
+    const target = path.join(targetDir, 'a-feature.md');
+    fs.writeFileSync(target, FEATURE_A, 'utf8');
+    fs.mkdirSync(path.join(project, 'odd', 'tasks'), { recursive: true });
+    const link = path.join(project, 'odd', 'tasks', 'a-feature.md');
+    if (!trySymlink(target, link, t)) return;
+
+    const { code, stdout } = await runProgress(['--cwd', project, '--json']);
+    assert.equal(code, 0);
+    const data = JSON.parse(stdout);
+    assert.deepEqual(data.features.map((f) => f.id), ['a-feature']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+});
+
+test('progressMain reports a dangling symlinked feature doc on stderr (path + code) and skips it', async (t) => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    fs.mkdirSync(path.join(project, 'odd', 'tasks'), { recursive: true });
+    const link = path.join(project, 'odd', 'tasks', 'dangling.md');
+    const missingTarget = path.join(project, 'does-not-exist.md');
+    if (!trySymlink(missingTarget, link, t)) return;
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json']);
+    assert.equal(code, 0);
+    assert.match(stderr, /odd\/tasks\/dangling\.md/);
+    assert.match(stderr, /ENOENT/);
+    const data = JSON.parse(stdout);
+    assert.deepEqual(data.features, []);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- R3-unreadable-tasks-dir-silent / Codex P2: only ENOENT means absent; any other discovery
+// error on docs/ROADMAP.md or odd/tasks is reported on stderr, and that source is skipped ---
+
+test('progressMain reports a real ENOTDIR when odd/tasks is a file, not a directory, and still reads the roadmap', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    fs.mkdirSync(path.join(project, 'odd'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'odd', 'tasks'), 'not a directory', 'utf8');
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json']);
+
+    assert.equal(code, 0);
+    assert.match(stderr, /odd\/tasks/);
+    assert.match(stderr, /ENOTDIR/);
+    const data = JSON.parse(stdout);
+    assert.notEqual(data.roadmap, null);
+    assert.deepEqual(data.features, []);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain reports a non-ENOENT stat error on docs/ROADMAP.md via an injected stat, and skips it', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'odd', 'tasks', 'a-feature.md'), FEATURE_A);
+    const roadmapPath = path.join(project, 'docs', 'ROADMAP.md');
+    const stat = (absolute) => {
+      if (absolute === roadmapPath) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return fs.statSync(absolute);
+    };
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], { stat });
+
+    assert.equal(code, 0);
+    assert.match(stderr, /docs\/ROADMAP\.md/);
+    assert.match(stderr, /EACCES/);
+    const data = JSON.parse(stdout);
+    assert.equal(data.roadmap, null);
+    assert.equal(data.features.length, 1);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain reports a non-ENOENT readdir error on odd/tasks via an injected readdir, and skips it', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    const tasksDir = path.join(project, 'odd', 'tasks');
+    const readdir = (absolute) => {
+      if (absolute === tasksDir) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return fs.readdirSync(absolute, { withFileTypes: true });
+    };
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], { readdir });
+
+    assert.equal(code, 0);
+    assert.match(stderr, /odd\/tasks/);
+    assert.match(stderr, /EACCES/);
+    const data = JSON.parse(stdout);
+    assert.notEqual(data.roadmap, null);
+    assert.deepEqual(data.features, []);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain never claims "no docs/ROADMAP.md or odd/tasks" when a source exists but failed; it says nothing could be read', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    fs.mkdirSync(path.join(project, 'odd', 'tasks'), { recursive: true });
+    const roadmapPath = path.join(project, 'docs', 'ROADMAP.md');
+    const tasksDir = path.join(project, 'odd', 'tasks');
+    const stat = (absolute) => {
+      if (absolute === roadmapPath) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return fs.statSync(absolute);
+    };
+    const readdir = (absolute) => {
+      if (absolute === tasksDir) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return fs.readdirSync(absolute, { withFileTypes: true });
+    };
+
+    const { code, stderr } = await runProgress(['--cwd', project], { stat, readdir });
+
+    assert.equal(code, 1);
+    const lines = stderr.split('\n');
+    assert.ok(lines.some((l) => l.includes('docs/ROADMAP.md') && l.includes('EACCES')));
+    assert.ok(lines.some((l) => l.includes('odd/tasks') && l.includes('EACCES')));
+    assert.equal(lines[lines.length - 1], `js-harness progress: nothing could be read under ${path.resolve(project)}`);
+    assert.ok(!stderr.includes('no docs/ROADMAP.md or odd/tasks'));
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});

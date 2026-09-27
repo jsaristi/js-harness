@@ -58,7 +58,7 @@ unpushed docs commits), so the PR carries them too.
 - [x] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
 - [x] T2b Accepted review follow-ups: close a fence only on the same character and at least the opening length (R3-fence-mismatch, Codex P2); skip non-file `.md` entries and turn read errors into the documented exit codes (R3-unreadable-entry-crash); unknown flags and positionals are usage errors, exit 2 (R3-unknown-args-ignored) — route: delegated writer (2 non-trivial files)
 - [x] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
-- [ ] T4 Accepted final-slice review follow-ups: a symlinked `odd/tasks/*.md` counts when its target is a file (R3-symlinked-feature-dropped, a T2b regression); only ENOENT means absent, every other discovery error on `odd/tasks` or `docs/ROADMAP.md` is reported on stderr (R3-unreadable-tasks-dir-silent, Codex P2); a backtick opener whose info string contains a backtick is not a fence (R3-backtick-info-string) — route: delegated writer (2 non-trivial files)
+- [x] T4 Accepted final-slice review follow-ups: a symlinked `odd/tasks/*.md` counts when its target is a file (R3-symlinked-feature-dropped, a T2b regression); only ENOENT means absent, every other discovery error on `odd/tasks` or `docs/ROADMAP.md` is reported on stderr (R3-unreadable-tasks-dir-silent, Codex P2); a backtick opener whose info string contains a backtick is not a fence (R3-backtick-info-string) — route: delegated writer (2 non-trivial files)
 
 ## Progress
 - 2026-09-27: document created after reading `bin/js-harness.mjs`, `bin/doctor.mjs` and the
@@ -151,5 +151,40 @@ unpushed docs commits), so the PR carries them too.
   `review-17fd24ad8241643d`, reliability lens: approved and acknowledged, three advisory findings
   accepted into T4. Codex (`gpt-6-sol`, `xhigh`): one P2, "report directory-read failures instead
   of treating features as absent", which duplicates R3-unreadable-tasks-dir-silent.
-- Next: T4, its review, then push `feat/progress-view` and open the PR (it carries the two
-  `docs/codex-review` commits); merge after Sebastián's go-ahead.
+- 2026-09-27: T4 done, commit `this commit`. Fixed the three accepted findings:
+  `bin/progress.mjs`'s `readFeatures` no longer filters `odd/tasks` entries on `Dirent.isFile()`
+  alone (a T2b regression that silently dropped every symlinked feature doc, since `isFile()`
+  reflects the link itself, not its target); a `.md` entry that is a symlink now gets its own
+  `stat` of the target, counted when the target is a file, and reported on stderr + skipped when
+  the target is missing or otherwise unreadable (R3-symlinked-feature-dropped). Both
+  `readRoadmap`'s `stat` on `docs/ROADMAP.md` and `readFeatures`'s `readdir` on `odd/tasks` now
+  treat only `ENOENT` as silent absence; any other error (`EACCES`, `ENOTDIR`, ...) is reported on
+  stderr as `js-harness progress: <relative path>: <code>` and that source is skipped
+  (R3-unreadable-tasks-dir-silent, Codex P2) — and the exit-1 message now reads `nothing could be
+  read under <root>` instead of the absence wording whenever a real error, not genuine absence,
+  is why nothing came back. `bin/lib/progress.mjs`'s `matchFenceOpen` now refuses a backtick
+  opener whose info string itself contains a backtick, so inline code like `` ```inline``` text ``
+  is read as ordinary text instead of opening a bogus fence (R3-backtick-info-string); a tilde
+  opener is unaffected, since a tilde fence may contain backticks. Added injectable `stat` and
+  `readdir` options to `progressMain` (same pattern as T2b's `readFile`), so the discovery-error
+  paths could be tested without OS-specific permission bits.
+  RED (new tests added against the unfixed code, before any fix): `node --test
+  bin/lib/progress.test.mjs` → 2 of 2 new backtick-info-string tests failed (27 pass, 2 fail).
+  `node --test bin/progress.test.mjs` → 4 of 4 new discovery-error tests failed (20 pass, 4 fail,
+  2 skipped); the 2 skips are the symlink tests, both hitting `EPERM` on `fs.symlinkSync` on this
+  machine (no Windows developer mode) — caught and turned into `t.skip('symlinks need privileges
+  on this machine')` per the review's own instruction, so they neither passed nor silently
+  vanished. Symlink behavior itself (following a valid target, reporting+skipping a dangling one)
+  is therefore unverified on this machine; the code path mirrors the already-tested
+  `tryReadFile`/stat-error handling used elsewhere in the same file, but that is not the same as
+  an observed pass.
+  GREEN (after the fixes): `node --test` (full suite, not just the progress files) →
+  `tests 279 / pass 277 / fail 0 / skipped 2` (the same 2 symlink skips).
+  `npm run check` → `PASS budget 1026 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `node bin/js-harness.mjs progress` (default `--cwd`, this repo) → exit 0, `Total  38/62  61%`
+  (Roadmap `20/43` `47%`, Features `18/19` `95%` — T4's own line in this doc is the one pending
+  step now).
+- Next: push `feat/progress-view` and open the PR (it carries the two `docs/codex-review`
+  commits); a final review of `8bf53a7..HEAD` (T4) before that; merge after Sebastián's
+  go-ahead.
