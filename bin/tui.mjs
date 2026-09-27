@@ -6,10 +6,12 @@ import { spawnSync } from 'node:child_process';
 import { currentVersion, installMain, uninstallMain } from './install.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
+import { doctorMain, buildReport } from './doctor.mjs';
 
-export const MENU_ITEMS = ['status', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
 const MENU_LABELS = {
   status: 'Status',
+  doctor: 'Doctor',
   install: 'Install',
   update: 'Update',
   upgrade: 'Upgrade',
@@ -17,9 +19,58 @@ const MENU_LABELS = {
   quit: 'Quit',
 };
 
-/** Builds the initial menu state from the version info the caller already resolved. */
-export function initialState({ installedVersion, updateAvailable }) {
-  return { mode: 'menu', selected: 0, installedVersion, updateAvailable };
+// --- T5: the stack block — one compact line per tool, from local probes + cache only ---
+
+const STATE_SEVERITY = { missing: 2, outdated: 2, unknown: 1, ok: 0, 'n/a': 0 };
+const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
+// `installed` and `upToDate` describe the tool's own version, so a gap there reads fine bare
+// ("missing", "outdated"); `claude`/`codex`/`project` are per-host/per-project, so a gap there
+// needs the dimension named ("missing codex") to say where it is.
+const BARE_DIMENSIONS = new Set(['installed', 'upToDate']);
+
+/** The worst state across a doctor row's dimensions, as the short label the stack block shows:
+ * bare (`ok`, `missing`, `outdated`, `unknown`) when the worst dimension is the tool's own
+ * installed/up-to-date state, or `<state> <dimension>` (e.g. `missing codex`) when a per-host or
+ * per-project dimension is worse. Ties break toward the first dimension in `DIMENSIONS` order, so
+ * the result is deterministic. */
+export function worstState(row) {
+  let best = { severity: -1, dimension: 'installed', state: 'ok' };
+  for (const dimension of DIMENSIONS) {
+    const state = row[dimension];
+    const severity = STATE_SEVERITY[state] ?? 0;
+    if (severity > best.severity) best = { severity, dimension, state };
+  }
+  if (best.severity === 0) return 'ok';
+  return BARE_DIMENSIONS.has(best.dimension) ? best.state : `${best.state} ${best.dimension}`;
+}
+
+/** One doctor report row -> the compact `{ id, version, state }` the stack block renders. `version`
+ * mirrors doctor.mjs's own version column: the installed version when the tool is `ok`, else the
+ * installed state itself, so a missing/unknown tool is visible without a separate column. */
+export function summarizeStackRow(row) {
+  const version = row.installed === 'ok' ? row.version : row.installed;
+  return { id: row.id, version, state: worstState(row) };
+}
+
+/** Resolves the stack block's rows from local probes plus the cache only — `buildReport` is called
+ * with `offline: true` (the same semantics as `doctor --offline`), so opening the TUI never touches
+ * the network. Any probe failure (a thrown error, a broken home, ...) must never stop the TUI from
+ * opening: it falls back to the literal string `'unknown'`, which `render` shows as a single
+ * `stack: unknown` line instead of the block. */
+export async function computeStackState({ home, cwd, spawn, platform, fetch: fetchImpl, now }) {
+  try {
+    const rows = await buildReport({ home, cwd, offline: true }, { spawn, platform, fetch: fetchImpl, now });
+    return rows.map(summarizeStackRow);
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Builds the initial menu state from the version info the caller already resolved. `stack` is the
+ * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
+ * stack block simply does not render (see `render` below), so older callers keep working. */
+export function initialState({ installedVersion, updateAvailable, stack }) {
+  return { mode: 'menu', selected: 0, installedVersion, updateAvailable, stack };
 }
 
 /** Maps a raw terminal chunk to a normalized key token; unrecognized input passes through. */
@@ -67,10 +118,19 @@ export function handleKey(state, key) {
   return { state, effect: null };
 }
 
-/** Pure: state -> the lines to draw. */
+/** Pure: state -> the lines to draw. The stack block (T5) renders above the menu, straight from
+ * `state.stack` — this function never probes anything itself, see `computeStackState`. */
 export function render(state) {
   const updateNote = state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
-  const lines = [`js-harness ${state.installedVersion}${updateNote}`, ''];
+  const lines = [`js-harness ${state.installedVersion}${updateNote}`];
+  if (Array.isArray(state.stack)) {
+    for (const row of state.stack) {
+      lines.push(`  ${row.id.padEnd(16)}${String(row.version).padEnd(10)}${row.state}`);
+    }
+  } else if (state.stack === 'unknown') {
+    lines.push('  stack: unknown');
+  }
+  lines.push('');
   for (const [i, item] of MENU_ITEMS.entries()) {
     const marker = i === state.selected ? '>' : ' ';
     lines.push(`${marker} ${MENU_LABELS[item]}`);
@@ -86,8 +146,15 @@ function screenText(state) {
 }
 
 /** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. */
-export function runTui({ installedVersion, updateAvailable, commands, stdin = process.stdin, stdout = process.stdout }) {
-  let state = initialState({ installedVersion, updateAvailable });
+export function runTui({
+  installedVersion,
+  updateAvailable,
+  stack,
+  commands,
+  stdin = process.stdin,
+  stdout = process.stdout,
+}) {
+  let state = initialState({ installedVersion, updateAvailable, stack });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -128,7 +195,9 @@ export function runTui({ installedVersion, updateAvailable, commands, stdin = pr
   });
 }
 
-/** CLI entry point: gathers version info, binds the real commands to a home, opens the TUI. */
+/** CLI entry point: gathers version info, binds the real commands to a home, computes the stack
+ * block (offline, never blocking on the network — see `computeStackState`), opens the TUI. `io` may
+ * also carry `fetch`/`now` overrides for tests; production leaves them at their real defaults. */
 export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {}) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
@@ -136,6 +205,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   };
   const home = get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir();
   const installedVersion = currentVersion();
+  const { fetch: fetchImpl = fetch, now } = io;
 
   let updateAvailable = null;
   try {
@@ -146,13 +216,16 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     updateAvailable = null;
   }
 
+  const stack = await computeStackState({ home, cwd: process.cwd(), spawn, fetch: fetchImpl, now });
+
   const commands = {
     status: () => statusMain(['--home', home], env, spawn),
+    doctor: () => doctorMain(['--home', home], env, { spawn, fetch: fetchImpl, now }),
     install: () => installMain(['--home', home]),
     update: () => updateMain(['--home', home], env, spawn),
     upgrade: () => upgradeMain(['--home', home], env, spawn),
     uninstall: () => uninstallMain(['--home', home]),
   };
 
-  return runTui({ installedVersion, updateAvailable, commands, ...io });
+  return runTui({ installedVersion, updateAvailable, stack, commands, ...io });
 }

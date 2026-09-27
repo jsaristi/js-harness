@@ -12,6 +12,9 @@ import {
   normalizeKey,
   runTui,
   tuiMain,
+  worstState,
+  summarizeStackRow,
+  computeStackState,
 } from './tui.mjs';
 
 function makeFakeStdin() {
@@ -207,7 +210,7 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   try {
     const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
     await flush();
-    stdin.emit('data', 'j'); // down to Install
+    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
     await flush();
     stdin.emit('data', 'q');
@@ -226,7 +229,7 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
 // Redraw in place: bytes measured 2026-09-26 on Windows (PowerShell 7.6 -> cmd -> node, raw mode):
 // down = ESC [ B, up = ESC [ A, Enter = \r.
 const noCommands = {
-  status: async () => {}, install: async () => {}, update: async () => {},
+  status: async () => {}, doctor: async () => {}, install: async () => {}, update: async () => {},
   upgrade: async () => {}, uninstall: async () => {},
 };
 const MENU_HEIGHT = 2 + MENU_ITEMS.length; // header, blank line, one line per item
@@ -241,10 +244,172 @@ test('runTui redraws the menu in place when the selection moves', async () => {
   await flush();
   const redraw = stdout.chunks.slice(before).join('');
   assert.ok(redraw.startsWith(`\u001b[${MENU_HEIGHT}A\u001b[0J`), `expected a cursor-up redraw, got ${JSON.stringify(redraw.slice(0, 12))}`);
-  assert.match(redraw, /> Install/);
+  assert.match(redraw, /> Doctor/);
 
   stdin.emit('data', 'q');
   await done;
+});
+
+// --- T5: the stack block (worstState / summarizeStackRow / computeStackState / render / menu) ---
+
+function makeDoctorRow(overrides = {}) {
+  return {
+    id: 'gentle-ai',
+    version: '3.7.0',
+    installed: 'ok',
+    claude: 'ok',
+    codex: 'ok',
+    project: 'n/a',
+    upToDate: 'ok',
+    ...overrides,
+  };
+}
+
+test('worstState is "ok" when every dimension is ok or n/a', () => {
+  assert.equal(worstState(makeDoctorRow()), 'ok');
+});
+
+test('worstState names the dimension for a per-host/per-project gap', () => {
+  assert.equal(worstState(makeDoctorRow({ codex: 'missing' })), 'missing codex');
+  assert.equal(worstState(makeDoctorRow({ claude: 'missing' })), 'missing claude');
+  assert.equal(worstState(makeDoctorRow({ project: 'missing' })), 'missing project');
+});
+
+test('worstState is bare (no dimension suffix) for an installed or up-to-date gap', () => {
+  assert.equal(worstState(makeDoctorRow({ installed: 'missing' })), 'missing');
+  assert.equal(worstState(makeDoctorRow({ upToDate: 'outdated' })), 'outdated');
+});
+
+test('worstState breaks ties deterministically toward the first dimension', () => {
+  assert.equal(worstState(makeDoctorRow({ installed: 'missing', codex: 'missing' })), 'missing');
+});
+
+test('summarizeStackRow reports the installed version and worst state when healthy', () => {
+  assert.deepEqual(summarizeStackRow(makeDoctorRow()), { id: 'gentle-ai', version: '3.7.0', state: 'ok' });
+});
+
+test('summarizeStackRow shows the installed state as the version when the tool is not ok', () => {
+  const row = makeDoctorRow({ installed: 'missing', version: null });
+  assert.deepEqual(summarizeStackRow(row), { id: 'gentle-ai', version: 'missing', state: 'missing' });
+});
+
+test('render shows one compact line per tool above the menu when state.stack is an array', () => {
+  const state = {
+    ...initialState({ installedVersion: '0.1.0', updateAvailable: null }),
+    stack: [
+      { id: 'gentle-ai', version: '3.7.0', state: 'ok' },
+      { id: 'codegraph', version: '1.6.0', state: 'missing codex' },
+    ],
+  };
+  const text = render(state).join('\n');
+  assert.match(text, /gentle-ai.*3\.7\.0.*ok/);
+  assert.match(text, /codegraph.*1\.6\.0.*missing codex/);
+});
+
+test('render falls back to a single "stack: unknown" line when the probe failed', () => {
+  const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack: 'unknown' };
+  assert.match(render(state).join('\n'), /stack: unknown/);
+});
+
+test('render shows no stack block when state.stack was never provided', () => {
+  const state = initialState({ installedVersion: '0.1.0', updateAvailable: null });
+  assert.doesNotMatch(render(state).join('\n'), /stack:/);
+});
+
+test('computeStackState falls back to "unknown" when a probe throws, never rejecting', async () => {
+  const spawn = () => ({ status: 0, stdout: '1.0.0', stderr: '' });
+  const stack = await computeStackState({ home: undefined, cwd: process.cwd(), spawn });
+  assert.equal(stack, 'unknown');
+});
+
+test('computeStackState resolves real rows from local probes without ever calling fetch (offline)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-stack-'));
+  let fetchCalled = false;
+  const fetchImpl = async () => {
+    fetchCalled = true;
+    return { ok: false };
+  };
+  const spawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+  try {
+    const stack = await computeStackState({ home, cwd: home, spawn, fetch: fetchImpl });
+    assert.equal(fetchCalled, false, 'the stack block must never touch the network');
+    assert.ok(Array.isArray(stack));
+    assert.deepEqual(
+      stack.map((r) => r.id),
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('MENU_ITEMS includes doctor, and enter on it requests it be run', () => {
+  assert.ok(MENU_ITEMS.includes('doctor'));
+  const state = {
+    ...initialState({ installedVersion: '0.1.0', updateAvailable: null }),
+    selected: MENU_ITEMS.indexOf('doctor'),
+  };
+  const { effect } = handleKey(state, 'enter');
+  assert.deepEqual(effect, { type: 'run', command: 'doctor' });
+});
+
+test('tuiMain wires the Doctor menu item to the full doctorMain, with network per the cache rules', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+  let fetchCalled = false;
+  const fetchImpl = async () => {
+    fetchCalled = true;
+    return { ok: false };
+  };
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-doctor-'));
+  let logged = '';
+  const originalLog = console.log;
+  console.log = (line) => {
+    logged += `${line}\n`;
+  };
+  try {
+    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
+    await flush();
+    const doctorIndex = MENU_ITEMS.indexOf('doctor');
+    for (let i = 0; i < doctorIndex; i++) stdin.emit('data', 'j');
+    stdin.emit('data', '\r');
+    await flush();
+    stdin.emit('data', 'q');
+    const code = await done;
+
+    assert.equal(code, 0);
+    assert.equal(
+      fetchCalled,
+      true,
+      'the Doctor menu item must be allowed to hit the network, unlike the startup stack block',
+    );
+    assert.match(logged, /gentle-ai/);
+  } finally {
+    console.log = originalLog;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('tuiMain never touches the network while opening (the startup stack block stays offline)', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+  let fetchCalled = false;
+  const fetchImpl = async () => {
+    fetchCalled = true;
+    return { ok: false };
+  };
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-nostack-fetch-'));
+  try {
+    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
+    await flush();
+    assert.equal(fetchCalled, false, 'opening the TUI must never call fetch');
+    stdin.emit('data', 'q');
+    await done;
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('runTui keeps a command\'s output on screen and draws the menu below it', async () => {
