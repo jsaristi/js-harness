@@ -66,17 +66,27 @@ const SOURCES = {
   'typescript-lsp': ({ home }) => Promise.resolve(readMarketplacePluginVersion(home, 'typescript-lsp')),
 };
 
+/** True when `fetchLatestVersions` below actually looks `row` up — false for a hosted context7 row
+ * (no version of its own to compare against npm) or for a row id with no `SOURCES` entry at all.
+ * Exported (R3-003, accepted final review follow-up, lineage review-cef5637e2884c12a) so any caller
+ * that needs to know what was *attempted*, not just what came back — doctor.mjs's
+ * `resolveLatestVersions`, deciding whether a refetch that resolved nothing was a real outage or
+ * simply had nothing left to check — reuses this one predicate instead of keeping a second copy of
+ * the same rule that can silently drift out of sync with it. */
+export function isLookupAttempted(row) {
+  if (row.id === 'context7' && row.version === 'hosted') return false;
+  return Boolean(SOURCES[row.id]);
+}
+
 /** Fetches every tool's latest version in parallel (each already timeout-bounded). Returns a map
- * of tool id to version string or `null`. Never throws: a source with no id in `SOURCES`, or one
- * whose own promise rejects, resolves to `null` for that id only. */
+ * of tool id to version string or `null`. Never throws: a row `isLookupAttempted` says no to, or
+ * one whose own promise rejects, resolves to `null` for that id only. */
 export async function fetchLatestVersions(rows, deps) {
   const entries = await Promise.all(
     rows.map(async (row) => {
-      if (row.id === 'context7' && row.version === 'hosted') return [row.id, null];
-      const source = SOURCES[row.id];
-      if (!source) return [row.id, null];
+      if (!isLookupAttempted(row)) return [row.id, null];
       try {
-        return [row.id, await source(deps, row)];
+        return [row.id, await SOURCES[row.id](deps, row)];
       } catch {
         return [row.id, null];
       }

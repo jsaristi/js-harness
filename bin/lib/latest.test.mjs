@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fetchLatestVersions } from './latest.mjs';
+import { fetchLatestVersions, isLookupAttempted } from './latest.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-latest-home-'));
@@ -203,6 +203,22 @@ test('every GitHub/npm request carries a 5s AbortSignal timeout', async () => {
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// --- R3-003 (accepted final review follow-up, lineage review-cef5637e2884c12a): a single shared
+// predicate decides what `fetchLatestVersions` actually attempts, so a caller that needs to know
+// what was attempted (doctor.mjs's `resolveLatestVersions`) reuses it instead of re-deriving its
+// own copy of the same rule, which can drift (it did: the old copy only knew about context7 hosted,
+// not about a row id with no registered source at all). ---
+
+test('isLookupAttempted is true for a row with a registered source', () => {
+  assert.equal(isLookupAttempted({ id: 'codegraph', version: '1.6.0' }), true);
+  assert.equal(isLookupAttempted({ id: 'context7', version: '2.2.5' }), true);
+});
+
+test('isLookupAttempted is false for a hosted context7 row and for a row id with no registered source', () => {
+  assert.equal(isLookupAttempted({ id: 'context7', version: 'hosted' }), false);
+  assert.equal(isLookupAttempted({ id: 'some-future-tool', version: '1.0.0' }), false);
 });
 
 test('every tool lookup runs concurrently, not one at a time', async () => {

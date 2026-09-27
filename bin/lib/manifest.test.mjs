@@ -281,6 +281,7 @@ test('install skips a malformed JSON hook file and reports it, without overwriti
     assert.equal(fs.readFileSync(target, 'utf8'), 'not json', 'malformed file must be left untouched');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
+    assert.equal(record.reason, 'malformed JSON');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -525,7 +526,16 @@ test('R3-003: uninstall keeps a hook file js-harness created when an unrelated k
 
     assert.ok(fs.existsSync(target), 'expected the file to survive because of the unrelated key');
     assert.deepEqual(readJson(target), { hooks: { SessionStart: [] }, unrelated: {} });
-    assert.ok(!result.entriesRemoved.includes(target) || fs.existsSync(target));
+    // R3-002 (accepted final review follow-up, lineage review-cef5637e2884c12a): the previous
+    // assertion here (`!result.entriesRemoved.includes(target) || fs.existsSync(target)`) was
+    // tautological — `fs.existsSync(target)` was already proven true above, so the whole expression
+    // was true no matter what `entriesRemoved` held. The real, currently-true behavior it should
+    // have proven is that removing our entry is still reported even though the file itself survives
+    // (only the unrelated key keeps it on disk).
+    assert.ok(
+      result.entriesRemoved.includes(target),
+      'expected the entry removal to be reported even though the file survives',
+    );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -580,6 +590,88 @@ test('R3-005: install keeps compact single-line JSON compact when appending', ()
     const raw = fs.readFileSync(target, 'utf8');
     assert.equal(raw, JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }));
     assert.ok(!raw.includes('\n'), 'expected the rewritten file to stay on one line');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- Final review follow-ups (lineage review-cef5637e2884c12a) ---
+
+// R3-001: a write failure on a component that was already installed must not let the manifest
+// forget it — the previous `{ path, sha256 }` record is carried forward (marked `skipped`, with a
+// `reason`) so uninstall can still find and remove the real file, and `sync` never treats a
+// component that is still declared as "no longer shipped" just because this run could not
+// (re)write it. The failure is injected through `deps.writeFile` (a seam) rather than real file
+// permissions, since chmod is unreliable on Windows.
+
+test('R3-001: install carries the previous file record forward when writing it fails, and reports it skipped', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    const [claudeComponent] = components;
+    const target = claudeComponent.target(home);
+    const previousRecord = manifest.files.find((f) => f.path === target);
+
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+    const next = install(home, '0.2.0', { writeFile: failingWriteFile });
+
+    const record = next.files.find((f) => f.path === target);
+    assert.deepEqual(record, {
+      path: target,
+      sha256: previousRecord.sha256,
+      skipped: true,
+      reason: 'EACCES: permission denied',
+    });
+    assert.equal(
+      fs.readFileSync(target, 'utf8'),
+      claudeComponent.content('0.1.0'),
+      'the real file must be untouched by the failed write',
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-001: sync does not delete a still-declared component whose write failed this run', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const [claudeComponent] = components;
+    const target = claudeComponent.target(home);
+
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+    sync(home, '0.2.0', { writeFile: failingWriteFile });
+
+    assert.ok(fs.existsSync(target), 'a component that is still declared must survive a failed rewrite');
+    assert.equal(fs.readFileSync(target, 'utf8'), claudeComponent.content('0.1.0'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('R3-001: install reports no record for a component that has never been written and just failed again', () => {
+  const home = makeTmpHome();
+  try {
+    const [claudeComponent] = components;
+    const target = claudeComponent.target(home);
+    const failingWriteFile = (writeTarget, ...rest) => {
+      if (writeTarget === target) throw new Error('EACCES: permission denied');
+      fs.writeFileSync(writeTarget, ...rest);
+    };
+
+    const manifest = install(home, '0.1.0', { writeFile: failingWriteFile });
+
+    assert.equal(
+      manifest.files.some((f) => f.path === target),
+      false,
+      'nothing to carry forward on a first-ever failure',
+    );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

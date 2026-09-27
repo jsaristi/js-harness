@@ -509,3 +509,32 @@ test('R3-004: resolveLatestVersions marks the cache fresh for a genuinely empty 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- R3-003 (accepted final review follow-up, lineage review-cef5637e2884c12a): the attempted set
+// is derived from lib/latest.mjs's own `isLookupAttempted` predicate, not a second inline copy of
+// the context7-hosted rule, so a realistic mixed row set — a hosted context7 with nothing to check
+// alongside a real tool whose lookup genuinely fails — must still leave the cache stale: the row
+// with nothing to attempt must never make a genuine failure look like "nothing attempted, so it's
+// fine to call this fresh".
+
+test('R3-003: resolveLatestVersions keeps the cache stale for a mixed row set (hosted context7 + one failing lookup)', async () => {
+  const home = makeTmpHome();
+  try {
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
+    const rows = [
+      { id: 'context7', version: 'hosted' },
+      { id: 'gentle-ai', version: '1.0.0' },
+    ];
+    const failingFetch = async () => {
+      throw new Error('offline');
+    };
+
+    await resolveLatestVersions(rows, { home, offline: false, fetch: failingFetch, now: () => new Date() });
+
+    const cache = readCache(home);
+    assert.equal(cache.latest.checkedAt, staleCheckedAt, 'a genuinely failed lookup must keep the cache stale');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

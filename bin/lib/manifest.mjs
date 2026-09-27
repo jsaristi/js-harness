@@ -136,18 +136,18 @@ function appendEntryToFile(target, pointer, entry) {
   try {
     fileExisted = fs.existsSync(target);
     raw = fileExisted ? fs.readFileSync(target, 'utf8') : '{}';
-  } catch {
-    return { skipped: true, createdFile: false };
+  } catch (err) {
+    return { skipped: true, createdFile: false, reason: err.message };
   }
 
   let data;
   try {
     data = JSON.parse(raw);
   } catch {
-    return { skipped: true, createdFile: false };
+    return { skipped: true, createdFile: false, reason: 'malformed JSON' };
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    return { skipped: true, createdFile: false };
+    return { skipped: true, createdFile: false, reason: 'not a JSON object' };
   }
 
   const trailingNewline = raw.endsWith('\n');
@@ -160,7 +160,7 @@ function appendEntryToFile(target, pointer, entry) {
     if (existing === undefined) {
       cursor[key] = {};
     } else if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) {
-      return { skipped: true, createdFile: false };
+      return { skipped: true, createdFile: false, reason: `"${key}" is not an object` };
     }
     cursor = cursor[key];
   }
@@ -169,7 +169,7 @@ function appendEntryToFile(target, pointer, entry) {
   if (existingLeaf === undefined) {
     cursor[lastKey] = [];
   } else if (!Array.isArray(existingLeaf)) {
-    return { skipped: true, createdFile: false };
+    return { skipped: true, createdFile: false, reason: `"${lastKey}" is not an array` };
   }
   const arr = cursor[lastKey];
 
@@ -181,8 +181,8 @@ function appendEntryToFile(target, pointer, entry) {
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
-  } catch {
-    return { skipped: true, createdFile: false };
+  } catch (err) {
+    return { skipped: true, createdFile: false, reason: err.message };
   }
   return { skipped: false, createdFile: !fileExisted };
 }
@@ -255,6 +255,7 @@ function installEntries(home, previousManifest) {
       sha256: sha256(JSON.stringify(entry)),
       createdFile: previousEntry ? previousEntry.createdFile : result.createdFile,
       skipped: result.skipped === true,
+      ...(result.skipped ? { reason: result.reason } : {}),
     };
   });
 }
@@ -289,13 +290,20 @@ function removeEmptyDirsUpTo(dir, home) {
 /** Writes every component for `version`, grafts every entry component, and records the resulting
  * manifest. Reads any previous manifest first (still on disk, since `writeManifest` below is the
  * last thing this does) so entry `createdFile` flags survive a repeat install — see
- * `installEntries`. R3-002 (accepted T4 review follow-up): a component whose host directory cannot
- * be reached (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run
+ * `installEntries`. `deps.writeFile` (default `fs.writeFileSync`) is an injectable seam so tests can
+ * force a component write to fail without depending on real file permissions (chmod is unreliable
+ * on Windows). R3-002 (accepted T4 review follow-up): a component whose host directory cannot be
+ * reached (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run
  * rather than throwing out of install/sync — the manifest still records whatever else was actually
- * written, and a later, healthy run picks the missing component back up. This never risks `sync`
- * pruning a perfectly good previous copy as "no longer shipped": the same broken ancestor makes
- * `fs.existsSync` on that path read `false` too, so its pruning guard never fires. */
-export function install(home, version) {
+ * written, and a later, healthy run picks the missing component back up. R3-001 (accepted final
+ * review follow-up, lineage review-cef5637e2884c12a): when the previous manifest already had a
+ * record for that same target, that record is carried forward instead of dropped — marked
+ * `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never
+ * orphaned: uninstall can still find and remove it (see `uninstall` below, unchanged: it already
+ * compares the real file's sha256 against whatever record it is handed), and `sync`'s pruning
+ * (below) never mistakes a merely-failed rewrite for a component that is no longer shipped. */
+export function install(home, version, deps = {}) {
+  const writeFile = deps.writeFile ?? fs.writeFileSync;
   const previous = readManifest(home);
   const files = [];
   for (const component of components) {
@@ -303,10 +311,14 @@ export function install(home, version) {
     const content = component.content(version);
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, content, 'utf8');
-      files.push({ path: target, sha256: sha256(content) });
-    } catch {
-      // See the doc comment above: skip this component for this run rather than throwing.
+      writeFile(target, content, 'utf8');
+      files.push({ path: target, sha256: sha256(content), skipped: false });
+    } catch (err) {
+      const previousRecord = previous?.files?.find((f) => f.path === target);
+      if (previousRecord) {
+        files.push({ path: previousRecord.path, sha256: previousRecord.sha256, skipped: true, reason: err.message });
+      }
+      // else: never installed before, so there is nothing to carry forward or report as orphaned.
     }
   }
   const entries = installEntries(home, previous);
@@ -317,15 +329,21 @@ export function install(home, version) {
 
 /** Re-writes components for `version`, drops files and entries the current release no longer
  * ships, and updates the manifest. An old manifest with no `entries` field (written before T4)
- * still loads: pruning simply has nothing to prune. */
-export function sync(home, version) {
+ * still loads: pruning simply has nothing to prune. `deps` is forwarded to `install` (see its
+ * `deps.writeFile` seam above). */
+export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
-  const manifest = install(home, version);
+  const manifest = install(home, version, deps);
 
   if (previous) {
-    const keep = new Set(manifest.files.map((f) => f.path));
+    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only
+    // when its component is no longer *declared* at all — compared against `components`' own
+    // current targets, not against this run's successful writes — so a component that is still
+    // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
+    // is never treated as "no longer shipped" and deleted.
+    const declaredTargets = new Set(components.map((c) => c.target(home)));
     for (const file of previous.files) {
-      if (keep.has(file.path)) continue;
+      if (declaredTargets.has(file.path)) continue;
       if (fs.existsSync(file.path)) {
         fs.rmSync(file.path);
         removeEmptyDirsUpTo(path.dirname(file.path), home);

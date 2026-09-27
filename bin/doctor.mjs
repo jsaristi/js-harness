@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
-import { fetchLatestVersions } from './lib/latest.mjs';
+import { fetchLatestVersions, isLookupAttempted } from './lib/latest.mjs';
 import { gapList, gapDigest } from './lib/digest.mjs';
 
 const GAP_STATES = new Set(['missing', 'outdated']);
@@ -78,8 +78,12 @@ export async function resolveLatestVersions(rows, { home, offline, fetch: fetchI
 
   // R3-004 (accepted T4 review follow-up): a row never even attempted (context7 hosted has no
   // version of its own to look up) is not a failure — only a row that was actually looked up and
-  // still came back null counts as "attempted and failed" for the check below.
-  const attemptedIds = rows.filter((row) => !(row.id === 'context7' && row.version === 'hosted')).map((r) => r.id);
+  // still came back null counts as "attempted and failed" for the check below. R3-003 (accepted
+  // final review follow-up, lineage review-cef5637e2884c12a): reuse latest.mjs's own
+  // `isLookupAttempted` predicate here instead of re-deriving a second copy of the same rule — the
+  // old inline copy only knew about context7 hosted, not about a row id with no registered source
+  // at all, so it could drift from what `fetchLatestVersions` actually attempts.
+  const attemptedIds = rows.filter(isLookupAttempted).map((r) => r.id);
 
   const fetched = await fetchLatestVersions(rows, { fetch: fetchImpl, home });
   const versions = { ...cache.latest.versions };

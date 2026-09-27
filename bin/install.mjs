@@ -16,27 +16,43 @@ export function currentVersion() {
   return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
 }
 
+// R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): a skipped component or
+// entry (a write that failed this run — see manifest.mjs's `install`/`sync`) is surfaced to the
+// user, not silently dropped, one line per item on stderr so it never pollutes the normal stdout
+// report a script might parse.
+function logSkip(item) {
+  console.error(`skipped ${item.path}: ${item.reason ?? 'unknown reason'}`);
+}
+
+function logFiles(files) {
+  for (const file of files ?? []) {
+    if (file.skipped) logSkip(file);
+  }
+}
+
 function logEntries(entries) {
   for (const entry of entries ?? []) {
-    if (entry.skipped) console.log(`skipped (malformed JSON) ${entry.path}`);
+    if (entry.skipped) logSkip(entry);
     else console.log(`registered hook entry in ${entry.path}`);
   }
 }
 
-export async function installMain(argv, env = process.env) {
+export async function installMain(argv, env = process.env, deps = {}) {
   const home = parseHome(argv, env);
   const version = currentVersion();
-  const manifest = install(home, version);
+  const manifest = install(home, version, deps);
   console.log(`installed js-harness ${version} (${manifest.files.length} files) into ${home}`);
+  logFiles(manifest.files);
   logEntries(manifest.entries);
   return 0;
 }
 
-export async function syncMain(argv, env = process.env) {
+export async function syncMain(argv, env = process.env, deps = {}) {
   const home = parseHome(argv, env);
   const version = currentVersion();
-  const manifest = sync(home, version);
+  const manifest = sync(home, version, deps);
   console.log(`synced js-harness ${version} (${manifest.files.length} files) into ${home}`);
+  logFiles(manifest.files);
   logEntries(manifest.entries);
   return 0;
 }
