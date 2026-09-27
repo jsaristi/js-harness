@@ -60,13 +60,16 @@ First request of a one-word prompt, estimated tokens:
 
 ## Phases
 
+What each phase must deliver. Its steps are the checkboxes under [Checklist](#checklist), and
+`js-harness progress` counts them; a phase's state is read there, not re-judged from this table.
+
 | Phase | Done when | State |
 |-------|-----------|-------|
 | F0 Safeguard and baseline | Old repos committed and pushed; per-turn payload measured on Claude and Codex; old folders marked read-only | Done 2026-09-26 |
 | F1 Skeleton | `AGENTS.md` ≤ ~1.5k tokens with the prompt audit applied; a dependency-free `check`; pre-commit wired | Done — `AGENTS.md` 691 tokens (`odd/tasks/f1-skeleton.md`) |
 | Install and update | `npm run check` and `npm run e2e` pass; the TUI opens with no arguments in a terminal | Done, reviewed, merged to `main` 2026-09-26 via `jsaristi/js-harness#1` (`odd/tasks/install-update.md`) |
 | Stack doctor | `js-harness doctor` reports gentle-ai, engram, codegraph, context7 and `typescript-lsp` as installed (with version), configured (per host and per project, read-only) and up to date, or `unknown` when it cannot tell, with each tool's own fix command; results cached 6 h and fail-open offline; a `SessionStart` hook (startup and resume) on Claude Code and Codex notifies through `systemMessage` only when something changed and never writes to stdout; the TUI shows the stack state above the menu; the hook entry is recorded so `uninstall` removes exactly it; tests use fixtures, never the network | Done, reviewed, merged to `main` 2026-09-27 via `jsaristi/js-harness#4`; installed on this machine, hook registered in Claude Code and Codex; the Windows exit crash that install found was fixed via `jsaristi/js-harness#5`, and the global package matches `main` (`js-harness doctor --hook` exits 0, 2026-09-27) (`odd/tasks/stack-doctor.md`) |
-| Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | — after the Stack doctor merge, before F2, so every later phase is tracked with it |
+| Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | In progress on `feat/progress-view` (`odd/tasks/progress-view.md`); before F2, so every later phase is tracked with it |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | — |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one | — needs F2 (the base `AGENTS.md` size); first verify that a git-spec global install works through the pnpm shim |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
@@ -74,6 +77,75 @@ First request of a one-word prompt, estimated tokens:
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
+
+## Checklist
+
+### F0 Safeguard and baseline
+- [x] Old repos committed and pushed
+- [x] Per-turn payload measured on Claude Code and Codex
+- [x] Old folders marked read-only
+
+### F1 Skeleton
+- [x] `AGENTS.md` within ~1.5k tokens with the prompt audit applied
+- [x] A dependency-free `check`
+- [x] Pre-commit runs `check`
+
+### Install and update
+- [x] `npm run check` and `npm run e2e` pass
+- [x] The TUI opens with no arguments in a terminal
+- [x] Reviewed and merged (`jsaristi/js-harness#1`)
+
+### Stack doctor
+- [x] `doctor` reports the five tools as installed, configured and up to date, with fix commands
+- [x] 6 h cache, fail-open offline
+- [x] `SessionStart` hook on Claude Code and Codex, `systemMessage` only on change
+- [x] Hook entry recorded so `uninstall` removes exactly it
+- [x] TUI stack block above the menu
+- [x] Reviewed and merged (`jsaristi/js-harness#4`, Windows exit fix `#5`)
+- [x] Installed on this machine; global package matches `main`
+
+### Progress view
+- [x] Parser for roadmap phases and feature docs
+- [x] `progress` and `progress --json`
+- [x] Review follow-ups (fences, bad input, unknown flags)
+- [x] The roadmap carries checkbox steps and `progress` runs on this repo
+- [ ] Reviewed and merged
+
+### F2 Context diet
+- [ ] The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`)
+- [ ] codegraph prompt hook measured with and without
+- [ ] gentle-ai v4 adopted when released
+- [ ] Block exclusion via gentle-ai #4036, if it ships
+
+### Project init
+- [ ] A git-spec global install works through the pnpm shim
+- [ ] `init` writes `harness.json`, a base `AGENTS.md` if none exists, the pre-commit gate, and runs `codegraph init`, all recorded in a project manifest
+- [ ] `uninstall` in a project restores it exactly
+- [ ] `sync` moves a project to its pinned version
+- [ ] The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
+
+### F3 Task contract
+- [ ] Contract template from origin.md
+- [ ] Validator rejects a contract without a done-when command
+- [ ] Fits the ODD feature doc and `/goal`
+
+### F4 Sensors
+- [ ] Tests wired to pre-commit and `check`
+- [ ] Lint/LSP diagnostics wired
+- [ ] Budget wired
+- [ ] RDD-by-risk wired
+
+### F5 Evals that discriminate
+- [ ] Spend approved by Sebastián
+- [ ] Tasks hard enough to separate configs
+- [ ] A/B minimal vs current config at medium and high
+
+### F6 Codex parity
+- [ ] The eval tasks run on Codex
+- [ ] Differences measured and written down
+
+### F7 Future-model protocol
+- [ ] Written procedure: measure payload, run evals, strip one component at a time
 
 ## Next
 

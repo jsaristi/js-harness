@@ -57,7 +57,7 @@ unpushed docs commits), so the PR carries them too.
 - [x] T1 `bin/lib/progress.mjs`: parse checkboxes (fences, bullets, indent), group roadmap steps by phase, read a feature doc's title and steps — route: delegated writer (2 non-trivial files with T2)
 - [x] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
 - [x] T2b Accepted review follow-ups: close a fence only on the same character and at least the opening length (R3-fence-mismatch, Codex P2); skip non-file `.md` entries and turn read errors into the documented exit codes (R3-unreadable-entry-crash); unknown flags and positionals are usage errors, exit 2 (R3-unknown-args-ignored) — route: delegated writer (2 non-trivial files)
-- [ ] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
+- [x] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
 
 ## Progress
 - 2026-09-27: document created after reading `bin/js-harness.mjs`, `bin/doctor.mjs` and the
@@ -110,7 +110,7 @@ unpushed docs commits), so the PR carries them too.
   plugin's shared app-server still held the token from before the ChatGPT Plus login
   (`~/.codex/auth.json` rewritten 16:45, broker started 16:05); stopping the broker let the plugin
   start a fresh one.
-- 2026-09-27: T2b done, commit `this commit`. Fixed the three accepted findings:
+- 2026-09-27: T2b done, commit `d8daaee`. Fixed the three accepted findings:
   `bin/lib/progress.mjs`'s fence toggle now records the opener's character and length and only
   treats a line as a closer per CommonMark (same character, at least as long, nothing but
   whitespace after — `matchFence`/`isFenceClose`), instead of toggling on any fence-looking line;
@@ -137,3 +137,14 @@ unpushed docs commits), so the PR carries them too.
   passed`.
   `node bin/js-harness.mjs progress --cwd D:/js-harness` → exit 0 (unchanged from T2; still no
   `## Checklist` in `docs/ROADMAP.md` — T3).
+- 2026-09-27: T3 done, commit below this entry. `docs/ROADMAP.md` gains `## Checklist` with one
+  `###` per phase (F0 to F7, Install and update, Stack doctor, Progress view, Project init); the
+  phases table now points to it and the Progress view row reads "In progress". Real run on this
+  repo, `node bin/js-harness.mjs progress` → exit 0: `Roadmap docs/ROADMAP.md 20/43 47%` (F0, F1,
+  Install and update, Stack doctor at 100%; Progress view 4/5 with "Reviewed and merged" pending;
+  F2 to F7 and Project init at 0%), `Features 17/18 94%`, `Total 37/61 61%`. `--json` → exit 0,
+  `37/61`, 12 phases, 4 features. `node --test` → `tests 269 / pass 269 / fail 0`.
+  Review state: T2b assessed `medium`, `under_budget` (352 lines from `5117e79`), so the slice
+  `5117e79..HEAD` is reviewed once at feature close, before the PR.
+- Next: review the slice from `5117e79` (gentle-ai, then Codex), push `feat/progress-view`, open
+  the PR (it carries the two `docs/codex-review` commits), merge after Sebastián's go-ahead.
