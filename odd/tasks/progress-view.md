@@ -56,6 +56,7 @@ unpushed docs commits), so the PR carries them too.
 ## Tasks
 - [x] T1 `bin/lib/progress.mjs`: parse checkboxes (fences, bullets, indent), group roadmap steps by phase, read a feature doc's title and steps — route: delegated writer (2 non-trivial files with T2)
 - [x] T2 `bin/progress.mjs`: read the project, text and `--json` output, `--cwd`, exit codes; dispatcher entry and help — route: delegated writer
+- [x] T2b Accepted review follow-ups: close a fence only on the same character and at least the opening length (R3-fence-mismatch, Codex P2); skip non-file `.md` entries and turn read errors into the documented exit codes (R3-unreadable-entry-crash); unknown flags and positionals are usage errors, exit 2 (R3-unknown-args-ignored) — route: delegated writer (2 non-trivial files)
 - [ ] T3 Add the `## Checklist` to `docs/ROADMAP.md`, run `progress` on this repo, record the output, update the roadmap — route: inline (docs only)
 
 ## Progress
@@ -100,3 +101,39 @@ unpushed docs commits), so the PR carries them too.
   constant, since titles vary far more here than doctor's five known tool ids; a blank line
   separates the Roadmap and Features sections (and precedes `Total`) for readability, matching no
   explicit spec line but no explicit spec line forbids it either.
+- 2026-09-27: T1–T2 reviewed as one slice from `1d8b048` (the branch point). gentle-ai lineage
+  `review-3fdfa5e62f45af47`, risk `medium` (`slice_budget_reached`, 863 lines), one reliability
+  lens: approved and acknowledged, with three advisory findings accepted into T2b
+  (R3-fence-mismatch, R3-unreadable-entry-crash, R3-unknown-args-ignored). Codex (`gpt-6-sol`,
+  `xhigh`) on the same range: P1 "roadmap has no `## Checklist`" is T3; P2 "match fence closers to
+  their opening delimiter" duplicates R3-fence-mismatch. The first Codex attempt failed because the
+  plugin's shared app-server still held the token from before the ChatGPT Plus login
+  (`~/.codex/auth.json` rewritten 16:45, broker started 16:05); stopping the broker let the plugin
+  start a fresh one.
+- 2026-09-27: T2b done, commit `this commit`. Fixed the three accepted findings:
+  `bin/lib/progress.mjs`'s fence toggle now records the opener's character and length and only
+  treats a line as a closer per CommonMark (same character, at least as long, nothing but
+  whitespace after — `matchFence`/`isFenceClose`), instead of toggling on any fence-looking line;
+  `bin/progress.mjs`'s `readFeatures` now filters `odd/tasks` entries by `dirent.isFile()` (a
+  directory named `x.md` is skipped, not read) and both `readRoadmap`/`readFeatures` route every
+  read through `tryReadFile`, which reports `<path>: <code>` on stderr and treats that source as
+  skipped instead of throwing, keeping the documented exit codes (0 if anything was read, 1 if
+  nothing); `parseArgs` now walks argv token by token instead of probing for known flag names, so
+  an unknown flag, `--cwd=value`, or a positional argument is a usage error (exit 2) instead of
+  being silently ignored. Added a `readFile` option to `progressMain` (defaults to
+  `fs.readFileSync`) so the read-error path could be tested by injection rather than relying on
+  OS-specific permission bits.
+  RED (new tests added against the unfixed code, before any fix): `node --test
+  bin/lib/progress.test.mjs` → 3 of the 3 new fence tests failed (22 pass, 3 fail), e.g. the
+  `~~~~` + nested ` ``` ` case returned the fenced checkbox as a real step instead of nothing.
+  `node --test bin/progress.test.mjs` → 8 of the 8 new tests failed (12 pass, 8 fail); the
+  directory-skip case crashed `progressMain` outright: `Error: EISDIR: illegal operation on a
+  directory, read at Object.readFileSync (node:fs:441:20) ... at readFeatures
+  (file:///D:/js-harness/bin/progress.mjs:56:16) at progressMain (...:132:20)` — proving
+  R3-unreadable-entry-crash was real, not just a theoretical review note.
+  GREEN (after the fixes): `node --test bin/lib/progress.test.mjs bin/progress.test.mjs
+  bin/js-harness.test.mjs` → `tests 56 / pass 56 / fail 0`.
+  `npm run check` → `PASS budget 1026 estimated tokens (budget 1500)` / `PASS tests node --test
+  passed`.
+  `node bin/js-harness.mjs progress --cwd D:/js-harness` → exit 0 (unchanged from T2; still no
+  `## Checklist` in `docs/ROADMAP.md` — T3).

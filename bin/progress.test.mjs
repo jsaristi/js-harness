@@ -231,3 +231,117 @@ test('progressMain resolves the default cwd to real process.cwd() when neither -
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
+
+// --- R3-unreadable-entry-crash: only regular files count; a read error is reported, not thrown ---
+
+test('progressMain skips a directory named *.md under odd/tasks and still reads real feature files', async () => {
+  const project = makeTmpProject();
+  try {
+    fs.mkdirSync(path.join(project, 'odd', 'tasks', 'not-a-file.md'), { recursive: true });
+    writeFile(path.join(project, 'odd', 'tasks', 'a-feature.md'), FEATURE_A);
+    const { code, stdout } = await runProgress(['--cwd', project, '--json']);
+    assert.equal(code, 0);
+    const data = JSON.parse(stdout);
+    assert.deepEqual(data.features.map((f) => f.id), ['a-feature']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain reports a feature read error on stderr, skips it, and still exits 0 when another feature was read', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'odd', 'tasks', 'a-feature.md'), FEATURE_A);
+    writeFile(path.join(project, 'odd', 'tasks', 'b-feature.md'), FEATURE_B);
+    const badPath = path.join(project, 'odd', 'tasks', 'b-feature.md');
+    const readFile = (absolute) => {
+      if (absolute === badPath) {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      }
+      return fs.readFileSync(absolute, 'utf8');
+    };
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], { readFile });
+
+    assert.equal(code, 0);
+    assert.match(stderr, /odd\/tasks\/b-feature\.md/);
+    assert.match(stderr, /EACCES/);
+    const data = JSON.parse(stdout);
+    assert.deepEqual(data.features.map((f) => f.id), ['a-feature']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain reports a roadmap read error on stderr, skips it (roadmap: null), and still exits 0 when a feature was read', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    writeFile(path.join(project, 'odd', 'tasks', 'a-feature.md'), FEATURE_A);
+    const badPath = path.join(project, 'docs', 'ROADMAP.md');
+    const readFile = (absolute) => {
+      if (absolute === badPath) {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      }
+      return fs.readFileSync(absolute, 'utf8');
+    };
+
+    const { code, stdout, stderr } = await runProgress(['--cwd', project, '--json'], { readFile });
+
+    assert.equal(code, 0);
+    assert.match(stderr, /docs\/ROADMAP\.md/);
+    assert.match(stderr, /EACCES/);
+    const data = JSON.parse(stdout);
+    assert.equal(data.roadmap, null);
+    assert.equal(data.features.length, 1);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('progressMain exits 1 when the only source present cannot be read at all', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    const badPath = path.join(project, 'docs', 'ROADMAP.md');
+    const readFile = (absolute) => {
+      if (absolute === badPath) {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      }
+      return fs.readFileSync(absolute, 'utf8');
+    };
+
+    const { code, stderr } = await runProgress(['--cwd', project], { readFile });
+
+    assert.equal(code, 1);
+    assert.match(stderr, /EACCES/);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- R3-unknown-args-ignored: anything other than `--cwd <value>` and `--json` is a usage error ---
+
+test('progressMain errors with usage on stderr and exits 2 for an unknown flag', async () => {
+  const { code, stderr } = await runProgress(['--bogus']);
+  assert.equal(code, 2);
+  assert.match(stderr, /Usage: js-harness progress/);
+});
+
+test('progressMain errors with usage on stderr and exits 2 for `--cwd=value` (not the two-token `--cwd <value>` form)', async () => {
+  const { code, stderr } = await runProgress(['--cwd=/some/path']);
+  assert.equal(code, 2);
+  assert.match(stderr, /Usage: js-harness progress/);
+});
+
+test('progressMain errors with usage on stderr and exits 2 for a bare positional argument', async () => {
+  const { code, stderr } = await runProgress(['some-positional']);
+  assert.equal(code, 2);
+  assert.match(stderr, /Usage: js-harness progress/);
+});
+
+test('progressMain errors with usage on stderr and exits 2 for a positional argument after a valid flag', async () => {
+  const { code, stderr } = await runProgress(['--json', 'extra']);
+  assert.equal(code, 2);
+  assert.match(stderr, /Usage: js-harness progress/);
+});

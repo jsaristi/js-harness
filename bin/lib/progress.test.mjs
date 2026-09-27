@@ -60,6 +60,57 @@ test('parseSteps does not treat `[ ]`-looking text as a step unless it starts a 
   assert.deepEqual(parseSteps(md), [{ text: 'a real step', done: false }]);
 });
 
+// --- fence closer must match the opener's character and length (R3-fence-mismatch, Codex P2) ---
+
+test('parseSteps: a ```` opener is not closed by a shorter ``` line, only by ```` or longer', () => {
+  const md = [
+    '````',
+    '- [ ] fenced',
+    '```',
+    '- [ ] still fenced (3 backticks is shorter than the 4-backtick opener)',
+    '````',
+    '- [x] real step after the fence closes',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after the fence closes', done: true }]);
+});
+
+test('parseSteps: a ~~~~ opener wrapping a ``` block keeps the checkbox inside fenced, and counts real steps after it closes', () => {
+  const md = [
+    '~~~~markdown',
+    '```',
+    '- [ ] fenced, inside the outer ~~~~ block',
+    '```',
+    '~~~~',
+    '- [x] real step after the outer fence closes',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after the outer fence closes', done: true }]);
+});
+
+test('parseSteps: a ``` line inside a ~~~ fence does not close it (different fence character)', () => {
+  const md = [
+    '~~~',
+    '- [ ] fenced',
+    '```',
+    '- [ ] still fenced, backticks do not close a tilde fence',
+    '~~~',
+    '- [x] real step after',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+});
+
+test('parseSteps: an unclosed fence runs to end of file, so nothing inside it is ever a step', () => {
+  const md = ['```', '- [ ] fenced, never closed', '- [x] also fenced, still never closed', ''].join('\n');
+  assert.deepEqual(parseSteps(md), []);
+});
+
+test('parseSteps: a longer closing fence than the opener still closes it', () => {
+  const md = ['```', '- [ ] fenced', '````', '- [x] real step after (longer closer still closes)', ''].join('\n');
+  assert.deepEqual(parseSteps(md), [{ text: 'real step after (longer closer still closes)', done: true }]);
+});
+
 test('parseSteps works on CRLF input', () => {
   const md = '- [ ] first\r\n- [x] second\r\n';
   assert.deepEqual(parseSteps(md), [

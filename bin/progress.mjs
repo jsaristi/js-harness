@@ -20,45 +20,95 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
+// R3-unknown-args-ignored (accepted review follow-up): walk argv token by token instead of probing
+// for known flags by name — `indexOf('--cwd')` alone silently accepted an unknown flag, a
+// positional argument, or `--cwd=value` (never equal to the literal token `--cwd`) by simply never
+// finding them. Any token that is not exactly `--cwd <value>` or `--json` is now a usage error.
 function parseArgs(argv) {
-  const get = (flag) => {
-    const i = argv.indexOf(flag);
-    return i !== -1 ? requireValue(argv, i, flag) : undefined;
-  };
-  return {
-    cwd: get('--cwd'),
-    json: argv.includes('--json'),
-  };
+  let cwd;
+  let json = false;
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === '--cwd') {
+      cwd = requireValue(argv, i, token);
+      i += 1; // consume the value too, so it is never re-read as its own token
+      continue;
+    }
+    if (token === '--json') {
+      json = true;
+      continue;
+    }
+    throw new ProgressArgError(`unknown argument: ${token}`);
+  }
+  return { cwd, json };
 }
 
 function toRepoRelative(root, absolutePath) {
   return path.relative(root, absolutePath).split(path.sep).join('/');
 }
 
+/** Reads one source file for `readRoadmap`/`readFeatures` — R3-unreadable-entry-crash (accepted
+ * review follow-up): a read error (permissions, a race with something deleting the file, ...)
+ * must not throw out of `progressMain`. It is reported as one line on `stderr` naming the
+ * repo-relative path and the error's code, and the source is treated as skipped (`null`), the same
+ * as if it had never existed. */
+function tryReadFile(absolute, relative, readFile, stderr) {
+  try {
+    return readFile(absolute);
+  } catch (err) {
+    stderr(`js-harness progress: ${relative}: ${err.code ?? err.message}`);
+    return null;
+  }
+}
+
 /** `docs/ROADMAP.md` under `root`, parsed into `{ path, done, total, phases }` — `null` when the
- * file does not exist, since a missing roadmap is not an error (odd/tasks/progress-view.md). */
-function readRoadmap(root) {
+ * file does not exist (a missing roadmap is not an error, odd/tasks/progress-view.md), when it is
+ * not a regular file (e.g. a directory at that path), or when reading it fails (see
+ * `tryReadFile` above). */
+function readRoadmap(root, readFile, stderr) {
   const absolute = path.join(root, 'docs', 'ROADMAP.md');
-  if (!fs.existsSync(absolute)) return null;
-  const { phases, done, total } = parseRoadmap(fs.readFileSync(absolute, 'utf8'));
-  return { path: toRepoRelative(root, absolute), done, total, phases };
+  let stat;
+  try {
+    stat = fs.statSync(absolute);
+  } catch {
+    return null;
+  }
+  if (!stat.isFile()) return null;
+  const relative = toRepoRelative(root, absolute);
+  const markdown = tryReadFile(absolute, relative, readFile, stderr);
+  if (markdown === null) return null;
+  const { phases, done, total } = parseRoadmap(markdown);
+  return { path: relative, done, total, phases };
 }
 
 /** Every `odd/tasks/*.md` under `root`, sorted by filename, as `{ id, title, path, done, total,
- * steps }` — `[]` when the directory does not exist, since a missing `odd/tasks/` is not an error. */
-function readFeatures(root) {
+ * steps }` — `[]` when the directory does not exist (a missing `odd/tasks/` is not an error).
+ * Only regular files count (R3-unreadable-entry-crash): a directory named `x.md` is skipped, not
+ * read. A file that exists but fails to read is skipped the same way, via `tryReadFile`. */
+function readFeatures(root, readFile, stderr) {
   const dir = path.join(root, 'odd', 'tasks');
-  if (!fs.existsSync(dir)) return [];
-  const files = fs
-    .readdirSync(dir)
-    .filter((file) => file.endsWith('.md'))
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => entry.name)
     .sort();
-  return files.map((file) => {
+
+  const features = [];
+  for (const file of files) {
     const absolute = path.join(dir, file);
+    const relative = toRepoRelative(root, absolute);
+    const markdown = tryReadFile(absolute, relative, readFile, stderr);
+    if (markdown === null) continue;
     const id = file.slice(0, -'.md'.length);
-    const { title, done, total, steps } = parseFeature(fs.readFileSync(absolute, 'utf8'), id);
-    return { id, title, path: toRepoRelative(root, absolute), done, total, steps };
-  });
+    const { title, done, total, steps } = parseFeature(markdown, id);
+    features.push({ id, title, path: relative, done, total, steps });
+  }
+  return features;
 }
 
 /** `—` for a group with nothing to count (`total: 0` means no steps, never 100%), else a rounded
@@ -118,7 +168,17 @@ function renderText(data) {
   return lines;
 }
 
-export async function progressMain(argv, { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
+export async function progressMain(
+  argv,
+  {
+    cwd: defaultCwd = process.cwd(),
+    stdout = console.log,
+    stderr = console.error,
+    // Injectable so tests can exercise a read error (R3-unreadable-entry-crash) without depending
+    // on OS-specific permission bits; real runs default to a plain `fs.readFileSync`.
+    readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
+  } = {},
+) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -128,8 +188,8 @@ export async function progressMain(argv, { cwd: defaultCwd = process.cwd(), stdo
   }
 
   const root = path.resolve(parsed.cwd ?? defaultCwd);
-  const roadmap = readRoadmap(root);
-  const features = readFeatures(root);
+  const roadmap = readRoadmap(root, readFile, stderr);
+  const features = readFeatures(root, readFile, stderr);
 
   if (!roadmap && features.length === 0) {
     stderr(`js-harness progress: no docs/ROADMAP.md or odd/tasks/*.md under ${root}`);

@@ -2,25 +2,49 @@
 // No fs here: every function takes markdown text and returns data, so `bin/progress.test.mjs` and
 // this file's own tests can use inline fixture strings instead of touching disk.
 
-const FENCE_PATTERN = /^ {0,3}(```+|~~~+)/;
+const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})/;
 const HEADING_PATTERN = /^ {0,3}(#{1,6})\s+(.*)$/;
 const STEP_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s*(.*)$/;
 
+/** A line's fence marker, if it opens one: its character (`` ` `` or `~`) and length (3+). Used
+ * both to detect a fresh opener and, while inside a fence, to test whether a line's marker
+ * qualifies as *that* fence's closer. */
+function matchFence(line) {
+  const m = line.match(FENCE_OPEN_PATTERN);
+  if (!m) return null;
+  const marker = m[1];
+  return { char: marker[0], length: marker.length, rest: line.slice(m[0].length) };
+}
+
+/** CommonMark's closing rule: a fence closes only on a line whose marker is the *same character*
+ * as the opener, *at least as long*, and followed by nothing but whitespace — R3-fence-mismatch
+ * (Codex P2). A shorter marker, a different character (` ``` ` never closes `~~~`, and vice versa),
+ * or trailing text after the marker is just more fenced content, not a closer. */
+function isFenceClose(line, fence) {
+  const marker = matchFence(line);
+  return (
+    marker !== null && marker.char === fence.char && marker.length >= fence.length && marker.rest.trim() === ''
+  );
+}
+
 /** Splits markdown into lines and tags each one as a fence toggle, a heading, a checkbox step, or
  * plain text — a single fence-aware pass every parser below builds on, so a heading or checkbox
- * that only appears inside a fenced example is never mistaken for a real one. */
+ * that only appears inside a fenced example (or inside a *nested*, mismatched fence marker) is
+ * never mistaken for a real one. An opener with no matching closer runs to end of file. */
 function tokenize(markdown) {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
-  let inFence = false;
+  let fence = null; // { char, length } of the currently open fence, or null outside any fence
   for (const raw of lines) {
-    if (FENCE_PATTERN.test(raw)) {
-      inFence = !inFence;
+    if (fence) {
+      if (isFenceClose(raw, fence)) fence = null;
       tokens.push({ fence: true });
       continue;
     }
-    if (inFence) {
-      tokens.push({});
+    const opened = matchFence(raw);
+    if (opened) {
+      fence = opened;
+      tokens.push({ fence: true });
       continue;
     }
     const heading = raw.match(HEADING_PATTERN);
