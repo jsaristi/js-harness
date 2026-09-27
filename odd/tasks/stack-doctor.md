@@ -452,5 +452,24 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   widget for a status-line indicator; the `.atl/` untracked-selection submission drops `--base-ref`
   (worked around with `.git/info/exclude`).
 
+- 2026-09-27 merged via `jsaristi/js-harness#4` (merge commit 3012836). Real install on this
+  machine: `npm pack` of `main`, `npm i -g` of the tarball with the real npm CLI (the PATH `npm` is
+  a pnpm shim; no git tag exists yet), then `js-harness install` → `installed js-harness 0.1.0
+  (2 files)`, one `SessionStart` entry registered in each host file. Checked against backups:
+  `~/.claude/settings.json` 3 → 4 entries, `~/.codex/hooks.json` 2 → 3, everything else identical.
+- 2026-09-27 that install exposed two defects the fixtures could not: every `doctor` run that
+  fetched (stale cache) exited 127 with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING),
+  file src\win\async.c` (the dispatcher's `process.exit()` raced closing fetch sockets), and every
+  probe printed Node 24's DEP0190 warning on stderr (shell spawn with an args array). Fixed in
+  0b914c5 on `fix/doctor-windows-exit`: `process.exitCode` instead of `process.exit()`, and win32
+  probes pass one command line with no args array. RED: the win32 probe test failed with `actual:
+  'codegraph'`, `expected: 'codegraph --version'`. GREEN: `node --test` 223/223, `npm run check`
+  PASS, `npm run e2e` 14/14. Real reproduction, three network runs before: exit 127 each; after:
+  exit 0, 0 stderr bytes, ~1 s; a stale-cache hook run printed only its `systemMessage` JSON. The
+  libuv race has no automated test (it needs the network and Windows); the evidence is that run.
+  Native review lineage review-ef82271a611a3847 approved and acknowledged; its warning (exitCode
+  lets a leftover handle delay exit) checked: the TUI releases stdin on quit (`bin/tui.mjs:188-190`)
+  and the dispatcher tests spawn the CLI with `spawnSync`, so a hang would fail them.
+
 ## Next step
-Feature complete on `feat/stack-doctor`. Push and PR are Sebastián's decision.
+Merge `fix/doctor-windows-exit`, reinstall the global package from `main`, run `js-harness sync`.
