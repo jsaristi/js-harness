@@ -143,6 +143,90 @@ test('initMain rejects --cwd with a missing value and exits 2', async () => {
   assert.match(stderr, /--cwd requires a value/);
 });
 
+test('initMain reports no such directory on stderr and exits 1 when --cwd does not exist', async () => {
+  const parent = makeTmpDir();
+  const missing = path.join(parent, 'nope');
+  try {
+    let stderr = '';
+    const origError = console.error;
+    console.error = (msg) => {
+      stderr += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', missing], process.env, {});
+    } finally {
+      console.error = origError;
+    }
+    assert.equal(code, 1);
+    assert.match(stderr, /no such directory/);
+    assert.ok(stderr.includes(missing));
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+// T2b Codex P1 + R3-init-partial-failure-unrecoverable
+test('initMain reports a rolled-back write failure on stderr and exits 1', async () => {
+  const root = makeTmpRepo();
+  try {
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('AGENTS.md')) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(target, content, enc);
+    };
+    let stderr = '';
+    const origError = console.error;
+    console.error = (msg) => {
+      stderr += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', root], process.env, { writeFile });
+    } finally {
+      console.error = origError;
+    }
+    assert.equal(code, 1);
+    assert.match(stderr, /init failed:/);
+    assert.match(stderr, /nothing was left behind/);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2b item 2: codegraph retry on a re-run
+test('initMain retries codegraph on a re-run after a prior failure and reports the outcome', async () => {
+  const root = makeTmpRepo();
+  const home = makeTmpHome();
+  try {
+    const failSpawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'boom' });
+    await initMain(['--cwd', root, '--home', home], process.env, { spawn: failSpawn, platform: 'linux' });
+
+    const okSpawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    let stdout = '';
+    const origLog = console.log;
+    console.log = (msg) => {
+      stdout += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', root, '--home', home], process.env, { spawn: okSpawn, platform: 'linux' });
+    } finally {
+      console.log = origLog;
+    }
+    assert.equal(code, 0);
+    assert.match(stdout, /retrying codegraph init/);
+    assert.match(stdout, /ran codegraph init/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('initMain reports a codegraph failure on stderr and still exits 0', async () => {
   const root = makeTmpRepo();
   const home = makeTmpHome();

@@ -70,8 +70,15 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
   js-harness current with `main` — route: inline (`package.json` + one test file, mechanical)
-- [ ] T2 `init` writes `harness.json`, a base `AGENTS.md` if none exists, the pre-commit gate, and
+- [x] T2 `init` writes `harness.json`, a base `AGENTS.md` if none exists, the pre-commit gate, and
   runs `codegraph init`, all recorded in a project manifest — route: delegated writer
+- [x] T2b Accepted review follow-ups on `init`: roll back a partial run (Codex P1,
+  R3-init-partial-failure-unrecoverable); retry a failed `codegraph init` and record `createdDir`
+  as observed (Codex P2, R3-codegraph-createdDir-unverified); never write a hooks path outside the
+  repository, another drive included (Codex P2, R3-hookspath-outside-repo-written); run codegraph
+  with `cwd: root` and `.` so `cmd` cannot expand `%VAR%` in the path (Codex P2); compare the
+  manifest path via realpath in its test (R3-manifestpath-assertion-not-realpath); report a
+  missing `--cwd` as such (R3-nonexistent-cwd-misreported) — route: the same delegated writer
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -161,6 +168,32 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   base `AGENTS.md` measures 122 tokens (`js-harness check` there); committing through the gate
   passed, and a commit with a failing test was blocked (`FAIL tests`, commit exit 1, HEAD
   unchanged).
+- 2026-09-28: T2 committed as 9f6ea49. Assessed (`--base-ref 222110f --committed-only`): risk
+  `medium` (`executable_change` on `bin/init.mjs`), 945 changed lines, `review_due: true`
+  (`slice_budget_reached`). Native review lineage review-608ab3ca807965a1: consent granted
+  (pre-granted), one lens (reliability), approved and acknowledged, with five advisory findings
+  (two WARNING on partial failure and hooks outside the repo, one WARNING on a test path
+  assertion, two SUGGESTION). Codex review (`--base 222110f`, commands allowed this time, its
+  test runner hit EPERM): one P1 (a failed step leaves an unrecoverable partial init) and three
+  P2 (no codegraph retry, a hooks path on another drive breaks the manifest's relative-path
+  contract, `cmd` expands `%VAR%` in the quoted root). All accepted as T2b.
+- 2026-09-28: T2b done by the same writer. `bin/lib/project.mjs`: `InitWriteError` and a rollback
+  of every file and directory chain the run created when a step after the first write throws;
+  `isOutsideRoot` keeps a hooks path outside the repository (another drive included) as `kept`,
+  recorded by its absolute path; `initCodegraph` records `createdDir` as observed and is reused
+  to retry a failed codegraph step when `harness.json` exists, the manifest says `failed` and
+  `.codegraph/` is still absent; codegraph runs as `codegraph init --yes .` with `cwd: root`.
+  `bin/init.mjs`: `no such directory: <cwd>` (exit 1), `init failed: ...; nothing was left
+  behind` (exit 1), and the retry's outcome. RED (new tests against 9f6ea49's code): `project.test.mjs`
+  → `does not provide an export named 'InitWriteError'`; `init.test.mjs` → a missing `--cwd`
+  reported as "not a git repository", an uncaught `EACCES` out of `initMain`, and "already
+  initialized" instead of a retry. GREEN: 36/36 in those files; full `node --test` → `tests 348 /
+  pass 346 / fail 0 / skipped 2`, re-run by the parent with the same result; `npm run check` PASS.
+  +631/−113 lines. Accepted writer calls: the rollback also removes a manifest directory the run
+  created; `.codegraph/` is not rolled back when the manifest write (the only later step) fails —
+  it ignores itself and a second `init` sees it; the retry reuses the same failure wording. Real
+  run in a scratch folder named `odd dir %USERNAME%`: `init` wrote the three files and `ran
+  codegraph init`, `.codegraph/` landed inside that folder, and no expanded sibling was created.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.

@@ -3,7 +3,7 @@
 // manifest — see bin/lib/project.mjs and odd/tasks/project-init.md, "T2 design".
 import os from 'node:os';
 import { currentVersion } from './install.mjs';
-import { initProject } from './lib/project.mjs';
+import { initProject, InitWriteError } from './lib/project.mjs';
 
 const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
 
@@ -63,6 +63,24 @@ function logAction(action) {
   }
 }
 
+/** The already-initialized report: the plain "nothing to do" line, or, when `initProject` retried
+ * codegraph (see project.mjs's `alreadyInitialized`), the retry's own outcome plus the rewritten
+ * manifest's path (T2b item 2). */
+function logAlreadyInitialized(result) {
+  const version = result.version ?? 'unknown version';
+  if (!result.codegraphRetry) {
+    console.log(`already initialized at ${version}; js-harness sync moves a project to its pin`);
+    return;
+  }
+  console.log(`already initialized at ${version}; retrying codegraph init`);
+  if (result.codegraphRetry.ok) {
+    console.log('ran codegraph init');
+  } else {
+    console.error(`codegraph init failed: ${result.codegraphRetry.reason}`);
+  }
+  console.log(`manifest: ${result.codegraphRetry.manifestPath}`);
+}
+
 export async function initMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
@@ -73,7 +91,25 @@ export async function initMain(argv, env = process.env, deps = {}) {
   }
 
   const version = currentVersion();
-  const result = initProject(parsed.cwd, version, deps);
+  let result;
+  try {
+    result = initProject(parsed.cwd, version, deps);
+  } catch (err) {
+    // T2b Codex P1 + R3-init-partial-failure-unrecoverable: initProject has already rolled back
+    // everything this run wrote (best-effort) before throwing — report what happened, never a raw
+    // stack trace, and exit 1 either way.
+    if (err instanceof InitWriteError) {
+      const cleanup = err.notRemoved.length > 0 ? `could not remove: ${err.notRemoved.join(', ')}` : 'nothing was left behind';
+      console.error(`init failed: ${err.message}; ${cleanup}`);
+      return 1;
+    }
+    throw err;
+  }
+
+  if (result.noSuchDirectory) {
+    console.error(`no such directory: ${result.cwd}`);
+    return 1;
+  }
 
   if (result.notGitRepo) {
     console.error('not a git repository: run git init first');
@@ -81,9 +117,7 @@ export async function initMain(argv, env = process.env, deps = {}) {
   }
 
   if (result.alreadyInitialized) {
-    console.log(
-      `already initialized at ${result.version ?? 'unknown version'}; js-harness sync moves a project to its pin`,
-    );
+    logAlreadyInitialized(result);
     return 0;
   }
 

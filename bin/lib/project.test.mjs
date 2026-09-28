@@ -10,6 +10,7 @@ import {
   resolveGitPath,
   agentsTemplate,
   runCodegraphInit,
+  InitWriteError,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
 
@@ -25,13 +26,20 @@ function makeTmpDir(prefix = 'js-harness-project-nongit-') {
 }
 
 /** A spawn that runs `git` for real (tests use real repos) but never touches a real `codegraph`
- * binary — the second argument controls what the fake codegraph call reports. */
+ * binary — the second argument controls what the fake codegraph call reports. A successful call
+ * creates `.codegraph` under the spawn's own `cwd` (now the resolved root — see runCodegraphInit's
+ * `cwd: root` contract), the same way a real `codegraph init` would, so `createdDir` assertions
+ * observe something real instead of an assumption. */
 function makeSpawn(codegraphResult = { status: 0, stdout: '', stderr: '' }) {
   const codegraphCalls = [];
   const spawn = (cmd, args, opts) => {
     if (cmd === 'git') return spawnSync('git', args, opts);
     codegraphCalls.push({ cmd, args, opts });
-    return typeof codegraphResult === 'function' ? codegraphResult(cmd, args, opts) : codegraphResult;
+    const result = typeof codegraphResult === 'function' ? codegraphResult(cmd, args, opts) : codegraphResult;
+    if (result.status === 0 && opts?.cwd) {
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+    }
+    return result;
   };
   spawn.codegraphCalls = codegraphCalls;
   return spawn;
@@ -101,7 +109,12 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
 
     assert.ok(fs.existsSync(result.manifestPath));
     assert.deepEqual(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8')), result.manifest);
-    assert.equal(result.manifestPath, path.join(root, '.git', 'js-harness', 'manifest.json'));
+    // T2b R3-manifestpath-assertion-not-realpath: compare real paths, like the root assertion
+    // above — git's own output can use forward slashes even on Windows.
+    assert.equal(
+      fs.realpathSync(result.manifestPath),
+      fs.realpathSync(path.join(root, '.git', 'js-harness', 'manifest.json')),
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -242,6 +255,236 @@ test('initProject with an existing harness.json writes nothing and reports alrea
   }
 });
 
+// --- T2b item 6: --cwd that does not exist ---
+
+test('initProject reports noSuchDirectory when --cwd does not exist, and touches nothing', () => {
+  const parent = makeTmpDir();
+  const missing = path.join(parent, 'does-not-exist');
+  try {
+    const result = initProject(missing, '0.1.0', { spawn: makeSpawn() });
+    assert.equal(result.code, 1);
+    assert.equal(result.noSuchDirectory, true);
+    assert.equal(result.cwd, missing);
+    assert.equal(fs.existsSync(missing), false);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+// --- T2b item 3: a core.hooksPath outside the repository is never written to ---
+
+test('initProject keeps (never writes) a pre-commit hook whose core.hooksPath resolves outside the repository', () => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-outside-hooks-');
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', outsideDir], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    // Nothing was written into the outside directory at all.
+    assert.deepEqual(fs.readdirSync(outsideDir), []);
+    assert.ok(!result.manifest.files.some((f) => f.path.includes('pre-commit')));
+    const keptEntry = result.manifest.kept.find((k) => k.reason.includes('outside the repository'));
+    assert.ok(keptEntry, 'expected the outside hooks path in kept');
+    assert.match(keptEntry.reason, /js-harness check/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// --- T2b item 1: failure atomicity ---
+
+test('initProject rolls back harness.json when the AGENTS.md write throws, and a following run succeeds', () => {
+  const root = makeTmpRepo();
+  try {
+    const before = fs.readdirSync(root);
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('AGENTS.md')) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(target, content, enc);
+    };
+
+    assert.throws(
+      () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile }),
+      (err) => err instanceof InitWriteError && /EACCES|permission denied/.test(err.message),
+    );
+
+    // Byte-identical: nothing this run wrote survives.
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
+    assert.deepEqual(fs.readdirSync(root), before);
+
+    const retry = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(retry.code, 0);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back everything, including a directory it created, when the hook write throws', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'nested/hooks/dir'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0);
+    const before = fs.readdirSync(root);
+
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('pre-commit')) throw new Error('disk full');
+      fs.writeFileSync(target, content, enc);
+    };
+
+    assert.throws(
+      () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile }),
+      (err) => err instanceof InitWriteError && /disk full/.test(err.message),
+    );
+
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
+    // The whole `nested/` chain this run created for the hook is gone, not just the hook file.
+    assert.equal(fs.existsSync(path.join(root, 'nested')), false);
+    assert.deepEqual(fs.readdirSync(root), before);
+
+    const retry = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(retry.code, 0);
+    assert.ok(fs.existsSync(path.join(root, 'nested', 'hooks', 'dir', 'pre-commit')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back a failed manifest write and reports what could not be removed', () => {
+  const root = makeTmpRepo();
+  try {
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('manifest.json')) throw new Error('ENOSPC: no space left on device');
+      fs.writeFileSync(target, content, enc);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /ENOSPC/);
+    assert.deepEqual(caught.notRemoved, []);
+
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
+    // The manifest dir this run created for itself is gone; codegraph (which ran and succeeded
+    // before the manifest write failed) is untouched — it never participates in this atomicity,
+    // same as a normal codegraph failure never blocks the rest of a run.
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- T2b item 2: codegraph createdDir is observed, not assumed ---
+
+test('initProject records codegraph createdDir as observed on disk, not assumed from a successful exit', () => {
+  const root = makeTmpRepo();
+  try {
+    // Reports success but never actually creates .codegraph — createdDir must reflect reality.
+    const spawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 0, stdout: '', stderr: '' });
+
+    const result = initProject(root, '0.1.0', { spawn, platform: 'linux' });
+
+    assert.deepEqual(result.manifest.codegraph, { createdDir: false, status: 'ok' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- T2b item 2: codegraph retry on an already-initialized project ---
+
+test('initProject retries only codegraph when harness.json exists, the manifest says codegraph failed, and .codegraph is still absent', () => {
+  const root = makeTmpRepo();
+  try {
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+    assert.deepEqual(first.manifest.codegraph, { createdDir: false, status: 'failed' });
+    const agentsBefore = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+    const hookBefore = fs.readFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), 'utf8');
+
+    const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' });
+    const second = initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux' });
+
+    assert.equal(second.code, 0);
+    assert.equal(second.alreadyInitialized, true);
+    assert.ok(second.codegraphRetry);
+    assert.equal(second.codegraphRetry.ok, true);
+    assert.equal(okSpawn.codegraphCalls.length, 1);
+
+    // Every other file is untouched.
+    assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
+    assert.equal(fs.readFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), 'utf8'), hookBefore);
+
+    const manifestOnDisk = JSON.parse(fs.readFileSync(first.manifestPath, 'utf8'));
+    assert.deepEqual(manifestOnDisk.codegraph, { createdDir: true, status: 'ok' });
+    assert.deepEqual(manifestOnDisk.files, first.manifest.files);
+    assert.deepEqual(manifestOnDisk.kept, first.manifest.kept);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject reports a second codegraph retry failure and still exits 0', () => {
+  const root = makeTmpRepo();
+  try {
+    initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+
+    const stillFailingSpawn = makeSpawn({ status: 1, stdout: '', stderr: 'boom again' });
+    const second = initProject(root, '0.1.0', { spawn: stillFailingSpawn, platform: 'linux' });
+
+    assert.equal(second.code, 0);
+    assert.equal(second.codegraphRetry.ok, false);
+    assert.match(second.codegraphRetry.reason, /boom again/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject does not retry codegraph once .codegraph exists, even after a prior failure', () => {
+  const root = makeTmpRepo();
+  try {
+    initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
+
+    const spawn = makeSpawn();
+    const result = initProject(root, '0.1.0', { spawn, platform: 'linux' });
+
+    assert.equal(result.alreadyInitialized, true);
+    assert.equal(result.codegraphRetry, undefined);
+    assert.equal(spawn.codegraphCalls.length, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject does not retry codegraph when the recorded status is not failed', () => {
+  const root = makeTmpRepo();
+  try {
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true }); // present before the first init
+    initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    fs.rmSync(path.join(root, '.codegraph'), { recursive: true, force: true }); // removed afterward
+
+    const spawn = makeSpawn();
+    const result = initProject(root, '0.1.0', { spawn, platform: 'linux' });
+
+    assert.equal(result.codegraphRetry, undefined);
+    assert.equal(spawn.codegraphCalls.length, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- gitTopLevel / resolveGitPath ---
 
 test('gitTopLevel returns null outside a git repository', () => {
@@ -289,8 +532,11 @@ test('agentsTemplate titles the doc with the folder name and stays short', () =>
 });
 
 // --- runCodegraphInit spawn shape ---
+// T2b Codex P2 (shell expansion): the root path is never embedded in the command line — it is
+// passed as the child's own `cwd`, with the command always the literal `.` — so a root containing
+// spaces or a drive letter can never break shell quoting or be mis-expanded.
 
-test('runCodegraphInit spawns one joined command line with shell:true and no args array on win32, quoting the root', () => {
+test('runCodegraphInit spawns one joined command line with shell:true, no args array, and cwd:root on win32', () => {
   const calls = [];
   const spawn = (cmd, args, opts) => {
     calls.push({ cmd, args, opts });
@@ -301,12 +547,13 @@ test('runCodegraphInit spawns one joined command line with shell:true and no arg
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].cmd, `codegraph init --yes "${root}"`);
+  assert.equal(calls[0].cmd, 'codegraph init --yes .');
   assert.deepEqual(calls[0].args, []);
   assert.equal(calls[0].opts.shell, true);
+  assert.equal(calls[0].opts.cwd, root);
 });
 
-test('runCodegraphInit spawns plain argv with no shell off win32', () => {
+test('runCodegraphInit spawns plain argv with no shell and cwd:root off win32', () => {
   const calls = [];
   const spawn = (cmd, args, opts) => {
     calls.push({ cmd, args, opts });
@@ -318,8 +565,9 @@ test('runCodegraphInit spawns plain argv with no shell off win32', () => {
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].cmd, 'codegraph');
-  assert.deepEqual(calls[0].args, ['init', '--yes', root]);
+  assert.deepEqual(calls[0].args, ['init', '--yes', '.']);
   assert.equal(calls[0].opts.shell, false);
+  assert.equal(calls[0].opts.cwd, root);
 });
 
 test('runCodegraphInit reports ok:false with a reason on a non-zero exit', () => {
