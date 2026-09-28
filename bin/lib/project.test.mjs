@@ -706,13 +706,21 @@ test('initProject creates the manifest temp file exclusively (flag: wx) with a u
 test('initProject fails, rather than overwrites, when something already sits at the manifest temp path', () => {
   const root = makeTmpRepo();
   try {
+    // Pre-create the manifest's own directory so it is *not* something this run creates (and so
+    // rollback never recursively removes it as a directory chain it owns) — isolates this test to
+    // `writeManifestAtomic`'s own foreign-file handling, not the surrounding directory rollback.
+    fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
+
     let intercepted = false;
+    let tmpPathUsed = null;
+    const foreignContent = 'not js-harness content';
     const writeFile = (target, content, options) => {
       if (isManifestTmp(target) && !intercepted) {
         intercepted = true;
+        tmpPathUsed = target;
         // Pre-create the exact path this run is about to use for its manifest .tmp file, holding
-        // content that must never be silently replaced.
-        fs.writeFileSync(target, 'not js-harness content', 'utf8');
+        // content that must never be silently replaced or removed.
+        fs.writeFileSync(target, foreignContent, 'utf8');
       }
       fs.writeFileSync(target, content, options); // delegates to the real fs call either way
     };
@@ -730,6 +738,49 @@ test('initProject fails, rather than overwrites, when something already sits at 
     // Nothing this run wrote survives, and the manifest was never actually produced.
     assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
     assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'manifest.json')), false);
+    // T2f item 1 (R3-wx-tmp-cleanup-deletes-foreign-file, Codex P2): this write never created the
+    // foreign file at the temp path (the `wx` create itself is what failed), so it must not be the
+    // one to remove it either — the pre-existing content survives byte-identical.
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run tried to use');
+    assert.ok(fs.existsSync(tmpPathUsed), 'expected the foreign file at the temp path to survive');
+    assert.equal(fs.readFileSync(tmpPathUsed, 'utf8'), foreignContent);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2f item 1: a successfully-created temp file (the exclusive `wx` create itself succeeds) *is*
+// this write's own responsibility — if the later rename fails, that temp file must be cleaned up.
+test('initProject removes its own temp file when the rename after a successful exclusive create fails', () => {
+  const root = makeTmpRepo();
+  try {
+    let tmpPathUsed = null;
+    const writeFile = (target, content, options) => {
+      if (isManifestTmp(target)) tmpPathUsed = target;
+      fs.writeFileSync(target, content, options);
+    };
+    const originalRename = fs.renameSync;
+    fs.renameSync = (from, to) => {
+      if (isManifestTmp(from)) throw new Error('EPERM: simulated rename failure');
+      return originalRename(from, to);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    } finally {
+      fs.renameSync = originalRename;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /EPERM|simulated rename failure/);
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run created');
+    // This write's own temp file — the exclusive create succeeded — is cleaned up on the later
+    // rename failure, unlike the foreign-file case above.
+    assert.equal(fs.existsSync(tmpPathUsed), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1170,6 +1221,233 @@ test('initProject writes the pre-commit hook into a linked worktree\'s common gi
     spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
     fs.rmSync(main, { recursive: true, force: true });
     fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+// --- T2f item 2 (Codex P2): shallowestMissingAncestor must bound its climb by the base that
+// actually contains the directory (working tree, git dir, or common git dir), not always the
+// working tree — otherwise, for a multi-level missing chain inside a git dir outside the working
+// tree, only the deepest directory is recorded, and its newly created parents leak on rollback or
+// uninstall. ---
+
+test('initProject records the shallowest created directory chain in an outside git dir, not just the deepest', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
+    assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false); // both levels missing
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(hooksDir, 'pre-commit')));
+    // The shallowest directory this run created (`custom`), not the deepest (`custom/nested/hooks`).
+    const expectedShallowest = path.join(commonGitDir, 'custom').split(path.sep).join('/');
+    assert.deepEqual(result.manifest.dirs, [{ path: expectedShallowest, gitDir: true }]);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back the whole created directory chain in an outside git dir, not just the deepest directory', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-rb-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs-rb'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const writeFile = (target, content, options) => {
+      if (isManifestTmp(target)) throw new Error('ENOSPC: no space left on device');
+      fs.writeFileSync(target, content, options);
+    };
+
+    assert.throws(
+      () => initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile }),
+      (err) => err instanceof InitWriteError,
+    );
+
+    // The whole chain this run created (custom, custom/nested, custom/nested/hooks) is gone, not
+    // just the deepest directory.
+    assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+// --- T2f item 3 (R3-realish-base-detection-equality-only): symlink-hop counting must start as
+// soon as the walk is at or below a base, checked after each hop as well as at segment starts, and
+// using the same at-or-below containment test everywhere else — not exact string equality with a
+// base, which misses a hop that lands (or chains through) a proper descendant of a base without
+// ever touching its exact path. ---
+
+test('initProject does not treat a junction above the repository root as occupying the hook', async (t) => {
+  const root = makeTmpRepo();
+  const outerJunction = makeTmpDir('js-harness-project-outerlink-');
+  fs.rmSync(outerJunction, { recursive: true, force: true });
+  try {
+    // core.hooksPath points *through* a junction that sits above (a sibling route back into) the
+    // repository root, landing on an ordinary subdirectory of the repo itself — the junction's own
+    // source position is outside every base, so it must never count as occupying anything inside.
+    const parentOfRoot = path.dirname(root);
+    if (!trySymlinkDir(parentOfRoot, outerJunction, t)) return;
+
+    const hooksPath = path.join(outerJunction, path.basename(root), 'somehooksdir');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    const realHookPath = path.join(root, 'somehooksdir', 'pre-commit');
+    assert.ok(fs.existsSync(realHookPath), 'expected the hook to be written through, not kept as occupied');
+    const wroteAction = result.actions.find((a) => a.kind === 'wrote' && a.path.includes('somehooksdir'));
+    assert.ok(wroteAction, 'expected a wrote action for the hook, not kept as occupied');
+    assert.ok(!('gitDir' in wroteAction)); // it resolves back inside the working tree
+    assert.ok(!result.manifest.kept.some((k) => k.path.includes('somehooksdir')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outerJunction, { recursive: true, force: true });
+  }
+});
+
+test('initProject treats a junction below the root, inside the hooks path, as occupying the hook', async (t) => {
+  const root = makeTmpRepo();
+  const target = path.join(root, 'real-hooks-target');
+  fs.mkdirSync(target, { recursive: true });
+  const linkedHooks = path.join(root, 'linked-hooks');
+  try {
+    if (!trySymlinkDir(target, linkedHooks, t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'linked-hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.existsSync(path.join(target, 'pre-commit')), false); // never written through it
+    const keptEntry = result.manifest.kept.find((k) => k.path === 'linked-hooks/pre-commit');
+    assert.ok(keptEntry, 'expected the hook kept as occupied because of the junction in its path');
+    assert.ok(!keptEntry.outside);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject counts a symlink hop that lands at or below a base even though it never touches the base\'s exact path', async (t) => {
+  const root = makeTmpRepo();
+  const actualHooks = path.join(root, 'actual-hooks');
+  fs.mkdirSync(actualHooks, { recursive: true });
+  const nestedLink = path.join(root, 'nested-link'); // a junction fully inside root, one hop from actualHooks
+  const outsideDir = makeTmpDir('js-harness-project-chainhop-outside-');
+  const entry = path.join(outsideDir, 'entry'); // a junction whose *source* is outside every base
+  try {
+    if (!trySymlinkDir(actualHooks, nestedLink, t)) return;
+    if (!trySymlinkDir(nestedLink, entry, t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', entry], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    // `entry` chains to `nested-link` (still being resolved for the *same* segment) to
+    // `actual-hooks`: the first hop's source (`entry`) is outside every base, so it must not count
+    // on its own — but the moment it lands on `nested-link`, that position is a base's descendant,
+    // and `nested-link` is *itself* a symlink, which must count from there on, even though `current`
+    // was never exactly equal to `root` (or any base) at any point in this walk. (Not asserting the
+    // exact recorded `path` shape here: `core.hooksPath` is configured from *outside* the repo but
+    // resolves back inside it, an exotic combination the manifest's repo-relative-vs-absolute
+    // choice — keyed off the lexical, unresolved hooksPath rather than its resolution — was never
+    // designed for; out of scope for this fix, which is only about `hadSymlink` detection.)
+    assert.equal(fs.existsSync(path.join(actualHooks, 'pre-commit')), false);
+    assert.equal(result.manifest.kept.length, 1);
+    assert.ok(!result.manifest.kept[0].outside);
+    assert.ok(!result.actions.some((a) => a.kind === 'wrote' && a.path.includes('pre-commit')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// --- T2f item 4 (R3-gitdir-occupied-and-submodule-untested) ---
+
+test('initProject keeps a pre-commit hook that already exists in an outside git dir (a linked worktree\'s common git dir)', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-existing-hook-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-existing'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const existingHookPath = path.join(main, '.git', 'hooks', 'pre-commit');
+    const original = '#!/bin/sh\necho custom\n';
+    fs.writeFileSync(existingHookPath, original, 'utf8');
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(existingHookPath, 'utf8'), original); // untouched
+
+    const keptAction = result.actions.find((a) => a.kind === 'kept' && a.path.endsWith('hooks/pre-commit'));
+    assert.ok(keptAction, 'expected a kept action for the existing hook');
+    assert.equal(keptAction.gitDir, true);
+    assert.ok(!('outside' in keptAction));
+
+    const keptEntry = result.manifest.kept.find((k) => k.path.endsWith('hooks/pre-commit'));
+    assert.ok(keptEntry, 'expected the existing hook recorded in manifest.kept');
+    assert.equal(keptEntry.gitDir, true);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes the pre-commit hook into a submodule\'s git dir under the superproject, recorded absolute with gitDir: true', () => {
+  const superRepo = makeTmpRepoWithCommit('js-harness-project-super-');
+  const subRepo = makeTmpRepoWithCommit('js-harness-project-sub-');
+  try {
+    const add = spawnSync(
+      'git',
+      ['-c', 'protocol.file.allow=always', 'submodule', 'add', subRepo.split(path.sep).join('/'), 'sub'],
+      { cwd: superRepo, encoding: 'utf8' },
+    );
+    assert.equal(add.status, 0, `git submodule add failed: ${add.stderr}`);
+
+    const subPath = path.join(superRepo, 'sub');
+    const result = initProject(subPath, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    const hookInSuperGitModules = path.join(superRepo, '.git', 'modules', 'sub', 'hooks', 'pre-commit');
+    assert.ok(fs.existsSync(hookInSuperGitModules), 'expected the hook under the superproject\'s .git/modules/sub');
+
+    const fileEntry = result.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.ok(fileEntry, 'expected the hook recorded in manifest.files');
+    assert.equal(fileEntry.gitDir, true);
+    assert.equal(
+      fs.realpathSync(fileEntry.path.split('/').join(path.sep)),
+      fs.realpathSync(hookInSuperGitModules),
+    );
+  } finally {
+    fs.rmSync(superRepo, { recursive: true, force: true });
+    fs.rmSync(subRepo, { recursive: true, force: true });
   }
 });
 

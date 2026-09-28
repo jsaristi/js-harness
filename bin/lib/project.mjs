@@ -124,16 +124,26 @@ function splitFromRoot(resolved) {
  * through — a symlinked drive, macOS's `/tmp` → `/private/tmp` — says nothing about that, and must
  * never make an otherwise-untouched hooks path look occupied (T2e item 5,
  * R3-realish-flags-symlinks-above-repo-root). With no `bases` given, every hop counts, matching the
- * plain full-walk behaviour this function always had. */
+ * plain full-walk behaviour this function always had.
+ *
+ * "At or below a base" is checked with `isWithinBase` (at-or-below containment, not exact string
+ * equality with `current`) at the start of every segment *and* again after every individual hop
+ * within it — a chain of symlinks resolved for a single segment can land squarely inside a base
+ * without `current` ever having been exactly that base's own path along the way, and every hop
+ * from that point on must still count (T2f item 3, R3-realish-base-detection-equality-only). */
 function realish(target, bases = []) {
   const { root, segments } = splitFromRoot(path.resolve(target));
   let current = root;
   let hadSymlink = false;
   let countHops = bases.length === 0;
   let hops = 0;
+  const maybeEnterBase = (p) => {
+    if (!countHops && bases.some((base) => isWithinBase(base, p))) countHops = true;
+  };
+  maybeEnterBase(current);
   for (const segment of segments) {
-    if (!countHops && bases.includes(current)) countHops = true;
     let next = path.join(current, segment);
+    maybeEnterBase(next);
     for (;;) {
       let stat;
       try {
@@ -147,6 +157,7 @@ function realish(target, bases = []) {
       if (hops > 40) return { real: target, hadSymlink }; // defensive: a symlink loop
       const linkTarget = fs.readlinkSync(next);
       next = path.isAbsolute(linkTarget) ? path.normalize(linkTarget) : path.resolve(path.dirname(next), linkTarget);
+      maybeEnterBase(next); // the hop's own destination may itself already be inside a base
     }
     current = next;
   }
@@ -164,12 +175,22 @@ function safeRealpath(p) {
   }
 }
 
+/** Whether `absolute` is `base` itself or a descendant of it. Case-insensitive on win32 (git's own
+ * output and `fs.realpathSync`'s do not always agree on the case of a drive letter or a segment —
+ * T2f item 3, R3-realish-base-detection-equality-only), exact everywhere else. Folding both sides
+ * to the same case before `path.relative` changes nothing about the *structure* it reports (segment
+ * boundaries, `..` counts), only whether two same-place segments compare equal. */
+function isWithinBase(base, absolute) {
+  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  return !isOutsideRelative(path.relative(fold(base), fold(absolute)));
+}
+
 /** The first of `bases` that contains `absolute` (itself or a descendant), or `null` when none do.
  * Used both for the real, symlink-resolved containment check and for the lexical (unresolved) one
  * that `resolveHookContainment` compares it against to tell a genuinely outside `core.hooksPath`
  * from one only a symlink sent outside (T2e item 7). */
 function containingBase(absolute, bases) {
-  return bases.find((base) => !isOutsideRelative(path.relative(base, absolute))) ?? null;
+  return bases.find((base) => isWithinBase(base, absolute)) ?? null;
 }
 
 /** True when a `path.relative` result places its target outside the directory it was computed
@@ -226,11 +247,16 @@ function revParseAbsolute(root, flag, spawn) {
  * never counting a symlink above that base — T2e item 5, R3-realish-flags-symlinks-above-repo-root):
  * writing through either could replace something a person put there or, for a dangling ancestor,
  * fail unpredictably deep inside a broken chain. `isWorkingTree` says which base actually contains
- * it, so a caller can choose the manifest's repo-relative-vs-absolute path shape (item 4). `viaLink`
- * is set only when the result is outside *because of* a symlink: the lexical (unresolved) hook path
- * was already inside some base, and a symlink in its chain is what sent it outside — as opposed to
- * the configured location itself (`core.hooksPath`, or the default) being outside from the start,
- * with no symlink involved in that verdict (T2e item 7). */
+ * it, so a caller can choose the manifest's repo-relative-vs-absolute path shape (item 4); `base`
+ * is that same winning base's real absolute path (`null` when outside), so a caller can bound a
+ * directory-creation walk by the base that actually contains the directory rather than always the
+ * working tree (T2f item 2: `shallowestMissingAncestor` bounded by `root` alone stopped instantly
+ * for a hooks directory in a git dir outside the working tree, recording only the deepest missing
+ * directory and leaking its newly created parents on rollback/uninstall). `viaLink` is set only
+ * when the result is outside *because of* a symlink: the lexical (unresolved) hook path was already
+ * inside some base, and a symlink in its chain is what sent it outside — as opposed to the
+ * configured location itself (`core.hooksPath`, or the default) being outside from the start, with
+ * no symlink involved in that verdict (T2e item 7). */
 function resolveHookContainment(root, hookPath, gitBases = {}) {
   const realRoot = fs.realpathSync(root);
   const realGitDir = safeRealpath(gitBases.gitDir);
@@ -246,7 +272,7 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
   const occupied = !outside && (hadSymlink || isOccupied(hookPath));
   const isWorkingTree = containingRealBase === realRoot;
   const viaLink = outside && !lexicalOutside;
-  return { real, outside, occupied, isWorkingTree, viaLink };
+  return { real, outside, occupied, isWorkingTree, viaLink, base: containingRealBase };
 }
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
@@ -337,17 +363,25 @@ function initCodegraph(root, spawn, platform) {
  * (`<target>.<pid>.<random>.tmp`, created exclusively with `flag: 'wx'` so it is always a brand
  * new file — never opened through something already there, ordinary file or link, T2e item 3),
  * then a single rename over `target`, so a reader never sees a partially-written manifest and a
- * failure never corrupts or truncates whatever was there before. On any failure the `.tmp` file is
- * removed (best-effort) and `target` itself is never touched directly — matters most for the
- * codegraph-retry update, which must not lose an existing, valid manifest just because this write
- * failed partway through (T2d Codex P2 atomic manifest writes). The injected `writeFile` is called
- * as `writeFile(path, content, options)`, options included, so it can pass `flag: 'wx'` through to
- * `fs.writeFileSync` (or an injected stand-in) exactly like a direct call would. */
+ * failure never corrupts or truncates whatever was there before. `target` itself is never touched
+ * directly — matters most for the codegraph-retry update, which must not lose an existing, valid
+ * manifest just because this write failed partway through (T2d Codex P2 atomic manifest writes).
+ * The injected `writeFile` is called as `writeFile(path, content, options)`, options included, so
+ * it can pass `flag: 'wx'` through to `fs.writeFileSync` (or an injected stand-in) exactly like a
+ * direct call would.
+ *
+ * The `.tmp` file is removed (best-effort) only when *this call* is the one that created it — i.e.
+ * only when the exclusive create itself succeeded and a later step (the rename) is what failed.
+ * When the exclusive create is what fails (`EEXIST` or anything else), nothing at `tmp` was written
+ * by this call, so nothing here is this call's to remove: whatever already sits there — someone
+ * else's file, a link, leftover content from an unrelated process — is left exactly as it was
+ * (T2f item 1, Codex P2, R3-wx-tmp-cleanup-deletes-foreign-file: the old code removed `tmp`
+ * unconditionally on any failure, silently deleting a file it never created). */
 function writeManifestAtomic(target, data, writeFile) {
   const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const content = JSON.stringify(data, null, 2) + '\n';
+  writeFile(tmp, content, { encoding: 'utf8', flag: 'wx' }); // if this throws, tmp is not ours to touch
   try {
-    writeFile(tmp, content, { encoding: 'utf8', flag: 'wx' });
     fs.renameSync(tmp, target);
   } catch (err) {
     try {
@@ -396,17 +430,24 @@ export class InitWriteError extends Error {
   }
 }
 
-/** Walks up from `dir` toward (but never past) `root`, returning the shallowest ancestor that does
+/** Walks up from `dir` toward (but never past) `base`, returning the shallowest ancestor that does
  * not exist yet — the top of whatever a later `mkdirSync(dir, { recursive: true })` would actually
- * create. `null` when `dir` itself already exists (nothing would be created — also the case for a
- * hooks directory in a git dir outside `root` entirely, since that directory always already exists:
- * git creates it, complete with sample hooks, the moment the repository itself does). Used so a
- * rollback can remove exactly the directory chain this run made, never a directory that predates it
- * (e.g. `.git/hooks` itself must never be removed). */
-function shallowestMissingAncestor(dir, root) {
+ * create. `null` when `dir` itself already exists (nothing would be created — also the common case
+ * for a hooks directory in a git dir outside the working tree, since `hooks/` itself usually already
+ * exists there: git creates it, complete with sample hooks, the moment the repository itself does).
+ * Used so a rollback can remove exactly the directory chain this run made, never a directory that
+ * predates it (e.g. `.git/hooks` itself must never be removed).
+ *
+ * `base` must be whichever real base actually contains `dir` — the working tree for an ordinary
+ * hooks path, but the git dir or common git dir for one outside it (a worktree, a submodule) — never
+ * always the working tree root: bounding a multi-level-missing chain by a base that does not
+ * actually contain it stops the climb before it starts (the `while` condition is false from its very
+ * first check), so only the single deepest directory is ever recorded, leaking its newly created
+ * parents on rollback or `uninstall` (T2f item 2, Codex P2). */
+function shallowestMissingAncestor(dir, base) {
   if (fs.existsSync(dir)) return null;
   let current = path.resolve(dir);
-  const stop = path.resolve(root);
+  const stop = path.resolve(base);
   let shallowest = current;
   while (current !== stop && current.startsWith(stop + path.sep) && !fs.existsSync(path.dirname(current))) {
     current = path.dirname(current);
@@ -418,9 +459,10 @@ function shallowestMissingAncestor(dir, root) {
 /** Creates `dir` (recursively) and, when that actually creates new directories, records the
  * shallowest one in `createdDirs` so a rollback can remove exactly that chain, and returns it (or
  * `null` when nothing was created) so a caller can also report it in the manifest's `dirs` (T2e
- * item 6). */
-function mkdirTracked(dir, root, createdDirs) {
-  const shallow = shallowestMissingAncestor(dir, root);
+ * item 6). `base` is forwarded to `shallowestMissingAncestor` unchanged — see there for why it must
+ * be the base that actually contains `dir`, not always the working tree. */
+function mkdirTracked(dir, base, createdDirs) {
+  const shallow = shallowestMissingAncestor(dir, base);
   fs.mkdirSync(dir, { recursive: true });
   if (shallow) createdDirs.push(shallow);
   return shallow;
@@ -527,6 +569,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
         occupied: hookOccupied,
         isWorkingTree: hookIsWorkingTree,
         viaLink: hookViaLink,
+        base: hookBase,
       } = resolveHookContainment(root, hookPath, gitBases);
       if (hookOutside) {
         // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink, T2d dangling
@@ -544,7 +587,10 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
         if (hookOccupied) {
           actions.push(kept(hookRel, 'exists; add `js-harness check` to it', false, !hookIsWorkingTree));
         } else {
-          const hookDirShallow = mkdirTracked(path.dirname(hookPath), root, createdDirs);
+          // T2f item 2: bounded by `hookBase` (the git dir or common git dir, for a worktree or a
+          // submodule), not always `root` — otherwise the climb stops before it starts whenever the
+          // hooks directory lives outside the working tree, recording only the deepest directory.
+          const hookDirShallow = mkdirTracked(path.dirname(hookPath), hookBase, createdDirs);
           if (hookDirShallow) reportedDirs.push({ absolute: hookDirShallow, isWorkingTree: hookIsWorkingTree });
           createdPaths.push(hookPath);
           writeFile(hookPath, PRE_COMMIT_HOOK, 'utf8');

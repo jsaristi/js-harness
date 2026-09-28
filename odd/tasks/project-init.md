@@ -150,7 +150,7 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   well); count only links below the real root as occupying the hook
   (R3-realish-flags-symlinks-above-repo-root) — route: delegated writer, likely with T3, which
   reads the same manifest
-- [ ] T2f Accepted review follow-ups on T2e: on `EEXIST` the manifest temp write must not delete
+- [x] T2f Accepted review follow-ups on T2e: on `EEXIST` the manifest temp write must not delete
   the entry it did not create (Codex P2, R3-wx-tmp-cleanup-deletes-foreign-file); record the
   shallowest missing directory within the containing git dir, not only within the working tree
   (Codex P2); count symlink hops from the first segment at or below a base, not on exact string
@@ -361,9 +361,25 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   SUGGESTION (R3-gitdir-occupied-and-submodule-untested). Codex (`--base b22ecc9`): P2 the same
   temp cleanup; P2 in an outside git dir `shallowestMissingAncestor` stops at the working-tree
   root, so a created chain is recorded by its deepest directory only. All accepted as T2f.
+- 2026-09-28: T2f done by the same writer (`bin/lib/project.mjs` and its test, +354/−30). The
+  `wx` create sits outside the cleanup, so only a temp file this call created is removed;
+  `resolveHookContainment` returns the containing `base`, which bounds `mkdirTracked` for the
+  hook's directory; `isWithinBase` (at or below, case-folded on win32) replaces exact equality in
+  `realish` and is checked after every hop. RED (new tests against 6d3e0a0's engine): 4 failures
+  — the foreign temp file deleted, the outside chain recorded and rolled back by its deepest
+  directory only, a hop below a base not counted. The junction-above-root, junction-below-root,
+  kept-hook-in-a-git-dir and submodule tests pass on the old engine too: coverage, not
+  discriminators. The above-root case is built with an absolute `core.hooksPath` through a
+  junction, since `git rev-parse --show-toplevel` already resolves links above the root. GREEN:
+  `node --test` → `tests 377 / pass 372 / fail 0 / skipped 5`, re-run by the parent; `npm run
+  check` PASS; with `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 54 / pass 51 / skipped 3`.
+  Observed by the writer, not fixed: when `core.hooksPath` is lexically outside but links resolve
+  it back inside, the manifest records the lexical path as a `../`-relative one. `uninstall`
+  resolves it lexically to the same file, so it still works; the shape is only odd.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T2f by the writer that did T2e, committed and reviewed; then T3 the same way; then slice 3's PR.
+T2f reviewed (gentle-ai, then Codex); then T3 by the same writer, committed and reviewed; then
+slice 3's PR.
