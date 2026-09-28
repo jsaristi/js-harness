@@ -114,5 +114,10 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   (`deserialize_config_toml_with_base` in openai/codex `codex-rs/core/src/config/mod.rs`).
   RED observed per finding; GREEN 36/36; `node bin/check.mjs --home` → usage on stderr, exit 2.
 
+- RDD over the branch with T6 (`a7d22e3..7f23314`, raised by the Stop hook): consent granted
+  (pre-granted), reliability lens approved with three SUGGESTION only (output-style precedence,
+  slug test, `tildePath` untested), acknowledged, authority burned (lineage
+  `review-9656b5472ecb38ec`).
+
 ## Next step
 Open the PR for Sebastián. T4 and T5 wait on gentle-ai.
