@@ -86,6 +86,11 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   (R3-retry-manifest-write-unguarded); say when `.codegraph/` survives a rollback
   (R3-nothing-left-behind-overclaims); give an outside hook one manifest shape
   (R3-outside-hook-kept-absolute-path) — route: the same delegated writer
+- [x] T2d Final follow-ups on `init`: a path is occupied when `lstat` finds anything, a dangling
+  symlink included, and the containment walk resolves dangling links (Codex P1,
+  R3-realish-dangling-symlink-escape); `createdDir` is observed on a failed codegraph run too, and
+  a run that made `.codegraph/` can be retried (Codex P2); manifest writes are atomic, tmp then
+  rename (Codex P2) — route: the same delegated writer
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -225,6 +230,27 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   re-run by the parent with the same result; `npm run check` PASS. +377/−58 lines. Real run: in
   the scratch clone from T2b, deleting `harness.json` and running `init` → the refusal message,
   exit 1, nothing written. Its advice to "run js-harness uninstall" becomes true with T3.
+- 2026-09-28: T2c committed as aa7ba68. Assessed (`--base-ref b596e01`): risk `medium`, 466
+  lines, `review_due: true`. Native review lineage review-dfe5653f880e7439: approved and
+  acknowledged, one WARNING (R3-realish-dangling-symlink-escape: a dangling symlink still passes
+  containment; not a regression). Codex (`--base 222110f`, its test runner hit EPERM): P1 the same
+  dangling symlink, also for `AGENTS.md`; P2 a failed codegraph run that made `.codegraph/` is
+  recorded as not created; P2 the retry's manifest rewrite is not atomic. Accepted as T2d, the
+  last correction round for this slice: later findings become follow-ups, not another round.
+- 2026-09-28: T2d done by the same writer (`bin/lib/project.mjs`: `isOccupied` on `lstat`,
+  `realish` walks segment by segment resolving links with `readlinkSync`, `createdDir` observed
+  after any codegraph run, `writeManifestAtomic`; tests updated to fault the `.tmp` write). RED
+  (new tests against aa7ba68's code): 5 failures for items 2 and 3. Item 1's three
+  dangling-symlink tests skip here: this account lacks `SeCreateSymbolicLinkPrivilege`
+  (`whoami /priv`), as the repo's two older symlink tests do. GREEN: `tests 47 / pass 44 /
+  skipped 3` in those files; full `node --test` → `tests 359 / pass 354 / fail 0 / skipped 5`,
+  re-run by the parent; `npm run check` PASS. +290/−52 lines. Item 1 checked by hand with a
+  junction, which needs no privilege: `.git/hooks` as a junction to a missing folder outside the
+  repo → new code keeps `<outside>/pre-commit` as `outside: true` and creates nothing there, exit
+  0; aa7ba68's code on the same setup fails closed (`init failed: ENOENT ... mkdir`, rolled back,
+  exit 1), so on Windows the escape needs a dangling file symlink, which this machine cannot
+  create. That case rests on the skipped tests and code reading. The outside reason still says
+  "(core.hooksPath)" when a link, not the config, sends the hook outside: wording follow-up.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.

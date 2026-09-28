@@ -54,23 +54,71 @@ function toForwardSlashes(absolute) {
   return absolute.split(path.sep).join('/');
 }
 
-/** Resolves `target`'s nearest existing ancestor to its real path (following symlinks) and
- * re-appends whatever doesn't exist yet on top of that — so a containment check sees through an
- * in-repo symlink (e.g. `core.hooksPath` pointing at a symlinked directory that itself points
- * outside the repo) without requiring `target` itself to already exist (T2c Codex P1 symlink).
- * Falls back to `target` unresolved if walking up somehow reaches the filesystem root without
- * finding anything that exists (should not happen in practice). */
-function realish(target) {
-  let current = path.resolve(target);
-  const tail = [];
-  while (!fs.existsSync(current)) {
+/** True when something already sits at `target` — an ordinary file/directory, or a symlink even
+ * when it is dangling. Unlike `fs.existsSync`, which follows a symlink and reports `false` for a
+ * broken one, this treats the symlink itself as occupying its path: writing through it (creating a
+ * new file at wherever it happens to point, possibly outside the repo entirely) would silently
+ * replace or escape past something a person deliberately placed there (T2d Codex P1 +
+ * R3-realish-dangling-symlink-escape). */
+function isOccupied(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Splits an already-`path.resolve`d absolute path into its filesystem root (`D:\` on win32, `/`
+ * on posix) and the ordered list of segments between the root and the path itself. */
+function splitFromRoot(resolved) {
+  const root = path.parse(resolved).root;
+  const segments = [];
+  let current = resolved;
+  while (current !== root) {
+    segments.unshift(path.basename(current));
     const parent = path.dirname(current);
-    if (parent === current) return target;
-    tail.unshift(path.basename(current));
+    if (parent === current) break; // defensive: should not happen once current !== root
     current = parent;
   }
-  const real = fs.realpathSync(current);
-  return tail.length > 0 ? path.join(real, ...tail) : real;
+  return { root, segments };
+}
+
+/** Resolves `target` to a real, fully symlink-followed absolute path, one path segment at a time
+ * from the filesystem root down — unlike `fs.realpathSync`, this never requires the final path (or
+ * any ancestor) to actually exist. A segment that isn't there at all is appended lexically from
+ * that point on; a symlink — even a dangling one — is followed via `fs.readlinkSync` (a relative
+ * target resolved against the link's own directory) instead of being treated as an ordinary,
+ * non-existent path component. That distinction is the whole point: the old "walk up to the
+ * nearest `fs.existsSync` ancestor" approach saw a dangling symlink and a plain missing directory
+ * as the same thing, silently ignoring where the symlink actually points (T2d Codex P1 +
+ * R3-realish-dangling-symlink-escape). Also returns `hadSymlink`, true when any segment — dangling
+ * or not — turned out to be a symlink, since a caller must never write through one even when its
+ * target resolves back inside the repo. */
+function realish(target) {
+  const { root, segments } = splitFromRoot(path.resolve(target));
+  let current = root;
+  let hadSymlink = false;
+  let hops = 0;
+  for (const segment of segments) {
+    let next = path.join(current, segment);
+    for (;;) {
+      let stat;
+      try {
+        stat = fs.lstatSync(next);
+      } catch {
+        break; // nothing here at all — this and every later segment is appended lexically
+      }
+      if (!stat.isSymbolicLink()) break;
+      hadSymlink = true;
+      hops += 1;
+      if (hops > 40) return { real: target, hadSymlink }; // defensive: a symlink loop
+      const linkTarget = fs.readlinkSync(next);
+      next = path.isAbsolute(linkTarget) ? path.normalize(linkTarget) : path.resolve(path.dirname(next), linkTarget);
+    }
+    current = next;
+  }
+  return { real: current, hadSymlink };
 }
 
 /** True when a `path.relative` result places its target outside the directory it was computed
@@ -85,14 +133,20 @@ function isOutsideRelative(rel) {
 }
 
 /** Whether `hookPath` (already resolved via `resolveGitPath`) is actually inside `root`, following
- * symlinks on both sides first (T2c Codex P1 symlink) so an in-repo symlink pointing outside the
- * repo is correctly seen as outside. Returns the real, symlink-resolved hook path alongside the
- * verdict, since callers that treat it as outside report *that* location, not the git-given one. */
+ * symlinks (dangling ones included) on both sides first (T2c Codex P1 symlink; T2d Codex P1 +
+ * R3-realish-dangling-symlink-escape) so a hooks path that is, or sits behind, a symlink pointing
+ * outside the repo is correctly seen as outside. `real` is the fully resolved location, reported
+ * when outside since that is where the user would actually need to add the check themselves.
+ * `occupied` is true when the (unresolved) `hookPath` itself must never be written to — either an
+ * ordinary lstat hit (a real file, or any symlink, dangling or not, right there) or a symlink
+ * anywhere in its ancestor chain (`hadSymlink`): writing through either could replace something a
+ * person put there or, for a dangling ancestor, fail unpredictably deep inside a broken chain. */
 function resolveHookContainment(root, hookPath) {
   const realRoot = fs.realpathSync(root);
-  const real = realish(hookPath);
-  const rel = path.relative(realRoot, real);
-  return { real, outside: isOutsideRelative(rel) };
+  const { real, hadSymlink } = realish(hookPath);
+  const outside = isOutsideRelative(path.relative(realRoot, real));
+  const occupied = !outside && (hadSymlink || isOccupied(hookPath));
+  return { real, outside, occupied };
 }
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
@@ -160,19 +214,45 @@ export function runCodegraphInit(root, { spawn = spawnSync, platform = process.p
   return { ok: true };
 }
 
-/** Runs (or re-runs) codegraph's init step and reports the manifest fragment for it. `createdDir`
- * is always what `fs.existsSync` observes afterward, never assumed from the exit code (T2b Codex
- * P2 + R3-codegraph-createdDir-unverified) — a tool that reports success without actually writing
- * `.codegraph/` must not be recorded as having created it. */
+/** Runs (or re-runs) codegraph's init step and reports the manifest fragment for it. Every caller
+ * only invokes this when `.codegraph/` was absent beforehand, so `createdDir` — always what
+ * `fs.existsSync` observes right after the run, whether it succeeded or failed — truthfully
+ * attributes the directory's presence (or absence) to *this* run. A run that fails partway through
+ * after already writing `.codegraph/` is not silently recorded as having created nothing (T2d
+ * Codex P2 codegraph ownership); a run that reports success without writing it is not credited with
+ * creating it either (T2b Codex P2 + R3-codegraph-createdDir-unverified). */
 function initCodegraph(root, spawn, platform) {
   const result = runCodegraphInit(root, { spawn, platform });
+  const createdDir = fs.existsSync(codegraphDirPath(root));
   if (result.ok) {
-    return { manifest: { createdDir: fs.existsSync(codegraphDirPath(root)), status: 'ok' } };
+    return { manifest: { createdDir, status: 'ok' } };
   }
   return {
-    manifest: { createdDir: false, status: 'failed' },
+    manifest: { createdDir, status: 'failed' },
     reason: `${result.reason} — fix: ${codegraphFixCommand()}`,
   };
+}
+
+/** Writes `data` to `target` atomically: serialized to `<target>.tmp` first, then a single rename
+ * over `target`, so a reader never sees a partially-written manifest and a failure never corrupts
+ * or truncates whatever was there before. On any failure the `.tmp` file is removed (best-effort)
+ * and `target` itself is never touched directly — matters most for the codegraph-retry update,
+ * which must not lose an existing, valid manifest just because this write failed partway through
+ * (T2d Codex P2 atomic manifest writes). */
+function writeManifestAtomic(target, data, writeFile) {
+  const tmp = `${target}.tmp`;
+  const content = JSON.stringify(data, null, 2) + '\n';
+  try {
+    writeFile(tmp, content, 'utf8');
+    fs.renameSync(tmp, target);
+  } catch (err) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Best-effort cleanup; `target` was never written to directly, so it is untouched regardless.
+    }
+    throw err;
+  }
 }
 
 function wrote(relPath, hash) {
@@ -275,10 +355,11 @@ function writeProject(root, version, spawn, platform, writeFile, manifestFilePat
     files.push({ path: harnessJsonRel, sha256: harnessJsonHash });
     actions.push(wrote(harnessJsonRel, harnessJsonHash));
 
-    // AGENTS.md: only when the project has none of its own.
+    // AGENTS.md: only when the project has none of its own. `isOccupied` (not `fs.existsSync`)
+    // so a dangling symlink there is kept, not silently written through (T2d item 1).
     const agentsPath = path.join(root, 'AGENTS.md');
     const agentsRel = toRepoRelative(root, agentsPath);
-    if (fs.existsSync(agentsPath)) {
+    if (isOccupied(agentsPath)) {
       actions.push(kept(agentsRel, 'exists'));
     } else {
       const content = agentsTemplate(root);
@@ -296,12 +377,11 @@ function writeProject(root, version, spawn, platform, writeFile, manifestFilePat
     if (!hookPath) {
       actions.push({ kind: 'skip', path: 'hooks/pre-commit', reason: 'could not resolve the git hooks path' });
     } else {
-      const { real: realHookPath, outside: hookOutside } = resolveHookContainment(root, hookPath);
+      const { real: realHookPath, outside: hookOutside, occupied: hookOccupied } = resolveHookContainment(root, hookPath);
       if (hookOutside) {
-        // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink: a `core.hooksPath`
-        // outside the repo — directly, or through an in-repo symlink — is never written to; this run
-        // does not own that location. Report the real (symlink-resolved) location, since that is
-        // where the user would actually need to add the check themselves.
+        // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink, T2d dangling
+        // symlink: a `core.hooksPath` outside the repo — directly, through an in-repo symlink, or
+        // through a dangling one — is never written to; this run does not own that location.
         actions.push(
           kept(
             toForwardSlashes(realHookPath),
@@ -311,7 +391,7 @@ function writeProject(root, version, spawn, platform, writeFile, manifestFilePat
         );
       } else {
         const hookRel = toRepoRelative(root, hookPath);
-        if (fs.existsSync(hookPath)) {
+        if (hookOccupied) {
           actions.push(kept(hookRel, 'exists; add `js-harness check` to it'));
         } else {
           mkdirTracked(path.dirname(hookPath), root, createdDirs);
@@ -362,7 +442,7 @@ function writeProject(root, version, spawn, platform, writeFile, manifestFilePat
     // file this run writes can never end up rolling back a manifest from a previous run.
     mkdirTracked(path.dirname(manifestFilePath), root, createdDirs);
     createdPaths.push(manifestFilePath);
-    writeFile(manifestFilePath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+    writeManifestAtomic(manifestFilePath, manifest, writeFile);
 
     return { code: 0, root, actions, manifest, manifestPath: manifestFilePath };
   } catch (err) {
@@ -372,12 +452,15 @@ function writeProject(root, version, spawn, platform, writeFile, manifestFilePat
 }
 
 /** `harness.json` already exists: nothing is (re-)written except one narrow, explicit exception.
- * When `.codegraph/` is still absent and the project manifest on disk says a previous codegraph run
- * failed, only the codegraph step is retried and only the manifest's `codegraph` field is updated;
- * every other file is untouched. A failure while rewriting the manifest here throws `InitWriteError`
- * the same way `writeProject` does (T2c R3-retry-manifest-write-unguarded) — codegraph itself already
- * ran and is not rolled back either way, so the error says precisely what happened: codegraph ran,
- * the manifest update failed. */
+ * When the project manifest on disk says a previous codegraph run failed, only the codegraph step
+ * is retried and only the manifest's `codegraph` field is updated; every other file is untouched.
+ * The retry runs even if `.codegraph/` exists now, as long as the failed run itself is what created
+ * it (`codegraph.createdDir: true` in that stale record) — a directory some *other* tool created
+ * after the failure is left alone, same as any other "already done" case (T2d Codex P2 codegraph
+ * ownership). A failure while rewriting the manifest here throws `InitWriteError` the same way
+ * `writeProject` does (T2c R3-retry-manifest-write-unguarded) — codegraph itself already ran and is
+ * not rolled back either way, so the error says precisely what happened: codegraph ran, the
+ * manifest update failed. */
 function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile) {
   let existingVersion = null;
   try {
@@ -387,18 +470,23 @@ function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, plat
     // and still write nothing (see "T2 design": exit 0, nothing written, either way).
   }
 
-  if (!fs.existsSync(codegraphDirPath(root)) && fs.existsSync(manifestFilePath)) {
+  if (fs.existsSync(manifestFilePath)) {
     let manifest;
     try {
       manifest = JSON.parse(fs.readFileSync(manifestFilePath, 'utf8'));
     } catch {
       manifest = null;
     }
-    if (manifest?.codegraph?.status === 'failed') {
+    const priorCodegraph = manifest?.codegraph;
+    const codegraphDirExists = fs.existsSync(codegraphDirPath(root));
+    const shouldRetryCodegraph =
+      priorCodegraph?.status === 'failed' && (!codegraphDirExists || priorCodegraph.createdDir === true);
+
+    if (shouldRetryCodegraph) {
       const { manifest: codegraphManifest, reason } = initCodegraph(root, spawn, platform);
       manifest.codegraph = codegraphManifest;
       try {
-        writeFile(manifestFilePath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+        writeManifestAtomic(manifestFilePath, manifest, writeFile);
       } catch (err) {
         throw new InitWriteError(
           `codegraph init ran but the manifest could not be updated: ${err.message}`,
@@ -446,8 +534,10 @@ export function initProject(cwd, version, deps = {}) {
   const manifestFilePath =
     resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
 
+  // `isOccupied` (not `fs.existsSync`) so a dangling harness.json symlink is treated as "already
+  // initialized" rather than silently written through (T2d item 1).
   const harnessJsonPath = path.join(root, 'harness.json');
-  if (fs.existsSync(harnessJsonPath)) {
+  if (isOccupied(harnessJsonPath)) {
     return alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile);
   }
 
@@ -455,7 +545,8 @@ export function initProject(cwd, version, deps = {}) {
   // harness.json means this clone was initialized before and then had harness.json removed (by
   // hand, or a partial/failed uninstall) — not a fresh project. Refuse rather than silently
   // writing a brand-new manifest over stale bookkeeping from a run this one knows nothing about.
-  if (fs.existsSync(manifestFilePath)) {
+  // `isOccupied` here too (T2d item 1): a dangling manifest symlink still counts as "there".
+  if (isOccupied(manifestFilePath)) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 

@@ -238,8 +238,10 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
       fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
       return { status: 0, stdout: '', stderr: '' };
     };
+    // The manifest is written to a `.tmp` file first (T2d atomic manifest writes) — that's the
+    // actual target this injected failure needs to hit.
     const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json')) throw new Error('EACCES: permission denied');
+      if (target.endsWith('manifest.json.tmp')) throw new Error('EACCES: permission denied');
       fs.writeFileSync(target, content, enc);
     };
     let stderr = '';

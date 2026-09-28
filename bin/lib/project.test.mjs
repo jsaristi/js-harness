@@ -401,6 +401,89 @@ test('initProject treats an in-repo symlink pointing outside the repo as an outs
   }
 });
 
+// --- T2d item 1: dangling symlinks are "occupied", never written through ---
+
+function trySymlink(target, link, type, t) {
+  try {
+    fs.symlinkSync(target, link, type);
+    return true;
+  } catch (err) {
+    if (err.code === 'EPERM' || err.code === 'EACCES') {
+      t.skip('symlinks need privileges on this machine');
+      return false;
+    }
+    throw err;
+  }
+}
+
+test('initProject keeps a dangling AGENTS.md symlink untouched rather than writing through it', async (t) => {
+  const root = makeTmpRepo();
+  try {
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const danglingTarget = path.join(root, 'nowhere-agents.md');
+    if (!trySymlink(danglingTarget, agentsPath, 'file', t)) return;
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.existsSync(danglingTarget), false); // nothing written through the link
+    assert.ok(!result.manifest.files.some((f) => f.path === 'AGENTS.md'));
+    const keptEntry = result.manifest.kept.find((k) => k.path === 'AGENTS.md');
+    assert.ok(keptEntry, 'expected AGENTS.md (a dangling symlink) in kept');
+    assert.match(keptEntry.reason, /exists/);
+    assert.equal(fs.lstatSync(agentsPath).isSymbolicLink(), true); // the link itself is untouched
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject keeps a dangling pre-commit symlink pointing outside the repo, writing nothing outside', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-dangling-outside-');
+  try {
+    const hookPath = path.join(root, '.git', 'hooks', 'pre-commit');
+    fs.mkdirSync(path.dirname(hookPath), { recursive: true });
+    const danglingTarget = path.join(outsideDir, 'does-not-exist');
+    if (!trySymlink(danglingTarget, hookPath, 'file', t)) return;
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(fs.readdirSync(outsideDir), []); // nothing written outside
+    assert.ok(!result.manifest.files.some((f) => f.path.includes('pre-commit')));
+    const keptEntry = result.manifest.kept.find((k) => k.outside === true);
+    assert.ok(keptEntry, 'expected the dangling pre-commit symlink to be treated as outside, in kept');
+    assert.equal(fs.lstatSync(hookPath).isSymbolicLink(), true); // the link itself is untouched
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+test('initProject keeps a dangling core.hooksPath symlink, writing nothing outside', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-dangling-hooksdir-');
+  try {
+    const linkPath = path.join(root, 'hooks-link');
+    const danglingTarget = path.join(outsideDir, 'nowhere');
+    if (!trySymlink(danglingTarget, linkPath, 'dir', t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'hooks-link'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(fs.readdirSync(outsideDir), []); // nothing written outside at all
+    assert.ok(!result.manifest.files.some((f) => f.path.includes('pre-commit')));
+    const keptEntry = result.manifest.kept.find((k) => k.outside === true);
+    assert.ok(keptEntry, 'expected the dangling hooksPath symlink to be treated as outside, in kept');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
 // --- T2b item 1: failure atomicity ---
 
 test('initProject rolls back harness.json when the AGENTS.md write throws, and a following run succeeds', () => {
@@ -464,8 +547,10 @@ test('initProject rolls back everything, including a directory it created, when 
 test('initProject rolls back a failed manifest write and reports what could not be removed', () => {
   const root = makeTmpRepo();
   try {
+    // T2d Codex P2 atomic manifest writes: the manifest is written to a `.tmp` file first, so
+    // that's the actual target this injected failure needs to hit.
     const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json')) throw new Error('ENOSPC: no space left on device');
+      if (target.endsWith('manifest.json.tmp')) throw new Error('ENOSPC: no space left on device');
       fs.writeFileSync(target, content, enc);
     };
 
@@ -512,6 +597,25 @@ test('initProject records codegraph createdDir as observed on disk, not assumed 
   }
 });
 
+// T2d Codex P2 codegraph ownership: createdDir is observed on failure too, not hardcoded false.
+test('initProject records codegraph createdDir as observed even when the run itself failed', () => {
+  const root = makeTmpRepo();
+  try {
+    // Fails, but not before partially creating .codegraph/ — createdDir must reflect that.
+    const spawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 1, stdout: '', stderr: 'boom' };
+    };
+
+    const result = initProject(root, '0.1.0', { spawn, platform: 'linux' });
+
+    assert.deepEqual(result.manifest.codegraph, { createdDir: true, status: 'failed' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- T2b item 2: codegraph retry on an already-initialized project ---
 
 test('initProject retries only codegraph when harness.json exists, the manifest says codegraph failed, and .codegraph is still absent', () => {
@@ -544,15 +648,51 @@ test('initProject retries only codegraph when harness.json exists, the manifest 
   }
 });
 
-// T2c R3-retry-manifest-write-unguarded
-test('initProject throws InitWriteError when the codegraph-retry manifest update fails', () => {
+// T2d Codex P2 codegraph ownership: retry even when .codegraph exists now, if the failed run
+// itself is what created it.
+test('initProject retries codegraph even when .codegraph exists, if the failed run itself created it', () => {
   const root = makeTmpRepo();
   try {
-    initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+    // First run: codegraph fails, but not before partially creating .codegraph/.
+    const failCreatingSpawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 1, stdout: '', stderr: 'boom' };
+    };
+    const first = initProject(root, '0.1.0', { spawn: failCreatingSpawn, platform: 'linux' });
+    assert.deepEqual(first.manifest.codegraph, { createdDir: true, status: 'failed' });
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+
+    // Second run (retry): .codegraph/ still exists — left over from the failed run — but since
+    // the manifest says js-harness created it and it failed, the retry still runs.
+    const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' });
+    const second = initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux' });
+
+    assert.equal(second.code, 0);
+    assert.ok(second.codegraphRetry);
+    assert.equal(second.codegraphRetry.ok, true);
+    assert.equal(okSpawn.codegraphCalls.length, 1);
+
+    const manifestOnDisk = JSON.parse(fs.readFileSync(first.manifestPath, 'utf8'));
+    // The directory was already there (from the failed run) and remains there: still createdDir: true.
+    assert.deepEqual(manifestOnDisk.codegraph, { createdDir: true, status: 'ok' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2c R3-retry-manifest-write-unguarded + T2d Codex P2 atomic manifest writes
+test('initProject throws InitWriteError when the codegraph-retry manifest update fails, leaving the original manifest byte-identical', () => {
+  const root = makeTmpRepo();
+  try {
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+    const originalBytes = fs.readFileSync(first.manifestPath, 'utf8');
 
     const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' }); // creates .codegraph on success
+    // The manifest is written to a `.tmp` file first (T2d atomic manifest writes) — that's the
+    // actual target this injected failure needs to hit; the real manifest.json is never opened.
     const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json')) throw new Error('EACCES: permission denied');
+      if (target.endsWith('manifest.json.tmp')) throw new Error('EACCES: permission denied');
       fs.writeFileSync(target, content, enc);
     };
 
@@ -573,6 +713,11 @@ test('initProject throws InitWriteError when the codegraph-retry manifest update
     // .codegraph/ this run — the manifest update failing does not roll that back either.
     assert.equal(caught.codegraphDirLeftBehind, true);
     assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+
+    // T2d Codex P2: the original manifest (from the first, failed run) is exactly what it was —
+    // the failed retry write never touched it, and its own .tmp file was cleaned up.
+    assert.equal(fs.readFileSync(first.manifestPath, 'utf8'), originalBytes);
+    assert.equal(fs.existsSync(`${first.manifestPath}.tmp`), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
