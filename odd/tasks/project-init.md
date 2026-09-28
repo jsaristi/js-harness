@@ -91,6 +91,16 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   R3-realish-dangling-symlink-escape); `createdDir` is observed on a failed codegraph run too, and
   a run that made `.codegraph/` can be retried (Codex P2); manifest writes are atomic, tmp then
   rename (Codex P2) — route: the same delegated writer
+- [ ] T2e Follow-ups from the whole-slice reviews, left for after slice 2 (no fourth round):
+  write `harness.json` last, so a killed run can be resumed by running `init` again
+  (R3-harness-json-written-before-manifest); keep `.codegraph/` ownership when a manifest write
+  fails, on a fresh run or a retry (R3-retry-manifest-failure-loses-codegraph-ownership, Codex
+  P2); create the manifest's temporary file exclusively, never through an existing link (Codex
+  P2); isolate the tests' `git init` from the host's global git config
+  (R3-tests-depend-on-host-git-config); test the "could not remove" wording
+  (R3-cleanup-clause-partial-branches-untested); say "a link" rather than "(core.hooksPath)" when
+  a link sends the hook outside — route: delegated writer, likely with T3, which reads the same
+  manifest
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -251,10 +261,15 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   exit 1), so on Windows the escape needs a dangling file symlink, which this machine cannot
   create. That case rests on the skipped tests and code reading. The outside reason still says
   "(core.hooksPath)" when a link, not the config, sends the hook outside: wording follow-up.
+- 2026-09-28: T2d committed as dc49d6d. Commit assessed (`--base-ref aa7ba68`): risk `medium`,
+  368 lines, `review_due: false` (`under_budget`). The gentle-ai Stop hook asked for the whole
+  slice, which is also the PR candidate: native review lineage review-a95098352b5dd5b5 (range
+  `222110f..dc49d6d`, one lens) approved and acknowledged, with three WARNING and one SUGGESTION,
+  all advisory. Codex on the same range: no P1, two P2. All six go to T2e.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Review T2's commit (gentle-ai, then Codex), open slice 2's PR against `main`, and check T2 off
-once it is approved; then T3 (`uninstall` in a project, from the manifest T2 writes).
+Sebastián merges slice 2's PR; then slice 3 on a new branch from `main`: T3 (`uninstall` in a
+project, from the manifest T2 writes) together with T2e, which changes the same manifest.
