@@ -99,8 +99,12 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   P2); isolate the tests' `git init` from the host's global git config
   (R3-tests-depend-on-host-git-config); test the "could not remove" wording
   (R3-cleanup-clause-partial-branches-untested); say "a link" rather than "(core.hooksPath)" when
-  a link sends the hook outside — route: delegated writer, likely with T3, which reads the same
-  manifest
+  a link sends the hook outside; in a linked worktree or a submodule the hooks path lives in the
+  common git dir, outside the working tree, so `init` wrongly skips the gate there
+  (R3-worktree-submodule-hook-misclassified-outside; judge containment against the git dir as
+  well); count only links below the real root as occupying the hook
+  (R3-realish-flags-symlinks-above-repo-root) — route: delegated writer, likely with T3, which
+  reads the same manifest
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
