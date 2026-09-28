@@ -209,6 +209,32 @@ test('a top-level model_instructions_file key before any table header is used, a
   });
 });
 
+test('a TOML literal string and a trailing comment are both read', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.codex', 'config.toml'), "model_instructions_file = 'C:\\Users\\test\\a.md'\n");
+    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, 'C:\\Users\\test\\a.md');
+    write(path.join(home, '.codex', 'config.toml'), 'model_instructions_file = "b.md" # engram\n');
+    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, 'b.md');
+  });
+});
+
+// A value `check` cannot make sense of must read as not found, never crash the pre-commit gate.
+test('an out-of-range TOML unicode escape does not throw', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.codex', 'config.toml'), 'model_instructions_file = "\\UFFFFFFFF.md"\n');
+    const source = findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions');
+    assert.equal(source.tokens, null);
+  });
+});
+
+test('a source path that is a directory reads tokens: null, without throwing', () => {
+  withFixture((home, cwd) => {
+    fs.mkdirSync(path.join(home, '.claude', 'CLAUDE.md'), { recursive: true });
+    const { hosts } = measurePayload({ home, cwd });
+    assert.equal(findSource(hosts[0], 'global CLAUDE.md').tokens, null);
+  });
+});
+
 // --- malformed config does not throw ---
 
 test('malformed settings.json yields no output style and no Claude hooks, without throwing', () => {

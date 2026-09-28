@@ -2,12 +2,20 @@
 // odd/tasks/f2-context-diet.md. Read-only: every function here reads files, never runs a hook.
 import fs from 'node:fs';
 import path from 'node:path';
-import { estimateTokens } from '../check.mjs';
 
-/** Reads `filePath` and returns its estimated token count, or `null` if the file does not exist. */
+/** Rough token estimate: ~4 chars per token. */
+export function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+/** Reads `filePath` and returns its estimated token count, or `null` if it cannot be read as a
+ * file (missing, a directory, no permission) — `check` reports it as not found, never crashes. */
 function tokensOf(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return estimateTokens(fs.readFileSync(filePath, 'utf8'));
+  try {
+    return estimateTokens(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 /** One measured source: `{ name, path, tokens }` — `tokens: null` when the file is missing. */
@@ -93,14 +101,18 @@ const TOML_ESCAPES = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', '"': '"', '\
  * backslash escapes, plus `\uXXXX`/`\UXXXXXXXX` Unicode escapes. */
 function unescapeTomlBasicString(body) {
   return body.replace(/\\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/gs, (whole, esc) => {
-    if (esc[0] === 'u' || esc[0] === 'U') return String.fromCodePoint(parseInt(esc.slice(1), 16));
+    if (esc[0] === 'u' || esc[0] === 'U') {
+      const codePoint = parseInt(esc.slice(1), 16);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : whole;
+    }
     return TOML_ESCAPES[esc] ?? whole;
   });
 }
 
 /** Codex's `model_instructions_file` config value: the top-level (before the first `[table]`
- * header) `model_instructions_file = "..."` line in `<home>/.codex/config.toml`, unescaped as a
- * TOML basic string. `null` when the file is missing or the key is absent above the first table. */
+ * header) `model_instructions_file` line in `<home>/.codex/config.toml`, as a TOML basic string
+ * (unescaped) or literal string (verbatim), with an optional trailing `#` comment. `null` when the
+ * file is missing or the key is absent above the first table. */
 function modelInstructionsFile(home) {
   let text;
   try {
@@ -110,8 +122,8 @@ function modelInstructionsFile(home) {
   }
   for (const line of text.split(/\r?\n/)) {
     if (/^\s*\[/.test(line)) break; // first table header ends the top-level section
-    const match = line.match(/^\s*model_instructions_file\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/);
-    if (match) return unescapeTomlBasicString(match[1]);
+    const match = line.match(/^\s*model_instructions_file\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')\s*(?:#.*)?$/);
+    if (match) return match[1] !== undefined ? unescapeTomlBasicString(match[1]) : match[2];
   }
   return null;
 }

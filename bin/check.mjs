@@ -5,13 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { estimateTokens, measurePayload } from './lib/payload.mjs';
+
+export { estimateTokens };
 
 const TOKEN_BUDGET = 1500;
-
-/** Rough token estimate: ~4 chars per token. */
-export function estimateTokens(text) {
-  return Math.ceil(text.length / 4);
-}
 
 /** PASS/FAIL row for AGENTS.md's token budget, rooted at `cwd`. */
 export function checkBudget(cwd) {
@@ -24,6 +22,27 @@ export function checkBudget(cwd) {
   const pass = tokens <= TOKEN_BUDGET;
   const detail = `${tokens} estimated tokens (budget ${TOKEN_BUDGET})`;
   return { name: 'budget', pass, detail };
+}
+
+/** Shortens `filePath` to start with `~` when it lies under `home`, so rows stay readable. */
+function tildePath(filePath, home) {
+  if (!filePath) return 'built-in or plugin';
+  const relative = path.relative(home, filePath);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? filePath : path.join('~', relative);
+}
+
+/** One INFO row per host with every file that loads on each turn and the hooks whose stdout
+ * reaches the model. Informational: the budget row alone decides pass or fail. */
+export function checkPayload(cwd, home) {
+  return measurePayload({ home, cwd }).hosts.map((host) => {
+    const sources = host.sources.map((s) => {
+      const tokens = s.tokens === null ? 'not found' : String(s.tokens);
+      return `${s.name.padEnd(18)} ${tokens.padStart(9)}  ${tildePath(s.path, home)}`;
+    });
+    const hooks = host.hooks.map((h) => `hook ${h.event.padEnd(16)} ${h.command}`);
+    const detail = `${host.total} estimated tokens per turn from files (tools and hook output not counted)`;
+    return { name: `payload ${host.host}`, pass: true, info: true, detail, lines: [...sources, ...hooks] };
+  });
 }
 
 /** Runs `node --test` in `cwd` as a child process and reports pass/fail. */
@@ -46,21 +65,26 @@ export function checkTests(cwd) {
   return { name: 'tests', pass, detail, output: pass ? '' : `${result.stdout}${result.stderr}` };
 }
 
+function flagValue(argv, flag, fallback) {
+  const index = argv.indexOf(flag);
+  return index !== -1 ? argv[index + 1] : fallback;
+}
+
 function parseArgs(argv) {
-  const cwdFlagIndex = argv.indexOf('--cwd');
-  const cwd = cwdFlagIndex !== -1 ? argv[cwdFlagIndex + 1] : process.cwd();
-  return { cwd };
+  return { cwd: flagValue(argv, '--cwd', process.cwd()), home: flagValue(argv, '--home', os.homedir()) };
 }
 
 function formatRow(row) {
-  const status = row.pass ? 'PASS' : 'FAIL';
-  return `${status}  ${row.name}  ${row.detail}`;
+  const status = row.info ? 'INFO' : row.pass ? 'PASS' : 'FAIL';
+  const lines = (row.lines ?? []).map((line) => `
+      ${line}`).join('');
+  return `${status}  ${row.name}  ${row.detail}${lines}`;
 }
 
 /** Runs all check rows and prints them; returns the process exit code. */
 export async function main(argv = process.argv.slice(2), env = process.env) {
-  const { cwd } = parseArgs(argv);
-  const rows = [checkBudget(cwd)];
+  const { cwd, home } = parseArgs(argv);
+  const rows = [checkBudget(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: the inner `node --test` this spawns must not spawn its own.
   if (env.JS_HARNESS_CHECK_INNER !== '1') {

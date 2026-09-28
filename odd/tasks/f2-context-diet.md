@@ -60,12 +60,12 @@ Mode: strict (source: user global config). Runner: `node --test`.
 Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wiring) — one slice.
 
 ## Tasks
-- [ ] T1 `bin/lib/payload.mjs`: per-host sources (Claude: global `CLAUDE.md`, output style from
+- [x] T1 `bin/lib/payload.mjs`: per-host sources (Claude: global `CLAUDE.md`, output style from
   `settings.outputStyle`, project `AGENTS.md`/`CLAUDE.md`, auto-memory index; Codex: global
   `AGENTS.md` or `AGENTS.override.md`, `model_instructions_file`, project `AGENTS.md`) and hooks
   on `UserPromptSubmit`/`SessionStart`, with fixture tests — route: delegated writer (2
   non-trivial files)
-- [ ] T2 `check` prints the payload report and takes `--home`; the budget row is unchanged —
+- [x] T2 `check` prints the payload report and takes `--home`; the budget row is unchanged —
   route: inline (one file plus its test, once T1 fixes the shape)
 - [x] T3 codegraph prompt hook measured with and without, recorded in the roadmap — route: inline
   (measurement)
@@ -86,5 +86,19 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   decision 5); whether it improves the work is an F5 eval question. Script:
   scratchpad `cg.mjs`, not committed (it reads private transcripts).
 
+## Verification evidence
+- T1 `4523de8` (delegated writer, sonnet): RED `ERR_MODULE_NOT_FOUND`, GREEN 15/15.
+- RDD over `a7d22e3..c504b50`: `gentle-ai review assess` → medium, `slice_budget_reached` (590
+  lines, mostly tests). Consent granted (pre-granted), one lens (reliability) → approved,
+  acknowledged, authority burned (lineage `review-d41a987789f78c62`). Advisory findings: three
+  WARNING (unguarded file read, out-of-range TOML `U` escape throws, TOML literal strings and
+  trailing comments unread) fixed in T2 with tests first; two SUGGESTION (slug test mirrors the
+  implementation, output-style precedence untested) left as follow-ups.
+- T2 (inline): RED `does not provide an export named 'checkPayload'`, then three RED tests for the
+  WARNING fixes (`EISDIR`, `RangeError: Invalid code point`, literal string unread); GREEN 27/27
+  across `check` and `payload`; `npm run check` → PASS budget, INFO payload claude 20,432,
+  INFO payload codex 10,762, PASS tests. `estimateTokens` moved into `payload.mjs` and
+  re-exported by `check.mjs` so the two modules do not import each other.
+
 ## Next step
-T1.
+Codex review of the branch, then the PR. T4 and T5 wait on gentle-ai.
