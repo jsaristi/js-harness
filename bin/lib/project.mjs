@@ -43,16 +43,56 @@ export function resolveGitPath(root, relPath, spawn = spawnSync) {
 }
 
 /** `absolute`, relative to `root`, with forward slashes — the shape the manifest and reports use
- * regardless of host OS. Only meaningful for a path actually under `root`; see `isOutsideRoot`. */
+ * regardless of host OS. Only meaningful for a path actually under `root`. */
 function toRepoRelative(root, absolute) {
   return path.relative(root, absolute).split(path.sep).join('/');
 }
 
-/** True when `target` is not inside `root` at all — a `core.hooksPath` pointing outside the repo,
- * including onto another drive on Windows (T2b R3-hookspath-outside-repo-written / Codex P2). */
-function isOutsideRoot(root, target) {
-  const rel = path.relative(root, target);
-  return rel.startsWith('..') || path.isAbsolute(rel);
+/** `absolute`, with forward slashes, host OS regardless — the shape used for a path that is *not*
+ * under `root` (an outside hooks path has no repo-relative form to report). */
+function toForwardSlashes(absolute) {
+  return absolute.split(path.sep).join('/');
+}
+
+/** Resolves `target`'s nearest existing ancestor to its real path (following symlinks) and
+ * re-appends whatever doesn't exist yet on top of that — so a containment check sees through an
+ * in-repo symlink (e.g. `core.hooksPath` pointing at a symlinked directory that itself points
+ * outside the repo) without requiring `target` itself to already exist (T2c Codex P1 symlink).
+ * Falls back to `target` unresolved if walking up somehow reaches the filesystem root without
+ * finding anything that exists (should not happen in practice). */
+function realish(target) {
+  let current = path.resolve(target);
+  const tail = [];
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) return target;
+    tail.unshift(path.basename(current));
+    current = parent;
+  }
+  const real = fs.realpathSync(current);
+  return tail.length > 0 ? path.join(real, ...tail) : real;
+}
+
+/** True when a `path.relative` result places its target outside the directory it was computed
+ * against: exactly `..`, starting with `..` followed by a path separator, or absolute (a different
+ * drive on Windows resolves to an absolute path here rather than a `..`-prefixed one). A directory
+ * whose name merely *starts* with two dots, like `..hooks`, is not outside — `"..hooks".startsWith`
+ * `("..")` is true but `"..hooks"` is a perfectly ordinary single path segment (T2c Codex P2). */
+function isOutsideRelative(rel) {
+  if (path.isAbsolute(rel)) return true;
+  if (rel === '..') return true;
+  return rel.startsWith(`..${path.sep}`) || rel.startsWith('../');
+}
+
+/** Whether `hookPath` (already resolved via `resolveGitPath`) is actually inside `root`, following
+ * symlinks on both sides first (T2c Codex P1 symlink) so an in-repo symlink pointing outside the
+ * repo is correctly seen as outside. Returns the real, symlink-resolved hook path alongside the
+ * verdict, since callers that treat it as outside report *that* location, not the git-given one. */
+function resolveHookContainment(root, hookPath) {
+  const realRoot = fs.realpathSync(root);
+  const real = realish(hookPath);
+  const rel = path.relative(realRoot, real);
+  return { real, outside: isOutsideRelative(rel) };
 }
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
@@ -139,19 +179,26 @@ function wrote(relPath, hash) {
   return { kind: 'wrote', path: relPath, sha256: hash };
 }
 
-function kept(relPath, reason) {
-  return { kind: 'kept', path: relPath, reason };
+/** `outside: true` marks an entry whose `path` is an absolute, forward-slashed location that is
+ * not under the repo root at all (an outside `core.hooksPath` — T2c item 6); every other `kept`
+ * entry carries a plain repo-relative `path` and no `outside` field. */
+function kept(relPath, reason, outside = false) {
+  return outside ? { kind: 'kept', path: relPath, reason, outside: true } : { kind: 'kept', path: relPath, reason };
 }
 
 /** Thrown by `initProject` when a step after the first write fails: everything this run wrote has
  * already been rolled back (best-effort) by the time this is thrown. `notRemoved` lists whatever
- * could not be cleaned up (root-relative), empty when the rollback was complete (T2b Codex P1 +
- * R3-init-partial-failure-unrecoverable). */
+ * could not be cleaned up (root-relative), empty when the rollback was complete. `codegraphDirLeftBehind`
+ * is true when `.codegraph/` was created by *this* run and is deliberately not part of the rollback
+ * (codegraph never participates in this atomicity — see `writeProject`) but still needs to be
+ * disclosed rather than implied away by "nothing was left behind" (T2b Codex P1 +
+ * R3-init-partial-failure-unrecoverable; T2c R3-nothing-left-behind-overclaims). */
 export class InitWriteError extends Error {
-  constructor(message, notRemoved = []) {
+  constructor(message, notRemoved = [], codegraphDirLeftBehind = false) {
     super(message);
     this.name = 'InitWriteError';
     this.notRemoved = notRemoved;
+    this.codegraphDirLeftBehind = codegraphDirLeftBehind;
   }
 }
 
@@ -202,14 +249,17 @@ function rollback(root, createdPaths, createdDirs) {
   return notRemoved;
 }
 
-/** The write phase for a project with no `harness.json` yet: writes it, `AGENTS.md` (if none
- * exists), the pre-commit gate (if resolvable, inside the repo, and none exists), runs codegraph
- * init, and records everything in the project manifest. Atomic on failure: if any step after the
- * first write throws, every file/directory this run created is removed (best-effort) and an
- * `InitWriteError` is thrown instead — see "T2b" item 1. */
-function writeProject(root, version, spawn, platform, writeFile) {
+/** The write phase for a project with no `harness.json` yet and no project manifest yet either
+ * (the caller, `initProject`, refuses before reaching here otherwise — see its `staleManifest`
+ * check). Writes `harness.json`, `AGENTS.md` (if none exists), the pre-commit gate (if resolvable,
+ * inside the repo, and none exists), runs codegraph init, and records everything in the project
+ * manifest at `manifestFilePath`. Atomic on failure: if any step after the first write throws,
+ * every file/directory this run created is removed (best-effort, except `.codegraph/` — see
+ * `InitWriteError`) and an `InitWriteError` is thrown instead. */
+function writeProject(root, version, spawn, platform, writeFile, manifestFilePath) {
   const createdPaths = [];
   const createdDirs = [];
+  let codegraphCreatedThisRun = false;
 
   try {
     const actions = [];
@@ -245,34 +295,43 @@ function writeProject(root, version, spawn, platform, writeFile) {
     const hookPath = resolveGitPath(root, 'hooks/pre-commit', spawn);
     if (!hookPath) {
       actions.push({ kind: 'skip', path: 'hooks/pre-commit', reason: 'could not resolve the git hooks path' });
-    } else if (isOutsideRoot(root, hookPath)) {
-      // T2b R3-hookspath-outside-repo-written / Codex P2: a `core.hooksPath` outside the repo (even
-      // on another drive) is never written to — this run does not own that location.
-      actions.push(
-        kept(
-          hookPath,
-          'hooks path is outside the repository (core.hooksPath); add `js-harness check` to its pre-commit yourself',
-        ),
-      );
     } else {
-      const hookRel = toRepoRelative(root, hookPath);
-      if (fs.existsSync(hookPath)) {
-        actions.push(kept(hookRel, 'exists; add `js-harness check` to it'));
+      const { real: realHookPath, outside: hookOutside } = resolveHookContainment(root, hookPath);
+      if (hookOutside) {
+        // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink: a `core.hooksPath`
+        // outside the repo — directly, or through an in-repo symlink — is never written to; this run
+        // does not own that location. Report the real (symlink-resolved) location, since that is
+        // where the user would actually need to add the check themselves.
+        actions.push(
+          kept(
+            toForwardSlashes(realHookPath),
+            'hooks path is outside the repository (core.hooksPath); add `js-harness check` to its pre-commit yourself',
+            true,
+          ),
+        );
       } else {
-        mkdirTracked(path.dirname(hookPath), root, createdDirs);
-        createdPaths.push(hookPath);
-        writeFile(hookPath, PRE_COMMIT_HOOK, 'utf8');
-        fs.chmodSync(hookPath, 0o755);
-        const hash = sha256(PRE_COMMIT_HOOK);
-        files.push({ path: hookRel, sha256: hash });
-        actions.push(wrote(hookRel, hash));
+        const hookRel = toRepoRelative(root, hookPath);
+        if (fs.existsSync(hookPath)) {
+          actions.push(kept(hookRel, 'exists; add `js-harness check` to it'));
+        } else {
+          mkdirTracked(path.dirname(hookPath), root, createdDirs);
+          createdPaths.push(hookPath);
+          writeFile(hookPath, PRE_COMMIT_HOOK, 'utf8');
+          fs.chmodSync(hookPath, 0o755);
+          const hash = sha256(PRE_COMMIT_HOOK);
+          files.push({ path: hookRel, sha256: hash });
+          actions.push(wrote(hookRel, hash));
+        }
       }
     }
 
     // codegraph init: only when `.codegraph/` does not exist yet — it writes only that directory
     // (measured in a scratch repo, codegraph 1.6.0), so its presence alone means "already done".
     // A codegraph failure is reported, never thrown: it does not participate in this function's
-    // atomicity (see "T2 design": codegraph missing/failing still exits 0 and carries on).
+    // atomicity (see "T2 design": codegraph missing/failing still exits 0 and carries on) — and a
+    // codegraph *success* is not rolled back either if a later step fails; `codegraphCreatedThisRun`
+    // tracks that so the eventual `InitWriteError` can disclose it instead of overclaiming a clean
+    // rollback (T2c R3-nothing-left-behind-overclaims).
     let codegraphManifest;
     if (fs.existsSync(codegraphDirPath(root))) {
       codegraphManifest = { createdDir: false, status: 'exists' };
@@ -280,6 +339,7 @@ function writeProject(root, version, spawn, platform, writeFile) {
     } else {
       const { manifest: cgManifest, reason } = initCodegraph(root, spawn, platform);
       codegraphManifest = cgManifest;
+      codegraphCreatedThisRun = cgManifest.createdDir === true;
       actions.push(
         reason
           ? { kind: 'problem', path: 'codegraph init', reason }
@@ -290,12 +350,16 @@ function writeProject(root, version, spawn, platform, writeFile) {
     const manifest = {
       version,
       files,
-      kept: actions.filter((a) => a.kind === 'kept').map((a) => ({ path: a.path, reason: a.reason })),
+      kept: actions
+        .filter((a) => a.kind === 'kept')
+        .map((a) => (a.outside ? { path: a.path, reason: a.reason, outside: true } : { path: a.path, reason: a.reason })),
       codegraph: codegraphManifest,
     };
 
-    const manifestFilePath =
-      resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
+    // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: `manifestFilePath` is guaranteed
+    // absent here — `initProject` already refused to reach `writeProject` at all when it exists
+    // (see its `staleManifest` check) — so tracking it in `createdPaths` exactly like every other
+    // file this run writes can never end up rolling back a manifest from a previous run.
     mkdirTracked(path.dirname(manifestFilePath), root, createdDirs);
     createdPaths.push(manifestFilePath);
     writeFile(manifestFilePath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
@@ -303,15 +367,18 @@ function writeProject(root, version, spawn, platform, writeFile) {
     return { code: 0, root, actions, manifest, manifestPath: manifestFilePath };
   } catch (err) {
     const notRemoved = rollback(root, createdPaths, createdDirs);
-    throw new InitWriteError(err.message, notRemoved);
+    throw new InitWriteError(err.message, notRemoved, codegraphCreatedThisRun);
   }
 }
 
-/** `harness.json` already exists: nothing is (re-)written except one narrow, explicit exception —
- * see "T2b" item 2. When `.codegraph/` is still absent and the project manifest on disk says a
- * previous codegraph run failed, only the codegraph step is retried and only the manifest's
- * `codegraph` field is updated; every other file is untouched. */
-function alreadyInitialized(root, harnessJsonPath, spawn, platform, writeFile) {
+/** `harness.json` already exists: nothing is (re-)written except one narrow, explicit exception.
+ * When `.codegraph/` is still absent and the project manifest on disk says a previous codegraph run
+ * failed, only the codegraph step is retried and only the manifest's `codegraph` field is updated;
+ * every other file is untouched. A failure while rewriting the manifest here throws `InitWriteError`
+ * the same way `writeProject` does (T2c R3-retry-manifest-write-unguarded) — codegraph itself already
+ * ran and is not rolled back either way, so the error says precisely what happened: codegraph ran,
+ * the manifest update failed. */
+function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile) {
   let existingVersion = null;
   try {
     existingVersion = JSON.parse(fs.readFileSync(harnessJsonPath, 'utf8'))?.version ?? null;
@@ -319,9 +386,6 @@ function alreadyInitialized(root, harnessJsonPath, spawn, platform, writeFile) {
     // Malformed harness.json is still "present" for the purposes of this gate; report what we can
     // and still write nothing (see "T2 design": exit 0, nothing written, either way).
   }
-
-  const manifestFilePath =
-    resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
 
   if (!fs.existsSync(codegraphDirPath(root)) && fs.existsSync(manifestFilePath)) {
     let manifest;
@@ -333,7 +397,15 @@ function alreadyInitialized(root, harnessJsonPath, spawn, platform, writeFile) {
     if (manifest?.codegraph?.status === 'failed') {
       const { manifest: codegraphManifest, reason } = initCodegraph(root, spawn, platform);
       manifest.codegraph = codegraphManifest;
-      writeFile(manifestFilePath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+      try {
+        writeFile(manifestFilePath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+      } catch (err) {
+        throw new InitWriteError(
+          `codegraph init ran but the manifest could not be updated: ${err.message}`,
+          [],
+          codegraphManifest.createdDir === true,
+        );
+      }
       return {
         code: 0,
         alreadyInitialized: true,
@@ -352,12 +424,15 @@ function alreadyInitialized(root, harnessJsonPath, spawn, platform, writeFile) {
  * so this module has no package.json of its own to know about. Returns one of:
  * - `{ code: 1, noSuchDirectory: true, cwd }` — `cwd` itself does not exist; nothing written.
  * - `{ code: 1, notGitRepo: true }` — `cwd` exists but is outside a git repository; nothing written.
+ * - `{ code: 1, staleManifest: true, manifestPath }` — no `harness.json`, but a project manifest
+ *   from a previous init already exists at `manifestPath`; nothing written (T2c item 1).
  * - `{ code: 0, alreadyInitialized: true, version, root, codegraphRetry? }` — `harness.json`
  *   already exists; nothing written, except a narrow codegraph retry (see `alreadyInitialized`).
  * - `{ code: 0, root, actions, manifest, manifestPath }` — a fresh project: `actions` is in report
  *   order (`wrote`/`kept`/`ran`/`skip`/`problem`), `manifest` is exactly what was written to
  *   `manifestPath`.
- * Throws `InitWriteError` when a write step fails after the first — see `writeProject`. */
+ * Throws `InitWriteError` when a write step fails after the first — see `writeProject` and
+ * `alreadyInitialized`. */
 export function initProject(cwd, version, deps = {}) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
@@ -368,10 +443,21 @@ export function initProject(cwd, version, deps = {}) {
   const root = gitTopLevel(cwd, spawn);
   if (!root) return { code: 1, notGitRepo: true };
 
+  const manifestFilePath =
+    resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
+
   const harnessJsonPath = path.join(root, 'harness.json');
   if (fs.existsSync(harnessJsonPath)) {
-    return alreadyInitialized(root, harnessJsonPath, spawn, platform, writeFile);
+    return alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile);
   }
 
-  return writeProject(root, version, spawn, platform, writeFile);
+  // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: a manifest surviving without
+  // harness.json means this clone was initialized before and then had harness.json removed (by
+  // hand, or a partial/failed uninstall) — not a fresh project. Refuse rather than silently
+  // writing a brand-new manifest over stale bookkeeping from a run this one knows nothing about.
+  if (fs.existsSync(manifestFilePath)) {
+    return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
+  }
+
+  return writeProject(root, version, spawn, platform, writeFile, manifestFilePath);
 }

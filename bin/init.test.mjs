@@ -143,6 +143,38 @@ test('initMain rejects --cwd with a missing value and exits 2', async () => {
   assert.match(stderr, /--cwd requires a value/);
 });
 
+// T2c Codex P1 + R3-rollback-deletes-preexisting-manifest
+test('initMain reports a stale manifest without harness.json on stderr and exits 1', async () => {
+  const root = makeTmpRepo();
+  try {
+    const manifestDir = path.join(root, '.git', 'js-harness');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    fs.writeFileSync(path.join(manifestDir, 'manifest.json'), '{}', 'utf8');
+
+    let stderr = '';
+    const origError = console.error;
+    console.error = (msg) => {
+      stderr += `${msg}\n`;
+    };
+    // Never rely on the guard alone to keep this hermetic: inject a spawn that only ever answers
+    // `git` for real and never a real `codegraph`, in case a future/older code path reaches it.
+    const spawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 0, stdout: '', stderr: '' });
+    let code;
+    try {
+      code = await initMain(['--cwd', root], process.env, { spawn, platform: 'linux' });
+    } finally {
+      console.error = origError;
+    }
+    assert.equal(code, 1);
+    assert.match(stderr, /this clone was initialized before/);
+    assert.match(stderr, /harness\.json is missing/);
+    assert.match(stderr, /js-harness uninstall/);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('initMain reports no such directory on stderr and exits 1 when --cwd does not exist', async () => {
   const parent = makeTmpDir();
   const missing = path.join(parent, 'nope');
@@ -189,6 +221,42 @@ test('initMain reports a rolled-back write failure on stderr and exits 1', async
     assert.match(stderr, /init failed:/);
     assert.match(stderr, /nothing was left behind/);
     assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2c R3-retry-manifest-write-unguarded + R3-nothing-left-behind-overclaims
+test('initMain reports a codegraph-retry manifest write failure on stderr and exits 1', async () => {
+  const root = makeTmpRepo();
+  try {
+    const failSpawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'boom' });
+    await initMain(['--cwd', root], process.env, { spawn: failSpawn, platform: 'linux' });
+
+    const okSpawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('manifest.json')) throw new Error('EACCES: permission denied');
+      fs.writeFileSync(target, content, enc);
+    };
+    let stderr = '';
+    const origError = console.error;
+    console.error = (msg) => {
+      stderr += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', root], process.env, { spawn: okSpawn, platform: 'linux', writeFile });
+    } finally {
+      console.error = origError;
+    }
+    assert.equal(code, 1);
+    assert.match(stderr, /init failed:/);
+    assert.match(stderr, /manifest could not be updated/);
+    assert.match(stderr, /removed everything it wrote except \.codegraph\//);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

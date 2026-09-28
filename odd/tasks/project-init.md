@@ -79,6 +79,13 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   with `cwd: root` and `.` so `cmd` cannot expand `%VAR%` in the path (Codex P2); compare the
   manifest path via realpath in its test (R3-manifestpath-assertion-not-realpath); report a
   missing `--cwd` as such (R3-nonexistent-cwd-misreported) — route: the same delegated writer
+- [x] T2c Second-round follow-ups on `init`: refuse to re-init over an earlier project manifest
+  when `harness.json` is missing (Codex P1, R3-rollback-deletes-preexisting-manifest); check hook
+  containment on real paths so an in-repo symlink to outside counts as outside (Codex P1); treat
+  `..hooks` as inside (Codex P2); guard the codegraph retry's manifest write
+  (R3-retry-manifest-write-unguarded); say when `.codegraph/` survives a rollback
+  (R3-nothing-left-behind-overclaims); give an outside hook one manifest shape
+  (R3-outside-hook-kept-absolute-path) — route: the same delegated writer
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -194,6 +201,30 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   it ignores itself and a second `init` sees it; the retry reuses the same failure wording. Real
   run in a scratch folder named `odd dir %USERNAME%`: `init` wrote the three files and `ran
   codegraph init`, `.codegraph/` landed inside that folder, and no expanded sibling was created.
+- 2026-09-28: T2b committed as b596e01. Assessed (`--base-ref 9f6ea49 --committed-only`): risk
+  `medium`, 783 changed lines, `review_due: true` (`slice_budget_reached`). Native review lineage
+  review-b0d6a66c47ea0007: one lens (reliability), approved and acknowledged, with four advisory
+  findings (two WARNING: a rollback can delete a manifest this run did not create, the retry's
+  manifest write is unguarded; two SUGGESTION: "nothing was left behind" overclaims when
+  `.codegraph/` survives, and the outside hook's absolute path shape). Codex (`--base 222110f`,
+  the whole slice): P1 hook containment is lexical, so an in-repo symlink to outside passes; P1
+  an earlier manifest is overwritten or deleted on re-init; P2 `..hooks` counts as outside. All
+  accepted as T2c; for an earlier manifest with `harness.json` missing, `init` refuses (exit 1)
+  and names both ways out, the safest choice until T3's `uninstall` exists.
+- 2026-09-28: T2c done by the same writer. `bin/lib/project.mjs`: an earlier manifest with no
+  `harness.json` → nothing written, exit 1, naming both ways out; hook containment on real paths
+  (`resolveHookContainment`), where only `..`, `..` + a separator or an absolute path is outside;
+  the retry's manifest write raises `InitWriteError`; `InitWriteError` carries
+  `codegraphDirLeftBehind`, and `init` says so instead of "nothing was left behind"; an outside
+  hook is kept as `{ path: <real absolute path, forward slashes>, outside: true, reason }`. The
+  manifest path is resolved once and shared by the check and the write. RED (new tests against
+  b596e01's code): 8 failures, one per item, including `..hooks` classed as outside and the
+  in-repo symlink to outside accepted; the writer also caught a CLI test that could reach a real
+  `codegraph` on the old code and injected a fake spawn. GREEN: 42/42 in those files (the symlink
+  test ran, not skipped); full `node --test` → `tests 354 / pass 352 / fail 0 / skipped 2`,
+  re-run by the parent with the same result; `npm run check` PASS. +377/−58 lines. Real run: in
+  the scratch clone from T2b, deleting `harness.json` and running `init` → the refusal message,
+  exit 1, nothing written. Its advice to "run js-harness uninstall" becomes true with T3.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.

@@ -255,6 +255,39 @@ test('initProject with an existing harness.json writes nothing and reports alrea
   }
 });
 
+// --- T2c item 1: a project manifest survives without harness.json ---
+
+test('initProject refuses to run and writes nothing when a project manifest already exists but harness.json is missing', () => {
+  const root = makeTmpRepo();
+  try {
+    // Simulate a clone that was initialized before and then had harness.json removed by hand (or
+    // a partial/failed uninstall), without the manifest itself being touched.
+    const manifestDir = path.join(root, '.git', 'js-harness');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    const manifestPath = path.join(manifestDir, 'manifest.json');
+    const staleManifest = {
+      version: '0.1.0',
+      files: [],
+      kept: [],
+      codegraph: { createdDir: false, status: 'exists' },
+    };
+    fs.writeFileSync(manifestPath, JSON.stringify(staleManifest, null, 2) + '\n', 'utf8');
+    const before = fs.readdirSync(root);
+
+    const result = initProject(root, '0.2.0', { spawn: makeSpawn() });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.staleManifest, true);
+    assert.equal(fs.realpathSync(result.manifestPath), fs.realpathSync(manifestPath));
+    assert.deepEqual(fs.readdirSync(root), before);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    // The stale manifest itself is untouched.
+    assert.deepEqual(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), staleManifest);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- T2b item 6: --cwd that does not exist ---
 
 test('initProject reports noSuchDirectory when --cwd does not exist, and touches nothing', () => {
@@ -271,7 +304,7 @@ test('initProject reports noSuchDirectory when --cwd does not exist, and touches
   }
 });
 
-// --- T2b item 3: a core.hooksPath outside the repository is never written to ---
+// --- T2b item 3 / T2c items 2, 3, 6: a core.hooksPath outside the repository is never written to ---
 
 test('initProject keeps (never writes) a pre-commit hook whose core.hooksPath resolves outside the repository', () => {
   const root = makeTmpRepo();
@@ -286,9 +319,82 @@ test('initProject keeps (never writes) a pre-commit hook whose core.hooksPath re
     // Nothing was written into the outside directory at all.
     assert.deepEqual(fs.readdirSync(outsideDir), []);
     assert.ok(!result.manifest.files.some((f) => f.path.includes('pre-commit')));
-    const keptEntry = result.manifest.kept.find((k) => k.reason.includes('outside the repository'));
-    assert.ok(keptEntry, 'expected the outside hooks path in kept');
+
+    // T2c item 6: an outside `kept` entry carries an absolute, forward-slashed path and `outside: true`.
+    const keptEntry = result.manifest.kept.find((k) => k.outside === true);
+    assert.ok(keptEntry, 'expected the outside hooks path in kept, marked outside: true');
+    assert.deepEqual(Object.keys(keptEntry).sort(), ['outside', 'path', 'reason']);
+    assert.doesNotMatch(keptEntry.path, /\\/);
+    assert.equal(path.resolve(keptEntry.path.split('/').join(path.sep)), path.join(fs.realpathSync(outsideDir), 'pre-commit'));
+    assert.match(keptEntry.reason, /outside the repository/);
     assert.match(keptEntry.reason, /js-harness check/);
+
+    // Every other kept/written entry stays plain (no `outside` field).
+    for (const entry of result.manifest.kept) {
+      if (entry !== keptEntry) assert.ok(!('outside' in entry));
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// T2c Codex P2: a directory whose name merely starts with ".." (like "..hooks") is not outside.
+test('initProject writes the hook when core.hooksPath is a directory merely named with a leading ".."', () => {
+  const root = makeTmpRepo();
+  try {
+    const dotDotDir = path.join(root, '..hooks');
+    fs.mkdirSync(dotDotDir, { recursive: true });
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', '..hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    const hookPath = path.join(dotDotDir, 'pre-commit');
+    assert.ok(fs.existsSync(hookPath));
+    assert.match(fs.readFileSync(hookPath, 'utf8'), /exec js-harness check/);
+    assert.ok(result.manifest.files.some((f) => f.path === '..hooks/pre-commit'));
+    assert.ok(!result.manifest.kept.some((k) => k.outside));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2c Codex P1 symlink: containment must follow symlinks — an in-repo symlink pointing outside
+// the repo counts as outside, not inside.
+function trySymlinkDir(target, link, t) {
+  try {
+    fs.symlinkSync(target, link, 'junction');
+    return true;
+  } catch (err) {
+    if (err.code === 'EPERM' || err.code === 'EACCES') {
+      t.skip('symlinks need privileges on this machine');
+      return false;
+    }
+    throw err;
+  }
+}
+
+test('initProject treats an in-repo symlink pointing outside the repo as an outside hooks path', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-outside-symlink-');
+  try {
+    const linkPath = path.join(root, 'hooks-link');
+    if (!trySymlinkDir(outsideDir, linkPath, t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'hooks-link'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(fs.readdirSync(outsideDir), []);
+    const keptEntry = result.manifest.kept.find((k) => k.outside === true);
+    assert.ok(keptEntry, 'expected the symlinked-outside hooks path in kept, marked outside: true');
+    assert.equal(
+      path.resolve(keptEntry.path.split('/').join(path.sep)),
+      path.join(fs.realpathSync(outsideDir), 'pre-commit'),
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
@@ -373,6 +479,9 @@ test('initProject rolls back a failed manifest write and reports what could not 
     assert.ok(caught instanceof InitWriteError);
     assert.match(caught.message, /ENOSPC/);
     assert.deepEqual(caught.notRemoved, []);
+    // T2c R3-nothing-left-behind-overclaims: codegraph ran and created .codegraph/ this run, and
+    // that is deliberately not rolled back — the error must disclose it, not imply a clean sweep.
+    assert.equal(caught.codegraphDirLeftBehind, true);
 
     assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
     assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
@@ -430,6 +539,40 @@ test('initProject retries only codegraph when harness.json exists, the manifest 
     assert.deepEqual(manifestOnDisk.codegraph, { createdDir: true, status: 'ok' });
     assert.deepEqual(manifestOnDisk.files, first.manifest.files);
     assert.deepEqual(manifestOnDisk.kept, first.manifest.kept);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2c R3-retry-manifest-write-unguarded
+test('initProject throws InitWriteError when the codegraph-retry manifest update fails', () => {
+  const root = makeTmpRepo();
+  try {
+    initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+
+    const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' }); // creates .codegraph on success
+    const writeFile = (target, content, enc) => {
+      if (target.endsWith('manifest.json')) throw new Error('EACCES: permission denied');
+      fs.writeFileSync(target, content, enc);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', writeFile });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /codegraph init ran/);
+    assert.match(caught.message, /manifest could not be updated/);
+    assert.match(caught.message, /EACCES|permission denied/);
+    assert.deepEqual(caught.notRemoved, []);
+    // codegraph really ran (the retry's precondition is that .codegraph was absent) and created
+    // .codegraph/ this run — the manifest update failing does not roll that back either.
+    assert.equal(caught.codegraphDirLeftBehind, true);
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -81,6 +81,21 @@ function logAlreadyInitialized(result) {
   console.log(`manifest: ${result.codegraphRetry.manifestPath}`);
 }
 
+/** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
+ * overclaiming "nothing was left behind" when either a file could not be removed or `.codegraph/`
+ * was legitimately created by this run and is deliberately never rolled back (T2c
+ * R3-nothing-left-behind-overclaims). */
+function cleanupClause(err) {
+  const hasNotRemoved = err.notRemoved.length > 0;
+  const hasCodegraph = err.codegraphDirLeftBehind === true;
+  const codegraphNote = '.codegraph/ (created by codegraph init, ignored by git)';
+
+  if (!hasNotRemoved && !hasCodegraph) return 'nothing was left behind';
+  if (hasNotRemoved && !hasCodegraph) return `could not remove: ${err.notRemoved.join(', ')}`;
+  if (!hasNotRemoved && hasCodegraph) return `removed everything it wrote except ${codegraphNote}`;
+  return `could not remove: ${err.notRemoved.join(', ')}; ${codegraphNote} was also left behind`;
+}
+
 export async function initMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
@@ -99,8 +114,7 @@ export async function initMain(argv, env = process.env, deps = {}) {
     // everything this run wrote (best-effort) before throwing — report what happened, never a raw
     // stack trace, and exit 1 either way.
     if (err instanceof InitWriteError) {
-      const cleanup = err.notRemoved.length > 0 ? `could not remove: ${err.notRemoved.join(', ')}` : 'nothing was left behind';
-      console.error(`init failed: ${err.message}; ${cleanup}`);
+      console.error(`init failed: ${err.message}; ${cleanupClause(err)}`);
       return 1;
     }
     throw err;
@@ -113,6 +127,14 @@ export async function initMain(argv, env = process.env, deps = {}) {
 
   if (result.notGitRepo) {
     console.error('not a git repository: run git init first');
+    return 1;
+  }
+
+  if (result.staleManifest) {
+    console.error(
+      `this clone was initialized before (manifest: ${result.manifestPath}) but harness.json is missing: ` +
+        'restore harness.json, or run js-harness uninstall first',
+    );
     return 1;
   }
 
