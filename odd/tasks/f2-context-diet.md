@@ -119,6 +119,14 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   slug test, `tildePath` untested), acknowledged, authority burned (lineage
   `review-9656b5472ecb38ec`).
 
+- A fourth gentle-ai review, again over the whole branch after the doc-only commit `35b0b10`,
+  approved with the same three SUGGESTION and was acknowledged (lineage
+  `review-c92fc4180abac27d`). The Stop hook raises the accumulated branch after every commit,
+  doc-only ones included; bookkeeping now rides with the code commit it belongs to.
+- Merged to `main` 2026-09-28 via `jsaristi/js-harness#7` with a merge commit (`52a95cd`).
+
 ## Next step
-PR `jsaristi/js-harness#7` is open against `main`, awaiting Sebastián's merge. After it merges,
-T4 and T5 wait on gentle-ai; the roadmap moves on to Project init.
+F2 stays open only for T4 and T5, both waiting on gentle-ai (checked 2026-09-28: latest release
+v3.7.0, #4036 open). Re-check them when gentle-ai ships; until then the roadmap moves on to
+Project init. Follow-ups from review: test output-style precedence, a memory-slug test that does
+not mirror the implementation, and a `tildePath` test.
