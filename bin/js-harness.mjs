@@ -2,6 +2,7 @@
 // Tiny dispatcher: `js-harness <command> [...args]`.
 import { main as checkMain } from './check.mjs';
 import { installMain, syncMain, uninstallMain } from './install.mjs';
+import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { doctorMain } from './doctor.mjs';
 import { progressMain } from './progress.mjs';
@@ -13,6 +14,7 @@ const USAGE = `Usage: js-harness <command>
 
 Commands:
   check       Run the budget and test gates.
+  init        Enable js-harness in this project: harness.json, AGENTS.md, the pre-commit gate.
   install     Write the skills and record a manifest under a home.
   sync        Re-write installed files for the running version.
   uninstall   Remove exactly what install wrote.
@@ -27,6 +29,7 @@ Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --ho
 
 const commands = {
   check: checkMain,
+  init: initMain,
   install: installMain,
   sync: syncMain,
   uninstall: uninstallMain,

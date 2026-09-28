@@ -11,7 +11,20 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 // by its full git URL and commit (ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED), and npm clones and runs
 // them on every git-spec install. js-harness has nothing to build, so it declares none.
 test('the package declares no script that runs when it is installed', () => {
-  const installTime = ['preinstall', 'install', 'postinstall', 'prepare', 'preprepare', 'postprepare', 'prepack', 'postpack'];
+  // R3-install-script-list-incomplete (accepted T1 review follow-up): `prepublish` is a legacy
+  // npm lifecycle script (superseded by `prepublishOnly`) but npm still runs it, so it belongs on
+  // this list too even though this package declares none of them.
+  const installTime = [
+    'preinstall',
+    'install',
+    'postinstall',
+    'prepare',
+    'preprepare',
+    'postprepare',
+    'prepack',
+    'postpack',
+    'prepublish',
+  ];
   const found = installTime.filter((name) => pkg.scripts && name in pkg.scripts);
   assert.deepEqual(found, []);
 });
