@@ -65,13 +65,29 @@ export function checkTests(cwd) {
   return { name: 'tests', pass, detail, output: pass ? '' : `${result.stdout}${result.stderr}` };
 }
 
-function flagValue(argv, flag, fallback) {
-  const index = argv.indexOf(flag);
-  return index !== -1 ? argv[index + 1] : fallback;
+const USAGE = 'Usage: js-harness check [--cwd <path>] [--home <path>]';
+
+// A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
+// error, not a silently-swallowed token that later crashes `path.join` with `undefined`.
+class CheckArgError extends Error {}
+
+function requireValue(argv, i, flag) {
+  const value = argv[i + 1];
+  if (value === undefined || value.startsWith('--')) throw new CheckArgError(`${flag} requires a value`);
+  return value;
 }
 
-function parseArgs(argv) {
-  return { cwd: flagValue(argv, '--cwd', process.cwd()), home: flagValue(argv, '--home', os.homedir()) };
+/** Parses `argv`, matching `doctor.mjs`'s precedence: `--home` flag, then `env.JS_HARNESS_HOME`,
+ * then `os.homedir()`. Throws `CheckArgError` when `--cwd`/`--home` is given without a value. */
+function parseArgs(argv, env) {
+  const get = (flag) => {
+    const i = argv.indexOf(flag);
+    return i !== -1 ? requireValue(argv, i, flag) : undefined;
+  };
+  return {
+    cwd: get('--cwd') ?? process.cwd(),
+    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+  };
 }
 
 function formatRow(row) {
@@ -81,9 +97,17 @@ function formatRow(row) {
   return `${status}  ${row.name}  ${row.detail}${lines}`;
 }
 
-/** Runs all check rows and prints them; returns the process exit code. */
+/** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
+ * stderr and running no row, when `--cwd`/`--home` is given without a value. */
 export async function main(argv = process.argv.slice(2), env = process.env) {
-  const { cwd, home } = parseArgs(argv);
+  let parsed;
+  try {
+    parsed = parseArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { cwd, home } = parsed;
   const rows = [checkBudget(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: the inner `node --test` this spawns must not spawn its own.

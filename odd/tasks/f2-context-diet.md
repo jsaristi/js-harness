@@ -69,6 +69,7 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   route: inline (one file plus its test, once T1 fixes the shape)
 - [x] T3 codegraph prompt hook measured with and without, recorded in the roadmap — route: inline
   (measurement)
+- [x] T6 Review follow-ups from gentle-ai and Codex — route: delegated writer (4 files)
 - [ ] T4 gentle-ai v4 adopted when released — blocked: latest is v3.7.0 (2026-09-23)
 - [ ] T5 Block exclusion via gentle-ai #4036 — blocked: issue open, last update 2026-09-12
 
@@ -100,5 +101,18 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   INFO payload codex 10,762, PASS tests. `estimateTokens` moved into `payload.mjs` and
   re-exported by `check.mjs` so the two modules do not import each other.
 
+- RDD over the whole branch `a7d22e3..4e30e43` (raised by the Stop hook): consent granted
+  (pre-granted), reliability lens approved, acknowledged, authority burned (lineage
+  `review-34cdb427a691d176`). Two WARNING: `--home`/`--cwd` without a value crashed, and a
+  relative `model_instructions_file` was not resolved; one SUGGESTION (`tildePath` untested).
+- Codex review (`codex-companion.mjs review --wait --base a7d22e3`, gpt-6-sol): three P2 —
+  `check` ignored `JS_HARNESS_HOME`, project-scoped Claude hooks (`.claude/settings.json`,
+  `settings.local.json`) were not listed, and a project `AGENTS.override.md` was not preferred
+  for Codex.
+- T6 review follow-ups (delegated writer, sonnet): all five fixed test-first. A relative
+  `model_instructions_file` resolves against the `config.toml` directory, as Codex does
+  (`deserialize_config_toml_with_base` in openai/codex `codex-rs/core/src/config/mod.rs`).
+  RED observed per finding; GREEN 36/36; `node bin/check.mjs --home` → usage on stderr, exit 2.
+
 ## Next step
-Codex review of the branch, then the PR. T4 and T5 wait on gentle-ai.
+Open the PR for Sebastián. T4 and T5 wait on gentle-ai.

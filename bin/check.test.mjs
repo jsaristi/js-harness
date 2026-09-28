@@ -134,3 +134,88 @@ test('main passes with a large machine payload when AGENTS.md is within budget',
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- home precedence: --home flag, then env.JS_HARNESS_HOME, then os.homedir() (matches doctor.mjs) ---
+
+/** Runs `main`, capturing everything it printed via console.log/console.error and the exit code. */
+async function runCheck(argv, env) {
+  let output = '';
+  let errOutput = '';
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = (line) => {
+    output += `${line}\n`;
+  };
+  console.error = (line) => {
+    errOutput += `${line}\n`;
+  };
+  try {
+    const code = await main(argv, env);
+    return { code, output, errOutput };
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
+}
+
+test('main resolves home from env.JS_HARNESS_HOME when --home is absent', async () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(40)); // 10 tokens
+
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: home });
+
+    assert.equal(code, 0);
+    assert.match(output, /global CLAUDE\.md +10/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('main prefers --home over env.JS_HARNESS_HOME when both are given', async () => {
+  const dir = makeTmpDir();
+  const flagHome = makeTmpDir();
+  const envHome = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(flagHome, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(flagHome, '.claude', 'CLAUDE.md'), 'a'.repeat(40)); // 10 tokens
+    fs.mkdirSync(path.join(envHome, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(envHome, '.claude', 'CLAUDE.md'), 'a'.repeat(80)); // 20 tokens
+
+    const { code, output } = await runCheck(['--cwd', dir, '--home', flagHome], {
+      JS_HARNESS_CHECK_INNER: '1',
+      JS_HARNESS_HOME: envHome,
+    });
+
+    assert.equal(code, 0);
+    assert.match(output, /global CLAUDE\.md +10/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(flagHome, { recursive: true, force: true });
+    fs.rmSync(envHome, { recursive: true, force: true });
+  }
+});
+
+// --- a flag missing its value, or immediately followed by another flag, is a usage error ---
+
+test('main errors with usage on stderr and exits 2 when --cwd is the last argument', async () => {
+  const { code, errOutput } = await runCheck(['--cwd'], { JS_HARNESS_CHECK_INNER: '1' });
+  assert.equal(code, 2);
+  assert.match(errOutput, /Usage: js-harness check/);
+});
+
+test('main errors with usage on stderr and exits 2 when --home is immediately followed by another flag', async () => {
+  const { code, errOutput } = await runCheck(['--home', '--cwd', '/tmp'], { JS_HARNESS_CHECK_INNER: '1' });
+  assert.equal(code, 2);
+  assert.match(errOutput, /Usage: js-harness check/);
+});
+
+test('main runs no row when args are invalid', async () => {
+  const { output } = await runCheck(['--home'], { JS_HARNESS_CHECK_INNER: '1' });
+  assert.equal(output, '');
+});

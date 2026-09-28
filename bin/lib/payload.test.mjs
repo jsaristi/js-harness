@@ -214,7 +214,11 @@ test('a TOML literal string and a trailing comment are both read', () => {
     write(path.join(home, '.codex', 'config.toml'), "model_instructions_file = 'C:\\Users\\test\\a.md'\n");
     assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, 'C:\\Users\\test\\a.md');
     write(path.join(home, '.codex', 'config.toml'), 'model_instructions_file = "b.md" # engram\n');
-    assert.equal(findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path, 'b.md');
+    // A relative value resolves against <home>/.codex, the directory of the config.toml that defines it.
+    assert.equal(
+      findSource(measurePayload({ home, cwd }).hosts[1], 'model instructions').path,
+      path.resolve(path.join(home, '.codex'), 'b.md'),
+    );
   });
 });
 
@@ -316,5 +320,66 @@ test('memory index slug for a POSIX cwd matches path.resolve with non-alnum char
     const { hosts } = measurePayload({ home, cwd });
     const memory = findSource(hosts[0], 'memory index');
     assert.equal(memory.path, path.join(home, '.claude', 'projects', expectedSlug, 'memory', 'MEMORY.md'));
+  });
+});
+
+// --- Claude hooks: also read project-scoped settings (Codex P2 follow-up) ---
+
+test('Claude hooks are concatenated from user, project and project-local settings, in that order', () => {
+  withFixture((home, cwd) => {
+    write(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ command: 'user-hook' }] }] } }),
+    );
+    write(
+      path.join(cwd, '.claude', 'settings.json'),
+      JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ command: 'project-hook' }] }] } }),
+    );
+    write(
+      path.join(cwd, '.claude', 'settings.local.json'),
+      JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ command: 'local-hook' }] }] } }),
+    );
+    const { hosts } = measurePayload({ home, cwd });
+    assert.deepEqual(hosts[0].hooks, [
+      { event: 'UserPromptSubmit', command: 'user-hook' },
+      { event: 'UserPromptSubmit', command: 'project-hook' },
+      { event: 'UserPromptSubmit', command: 'local-hook' },
+    ]);
+  });
+});
+
+test('missing or malformed project-scoped Claude settings contribute no hooks, without throwing', () => {
+  withFixture((home, cwd) => {
+    write(path.join(cwd, '.claude', 'settings.json'), '{ not json');
+    write(path.join(cwd, '.claude', 'settings.local.json'), '{ not json');
+    assert.doesNotThrow(() => measurePayload({ home, cwd }));
+    const { hosts } = measurePayload({ home, cwd });
+    assert.deepEqual(hosts[0].hooks, []);
+  });
+});
+
+// --- Codex project AGENTS.md prefers AGENTS.override.md, same as the global selection (Codex P2 follow-up) ---
+
+test('Codex project instructions prefer AGENTS.override.md over AGENTS.md in cwd', () => {
+  withFixture((home, cwd) => {
+    write(path.join(cwd, 'AGENTS.md'), 'base project agents');
+    write(path.join(cwd, 'AGENTS.override.md'), 'hh'.repeat(10));
+    const { hosts } = measurePayload({ home, cwd });
+    const projectSource = findSource(hosts[1], 'project AGENTS.md');
+    assert.equal(projectSource.path, path.join(cwd, 'AGENTS.override.md'));
+    assert.equal(projectSource.tokens, estimateTokens('hh'.repeat(10)));
+  });
+});
+
+// --- model_instructions_file resolves relative to the config.toml directory (gentle-ai WARNING follow-up) ---
+
+test('a relative model_instructions_file value resolves against the config.toml directory (<home>/.codex)', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.codex', 'engram-instructions.md'), 'relative-instructions');
+    write(path.join(home, '.codex', 'config.toml'), 'model_instructions_file = "engram-instructions.md"\n');
+    const { hosts } = measurePayload({ home, cwd });
+    const source = findSource(hosts[1], 'model instructions');
+    assert.equal(source.path, path.join(home, '.codex', 'engram-instructions.md'));
+    assert.equal(source.tokens, estimateTokens('relative-instructions'));
   });
 });

@@ -109,6 +109,14 @@ function unescapeTomlBasicString(body) {
   });
 }
 
+/** Resolves Codex's `model_instructions_file` value against the directory of the `config.toml`
+ * that defines it (`<home>/.codex`), the same way Codex's own config loader does
+ * (`deserialize_config_toml_with_base` in openai/codex `codex-rs/core/src/config/mod.rs`). An
+ * absolute value is kept as-is. */
+function resolveModelInstructionsPath(home, value) {
+  return path.isAbsolute(value) ? value : path.resolve(path.join(home, '.codex'), value);
+}
+
 /** Codex's `model_instructions_file` config value: the top-level (before the first `[table]`
  * header) `model_instructions_file` line in `<home>/.codex/config.toml`, as a TOML basic string
  * (unescaped) or literal string (verbatim), with an optional trailing `#` comment. `null` when the
@@ -156,6 +164,18 @@ function totalTokens(sources) {
   return sources.reduce((sum, s) => sum + (s.tokens ?? 0), 0);
 }
 
+/** Claude's context-injecting hook commands, concatenated the same way Claude Code itself merges
+ * settings layers: user (`<home>/.claude/settings.json`), then project (`<cwd>/.claude/settings.json`),
+ * then project-local (`<cwd>/.claude/settings.local.json`). A missing or malformed file contributes
+ * nothing, never throws. */
+function claudeHooks(home, cwd) {
+  return [
+    ...readHooks(path.join(home, '.claude', 'settings.json')),
+    ...readHooks(path.join(cwd, '.claude', 'settings.json')),
+    ...readHooks(path.join(cwd, '.claude', 'settings.local.json')),
+  ];
+}
+
 /** Claude's per-turn sources, in load order: global `CLAUDE.md`, the active output style, the
  * project's `AGENTS.md` and (if present) `CLAUDE.md`, and the auto-memory index. */
 function claudeHost(home, cwd) {
@@ -177,21 +197,25 @@ function claudeHost(home, cwd) {
     host: 'claude',
     sources,
     total: totalTokens(sources),
-    hooks: readHooks(path.join(home, '.claude', 'settings.json')),
+    hooks: claudeHooks(home, cwd),
   };
 }
 
 /** Codex's per-turn sources, in load order: global `AGENTS.md` (or its override), the configured
- * model-instructions file (if set), and the project's `AGENTS.md`. */
+ * model-instructions file (if set), and the project's `AGENTS.md` (or its override). */
 function codexHost(home, cwd) {
   const overridePath = path.join(home, '.codex', 'AGENTS.override.md');
   const globalAgentsPath = fs.existsSync(overridePath) ? overridePath : path.join(home, '.codex', 'AGENTS.md');
   const sources = [source('global AGENTS.md', globalAgentsPath)];
 
   const instructionsFile = modelInstructionsFile(home);
-  if (instructionsFile) sources.push(source('model instructions', instructionsFile));
+  if (instructionsFile) {
+    sources.push(source('model instructions', resolveModelInstructionsPath(home, instructionsFile)));
+  }
 
-  sources.push(source('project AGENTS.md', path.join(cwd, 'AGENTS.md')));
+  const projectOverridePath = path.join(cwd, 'AGENTS.override.md');
+  const projectAgentsPath = fs.existsSync(projectOverridePath) ? projectOverridePath : path.join(cwd, 'AGENTS.md');
+  sources.push(source('project AGENTS.md', projectAgentsPath));
 
   return {
     host: 'codex',
