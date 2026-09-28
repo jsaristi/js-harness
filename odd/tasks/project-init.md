@@ -1,7 +1,8 @@
 # Project init
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
-`feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2)
+`feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e, T3)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -42,7 +43,8 @@ Mode: strict (source: user global config). Runner: `node --test`.
 Forecast: well over 400 authored lines across the seven tasks (T2–T5 alone add a command, a
 manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-to-main`, chosen
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
-1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`feat/project-init-cmd`).
+1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
+b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -65,6 +67,49 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   to the root + sha256), each one it kept and why, and whether it created `.codegraph/`, so T3's
   `uninstall` can restore the repo exactly.
 - Exit codes: 0 done (skips are reported, not failures), 1 not a git repository, 2 usage error.
+
+## T2e design
+- `harness.json` is written last, after the manifest (which already lists it), so a killed run
+  leaves either nothing `init` can trip on or a manifest without `harness.json`, which `init`
+  refuses and `uninstall` (T3) clears.
+- When this run created `.codegraph/` and the manifest that would record it cannot be written (a
+  fresh run's rollback or a codegraph retry), `.codegraph/` is removed too, so nothing unrecorded
+  is left; if that removal fails it is named in "could not remove".
+- The manifest's temporary file is created exclusively (`wx`, a unique name ending in `.tmp`),
+  never through an existing file or link, then renamed over the manifest.
+- The pre-commit hook may live in the git dir outside the working tree (a linked worktree, a
+  submodule): containment is judged against the real working tree *and* the real git dir and
+  common git dir (`git rev-parse --git-dir` / `--git-common-dir`). A file in a git dir outside
+  the working tree is recorded by its absolute forward-slashed path with `gitDir: true`. Only
+  symlinks below the real base (working tree or git dir) make a hook path occupied, not links
+  above it (macOS `/tmp`, a linked drive).
+- The manifest gains `dirs`: the shallowest directory of each chain this run created (the hooks
+  directory, say), in the same path shape as `files`, so `uninstall` can remove it when empty.
+  The manifest's own directory is not listed; `uninstall` removes it when empty.
+- An outside hook's reason names a link when a link, not `core.hooksPath`, sends it outside.
+- Tests that run real `git` isolate it from the host's global and system config
+  (`GIT_CONFIG_GLOBAL` pointed at an empty file, `GIT_CONFIG_NOSYSTEM=1`), and the three
+  "could not remove" wordings of a failed `init` are tested.
+
+## T3 design
+- Scope by location (Sebastián, 2026-09-28; roadmap, Decided: "Command scope"): `js-harness
+  uninstall [--cwd <dir>] [--home <dir>] [--global]`. Inside a git repository whose top-level has
+  `harness.json` or a project manifest, it undoes the project; anywhere else, or with `--global`,
+  it undoes the machine install exactly as today. Flags are strict like `init`'s: an unknown flag,
+  a missing value, or `--global` with `--cwd` is a usage error (exit 2).
+- Project undo, from the manifest at `git rev-parse --git-path js-harness/manifest.json`: each
+  file in `files` is removed when its content still hashes to the recorded sha256 (CRLF read as
+  LF, since git may rewrite line endings on checkout), kept and reported when changed, reported as
+  already gone when absent, and never followed through a symlink. Each directory in `dirs` is
+  removed when empty. `.codegraph/` is removed when `codegraph.createdDir` is true (never
+  `codegraph uninit`: user rule). `kept` entries were never written by `init` and are left
+  alone. Last, the manifest and its directory when empty.
+- If any removal fails, the manifest stays so a second `uninstall` finishes the job, and the exit
+  is 1. A project with `harness.json` but no manifest in this clone (a fresh clone of an
+  initialized project) writes nothing and exits 1: those files are committed, so git removes
+  them, and `--global` reaches the machine install.
+- Exit codes: 0 done (kept files are reported, not failures), 1 a failed removal or no manifest,
+  2 usage error.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -270,10 +315,14 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   slice, which is also the PR candidate: native review lineage review-a95098352b5dd5b5 (range
   `222110f..dc49d6d`, one lens) approved and acknowledged, with three WARNING and one SUGGESTION,
   all advisory. Codex on the same range: no P1, two P2. All six go to T2e.
+- 2026-09-28: slice 2 merged as b22ecc9 (`jsaristi/js-harness#9`); slice 3 starts on
+  `feat/project-uninstall` from it. Sebastián chose how `uninstall` picks its scope: by location,
+  like npm, with `--global` for the machine (roadmap, Decided: "Command scope"). T2e and T3
+  designed above; T2e goes first because T3 reads the manifest shape it settles.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Sebastián merges slice 2's PR; then slice 3 on a new branch from `main`: T3 (`uninstall` in a
-project, from the manifest T2 writes) together with T2e, which changes the same manifest.
+T2e by a delegated writer (strict TDD), committed and reviewed (gentle-ai, then Codex); then T3 the
+same way; then slice 3's PR.
