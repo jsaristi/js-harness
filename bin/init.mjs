@@ -82,18 +82,16 @@ function logAlreadyInitialized(result) {
 }
 
 /** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
- * overclaiming "nothing was left behind" when either a file could not be removed or `.codegraph/`
- * was legitimately created by this run and is deliberately never rolled back (T2c
- * R3-nothing-left-behind-overclaims). */
+ * overclaiming "nothing was left behind" when something could not be removed (T2c
+ * R3-nothing-left-behind-overclaims). `.codegraph/` is now part of the same rollback as everything
+ * else whenever this run is the one that created it (T2e item 2), so a failure to remove it shows
+ * up in `notRemoved` exactly like any other path — no separate clause for it. The one case where
+ * `.codegraph/` is deliberately left untouched (a codegraph retry whose directory already existed,
+ * still truthfully owned by the older, unrewritten manifest) is not a removal failure at all, so it
+ * never reaches `notRemoved` and needs no disclosure here. */
 function cleanupClause(err) {
-  const hasNotRemoved = err.notRemoved.length > 0;
-  const hasCodegraph = err.codegraphDirLeftBehind === true;
-  const codegraphNote = '.codegraph/ (created by codegraph init, ignored by git)';
-
-  if (!hasNotRemoved && !hasCodegraph) return 'nothing was left behind';
-  if (hasNotRemoved && !hasCodegraph) return `could not remove: ${err.notRemoved.join(', ')}`;
-  if (!hasNotRemoved && hasCodegraph) return `removed everything it wrote except ${codegraphNote}`;
-  return `could not remove: ${err.notRemoved.join(', ')}; ${codegraphNote} was also left behind`;
+  if (err.notRemoved.length === 0) return 'nothing was left behind';
+  return `could not remove: ${err.notRemoved.join(', ')}`;
 }
 
 export async function initMain(argv, env = process.env, deps = {}) {

@@ -319,6 +319,31 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   `feat/project-uninstall` from it. Sebastián chose how `uninstall` picks its scope: by location,
   like npm, with `--global` for the machine (roadmap, Decided: "Command scope"). T2e and T3
   designed above; T2e goes first because T3 reads the manifest shape it settles.
+- 2026-09-28: T2e done by a delegated writer (4 files: `bin/lib/project.mjs`, `bin/init.mjs` and
+  their tests; +697/−141). New: `gitDirs`, containment against the working tree and both git
+  dirs, `manifestEntry` (repo-relative, or absolute with `gitDir: true`), `dirs` in the
+  manifest, symlink hops counted only at or below the containing base, the link wording, a unique
+  `wx` temp file, `harness.json` written after the manifest, `.codegraph/` rolled back when
+  this run created it and its manifest never landed, and an injectable `rm` so each "could not
+  remove" wording is tested; `InitWriteError.codegraphDirLeftBehind` is gone, folded into
+  `notRemoved`. TDD was not followed by the writer on its first pass (it implemented, then ran
+  the old tests), so RED was taken by the parent: the new tests against the old engine (plus a
+  `gitDirs` stub so the import resolves) → 10 failures, among them the worktree, `gitDirs`, the
+  three wordings and the `.codegraph/` rollbacks; the writer's second pass added the write-order
+  and `wx` tests, RED against the old engine too (3 failures; its "rolls back everything when the
+  harness.json write throws" test also passes on the old code, where that write came first). GREEN:
+  `node --test` → `tests 369 / pass 364 / fail 0 / skipped 5`, re-run by the parent; `npm run
+  check` PASS. Item 5 (links above the base) rests on code reading: `git rev-parse
+  --show-toplevel` already resolves those links here and this account cannot create symlinks.
+  Real run in a scratch repo with a linked worktree (real git, real codegraph): `init --cwd <wt>`
+  → the hook written at `<main>/.git/hooks/pre-commit` and recorded absolute with `gitDir:
+  true`, the manifest at `<main>/.git/worktrees/wt/js-harness/manifest.json`, exit 0.
+  The first commit attempt was blocked by the pre-commit gate: inside a hook git exports
+  `GIT_INDEX_FILE` and friends, and the worktree test's `git worktree add` inherited them
+  (`Unable to create '<tmp>/.git/index.lock'`). RED outside the hook: `GIT_INDEX_FILE=.git/index
+  node --test bin/lib/project.test.mjs` → 1 failure (that test). Fixed in the parent: both test
+  files drop every inherited `GIT_*` variable before isolating the config; GREEN with
+  `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 57 / pass 54 / skipped 3`.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
