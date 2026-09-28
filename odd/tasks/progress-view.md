@@ -199,5 +199,5 @@ unpushed docs commits), so the PR carries them too.
   for an edge that rare is not worth a new slice; left as a known follow-up. Codex (`gpt-6-sol`,
   `xhigh`): no actionable regression.
 - Known follow-up: R3-001 above.
-- Next: push `feat/progress-view`, open the PR (it carries the two `docs/codex-review` commits),
-  merge after Sebastián's go-ahead, then tick "Reviewed and merged" in the roadmap checklist.
+- 2026-09-27: merged to `main` via `jsaristi/js-harness#6` (merge commit `b071bff`); "Reviewed and merged"
+  ticked in the roadmap checklist. Feature closed; the next phase is F2 Context diet.
