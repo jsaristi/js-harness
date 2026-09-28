@@ -15,7 +15,7 @@
     "test": "node --test",
     "e2e": "node scripts/e2e.mjs",
     "sandbox": "node scripts/sandbox.mjs",
-    "prepare": "git config core.hooksPath .githooks || exit 0"
+    "hooks": "git config core.hooksPath .githooks"
   },
   "engines": {
     "node": ">=22"
