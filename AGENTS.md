@@ -46,7 +46,9 @@ Review is not one of them: he has pre-granted gentle-ai review consent for every
 so when `gentle-ai review start` returns its consent envelope, run the `granted` invocation
 without asking. The review itself always runs; only the question is skipped, because his answer
 is always yes and the question only stalls the work. If the envelope has no `granted` choice or
-does not parse, ask him instead.
+does not parse, ask him instead. After gentle-ai approves a slice with code, Codex reviews the
+same range with the Codex plugin's `codex-companion.mjs review --wait --base <boundary>`; treat
+its findings like gentle-ai's. If Codex rejects its model, report that and go on without it.
 
 Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain-language summary and close with a recap of
@@ -56,7 +58,10 @@ A session holds one task, because the conversation is lost on a new session or a
 only files survive. So every decision made in the conversation is written to the roadmap or the
 feature document and committed in the same session. Tell him when to cut: a new session when a
 feature closes, a PR merges or a phase starts; `/compact` with what to keep when a task is still
-open but the conversation has grown long.
+open but the conversation has grown long. End every reply with the next prompt he should send, as
+plain quoted text (a code block may not show in the app): the next step in this chat, and when
+cutting, the opening prompt for the new session or the full `/compact` command. He never writes
+the handoff himself.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.
