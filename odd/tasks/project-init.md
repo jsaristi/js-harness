@@ -136,7 +136,7 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   R3-realish-dangling-symlink-escape); `createdDir` is observed on a failed codegraph run too, and
   a run that made `.codegraph/` can be retried (Codex P2); manifest writes are atomic, tmp then
   rename (Codex P2) — route: the same delegated writer
-- [ ] T2e Follow-ups from the whole-slice reviews, left for after slice 2 (no fourth round):
+- [x] T2e Follow-ups from the whole-slice reviews, left for after slice 2 (no fourth round):
   write `harness.json` last, so a killed run can be resumed by running `init` again
   (R3-harness-json-written-before-manifest); keep `.codegraph/` ownership when a manifest write
   fails, on a fresh run or a retry (R3-retry-manifest-failure-loses-codegraph-ownership, Codex
@@ -150,6 +150,13 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   well); count only links below the real root as occupying the hook
   (R3-realish-flags-symlinks-above-repo-root) — route: delegated writer, likely with T3, which
   reads the same manifest
+- [ ] T2f Accepted review follow-ups on T2e: on `EEXIST` the manifest temp write must not delete
+  the entry it did not create (Codex P2, R3-wx-tmp-cleanup-deletes-foreign-file); record the
+  shallowest missing directory within the containing git dir, not only within the working tree
+  (Codex P2); count symlink hops from the first segment at or below a base, not on exact string
+  equality with it (R3-realish-base-detection-equality-only); test a kept hook and a created hooks
+  directory in an outside git dir, and a submodule (R3-gitdir-occupied-and-submodule-untested) —
+  route: delegated writer, the one that wrote T2e
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -344,10 +351,19 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   node --test bin/lib/project.test.mjs` → 1 failure (that test). Fixed in the parent: both test
   files drop every inherited `GIT_*` variable before isolating the config; GREEN with
   `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 57 / pass 54 / skipped 3`.
+- 2026-09-28: T2e committed as 6d3e0a0. Assessed (`--base-ref b22ecc9 --committed-only`): risk
+  `medium`, 935 lines, `review_due: true` (`slice_budget_reached`). Native review lineage
+  review-42da9bfd954b4742: consent granted (pre-granted), one lens (reliability), approved and
+  acknowledged (authority burned), with two WARNING (R3-wx-tmp-cleanup-deletes-foreign-file: on
+  `EEXIST` the catch removes the file already at the temp path, and the test never checks it
+  survives; R3-realish-base-detection-equality-only: hop counting starts only on exact equality
+  with a base, so a link that lands below a base, or a case difference on win32, skips it) and one
+  SUGGESTION (R3-gitdir-occupied-and-submodule-untested). Codex (`--base b22ecc9`): P2 the same
+  temp cleanup; P2 in an outside git dir `shallowestMissingAncestor` stops at the working-tree
+  root, so a created chain is recorded by its deepest directory only. All accepted as T2f.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T2e by a delegated writer (strict TDD), committed and reviewed (gentle-ai, then Codex); then T3 the
-same way; then slice 3's PR.
+T2f by the writer that did T2e, committed and reviewed; then T3 the same way; then slice 3's PR.
