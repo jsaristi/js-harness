@@ -90,10 +90,22 @@ T2's first commit. T1 is small and ships as the first slice.
   0.1.0`, exit 0, and the installed `js-harness progress` runs. Pending to close T1: after the
   merge, `npm i -g github:jsaristi/js-harness` with no flag against GitHub, which also moves the
   global to the merged `main`.
+- 2026-09-28: T1 committed as 1c62ea4. Assessed (`--base-ref 36f2cee --committed-only`): risk
+  `medium` (`executable_change` on `AGENTS.md`), 121 changed lines, `review_due: false`
+  (`under_budget`); reviewed anyway because the slice ships alone as a PR. Native review lineage
+  review-687e4003cf557557: consent granted (pre-granted), one lens (reliability), approved and
+  acknowledged. Two advisory findings, non-blocking, carried as later work: R3-hook-wiring-now-opt-in
+  (WARNING: a fresh clone gets no pre-commit gate until `npm run hooks`, and nothing reports it —
+  T2's `init` writes the pre-commit gate, and running it on this repo closes the gap) and
+  R3-install-script-list-incomplete (SUGGESTION: add the legacy `prepublish` to the test's list;
+  folded into T2's first commit). Codex review (`codex-companion.mjs review --wait --base 36f2cee`):
+  the first run could not assess (process creation denied in its sandbox); the retry found "no
+  actionable defects", comparing the base and head git objects directly with commands still
+  denied, so it did not rerun the tests.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Review the T1 commit, open the first slice's PR, and ask the chain strategy for T2–T7; after the
-merge, reinstall the global from GitHub with no flag and check T1 off.
+Merge the first slice's PR (T1), then reinstall the global from GitHub with no flag and check T1
+off; the chain strategy for T2–T7 is asked before T2's first commit.
