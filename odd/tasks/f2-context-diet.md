@@ -67,14 +67,24 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   non-trivial files)
 - [ ] T2 `check` prints the payload report and takes `--home`; the budget row is unchanged —
   route: inline (one file plus its test, once T1 fixes the shape)
-- [ ] T3 codegraph prompt hook measured with and without, recorded in the roadmap — route: inline
+- [x] T3 codegraph prompt hook measured with and without, recorded in the roadmap — route: inline
   (measurement)
 - [ ] T4 gentle-ai v4 adopted when released — blocked: latest is v3.7.0 (2026-09-23)
 - [ ] T5 Block exclusion via gentle-ai #4036 — blocked: issue open, last update 2026-09-12
 
 ## Progress
 - 2026-09-27: explored `bin/check.mjs`, both hosts' instruction files and hook configs; document
-  created.
+  created (`5291598`).
+- T3: replayed the 55 user prompts in this project's Claude transcripts through `codegraph.cmd
+  prompt-hook` (codegraph 1.6.0, today's index, `{prompt, cwd}` on stdin). Without the hook: 0
+  tokens. With it: 33 of 55 prompts (60%) get an injection; 17 get a symbol pointer (~130–520
+  tokens), 16 get a full exploration of ~4.0k tokens each (16,223 chars) — 65.8k tokens in all,
+  ~1.2k per prompt on average, median 170 when it fires. The full explorations include prompts
+  with no code intent (e.g. a request to add a line to `AGENTS.md` pulled 40 symbols from 4
+  files). Each injection stays in the conversation, so it is paid again on every later turn
+  (cached). Whether to keep, narrow or drop the hook is Sebastián's call (roadmap open
+  decision 5); whether it improves the work is an F5 eval question. Script:
+  scratchpad `cg.mjs`, not committed (it reads private transcripts).
 
 ## Next step
 T1.
