@@ -112,7 +112,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Reviewed and merged (`jsaristi/js-harness#6`)
 
 ### F2 Context diet
-- [ ] The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`)
+- [x] The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`)
 - [x] codegraph prompt hook measured with and without
 - [ ] gentle-ai v4 adopted when released
 - [ ] Block exclusion via gentle-ai #4036, if it ships
