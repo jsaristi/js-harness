@@ -2,9 +2,12 @@
 // pre-commit gate), runs `codegraph init`, and records everything in a project manifest so T3's
 // `uninstall` can restore the repo exactly — see odd/tasks/project-init.md, "T2 design". Like
 // manifest.mjs's install/sync engine, this stays pure-ish over injectable `deps`
-// (`spawn`/`platform`/`writeFile`/`rm`) so tests never touch a real home, a real `codegraph`, or
-// this repo itself — `rm` in particular lets a test make one specific removal fail (a rollback, or
-// the best-effort `.codegraph/` cleanup) without any OS-specific trick to reproduce it.
+// (`spawn`/`platform`/`writeFile`/`rm`/`open`/`write`/`close`) so tests never touch a real home, a
+// real `codegraph`, or this repo itself — `rm` in particular lets a test make one specific removal
+// fail (a rollback, or the best-effort `.codegraph/` cleanup) without any OS-specific trick to
+// reproduce it. `open`/`write`/`close` are the manifest's own exclusive-create write, injected
+// separately from the general `writeFile` so a test (or `writeManifestAtomic` itself) can tell the
+// exclusive create failing apart from something failing after it succeeded — see there.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -366,21 +369,47 @@ function initCodegraph(root, spawn, platform) {
  * failure never corrupts or truncates whatever was there before. `target` itself is never touched
  * directly — matters most for the codegraph-retry update, which must not lose an existing, valid
  * manifest just because this write failed partway through (T2d Codex P2 atomic manifest writes).
- * The injected `writeFile` is called as `writeFile(path, content, options)`, options included, so
- * it can pass `flag: 'wx'` through to `fs.writeFileSync` (or an injected stand-in) exactly like a
- * direct call would.
  *
- * The `.tmp` file is removed (best-effort) only when *this call* is the one that created it — i.e.
- * only when the exclusive create itself succeeded and a later step (the rename) is what failed.
- * When the exclusive create is what fails (`EEXIST` or anything else), nothing at `tmp` was written
- * by this call, so nothing here is this call's to remove: whatever already sits there — someone
- * else's file, a link, leftover content from an unrelated process — is left exactly as it was
- * (T2f item 1, Codex P2, R3-wx-tmp-cleanup-deletes-foreign-file: the old code removed `tmp`
- * unconditionally on any failure, silently deleting a file it never created). */
-function writeManifestAtomic(target, data, writeFile) {
+ * `deps` (`{ open, write, close }`, each independently injectable, defaulting to real
+ * `fs.openSync(path, 'wx')` / `fs.writeSync(fd, content)` / `fs.closeSync(fd)`) is split into these
+ * three steps, rather than one opaque `writeFile(path, content, options)` call, specifically so
+ * this function can tell "the exclusive create itself never happened" (`open` throws — `EEXIST` or
+ * anything else; `tmp` is not ours to touch) apart from "the create succeeded, and something *after*
+ * it failed" (`write`, `close`, or the rename below; `tmp` exists and is this call's own file, so
+ * it is removed). A single combined call (the old `writeFile(tmp, content, {flag:'wx',...})` shape)
+ * cannot make that distinction from the outside — whatever it does internally, its caller only ever
+ * sees "it threw" or "it didn't" (T2g R3-001, Codex P2: moving that one call outside the try/catch
+ * correctly stopped deleting a foreign file on `EEXIST`, per T2f item 1, but then left this call's
+ * *own* just-created file leaking on a write failure that happens after the open — e.g. `ENOSPC`,
+ * `EIO` partway through filling it). Splitting `open` out as its own step means only *its* own
+ * failure is ambiguous-ownership territory; every failure after it succeeds is unambiguously this
+ * call's to clean up. */
+function writeManifestAtomic(target, data, deps = {}) {
+  const open = deps.open ?? ((p) => fs.openSync(p, 'wx'));
+  const write = deps.write ?? ((fd, content) => fs.writeSync(fd, content));
+  const close = deps.close ?? ((fd) => fs.closeSync(fd));
+
   const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const content = JSON.stringify(data, null, 2) + '\n';
-  writeFile(tmp, content, { encoding: 'utf8', flag: 'wx' }); // if this throws, tmp is not ours to touch
+
+  const fd = open(tmp); // if this throws, nothing was created by this call — tmp is not ours to touch
+  try {
+    write(fd, content);
+    close(fd);
+  } catch (err) {
+    try {
+      close(fd);
+    } catch {
+      // Best-effort; `fd` may already be closed or invalid depending on how `write` failed.
+    }
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Best-effort cleanup; `err` is still the one thrown below regardless.
+    }
+    throw err;
+  }
+
   try {
     fs.renameSync(tmp, target);
   } catch (err) {
@@ -438,22 +467,36 @@ export class InitWriteError extends Error {
  * Used so a rollback can remove exactly the directory chain this run made, never a directory that
  * predates it (e.g. `.git/hooks` itself must never be removed).
  *
- * `base` must be whichever real base actually contains `dir` — the working tree for an ordinary
- * hooks path, but the git dir or common git dir for one outside it (a worktree, a submodule) — never
- * always the working tree root: bounding a multi-level-missing chain by a base that does not
- * actually contain it stops the climb before it starts (the `while` condition is false from its very
- * first check), so only the single deepest directory is ever recorded, leaking its newly created
- * parents on rollback or `uninstall` (T2f item 2, Codex P2). */
+ * `base` must be whichever real (`fs.realpathSync`-resolved) base actually contains `dir` — the
+ * working tree for an ordinary hooks path, but the git dir or common git dir for one outside it (a
+ * worktree, a submodule) — never always the working tree root (T2f item 2, Codex P2): bounding a
+ * multi-level-missing chain by a base that does not actually contain it must stop the climb before
+ * it starts, recording only the single deepest directory rather than leaking its newly created
+ * parents on rollback or `uninstall`.
+ *
+ * The climb itself only ever asks "does this ancestor already exist" (`fs.existsSync`, which on
+ * Windows resolves case-insensitively — a missing segment can never *be* a symlink, so no
+ * containment question can arise while climbing through it); only once it reaches an ancestor that
+ * does exist is `base` containment checked at all, via `isWithinBase` against that existing
+ * ancestor's own real, resolved form. Comparing `base` (already real) against `dir` (still
+ * lexical — the unresolved `core.hooksPath`, or the default) with a plain case-sensitive
+ * `startsWith`, as this used to, silently stops the climb on the very first check whenever the two
+ * disagree on case or on an 8.3 short name — which can happen for an *ordinary* working-tree hooks
+ * path too, not just one outside it (T2g R3-002, a regression from T2f: a symlinked root, a
+ * differently-cased path, or a Windows TEMP directory's short name all reproduce it). When the
+ * climb's existing boundary genuinely is not within `base` at all, this falls back to reporting just
+ * the leaf (`dir` itself) uncombined — the same degenerate result the old code returned when its very
+ * first containment check failed — rather than reporting nothing, so a caller still tracks at least
+ * that one directory for rollback. */
 function shallowestMissingAncestor(dir, base) {
   if (fs.existsSync(dir)) return null;
-  let current = path.resolve(dir);
-  const stop = path.resolve(base);
-  let shallowest = current;
-  while (current !== stop && current.startsWith(stop + path.sep) && !fs.existsSync(path.dirname(current))) {
+  const leaf = path.resolve(dir);
+  let current = leaf;
+  while (current !== path.dirname(current) && !fs.existsSync(path.dirname(current))) {
     current = path.dirname(current);
-    shallowest = current;
   }
-  return shallowest;
+  const realExistingParent = safeRealpath(path.dirname(current));
+  return isWithinBase(base, realExistingParent) ? current : leaf;
 }
 
 /** Creates `dir` (recursively) and, when that actually creates new directories, records the
@@ -518,7 +561,7 @@ function rollback(root, createdPaths, createdDirs, rm = fs.rmSync) {
  * created is removed (best-effort — see `InitWriteError`), `.codegraph/` included when this run is
  * the one that created it (T2e item 2): since the manifest that would have recorded owning it never
  * reaches disk either, nothing is left unrecorded. */
-function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath) {
+function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps) {
   const createdPaths = [];
   const createdDirs = [];
   const reportedDirs = [];
@@ -649,7 +692,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // bookkeeping, not a project file, and `uninstall` (T3) removes it separately, last.
     mkdirTracked(path.dirname(manifestFilePath), root, createdDirs);
     createdPaths.push(manifestFilePath);
-    writeManifestAtomic(manifestFilePath, manifest, writeFile);
+    writeManifestAtomic(manifestFilePath, manifest, manifestDeps);
 
     // harness.json: written last, only once the manifest that already lists it is safely on disk
     // (T2e item 1). A failure here rolls back everything, the manifest included.
@@ -687,7 +730,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
  * `createdDir: true` from an earlier failed run), that older manifest still truthfully owns it —
  * this retry's failed rewrite never touched it, so removing `.codegraph/` here would make that
  * still-valid record lie about what is actually on disk. */
-function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile, rm) {
+function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, rm, manifestDeps) {
   let existingVersion = null;
   try {
     existingVersion = JSON.parse(fs.readFileSync(harnessJsonPath, 'utf8'))?.version ?? null;
@@ -712,7 +755,7 @@ function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, plat
       const { manifest: codegraphManifest, reason } = initCodegraph(root, spawn, platform);
       manifest.codegraph = codegraphManifest;
       try {
-        writeManifestAtomic(manifestFilePath, manifest, writeFile);
+        writeManifestAtomic(manifestFilePath, manifest, manifestDeps);
       } catch (err) {
         const notRemoved = [];
         if (!codegraphDirExistedBeforeRetry) {
@@ -756,6 +799,10 @@ export function initProject(cwd, version, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const rm = deps.rm ?? fs.rmSync;
+  // The manifest's own exclusive-create write is injected separately from the general `writeFile`
+  // (used for AGENTS.md, the hook, and harness.json): see `writeManifestAtomic` for why it needs its
+  // open/write/close steps distinguishable rather than one opaque call (T2g R3-001).
+  const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
 
   if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
 
@@ -769,7 +816,7 @@ export function initProject(cwd, version, deps = {}) {
   // initialized" rather than silently written through (T2d item 1).
   const harnessJsonPath = path.join(root, 'harness.json');
   if (isOccupied(harnessJsonPath)) {
-    return alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, writeFile, rm);
+    return alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, platform, rm, manifestDeps);
   }
 
   // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: a manifest surviving without
@@ -781,5 +828,5 @@ export function initProject(cwd, version, deps = {}) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 
-  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath);
+  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps);
 }

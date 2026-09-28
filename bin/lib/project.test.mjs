@@ -80,6 +80,10 @@ function makeSpawn(codegraphResult = { status: 0, stdout: '', stderr: '' }) {
   return spawn;
 }
 
+// T2e item 3: the manifest's temp file has a unique name (`<target>.<pid>.<random>.tmp`), not a
+// fixed `<target>.tmp` — every fault-injecting `open` below matches on that looser shape.
+const isManifestTmp = (target) => target.includes('manifest.json.') && target.endsWith('.tmp');
+
 // --- not a git repository ---
 
 test('initProject outside a git repository writes nothing and reports notGitRepo', () => {
@@ -168,8 +172,12 @@ test('initProject writes harness.json last, after the manifest\'s temp file, amo
       writeCalls.push(target);
       fs.writeFileSync(target, content, options);
     };
+    const open = (tmp) => {
+      writeCalls.push(tmp);
+      return fs.openSync(tmp, 'wx');
+    };
 
-    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile, open });
 
     assert.equal(result.code, 0);
     assert.ok(writeCalls.length >= 3, `expected at least 3 writes, got ${writeCalls.length}`);
@@ -657,24 +665,19 @@ test('initProject rolls back everything, including a directory it created, when 
   }
 });
 
-// T2e item 3: the manifest's temp file now has a unique name (`<target>.<pid>.<random>.tmp`), not
-// a fixed `<target>.tmp` — every fault-injecting `writeFile` below matches on that looser shape.
-const isManifestTmp = (target) => target.includes('manifest.json.') && target.endsWith('.tmp');
-
-test('initProject creates the manifest temp file exclusively (flag: wx) with a unique <pid>.<hex> name, never reused across runs', () => {
+test('initProject creates the manifest temp file exclusively with a unique <pid>.<hex> name, never reused across runs', () => {
   const root = makeTmpRepo();
   try {
-    const tmpCalls = [];
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) tmpCalls.push({ target, options });
-      fs.writeFileSync(target, content, options);
+    const opens = [];
+    const open = (tmp) => {
+      opens.push(tmp);
+      return fs.openSync(tmp, 'wx');
     };
 
-    const first = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
     assert.equal(first.code, 0);
-    assert.equal(tmpCalls.length, 1);
-    assert.deepEqual(tmpCalls[0].options, { encoding: 'utf8', flag: 'wx' });
-    const tmpName = path.basename(tmpCalls[0].target);
+    assert.equal(opens.length, 1);
+    const tmpName = path.basename(opens[0]);
     assert.match(tmpName, new RegExp(`^manifest\\.json\\.${process.pid}\\.[0-9a-f]+\\.tmp$`));
 
     // A second run (the codegraph retry path) writes the manifest again, exclusively, under a
@@ -690,18 +693,17 @@ test('initProject creates the manifest temp file exclusively (flag: wx) with a u
     manifestOnDisk.codegraph = { createdDir: false, status: 'failed' };
     fs.writeFileSync(first.manifestPath, JSON.stringify(manifestOnDisk, null, 2) + '\n', 'utf8');
 
-    const second = initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', writeFile });
+    const second = initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
     assert.equal(second.code, 0);
-    assert.equal(tmpCalls.length, 2);
-    assert.deepEqual(tmpCalls[1].options, { encoding: 'utf8', flag: 'wx' });
-    assert.notEqual(tmpCalls[0].target, tmpCalls[1].target);
+    assert.equal(opens.length, 2);
+    assert.notEqual(opens[0], opens[1]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-// T2e item 3: `flag: 'wx'` means the temp file is always a brand-new file — a real
-// `fs.writeFileSync` (via an injected `writeFile` that just delegates to it, no fault of its own)
+// T2e item 3: `flag: 'wx'` means the temp file is always a brand-new file — the real
+// `fs.openSync(path, 'wx')` (via an injected `open` that just delegates to it, no fault of its own)
 // refuses to open a path that already exists, rather than silently overwriting whatever was there.
 test('initProject fails, rather than overwrites, when something already sits at the manifest temp path', () => {
   const root = makeTmpRepo();
@@ -711,23 +713,20 @@ test('initProject fails, rather than overwrites, when something already sits at 
     // `writeManifestAtomic`'s own foreign-file handling, not the surrounding directory rollback.
     fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
 
-    let intercepted = false;
     let tmpPathUsed = null;
     const foreignContent = 'not js-harness content';
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target) && !intercepted) {
-        intercepted = true;
-        tmpPathUsed = target;
-        // Pre-create the exact path this run is about to use for its manifest .tmp file, holding
-        // content that must never be silently replaced or removed.
-        fs.writeFileSync(target, foreignContent, 'utf8');
-      }
-      fs.writeFileSync(target, content, options); // delegates to the real fs call either way
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      // Pre-create the exact path this run is about to use for its manifest .tmp file, holding
+      // content that must never be silently replaced or removed — then let the real exclusive open
+      // genuinely fail with EEXIST, the same way it would for any other foreign file.
+      fs.writeFileSync(tmp, foreignContent, 'utf8');
+      return fs.openSync(tmp, 'wx');
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -739,8 +738,8 @@ test('initProject fails, rather than overwrites, when something already sits at 
     assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
     assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'manifest.json')), false);
     // T2f item 1 (R3-wx-tmp-cleanup-deletes-foreign-file, Codex P2): this write never created the
-    // foreign file at the temp path (the `wx` create itself is what failed), so it must not be the
-    // one to remove it either — the pre-existing content survives byte-identical.
+    // foreign file at the temp path (the exclusive open itself is what failed), so it must not be
+    // the one to remove it either — the pre-existing content survives byte-identical.
     assert.ok(tmpPathUsed, 'expected to have captured the temp path this run tried to use');
     assert.ok(fs.existsSync(tmpPathUsed), 'expected the foreign file at the temp path to survive');
     assert.equal(fs.readFileSync(tmpPathUsed, 'utf8'), foreignContent);
@@ -749,15 +748,15 @@ test('initProject fails, rather than overwrites, when something already sits at 
   }
 });
 
-// T2f item 1: a successfully-created temp file (the exclusive `wx` create itself succeeds) *is*
-// this write's own responsibility — if the later rename fails, that temp file must be cleaned up.
+// T2f item 1: a successfully-created temp file (the exclusive open itself succeeds) *is* this
+// write's own responsibility — if the later rename fails, that temp file must be cleaned up.
 test('initProject removes its own temp file when the rename after a successful exclusive create fails', () => {
   const root = makeTmpRepo();
   try {
     let tmpPathUsed = null;
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) tmpPathUsed = target;
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      return fs.openSync(tmp, 'wx');
     };
     const originalRename = fs.renameSync;
     fs.renameSync = (from, to) => {
@@ -767,7 +766,7 @@ test('initProject removes its own temp file when the rename after a successful e
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -786,17 +785,54 @@ test('initProject removes its own temp file when the rename after a successful e
   }
 });
 
-test('initProject rolls back a failed manifest write, including .codegraph it created this run, and reports what could not be removed', () => {
+// T2g R3-001, Codex P2, a regression from T2f: moving the exclusive-create write outside the
+// try/catch (so an `EEXIST` failure never deletes a foreign file — the test above) correctly left
+// a *failed* create's non-existent tmp alone, but also left a *successful* create's own tmp leaking
+// when the failure happens later, filling it (ENOSPC, EIO) — nothing removed it, since the whole
+// open+write+close was one opaque call from the outside. Splitting `open` from `write` (see
+// `writeManifestAtomic`) lets this be told apart from the EEXIST case above: the open here really
+// does succeed (the real `fs.openSync(tmp, 'wx')` genuinely creates the file), so a failure in the
+// injected `write` step afterward is unambiguously this call's own file to clean up.
+test('initProject removes its own temp file when the write itself fails after a successful exclusive create', () => {
   const root = makeTmpRepo();
   try {
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('ENOSPC: no space left on device');
-      fs.writeFileSync(target, content, options);
+    let tmpPathUsed = null;
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      return fs.openSync(tmp, 'wx'); // the exclusive create really happens — this call owns tmp
+    };
+    const write = () => {
+      throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, write });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /ENOSPC/);
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run created');
+    assert.equal(fs.existsSync(tmpPathUsed), false);
+    assert.deepEqual(caught.notRemoved, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back a failed manifest write, including .codegraph it created this run, and reports what could not be removed', () => {
+  const root = makeTmpRepo();
+  try {
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -826,9 +862,8 @@ test('initProject rolls back a failed manifest write, including .codegraph it cr
 test('initProject reports both an ordinary removal failure and a failed .codegraph removal', () => {
   const root = makeTmpRepo();
   try {
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('ENOSPC: no space left on device');
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
     };
     const rm = (target, options) => {
       if (target.endsWith('AGENTS.md') || target.endsWith('.codegraph')) {
@@ -839,7 +874,7 @@ test('initProject reports both an ordinary removal failure and a failed .codegra
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile, rm });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, rm });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -860,9 +895,8 @@ test('initProject reports only the ordinary removal failure when .codegraph neve
   const root = makeTmpRepo();
   try {
     fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('ENOSPC: no space left on device');
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
     };
     const rm = (target, options) => {
       if (target.endsWith('AGENTS.md')) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
@@ -871,7 +905,7 @@ test('initProject reports only the ordinary removal failure when .codegraph neve
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile, rm });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, rm });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -996,14 +1030,13 @@ test('initProject throws InitWriteError when the codegraph-retry manifest update
     const originalBytes = fs.readFileSync(first.manifestPath, 'utf8');
 
     const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' }); // creates .codegraph on success
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('EACCES: permission denied');
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -1049,14 +1082,13 @@ test('initProject leaves .codegraph alone when the codegraph-retry manifest upda
     assert.ok(fs.existsSync(path.join(root, '.codegraph')));
 
     const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' });
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('EACCES: permission denied');
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -1271,13 +1303,12 @@ test('initProject rolls back the whole created directory chain in an outside git
     const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
     assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
 
-    const writeFile = (target, content, options) => {
-      if (isManifestTmp(target)) throw new Error('ENOSPC: no space left on device');
-      fs.writeFileSync(target, content, options);
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
     };
 
     assert.throws(
-      () => initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile }),
+      () => initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
       (err) => err instanceof InitWriteError,
     );
 
@@ -1289,6 +1320,95 @@ test('initProject rolls back the whole created directory chain in an outside git
     fs.rmSync(main, { recursive: true, force: true });
     fs.rmSync(worktree, { recursive: true, force: true });
   }
+});
+
+// --- T2g R3-002, Codex P2, a regression from T2f: `shallowestMissingAncestor` climbed the
+// *lexical* hooks directory against a *real* (`fs.realpathSync`-resolved) base using a plain,
+// case-sensitive `startsWith` — so whenever the two disagreed only on case (or an 8.3 short name),
+// the climb stopped on its very first check, recording just the deepest directory. This affects the
+// ordinary working-tree case too, not just an outside git dir. ---
+
+test('initProject records the shallowest created directory chain even when the hooks path differs only by case from the real root (win32)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('case folding only matters on win32, where the filesystem is case-insensitive');
+    return;
+  }
+  const root = makeTmpRepo();
+  try {
+    const realRoot = fs.realpathSync(root);
+    // An absolute core.hooksPath built from an uppercased copy of the real root: `isWithinBase`
+    // (used by `resolveHookContainment`'s own containment check) already folds case, so this is
+    // correctly seen as inside the repo — but the *directory-creation climb*, before this fix,
+    // compared this same lexical (uppercased) path against the properly-cased real root with a
+    // case-sensitive `startsWith`, which never matched, so it never climbed past the deepest
+    // missing directory.
+    const casedRoot = realRoot.toUpperCase();
+    assert.notEqual(casedRoot, realRoot, 'expected the real root to contain a lowercase letter to flip');
+    const hooksDir = path.join(casedRoot, 'custom', 'nested', 'hooks');
+    assert.equal(fs.existsSync(path.join(realRoot, 'custom')), false); // both levels missing
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(realRoot, 'custom', 'nested', 'hooks', 'pre-commit')));
+    // The shallowest directory this run created (`custom`), not the deepest
+    // (`custom/nested/hooks`) — the case mismatch must not stop the climb early. This is the
+    // ordinary working tree, so the manifest records it repo-relative, same as `files`.
+    assert.deepEqual(result.manifest.dirs, [{ path: 'custom' }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back the whole created directory chain even when the hooks path differs only by case from the real root (win32)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('case folding only matters on win32, where the filesystem is case-insensitive');
+    return;
+  }
+  const root = makeTmpRepo();
+  try {
+    const realRoot = fs.realpathSync(root);
+    const casedRoot = realRoot.toUpperCase();
+    const hooksDir = path.join(casedRoot, 'custom', 'nested', 'hooks');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    assert.throws(
+      () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
+      (err) => err instanceof InitWriteError,
+    );
+
+    // The whole chain this run created (custom, custom/nested, custom/nested/hooks) is gone, not
+    // just the deepest directory — without the fix, only the deepest would ever have been tracked
+    // (and removed), leaking `custom` and `custom/nested` behind.
+    assert.equal(fs.existsSync(path.join(realRoot, 'custom')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2g R3-003: an 8.3 short-name mismatch (the other reported way `os.tmpdir()` can disagree with
+// `fs.realpathSync` on Windows) cannot be constructed on this machine — verified empirically before
+// writing this test: `os.tmpdir()`, `fs.realpathSync(os.tmpdir())`, and
+// `fs.realpathSync.native(os.tmpdir())` are all byte-identical here (no `~1`-style component), and a
+// freshly `mkdtempSync`-created directory under it round-trips through `fs.realpathSync` unchanged
+// too. `fsutil 8dot3name query` (volume-level) requires elevation this account does not have, but
+// that is moot: the practical question — does *this* host's TEMP directory ever hand back a short
+// name — is already answered, empirically, by the above. The case-folding tests above are the
+// closest reproduction available on this host for the same underlying bug class (a lexical path
+// disagreeing with its own real form).
+test('initProject: 8.3 short-name mismatch cannot be reproduced on this host (documented, not skipped silently)', (t) => {
+  t.skip(
+    'os.tmpdir(), fs.realpathSync(os.tmpdir()), and fs.realpathSync.native(os.tmpdir()) are identical ' +
+      'on this machine — no 8.3 short-name component to reproduce the mismatch with, and a volume-level ' +
+      'fsutil 8dot3name query needs elevation this account lacks',
+  );
 });
 
 // --- T2f item 3 (R3-realish-base-detection-equality-only): symlink-hop counting must start as

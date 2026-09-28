@@ -257,9 +257,11 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
       return { status: 0, stdout: '', stderr: '' };
     };
     // T2e item 3: the manifest's temp file now has a unique name, not a fixed `<target>.tmp`.
-    const writeFile = (target, content, options) => {
-      if (target.includes('manifest.json.') && target.endsWith('.tmp')) throw new Error('EACCES: permission denied');
-      fs.writeFileSync(target, content, options);
+    // T2g R3-001: the manifest's own exclusive-create write is injected separately from the general
+    // `writeFile` (see `writeManifestAtomic` in bin/lib/project.mjs) — faulting it here means
+    // failing the `open` step, not `writeFile`.
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
     };
     let stderr = '';
     const origError = console.error;
@@ -268,7 +270,7 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
     };
     let code;
     try {
-      code = await initMain(['--cwd', root], process.env, { spawn: okSpawn, platform: 'linux', writeFile });
+      code = await initMain(['--cwd', root], process.env, { spawn: okSpawn, platform: 'linux', open });
     } finally {
       console.error = origError;
     }
