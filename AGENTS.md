@@ -61,7 +61,8 @@ feature closes, a PR merges or a phase starts; `/compact` with what to keep when
 open but the conversation has grown long. End every reply with the next prompt he should send, as
 plain quoted text (a code block may not show in the app): the next step in this chat, and when
 cutting, the opening prompt for the new session or the full `/compact` command. He never writes
-the handoff himself.
+the handoff himself. Just before it, show the map: each roadmap phase with its percentage and the
+total, taken from `js-harness progress`, never estimated.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.
