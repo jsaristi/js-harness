@@ -33,8 +33,9 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists install, sync, uninstall, status, update, upgrade, doctor and progress', () => {
+test('--help lists init, install, sync, uninstall, status, update, upgrade, doctor and progress', () => {
   const result = run(['--help']);
+  assert.match(result.stdout, /init/);
   assert.match(result.stdout, /install/);
   assert.match(result.stdout, /sync/);
   assert.match(result.stdout, /uninstall/);
@@ -86,6 +87,28 @@ test('install dispatches to a temp home and exits 0', () => {
     assert.match(result.stdout, /installed js-harness/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T2 (project-init): `.codegraph` pre-created means `init` never spawns a real `codegraph` binary
+// here — same hermetic guarantee the doctor test below relies on, without needing a fake spawn
+// across the process boundary this dispatcher test runs through.
+test('init dispatches to a temp cwd/home and exits 0, hermetically (no real codegraph spawn)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-init-home-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-init-cwd-'));
+  try {
+    const gitInit = spawnSync('git', ['init'], { cwd, encoding: 'utf8' });
+    assert.equal(gitInit.status, 0, `git init failed: ${gitInit.stderr}`);
+    fs.mkdirSync(path.join(cwd, '.codegraph'), { recursive: true });
+
+    const result = run(['init', '--home', home, '--cwd', cwd]);
+
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /wrote harness\.json/);
+    assert.ok(fs.existsSync(path.join(cwd, 'harness.json')));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
 

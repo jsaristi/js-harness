@@ -1,6 +1,7 @@
 # Project init
 
-Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branch: `feat/project-init`
+Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
+`feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -39,11 +40,34 @@ Mode: strict (source: user global config). Runner: `node --test`.
 
 ## Delivery
 Forecast: well over 400 authored lines across the seven tasks (T2–T5 alone add a command, a
-manifest and the TUI changes). Strategy: `ask-on-risk`; the chain strategy is asked once before
-T2's first commit. T1 is small and ships as the first slice.
+manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-to-main`, chosen
+by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
+1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`feat/project-init-cmd`).
+
+## T2 design
+- `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
+  git repository it writes nothing and exits 1 ("not a git repository: run git init first");
+  with `harness.json` already present it writes nothing, says so and exits 0 (`sync` is T4).
+- `harness.json` (committed): `{ "version": "<running version>" }`, the pin.
+- `AGENTS.md` (committed), only when none exists: a short base template with the sections this
+  repo's own `AGENTS.md` uses (what the project is, how it works, what good looks like, the
+  constraints with their reasons), titled with the folder name.
+- The pre-commit gate: `#!/bin/sh` + `exec js-harness check`, written at
+  `git rev-parse --git-path hooks/pre-commit`, which honours `core.hooksPath`. When a hook
+  already exists there it is kept, and `init` prints how to add `js-harness check` to it. No git
+  config is changed: setting `core.hooksPath` would silently disable a project's `.git/hooks`.
+- `codegraph init --yes <root>`, spawned the way `bin/lib/stack.mjs` probes tools (one command
+  line with `shell: true` on win32), only when `.codegraph/` does not exist. It writes only
+  `.codegraph/`, which ignores itself (measured in a scratch repo, codegraph 1.6.0). When
+  codegraph is missing or fails, `init` reports it with codegraph's own fix and carries on.
+- The project manifest lives at `git rev-parse --git-path js-harness/manifest.json`: per clone
+  and never committed, like the hook it records. It lists each file `init` created (path relative
+  to the root + sha256), each one it kept and why, and whether it created `.codegraph/`, so T3's
+  `uninstall` can restore the repo exactly.
+- Exit codes: 0 done (skips are reported, not failures), 1 not a git repository, 2 usage error.
 
 ## Tasks
-- [ ] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
+- [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
   js-harness current with `main` — route: inline (`package.json` + one test file, mechanical)
 - [ ] T2 `init` writes `harness.json`, a base `AGENTS.md` if none exists, the pre-commit gate, and
@@ -102,10 +126,45 @@ T2's first commit. T1 is small and ships as the first slice.
   the first run could not assess (process creation denied in its sandbox); the retry found "no
   actionable defects", comparing the base and head git objects directly with commands still
   denied, so it did not rerun the tests.
+- 2026-09-28: the doc-only commit 53b1d04 made the branch a new candidate; the gentle-ai Stop hook
+  asked for it, and native review lineage review-ee44bc207d8e48ad (range `36f2cee..53b1d04`, one
+  lens) approved it with the same two advisory findings, acknowledged.
+- 2026-09-28: T1 closed. `jsaristi/js-harness#8` merged by Sebastián's go-ahead as 222110f. The
+  no-flag install from GitHub works: in the isolated pnpm global, `pnpm i -g
+  github:jsaristi/js-harness` over an existing copy → `+ js-harness 0.1.0`, "Done in 10.4s", exit
+  0; after `pnpm rm -g js-harness`, a fresh one → "Done in 10s", exit 0. In the real global the
+  same command resolves and prints `+ js-harness 0.1.0 ... done`, then never exits (killed at
+  120 s and 90 s, debug logging adds nothing), and `pnpm rm -g js-harness` hangs the same way.
+  The cause is outside js-harness: two Codex processes run from binaries inside that same pnpm
+  global (an interactive `codex` CLI session, PID 15852, and the Codex plugin's `codex
+  app-server`, PID 15400), and Windows will not let pnpm move files that are in use. The global
+  therefore stays at 36f2cee, whose runtime is identical to 222110f: `git diff --stat 36f2cee
+  222110f -- bin ':!bin/*.test.mjs' ':!bin/**/*.test.mjs'` is empty (the merge changed a test,
+  docs and a `package.json` script only). With Codex closed, `npm i -g github:jsaristi/js-harness`
+  finishes the move. No pnpm process was left running.
+- 2026-09-28: T2 implemented by a delegated writer (4+ files: mapping by an explorer first, then
+  one writer). New `bin/lib/project.mjs` (`gitTopLevel`, `resolveGitPath`, `agentsTemplate`,
+  `runCodegraphInit`, `initProject`) and `bin/init.mjs` (`initMain`, strict flags), each with its
+  test file; `init` wired into the dispatcher and its usage; `prepublish` added to
+  `bin/package.test.mjs` (R3-install-script-list-incomplete). RED: `node --test
+  bin/lib/project.test.mjs bin/init.test.mjs` → `ERR_MODULE_NOT_FOUND ... bin\lib\project.mjs`.
+  GREEN: same → 23/23; full `node --test` → `tests 335 / pass 333 / fail 0 / skipped 2` (the two
+  symlink tests skip on Windows without developer mode), re-run by the parent with the same
+  result; `npm run check` → `PASS budget 1150`, `PASS tests`. ~870 authored lines, over the ~400
+  heuristic: one engine, one CLI and tests for the ten cases the design names; not split.
+  Writer's own calls, accepted: a manifest-path fallback to `.git/js-harness/manifest.json` if
+  `--git-path` fails after the top-level resolved; the wording of kept/failed messages; the
+  template's prose. Real run in a scratch repo (real git, real codegraph 1.6.0): outside a repo
+  → exit 1; `init --cwd <repo>/src` → `wrote harness.json`, `wrote AGENTS.md`, `wrote
+  .git/hooks/pre-commit`, `ran codegraph init`, exit 0, manifest with three sha256 entries and
+  `codegraph.createdDir: true`; a second `init` → "already initialized at 0.1.0", exit 0; the
+  base `AGENTS.md` measures 122 tokens (`js-harness check` there); committing through the gate
+  passed, and a commit with a failing test was blocked (`FAIL tests`, commit exit 1, HEAD
+  unchanged).
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Merge the first slice's PR (T1), then reinstall the global from GitHub with no flag and check T1
-off; the chain strategy for T2–T7 is asked before T2's first commit.
+Review T2's commit (gentle-ai, then Codex), open slice 2's PR against `main`, and check T2 off
+once it is approved; then T3 (`uninstall` in a project, from the manifest T2 writes).
