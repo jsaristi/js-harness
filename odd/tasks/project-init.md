@@ -157,6 +157,13 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   equality with it (R3-realish-base-detection-equality-only); test a kept hook and a created hooks
   directory in an outside git dir, and a submodule (R3-gitdir-occupied-and-submodule-untested) —
   route: delegated writer, the one that wrote T2e
+- [ ] T2g Accepted review follow-ups on T2f: a temp file the exclusive write created and then
+  failed to fill is still removed; only `EEXIST` leaves the path alone (Codex P2, R3-001); the
+  directory climb compares the lexical hooks directory against its base with the same
+  realpath- and case-aware containment used elsewhere, so a symlinked root or a win32 case
+  difference still records the whole chain (Codex P2, R3-002, a regression from T2f); test the
+  case folding and a hooks directory under a linked root where this machine allows it (R3-003)
+  — route: the same delegated writer
 - [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
@@ -376,10 +383,18 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   Observed by the writer, not fixed: when `core.hooksPath` is lexically outside but links resolve
   it back inside, the manifest records the lexical path as a `../`-relative one. `uninstall`
   resolves it lexically to the same file, so it still works; the shape is only odd.
+- 2026-09-28: T2f committed as e187fd2. Assessed (`--base-ref 3064173 --committed-only`): risk
+  `medium`, 404 lines, `review_due: true`. Native review lineage review-5cb0b7e551a007ef: consent
+  granted (pre-granted), one lens (reliability), approved and acknowledged, with two WARNING
+  (R3-001: moving the `wx` write out of the `try` leaks a temp file it created when the write
+  itself fails; R3-002: `mkdirTracked` now climbs the lexical directory against a realpath base
+  with a case-sensitive `startsWith`, so a symlinked root, an 8.3 name or a case difference
+  records only the deepest directory, a regression for the working tree too) and one SUGGESTION
+  (R3-003: case folding and a linked root untested). Codex (`--base 3064173`): the first run could
+  not assess (process creation denied); the retry found the same two, as P2. Accepted as T2g.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T2f reviewed (gentle-ai, then Codex); then T3 by the same writer, committed and reviewed; then
-slice 3's PR.
+T2g by the same writer, committed and reviewed; then T3 the same way; then slice 3's PR.
