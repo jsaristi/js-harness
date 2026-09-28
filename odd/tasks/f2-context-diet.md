@@ -120,4 +120,5 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
   `review-9656b5472ecb38ec`).
 
 ## Next step
-Open the PR for Sebastián. T4 and T5 wait on gentle-ai.
+PR `jsaristi/js-harness#7` is open against `main`, awaiting Sebastián's merge. After it merges,
+T4 and T5 wait on gentle-ai; the roadmap moves on to Project init.
