@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, `jsaristi/js-harness#13`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, merged via `jsaristi/js-harness#13`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea). 6 = T6–T6d (`jsaristi/js-harness#13`, merged as 0d12e02).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -875,10 +875,13 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   On this machine `doctor` reports codegraph not registered in Codex and outdated (1.6.0), which is
   codegraph's own fix to run, not this repository's.
 - 2026-09-29: PR `jsaristi/js-harness#13` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
+- 2026-09-29: review of the exact PR range `4b5cef7..50a9f52`, started from the Stop hook's START.
+  Native review lineage review-24cbd5f0e6292369: approved and acknowledged, one SUGGESTION, the
+  carried R3-codex-version-timeout-classified-ok again.
+- 2026-09-29: slice 6 merged as 0d12e02 (`jsaristi/js-harness#13`) by Sebastián's go-ahead.
 
 ## Next step
-Slice 6 (T6–T6d on `feat/codex-plugin-doctor`) is complete: every commit reviewed by gentle-ai and
-Codex, the exact PR range by gentle-ai (Codex last saw the whole range at 1440dc2). Next: the merge of `jsaristi/js-harness#13` on Sebastián's go-ahead;
-then T7 (a verifiable record of the Codex review of each approved slice) in a new session. The
-installed skill on this machine still carries the old text until `js-harness` is reinstalled from
-`main` and synced.
+T7 (the Codex review of each approved code slice leaves a record a check verifies, so a skipped
+review is caught) on a new branch from `main`, in a new session; its route is decided after
+exploration. The installed skill on this machine still carries the old text until `js-harness` is
+reinstalled from `main` and synced.
