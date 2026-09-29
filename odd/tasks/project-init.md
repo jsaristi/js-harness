@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, merged via `jsaristi/js-harness#13`), `feat/codex-review-record` (T7–T7e, `jsaristi/js-harness#14`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, merged via `jsaristi/js-harness#13`), `feat/codex-review-record` (T7–T7e, merged via `jsaristi/js-harness#14`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea). 6 = T6–T6d (`jsaristi/js-harness#13`, merged as 0d12e02). 7 = T7–T7e (`jsaristi/js-harness#14`).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea). 6 = T6–T6d (`jsaristi/js-harness#13`, merged as 0d12e02). 7 = T7–T7e (`jsaristi/js-harness#14`, merged as 94b9544).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -1062,9 +1062,11 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 - 2026-09-29: `feat/codex-review-record` pushed on Sebastián's go-ahead; the new pre-push hook ran
   on the real push and passed (`PASS codex-review 5 code commits since origin/main`). PR
   `jsaristi/js-harness#14` opened (mergeable, clean; the repository has no CI checks).
+- 2026-09-29: slice 7 merged as 94b9544 (`jsaristi/js-harness#14`) by Sebastián's go-ahead. The
+  seven roadmap steps under "Project init" hold; the feature is complete.
 
 ## Next step
-Merging `jsaristi/js-harness#14` on Sebastián's go-ahead;
-after it merges, Project init is complete. The first carried follow-up (a Codex turn that could not
-inspect recorded as `reviewed`) is the next work worth doing on this gate. The installed skill on this machine still carries the old text until `js-harness` is
-reinstalled from `main` and synced.
+None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
+separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
+`reviewed`, is item 1 of the roadmap's "Next". The installed skill on this machine still carries
+the old text until `js-harness` is reinstalled from `main` and synced.
