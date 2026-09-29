@@ -1104,6 +1104,13 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   the first pattern, so three regexes were untested), accepted: one sentence per pattern, and
   breaking each of those three regexes in turn fails the new test (observed). Codex skip recorded
   again for the range with this commit, same model rejection.
+- 2026-09-29: committed as fbeefd8; last round, native review lineage review-8cbf241c40c8c8ba of
+  `21c491d..fbeefd8` (risk `medium`, 207 lines): approved and acknowledged. Carried, not fixed
+  (no further round): R3-classifier-self-reference (WARNING: the text is classified whole, so a
+  review that really inspected a diff but quotes "incomplete review" or "fail-closed verdict",
+  such as a Codex review of this very change, is refused on every rerun; a likely fix is to
+  classify only reviews without findings, or only the summary before them) and
+  R3-overflow-passthrough-unasserted (SUGGESTION: assert the partial review is shown on ENOBUFS).
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
