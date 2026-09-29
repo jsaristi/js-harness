@@ -1093,9 +1093,15 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   Codex (`js-harness codex-review --base main`): the turn failed, 400 "The 'gpt-6.1-sol' model is
   not supported when using Codex with a ChatGPT account" (`model = "gpt-6.1-sol"` in
   `~/.codex/config.toml`, Sebastián's); the command exited 1 and wrote nothing, as it should.
+- 2026-09-29: the R3-maxbuffer fix committed as 5d584b9 (assessed `--base-ref 438364a`: risk
+  `medium`, 40 lines, `under_budget`). Codex skip recorded for `21c491d..5d584b9` with
+  `--unavailable` naming the rejected model; `node bin/check.mjs --push` → `PASS codex-review 2
+  code commits since origin/main, all covered`, exit 0. Next: push and open the PR on Sebastián's
+  go-ahead; a real Codex review of this range waits for a model the ChatGPT plan accepts.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
-`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entry). The installed skill on this machine still carries
+`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entries), awaiting push and
+PR on Sebastián's go-ahead. The installed skill on this machine still carries
 the old text until `js-harness` is reinstalled from `main` and synced.
