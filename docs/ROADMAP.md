@@ -152,12 +152,8 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. The Codex review record's first carried follow-up: a Codex turn that could not inspect the diff
-   is recorded as `reviewed`, because the companion's exit 0 means the turn completed, not that
-   the review ran (seen twice on 2026-09-29; `odd/tasks/project-init.md`, Progress). Until it is
-   fixed the agent reads Codex's verdict and records such a run with `--unavailable`.
-2. F3 Task contract.
-3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
+1. F3 Task contract.
+2. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
    can be taken at any time.
 
 ## Stack doctor notes

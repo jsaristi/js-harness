@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { codexReviewMain } from './codex-review.mjs';
+import { codexReviewMain, saysReviewNotInspected } from './codex-review.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
 // Real git and a fake companion script: no test ever calls a real Codex.
@@ -52,8 +52,9 @@ function makeRepo() {
 }
 
 /** A home whose plugin record points at a fake companion that logs its argv and cwd next to
- * itself and exits with `exitCode`. Returns the home and where the call is logged. */
-function makeHome(exitCode = 0) {
+ * itself, prints `stdout` (the rendered review) and exits with `exitCode`. Returns the home and
+ * where the call is logged. */
+function makeHome(exitCode = 0, stdout = '') {
   const home = tmp('js-harness-codex-review-home-');
   const installPath = path.join(home, 'plugin-cache', 'codex');
   fs.mkdirSync(path.join(installPath, 'scripts'), { recursive: true });
@@ -62,7 +63,8 @@ function makeHome(exitCode = 0) {
     path.join(installPath, 'scripts', 'codex-companion.mjs'),
     `import fs from 'node:fs';\n` +
       `fs.writeFileSync(${JSON.stringify(callLog)}, JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }));\n` +
-      `process.exit(${exitCode});\n`,
+      `process.stdout.write(${JSON.stringify(stdout)});\n` +
+      `process.exitCode = ${exitCode};\n`,
     'utf8',
   );
   fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
@@ -74,18 +76,38 @@ function makeHome(exitCode = 0) {
   return { home, callLog };
 }
 
-/** Runs the command with output captured; `now` is fixed so the record is comparable. */
+/** Runs the command with output captured; `now` is fixed so the record is comparable. `shown` is
+ * what the review passed through to the user, `out` what the command itself logged. */
 async function run(argv, extra = {}) {
   const out = [];
   const err = [];
+  const shown = [];
   const code = await codexReviewMain(argv, {}, {
     now: () => new Date('2026-09-29T12:00:00.000Z'),
     log: (line) => out.push(line),
     error: (line) => err.push(line),
+    write: (text) => shown.push(text),
     ...extra,
   });
-  return { code, out: out.join('\n'), err: err.join('\n') };
+  return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
 }
+
+// Real review texts (2026-09-29). Codex's turn completes either way; only its words say whether it
+// saw the diff.
+const NOT_INSPECTED = [
+  'I could not assess the patch: the environment denied process creation, so `git diff 36f2abc` and `js-harness progress` could not run. This verdict means the patch is unverified, not that I found a defect.',
+  'I could not assess the patch: the environment denied process creation, so `git diff 3064abc` did not run. This verdict reflects an incomplete review, not an identified code defect.',
+  'I could not assess the patch: the requested git diff was blocked by a process-launch access-denied error. This verdict means correctness is unverified, not that I found a defect. Please provide the diff or restore command access for a review.',
+  'This is a fail-closed verdict, not a finding about the code. The terminal was denied access before `git diff` could run, so I could not inspect the changes or verify the patch; nothing else was checked.',
+];
+const INSPECTED = [
+  'The full test suite could not run in this read-only environment because process spawning and temporary-file creation were denied.',
+  'Focused tests could not be verified because the read-only sandbox denied process spawning.',
+  'No actionable defects were found in the four changed files. Command execution was denied, so I compared the base and head Git objects directly; tests were not rerun.',
+  'I found no actionable regression in the changed code or tests. Process creation was denied, so I could not run `git diff` or the tests; I compared the base and HEAD Git objects and verified the reviewed worktree files match HEAD.',
+  'I could not run `npm run check` because the read-only environment denied creation of its temporary test directory.',
+  'No actionable regression was found in the diff.',
+];
 
 test('a completed review appends a reviewed record with full commit ids and exits 0', async () => {
   const { root, base, head } = makeRepo();
@@ -293,4 +315,51 @@ test('a failed git status refuses the review instead of reading as a clean tree'
   assert.match(result.err, /git status/);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
   assert.equal(fs.existsSync(callLog), false);
+});
+
+test('the classifier catches every review that says it could not inspect the diff, and none that did', () => {
+  for (const text of NOT_INSPECTED) assert.equal(saysReviewNotInspected(text), true, text);
+  for (const text of INSPECTED) assert.equal(saysReviewNotInspected(text), false, text);
+  assert.equal(saysReviewNotInspected(''), false);
+  assert.equal(saysReviewNotInspected(undefined), false);
+});
+
+test('a completed turn whose review could not assess the patch writes nothing, returns 1 and names --unavailable', async () => {
+  const { root } = makeRepo();
+  const { home } = makeHome(0, `# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n`);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.match(result.err, /nothing was recorded/i);
+  assert.match(result.err, /--unavailable <reason>/);
+  assert.ok(result.shown.includes(NOT_INSPECTED[0]), 'the review text is still shown to the user');
+});
+
+test('the fail-closed wording is refused the same way', async () => {
+  const { root } = makeRepo();
+  const { home } = makeHome(0, `# Codex Review\n\n${NOT_INSPECTED[3]}\n`);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.match(result.err, /--unavailable <reason>/);
+});
+
+test('a completed review with findings is recorded and its text is passed through unchanged', async () => {
+  const { root, base, head } = makeRepo();
+  const review = '# Codex Review\n\nTarget: x\n\n[high] bin/x.mjs:3 drops the last record.\nI compared the Git objects directly.\n';
+  const { home } = makeHome(0, review);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 0);
+  assert.equal(result.shown, review);
+  assert.deepEqual(readCodexReviews(root), [
+    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
+  ]);
+});
+
+test('the review text is shown even when the companion fails', async () => {
+  const { root } = makeRepo();
+  const { home } = makeHome(1, 'partial output\n');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 1);
+  assert.equal(result.shown, 'partial output\n');
 });

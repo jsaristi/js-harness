@@ -2,6 +2,9 @@
 // `js-harness codex-review --base <rev>`: run the Codex plugin's review of `<rev>..HEAD` and record
 // that it ran, or record an explicit skip with `--unavailable <reason>`. The record is what
 // `check --push` reads to catch a slice that was never reviewed (T7 in odd/tasks/project-init.md).
+// The companion's exit 0 only means Codex's turn completed, not that it read the diff (its sandbox
+// can deny process launch and it says so in the review), and the review text is the only signal it
+// exposes; so a zero exit is not trusted on its own: the text is read before a record is written.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -65,13 +68,29 @@ function findCompanion(home) {
   return fs.existsSync(companion) ? companion : null;
 }
 
+// Codex's own words for a review that never saw the diff. Deliberately narrow: good reviews also say
+// "could not run `git diff`" or "tests could not run" after reading the Git objects directly.
+const NOT_INSPECTED = [
+  /\bcould(?: not|n't) (?:assess|inspect|review|evaluate) (?:the |this )?(?:patch|diff|changes)\b/i,
+  /\b(?:patch|diff|changes|correctness) (?:is|are) unverified\b/i,
+  /\bincomplete review\b/i,
+  /\bfail-closed verdict\b/i,
+];
+
+/** Whether the review text says Codex could not inspect the diff. */
+export function saysReviewNotInspected(text) {
+  return typeof text === 'string' && NOT_INSPECTED.some((pattern) => pattern.test(text));
+}
+
 const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (for git
- * and the companion), `now`, `home`, `log` and `error` so tests use fixtures. Exits 2 with usage
- * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
+ * and the companion), `now`, `home`, `log`, `error` and `write` (the review passed through to
+ * the user) so tests use fixtures. Exits 2 with usage on a bad flag; 1 when nothing could be
+ * recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, now = () => new Date(), log = console.log, error = console.error } = deps;
+  const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
   try {
     args = parseArgs(argv, env, deps.home ?? os.homedir());
@@ -124,14 +143,25 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     let result;
     try {
-      result = spawn(process.execPath, [companion, 'review', '--wait', '--base', base], { cwd: root, stdio: 'inherit' });
+      // stdout is piped so the review text can be read; stderr (the progress) stays live.
+      result = spawn(process.execPath, [companion, 'review', '--wait', '--base', base], {
+        cwd: root,
+        stdio: ['inherit', 'pipe', 'inherit'],
+        encoding: 'utf8',
+      });
     } catch (err) {
       result = { status: null, error: err };
     }
+    const review = typeof result?.stdout === 'string' ? result.stdout : '';
+    if (review) write(review);
     if (result?.status !== 0) {
       const reason = result?.error ? `could not start it: ${result.error.message}` : `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`;
       error(`The Codex review did not complete (${reason}); no record was written.\n${WAYS_ON}`);
       return result?.status ?? 1;
+    }
+    if (saysReviewNotInspected(review)) {
+      error(`Codex's turn completed, but its review says it could not inspect the diff; nothing was recorded.\n${WAYS_ON}`);
+      return 1;
     }
     outcome = 'reviewed';
   }

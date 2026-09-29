@@ -212,7 +212,12 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   <installPath>/scripts/codex-companion.mjs review --wait --base <rev>` in the repository (the
   `installPath` of `codex@openai-codex` in `~/.claude/plugins/installed_plugins.json`), with its
   output shown as is. The companion exits 0 when Codex's turn completed, findings or not, and 1
-  when the turn failed (`buildResultStatus` in `scripts/lib/codex.mjs`). On 0 it appends one
+  when the turn failed (`buildResultStatus` in `scripts/lib/codex.mjs`), so exit 0 is not trusted
+  alone: a turn whose sandbox denied process launch completes with a review that says it could not
+  read the diff. The companion exposes only the review text, so its stdout is captured (stderr, the
+  progress, stays live), shown as is, and read with `saysReviewNotInspected`, a short list of
+  Codex's own phrases ("could not assess the patch", "correctness is unverified", "fail-closed
+  verdict"); a match writes nothing and exits 1 with the two ways on. On a clean 0 it appends one
   JSON line `{ schema, base, head, reviewedAt, outcome: "reviewed" }`, full commit ids, to
   `<git common dir>/js-harness/codex-reviews.jsonl`; on anything else it writes nothing and exits
   with the companion's code, naming the two ways on. When Codex cannot run (the model is
@@ -1065,8 +1070,20 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 - 2026-09-29: slice 7 merged as 94b9544 (`jsaristi/js-harness#14`) by Sebastián's go-ahead. The
   seven roadmap steps under "Project init" hold; the feature is complete.
 
+- 2026-09-29: follow-up, a Codex turn that could not inspect the diff is no longer recorded as
+  `reviewed` (branch `fix/codex-review-uninspected`). The companion exposes no structured signal:
+  its native review returns only text. Of the 36 reviews stored under the plugin's data dir for
+  this repo, the 4 that never saw the diff all said so ("I could not assess the patch", "could not
+  inspect the changes", "correctness is unverified", "fail-closed verdict"), and none of the 32
+  that did uses those phrases; several of those say tests or even `git diff` could not run, since
+  they read the Git objects directly, so the patterns stay narrow. A new phrasing would still pass
+  as `reviewed`, as before; the agent keeps reading the verdict. Route: delegated writer
+  (`codex-review.mjs` and its test). RED: 24 tests, 5 failing. GREEN: `node --test
+  bin/codex-review.test.mjs` 24/24; `node --test` → `tests 691 / pass 684 / fail 0 / skipped 7`;
+  `npm run check` exit 0. Parent spot check: the suite 24/24.
+
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
-`reviewed`, is item 1 of the roadmap's "Next". The installed skill on this machine still carries
+`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entry). The installed skill on this machine still carries
 the old text until `js-harness` is reinstalled from `main` and synced.
