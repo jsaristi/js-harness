@@ -1111,6 +1111,19 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   such as a Codex review of this very change, is refused on every rerun; a likely fix is to
   classify only reviews without findings, or only the summary before them) and
   R3-overflow-passthrough-unasserted (SUGGESTION: assert the partial review is shown on ENOBUFS).
+- 2026-09-29: a further round over `21c491d..89b4dc0` (lineage review-a2d444f692f2fc95, after two
+  docs commits) approved and acknowledged, repeating the two carried findings and adding
+  R3-classifier-substring-false-positive (no negation or context guard). Codex answered a probe
+  with `gpt-6.1-sol` at `high` (Sebastián's model from now on, roadmap Decided), so the three are
+  fixed on this branch by Sebastián's request, with R3-overflow-passthrough-unasserted: a review
+  listing findings (`- [P2] …`) read the diff and is never refused; otherwise only its summary is
+  read (heading and Target dropped, cut at the findings header), with quoted spans (backticks,
+  double, curly, and single quotes in a quote-like position) removed first; `unverified` only for
+  the patch or correctness and not after a possessive; `incomplete review` and `fail-closed
+  verdict` not after `not`/`no`. Route: delegated writer. RED: 32 tests, 6 failing. GREEN: 32/32;
+  `node --test` → `tests 699 / pass 692 / fail 0 / skipped 7`; `npm run check` passes. Mutation:
+  without the findings short-circuit, a findings list with no header fails. Parent spot check
+  32/32.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are

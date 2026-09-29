@@ -72,14 +72,31 @@ function findCompanion(home) {
 // "could not run `git diff`" or "tests could not run" after reading the Git objects directly.
 const NOT_INSPECTED = [
   /\bcould(?: not|n't) (?:assess|inspect|review|evaluate) (?:the |this )?(?:patch|diff|changes)\b/i,
-  /\b(?:patch|diff|changes|correctness) (?:is|are) unverified\b/i,
-  /\bincomplete review\b/i,
-  /\bfail-closed verdict\b/i,
+  // Only the patch or correctness as a whole, and not a possessed subject ("the tests' correctness is
+  // unverified" is about the tests; a reviewer that read the diff says it).
+  /(?<!['’]s |s['’] )\b(?:patch|correctness) (?:is|remains) unverified\b/i,
+  // Negated, the phrase denies the very thing it names ("this is not an incomplete review").
+  /(?<!\b(?:not(?: an?)?|no) )\bincomplete review\b/i,
+  /(?<!\b(?:not(?: an?)?|no) )\bfail-closed verdict\b/i,
 ];
 
-/** Whether the review text says Codex could not inspect the diff. */
+// Quoting a phrase is not saying it: a review of this classifier's own diff quotes its wording.
+// The single-quote span needs a quote-like position so apostrophes ("Codex's", "tests'") stay text.
+const QUOTED = [/`[^`\n]*`/g, /"[^"\n]*"/g, /“[^”\n]*”/g, /(?<=^|[\s(])'[^'\n]*'(?=$|[\s.,;:!?)])/g];
+
+/** The rendered review's summary: without its heading and Target lines, and up to its findings. */
+function reviewSummary(text) {
+  const body = text.replace(/^\s*# Codex Review[^\n]*\n/, '').replace(/^\s*Target:[^\n]*\n/, '');
+  const cut = body.search(/^\s*(?:Full review comments|Review comment):/m);
+  return cut === -1 ? body : body.slice(0, cut);
+}
+
+/** Whether the review text says Codex could not inspect the diff. A review that lists findings
+ * (`- [P2] …`) read the diff; otherwise only its summary is classified. */
 export function saysReviewNotInspected(text) {
-  return typeof text === 'string' && NOT_INSPECTED.some((pattern) => pattern.test(text));
+  if (typeof text !== 'string' || /^\s*- \[P\d+\]/m.test(text)) return false;
+  const summary = QUOTED.reduce((rest, quoted) => rest.replace(quoted, ' '), reviewSummary(text));
+  return NOT_INSPECTED.some((pattern) => pattern.test(summary));
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;

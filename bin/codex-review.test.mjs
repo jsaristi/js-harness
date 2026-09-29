@@ -335,6 +335,73 @@ test('each classifier pattern catches its wording on its own', () => {
   }
 });
 
+test('a review that lists findings inspected the diff, even when a finding quotes the refusal wording', () => {
+  const text =
+    '# Codex Review\n\nTarget: branch diff against abc123\n\nOne issue.\n\nReview comment:\n\n' +
+    '- [P2] Classifier self-reference — D:\\x\\bin\\codex-review.mjs:70-85\n' +
+    '  A "fail-closed verdict" or "incomplete review" quoted here is refused. I could not assess the patch under test.\n';
+  assert.equal(saysReviewNotInspected(text), false);
+  // No "Review comment:" line to cut at: the finding itself is what marks the review as inspected.
+  assert.equal(saysReviewNotInspected('One issue.\n\n- [P1] Drops a record\n  I could not assess the patch fully.\n'), false);
+});
+
+test('negated wording is not a claim that the diff went uninspected', () => {
+  for (const text of [
+    'This is not an incomplete review.',
+    'Not a fail-closed verdict: the diff was read.',
+    'No incomplete review here.',
+  ]) {
+    assert.equal(saysReviewNotInspected(text), false, text);
+  }
+});
+
+test('"correctness is unverified" about a possessed subject is not a claim about the patch', () => {
+  for (const text of [
+    "The tests' correctness is unverified, but the diff was read.",
+    "The parser's correctness is unverified.",
+    'The parser’s correctness is unverified.',
+  ]) {
+    assert.equal(saysReviewNotInspected(text), false, text);
+  }
+  assert.equal(saysReviewNotInspected('This verdict means the patch is unverified.'), true);
+  assert.equal(saysReviewNotInspected('This verdict means correctness is unverified.'), true);
+});
+
+test('a quoted phrase in a summary is not said by it', () => {
+  for (const text of [
+    'The classifier now matches `fail-closed verdict`.',
+    'It adds the phrase "incomplete review" to the list.',
+    'It adds the phrase “incomplete review” to the list.',
+    "It adds 'could not assess the patch' to the patterns.",
+  ]) {
+    assert.equal(saysReviewNotInspected(text), false, text);
+  }
+  // An apostrophe is not a quote: the wording after it is still the review's own.
+  assert.equal(saysReviewNotInspected("Codex's run ended early. I could not assess the patch, and the tests' run is unverified."), true);
+});
+
+test('the heading and Target lines are not classified, the summary still is', () => {
+  const rendered = (summary) => `# Codex Review\n\nTarget: branch diff against abc123 (incomplete review of fail-closed verdict)\n\n${summary}\n`;
+  assert.equal(saysReviewNotInspected(rendered('No actionable defects were found.')), false);
+  assert.equal(saysReviewNotInspected(rendered(NOT_INSPECTED[0])), true);
+  assert.equal(saysReviewNotInspected(rendered(NOT_INSPECTED[3])), true);
+});
+
+test('a completed review whose findings quote the refusal wording is recorded', async () => {
+  const { root, base, head } = makeRepo();
+  const review =
+    '# Codex Review\n\nTarget: branch diff against abc123\n\nOne issue.\n\nFull review comments:\n\n' +
+    '- [P2] Self-reference — D:\\x\\bin\\codex-review.mjs:70-85\n' +
+    '  The text "fail-closed verdict" and "incomplete review" are matched anywhere in the review.\n';
+  const { home } = makeHome(0, review);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 0);
+  assert.equal(result.shown, review);
+  assert.deepEqual(readCodexReviews(root), [
+    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
+  ]);
+});
+
 test('a completed turn whose review could not assess the patch writes nothing, returns 1 and names --unavailable', async () => {
   const { root } = makeRepo();
   const { home } = makeHome(0, `# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n`);
@@ -388,6 +455,7 @@ test('the review output may exceed 1 MiB, and an overflow is named as such, not 
   const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
   assert.ok(companionOpts.maxBuffer > 1024 * 1024, `maxBuffer ${companionOpts.maxBuffer}`);
   assert.equal(result.code, 1);
+  assert.equal(result.shown, 'partial');
   assert.match(result.err, /output exceeded/);
   assert.doesNotMatch(result.err, /could not start/);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);

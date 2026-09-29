@@ -152,11 +152,8 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. Before the first real Codex review after `fix/codex-review-uninspected`: the classifier reads
-   the whole review text, so a review quoting its phrases (a review of that very change) is refused
-   on every rerun (R3-classifier-self-reference, `odd/tasks/project-init.md`, Progress).
-2. F3 Task contract.
-3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
+1. F3 Task contract.
+2. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
    can be taken at any time.
 
 ## Stack doctor notes
