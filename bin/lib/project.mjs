@@ -302,6 +302,10 @@ project carries its evidence.
 `;
 }
 
+/** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
 const PRE_COMMIT_HOOK =
   '#!/bin/sh\n# Written by js-harness init; js-harness uninstall removes it.\nexec js-harness check\n';
 
@@ -1356,7 +1360,7 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
  *   the caller (`syncMain`) reports it and names `--global`, never falling through to the machine.
  * - `{ code: 1, staleManifest: true, manifestPath }` — a manifest but no `harness.json`.
  * - `{ code: 1, invalidHarnessJson: true, harnessJsonPath, reason }` — `harness.json` is unreadable, not
- *   JSON, or has no string `version`.
+ *   JSON, or has no semver `version` (T4c: the pin is printed inside a suggested install command).
  * - `{ code: 1, pinMismatch: true, pin, version }` — the pin is not the running version.
  * - `{ code: 1, malformedManifest: true, manifestPath, reason? }` — as `uninstallProject`.
  * - `{ code: 0, root, actions, manifest, manifestPath, version, setUp: true }` — a fresh clone (no
@@ -1394,6 +1398,11 @@ export function syncProject(cwd, version, deps = {}) {
   }
   if (typeof pin !== 'string' || pin.length === 0) {
     return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: 'it has no string "version"' };
+  }
+  // A committed pin reaches the terminal inside a suggested install command, so a cloned repository
+  // must not be able to smuggle shell or escape sequences through it (T4c, R1-001).
+  if (!SEMVER.test(pin)) {
+    return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: 'its "version" is not a semver version' };
   }
   if (pin !== version) return { code: 1, pinMismatch: true, pin, version };
 
