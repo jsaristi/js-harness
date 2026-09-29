@@ -1124,6 +1124,12 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `node --test` → `tests 699 / pass 692 / fail 0 / skipped 7`; `npm run check` passes. Mutation:
   without the findings short-circuit, a findings list with no header fails. Parent spot check
   32/32.
+- 2026-09-29: committed as b85b5b2. Native review of `21c491d..b85b5b2` (risk `medium`, 314
+  lines), lineage review-7661134792b95c8b: approved and acknowledged, two SUGGESTION.
+  R3-findings-shortcircuit-unproved-on-real-render: the stored full renders of the four
+  uninspected reviews (`rendered` in their job files) contain no `- [P<n>]` line (checked), so the
+  short-circuit does not hide them; carried as a possible verbatim fixture. R3-roadmap-effort-row-stale:
+  the Effort row now names `gpt-6.1-sol` at `high`, fixed in this commit.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
