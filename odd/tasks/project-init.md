@@ -254,6 +254,11 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and
   the machine commands outside one; `status` acts by location (see "T5 design") — route: delegated
   writer (touches `bin/tui.mjs`, `bin/update.mjs`, `bin/lib/project.mjs` and their tests)
+- [ ] T5b Accepted review follow-ups on T5: the TUI binds project commands to the location it just
+  read, so a rebuilt menu never offers an unbound item, and a failing command or location re-read
+  resumes stdin and redraws (R4-stale-command-binding, R3-001); an invalid `harness.json` is
+  reported with a fixed reason, never `JSON.parse`'s text (R1-status-reason-echo); the three
+  readability points (R2-*) — route: to be decided with Codex's findings
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -634,6 +639,33 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - 2026-09-29: slice 5 (T5) starts on `feat/project-tui` from 7d8fe3e. Sebastián chose that inside
   a repository the menu shows the project commands and, below them, the machine ones (see "T5
   design"); `status` gets the project level so the menu's project Status has something to show.
+  Design committed as 2393109.
+- 2026-09-29: T5 done by a delegated writer: `projectLocation` in `bin/lib/project.mjs` (sharing
+  `readPin`/`projectFiles` with `syncProject`, and `invalidHarnessJsonMessage` with `sync`),
+  `status` by location in `bin/update.mjs`, the menu as data (`buildMenu`, `withLocation`) in
+  `bin/tui.mjs`; 10 files, +1126/−66, most of it tests. RED: `project.test.mjs` 10 of 138,
+  `update.test.mjs` 12 of 31, `tui.test.mjs` 14 of 50, `js-harness.test.mjs` 1 of 15 (every RED call
+  with a fixture `--home`). GREEN: `node --test` → `tests 532 / pass 525 / fail 0 / skipped 7`,
+  re-run by the parent; `npm run check` PASS; `npm run e2e` every step PASS. Real run by the parent in
+  a scratch repo: `status` before `init` → exit 1 naming `js-harness init` and `status --global`;
+  after → root, pin 0.1.0, running 0.1.0, clone set up, match, exit 0; `status --global` → the machine
+  report; the initialized menu renders `project` (Sync, Status, Uninstall) above `machine`; project
+  `uninstall` → `git status --porcelain` empty. Writer's calls, accepted: this checkout is a git
+  repository that is not initialized, so a plain `status` here now exits 1 and the machine-status
+  tests and the e2e step pass `--global`; after `init` the selection lands on Sync, after a project
+  `uninstall` on Init; location always uses real `git`, never the injected package-manager `spawn`;
+  the menu's `doctor` passes `--cwd`, like the stack block. Committed as 52eaafa. Assessed
+  (`--base-ref 7d8fe3e --committed-only`): risk `high`, 1235 lines, `review_due: true`
+  (`high_risk`). Native review lineage review-4906b65b0638431f: consent granted (pre-granted), four
+  lenses, approved and acknowledged (authority burned), with three WARNING and four SUGGESTION, all
+  non-blocking: R4-stale-command-binding (the command table is bound once, so a menu rebuilt after
+  `git init` elsewhere offers an unbound Init whose Enter throws with stdin paused and hangs the
+  TUI), R1-status-reason-echo (a malformed `harness.json` in a clone reaches the terminal through
+  `JSON.parse`'s message, escapes included; `sync` already did this), R2-buildcommands-doc-contradicts-doctor-cwd,
+  R2-update-header-overstates-status-scope, R2-confirm-mode-name-and-duplicated-default, R3-001 (a
+  throwing location re-read leaves stdin paused) and R3-002 (a plain `status` in a repository that is
+  not initialized now exits 1). All but R3-002 accepted as T5b; R3-002 is the "Command scope" rule
+  the design chose, and the one caller in this repo (e2e) moved to `--global`.
 
 ## Next step
 T5 on `feat/project-tui`: a delegated writer implements "T5 design" test-first.
