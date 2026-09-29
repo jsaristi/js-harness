@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`feat/project-tui`, PR pending).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -272,6 +272,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T5e Accepted review follow-ups on T5d: the reverse independence test (a failed location
   re-read still refreshes the stack; R2-001, R3-001) and the comment saying why `fetch` stays unused
   on the offline stack refresh (R2-002) — route: inline (one test, one comment)
+- [x] T5f Accepted final whole-slice review follow-up: every suite that creates an empty git
+  config in the temp directory removes it when it ends (Codex P3) — route: inline (the same
+  mechanical hook in five test files)
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -724,7 +727,30 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   redraws the refreshed stack) passed on first run, since it covers behavior T5d already had, so
   there is no RED; the comment now cites `offline: true`, which `resolveLatestVersions` answers from
   the cache without calling `fetch` (`bin/doctor.mjs:90`). GREEN: `tui.test.mjs` 62/62.
+  Committed as 012da1f.
+- 2026-09-29: final whole-slice review of `7d8fe3e..ebefc02` (risk `high`, 1800 lines). Native review
+  lineage review-fc3af9150637cb0a: consent granted (pre-granted), four lenses, approved and
+  acknowledged, two SUGGESTION carried as follow-ups: R2-withlocation-pending-mode-invariant
+  (`withLocation` clears `pending` but keeps `mode`; only called after a command, so unreachable
+  today) and R2-duplicated-git-env-isolation (the git-isolation `before` block and a tree-snapshot
+  helper are copied across suites). Codex (`--base 7d8fe3e`): one P3 — the tui and update suites
+  leave their empty git config folder in the system temp directory on every run. Accepted as T5f,
+  wider than reported: the same copied block leaked in the init, install and project suites too,
+  and 339 such folders had piled up on this machine.
+- 2026-09-29: T5f done inline by the parent: each of the five suites keeps the folder's path and
+  removes it in an `after` hook. Evidence: `node --test` → `tests 548 / pass 541 / fail 0 /
+  skipped 7`, and the count of `*-gitconfig-*` folders in the temp directory was 339 before the run
+  and 339 after (each run used to add five). The 339 existing folders are left for Sebastián to
+  remove. Committed as 45c0737. Assessed (`--base-ref ebefc02`): risk `high`, 40 lines. Native review
+  lineage review-232e1b7fd4672c9b: approved and acknowledged, three SUGGESTION of one kind (an
+  `after` hook would throw on an undefined path if `before` failed first, and in tui.test.mjs the
+  new removal runs after another that could throw), carried as follow-ups rather than a fourth
+  round, since they matter only once setup has already failed. Codex (`--base ebefc02`): no
+  actionable regression. Slice 5 is complete: T5 through T5f, each reviewed by gentle-ai and Codex.
+- Follow-ups carried from slice 5, none blocking: R3-002 (a plain `status` in a repository that is
+  not initialized exits 1, by the "Command scope" rule); the two whole-slice SUGGESTION above; the
+  unguarded `after` cleanup (R4-after-hook-undefined-configdir, R3-001, R3-002 of the T5f review).
 
 ## Next step
-The final whole-slice review of `7d8fe3e..HEAD` (gentle-ai, then Codex), then PR slice 5 against
-`main`.
+Open PR slice 5 (`feat/project-tui`) against `main`, on Sebastián's go-ahead; after it merges, T6
+(`doctor` reports the Codex plugin) in a new session.
