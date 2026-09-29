@@ -156,7 +156,7 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   initialized, since `status` and `sync` name the problem and `uninstall` clears a stale manifest).
   Section headers are not selectable.
 - Project items run with `--cwd <root>`; the machine items that act by location (`status`,
-  `uninstall`) pass `--global`, so the same Enter never changes scope with the folder. The two
+  `sync`, `uninstall`) pass `--global`, so the same Enter never changes scope with the folder. The two
   uninstalls confirm with different questions: "Undo js-harness in this project?" and today's
   machine one.
 - After a command runs, the TUI re-reads its location and rebuilds the menu (an `init` turns Init
@@ -264,6 +264,14 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   (R3-oneline-c1-controls), the unreadable-pin test accepts every code shape (R2-002), and
   `buildCommands` says what `root` is for (R2-001) — route: inline (one regex, one test pattern,
   one comment)
+- [x] T5d Accepted whole-slice review follow-ups: the TUI refreshes the stack block after a command
+  (Codex P2); the installed skill names `status --global` and `sync --global` for the machine
+  (Codex P2, and the slice-4 follow-up); `statusMain` says why it uses real git
+  (R2-status-spawn-not-forwarded-unexplained); the missing-directory test builds its path under a
+  unique parent (R3-nosuchdir-fixed-path) — route: delegated writer (the T5 writer, resumed)
+- [x] T5e Accepted review follow-ups on T5d: the reverse independence test (a failed location
+  re-read still refreshes the stack; R2-001, R3-001) and the comment saying why `fetch` stays unused
+  on the offline stack refresh (R2-002) — route: inline (one test, one comment)
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -690,6 +698,33 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   stderr). GREEN: `tui.test.mjs` + `project.test.mjs` → `tests 196 / pass 191 / fail 0 / skipped 5`;
   full suite through the commit gate PASS. Committed as 6353163. Assessed (`--base-ref e090e80`):
   risk `medium`, `under_budget`; left to the whole-slice review, the slice's last code commit.
+- 2026-09-29: whole-slice review of `7d8fe3e..b7ac70a` (risk `high`, 1565 lines). Native review
+  lineage review-e091a94b7c602ecf: consent granted (pre-granted), four lenses, approved and
+  acknowledged, three SUGGESTION: R2-status-spawn-not-forwarded-unexplained (`statusMain` uses real
+  git for the location without saying why), R2-design-doc-omits-sync-global (fixed in "T5 design"
+  by the parent), R3-nosuchdir-fixed-path (a test path a leftover folder could break). Codex
+  (`--base 7d8fe3e`): two P2 — the stack block is not refreshed after a project command, so Init's
+  codegraph setup stays shown as missing; and the installed skill (`bin/lib/manifest.mjs:15`) still
+  tells agents that a plain `js-harness status` reports the machine. Both P2, the two remaining
+  SUGGESTION and the carried follow-up (the skill's unqualified `js-harness sync`) accepted as T5d.
+- 2026-09-29: T5d done by the T5 writer, resumed: `runTui` takes `readStack` and re-probes the stack
+  offline after a command, in its own guard (a failure keeps the previous block); the installed
+  skill names `status`/`sync`/`uninstall --global` and says what the plain forms do in a project
+  (a new test pins the wording; nothing pinned it or its sha256 before); a comment in `statusMain`;
+  the missing-directory test under a unique parent. RED: `tui.test.mjs` 3 of 61,
+  `manifest.test.mjs` 1 of 35 (the test path refactor has none). GREEN: `node --test` → `tests 547 /
+  pass 540 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL.
+  Committed as 6930435. Assessed (`--base-ref b7ac70a`): risk `high`, `review_due`. Native review
+  lineage review-ebf4dc62453c0a4d: consent granted (pre-granted), four lenses, approved and
+  acknowledged, one WARNING and two SUGGESTION: a test titled for both directions of independence
+  checked one (R2-001, R3-001), and the offline comment did not say why `fetch` is passed (R2-002).
+  Codex (`--base b7ac70a`, docs stashed so it saw only code): no actionable defect; its sandbox
+  could not run the tests. All three accepted as T5e.
+- 2026-09-29: T5e done inline by the parent: the reverse test (a rejected location re-read still
+  redraws the refreshed stack) passed on first run, since it covers behavior T5d already had, so
+  there is no RED; the comment now cites `offline: true`, which `resolveLatestVersions` answers from
+  the cache without calling `fetch` (`bin/doctor.mjs:90`). GREEN: `tui.test.mjs` 62/62.
 
 ## Next step
-The whole-slice review of `7d8fe3e..HEAD` (gentle-ai, then Codex), then PR slice 5 against `main`.
+The final whole-slice review of `7d8fe3e..HEAD` (gentle-ai, then Codex), then PR slice 5 against
+`main`.
