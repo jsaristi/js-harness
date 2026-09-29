@@ -223,16 +223,21 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   adds no commit and no file to the project, and every worktree of a clone shares it. It is one
   file, undone by deleting it. A fresh clone starts without records, so commits reviewed on
   another machine need their review recorded again there.
-- Check: `js-harness check --push` adds a `codex-review` row. A commit needs a Codex review when it
-  is not a merge and changes a file that is not Markdown; it is covered when some record's
-  `base..head` contains it. The row covers `<default branch>..<head>` (the default branch from
-  `refs/remotes/origin/HEAD`, else `main`), passes with nothing to cover, lists `unavailable`
-  records as INFO lines, and fails naming each uncovered commit (short id and subject) and the
-  command that records it. Plain `check` (the pre-commit gate) does not run it, since a slice
-  under gentle-ai's review budget is committed before it is reviewed.
-- Gate: `.githooks/pre-push` runs `check --push --head <sha>` for each ref it pushes (skipping
-  deletes), so a skipped review stops the push, which precedes every pull request. `init` does not
-  write a pre-push hook yet; that is for a project that adopts this review flow.
+- Check: `js-harness check --push` runs one row, `codex-review`, and nothing else: the budget and
+  test rows read the working tree, not the pushed commit, and pre-commit already ran them on every
+  commit (T7d). A commit needs a Codex review when it is not a merge and changes a file that is not
+  Markdown; it is covered when some valid record's `base..head` contains it (T7e). The row covers
+  `<remote default>..<head>`, the base taken only from the remote's refs
+  (`refs/remotes/<remote>/HEAD`, else `<remote>/main`, else `<remote>/master`; `--remote`, default
+  `origin`), never a local branch, and fails naming `git remote set-head <remote> --auto` when
+  there is none (T7d). It passes with nothing to cover, lists `unavailable` records as lines of the
+  PASS row, and fails naming each uncovered commit (short id and subject) and the command that
+  records it. Plain `check` (the pre-commit gate) does not run it, since a slice under gentle-ai's
+  review budget is committed before it is reviewed.
+- Gate: `.githooks/pre-push` runs `check --push --remote "$1" --head <sha>` for each ref it pushes
+  (skipping deletes, `node` reading `/dev/null`), so a skipped review stops the push, which
+  precedes every pull request. `init` does not write a pre-push hook yet; that is for a project
+  that adopts this review flow.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -385,6 +390,14 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `/dev/null`, not the ref list (R3-hook-child-stdin); no `^` hint for a root commit
   (R3-root-commit-fix-hint); the three comments R2 found wrong or missing — route: delegated
   writer (the T7 writer, resumed)
+- [ ] T7e Accepted PR-range review follow-ups (the last round for slice 7; later findings are
+  carried): a record whose head lies past the pushed tip still covers the commits in its range
+  (Codex P2, R3-record-head-beyond-pushed-tip-dropped); only a valid record counts as evidence —
+  the v1 schema, `reviewed` or `unavailable` with a reason, full commit ids (Codex P2); a push to a
+  URL rather than a named remote fails with a hint that works, not `git remote set-head <url>`
+  (R4-push-to-url-always-refused); the module header's tense (R2-codex-review-header-future-tense)
+  and a comment on the newest-first order the fix hint relies on (R2-oldest-uncovered-order-implicit)
+  — route: delegated writer (the T7 writer, resumed)
 
 ## Progress
 - 2026-09-28: T1 measured before any change. `npm i -g github:jsaristi/js-harness` through the
@@ -1001,7 +1014,19 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   of 4 code commits since origin/main have no Codex review record`, naming 4c3cc5c, exit 1.
 - 2026-09-29: T7d committed as 4c3cc5c. Assessed (`--base-ref ec7af8f`): risk `medium`, 285 lines,
   `under_budget`; the PR-range review of slice 7 covers it.
+- 2026-09-29: review of the PR range `8e0dea6..a4460d4` (risk `high`, 1503 lines). Native review
+  lineage review-b1cb480b4ad6c5d0: consent granted (pre-granted), four lenses, approved and
+  acknowledged; three WARNING (R4-push-to-url-always-refused, R2-t7-design-stale-after-t7d,
+  R3-record-head-beyond-pushed-tip-dropped) and four SUGGESTION (R4-companion-no-timeout,
+  R2-codex-review-header-future-tense, R2-duplicated-git-helper, R2-oldest-uncovered-order-implicit).
+  Codex, through `js-harness codex-review --base 8e0dea6` (exit 0, recorded 8e0dea6..a4460d4): two
+  P2, a record whose head lies past the pushed ref is dropped, and a record without a valid schema
+  or outcome counts as coverage. The design text is brought up to date in this commit
+  (R2-t7-design-stale-after-t7d); the two P2, R3, R4-push-to-url and two SUGGESTION are accepted as
+  T7e. Carried: R4-companion-no-timeout (a Codex review can rightly take many minutes, so a timeout
+  needs a measured bound) and R2-duplicated-git-helper (a shared git helper across `check.mjs` and
+  `codex-review.mjs`).
 
 ## Next step
-The PR-range review of slice 7 (`8e0dea6..` its tip), gentle-ai then Codex. The installed skill on this machine still carries the old text until `js-harness` is
+T7e by the T7 writer resumed, its gentle-ai and Codex reviews, then the pull request of slice 7 on Sebastián's go-ahead. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
