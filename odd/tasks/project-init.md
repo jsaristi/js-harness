@@ -251,14 +251,19 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T4c Accepted whole-slice review follow-up: a pin that is not semver is an invalid
   `harness.json`, since a cloned repository's pin is printed inside a suggested install command
   (R1-001) — route: inline (one check and its tests)
-- [ ] T5 The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and
+- [x] T5 The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and
   the machine commands outside one; `status` acts by location (see "T5 design") — route: delegated
   writer (touches `bin/tui.mjs`, `bin/update.mjs`, `bin/lib/project.mjs` and their tests)
-- [ ] T5b Accepted review follow-ups on T5: the TUI binds project commands to the location it just
+- [x] T5b Accepted review follow-ups on T5: the TUI binds project commands to the location it just
   read, so a rebuilt menu never offers an unbound item, and a failing command or location re-read
   resumes stdin and redraws (R4-stale-command-binding, R3-001); an invalid `harness.json` is
   reported with a fixed reason, never `JSON.parse`'s text (R1-status-reason-echo); the three
-  readability points (R2-*) — route: to be decided with Codex's findings
+  readability points (R2-*) — route: delegated writer (the T5 writer, resumed: two non-trivial
+  files and their tests)
+- [x] T5c Accepted review follow-ups on T5b: the TUI's error line drops C1 controls too
+  (R3-oneline-c1-controls), the unreadable-pin test accepts every code shape (R2-002), and
+  `buildCommands` says what `root` is for (R2-001) — route: inline (one regex, one test pattern,
+  one comment)
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -665,7 +670,26 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   R2-update-header-overstates-status-scope, R2-confirm-mode-name-and-duplicated-default, R3-001 (a
   throwing location re-read leaves stdin paused) and R3-002 (a plain `status` in a repository that is
   not initialized now exits 1). All but R3-002 accepted as T5b; R3-002 is the "Command scope" rule
-  the design chose, and the one caller in this repo (e2e) moved to `--global`.
+  the design chose, and the one caller in this repo (e2e) moved to `--global`. Codex (`--base
+  7d8fe3e`): three P2, the same defects as R4-stale-command-binding, R1-status-reason-echo and
+  R3-001; its sandbox could not run the tests, so it read the diff and probed `JSON.parse`.
+- 2026-09-29: T5b done by the T5 writer, resumed: project commands take the location the menu was
+  last built for (`argsAt(location)`), a failing command or re-read prints one line and gives the
+  terminal back, `readPin` reports "it is not valid JSON" or "it cannot be read (<code>)", one
+  `confirm` mode driven by `CONFIRM_PROMPTS`, two comments corrected; 7 files, +270/−36. RED:
+  `tui.test.mjs` 11 of 56, `project.test.mjs` 1 of 139, `update.test.mjs` 1 of 32,
+  `install.test.mjs` 1 of 42. GREEN: `node --test` → `tests 541 / pass 534 / fail 0 / skipped 7`;
+  `npm run check` PASS; `npm run e2e` exit 0, 14 PASS, 0 FAIL (exit code captured by the parent).
+  Committed as e090e80. Assessed (`--base-ref 1030a87`): risk `high`, 306 lines, `review_due`.
+  Native review lineage review-1aaca18091b58a5c: consent granted (pre-granted), four lenses,
+  approved and acknowledged, three SUGGESTION (R2-001 `root` kept alive mostly by tests, R2-002 a
+  test pattern narrower than the codes, R3-oneline-c1-controls). Codex (`--base 1030a87`, run in
+  parallel with the native review rather than after it): no actionable regression; its sandbox
+  could not create a temp directory for the tests. All three SUGGESTION accepted as T5c.
+- 2026-09-29: T5c done inline by the parent. RED: the new C1 test failed (`\x9B` and `\x85` reached
+  stderr). GREEN: `tui.test.mjs` + `project.test.mjs` → `tests 196 / pass 191 / fail 0 / skipped 5`;
+  full suite through the commit gate PASS. Committed as 6353163. Assessed (`--base-ref e090e80`):
+  risk `medium`, `under_budget`; left to the whole-slice review, the slice's last code commit.
 
 ## Next step
-T5 on `feat/project-tui`: a delegated writer implements "T5 design" test-first.
+The whole-slice review of `7d8fe3e..HEAD` (gentle-ai, then Codex), then PR slice 5 against `main`.
