@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, `jsaristi/js-harness#12`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`feat/project-tui`, PR pending).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, open).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -759,7 +759,8 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   unguarded `after` cleanup (R4-after-hook-undefined-configdir, R3-001, R3-002 of the T5f review);
   the PR-range SUGGESTION above, of which the skill's missing outside-a-repository case is the one
   worth doing first, since agents read that text.
+- 2026-09-29: PR `jsaristi/js-harness#12` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
 
 ## Next step
-Open PR slice 5 (`feat/project-tui`) against `main`, on Sebastián's go-ahead; after it merges, T6
+Merge `jsaristi/js-harness#12` on Sebastián's go-ahead; after it merges, T6
 (`doctor` reports the Codex plugin) in a new session.
