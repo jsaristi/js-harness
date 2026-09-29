@@ -45,6 +45,7 @@ function makeRepo(failing = []) {
     `import fs from 'node:fs';\n` +
       `const argv = process.argv.slice(2);\n` +
       `const head = argv[argv.indexOf('--head') + 1];\n` +
+      `try { fs.readFileSync(0); } catch {}\n` +
       `fs.appendFileSync(${JSON.stringify(path.join(root, 'calls.log'))}, argv.join(' ') + '\\n');\n` +
       `const failing = fs.readFileSync(${JSON.stringify(path.join(root, 'failing.txt'))}, 'utf8').split('\\n');\n` +
       `process.exit(failing.includes(head) ? 1 : 0);\n`,
@@ -74,18 +75,18 @@ test('the hook is POSIX sh and starts with a shebang', () => {
   assert.match(text, /^#!\/bin\/sh\r?\n/);
 });
 
-test('each pushed ref is checked with --push --head <its local sha>', { skip }, () => {
+test('each pushed ref is checked with --push --remote <the remote> --head <its local sha>', { skip }, () => {
   const root = makeRepo();
   const result = runHook(root, line(A) + line(B, A));
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(result.calls, [`--push --head ${A}`, `--push --head ${B}`]);
+  assert.deepEqual(result.calls, [`--push --remote origin --head ${A}`, `--push --remote origin --head ${B}`]);
 });
 
 test('a deleted ref (local sha all zeros) is not checked', { skip }, () => {
   const root = makeRepo();
   const result = runHook(root, `(delete) ${ZEROS} refs/heads/gone ${A}\n` + line(B));
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(result.calls, [`--push --head ${B}`]);
+  assert.deepEqual(result.calls, [`--push --remote origin --head ${B}`]);
 });
 
 test('a push of only deletes runs no check and passes', { skip }, () => {
@@ -99,7 +100,7 @@ test('a failing check stops the push, but every ref is still checked', { skip },
   const root = makeRepo([A]);
   const result = runHook(root, line(A) + line(B));
   assert.notEqual(result.status, 0);
-  assert.deepEqual(result.calls, [`--push --head ${A}`, `--push --head ${B}`]);
+  assert.deepEqual(result.calls, [`--push --remote origin --head ${A}`, `--push --remote origin --head ${B}`]);
 });
 
 test('an empty stdin runs no check and passes', { skip }, () => {
@@ -107,4 +108,20 @@ test('an empty stdin runs no check and passes', { skip }, () => {
   const result = runHook(root, '');
   assert.equal(result.status, 0);
   assert.deepEqual(result.calls, []);
+});
+
+test('the remote the push goes to is passed through, and the check never reads the ref list', { skip }, () => {
+  const root = makeRepo();
+  const result = spawnSync('sh', ['pre-push', 'upstream', 'https://example.invalid/repo.git'], {
+    cwd: root,
+    input: line(A) + line(B, A) + line('c'.repeat(40)),
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = fs.readFileSync(path.join(root, 'calls.log'), 'utf8').split('\n').filter(Boolean);
+  assert.deepEqual(calls, [
+    `--push --remote upstream --head ${A}`,
+    `--push --remote upstream --head ${B}`,
+    `--push --remote upstream --head ${'c'.repeat(40)}`,
+  ]);
 });

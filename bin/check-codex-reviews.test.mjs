@@ -45,14 +45,17 @@ function commit(root, file, content, message) {
   return git(root, 'rev-parse', 'HEAD');
 }
 
-/** A repo on `main` with one code commit; `main` is the default branch the check compares to. */
-function makeRepo(branch = 'main') {
+/** A repo on `main` with one code commit, which `origin/<remoteBranch>` also points at: what the
+ * check compares a push to is the remote's branch, never the local one. `remoteBranch = null`
+ * leaves the repo with no remote refs at all. */
+function makeRepo(remoteBranch = 'main') {
   const root = tmp('js-harness-check-push-');
   git(root, 'init');
-  git(root, 'symbolic-ref', 'HEAD', `refs/heads/${branch}`);
+  git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
   const base = commit(root, 'a.js', 'one', 'init');
+  if (remoteBranch) git(root, 'update-ref', `refs/remotes/origin/${remoteBranch}`, base);
   return { root, base };
 }
 
@@ -82,7 +85,7 @@ test('every code commit inside a recorded range passes, and the detail counts th
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.name, 'codex-review');
   assert.equal(row.pass, true);
-  assert.match(row.detail, /2 code commits since main, all covered by a Codex review record/);
+  assert.match(row.detail, /2 code commits since origin.main, all covered by a Codex review record/);
 });
 
 test('an uncovered code commit fails, naming it and the command that records it', () => {
@@ -93,7 +96,7 @@ test('an uncovered code commit fails, naming it and the command that records it'
   record(root, base, first);
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false);
-  assert.match(row.detail, /1 of 2 code commits since main/);
+  assert.match(row.detail, /1 of 2 code commits since origin.main/);
   assert.match(row.detail, /codex-reviews\.jsonl/);
   const lines = row.lines.join('\n');
   assert.ok(lines.includes(`${short(root, second)} feat: three, never reviewed`), lines);
@@ -120,7 +123,7 @@ test('a commit that changes only Markdown needs no review, in any letter case', 
   commit(root, 'README.MD', 'words', 'docs: readme');
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, true);
-  assert.match(row.detail, /no code commits since main/);
+  assert.match(row.detail, /no code commits since origin.main/);
 });
 
 test('a commit that changes Markdown and code still needs a review', () => {
@@ -139,13 +142,16 @@ test('a merge commit needs no review of its own', () => {
   const own = commit(root, 'b.js', 'two', 'feat: two');
   git(root, 'checkout', 'main');
   commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  // A fetch: origin/main now reaches the commit that is about to be merged in.
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
   git(root, 'checkout', 'feature');
   git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
   record(root, base, own);
   const row = checkCodexReviews(root, 'HEAD');
-  // Against the *old* main the merged-in commit is not in the range; the merge commit is ignored.
+  // The merged-in commit is excluded because the current origin/main reaches it, and the merge
+  // commit itself is skipped: only `own` needed a review, and the record covers it.
   assert.equal(row.pass, true, `${row.detail}\n${(row.lines ?? []).join('\n')}`);
-  assert.match(row.detail, /1 code commit since main/);
+  assert.match(row.detail, /1 code commit since origin\/main/);
 });
 
 test('an unavailable record covers its range and shows up as a line, still passing', () => {
@@ -170,17 +176,16 @@ test('an unavailable record that covers none of these commits is not listed', ()
   assert.ok(!row.lines.some((line) => line.startsWith('unavailable')));
 });
 
-test('records whose base or head no longer resolve are ignored, and counted', () => {
+test('a record whose base no longer resolves is ignored and counted', () => {
   const { root, base } = makeRepo();
   feature(root);
   const head = commit(root, 'b.js', 'two', 'feat: two');
   record(root, base, head);
   record(root, 'f'.repeat(40), head);
-  record(root, base, 'e'.repeat(40));
   record(root, '--upload-pack=x', head);
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, true);
-  assert.match(row.detail, /3 records ignored/);
+  assert.match(row.detail, /2 records ignored/);
 });
 
 test('ignoring a record can leave a commit uncovered', () => {
@@ -193,34 +198,102 @@ test('ignoring a record can leave a commit uncovered', () => {
   assert.match(row.detail, /1 record ignored/);
 });
 
-test('a repository with no main, master or origin/HEAD fails saying so', () => {
-  const { root } = makeRepo('trunk');
+test('a record whose head is outside the checked range is not expanded at all', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, base, head);
+  record(root, base, base);
+  record(root, 'e'.repeat(40), 'd'.repeat(40));
+  const expanded = [];
+  const spawn = (cmd, args, opts) => {
+    if (args[0] === 'rev-list') expanded.push(args[1]);
+    return spawnSync(cmd, args, opts);
+  };
+  const row = checkCodexReviews(root, 'HEAD', { spawn });
+  assert.equal(row.pass, true);
+  assert.ok(expanded.includes(`${base}..${head}`), 'the record whose head is in the range is expanded');
+  assert.ok(!expanded.includes(`${base}..${base}`), 'a head on the default branch is skipped');
+  assert.ok(!expanded.some((range) => range.startsWith('e'.repeat(40))), 'an unknown head is skipped');
+});
+
+test('a repository with no refs of the remote fails, naming the command that sets its default branch', () => {
+  const { root } = makeRepo(null);
   feature(root);
   commit(root, 'b.js', 'two', 'feat: two');
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false);
-  assert.match(row.detail, /default branch/i);
+  assert.match(row.detail, /no default branch of origin/i);
+  assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')), row.lines.join('\n'));
 });
 
-test('master is the default branch when there is no main', () => {
+test('a local main is never the base: with no origin refs it still fails', () => {
+  const { root } = makeRepo(null);
+  git(root, 'branch', 'master');
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+});
+
+test('origin/master is the default branch when there is no origin/main', () => {
   const { root, base } = makeRepo('master');
   feature(root);
   const head = commit(root, 'b.js', 'two', 'feat: two');
   record(root, base, head);
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, true);
-  assert.match(row.detail, /since master/);
+  assert.match(row.detail, /since origin\/master/);
 });
 
-test('origin/HEAD names the default branch before a local main does', () => {
+test('origin/HEAD names the default branch before origin/main does', () => {
   const { root, base } = makeRepo();
-  const behind = commit(root, 'b.js', 'two', 'feat: two, on main');
-  git(root, 'update-ref', 'refs/remotes/origin/main', base);
-  git(root, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+  const ahead = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'update-ref', 'refs/remotes/origin/main', ahead);
+  git(root, 'update-ref', 'refs/remotes/origin/develop', base);
+  git(root, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop');
   const row = checkCodexReviews(root, 'HEAD');
-  assert.match(row.detail, /since origin\/main/);
+  assert.match(row.detail, /since origin\/develop/);
   assert.equal(row.pass, false);
-  assert.ok(row.lines.join('\n').includes(short(root, behind)));
+  assert.ok(row.lines.join('\n').includes(short(root, ahead)));
+});
+
+test('a local main ahead of origin/main with no origin/HEAD reports the unreviewed commits', () => {
+  // The push case that used to pass: main itself is being pushed, so a local main as the base
+  // left nothing to check.
+  const { root } = makeRepo();
+  const first = commit(root, 'b.js', 'two', 'feat: two, on main');
+  const second = commit(root, 'c.js', 'three', 'feat: three, on main');
+  const row = checkCodexReviews(root, 'main');
+  assert.equal(row.pass, false);
+  const lines = row.lines.join('\n');
+  assert.ok(lines.includes(short(root, first)) && lines.includes(short(root, second)), lines);
+});
+
+test('--remote picks another remote', () => {
+  const { root, base } = makeRepo(null);
+  git(root, 'update-ref', 'refs/remotes/upstream/main', base);
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  const row = checkCodexReviews(root, 'HEAD', { remote: 'upstream' });
+  assert.match(row.detail, /since upstream\/main/);
+  assert.match(row.detail, /1 of 1/);
+});
+
+test('a root commit gets no ^ hint, and the hint that would reach it is named', () => {
+  const { root, base } = makeRepo();
+  git(root, 'checkout', '--orphan', 'unrelated');
+  const rootCommit = commit(root, 'z.js', 'unrelated history', 'feat: a root commit');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false);
+  const lines = row.lines.join('\n');
+  assert.ok(lines.includes(short(root, rootCommit)), lines);
+  assert.ok(!lines.includes(`--base ${short(root, rootCommit)}^`), lines);
+  assert.match(lines, /root commit/);
+  assert.match(lines, /--unavailable <reason>/);
+  // What the hint says is true: a range from the unrelated default branch does reach the root.
+  record(root, base, rootCommit);
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
 });
 
 test('--head checks that commit instead of HEAD', () => {
@@ -272,6 +345,7 @@ function projectWithUnreviewedCommit() {
   fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'docs: agents');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
   feature(root);
   const head = commit(root, 'b.js', 'two', 'feat: two');
   return { root, head, home: tmp('js-harness-check-push-home-') };
@@ -284,12 +358,31 @@ test('plain check runs and prints no codex-review row', async () => {
   assert.doesNotMatch(output, /codex-review/);
 });
 
-test('check --push adds the codex-review row and fails on an uncovered commit', async () => {
+test('check --push runs only the codex-review row and fails on an uncovered commit', async () => {
   const { root, head, home } = projectWithUnreviewedCommit();
   const { code, output } = await runCheck(['--push', '--cwd', root, '--home', home]);
   assert.equal(code, 1);
   assert.match(output, /FAIL {2}codex-review/);
   assert.ok(output.includes(`js-harness codex-review --base ${short(root, head)}^`), output);
+  // The budget, payload and test rows read the working tree, not the pushed commit.
+  assert.doesNotMatch(output, /budget|payload|tests/);
+  assert.equal(output.split('\n').filter((l) => /^(PASS|FAIL|INFO) /.test(l)).length, 1, output);
+});
+
+test('check --push needs no AGENTS.md: the budget row does not run', async () => {
+  const { root, head, home } = projectWithUnreviewedCommit();
+  record(root, git(root, 'rev-parse', `${head}^`), head);
+  git(root, 'rm', '-q', 'AGENTS.md');
+  git(root, 'commit', '-m', 'docs: drop agents');
+  const { code, output } = await runCheck(['--push', '--head', head, '--cwd', root, '--home', home]);
+  assert.equal(code, 0, output);
+});
+
+test('check --push --remote names the remote the range starts from', async () => {
+  const { root, home } = projectWithUnreviewedCommit();
+  git(root, 'update-ref', 'refs/remotes/mirror/main', 'main');
+  const { output } = await runCheck(['--push', '--remote', 'mirror', '--cwd', root, '--home', home]);
+  assert.match(output, /since mirror\/main/);
 });
 
 test('check --push --head checks the given commit and passes once it is covered', async () => {
@@ -301,8 +394,8 @@ test('check --push --head checks the given commit and passes once it is covered'
   assert.match(output, /PASS {2}codex-review/);
 });
 
-test('--head or --push --head with no value exits 2 with usage and runs no row', async () => {
-  for (const argv of [['--push', '--head'], ['--head', '--push'], ['--head']]) {
+test('--head or --remote with no value exits 2 with usage and runs no row', async () => {
+  for (const argv of [['--push', '--head'], ['--head', '--push'], ['--head'], ['--push', '--remote'], ['--remote', '--push']]) {
     const { code, output, errOutput } = await runCheck(argv);
     assert.equal(code, 2, argv.join(' '));
     assert.match(errOutput, /Usage: js-harness check .*--push/);

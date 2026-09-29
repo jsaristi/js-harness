@@ -282,3 +282,15 @@ test('--home falls back to JS_HARNESS_HOME', async () => {
   assert.equal(code, 0);
   assert.equal(readCodexReviews(root).length, 1);
 });
+
+test('a failed git status refuses the review instead of reading as a clean tree', async () => {
+  const { root } = makeRepo();
+  const { home, callLog } = makeHome(0);
+  const spawn = (cmd, args, opts) =>
+    cmd === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : spawnSync(cmd, args, opts);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /git status/);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.equal(fs.existsSync(callLog), false);
+});

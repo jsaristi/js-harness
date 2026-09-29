@@ -38,11 +38,12 @@ function parseArgs(argv, env, defaultHome) {
   };
 }
 
-/** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. */
+/** Trimmed stdout of a successful `git <args>` run in `cwd` (empty when it printed nothing), else
+ * `null`: a failed run and an empty answer are different things. */
 function git(spawn, cwd, args) {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8' });
-    if (result && !result.error && result.status === 0 && result.stdout) return result.stdout.trim();
+    if (result && !result.error && result.status === 0) return (result.stdout ?? '').trim();
   } catch {
     // No git on PATH: the caller reports it as an unresolvable repository or revision.
   }
@@ -110,6 +111,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
     const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    if (dirty === null) {
+      error('Could not run `git status` to check for uncommitted changes, so the review was not started and nothing was recorded.');
+      return 1;
+    }
     if (dirty) {
       error(
         `Tracked files have uncommitted changes, but the record claims the committed range base..HEAD (${base.slice(0, 7)}..HEAD); ` +

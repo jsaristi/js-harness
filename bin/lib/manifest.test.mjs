@@ -721,4 +721,6 @@ test('the installed skill names codex-review and check --push', () => {
   assert.match(text, /js-harness codex-review --base/);
   assert.match(text, /--unavailable/);
   assert.match(text, /js-harness check --push/);
+  assert.match(text, /only check it runs/);
+  assert.match(text, /default branch/);
 });
