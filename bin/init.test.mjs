@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -9,6 +9,7 @@ import { initMain } from './init.mjs';
 // T2e item 8 (R3-tests-depend-on-host-git-config): isolate every real `git` call this file makes
 // (directly, or through the engine's default `spawnSync`, which inherits `process.env`) from the
 // host's own global/system config — see bin/lib/project.test.mjs's identical `before` hook.
+let configDir;
 before(() => {
   // A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
   // committed; inherited here, they would send every git call below to that repository instead
@@ -16,10 +17,14 @@ before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-init-cli-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-init-cli-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+// The empty git config lives outside the repository, so it is removed with the suite.
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeTmpRepo(prefix = 'js-harness-init-cli-') {

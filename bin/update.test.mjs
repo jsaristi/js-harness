@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,14 +11,19 @@ import { resolveLatest, resolveSpec, statusMain, updateMain, upgradeMain } from 
 
 // T5: `status` now reads the project the current folder belongs to, and these tests run real `git`,
 // so they must not pick up the host's git config (see project.test.mjs, T2e item 8).
+let configDir;
 before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-update-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-update-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+// The empty git config lives outside the repository, so it is removed with the suite.
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeTmpDir(prefix) {

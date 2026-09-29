@@ -27,11 +27,12 @@ import { spawnSync } from 'node:child_process';
 // git config (see project.test.mjs, T2e item 8), and give every machine-menu test a folder outside any
 // repository, since the default (this repo's own checkout) is now a project.
 let nonGitDir;
+let configDir;
 before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
@@ -39,6 +40,7 @@ before(() => {
 });
 after(() => {
   fs.rmSync(nonGitDir, { recursive: true, force: true });
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeFakeStdin() {

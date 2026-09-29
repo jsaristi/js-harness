@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,6 +24,7 @@ import { sha256 } from './manifest.mjs';
 // change what a test observes. Pointing `GIT_CONFIG_GLOBAL` at an empty file and setting
 // `GIT_CONFIG_NOSYSTEM=1` isolates every `git` call this file makes — both the ones tests spawn
 // directly and the engine's own default `spawnSync`, which inherits `process.env` the same way.
+let configDir;
 before(() => {
   // A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
   // committed; inherited here, they would send every git call below to that repository instead
@@ -31,10 +32,14 @@ before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-project-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-project-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+// The empty git config lives outside the repository, so it is removed with the suite.
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeTmpRepo(prefix = 'js-harness-project-') {
