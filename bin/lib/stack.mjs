@@ -1,6 +1,8 @@
 // The stack's tools as data, plus read-only, injectable probes for three of their four states:
 // installed (+ version), configured (per host, per project). `outdated` is T2's job — see
 // odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
+// The Codex plugin row (`codex-plugin`, T6) keeps the column meanings: `claude` is the plugin
+// enabled, `codex` is "the Codex side is ready", i.e. logged in.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
@@ -12,26 +14,38 @@ const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // report `unknown`, the same as any other unreadable result, rather than leaving it to hang.
 const PROBE_TIMEOUT_MS = 5000;
 
-/** Runs `<command> <args>` and extracts the first semver from stdout. Never throws: a missing
- * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version, or a probe
- * that had to be killed after `PROBE_TIMEOUT_MS`, is `unknown`. `shell` is needed on win32 because
- * npm-installed global binaries are `.cmd` shims (see how `upgradeMain` in update.mjs spawns
- * `js-harness` itself for the same reason). Through a shell the command goes as one line with no
- * args array: Node 24 warns (DEP0190) on stderr otherwise, and the probe args are fixed literals. */
-function probeVersionCommand(command, args, { spawn = spawnSync, platform = process.platform } = {}) {
+/** Spawns one probe, bounded by `PROBE_TIMEOUT_MS`, and returns the raw result, or `null` when the
+ * spawn throws or yields nothing. `shell` is needed on win32 because npm-installed global binaries
+ * are `.cmd` shims (see how `upgradeMain` in update.mjs spawns `js-harness` itself for the same
+ * reason). Through a shell the command goes as one line with no args array: Node 24 warns (DEP0190)
+ * on stderr otherwise, and the probe args are fixed literals. `env`, when given, is merged over
+ * `process.env`; without it the child inherits the environment untouched. */
+function spawnProbe(command, args, { spawn = spawnSync, platform = process.platform, env } = {}) {
   const shell = platform === 'win32';
   const [file, argv] = shell ? [[command, ...args].join(' '), []] : [command, args];
-  let result;
+  const options = { encoding: 'utf8', shell, timeout: PROBE_TIMEOUT_MS };
+  if (env) options.env = { ...process.env, ...env };
   try {
-    result = spawn(file, argv, { encoding: 'utf8', shell, timeout: PROBE_TIMEOUT_MS });
+    return spawn(file, argv, options) ?? null;
   } catch {
-    return { state: 'missing', version: null };
+    return null;
   }
+}
+
+/** Node kills a timed-out spawnSync child with a signal (status becomes null); it may also carry
+ * an ETIMEDOUT error instead, depending on where the timeout was detected. Either shape means the
+ * tool could not be reached in time, not that it is missing. */
+function probeTimedOut(result) {
+  return Boolean(result.signal || result.error?.code === 'ETIMEDOUT');
+}
+
+/** Runs `<command> <args>` and extracts the first semver from stdout. Never throws: a missing
+ * binary (ENOENT, or any non-zero exit) is `missing`; output with no parseable version, or a probe
+ * that had to be killed after `PROBE_TIMEOUT_MS`, is `unknown`. */
+function probeVersionCommand(command, args, deps) {
+  const result = spawnProbe(command, args, deps);
   if (!result) return { state: 'missing', version: null };
-  // Node kills a timed-out spawnSync child with a signal (status becomes null); it may also carry
-  // an ETIMEDOUT error instead, depending on where the timeout was detected. Either shape means
-  // the tool could not be reached in time, not that it is missing.
-  if (result.signal || result.error?.code === 'ETIMEDOUT') return { state: 'unknown', version: null };
+  if (probeTimedOut(result)) return { state: 'unknown', version: null };
   if (result.error || result.status !== 0) return { state: 'missing', version: null };
   const match = SEMVER_RE.exec(result.stdout ?? '');
   return match ? { state: 'ok', version: match[1] } : { state: 'unknown', version: null };
@@ -113,21 +127,36 @@ function context7InstalledVersion(home) {
   return match ? { state: 'ok', version: match[1] } : { state: 'unknown', version: null };
 }
 
-/** typescript-lsp has no CLI either: its version comes from the plugin marketplace's own record
- * of what it installed, since that is the only place the version is written down. */
-function typescriptLspInstalledVersion(home) {
+/** A Claude Code plugin has no CLI to ask: its version comes from the plugin marketplace's own
+ * record of what it installed (`installed_plugins.json`), since that is the only place the version
+ * is written down. Used by typescript-lsp and the Codex plugin, each with its own
+ * `<name>@<marketplace>` id. */
+function pluginInstalledVersion(home, pluginId) {
   const { found, data } = readJsonFile(path.join(home, '.claude', 'plugins', 'installed_plugins.json'));
   if (!found) return { state: 'missing', version: null };
   if (data === undefined) return { state: 'unknown', version: null };
-  const entries = data?.plugins?.['typescript-lsp@claude-plugins-official'];
+  const entries = data?.plugins?.[pluginId];
   const version = Array.isArray(entries) ? entries[0]?.version : undefined;
   return version ? { state: 'ok', version } : { state: 'missing', version: null };
+}
+
+/** Whether Codex is logged in, by asking Codex itself: `codex login status` exits 0 when it is.
+ * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home the MCP probes read
+ * and a fixture home never reads the real one. `unknown` on a timeout; any other outcome (not
+ * logged in, no `codex` on PATH, a spawn that throws) is `missing`. Never reads `auth.json`. */
+function codexLoggedIn({ home, ...deps }) {
+  const env = { CODEX_HOME: path.join(home, '.codex') };
+  const result = spawnProbe('codex', ['login', 'status'], { ...deps, env });
+  if (!result) return 'missing';
+  if (probeTimedOut(result)) return 'unknown';
+  return !result.error && result.status === 0 ? 'ok' : 'missing';
 }
 
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
- * for, e.g. context7 has no CLI to `installed`-fix, typescript-lsp has no Codex equivalent). `fix`
+ * for, e.g. context7 has no CLI to `installed`-fix, typescript-lsp has no Codex equivalent; the
+ * Codex plugin's `codex` dimension is "logged in", not "registered"). `fix`
  * takes the same `deps` bag as the other probes, since codegraph's `project` fix must carry the
  * actual resolved project root, not a placeholder. Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
@@ -204,7 +233,7 @@ export const tools = [
   },
   {
     id: 'typescript-lsp',
-    installed: ({ home }) => typescriptLspInstalledVersion(home),
+    installed: ({ home }) => pluginInstalledVersion(home, 'typescript-lsp@claude-plugins-official'),
     configured: ({ home }) => ({
       claude: claudeEnabledPlugin(home, 'typescript-lsp@claude-plugins-official'),
       codex: 'n/a',
@@ -216,6 +245,24 @@ export const tools = [
       installed: 'claude plugin install typescript-lsp@claude-plugins-official',
       claude: 'claude plugin enable typescript-lsp@claude-plugins-official',
       upToDate: 'claude plugin update typescript-lsp@claude-plugins-official',
+    }),
+  },
+  {
+    // `codex` here is "logged in", not a registration: the plugin's Codex side is Codex itself
+    // being signed in. Its fixes are the tool's own commands (the marketplace source is the one
+    // recorded in `known_marketplaces.json`).
+    id: 'codex-plugin',
+    installed: ({ home }) => pluginInstalledVersion(home, 'codex@openai-codex'),
+    configured: (deps) => ({
+      claude: claudeEnabledPlugin(deps.home, 'codex@openai-codex'),
+      codex: codexLoggedIn(deps),
+    }),
+    project: () => 'n/a',
+    fix: () => ({
+      installed: 'claude plugin marketplace add openai/codex-plugin-cc; claude plugin install codex@openai-codex',
+      claude: 'claude plugin enable codex@openai-codex',
+      codex: 'codex login',
+      upToDate: 'claude plugin update codex@openai-codex',
     }),
   },
 ];

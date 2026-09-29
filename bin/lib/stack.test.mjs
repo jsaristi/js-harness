@@ -28,10 +28,10 @@ function findTool(id) {
   return tool;
 }
 
-test('tools carries exactly the five stack tools, in Design-table order', () => {
+test('tools carries exactly the six stack tools, in Design-table order', () => {
   assert.deepEqual(
     tools.map((t) => t.id),
-    ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+    ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
   );
 });
 
@@ -84,6 +84,18 @@ test('context7 fix covers claude, codex and upToDate but has no installed or pro
 test('typescript-lsp fix covers installed, claude and upToDate but has no codex or project fix', () => {
   const fix = findTool('typescript-lsp').fix({});
   assert.deepEqual(Object.keys(fix).sort(), ['claude', 'installed', 'upToDate']);
+});
+
+test('codex-plugin fix covers installed, claude, codex and upToDate with its own commands, and no project fix', () => {
+  const fix = findTool('codex-plugin').fix({});
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
+  assert.equal(
+    fix.installed,
+    'claude plugin marketplace add openai/codex-plugin-cc; claude plugin install codex@openai-codex',
+  );
+  assert.equal(fix.claude, 'claude plugin enable codex@openai-codex');
+  assert.equal(fix.codex, 'codex login');
+  assert.equal(fix.upToDate, 'claude plugin update codex@openai-codex');
 });
 
 // --- installed + version: version-command tools (gentle-ai, engram, codegraph) ---
@@ -271,6 +283,56 @@ test('typescript-lsp is unknown when installed_plugins.json is malformed', () =>
   }
 });
 
+// --- installed + version: codex-plugin (same installed_plugins.json, its own plugin id) ---
+
+test('codex-plugin reads its version from installed_plugins.json under codex@openai-codex', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+      version: 2,
+      plugins: {
+        'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
+        'codex@openai-codex': [{ version: '1.0.6' }],
+      },
+    });
+    assert.deepEqual(findTool('codex-plugin').installed({ home }), { state: 'ok', version: '1.0.6' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin is missing when installed_plugins.json has no codex@openai-codex entry, whatever else is installed', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+      plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    });
+    assert.deepEqual(findTool('codex-plugin').installed({ home }), { state: 'missing', version: null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin is missing when installed_plugins.json does not exist', () => {
+  const home = makeTmpHome();
+  try {
+    assert.deepEqual(findTool('codex-plugin').installed({ home }), { state: 'missing', version: null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin is unknown when installed_plugins.json is malformed', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), 'not json', 'utf8');
+    assert.deepEqual(findTool('codex-plugin').installed({ home }), { state: 'unknown', version: null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- configured per host ---
 
 test('gentle-ai reads configured per host from ~/.gentle-ai/state.json installed_agents', () => {
@@ -328,6 +390,167 @@ test('typescript-lsp configured reads Claude from settings.json enabledPlugins a
     });
     const tool = findTool('typescript-lsp');
     assert.deepEqual(tool.configured({ home }), { claude: 'ok', codex: 'n/a' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- configured per host: codex-plugin (enabled in Claude Code; "logged in" on the Codex side) ---
+
+/** A fake spawn recording every call, answering the `codex login status` probe with `result`. */
+function loginSpawn(result, calls = []) {
+  return (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return result;
+  };
+}
+
+test('codex-plugin claude is ok when settings.json enables codex@openai-codex', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude', 'settings.json'), { enabledPlugins: { 'codex@openai-codex': true } });
+    const configured = findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }) });
+    assert.equal(configured.claude, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin claude is missing when it is disabled or only another plugin is enabled', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.claude', 'settings.json'), {
+      enabledPlugins: { 'codex@openai-codex': false, 'typescript-lsp@claude-plugins-official': true },
+    });
+    const configured = findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }) });
+    assert.equal(configured.claude, 'missing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin codex is ok when `codex login status` exits 0', () => {
+  const home = makeTmpHome();
+  try {
+    const configured = findTool('codex-plugin').configured({
+      home,
+      spawn: loginSpawn({ status: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' }),
+    });
+    assert.equal(configured.codex, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin codex is missing when `codex login status` exits non-zero (not logged in)', () => {
+  const home = makeTmpHome();
+  try {
+    const configured = findTool('codex-plugin').configured({
+      home,
+      spawn: loginSpawn({ status: 1, stdout: '', stderr: 'Not logged in' }),
+    });
+    assert.equal(configured.codex, 'missing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin codex is unknown when the login probe is killed by a timeout signal', () => {
+  const home = makeTmpHome();
+  try {
+    const configured = findTool('codex-plugin').configured({
+      home,
+      spawn: loginSpawn({ status: null, signal: 'SIGTERM', stdout: '', stderr: '' }),
+    });
+    assert.equal(configured.codex, 'unknown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin codex is unknown when the login probe result carries an ETIMEDOUT error', () => {
+  const home = makeTmpHome();
+  try {
+    const error = new Error('spawnSync codex ETIMEDOUT');
+    error.code = 'ETIMEDOUT';
+    const configured = findTool('codex-plugin').configured({
+      home,
+      spawn: loginSpawn({ status: null, error, stdout: '', stderr: '' }),
+    });
+    assert.equal(configured.codex, 'unknown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin codex is missing when codex is not on PATH (ENOENT) or the spawn throws', () => {
+  const home = makeTmpHome();
+  try {
+    const tool = findTool('codex-plugin');
+    assert.equal(tool.configured({ home, spawn: fakeSpawnMissing() }).codex, 'missing');
+    const throwing = () => {
+      throw new Error('spawn blew up');
+    };
+    assert.equal(tool.configured({ home, spawn: throwing }).codex, 'missing');
+    assert.equal(tool.configured({ home, spawn: () => undefined }).codex, 'missing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login probe points CODEX_HOME at <home>/.codex and keeps the rest of the environment', () => {
+  const home = makeTmpHome();
+  try {
+    const calls = [];
+    findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, calls), platform: 'linux' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].opts.env.CODEX_HOME, path.join(home, '.codex'));
+    assert.equal(calls[0].opts.env.PATH ?? calls[0].opts.env.Path, process.env.PATH ?? process.env.Path);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login probe passes the 5000ms timeout, and no env is added to the version probes', () => {
+  const home = makeTmpHome();
+  try {
+    const calls = [];
+    findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, calls) });
+    assert.equal(calls[0].opts.timeout, 5000);
+
+    const versionCalls = [];
+    findTool('gentle-ai').installed({ spawn: loginSpawn({ status: 0, stdout: '3.7.0' }, versionCalls) });
+    assert.equal('env' in versionCalls[0].opts, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login probe is one shell command line with no args array on win32, an args array elsewhere', () => {
+  const home = makeTmpHome();
+  try {
+    const win = [];
+    findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, win), platform: 'win32' });
+    assert.equal(win[0].cmd, 'codex login status');
+    assert.deepEqual(win[0].args, []);
+    assert.equal(win[0].opts.shell, true);
+
+    const posix = [];
+    findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, posix), platform: 'linux' });
+    assert.equal(posix[0].cmd, 'codex');
+    assert.deepEqual(posix[0].args, ['login', 'status']);
+    assert.equal(posix[0].opts.shell, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login answer comes only from the probe, never from an auth.json in the Codex home', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.codex', 'auth.json'), { tokens: { access_token: 'sentinel-secret' } });
+    const configured = findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 1, stdout: '' }) });
+    assert.equal(configured.codex, 'missing');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -413,7 +636,7 @@ test('codegraph configured for the project is missing when .codegraph/ does not 
 });
 
 test('project is n/a for every tool that has no per-project meaning', () => {
-  for (const id of ['gentle-ai', 'engram', 'context7', 'typescript-lsp']) {
+  for (const id of ['gentle-ai', 'engram', 'context7', 'typescript-lsp', 'codex-plugin']) {
     assert.equal(findTool(id).project({ project: '/does/not/matter' }), 'n/a');
   }
 });
@@ -470,7 +693,7 @@ test('probeStack returns one row per tool, in order, never throwing on an empty 
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {

@@ -40,22 +40,33 @@ function seedHealthyHome(home) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'codex@openai-codex': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: {
+      'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
+      'codex@openai-codex': [{ version: '1.0.6' }],
+    },
   });
 }
 
 /** A fake spawn: resolves `git rev-parse --show-toplevel` to `gitToplevel` (or fails, as a real
- * one would outside a repo), and any version command named in `versions` to its stdout. Anything
- * else looks like a missing binary — never a real spawn, never the network. */
-function fakeSpawn({ versions = {}, gitToplevel } = {}) {
-  return (cmd, args) => {
+ * one would outside a repo), any version command named in `versions` to its stdout, and the
+ * `codex login status` probe per `codexLogin` (`'in'` exits 0, `'out'` exits 1, `'timeout'` is
+ * killed by a signal). Anything else looks like a missing binary — never a real spawn, never the
+ * network. Every login probe's `env` lands in `loginEnvs`, so a test can see which Codex home it read. */
+function fakeSpawn({ versions = {}, gitToplevel, codexLogin, loginEnvs = [] } = {}) {
+  return (cmd, args, opts) => {
     if (cmd === 'git' && args[0] === 'rev-parse') {
       return gitToplevel
         ? { status: 0, stdout: `${gitToplevel}\n`, stderr: '' }
         : { status: 128, stdout: '', stderr: 'not a git repository' };
+    }
+    if ([cmd, ...args].join(' ') === 'codex login status') {
+      loginEnvs.push(opts?.env);
+      if (codexLogin === 'in') return { status: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' };
+      if (codexLogin === 'out') return { status: 1, stdout: '', stderr: 'Not logged in' };
+      if (codexLogin === 'timeout') return { status: null, signal: 'SIGTERM', stdout: '', stderr: '' };
     }
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
@@ -88,14 +99,16 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
     const spawn = fakeSpawn({
       versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
+      codexLogin: 'in',
     });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
 
     assert.equal(code, 0);
-    for (const id of ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp']) {
+    for (const id of ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin']) {
       assert.match(output, new RegExp(id));
     }
+    assert.match(output, /codex-plugin\s+1\.0\.6\s+ok\s+ok\s+n\/a/);
     assert.match(output, /3\.7\.0/);
     assert.match(output, /hosted/);
     assert.doesNotMatch(output, /\nFix:/, 'a fully healthy fixture must report no gaps');
@@ -105,7 +118,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
   }
 });
 
-test('doctorMain --json prints a parseable array with the five tool ids and upToDate unknown (or n/a for hosted context7)', async () => {
+test('doctorMain --json prints a parseable array with the six tool ids and upToDate unknown (or n/a for hosted context7)', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
@@ -118,7 +131,7 @@ test('doctorMain --json prints a parseable array with the five tool ids and upTo
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
@@ -145,6 +158,12 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
     assert.match(output, /codegraph \(installed\): npm i -g @colbymchenry\/codegraph/);
     assert.doesNotMatch(output, /codegraph upgrade/);
     assert.match(output, /gentle-ai \(claude\): gentle-ai install/);
+    assert.match(
+      output,
+      /codex-plugin \(installed\): claude plugin marketplace add openai\/codex-plugin-cc; claude plugin install codex@openai-codex/,
+    );
+    assert.match(output, /codex-plugin \(claude\): claude plugin enable codex@openai-codex/);
+    assert.match(output, /codex-plugin \(codex\): codex login/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -330,6 +349,93 @@ test('a gap with no known fix command is still reported, in --json gaps and in t
 
     const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
     assert.match(text.output, /context7 \(installed\): no fix command known/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- T6: the Codex plugin row (`codex` column = logged in) ---
+
+test('doctorMain --json reports codex-plugin logged out as a codex gap with its own fix, exit still 0', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ codexLogin: 'out' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    const row = JSON.parse(output).find((r) => r.id === 'codex-plugin');
+    assert.equal(row.version, '1.0.6');
+    assert.equal(row.installed, 'ok');
+    assert.equal(row.claude, 'ok');
+    assert.equal(row.codex, 'missing');
+    assert.equal(row.project, 'n/a');
+    assert.deepEqual(row.gaps, [{ dimension: 'codex', state: 'missing', fix: 'codex login' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows a timed-out login probe as unknown and lists no codex-plugin fix for it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ codexLogin: 'timeout' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /codex-plugin\s+1\.0\.6\s+ok\s+unknown\s+n\/a/);
+    assert.doesNotMatch(output, /codex-plugin \(codex\)/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("doctorMain's login probe reads the Codex home under --home, never the real one", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const loginEnvs = [];
+    const spawn = fakeSpawn({ codexLogin: 'in', loginEnvs });
+
+    await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(loginEnvs.length, 1);
+    assert.equal(loginEnvs[0].CODEX_HOME, path.join(home, '.codex'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain compares the Codex plugin against its openai-codex marketplace version: outdated, then ok', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const marketplace = path.join(
+      home, '.claude', 'plugins', 'marketplaces', 'openai-codex', '.claude-plugin', 'marketplace.json',
+    );
+    writeJson(marketplace, { plugins: [{ name: 'codex', version: '1.0.7' }] });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+
+    const outdated = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.match(outdated.output, /codex-plugin\s+1\.0\.6\s+ok\s+ok\s+n\/a\s+outdated/);
+    assert.match(outdated.output, /codex-plugin \(upToDate\): claude plugin update codex@openai-codex/);
+
+    // The cache is fresh after that run, so read the marketplace again through a clean cache.
+    writeJson(marketplace, { plugins: [{ name: 'codex', version: '1.0.6' }] });
+    fs.rmSync(path.join(home, '.js-harness'), { recursive: true, force: true });
+    const current = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    assert.equal(JSON.parse(current.output).find((r) => r.id === 'codex-plugin').upToDate, 'ok');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

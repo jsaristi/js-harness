@@ -20,6 +20,7 @@ const ROWS = [
   { id: 'codegraph', version: '1.6.0' },
   { id: 'context7', version: null },
   { id: 'typescript-lsp', version: null },
+  { id: 'codex-plugin', version: null },
 ];
 
 test('gentle-ai and engram fetch their GitHub releases/latest tag_name, stripped of a leading v', async () => {
@@ -151,6 +152,47 @@ test('typescript-lsp reads null when the marketplace file is malformed', async (
   }
 });
 
+function marketplaceFile(home, marketplace) {
+  return path.join(home, '.claude', 'plugins', 'marketplaces', marketplace, '.claude-plugin', 'marketplace.json');
+}
+
+test('codex-plugin reads its latest version offline from the openai-codex marketplace, plugin "codex"', async () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(marketplaceFile(home, 'openai-codex'), {
+      plugins: [{ name: 'codex', version: '1.0.7' }, { name: 'other-plugin', version: '9.9.9' }],
+    });
+    // A same-named plugin in the other marketplace must never leak in: the marketplace name matters.
+    writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'codex', version: '8.8.8' }] });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      return { ok: false };
+    };
+    const rows = [{ id: 'codex-plugin', version: '1.0.6' }];
+    const versions = await fetchLatestVersions(rows, { fetch: fetchImpl, home });
+    assert.equal(versions['codex-plugin'], '1.0.7');
+    assert.equal(fetchCalled, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin reads null when the openai-codex marketplace file does not exist or lacks the plugin', async () => {
+  const home = makeTmpHome();
+  try {
+    const rows = [{ id: 'codex-plugin', version: '1.0.6' }];
+    const missing = await fetchLatestVersions(rows, { fetch: async () => ({ ok: false }), home });
+    assert.equal(missing['codex-plugin'], null);
+
+    writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'other-plugin', version: '1.0.0' }] });
+    const absent = await fetchLatestVersions(rows, { fetch: async () => ({ ok: false }), home });
+    assert.equal(absent['codex-plugin'], null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a failed fetch (network error) resolves to null instead of throwing', async () => {
   const fetchImpl = async () => {
     throw new Error('offline');
@@ -214,6 +256,7 @@ test('every GitHub/npm request carries a 5s AbortSignal timeout', async () => {
 test('isLookupAttempted is true for a row with a registered source', () => {
   assert.equal(isLookupAttempted({ id: 'codegraph', version: '1.6.0' }), true);
   assert.equal(isLookupAttempted({ id: 'context7', version: '2.2.5' }), true);
+  assert.equal(isLookupAttempted({ id: 'codex-plugin', version: '1.0.6' }), true);
 });
 
 test('isLookupAttempted is false for a hosted context7 row and for a row id with no registered source', () => {

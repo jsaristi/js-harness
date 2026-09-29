@@ -365,7 +365,7 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

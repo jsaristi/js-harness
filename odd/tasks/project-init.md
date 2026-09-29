@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -174,6 +174,26 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   a repository not initialized, an initialized project with its pin, manifest presence, or its
   stale/invalid state), sharing `syncProject`'s pin reading; both the TUI and `status` use it.
 
+## T6 design
+- One more row in `tools` (`bin/lib/stack.mjs`), id `codex-plugin` (fits the 16-wide column; the
+  plugin id `codex@openai-codex` does not). Its columns keep their meaning: `installed` + version
+  from `~/.claude/plugins/installed_plugins.json` `plugins["codex@openai-codex"][0].version` (the
+  typescript-lsp shape); `claude` is enabled in `~/.claude/settings.json` `enabledPlugins`; `codex`
+  is "the Codex side is ready": `codex login status` exits 0 (checked on this machine 2026-09-29:
+  "Logged in using ChatGPT", exit 0; with an empty `CODEX_HOME`, "Not logged in", exit 1);
+  `project` is `n/a`.
+- The login probe runs with `CODEX_HOME=<home>/.codex`, so `--home` means the same Codex home the
+  MCP probes already read, and a fixture home never reads the real one. Exit 0 is `ok`; a timeout
+  is `unknown`; any other exit, or no `codex` on PATH (on win32 through the shell that is exit 1
+  too), is `missing`. It reads Codex's own answer, never `auth.json`.
+- Up to date: the latest version comes from the local `openai-codex` marketplace file
+  (`~/.claude/plugins/marketplaces/openai-codex/.claude-plugin/marketplace.json`, plugin `codex`),
+  the offline source typescript-lsp already uses; the reader takes the marketplace name.
+- Fix commands, the tool's own: installed `claude plugin marketplace add openai/codex-plugin-cc;
+  claude plugin install codex@openai-codex` (the marketplace source recorded in
+  `known_marketplaces.json`); claude `claude plugin enable codex@openai-codex`; codex `codex login`;
+  upToDate `claude plugin update codex@openai-codex`.
+
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
@@ -275,8 +295,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T5f Accepted final whole-slice review follow-up: every suite that creates an empty git
   config in the temp directory removes it when it ends (Codex P3) — route: inline (the same
   mechanical hook in five test files)
-- [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
-  in, with its fix command — route: delegated writer
+- [x] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
+  in, with its fix command (see "T6 design") — route: delegated writer (touches
+  `bin/lib/stack.mjs`, `bin/lib/latest.mjs` and the tests that count the stack's rows)
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
   skipped review is caught — route: to be decided after exploration
 
@@ -761,6 +782,14 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   worth doing first, since agents read that text.
 - 2026-09-29: PR `jsaristi/js-harness#12` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
 - 2026-09-29: slice 5 merged as 8ca30ea (`jsaristi/js-harness#12`) by Sebastián's go-ahead.
+- 2026-09-29: T6 done by a delegated writer on `feat/codex-plugin-doctor`: a sixth `tools` row,
+  `codex-plugin` (see "T6 design"); a shared `spawnProbe`/`probeTimedOut` under the version and
+  login probes; `pluginInstalledVersion` and `readMarketplacePluginVersion` take the plugin id and
+  the marketplace. RED: `node --test` → 570 tests, 30 failing, all because the row did not exist.
+  GREEN: `node --test` → `tests 570 / pass 563 / fail 0 / skipped 7`; `npm run check` exit 0;
+  `npm run e2e` exit 0, 14 PASS, 0 FAIL; `node bin/js-harness.mjs doctor --offline` on this machine →
+  `codex-plugin    1.0.6     ok        ok        n/a       unknown` (`unknown` because the offline
+  cache has no entry for the new row yet).
 
 ## Next step
 T6 (`doctor` reports the Codex plugin `codex@openai-codex`: installed, enabled and logged in,

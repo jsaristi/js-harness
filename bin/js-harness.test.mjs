@@ -122,7 +122,7 @@ test('init dispatches to a temp cwd/home and exits 0, hermetically (no real code
 
 // R3-002 (accepted T1 review follow-up): this must not depend on the host's real binaries or on
 // network access (T2 adds a real latest-version fetch) — a temp `--home`, a temp `--cwd` outside
-// any repo, and `--offline` keep it hermetic, while `--json` parsing to the five known ids is what
+// any repo, and `--offline` keep it hermetic, while `--json` parsing to the six known ids is what
 // actually proves dispatch reached `doctorMain`, not just that *something* printed.
 test('doctor dispatches to a temp home and exits 0, hermetically (no host binaries or network)', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-doctor-'));
@@ -133,7 +133,7 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     const rows = JSON.parse(result.stdout);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

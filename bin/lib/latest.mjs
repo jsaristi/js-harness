@@ -1,5 +1,5 @@
 // Latest-version lookups: one request per tool (a GitHub release, an npm registry entry, or the
-// local plugin marketplace for typescript-lsp), each bounded by a 5s timeout and run in parallel.
+// local plugin marketplaces for the two Claude plugins), each bounded by a 5s timeout and run in parallel.
 // Every lookup fails open to `null` ("unknown" upstream) instead of throwing: a network outage or
 // a malformed body for one tool never blocks the others, and `doctor` is a report, not a gate.
 import fs from 'node:fs';
@@ -33,15 +33,16 @@ async function fetchNpmLatestVersion(pkgName, fetchImpl) {
   }
 }
 
-/** typescript-lsp has no CLI and no registry: its latest version is read offline from the local
- * plugin marketplace file the `claude-plugins-official` marketplace ships. */
-function readMarketplacePluginVersion(home, pluginName) {
+/** A Claude plugin has no CLI and no registry: its latest version is read offline from the local
+ * marketplace file its own marketplace ships (`claude-plugins-official` for typescript-lsp,
+ * `openai-codex` for the Codex plugin). */
+function readMarketplacePluginVersion(home, marketplace, pluginName) {
   const filePath = path.join(
     home,
     '.claude',
     'plugins',
     'marketplaces',
-    'claude-plugins-official',
+    marketplace,
     '.claude-plugin',
     'marketplace.json',
   );
@@ -63,7 +64,9 @@ const SOURCES = {
   engram: ({ fetch: fetchImpl }) => fetchGithubReleaseVersion('Gentleman-Programming', 'engram', fetchImpl),
   codegraph: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@colbymchenry/codegraph', fetchImpl),
   context7: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@upstash/context7-mcp', fetchImpl),
-  'typescript-lsp': ({ home }) => Promise.resolve(readMarketplacePluginVersion(home, 'typescript-lsp')),
+  'typescript-lsp': ({ home }) =>
+    Promise.resolve(readMarketplacePluginVersion(home, 'claude-plugins-official', 'typescript-lsp')),
+  'codex-plugin': ({ home }) => Promise.resolve(readMarketplacePluginVersion(home, 'openai-codex', 'codex')),
 };
 
 /** True when `fetchLatestVersions` below actually looks `row` up — false for a hosted context7 row

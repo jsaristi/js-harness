@@ -43,10 +43,13 @@ function seedHealthyHome(home, project) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'codex@openai-codex': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: {
+      'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
+      'codex@openai-codex': [{ version: '1.0.6' }],
+    },
   });
   fs.mkdirSync(path.join(project, '.codegraph'), { recursive: true });
 }
@@ -57,6 +60,8 @@ function healthySpawn(project) {
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
     if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
+    // The Codex plugin's login probe (`codex login status`): logged in.
+    if ([cmd, ...args].join(' ') === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }

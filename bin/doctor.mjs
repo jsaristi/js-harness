@@ -84,7 +84,7 @@ function computeUpToDate(row, latestVersion) {
  * still fresh (checked within the last 6h), else refetched. A refetch is fail-open per tool: one
  * that could not be resolved this time keeps whatever was cached for it before (`null` if there
  * was nothing), so a partial outage never wipes out data that was fine an hour ago. Exported for
- * its own tests (R3-004 below needs a row set smaller than the real five-tool stack). */
+ * its own tests (R3-004 below needs a row set smaller than the real stack). */
 export async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
   const cache = readCache(home);
   if (offline || !isStale(cache.latest.checkedAt, now)) return cache.latest.versions;
