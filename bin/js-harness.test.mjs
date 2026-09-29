@@ -179,3 +179,9 @@ test('--help describes sync\'s two scopes (project vs. machine/--global)', () =>
   const result = run(['--help']);
   assert.match(result.stdout, /sync\s+.*project.*pin.*machine install.*--global.*outside a git repository/);
 });
+
+// T5 (project-init): status covers two scopes as well, and the usage line says so.
+test('--help describes status\'s two scopes (project vs. machine/--global)', () => {
+  const result = run(['--help']);
+  assert.match(result.stdout, /status\s+.*project.*pin.*machine.*versions.*--global.*outside a git repository/);
+});

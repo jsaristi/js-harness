@@ -7,7 +7,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, sync, uninstall } from './lib/manifest.mjs';
-import { uninstallProject, syncProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
+import {
+  uninstallProject,
+  syncProject,
+  InitWriteError,
+  cleanupClause,
+  staleManifestMessage,
+  invalidHarnessJsonMessage,
+} from './lib/project.mjs';
 
 function parseHome(argv, env) {
   const i = argv.indexOf('--home');
@@ -187,7 +194,7 @@ function reportSyncProject(result) {
     return 1;
   }
   if (result.invalidHarnessJson) {
-    console.error(`cannot read the pin from ${result.harnessJsonPath}: ${result.reason}; nothing was written`);
+    console.error(`${invalidHarnessJsonMessage(result.harnessJsonPath, result.reason)}; nothing was written`);
     return 1;
   }
   if (result.staleManifest) {

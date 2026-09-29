@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   MENU_ITEMS,
+  buildMenu,
+  withLocation,
   initialState,
   handleKey,
   render,
@@ -20,6 +22,24 @@ import {
 import { installMain } from './install.mjs';
 import { manifestPath } from './lib/manifest.mjs';
 import { spawnSync } from 'node:child_process';
+
+// T5: the menu depends on where the TUI opens, and these tests run real `git`: keep it off the host's
+// git config (see project.test.mjs, T2e item 8), and give every machine-menu test a folder outside any
+// repository, since the default (this repo's own checkout) is now a project.
+let nonGitDir;
+before(() => {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) delete process.env[key];
+  }
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+  nonGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-nongit-'));
+});
+after(() => {
+  fs.rmSync(nonGitDir, { recursive: true, force: true });
+});
 
 function makeFakeStdin() {
   const emitter = new EventEmitter();
@@ -197,7 +217,7 @@ test('tuiMain shows an available update from the injected spawn, then quits clea
   const stdout = makeFakeStdout();
   const spawn = () => ({ status: 0, stdout: '99.0.0', stderr: '' });
 
-  const done = tuiMain([], {}, spawn, { stdin, stdout });
+  const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], {}, spawn, { stdin, stdout });
   await flush();
   stdin.emit('data', 'q');
   const code = await done;
@@ -212,7 +232,7 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   const spawn = () => ({ status: 0, stdout: '', stderr: '' });
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-envhome-'));
   try {
-    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
+    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
     await flush();
     for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
@@ -373,7 +393,7 @@ test('tuiMain wires the Doctor menu item to the full doctorMain, with network pe
     logged += `${line}\n`;
   };
   try {
-    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
+    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
     await flush();
     const doctorIndex = MENU_ITEMS.indexOf('doctor');
     for (let i = 0; i < doctorIndex; i++) stdin.emit('data', 'j');
@@ -406,7 +426,7 @@ test('tuiMain never touches the network while opening (the startup stack block s
   };
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-nostack-fetch-'));
   try {
-    const done = tuiMain([], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
+    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
     await flush();
     assert.equal(fetchCalled, false, 'opening the TUI must never call fetch');
     stdin.emit('data', 'q');
@@ -482,4 +502,329 @@ test('buildCommands sync syncs the machine install even when run inside a git re
     fs.rmSync(repo, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// --- T5: the menu by location ---
+
+const NOT_GIT = { kind: 'notGit' };
+const NOT_INITIALIZED = { kind: 'notInitialized', root: '/repo' };
+const INITIALIZED = { kind: 'initialized', root: '/repo', pin: '0.1.0', manifestPresent: true };
+const STALE = { kind: 'staleManifest', root: '/repo', manifestPath: '/repo/.git/js-harness/manifest.json' };
+const INVALID = { kind: 'invalidHarnessJson', root: '/repo', harnessJsonPath: '/repo/harness.json', reason: 'x' };
+
+/** A menu as one comparable list: headers as `[label]`, items by id. */
+const ids = (menu) => menu.map((entry) => (entry.header ? `[${entry.label}]` : entry.id));
+const PROJECT_MENU = ['[project]', 'project-sync', 'project-status', 'project-uninstall'];
+
+function stateAt(location, id) {
+  const state = initialState({ installedVersion: '0.1.0', updateAvailable: null, location });
+  return { ...state, selected: state.menu.findIndex((entry) => entry.id === id) };
+}
+
+function press(state, ...keys) {
+  let effect = null;
+  for (const key of keys) ({ state, effect } = handleKey(state, key));
+  return { state, effect };
+}
+
+test('buildMenu is exactly today\'s machine menu outside a git repository', () => {
+  for (const location of [NOT_GIT, { kind: 'noSuchDirectory', cwd: '/x' }]) {
+    const menu = buildMenu(location);
+    assert.deepEqual(ids(menu), MENU_ITEMS);
+    assert.equal(menu.some((entry) => entry.header), false);
+  }
+  assert.deepEqual(
+    buildMenu(NOT_GIT).map((entry) => entry.label),
+    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Quit'],
+  );
+});
+
+test('buildMenu offers Init, then the machine section, in a repository that is not initialized', () => {
+  const menu = buildMenu(NOT_INITIALIZED);
+  assert.deepEqual(ids(menu), ['[project]', 'project-init', '[machine]', ...MENU_ITEMS]);
+  assert.equal(menu[1].label, 'Init');
+});
+
+test('buildMenu offers Sync, Status and Uninstall in an initialized project, stale and invalid ones included', () => {
+  for (const location of [INITIALIZED, STALE, INVALID]) {
+    const menu = buildMenu(location);
+    assert.deepEqual(ids(menu), [...PROJECT_MENU, '[machine]', ...MENU_ITEMS], location.kind);
+    assert.deepEqual(
+      menu.slice(1, 4).map((entry) => entry.label),
+      ['Sync', 'Status', 'Uninstall'],
+    );
+  }
+});
+
+test('initialState starts on the first selectable item, never on a header', () => {
+  assert.equal(initialState({ installedVersion: '0.1.0', updateAvailable: null }).selected, 0);
+  const inRepo = initialState({ installedVersion: '0.1.0', updateAvailable: null, location: INITIALIZED });
+  assert.equal(inRepo.menu[inRepo.selected].id, 'project-sync');
+});
+
+test('render draws the section headers unselectable, with the selection on an item', () => {
+  const state = initialState({ installedVersion: '0.1.0', updateAvailable: null, location: INITIALIZED });
+  const text = render(state).join('\n');
+  assert.match(text, /^project$/m);
+  assert.match(text, /^machine$/m);
+  assert.match(text, /^> Sync$/m);
+  assert.match(text, /^ {2}Status$/m);
+  assert.equal(text.match(/Status$/gm).length, 2, 'the project Status and the machine Status');
+  assert.doesNotMatch(text, /^> (project|machine)$/m);
+});
+
+test('render outside a repository shows no section headers', () => {
+  const text = render(initialState({ installedVersion: '0.1.0', updateAvailable: null })).join('\n');
+  assert.doesNotMatch(text, /^(project|machine)$/m);
+});
+
+test('down and up skip the headers and wrap around the whole menu', () => {
+  const start = stateAt(INITIALIZED, 'project-uninstall');
+  const machineStatus = press(start, 'down').state;
+  assert.equal(machineStatus.menu[machineStatus.selected].id, 'status', 'down from the last project item skips [machine]');
+  const back = press(machineStatus, 'up').state;
+  assert.equal(back.menu[back.selected].id, 'project-uninstall', 'up skips [machine] the other way');
+
+  const first = stateAt(INITIALIZED, 'project-sync');
+  const wrapped = press(first, 'up').state;
+  assert.equal(wrapped.menu[wrapped.selected].id, 'quit', 'up from the first item skips [project] and wraps to Quit');
+  const around = press(wrapped, 'down').state;
+  assert.equal(around.menu[around.selected].id, 'project-sync', 'down from Quit wraps past [project]');
+});
+
+test('Init is a selectable project command; Sync and Status run directly', () => {
+  assert.deepEqual(press(stateAt(NOT_INITIALIZED, 'project-init'), 'enter').effect, {
+    type: 'run',
+    command: 'project-init',
+  });
+  assert.deepEqual(press(stateAt(INITIALIZED, 'project-sync'), 'enter').effect, {
+    type: 'run',
+    command: 'project-sync',
+  });
+  assert.deepEqual(press(stateAt(INITIALIZED, 'project-status'), 'enter').effect, {
+    type: 'run',
+    command: 'project-status',
+  });
+  assert.deepEqual(press(stateAt(INITIALIZED, 'status'), 'enter').effect, { type: 'run', command: 'status' });
+});
+
+test('the two uninstalls ask different questions and run different commands', () => {
+  const project = press(stateAt(INITIALIZED, 'project-uninstall'), 'enter');
+  assert.equal(project.effect, null);
+  assert.equal(project.state.mode, 'confirm-uninstall');
+  assert.match(render(project.state).join('\n'), /Undo js-harness in this project\? \(y\/N\)/);
+  assert.doesNotMatch(render(project.state).join('\n'), /from this home/);
+  assert.deepEqual(handleKey(project.state, 'y').effect, { type: 'run', command: 'project-uninstall' });
+  assert.equal(handleKey(project.state, 'n').effect, null);
+
+  const machine = press(stateAt(INITIALIZED, 'uninstall'), 'enter');
+  assert.equal(machine.state.mode, 'confirm-uninstall');
+  assert.match(render(machine.state).join('\n'), /Uninstall js-harness from this home\? \(y\/N\)/);
+  assert.doesNotMatch(render(machine.state).join('\n'), /in this project/);
+  assert.deepEqual(handleKey(machine.state, 'y').effect, { type: 'run', command: 'uninstall' });
+});
+
+test('withLocation rebuilds the menu and keeps the selection on the same item when it survives', () => {
+  const state = stateAt(INITIALIZED, 'status');
+  const next = withLocation(state, STALE);
+  assert.equal(next.menu[next.selected].id, 'status');
+
+  const moved = withLocation(stateAt(NOT_INITIALIZED, 'status'), INITIALIZED);
+  assert.deepEqual(ids(moved.menu), [...PROJECT_MENU, '[machine]', ...MENU_ITEMS]);
+  assert.equal(moved.menu[moved.selected].id, 'status', 'the machine item stays selected as the section above grows');
+});
+
+test('withLocation lands on a selectable, in-range item when the selected one disappears', () => {
+  // After `init`: Init is gone, so the project section's first item is selected.
+  const afterInit = withLocation(stateAt(NOT_INITIALIZED, 'project-init'), INITIALIZED);
+  assert.equal(afterInit.menu[afterInit.selected].id, 'project-sync');
+  // After a project `uninstall`: back to Init.
+  const afterUninstall = withLocation(stateAt(INITIALIZED, 'project-uninstall'), NOT_INITIALIZED);
+  assert.equal(afterUninstall.menu[afterUninstall.selected].id, 'project-init');
+  // Out of the repository entirely: the machine menu, selection in range.
+  const outside = withLocation(stateAt(INITIALIZED, 'project-status'), NOT_GIT);
+  assert.ok(outside.selected >= 0 && outside.selected < outside.menu.length);
+  assert.ok(!outside.menu[outside.selected].header);
+  assert.deepEqual(ids(outside.menu), MENU_ITEMS);
+});
+
+test('withLocation leaves the mode alone and never touches the version or stack', () => {
+  const state = { ...stateAt(INITIALIZED, 'project-status'), stack: 'unknown', installedVersion: '9.9.9' };
+  const next = withLocation(state, INITIALIZED);
+  assert.equal(next.stack, 'unknown');
+  assert.equal(next.installedVersion, '9.9.9');
+  assert.equal(next.mode, 'menu');
+});
+
+test('runTui rereads the location after a command and redraws the rebuilt menu', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const calls = [];
+  let location = NOT_INITIALIZED;
+  const commands = {
+    ...noCommands,
+    'project-init': async () => {
+      calls.push('project-init');
+      location = INITIALIZED;
+    },
+  };
+  const done = runTui({
+    installedVersion: '0.1.0',
+    updateAvailable: null,
+    location,
+    readLocation: () => location,
+    commands,
+    stdin,
+    stdout,
+  });
+  assert.match(stdout.chunks.join(''), /^> Init$/m);
+
+  stdin.emit('data', '\r'); // Enter on Init
+  await flush();
+
+  assert.deepEqual(calls, ['project-init']);
+  const redraw = stdout.chunks.at(-1);
+  assert.match(redraw, /^> Sync$/m);
+  assert.doesNotMatch(redraw, /Init/);
+  assert.match(redraw, /Uninstall/);
+
+  stdin.emit('data', 'q');
+  await done;
+});
+
+// --- T5: project commands, bound to the repository root ---
+
+function makeFixtureRepo(prefix = 'js-harness-tui-project-') {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  assert.equal(spawnSync('git', ['init'], { cwd: repo, encoding: 'utf8' }).status, 0);
+  // Pre-created, so `init` never spawns a real `codegraph` (as in js-harness.test.mjs).
+  fs.mkdirSync(path.join(repo, '.codegraph'));
+  return repo;
+}
+
+async function silently(fn) {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const lines = [];
+  console.log = (line) => lines.push(String(line));
+  console.error = (line) => lines.push(String(line));
+  try {
+    return { result: await fn(), lines };
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
+}
+
+test('buildCommands binds the project commands to the root: init, status, sync, uninstall', async () => {
+  const repo = makeFixtureRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-project-home-'));
+  try {
+    const commands = buildCommands({ home, root: repo });
+
+    const init = await silently(() => commands['project-init']());
+    assert.equal(init.result, 0, init.lines.join('\n'));
+    assert.ok(fs.existsSync(path.join(repo, 'harness.json')));
+
+    const status = await silently(() => commands['project-status']());
+    assert.equal(status.result, 0);
+    assert.match(status.lines.join('\n'), /pinned version: /);
+
+    const sync = await silently(() => commands['project-sync']());
+    assert.equal(sync.result, 0, sync.lines.join('\n'));
+    assert.match(sync.lines.join('\n'), /up to date/);
+
+    const uninstall = await silently(() => commands['project-uninstall']());
+    assert.equal(uninstall.result, 0, uninstall.lines.join('\n'));
+    assert.equal(fs.existsSync(path.join(repo, 'harness.json')), false);
+
+    assert.deepEqual(fs.readdirSync(home), [], 'project commands never write under the home');
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('buildCommands leaves the project commands out when there is no project root', () => {
+  const commands = buildCommands({ home: os.tmpdir() });
+  for (const id of ['project-init', 'project-sync', 'project-status', 'project-uninstall']) {
+    assert.equal(commands[id], undefined, id);
+  }
+});
+
+// The machine status is the machine's wherever the TUI opened: inside a repository a plain `status`
+// would report that project instead (or refuse for it).
+test('buildCommands status reports the machine install even when run inside a git repository', async () => {
+  const repo = makeFixtureRepo('js-harness-tui-status-repo-');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-status-home-'));
+  const originalCwd = process.cwd();
+  try {
+    process.chdir(repo);
+    const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+
+    const { result, lines } = await silently(() => buildCommands({ home, spawn }).status());
+
+    assert.equal(result, 0, lines.join('\n'));
+    assert.match(lines.join('\n'), /manifest version: /);
+  } finally {
+    process.chdir(originalCwd);
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('tuiMain in a repository shows the project section, inits it, and offers Sync/Status/Uninstall after', async () => {
+  const repo = makeFixtureRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-project-home-'));
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+  try {
+    const { result: done } = await silently(async () => {
+      const running = tuiMain(['--cwd', repo, '--home', home], {}, spawn, { stdin, stdout });
+      await flush();
+      const opening = stdout.chunks.join('');
+      assert.match(opening, /^project$/m);
+      assert.match(opening, /^machine$/m);
+      assert.match(opening, /^> Init$/m);
+
+      stdin.emit('data', '\r'); // Init, for real, in the fixture repository
+      await flush();
+      assert.ok(fs.existsSync(path.join(repo, 'harness.json')));
+      const afterInit = stdout.chunks.at(-1);
+      assert.match(afterInit, /^> Sync$/m);
+      assert.doesNotMatch(afterInit, /Init/);
+
+      stdin.emit('data', 'j');
+      stdin.emit('data', 'j'); // Uninstall (project)
+      stdin.emit('data', '\r');
+      await flush();
+      assert.match(stdout.chunks.at(-1), /Undo js-harness in this project\? \(y\/N\)/);
+      stdin.emit('data', 'y');
+      await flush();
+      assert.equal(fs.existsSync(path.join(repo, 'harness.json')), false);
+      assert.match(stdout.chunks.at(-1), /^> Init$/m, 'the menu goes back to Init once the project is undone');
+
+      stdin.emit('data', 'q');
+      return running;
+    });
+    assert.equal(done, 0);
+    assert.deepEqual(fs.readdirSync(home), [], 'nothing was written under the home');
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('tuiMain --cwd outside any repository opens the machine menu only', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+  const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], {}, spawn, { stdin, stdout });
+  await flush();
+  const opening = stdout.chunks.join('');
+  assert.doesNotMatch(opening, /^(project|machine)$/m);
+  assert.match(opening, /^> Status$/m);
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
 });

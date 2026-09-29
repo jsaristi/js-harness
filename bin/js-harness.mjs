@@ -18,7 +18,7 @@ Commands:
   install     Write the skills and record a manifest under a home.
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
   uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository).
-  status      Show installed, manifest and latest available versions.
+  status      Show the project's pin and this clone (inside one) or the machine's installed, manifest and latest versions (--global, or outside a git repository).
   update      Check whether a newer release exists.
   upgrade     Install the newer release, then sync.
   doctor      Report the stack's tools: installed, configured, up to date.

@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // `status`, `update`, `upgrade`: version detection and upgrade. The package manager and the
-// release source are both injectable because on this machine `npm` on PATH is a pnpm shim.
+// release source are both injectable because on this machine `npm` on PATH is a pnpm shim. `status`
+// also answers by location (T5 design): inside a git repository it reports the project, anywhere else
+// (or with `--global`) the machine install.
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { readManifest } from './lib/manifest.mjs';
+import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage } from './lib/project.mjs';
 import { latestFromSource, splitCommand, viewArgs, installArgs, isNewer } from './lib/version.mjs';
 
 const PKG_NAME = 'js-harness';
@@ -57,8 +60,110 @@ function quoteForShell(value, platform) {
   return platform === 'win32' ? `"${value}"` : `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+const STATUS_USAGE =
+  'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+
+class StatusArgError extends Error {}
+
+/** `status`'s flags are strict, unlike `update`/`upgrade`'s lenient `parseArgs` above (whose behavior stays
+ * as it was): an unknown flag or a missing value is a usage error, and `--global` with `--cwd` is one too,
+ * the same rule `sync` and `uninstall` follow (`--cwd` only means anything for the project scope). */
+function parseStatusArgs(argv, env) {
+  const values = {};
+  let global = false;
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === '--global') {
+      global = true;
+    } else if (['--cwd', '--home', '--source', '--prefix', '--pm'].includes(token)) {
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith('--')) throw new StatusArgError(`${token} requires a value`);
+      values[token] = value;
+      i++;
+    } else {
+      throw new StatusArgError(`unknown flag: ${token}`);
+    }
+  }
+  if (global && values['--cwd'] !== undefined) throw new StatusArgError('--global cannot be combined with --cwd');
+  return {
+    cwd: values['--cwd'] ?? process.cwd(),
+    cwdExplicit: values['--cwd'] !== undefined,
+    global,
+    home: values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    source: values['--source'] ?? env.JS_HARNESS_SOURCE,
+    prefix: values['--prefix'] ?? env.JS_HARNESS_PREFIX,
+    pm: values['--pm'],
+  };
+}
+
+/** The project half of `status`: what `init` pinned, what is running, and whether this clone is set up.
+ * A pin that differs from the running version is reported, not failed: `status` reads, `sync` names the
+ * ways out (T4 design). */
+function reportProjectStatus(location, version) {
+  console.log(`project: ${path.normalize(location.root)}`);
+  console.log(`pinned version: ${location.pin}`);
+  console.log(`running version: ${version}`);
+  console.log(
+    location.manifestPresent
+      ? `this clone: set up (manifest: ${path.normalize(location.manifestPath)})`
+      : 'this clone: not set up; js-harness sync sets it up',
+  );
+  console.log(
+    location.pin === version
+      ? 'pin and running version: match'
+      : 'pin and running version: differ; js-harness sync names the ways out',
+  );
+}
+
+/** `status` by location, the "Command scope" rule `sync` and `uninstall` follow: inside a git repository it
+ * reports the project (exit 0), or names what is wrong with it (exit 1); outside one with no `--cwd`, or
+ * with `--global`, it is the machine status. An explicit `--cwd` names a project, so when it is not an
+ * initialized one this exits 1 and names `--global` rather than falling through to the machine. */
 export async function statusMain(argv, env = process.env, spawn = spawnSync) {
-  const opts = parseArgs(argv, env);
+  let opts;
+  try {
+    opts = parseStatusArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}
+
+${STATUS_USAGE}`);
+    return 2;
+  }
+
+  if (!opts.global) {
+    const location = projectLocation(opts.cwd);
+    switch (location.kind) {
+      case 'initialized':
+        reportProjectStatus(location, currentVersion());
+        return 0;
+      case 'invalidHarnessJson':
+        console.error(invalidHarnessJsonMessage(location.harnessJsonPath, location.reason));
+        return 1;
+      case 'staleManifest':
+        console.error(staleManifestMessage(location.manifestPath));
+        return 1;
+      case 'noSuchDirectory':
+        console.error(`no such directory: ${opts.cwd}`);
+        return 1;
+      case 'notInitialized':
+        console.error(notInitializedMessage(opts.cwd));
+        return 1;
+      default: // notGit: the machine, unless --cwd named a project
+        if (opts.cwdExplicit) {
+          console.error(notInitializedMessage(opts.cwd));
+          return 1;
+        }
+    }
+  }
+
+  return machineStatus(opts, env, spawn);
+}
+
+function notInitializedMessage(cwd) {
+  return `not an initialized project: ${cwd}; js-harness init sets one up, js-harness status --global shows the machine install`;
+}
+
+async function machineStatus(opts, env, spawn) {
   const installed = currentVersion();
   const manifest = readManifest(opts.home);
   const latest = resolveLatest(opts, env, spawn);
