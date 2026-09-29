@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, `jsaristi/js-harness#13`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -874,10 +874,11 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   `<home>/.codex` even when the user set `CODEX_HOME` (pre-existing, noted in `codexLoginState`).
   On this machine `doctor` reports codegraph not registered in Codex and outdated (1.6.0), which is
   codegraph's own fix to run, not this repository's.
+- 2026-09-29: PR `jsaristi/js-harness#13` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
 
 ## Next step
 Slice 6 (T6–T6d on `feat/codex-plugin-doctor`) is complete: every commit reviewed by gentle-ai and
-Codex, the exact PR range by gentle-ai (Codex last saw the whole range at 1440dc2). Next: the pull request on Sebastián's go-ahead, then its merge;
+Codex, the exact PR range by gentle-ai (Codex last saw the whole range at 1440dc2). Next: the merge of `jsaristi/js-harness#13` on Sebastián's go-ahead;
 then T7 (a verifiable record of the Codex review of each approved slice) in a new session. The
 installed skill on this machine still carries the old text until `js-harness` is reinstalled from
 `main` and synced.
