@@ -1,5 +1,6 @@
-// Latest-version lookups: one request per tool (a GitHub release, an npm registry entry, or the
-// local plugin marketplace for typescript-lsp), each bounded by a 5s timeout and run in parallel.
+// Latest-version lookups: one request per tool (a GitHub release or an npm registry entry), each
+// bounded by a 5s timeout and run in parallel, plus the two Claude plugins' latest versions, which
+// are read from their local plugin marketplace files instead (`LOCAL_SOURCES`, never cached).
 // Every lookup fails open to `null` ("unknown" upstream) instead of throwing: a network outage or
 // a malformed body for one tool never blocks the others, and `doctor` is a report, not a gate.
 import fs from 'node:fs';
@@ -33,15 +34,16 @@ async function fetchNpmLatestVersion(pkgName, fetchImpl) {
   }
 }
 
-/** typescript-lsp has no CLI and no registry: its latest version is read offline from the local
- * plugin marketplace file the `claude-plugins-official` marketplace ships. */
-function readMarketplacePluginVersion(home, pluginName) {
+/** A Claude plugin has no CLI and no registry: its latest version is read offline from the local
+ * marketplace file its own marketplace ships (`claude-plugins-official` for typescript-lsp,
+ * `openai-codex` for the Codex plugin). */
+function readMarketplacePluginVersion(home, marketplace, pluginName) {
   const filePath = path.join(
     home,
     '.claude',
     'plugins',
     'marketplaces',
-    'claude-plugins-official',
+    marketplace,
     '.claude-plugin',
     'marketplace.json',
   );
@@ -63,11 +65,38 @@ const SOURCES = {
   engram: ({ fetch: fetchImpl }) => fetchGithubReleaseVersion('Gentleman-Programming', 'engram', fetchImpl),
   codegraph: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@colbymchenry/codegraph', fetchImpl),
   context7: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@upstash/context7-mcp', fetchImpl),
-  'typescript-lsp': ({ home }) => Promise.resolve(readMarketplacePluginVersion(home, 'typescript-lsp')),
 };
 
-/** True when `fetchLatestVersions` below actually looks `row` up — false for a hosted context7 row
- * (no version of its own to compare against npm) or for a row id with no `SOURCES` entry at all.
+/** Latest-version sources that are a local file, not a request. Each receives the shared deps
+ * (`home`) and returns a version string or `null`, synchronously. They are read on every run,
+ * online or `--offline`, and never cached: a plugin installed after a run that found no answer
+ * must be compared at once, not up to 6h later (T6d, Codex P2). */
+const LOCAL_SOURCES = {
+  'typescript-lsp': ({ home }) => readMarketplacePluginVersion(home, 'claude-plugins-official', 'typescript-lsp'),
+  'codex-plugin': ({ home }) => readMarketplacePluginVersion(home, 'openai-codex', 'codex'),
+};
+
+/** True when `row`'s latest version is read from a local file (`LOCAL_SOURCES`), not fetched. */
+export function isLocalSource(row) {
+  return Boolean(LOCAL_SOURCES[row.id]);
+}
+
+/** Reads every local-source row's latest version: a map of tool id to version string or `null`,
+ * with an entry only for the rows `isLocalSource` says yes to. Never throws. */
+export function readLocalLatestVersions(rows, deps) {
+  const entries = rows.filter(isLocalSource).map((row) => {
+    try {
+      return [row.id, LOCAL_SOURCES[row.id](deps, row)];
+    } catch {
+      return [row.id, null];
+    }
+  });
+  return Object.fromEntries(entries);
+}
+
+/** True when `fetchLatestVersions` below actually looks `row` up over the network — false for a
+ * hosted context7 row (no version of its own to compare against npm), for a local-source row (read
+ * by `readLocalLatestVersions`, never an outage-prone lookup), or for a row id with no source at all.
  * Exported (R3-003, accepted final review follow-up, lineage review-cef5637e2884c12a) so any caller
  * that needs to know what was *attempted*, not just what came back — doctor.mjs's
  * `resolveLatestVersions`, deciding whether a refetch that resolved nothing was a real outage or

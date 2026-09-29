@@ -43,10 +43,13 @@ function seedHealthyHome(home, project) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'codex@openai-codex': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: {
+      'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
+      'codex@openai-codex': [{ version: '1.0.6' }],
+    },
   });
   fs.mkdirSync(path.join(project, '.codegraph'), { recursive: true });
 }
@@ -57,6 +60,8 @@ function healthySpawn(project) {
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
     if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
+    // The Codex plugin's login probe (`codex login status`): logged in.
+    if ([cmd, ...args].join(' ') === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
@@ -165,6 +170,42 @@ test('doctor --hook prints nothing and stores an empty digest when there are no 
     assert.equal(stderr, '');
     const cache = readCache(home);
     assert.equal(cache.notified, '');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
+// care — its message only counts gaps, so one report carrying two list fixes (codex-plugin
+// `installed`, gentle-ai `upToDate`) is still exactly one well-formed count line.
+test('doctor --hook prints one well-formed count line for a report whose gaps have list fixes', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    // Only the Codex plugin goes missing (a list `installed` fix); typescript-lsp stays installed.
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+      plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    });
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () =>
+        url.includes('registry.npmjs.org')
+          ? { version: '0.0.1' }
+          : { tag_name: url.includes('Gentleman-Programming/gentle-ai') ? 'v99.0.0' : 'v0.0.1' },
+    });
+
+    const { code, stdout, stderr } = await runHook(
+      ['--hook', '--home', home, '--cwd', project],
+      {},
+      { spawn: healthySpawn(project), fetch: fetchImpl },
+    );
+
+    assert.equal(code, 0);
+    assert.equal(stderr, '');
+    assert.equal(stdout.split('\n').filter(Boolean).length, 1, 'exactly one line on stdout');
+    assert.deepEqual(JSON.parse(stdout), { systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

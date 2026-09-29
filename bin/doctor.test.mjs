@@ -13,6 +13,10 @@ const noopFetch = async () => {
   throw new Error('network disabled in tests');
 };
 
+// Every looked-up tool but gentle-ai, cached as "looked up, nothing found": a fresh cache with a key
+// for every row (a `null` counts as present) is what "nothing left to refetch" looks like.
+const NULL_VERSIONS = { engram: null, codegraph: null, context7: null, 'typescript-lsp': null, 'codex-plugin': null };
+
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-doctor-home-'));
 }
@@ -40,22 +44,37 @@ function seedHealthyHome(home) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'codex@openai-codex': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: {
+      'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }],
+      'codex@openai-codex': [{ version: '1.0.6' }],
+    },
   });
 }
 
 /** A fake spawn: resolves `git rev-parse --show-toplevel` to `gitToplevel` (or fails, as a real
- * one would outside a repo), and any version command named in `versions` to its stdout. Anything
- * else looks like a missing binary — never a real spawn, never the network. */
-function fakeSpawn({ versions = {}, gitToplevel } = {}) {
-  return (cmd, args) => {
+ * one would outside a repo), any version command named in `versions` to its stdout, and the
+ * `codex login status` probe per `codexLogin` (`'in'` exits 0, `'out'` exits 1 with the Codex CLI
+ * still answering `codex --version`, `'no-cli'` exits 1 with no CLI at all, `'timeout'` is killed by
+ * a signal). Anything else looks like a missing binary — never a real spawn, never the
+ * network. Every login probe's `env` lands in `loginEnvs`, so a test can see which Codex home it read. */
+function fakeSpawn({ versions = {}, gitToplevel, codexLogin, loginEnvs = [] } = {}) {
+  return (cmd, args, opts) => {
     if (cmd === 'git' && args[0] === 'rev-parse') {
       return gitToplevel
         ? { status: 0, stdout: `${gitToplevel}\n`, stderr: '' }
         : { status: 128, stdout: '', stderr: 'not a git repository' };
+    }
+    if ([cmd, ...args].join(' ') === 'codex --version' && codexLogin === 'out') {
+      return { status: 0, stdout: 'codex-cli 0.130.0\n', stderr: '' };
+    }
+    if ([cmd, ...args].join(' ') === 'codex login status') {
+      loginEnvs.push(opts?.env);
+      if (codexLogin === 'in') return { status: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' };
+      if (codexLogin === 'out' || codexLogin === 'no-cli') return { status: 1, stdout: '', stderr: 'Not logged in' };
+      if (codexLogin === 'timeout') return { status: null, signal: 'SIGTERM', stdout: '', stderr: '' };
     }
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
@@ -88,14 +107,16 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
     const spawn = fakeSpawn({
       versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
+      codexLogin: 'in',
     });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
 
     assert.equal(code, 0);
-    for (const id of ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp']) {
+    for (const id of ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin']) {
       assert.match(output, new RegExp(id));
     }
+    assert.match(output, /codex-plugin\s+1\.0\.6\s+ok\s+ok\s+n\/a/);
     assert.match(output, /3\.7\.0/);
     assert.match(output, /hosted/);
     assert.doesNotMatch(output, /\nFix:/, 'a fully healthy fixture must report no gaps');
@@ -105,7 +126,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
   }
 });
 
-test('doctorMain --json prints a parseable array with the five tool ids and upToDate unknown (or n/a for hosted context7)', async () => {
+test('doctorMain --json prints a parseable array with the six tool ids and upToDate unknown (or n/a for hosted context7)', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
@@ -118,7 +139,7 @@ test('doctorMain --json prints a parseable array with the five tool ids and upTo
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
@@ -145,6 +166,14 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
     assert.match(output, /codegraph \(installed\): npm i -g @colbymchenry\/codegraph/);
     assert.doesNotMatch(output, /codegraph upgrade/);
     assert.match(output, /gentle-ai \(claude\): gentle-ai install/);
+    assert.match(
+      output,
+      /  codex-plugin \(installed\):\n    claude plugin marketplace add openai\/codex-plugin-cc\n    claude plugin install codex@openai-codex\n/,
+    );
+    assert.match(output, /codex-plugin \(claude\): claude plugin enable codex@openai-codex/);
+    // Not installed, so there is nothing to be logged in for: no `codex` gap for this row.
+    assert.match(output, /codex-plugin\s+missing\s+missing\s+n\/a\s+n\/a/);
+    assert.doesNotMatch(output, /codex-plugin \(codex\)/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -336,6 +365,404 @@ test('a gap with no known fix command is still reported, in --json gaps and in t
   }
 });
 
+// --- T6: the Codex plugin row (`codex` column = logged in) ---
+
+test('doctorMain --json reports codex-plugin logged out as a codex gap with its own fix, exit still 0', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ codexLogin: 'out' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    const row = JSON.parse(output).find((r) => r.id === 'codex-plugin');
+    assert.equal(row.version, '1.0.6');
+    assert.equal(row.installed, 'ok');
+    assert.equal(row.claude, 'ok');
+    assert.equal(row.codex, 'missing');
+    assert.equal(row.project, 'n/a');
+    assert.deepEqual(row.gaps, [{ dimension: 'codex', state: 'missing', fix: 'codex login' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain tells a missing Codex CLI from a logged-out one by the codex fix, not by the cell', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const noCli = await runDoctor(
+      ['--home', home, '--cwd', project, '--json'],
+      {},
+      { spawn: fakeSpawn({ codexLogin: 'no-cli' }), fetch: noopFetch },
+    );
+    const missingCli = JSON.parse(noCli.output).find((r) => r.id === 'codex-plugin');
+    assert.equal(missingCli.codex, 'missing');
+    assert.deepEqual(missingCli.gaps, [
+      { dimension: 'codex', state: 'missing', fix: ['npm i -g @openai/codex', 'codex login'] },
+    ]);
+    assert.equal('codexCli' in missingCli, false);
+
+    const text = await runDoctor(
+      ['--home', home, '--cwd', project],
+      {},
+      { spawn: fakeSpawn({ codexLogin: 'no-cli' }), fetch: noopFetch },
+    );
+    assert.match(text.output, /\n  codex-plugin \(codex\):\n    npm i -g @openai\/codex\n    codex login\n/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows a timed-out login probe as unknown and lists no codex-plugin fix for it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ codexLogin: 'timeout' });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /codex-plugin\s+1\.0\.6\s+ok\s+unknown\s+n\/a/);
+    assert.doesNotMatch(output, /codex-plugin \(codex\)/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("doctorMain's login probe reads the Codex home under --home, never the real one", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const loginEnvs = [];
+    const spawn = fakeSpawn({ codexLogin: 'in', loginEnvs });
+
+    await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(loginEnvs.length, 1);
+    assert.equal(loginEnvs[0].CODEX_HOME, path.join(home, '.codex'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain compares the Codex plugin against its openai-codex marketplace version: outdated, then ok', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const marketplace = path.join(
+      home, '.claude', 'plugins', 'marketplaces', 'openai-codex', '.claude-plugin', 'marketplace.json',
+    );
+    writeJson(marketplace, { plugins: [{ name: 'codex', version: '1.0.7' }] });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+
+    const outdated = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.match(outdated.output, /codex-plugin\s+1\.0\.6\s+ok\s+ok\s+n\/a\s+outdated/);
+    assert.match(outdated.output, /codex-plugin \(upToDate\): claude plugin update codex@openai-codex/);
+
+    // The cache is fresh after that run, yet a local marketplace file is read again every run.
+    writeJson(marketplace, { plugins: [{ name: 'codex', version: '1.0.6' }] });
+    const current = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    assert.equal(JSON.parse(current.output).find((r) => r.id === 'codex-plugin').upToDate, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- T6b: a fix with several steps is a list, printed one command per line ---
+
+test('doctorMain prints a one-step fix on the gap line and a multi-step fix as a header plus indented lines', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    // Plugin and its enablement gone (one multi-step and one one-step gap), everything else healthy.
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), { plugins: {} });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.match(output, /\n  codex-plugin \(installed\):\n    claude plugin marketplace add openai\/codex-plugin-cc\n    claude plugin install codex@openai-codex\n/);
+    assert.match(output, /\n  gentle-ai \(installed\): see https:\/\/github\.com\/Gentleman-Programming\/gentle-ai\n/);
+    // Once each command has its own line there is no `;` joining commands anywhere in the section.
+    assert.doesNotMatch(output.slice(output.indexOf('Fix:')), /;/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain --json carries a multi-step fix as an array, in the row fix map and in the gap', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const spawn = fakeSpawn({});
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    const row = JSON.parse(output).find((r) => r.id === 'codex-plugin');
+    const steps = ['claude plugin marketplace add openai/codex-plugin-cc', 'claude plugin install codex@openai-codex'];
+    assert.deepEqual(row.fix.installed, steps);
+    assert.deepEqual(row.gaps.find((g) => g.dimension === 'installed').fix, steps);
+    assert.equal(typeof JSON.parse(output).find((r) => r.id === 'codegraph').fix.installed, 'string');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- T6b (Codex P2): a fresh cache written before a row existed must not hide that row for 6 h ---
+
+/** The Codex plugin fixture for the cache tests: installed 1.0.6 with 1.0.6 in its marketplace. */
+function seedCodexMarketplace(home) {
+  writeJson(
+    path.join(home, '.claude', 'plugins', 'marketplaces', 'openai-codex', '.claude-plugin', 'marketplace.json'),
+    { plugins: [{ name: 'codex', version: '1.0.6' }] },
+  );
+}
+
+test('an online run refetches when a fresh cache has no key for a network row, and fills it in', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    // A minute old: still fresh, and a restamp can never land on the same millisecond.
+    const freshAt = new Date(Date.now() - 60_000).toISOString();
+    writeCache(home, {
+      latest: { checkedAt: freshAt, versions: { 'gentle-ai': '3.7.0', codegraph: null, context7: null } },
+      notified: null,
+    });
+    const spawn = fakeSpawn({
+      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1' },
+      codexLogin: 'in',
+    });
+    const fetchImpl = async (url) =>
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => ({ tag_name: 'v2.2.1' }) } : { ok: false };
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(JSON.parse(output).find((r) => r.id === 'engram').upToDate, 'ok');
+    const cache = readCache(home);
+    assert.equal(cache.latest.versions.engram, '2.2.1');
+    assert.equal(cache.latest.versions['gentle-ai'], '3.7.0', 'a failed lookup keeps what was cached for it');
+    assert.notEqual(cache.latest.checkedAt, freshAt, 'the refetch succeeded for one row, so the cache is stamped again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--offline never refetches for a network row the cache predates: it stays unknown', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: {} }, notified: null });
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called in --offline mode');
+    };
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json', '--offline'], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(fetchCalled, false);
+    assert.equal(JSON.parse(output).find((r) => r.id === 'gentle-ai').upToDate, 'unknown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- T6d (Codex P2): a latest version read from a local marketplace file is never taken from the
+// cache. It is read on every run, online or --offline, and overlays whatever the cache holds. It
+// is not written to the cache either (the simpler of the two options: nothing is stored that a
+// later run must remember not to read), and it never counts as an attempted lookup. ---
+
+test('a plugin installed after a run cached null for it is compared at once, online and --offline', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    seedCodexMarketplace(home);
+    writeCache(home, {
+      latest: { checkedAt: new Date().toISOString(), versions: { ...NULL_VERSIONS, 'gentle-ai': '3.7.0' } },
+      notified: null,
+    });
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
+
+    const online = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+    assert.equal(JSON.parse(online.output).find((r) => r.id === 'codex-plugin').upToDate, 'ok');
+
+    const offline = await runDoctor(['--home', home, '--cwd', project, '--json', '--offline'], {}, { spawn, fetch: noopFetch });
+    assert.equal(JSON.parse(offline.output).find((r) => r.id === 'codex-plugin').upToDate, 'ok');
+
+    assert.equal(readCache(home).latest.versions['codex-plugin'], null, 'the local answer is never written to the cache');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('a fresh cache with a key for every network row is not refetched, whatever it lacks for local rows', async () => {
+  const home = makeTmpHome();
+  try {
+    const checkedAt = new Date().toISOString();
+    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': '3.7.0' } }, notified: null });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called');
+    };
+    const rows = [
+      { id: 'gentle-ai', version: '3.7.0' },
+      { id: 'typescript-lsp', version: '1.0.0' },
+      { id: 'codex-plugin', version: '1.0.6' },
+    ];
+
+    await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now: () => new Date() });
+
+    assert.equal(fetchCalled, false);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('local lookups are not "attempted": a row set of only local rows leaves the cache fresh and writes no local key', async () => {
+  const home = makeTmpHome();
+  try {
+    seedCodexMarketplace(home);
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called');
+    };
+
+    const versions = await resolveLatestVersions([{ id: 'codex-plugin', version: '1.0.6' }], {
+      home,
+      offline: false,
+      fetch: fetchImpl,
+      now: () => new Date(),
+    });
+
+    assert.equal(versions['codex-plugin'], '1.0.6');
+    assert.equal(fetchCalled, false);
+    const cache = readCache(home);
+    assert.notEqual(cache.latest.checkedAt, staleCheckedAt, 'nothing was attempted, so there was nothing to fail');
+    assert.equal('codex-plugin' in cache.latest.versions, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a local answer never hides an outage: a failing network row alongside it keeps the cache stale', async () => {
+  const home = makeTmpHome();
+  try {
+    seedCodexMarketplace(home);
+    const staleCheckedAt = new Date(0).toISOString();
+    writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
+    const failingFetch = async () => {
+      throw new Error('offline');
+    };
+    const rows = [
+      { id: 'codex-plugin', version: '1.0.6' },
+      { id: 'gentle-ai', version: '3.7.0' },
+    ];
+
+    const versions = await resolveLatestVersions(rows, { home, offline: false, fetch: failingFetch, now: () => new Date() });
+
+    assert.equal(versions['codex-plugin'], '1.0.6');
+    assert.equal(versions['gentle-ai'], null);
+    assert.equal(readCache(home).latest.checkedAt, staleCheckedAt);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a cached null counts as present: an outage never retriggers the refetch on every run', async () => {
+  const home = makeTmpHome();
+  try {
+    const checkedAt = new Date().toISOString();
+    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': null } }, notified: null });
+    let fetchCalls = 0;
+    const fetchImpl = async () => {
+      fetchCalls += 1;
+      throw new Error('offline');
+    };
+    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+
+    await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now: () => new Date() });
+
+    assert.equal(fetchCalls, 0);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a refetch for a missing key that fails everywhere leaves checkedAt alone and stores a null, so the next run does not retry', async () => {
+  const home = makeTmpHome();
+  try {
+    const checkedAt = new Date(Date.now() - 60_000).toISOString();
+    writeCache(home, { latest: { checkedAt, versions: {} }, notified: null });
+    let fetchCalls = 0;
+    const fetchImpl = async () => {
+      fetchCalls += 1;
+      throw new Error('offline');
+    };
+    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+    const deps = { home, offline: false, fetch: fetchImpl, now: () => new Date() };
+
+    await resolveLatestVersions(rows, deps);
+    assert.equal(fetchCalls, 1);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt, 'no lookup succeeded, so the stamp does not move');
+    assert.equal(readCache(home).latest.versions['gentle-ai'], null);
+
+    await resolveLatestVersions(rows, deps);
+    assert.equal(fetchCalls, 1, 'the key is now present, so a still-fresh cache is not refetched again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a hosted context7 row (never looked up) does not count as a missing key', async () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: {} }, notified: null });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called');
+    };
+
+    await resolveLatestVersions([{ id: 'context7', version: 'hosted' }], {
+      home,
+      offline: false,
+      fetch: fetchImpl,
+      now: () => new Date(),
+    });
+
+    assert.equal(fetchCalled, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- T2: latest-version lookup, cache, `outdated`, `--offline` ---
 
 test('doctorMain marks a tool ok when its installed version is at least the fetched latest', async () => {
@@ -369,7 +796,7 @@ test('doctorMain marks a tool outdated and lists its fix when the fetched latest
 
     assert.equal(code, 0);
     assert.match(output, /gentle-ai\s.*outdated/);
-    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\): gentle-ai upgrade; gentle-ai sync/);
+    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\):\n    gentle-ai upgrade\n    gentle-ai sync\n/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -412,7 +839,7 @@ test('doctorMain skips fetching when the cache was checked within the last 6 hou
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0' } },
+      latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0', ...NULL_VERSIONS } },
       notified: null,
     });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });

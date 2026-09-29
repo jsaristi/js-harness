@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
-import { fetchLatestVersions, isLookupAttempted } from './lib/latest.mjs';
+import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { gapList, gapDigest } from './lib/digest.mjs';
 
 const GAP_STATES = new Set(['missing', 'outdated']);
@@ -84,10 +84,28 @@ function computeUpToDate(row, latestVersion) {
  * still fresh (checked within the last 6h), else refetched. A refetch is fail-open per tool: one
  * that could not be resolved this time keeps whatever was cached for it before (`null` if there
  * was nothing), so a partial outage never wipes out data that was fine an hour ago. Exported for
- * its own tests (R3-004 below needs a row set smaller than the real five-tool stack). */
-export async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
+ * its own tests (R3-004 below needs a row set smaller than the real stack). */
+export async function resolveLatestVersions(rows, deps) {
+  // T6d (Codex P2): a latest version read from a local marketplace file is never taken from the
+  // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
+  // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
+  // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
+  const local = readLocalLatestVersions(rows, { home: deps.home });
+  const networkRows = rows.filter((row) => !isLocalSource(row));
+  return { ...(await resolveNetworkVersions(networkRows, deps)), ...local };
+}
+
+/** The cache-backed half of `resolveLatestVersions`: every row here is a network lookup (or has no
+ * source at all), served from the cache alone in `--offline` mode or while it is still fresh. */
+async function resolveNetworkVersions(rows, { home, offline, fetch: fetchImpl, now }) {
   const cache = readCache(home);
-  if (offline || !isStale(cache.latest.checkedAt, now)) return cache.latest.versions;
+  if (offline) return cache.latest.versions;
+  // Codex P2 (accepted T6 review follow-up): a fresh cache that predates a row (no key for its id)
+  // would leave that row `unknown` for up to 6h, so an online run refetches for it. A cached `null`
+  // counts as present, so an outage — which stores `null` for what it could not resolve — never
+  // retriggers this on every run.
+  const predatesRow = rows.some((row) => isLookupAttempted(row) && !(row.id in cache.latest.versions));
+  if (!isStale(cache.latest.checkedAt, now) && !predatesRow) return cache.latest.versions;
 
   // R3-004 (accepted T4 review follow-up): a row never even attempted (context7 hosted has no
   // version of its own to look up) is not a failure — only a row that was actually looked up and
@@ -163,7 +181,15 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   const gapLines = rows.flatMap((row) => rowGaps(row).map((gap) => ({ id: row.id, ...gap })));
   if (gapLines.length > 0) {
     console.log('\nFix:');
-    for (const gap of gapLines) console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix ?? 'no fix command known'}`);
+    for (const gap of gapLines) {
+      // A multi-step fix is a list of commands: the header line, then one indented command per line.
+      if (Array.isArray(gap.fix)) {
+        console.log(`  ${gap.id} (${gap.dimension}):`);
+        for (const command of gap.fix) console.log(`    ${command}`);
+      } else {
+        console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix ?? 'no fix command known'}`);
+      }
+    }
   }
 
   return 0;
