@@ -167,6 +167,15 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   case folding and a hooks directory under a linked root where this machine allows it (R3-003)
   — route: the same delegated writer
 - [x] T3 `uninstall` in a project restores it exactly — route: delegated writer
+- [ ] T3b Accepted review follow-ups on T3: before removing a recorded file, check its real
+  containment through every ancestor and keep an entry a link moved outside (Codex P1); prune only
+  the directory chain init created, never an empty directory added later (Codex P2); only absence
+  is benign — any other read or `lstat` failure is a failed removal that keeps the manifest (Codex
+  P2); write the manifest in full before renaming (Codex P2); validate every manifest entry's shape
+  and containment before any removal, a malformed one being `malformedManifest`, exit 1 (Codex P2,
+  R3-manifest-entry-shape-unvalidated); pin the older machine-scope `uninstallMain` tests with
+  `--global` so a test run never touches the checkout it starts in
+  (R3-uninstall-cwd-dependent-machine-tests) — route: the same delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
@@ -426,10 +435,23 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   codegraph): init then uninstall → `git status --porcelain` empty, hook, `.codegraph/` and
   manifest gone (the writer's); with `AGENTS.md` edited after init → `kept AGENTS.md (changed
   since init)`, the rest removed, exit 0 (the parent's).
+- 2026-09-28: T3 committed as 0ad11dd. Assessed (`--base-ref fa96953 --committed-only`, T2g and T3):
+  risk `medium`, 1323 lines, `review_due: true`. Native review lineage review-8a51cf5f7fba849d:
+  consent granted (pre-granted), one lens (reliability), approved and acknowledged, with two WARNING
+  (R3-uninstall-cwd-dependent-machine-tests: the older machine tests pass no `--global` or
+  `--cwd`, so in an initialized checkout a test run would undo that project;
+  R3-manifest-entry-shape-unvalidated: an entry without a string `path` crashes instead of
+  `malformedManifest`) and one SUGGESTION (R3-implicit-rerun-falls-to-machine: a second plain
+  `uninstall` inside the same repo finds it uninitialized and removes the machine install; this
+  follows the scope rule Sebastián chose, so it is his call). Codex (`--base fa96953`): P1 a
+  recorded file behind an ancestor later replaced by a link to outside is deleted there; P2
+  unrecorded empty subdirectories are pruned; P2 `EACCES` reads as already gone and the manifest is
+  dropped; P2 a short `writeSync` is renamed into place; P2 manifest paths are not checked for
+  containment. All but the SUGGESTION accepted as T3b.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Review the range fa96953..T3 (T2g stayed under budget, so it is reviewed with T3): gentle-ai,
-then Codex; then slice 3's PR.
+T3b by the same writer, committed and reviewed; Sebastián decides whether a plain `uninstall`
+inside an uninitialized git repository may reach the machine; then slice 3's PR.
