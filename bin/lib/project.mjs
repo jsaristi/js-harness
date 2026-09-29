@@ -371,30 +371,41 @@ function initCodegraph(root, spawn, platform) {
  * manifest just because this write failed partway through (T2d Codex P2 atomic manifest writes).
  *
  * `deps` (`{ open, write, close }`, each independently injectable, defaulting to real
- * `fs.openSync(path, 'wx')` / `fs.writeSync(fd, content)` / `fs.closeSync(fd)`) is split into these
- * three steps, rather than one opaque `writeFile(path, content, options)` call, specifically so
- * this function can tell "the exclusive create itself never happened" (`open` throws — `EEXIST` or
- * anything else; `tmp` is not ours to touch) apart from "the create succeeded, and something *after*
- * it failed" (`write`, `close`, or the rename below; `tmp` exists and is this call's own file, so
- * it is removed). A single combined call (the old `writeFile(tmp, content, {flag:'wx',...})` shape)
- * cannot make that distinction from the outside — whatever it does internally, its caller only ever
- * sees "it threw" or "it didn't" (T2g R3-001, Codex P2: moving that one call outside the try/catch
- * correctly stopped deleting a foreign file on `EEXIST`, per T2f item 1, but then left this call's
- * *own* just-created file leaking on a write failure that happens after the open — e.g. `ENOSPC`,
- * `EIO` partway through filling it). Splitting `open` out as its own step means only *its* own
- * failure is ambiguous-ownership territory; every failure after it succeeds is unambiguously this
- * call's to clean up. */
+ * `fs.openSync(path, 'wx')` / `fs.writeSync(fd, buffer, offset, length, position)` /
+ * `fs.closeSync(fd)`) is split into these three steps, rather than one opaque
+ * `writeFile(path, content, options)` call, specifically so this function can tell "the exclusive
+ * create itself never happened" (`open` throws — `EEXIST` or anything else; `tmp` is not ours to
+ * touch) apart from "the create succeeded, and something *after* it failed" (`write`, `close`, or
+ * the rename below; `tmp` exists and is this call's own file, so it is removed). A single combined
+ * call (the old `writeFile(tmp, content, {flag:'wx',...})` shape) cannot make that distinction from
+ * the outside — whatever it does internally, its caller only ever sees "it threw" or "it didn't"
+ * (T2g R3-001, Codex P2: moving that one call outside the try/catch correctly stopped deleting a
+ * foreign file on `EEXIST`, per T2f item 1, but then left this call's *own* just-created file
+ * leaking on a write failure that happens after the open — e.g. `ENOSPC`, `EIO` partway through
+ * filling it). Splitting `open` out as its own step means only *its* own failure is
+ * ambiguous-ownership territory; every failure after it succeeds is unambiguously this call's to
+ * clean up.
+ *
+ * `write` is called in a loop, each call resuming exactly where the last one left off
+ * (`buffer`/`offset`/`length`/`position` all reflect only the unwritten remainder), until every
+ * byte is written — `fs.writeSync`'s buffer form returns however many bytes it actually wrote,
+ * which is not guaranteed to be all of them in one call (T3b item 4, Codex P2: the single-shot
+ * `write(fd, content)` this used to be trusted a short write never happens, the same assumption
+ * `fs.writeFileSync` itself does *not* make internally). */
 function writeManifestAtomic(target, data, deps = {}) {
   const open = deps.open ?? ((p) => fs.openSync(p, 'wx'));
-  const write = deps.write ?? ((fd, content) => fs.writeSync(fd, content));
+  const write = deps.write ?? ((fd, buffer, offset, length, position) => fs.writeSync(fd, buffer, offset, length, position));
   const close = deps.close ?? ((fd) => fs.closeSync(fd));
 
   const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  const content = JSON.stringify(data, null, 2) + '\n';
+  const buffer = Buffer.from(JSON.stringify(data, null, 2) + '\n', 'utf8');
 
   const fd = open(tmp); // if this throws, nothing was created by this call — tmp is not ours to touch
   try {
-    write(fd, content);
+    let written = 0;
+    while (written < buffer.length) {
+      written += write(fd, buffer, written, buffer.length - written, written);
+    }
     close(fd);
   } catch (err) {
     try {
@@ -835,7 +846,10 @@ export function initProject(cwd, version, deps = {}) {
  * `root` for an ordinary working-tree entry, or the entry's own absolute forward-slashed `path`
  * (converted back to the host's separator) when `gitDir: true` marks it as written into a git dir
  * outside the working tree — the same two shapes `manifestEntry`/`pathShapeFor` produce on the way
- * in (see there). */
+ * in (see there). Callers that have not yet validated the entry's shape (`isValidManifestEntry`)
+ * must not call this: an entry claiming `gitDir: true` with a non-absolute `path` would resolve
+ * relative to `process.cwd()` here, which is exactly the escape `isValidManifestEntry` exists to
+ * catch first. */
 function resolveManifestEntryPath(root, entry) {
   const segments = entry.path.split('/');
   return entry.gitDir ? path.resolve(segments.join(path.sep)) : path.join(root, ...segments);
@@ -851,40 +865,140 @@ function matchesRecordedHash(content, expectedHash) {
   return sha256(content.replace(/\r\n/g, '\n')) === expectedHash;
 }
 
-/** Removes `dir` and every descendant directory that ends up empty, deepest first — walking *down*
- * from the recorded shallowest directory `init` created, the opposite direction from
- * `manifest.mjs`'s `removeEmptyDirsUpTo` (which climbs up from a leaf toward a fixed stop). `dirs`
- * only ever records the shallowest ancestor a single `mkdirSync(dir, { recursive: true })` actually
- * created (see `shallowestMissingAncestor`), so by the time this runs — after every `files` entry is
- * already handled — the whole chain below it should be empty; a directory that turns out to have
- * real content left in it (something added after init, or a file above that was kept or failed) is
- * silently left alone rather than forced empty, matching `dirs`' own "remove each when empty"
- * contract (T3 design) — only an actual removal failure on a directory this walk itself confirmed
- * *was* empty is reported. `isWorkingTreeDir` (constant for the whole walk, from the manifest
- * entry's own `gitDir` flag) picks `pathShapeFor`'s report shape for any failure, at whatever depth
- * it happens. */
-function pruneEmptyDirsBottomUp(root, dir, isWorkingTreeDir, rm, notRemoved, actions) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return; // already gone entirely — nothing to do
+/** True only for the two errors that mean "nothing is there" — an absent path (`ENOENT`) or a path
+ * that walks through something that is not a directory where one was expected (`ENOTDIR`). Every
+ * other failure (`EACCES`, `EPERM`, a transient I/O error...) means something real is blocking the
+ * check, not that the target is simply gone, so it must never be read as "already removed" (T3b
+ * item 3, Codex P2: an unreadable file used to be treated exactly like a missing one, silently
+ * dropping the manifest's only record of it instead of keeping the manifest and failing). */
+function isBenignAbsence(err) {
+  return err?.code === 'ENOENT' || err?.code === 'ENOTDIR';
+}
+
+/** Whether `abs` (a manifest entry's own lexical, unresolved path) is still, right now, really
+ * inside one of `bases` — following every ancestor through `realish` the same way
+ * `resolveHookContainment` judges a hooks path, not just trusting `abs`'s own final path once
+ * something is found there. An ancestor a link now sends outside (a directory replaced by a junction
+ * to somewhere else, say) means `abs` no longer names what `init` wrote at all, even when something
+ * still sits at that exact path and even happens to share the same bytes (T3b item 1, Codex P1: the
+ * old code trusted `abs` once `lstat` found a plain file there, so a link redirecting an ancestor
+ * made it remove — or, worse, silently content-match and remove — a file entirely outside the
+ * project). `bases` is the recorded base's *real* (`fs.realpathSync`-resolved) form: the working
+ * tree root for an ordinary entry, or the git dir/common git dir for one recorded `gitDir: true` —
+ * exactly the bases `resolveHookContainment` judged containment against when `init` wrote it. */
+function stillWithinRecordedBase(abs, bases) {
+  if (bases.length === 0) return false;
+  const { real } = realish(abs, bases);
+  return containingBase(real, bases) !== null;
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/** Whether one `files`/`dirs` manifest entry has the shape `init` itself would have written *and*
+ * resolves inside the base that shape claims — `path` a non-empty string, `gitDir` (if present) a
+ * boolean, `sha256` (required only for a `files` entry, never a `dirs` one) a 64-hex sha256 —
+ * checked before anything on disk is touched (T3b item 5, Codex P2 +
+ * R3-manifest-entry-shape-unvalidated: an entry missing `path`, or one whose `path` escapes its base
+ * entirely — `../shared`, or a `gitDir: true` absolute path outside both git dirs — must never reach
+ * `resolveManifestEntryPath`/removal at all, since a hand-edited or corrupted manifest could
+ * otherwise point uninstall at an arbitrary path). This is a *lexical* containment check only, using
+ * the git dirs' own unresolved form (`lexicalGitBases`) — no symlink-following happens here at all;
+ * that is `stillWithinRecordedBase`'s job, done later, per file, only for entries this already
+ * passed. */
+function isValidManifestEntry(entry, { requireSha256, root, lexicalGitBases }) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  if (typeof entry.path !== 'string' || entry.path.length === 0) return false;
+  if (entry.gitDir !== undefined && typeof entry.gitDir !== 'boolean') return false;
+  if (requireSha256 && !SHA256_HEX.test(entry.sha256 ?? '')) return false;
+
+  if (entry.gitDir) {
+    if (!path.isAbsolute(entry.path.split('/').join(path.sep))) return false;
   }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      pruneEmptyDirsBottomUp(root, path.join(dir, entry.name), isWorkingTreeDir, rm, notRemoved, actions);
+  const abs = resolveManifestEntryPath(root, entry);
+  const bases = entry.gitDir ? lexicalGitBases : [path.resolve(root)];
+  return containingBase(abs, bases) !== null;
+}
+
+/** Whether the whole manifest has the shape `initProject` writes, checked once before any removal at
+ * all (T3b item 5). `files` must be present and every entry valid; `dirs`/`codegraph` are optional
+ * (an old manifest predating one of them still loads), but whichever *is* present must have the
+ * right shape throughout — one bad entry anywhere invalidates the whole manifest, since a partially
+ * trusted manifest is exactly the hazard this check exists to close off. */
+function isValidManifestShape(manifest, root, gitBases) {
+  if (!manifest || typeof manifest !== 'object') return false;
+  if (!Array.isArray(manifest.files)) return false;
+  const lexicalGitBases = [gitBases.gitDir, gitBases.commonGitDir].filter(Boolean).map((p) => path.resolve(p));
+  const entryOpts = { root, lexicalGitBases };
+  if (!manifest.files.every((f) => isValidManifestEntry(f, { ...entryOpts, requireSha256: true }))) return false;
+  if (manifest.dirs !== undefined) {
+    if (!Array.isArray(manifest.dirs)) return false;
+    if (!manifest.dirs.every((d) => isValidManifestEntry(d, { ...entryOpts, requireSha256: false }))) return false;
+  }
+  if (manifest.codegraph !== undefined) {
+    if (typeof manifest.codegraph !== 'object' || manifest.codegraph === null) return false;
+    if (manifest.codegraph.createdDir !== undefined && typeof manifest.codegraph.createdDir !== 'boolean') return false;
+  }
+  return true;
+}
+
+/** Every directory `init` actually created, deepest first — derived purely from the manifest's own
+ * data, never by reading the real directory tree to discover what is there, so uninstall only ever
+ * considers removing a directory it can name from `dirs` and the `files` written under it, never a
+ * sibling directory added later for an unrelated reason (T3b item 2, Codex P2: the old bottom-up
+ * walk read the *real* tree and recursed into anything it found, so an empty directory added after
+ * init — e.g. `custom/cache` — was silently swept up and removed too, even though init never made
+ * it). Each `dirs` entry only ever records the *shallowest* ancestor a single
+ * `mkdirSync(dir, { recursive: true })` created; the full chain down to the file it was made for is
+ * reconstructed by walking that file's own recorded directory back up to (and including) the `dirs`
+ * entry's own path, one path segment at a time — every directory along the way, and only those, is
+ * init's to remove. Everything here stays in the manifest's own string shape (`path`/`gitDir`); no
+ * real filesystem access happens until the caller resolves and touches disk. */
+function directoriesToPrune(manifest) {
+  const chain = new Map(); // `${gitDir}\u0000${path}` -> { path, gitDir } (dedup across files)
+  for (const dirEntry of manifest.dirs ?? []) {
+    const gitDirFlag = !!dirEntry.gitDir;
+    for (const file of manifest.files) {
+      if (!!file.gitDir !== gitDirFlag) continue;
+      if (file.path !== dirEntry.path && !file.path.startsWith(`${dirEntry.path}/`)) continue;
+      const lastSlash = file.path.lastIndexOf('/');
+      if (lastSlash === -1) continue; // the file sits directly at the repo/git-dir root: no chain
+      let current = file.path.slice(0, lastSlash);
+      for (;;) {
+        chain.set(`${gitDirFlag}\u0000${current}`, { path: current, gitDir: gitDirFlag });
+        if (current === dirEntry.path) break;
+        const idx = current.lastIndexOf('/');
+        if (idx === -1) break; // defensive: should not happen once current === dirEntry.path above
+        current = current.slice(0, idx);
+      }
     }
   }
+  return [...chain.values()].sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+}
+
+/** Removes one directory `directoriesToPrune` named, but only if it is now empty — never a
+ * directory with real content in it (T3 design's "remove each when empty"), and this function never
+ * reads anything but that one directory's own listing; the *set* of directories ever considered
+ * comes entirely from `directoriesToPrune`, from the manifest, not from walking disk (T3b item 2).
+ * Absence (`ENOENT`/`ENOTDIR`) is not a failure — the directory is already gone, nothing to report
+ * either way; any other `readdir` failure keeps the manifest and fails the run, same as a file's
+ * (T3b item 3). */
+function removeDirectoryIfEmpty(root, dirEntry, rm, readdir, notRemoved, actions) {
+  const abs = resolveManifestEntryPath(root, dirEntry);
+  const isWorkingTreeDir = !dirEntry.gitDir;
   let remaining;
   try {
-    remaining = fs.readdirSync(dir);
-  } catch {
-    return; // vanished during the recursion above (already handled by a deeper call)
+    remaining = readdir(abs);
+  } catch (err) {
+    if (isBenignAbsence(err)) return;
+    const label = pathShapeFor(root, abs, isWorkingTreeDir);
+    notRemoved.push(label);
+    actions.push({ kind: 'failed', path: label, reason: err.message });
+    return;
   }
-  if (remaining.length > 0) return; // real content left behind — never this walk's to remove
-  const label = pathShapeFor(root, dir, isWorkingTreeDir);
+  if (remaining.length > 0) return; // real content left behind — never this run's to remove
+  const label = pathShapeFor(root, abs, isWorkingTreeDir);
   try {
-    rm(dir, { recursive: true, force: true });
+    rm(abs, { recursive: true, force: true });
     actions.push({ kind: 'removed', path: label });
   } catch (err) {
     notRemoved.push(label);
@@ -913,7 +1027,10 @@ function removeManifestDirIfEmpty(dir, rm) {
 
 /** Undoes exactly what `initProject` wrote, from the project manifest it left behind — the
  * counterpart T3 design calls for. `deps.spawn`/`deps.rm` are injectable the same way `initProject`'s
- * are; no `writeFile` here, since uninstall never writes anything.
+ * are; no `writeFile` here, since uninstall never writes anything. `deps.lstat`/`readFile`/`readdir`
+ * are the read-side equivalent (T3b item 3): a test forces one of them to fail with something other
+ * than absence, to prove that keeps the manifest and fails the run rather than being read as "already
+ * gone".
  *
  * Returns one of:
  * - `{ code: 1, noSuchDirectory: true, cwd }` — `cwd` itself does not exist.
@@ -925,7 +1042,7 @@ function removeManifestDirIfEmpty(dir, rm) {
  * - `{ code: 1, noManifestFile: true, manifestPath }` — `harness.json` exists but no manifest does
  *   (a fresh clone of an initialized project: those files are already committed, so git has them).
  * - `{ code: 1, malformedManifest: true, manifestPath, reason? }` — the manifest does not parse as
- *   the shape `initProject` writes.
+ *   JSON, or does not have the shape `initProject` writes (T3b item 5).
  * - `{ code, root, manifestPath, actions, notRemoved }` — the ordinary result: `actions` is in
  *   report order (`removed`/`kept`/`alreadyGone`/`codegraphRemoved`/`failed`/`manifestRemoved`),
  *   `code` is 1 exactly when `notRemoved` is non-empty (a kept, unchanged file is not a failure —
@@ -934,6 +1051,12 @@ function removeManifestDirIfEmpty(dir, rm) {
 export function uninstallProject(cwd, deps = {}) {
   const spawn = deps.spawn ?? spawnSync;
   const rm = deps.rm ?? fs.rmSync;
+  // Independently injectable (T3b item 3), the same way `initProject`'s `writeFile`/`rm` are: real
+  // permission failures are unreliable to reproduce on Windows (chmod does not restrict owner read
+  // access the same way POSIX does), so a test forces one of these instead.
+  const lstat = deps.lstat ?? fs.lstatSync;
+  const readFile = deps.readFile ?? ((p) => fs.readFileSync(p, 'utf8'));
+  const readdir = deps.readdir ?? fs.readdirSync;
 
   if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
 
@@ -956,20 +1079,39 @@ export function uninstallProject(cwd, deps = {}) {
   } catch (err) {
     return { code: 1, malformedManifest: true, manifestPath: manifestFilePath, reason: err.message };
   }
-  if (!manifest || !Array.isArray(manifest.files)) {
+
+  // T2e item 4's bases, recomputed here (never threaded from `initProject`: uninstall may run in a
+  // whole separate process, possibly long after init did) — used both to validate the manifest's own
+  // shape below and, per file, to re-check real containment (T3b items 1 and 5).
+  const gitBases = gitDirs(root, spawn);
+  if (!isValidManifestShape(manifest, root, gitBases)) {
     return { code: 1, malformedManifest: true, manifestPath: manifestFilePath };
   }
+  const realRoot = fs.realpathSync(root);
+  const realGitDirBases = [safeRealpath(gitBases.gitDir), safeRealpath(gitBases.commonGitDir)].filter(Boolean);
 
   const actions = [];
   const notRemoved = [];
 
   for (const file of manifest.files) {
     const abs = resolveManifestEntryPath(root, file);
+    const bases = file.gitDir ? realGitDirBases : [realRoot];
+    if (!stillWithinRecordedBase(abs, bases)) {
+      // A link along the way now sends this entry somewhere else entirely (T3b item 1, Codex P1) —
+      // whatever is or is not at that redirected location is simply not this run's to judge.
+      actions.push({ kind: 'kept', path: file.path, reason: 'moved outside' });
+      continue;
+    }
     let stat;
     try {
-      stat = fs.lstatSync(abs);
-    } catch {
-      actions.push({ kind: 'alreadyGone', path: file.path });
+      stat = lstat(abs);
+    } catch (err) {
+      if (isBenignAbsence(err)) {
+        actions.push({ kind: 'alreadyGone', path: file.path });
+      } else {
+        notRemoved.push(file.path);
+        actions.push({ kind: 'failed', path: file.path, reason: err.message });
+      }
       continue;
     }
     if (!stat.isFile()) {
@@ -980,10 +1122,14 @@ export function uninstallProject(cwd, deps = {}) {
     }
     let content;
     try {
-      content = fs.readFileSync(abs, 'utf8');
+      content = readFile(abs);
     } catch (err) {
-      notRemoved.push(file.path);
-      actions.push({ kind: 'failed', path: file.path, reason: err.message });
+      if (isBenignAbsence(err)) {
+        actions.push({ kind: 'alreadyGone', path: file.path });
+      } else {
+        notRemoved.push(file.path);
+        actions.push({ kind: 'failed', path: file.path, reason: err.message });
+      }
       continue;
     }
     if (!matchesRecordedHash(content, file.sha256)) {
@@ -999,9 +1145,8 @@ export function uninstallProject(cwd, deps = {}) {
     }
   }
 
-  for (const dir of manifest.dirs ?? []) {
-    const abs = resolveManifestEntryPath(root, dir);
-    pruneEmptyDirsBottomUp(root, abs, !dir.gitDir, rm, notRemoved, actions);
+  for (const dirEntry of directoriesToPrune(manifest)) {
+    removeDirectoryIfEmpty(root, dirEntry, rm, readdir, notRemoved, actions);
   }
 
   if (manifest.codegraph?.createdDir === true) {

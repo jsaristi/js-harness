@@ -198,6 +198,19 @@ export function runTui({
 /** CLI entry point: gathers version info, binds the real commands to a home, computes the stack
  * block (offline, never blocking on the network — see `computeStackState`), opens the TUI. `io` may
  * also carry `fetch`/`now` overrides for tests; production leaves them at their real defaults. */
+/** The machine-level commands the menu runs, each bound to `home`. */
+export function buildCommands({ home, env = process.env, spawn = spawnSync, fetch: fetchImpl = fetch, now } = {}) {
+  return {
+    status: () => statusMain(['--home', home], env, spawn),
+    doctor: () => doctorMain(['--home', home], env, { spawn, fetch: fetchImpl, now }),
+    install: () => installMain(['--home', home]),
+    update: () => updateMain(['--home', home], env, spawn),
+    upgrade: () => upgradeMain(['--home', home], env, spawn),
+    // --global: the menu's uninstall is the machine one, wherever the TUI was opened.
+    uninstall: () => uninstallMain(['--global', '--home', home]),
+  };
+}
+
 export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {}) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
@@ -218,14 +231,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   const stack = await computeStackState({ home, cwd: process.cwd(), spawn, fetch: fetchImpl, now });
 
-  const commands = {
-    status: () => statusMain(['--home', home], env, spawn),
-    doctor: () => doctorMain(['--home', home], env, { spawn, fetch: fetchImpl, now }),
-    install: () => installMain(['--home', home]),
-    update: () => updateMain(['--home', home], env, spawn),
-    upgrade: () => upgradeMain(['--home', home], env, spawn),
-    uninstall: () => uninstallMain(['--home', home]),
-  };
+  const commands = buildCommands({ home, env, spawn, fetch: fetchImpl, now });
 
   return runTui({ installedVersion, updateAvailable, stack, commands, ...io });
 }

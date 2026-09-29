@@ -228,7 +228,10 @@ async function main() {
     });
 
     step('`js-harness uninstall` removes what it wrote and restores both hook files byte-for-byte', () => {
-      const result = run(process.execPath, [binPath, 'uninstall', '--home', home]);
+      // --global (T3b item 6, R3-uninstall-cwd-dependent-machine-tests): this step must always
+      // mean the machine install under `home`, never depend on whichever directory `npm run e2e`
+      // happens to be invoked from.
+      const result = run(process.execPath, [binPath, 'uninstall', '--home', home, '--global']);
       assertThat(result.status === 0, `uninstall exited ${result.status}: ${result.stderr}`);
       assertThat(!fs.existsSync(path.join(home, '.js-harness')), 'expected .js-harness to be removed');
       assertThat(

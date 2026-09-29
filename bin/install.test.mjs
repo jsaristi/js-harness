@@ -94,7 +94,9 @@ test('uninstallMain removes the manifest under --home and exits 0', async () => 
   const home = makeTmpHome();
   try {
     await installMain(['--home', home]);
-    const code = await uninstallMain(['--home', home]);
+    // T3b item 6, R3-uninstall-cwd-dependent-machine-tests: pinned with --global so this machine
+    // test never depends on whatever project (if any) the test runner's own cwd happens to sit in.
+    const code = await uninstallMain(['--global', '--home', home]);
     assert.equal(code, 0);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
@@ -186,7 +188,8 @@ test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --h
     assert.equal(syncCode, 0);
     assert.equal(readManifest(home).version, currentVersion());
 
-    const uninstallCode = await uninstallMain([], { JS_HARNESS_HOME: home });
+    // T3b item 6, R3-uninstall-cwd-dependent-machine-tests: pinned with --global (see above).
+    const uninstallCode = await uninstallMain(['--global'], { JS_HARNESS_HOME: home });
     assert.equal(uninstallCode, 0);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
@@ -308,6 +311,74 @@ test('uninstallMain --global reaches the machine even from inside an initialized
     assert.ok(fs.existsSync(path.join(root, 'AGENTS.md')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+/** Runs `fn` with `dir` as the process cwd, restoring the original cwd afterwards. */
+async function inDir(dir, fn) {
+  const originalCwd = process.cwd();
+  process.chdir(dir);
+  try {
+    return await fn();
+  } finally {
+    process.chdir(originalCwd);
+  }
+}
+
+// Sebastián's rule (roadmap, Decided: "Command scope"): with no flags, inside a git repository that
+// is not an initialized project — a second `uninstall` in the same repo, say — `uninstall` refuses
+// and names --global instead of removing the machine install.
+test('uninstallMain with no flags inside an uninitialized git repository exits 1 and leaves the machine install alone', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+
+    const { code, outLines, errLines } = await inDir(root, () => captureConsole(() => uninstallMain(['--home', home])));
+
+    assert.equal(code, 1);
+    assert.equal(fs.existsSync(manifestPath(home)), true);
+    assert.deepEqual(outLines, []);
+    assert.ok(errLines.some((l) => l.includes('not an initialized project') && l.includes('--global')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain run twice in the same project undoes it once, then refuses rather than reaching the machine', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    assert.equal(initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' }).code, 0);
+    await installMain(['--home', home]);
+
+    const first = await inDir(root, () => captureConsole(() => uninstallMain(['--home', home])));
+    const second = await inDir(root, () => captureConsole(() => uninstallMain(['--home', home])));
+
+    assert.equal(first.code, 0);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(second.code, 1);
+    assert.equal(fs.existsSync(manifestPath(home)), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain with no flags outside any git repository still undoes the machine install', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-nogit-'));
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+
+    const { code } = await inDir(dir, () => captureConsole(() => uninstallMain(['--home', home])));
+
+    assert.equal(code, 0);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
   }
 });

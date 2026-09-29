@@ -112,6 +112,10 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   2 usage error.
 - An explicit `--cwd` names a project: when it is not an initialized one, `uninstall` exits 1 and
   names `--global`, never falling through to the machine (found by the parent in review of T3).
+  With no flags, the same holds inside any git repository that is not an initialized project;
+  only outside a git repository does a plain `uninstall` reach the machine (Sebastián,
+  2026-09-28, answering R3-implicit-rerun-falls-to-machine). The TUI's uninstall passes
+  `--global`.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -167,7 +171,7 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   case folding and a hooks directory under a linked root where this machine allows it (R3-003)
   — route: the same delegated writer
 - [x] T3 `uninstall` in a project restores it exactly — route: delegated writer
-- [ ] T3b Accepted review follow-ups on T3: before removing a recorded file, check its real
+- [x] T3b Accepted review follow-ups on T3: before removing a recorded file, check its real
   containment through every ancestor and keep an entry a link moved outside (Codex P1); prune only
   the directory chain init created, never an empty directory added later (Codex P2); only absence
   is benign — any other read or `lstat` failure is a failed removal that keeps the manifest (Codex
@@ -448,10 +452,26 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   unrecorded empty subdirectories are pruned; P2 `EACCES` reads as already gone and the manifest is
   dropped; P2 a short `writeSync` is renamed into place; P2 manifest paths are not checked for
   containment. All but the SUGGESTION accepted as T3b.
+- 2026-09-28: T3b done by the same writer (`bin/lib/project.mjs` +201/−56, its test +248,
+  `bin/install.test.mjs` +5/−2, `scripts/e2e.mjs` +4/−1): each recorded file's real location is
+  re-checked against its base before removal (`kept (moved outside)` otherwise); `dirs` pruning
+  touches only the chain init created, derived from `dirs` and `files` without walking the disk;
+  only `ENOENT`/`ENOTDIR` count as absent; manifest writes loop until every byte is written; the
+  whole manifest is validated (shape and containment) before any removal; the older machine tests
+  and the e2e `uninstall` pass `--global`. RED against d359829: 10 failures, one per new test;
+  the junction test showed the old engine reporting `removed custom/nested/hooks/pre-commit` for
+  the file outside. The writer's own call: `dirs` pruning checks emptiness, not real
+  containment, since removing a directory junction removes the link, not its target. It also
+  found the TUI's uninstall passed no `--global`. Sebastián then chose that a plain
+  `uninstall` inside an uninitialized git repository refuses (see "T3 design"); the parent
+  implemented it and the TUI's `--global` inline, extracting `buildCommands` from `tuiMain`
+  so it can be tested. RED: `install.test.mjs` 2 failures (an uninitialized repo, a second run in
+  the same project); `tui.test.mjs` 1 once the rule was in (the menu's uninstall refused inside a
+  repo); the usage line 1. GREEN: `node --test` → `tests 422 / pass 415 / fail 0 / skipped 7`;
+  `npm run e2e` 14 steps PASS; `npm run check` PASS through the commit hook.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T3b by the same writer, committed and reviewed; Sebastián decides whether a plain `uninstall`
-inside an uninitialized git repository may reach the machine; then slice 3's PR.
+Review T3b (gentle-ai, then Codex); then slice 3's PR, which Sebastián opens or asks for.

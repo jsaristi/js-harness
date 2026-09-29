@@ -51,7 +51,7 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
 // even with the old, single-scope wording).
 test('--help describes uninstall\'s two scopes (project vs. machine/--global)', () => {
   const result = run(['--help']);
-  assert.match(result.stdout, /uninstall\s+Undo the project.*machine install.*--global/);
+  assert.match(result.stdout, /uninstall\s+Undo the project.*machine install.*--global.*outside a git repository/);
 });
 
 test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {

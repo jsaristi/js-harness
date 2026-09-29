@@ -182,16 +182,16 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     if (!projectResult.notGitRepo && !projectResult.notInitialized) {
       return reportUninstallProject(projectResult);
     }
-    // An explicit --cwd names a project: when it is not an initialized one, say so rather than
-    // falling through, or a second `uninstall --cwd <repo>` would remove the machine install.
-    if (parsed.cwdExplicit) {
+    // An explicit --cwd names a project, and so does a git repository around the cwd: when it is not
+    // an initialized one, say so rather than falling through, or a second `uninstall` in the same
+    // repository would remove the machine install (Sebastián, roadmap Decided: "Command scope").
+    if (parsed.cwdExplicit || projectResult.notInitialized) {
       console.error(
         `not an initialized project: ${parsed.cwd}; js-harness uninstall --global removes the machine install`,
       );
       return 1;
     }
-    // Outside a git repository, or inside one `js-harness init` never touched: "anywhere else" in
-    // T3 design's scoping — fall through to the machine uninstall below.
+    // Outside any git repository, with no --cwd: fall through to the machine uninstall below.
   }
 
   const home = parsed.home;
