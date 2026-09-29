@@ -3045,8 +3045,14 @@ test('syncProject reports malformedManifest when an entry escapes the working tr
 // --- T5: projectLocation, the read-only answer to "where does this folder stand" ---
 
 test('projectLocation reports noSuchDirectory when the cwd does not exist', () => {
-  const cwd = path.join(os.tmpdir(), 'js-harness-does-not-exist-t5');
-  assert.deepEqual(projectLocation(cwd, syncDeps()), { kind: 'noSuchDirectory', cwd });
+  // A missing child of a fresh parent, so a leftover folder can never make it exist.
+  const parent = makeTmpDir();
+  try {
+    const cwd = path.join(parent, 'does-not-exist');
+    assert.deepEqual(projectLocation(cwd, syncDeps()), { kind: 'noSuchDirectory', cwd });
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
 });
 
 test('projectLocation reports notGit outside a git repository and writes nothing', () => {

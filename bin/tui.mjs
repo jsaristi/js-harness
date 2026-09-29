@@ -232,13 +232,16 @@ function screenText(state) {
 
 /** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. `location` is the
  * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
- * since a command can change it (`init` initializes the project, `uninstall` undoes it). */
+ * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
+ * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
+ * codegraph's project state, and `uninstall` the reverse. */
 export function runTui({
   installedVersion,
   updateAvailable,
   stack,
   location,
   readLocation,
+  readStack,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
@@ -278,6 +281,13 @@ export function runTui({
             state = withLocation(state, await readLocation());
           } catch (err) {
             console.error(`reading the project failed: ${oneLine(err)}`);
+          }
+        }
+        if (readStack) {
+          try {
+            state = { ...state, stack: await readStack() };
+          } catch (err) {
+            console.error(`refreshing the stack failed: ${oneLine(err)}`);
           }
         }
         stdin.resume();
@@ -369,6 +379,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     stack,
     location,
     readLocation: () => projectLocation(cwd),
+    // The same offline probes as at start, never the network.
+    readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
     commands,
     ...io,
   });

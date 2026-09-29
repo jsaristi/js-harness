@@ -131,6 +131,7 @@ ${STATUS_USAGE}`);
   }
 
   if (!opts.global) {
+    // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager, not for git.
     const location = projectLocation(opts.cwd);
     switch (location.kind) {
       case 'initialized':

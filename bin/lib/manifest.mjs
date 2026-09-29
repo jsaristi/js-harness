@@ -12,12 +12,15 @@ description: Install, update, and check js-harness (v${version}) status and comm
 ---
 
 js-harness commands:
-- \`js-harness status\` — installed version, manifest version, and latest available.
+- \`js-harness status --global\` — installed version, manifest version, and latest available, for the machine.
 - \`js-harness install\` — write this skill and record a manifest under the home.
-- \`js-harness sync\` — re-write installed files for the running version.
+- \`js-harness sync --global\` — re-write installed files for the running version.
 - \`js-harness update\` — check whether a newer release exists.
 - \`js-harness upgrade\` — install the newer release, then sync.
-- \`js-harness uninstall\` — remove exactly what install wrote.
+- \`js-harness uninstall --global\` — remove exactly what install wrote.
+
+Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
+(report it, move it to its pin, undo it) and refuse in a git repository that is not one.
 `;
 }
 

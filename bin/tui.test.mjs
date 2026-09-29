@@ -1001,3 +1001,137 @@ test('tuiMain --cwd outside any repository opens the machine menu only', async (
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
 });
+
+// --- T5d: the stack block is read again after a command, like the location ---
+
+const STACK_BEFORE = [{ id: 'codegraph', version: '1.6.0', state: 'missing project' }];
+const STACK_AFTER = [{ id: 'codegraph', version: '1.6.0', state: 'ok' }];
+
+test('runTui reads the stack again after a command and redraws the new block', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  let stack = STACK_BEFORE;
+  const done = runTui({
+    installedVersion: '0.1.0',
+    updateAvailable: null,
+    stack,
+    readStack: () => stack,
+    commands: {
+      ...noCommands,
+      status: async () => {
+        stack = STACK_AFTER; // e.g. `init` created .codegraph/
+      },
+    },
+    stdin,
+    stdout,
+  });
+  assert.match(stdout.chunks.join(''), /codegraph\s+1\.6\.0\s+missing project/);
+
+  stdin.emit('data', '\r');
+  await flush();
+
+  const redraw = stdout.chunks.at(-1);
+  assert.match(redraw, /codegraph\s+1\.6\.0\s+ok/);
+  assert.doesNotMatch(redraw, /missing project/);
+
+  stdin.emit('data', 'q');
+  await done;
+});
+
+test('a stack read that fails keeps the previous block, and the terminal still comes back', async () => {
+  for (const fail of [
+    () => Promise.reject(new Error('probe\nexploded')),
+    () => {
+      throw new Error('probe\nexploded');
+    },
+  ]) {
+    const stdin = makeFakeStdin();
+    const stdout = makeFakeStdout();
+    const input = pausable(stdin);
+    const done = runTui({
+      installedVersion: '0.1.0',
+      updateAvailable: null,
+      stack: STACK_BEFORE,
+      readStack: fail,
+      commands: { ...noCommands, status: async () => {} },
+      stdin,
+      stdout,
+    });
+
+    const { lines } = await silently(async () => {
+      stdin.emit('data', '\r');
+      await flush();
+    });
+
+    assert.equal(input.paused, false, 'stdin must be resumed');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /refreshing the stack failed: probe$/);
+    assert.match(stdout.chunks.at(-1), /codegraph\s+1\.6\.0\s+missing project/, 'the previous block stays');
+
+    stdin.emit('data', 'q');
+    assert.equal(await done, 0);
+  }
+});
+
+test('a failed stack read does not stop the location re-read, nor the other way round', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const done = runTui({
+    installedVersion: '0.1.0',
+    updateAvailable: null,
+    stack: STACK_BEFORE,
+    location: NOT_INITIALIZED,
+    readLocation: () => INITIALIZED,
+    readStack: () => {
+      throw new Error('nope');
+    },
+    commands: { ...noCommands, status: async () => {} },
+    stdin,
+    stdout,
+  });
+  stdin.emit('data', 'j'); // machine Status
+  await silently(async () => {
+    stdin.emit('data', '\r');
+    await flush();
+  });
+  assert.match(stdout.chunks.at(-1), /^> Status$/m);
+  assert.match(stdout.chunks.at(-1), /Sync/, 'the location was still re-read');
+  stdin.emit('data', 'q');
+  await done;
+});
+
+test('tuiMain probes the stack again after a command, offline', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-restack-home-'));
+  const probes = [];
+  const spawn = (cmd, args) => {
+    // Windows probes through a shell (`codegraph --version` as one string), elsewhere as file + args.
+    if (args?.[0] === '--version' || String(cmd).endsWith(' --version')) probes.push(cmd);
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  let fetchCalled = false;
+  const fetchImpl = async () => {
+    fetchCalled = true;
+    return { ok: false };
+  };
+  try {
+    const { result: done } = await silently(async () => {
+      const running = tuiMain(['--cwd', nonGitDir, '--home', home], {}, spawn, { stdin, stdout, fetch: fetchImpl });
+      await flush();
+      const atStart = probes.length;
+      assert.ok(atStart > 0, 'the stack is probed when the TUI opens');
+
+      stdin.emit('data', '\r'); // machine Status
+      await flush();
+      assert.equal(probes.length, atStart * 2, 'and once more after the command');
+      assert.equal(fetchCalled, false, 'never the network');
+
+      stdin.emit('data', 'q');
+      return running;
+    });
+    assert.equal(done, 0);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
