@@ -1073,7 +1073,31 @@ test('a stack read that fails keeps the previous block, and the terminal still c
   }
 });
 
-test('a failed stack read does not stop the location re-read, nor the other way round', async () => {
+test('a failed location re-read does not stop the stack refresh', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const done = runTui({
+    installedVersion: '0.1.0',
+    updateAvailable: null,
+    stack: STACK_BEFORE,
+    readLocation: () => Promise.reject(new Error('git vanished')),
+    readStack: () => STACK_AFTER,
+    commands: { ...noCommands, status: async () => {} },
+    stdin,
+    stdout,
+  });
+  const { lines } = await silently(async () => {
+    stdin.emit('data', '\r');
+    await flush();
+  });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /reading the project failed: git vanished$/);
+  assert.match(stdout.chunks.at(-1), /codegraph\s+1\.6\.0\s+ok/, 'the stack was still refreshed');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('a failed stack read does not stop the location re-read', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
   const done = runTui({

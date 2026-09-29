@@ -379,7 +379,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     stack,
     location,
     readLocation: () => projectLocation(cwd),
-    // The same offline probes as at start, never the network.
+    // The same offline probes as at start, never the network: `computeStackState` always calls
+    // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
     readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
     commands,
     ...io,
