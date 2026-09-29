@@ -365,7 +365,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `.githooks/pre-push` runs it, and AGENTS.md, the installed skill and the roadmap name
   `codex-review` — route: delegated writer (the T7 writer, resumed: `check.mjs`, the hook, the
   skill text and their tests)
-- [ ] T7c Accepted review follow-ups on T7: an append after an unterminated last line starts on a
+- [x] T7c Accepted review follow-ups on T7: an append after an unterminated last line starts on a
   new line, so a damaged tail cannot swallow the next record (Codex P2); `codex-review` refuses to
   run the review while tracked files have uncommitted changes, since the record claims the
   committed range (R3-dirty-tree-recorded-as-reviewed); the companion gets the resolved base id,
@@ -945,7 +945,18 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   unterminated last line joins the new record to it. All five accepted as T7c. The run printed a
   `DEP0190` warning from the companion's own spawn, not from js-harness (`codex-review.mjs`
   spawns an argv, no shell).
+- 2026-09-29: T7c done by the T7 writer, resumed: an append after an unterminated last line
+  writes a newline first; `codex-review` refuses while tracked files have uncommitted changes
+  (`git status --porcelain --untracked-files=no`; `--unavailable` and untracked files are not
+  blocked); the companion gets the resolved base id; a dispatcher-level test; the accumulate test
+  asserts each exit code. RED: the three focused suites → 45 tests, 4 failing (the unterminated
+  tail, both dirty-tree cases, the resolved base id). GREEN: the same → 45/45; `node --test` →
+  `tests 632 / pass 625 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14
+  PASS. Parent spot check: 45/45.
+- 2026-09-29: T7c committed as 1d31b84. Assessed (`--base-ref 7a8e60f`, the passive docs commit
+  7a8e60f having advanced the boundary from c6e95b3): risk `medium`, 104 lines, `under_budget`,
+  so its review waits in the slice for T7b; so does its Codex review.
 
 ## Next step
-T7c, then T7b, by the T7 writer resumed, each with its gentle-ai and Codex reviews. The installed skill on this machine still carries the old text until `js-harness` is
+T7b by the T7 writer resumed, then the gentle-ai and Codex reviews of 7a8e60f..T7b (T7c included). The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
