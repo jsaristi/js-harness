@@ -168,7 +168,8 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
       prefix,
     ]);
     assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
-    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home]);
+    // T4: --global, or the newly installed binary's sync would act on the project it runs in.
+    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home, '--global']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
@@ -202,7 +203,8 @@ test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the sync
 
     assert.equal(code, 0);
     assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
-    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home]);
+    // T4: --global, or the newly installed binary's sync would act on the project it runs in.
+    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home, '--global']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
@@ -230,6 +232,7 @@ test('upgradeMain spawns the PATH js-harness sync via a shell when no --prefix i
     assert.equal(calls[1].args[1], '--home');
     const expectedHome = process.platform === 'win32' ? `"${home}"` : `'${home}'`;
     assert.equal(calls[1].args[2], expectedHome, 'the home path must be quoted for the shell');
+    assert.equal(calls[1].args[3], '--global');
     assert.equal(calls[1].opts.shell, true, 'shell is required so .cmd shims resolve on Windows');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

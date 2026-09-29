@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// CLI surface over the manifest engine: `install`, `sync`, `uninstall`. `uninstall` also covers the
-// *project* undo (T3 design): inside a git repository that `js-harness init` touched, it routes to
-// `uninstallProject` instead of the machine engine below — see bin/lib/project.mjs and
-// odd/tasks/project-init.md, "T3 design".
+// CLI surface over the manifest engine: `install`, `sync`, `uninstall`. `uninstall` and `sync` also
+// cover the *project* scope (T3/T4 design): inside a git repository that `js-harness init` touched
+// they route to `uninstallProject` / `syncProject` instead of the machine engine below — see
+// bin/lib/project.mjs and odd/tasks/project-init.md, "T3 design" and "T4 design".
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, sync, uninstall } from './lib/manifest.mjs';
-import { uninstallProject } from './lib/project.mjs';
+import { uninstallProject, syncProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
 
 function parseHome(argv, env) {
   const i = argv.indexOf('--home');
@@ -15,39 +15,40 @@ function parseHome(argv, env) {
 }
 
 const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
+const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
-class UninstallArgError extends Error {}
+class ScopeArgError extends Error {}
 
-function requireUninstallValue(argv, i, flag) {
+function requireScopeValue(argv, i, flag) {
   const value = argv[i + 1];
-  if (value === undefined || value.startsWith('--')) throw new UninstallArgError(`${flag} requires a value`);
+  if (value === undefined || value.startsWith('--')) throw new ScopeArgError(`${flag} requires a value`);
   return value;
 }
 
-/** Strict like `init`'s parsing (an unknown flag or a missing value is an error, not silently
- * ignored) plus one more rule T3 design calls for: `--global` forces the machine scope below even
- * from inside an initialized project, so combining it with `--cwd` (which only means anything for
- * the *project* scope) is a usage error rather than a silently-ignored flag. */
-function parseUninstallArgs(argv, env) {
+/** The flags `uninstall` and `sync` share. Strict like `init`'s parsing (an unknown flag or a missing
+ * value is an error, not silently ignored) plus one more rule T3 design calls for: `--global` forces the
+ * machine scope even from inside an initialized project, so combining it with `--cwd` (which only means
+ * anything for the *project* scope) is a usage error rather than a silently-ignored flag. */
+function parseScopeArgs(argv, env) {
   let cwd;
   let home;
   let global = false;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--cwd') {
-      cwd = requireUninstallValue(argv, i, token);
+      cwd = requireScopeValue(argv, i, token);
       i++;
     } else if (token === '--home') {
-      home = requireUninstallValue(argv, i, token);
+      home = requireScopeValue(argv, i, token);
       i++;
     } else if (token === '--global') {
       global = true;
     } else {
-      throw new UninstallArgError(`unknown flag: ${token}`);
+      throw new ScopeArgError(`unknown flag: ${token}`);
     }
   }
   if (global && cwd !== undefined) {
-    throw new UninstallArgError('--global cannot be combined with --cwd');
+    throw new ScopeArgError('--global cannot be combined with --cwd');
   }
   return {
     cwd: cwd ?? process.cwd(),
@@ -152,9 +153,112 @@ export async function installMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
+function logSyncProjectAction(action) {
+  switch (action.kind) {
+    case 'wrote':
+      console.log(`wrote ${action.path}`);
+      break;
+    case 'ran':
+      console.log(`ran ${action.path}`);
+      break;
+    case 'versionRecorded':
+      console.log(`recorded ${action.to} in the manifest (was ${action.from ?? 'unrecorded'})`);
+      break;
+    case 'kept':
+      console.error(`kept ${action.path} (${action.reason})`);
+      break;
+    case 'skip':
+      console.error(`${action.path} skipped: ${action.reason}`);
+      break;
+    case 'problem':
+      console.error(`${action.path} failed: ${action.reason}`);
+      break;
+    default:
+      break;
+  }
+}
+
+/** Renders `syncProject`'s result and returns the exit code — the project-scope half of `syncMain`.
+ * `result.notGitRepo`/`result.notInitialized` are never reached here: the caller reports those itself
+ * and names `--global` (T4 design), never as project-scope outcomes to render. */
+function reportSyncProject(result) {
+  if (result.noSuchDirectory) {
+    console.error(`no such directory: ${result.cwd}`);
+    return 1;
+  }
+  if (result.invalidHarnessJson) {
+    console.error(`cannot read the pin from ${result.harnessJsonPath}: ${result.reason}; nothing was written`);
+    return 1;
+  }
+  if (result.staleManifest) {
+    console.error(staleManifestMessage(result.manifestPath));
+    return 1;
+  }
+  if (result.malformedManifest) {
+    console.error(
+      `project manifest at ${result.manifestPath} is malformed` + (result.reason ? `: ${result.reason}` : ''),
+    );
+    return 1;
+  }
+  if (result.pinMismatch) {
+    console.error(
+      `harness.json pins js-harness ${result.pin} but ${result.version} is running; nothing was written. ` +
+        `To use the pinned version, run npm i -g github:jsaristi/js-harness#v${result.pin}; ` +
+        `or raise the pin to ${result.version} in harness.json and commit it.`,
+    );
+    return 1;
+  }
+  for (const action of result.actions) logSyncProjectAction(action);
+  if (result.setUp) {
+    console.log(`set up this clone at ${result.version}`);
+    console.log(`manifest: ${result.manifestPath}`);
+  } else if (result.upToDate) {
+    console.log(`up to date at ${result.version}`);
+  } else {
+    console.log(`synced project at ${result.version}`);
+  }
+  return result.code;
+}
+
+/** Scope by location, the same rule as `uninstallMain` (T4 design): inside a git repository that
+ * `js-harness init` touched (`harness.json` or a project manifest present), move the project to its pin;
+ * outside any git repository with no `--cwd`, or with `--global`, re-write the machine install exactly as
+ * before T4. An explicit `--cwd`, or a git repository around the cwd, that is not an initialized project
+ * exits 1 and names `--global`. `deps` reaches both engines: `spawn`/`platform`/`rm`/... for
+ * `syncProject`, `writeFile` for the machine one — each ignores what it does not use. */
 export async function syncMain(argv, env = process.env, deps = {}) {
-  const home = parseHome(argv, env);
+  let parsed;
+  try {
+    parsed = parseScopeArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${SYNC_USAGE}`);
+    return 2;
+  }
+
   const version = currentVersion();
+  if (!parsed.global) {
+    let projectResult;
+    try {
+      projectResult = syncProject(parsed.cwd, version, deps);
+    } catch (err) {
+      // A failed write: syncProject has already rolled back what this run wrote (best-effort).
+      if (err instanceof InitWriteError) {
+        console.error(`sync failed: ${err.message}; ${cleanupClause(err)}`);
+        return 1;
+      }
+      throw err;
+    }
+    if (!projectResult.notGitRepo && !projectResult.notInitialized) return reportSyncProject(projectResult);
+    if (parsed.cwdExplicit || projectResult.notInitialized) {
+      console.error(
+        `not an initialized project: ${parsed.cwd}; js-harness sync --global syncs the machine install`,
+      );
+      return 1;
+    }
+    // Outside any git repository, with no --cwd: fall through to the machine sync below.
+  }
+
+  const home = parsed.home;
   const manifest = sync(home, version, deps);
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
@@ -171,7 +275,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
 export async function uninstallMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
-    parsed = parseUninstallArgs(argv, env);
+    parsed = parseScopeArgs(argv, env);
   } catch (err) {
     console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
     return 2;

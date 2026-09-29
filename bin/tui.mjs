@@ -3,7 +3,7 @@
 // unit-tested without a terminal. Only `runTui`/`tuiMain` below touch real stdin/stdout.
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { currentVersion, installMain, uninstallMain } from './install.mjs';
+import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
@@ -206,7 +206,9 @@ export function buildCommands({ home, env = process.env, spawn = spawnSync, fetc
     install: () => installMain(['--home', home]),
     update: () => updateMain(['--home', home], env, spawn),
     upgrade: () => upgradeMain(['--home', home], env, spawn),
-    // --global: the menu's uninstall is the machine one, wherever the TUI was opened.
+    // --global: the menu's uninstall and sync are the machine ones, wherever the TUI was opened.
+    // (T5 decides what the menu offers inside a project.)
+    sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
   };
 }

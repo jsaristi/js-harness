@@ -82,7 +82,9 @@ test('syncMain updates the manifest under --home and exits 0', async () => {
   const home = makeTmpHome();
   try {
     await installMain(['--home', home]);
-    const code = await syncMain(['--home', home]);
+    // T4: pinned with --global so this machine test never depends on the project (if any) the test
+    // runner's own cwd happens to sit in.
+    const code = await syncMain(['--global', '--home', home]);
     assert.equal(code, 0);
     assert.equal(readManifest(home).version, currentVersion());
   } finally {
@@ -136,7 +138,7 @@ test('syncMain prints a stderr skip line when a component write fails, naming th
     console.error = (line) => errLines.push(String(line));
     let code;
     try {
-      code = await syncMain(['--home', home], process.env, { writeFile: failingWriteFile });
+      code = await syncMain(['--global', '--home', home], process.env, { writeFile: failingWriteFile });
     } finally {
       console.error = originalError;
     }
@@ -168,7 +170,7 @@ test('syncMain counts only the files it actually wrote, not records carried forw
     console.log = (line) => outLines.push(String(line));
     console.error = () => {};
     try {
-      await syncMain(['--home', home], process.env, { writeFile: failingWriteFile });
+      await syncMain(['--global', '--home', home], process.env, { writeFile: failingWriteFile });
     } finally {
       console.log = originalLog;
       console.error = originalError;
@@ -184,7 +186,7 @@ test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --h
   const home = makeTmpHome();
   try {
     await installMain([], { JS_HARNESS_HOME: home });
-    const syncCode = await syncMain([], { JS_HARNESS_HOME: home });
+    const syncCode = await syncMain(['--global'], { JS_HARNESS_HOME: home });
     assert.equal(syncCode, 0);
     assert.equal(readManifest(home).version, currentVersion());
 
@@ -377,6 +379,320 @@ test('uninstallMain with no flags outside any git repository still undoes the ma
 
     assert.equal(code, 0);
     assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- T4 (project-init): syncMain's scope routing — see project.mjs's syncProject and "T4 design" ---
+
+/** A fresh clone of an initialized project: `harness.json` pinned to `version` and a committed
+ * `AGENTS.md`, but no manifest, hook or `.codegraph/` in this clone. */
+function makeTmpClone(version = currentVersion(), { agents = true } = {}) {
+  const dir = makeTmpProjectRepo();
+  fs.writeFileSync(path.join(dir, 'harness.json'), JSON.stringify({ version }, null, 2) + '\n', 'utf8');
+  if (agents) fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# committed\n', 'utf8');
+  return dir;
+}
+
+const projectDeps = () => ({ spawn: fakeCodegraphSpawn(), platform: 'linux' });
+
+test('syncMain rejects an unknown flag with usage and exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => syncMain(['--bogus']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('unknown flag: --bogus')));
+  assert.ok(errLines.some((l) => l.includes('Usage: js-harness sync')));
+});
+
+test('syncMain rejects --cwd with no value, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => syncMain(['--cwd']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--cwd requires a value')));
+});
+
+test('syncMain rejects --home with no value, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => syncMain(['--home']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--home requires a value')));
+});
+
+test('syncMain rejects --home followed by another flag, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => syncMain(['--home', '--global']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--home requires a value')));
+});
+
+test('syncMain rejects --global combined with --cwd, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => syncMain(['--global', '--cwd', '/tmp/whatever']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--global cannot be combined with --cwd')));
+});
+
+test('syncMain --cwd sets a fresh clone up, prints what it wrote, and a second run says up to date', async () => {
+  const root = makeTmpClone();
+  try {
+    const first = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(first.code, 0);
+    assert.ok(first.outLines.includes('wrote .git/hooks/pre-commit'));
+    assert.ok(first.outLines.includes('ran codegraph init'));
+    assert.ok(first.outLines.some((l) => l.startsWith('manifest: ')));
+    assert.ok(first.errLines.includes('kept harness.json (committed)'));
+    assert.ok(first.errLines.includes('kept AGENTS.md (committed)'));
+    assert.ok(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')));
+
+    const second = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(second.code, 0);
+    assert.deepEqual(second.outLines, [`up to date at ${currentVersion()}`]);
+    assert.deepEqual(second.errLines, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd reports a missing AGENTS.md as a skip on stderr and does not create it', async () => {
+  const root = makeTmpClone(currentVersion(), { agents: false });
+  try {
+    const { code, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 0);
+    assert.ok(errLines.some((l) => l.startsWith('AGENTS.md skipped: ')));
+    assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd restores a gone hook and prints it', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    assert.equal(initProject(root, currentVersion(), projectDeps()).code, 0);
+    fs.rmSync(path.join(root, '.git', 'hooks', 'pre-commit'));
+
+    const { code, outLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.includes('wrote .git/hooks/pre-commit'));
+    assert.ok(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd reports a codegraph failure on stderr and still exits 0', async () => {
+  const root = makeTmpClone();
+  try {
+    const failing = (cmd, args, opts) =>
+      cmd === 'git' ? spawnSync('git', args, opts) : { status: 1, stdout: '', stderr: 'codegraph exploded' };
+
+    const { code, errLines } = await captureConsole(() =>
+      syncMain(['--cwd', root], process.env, { spawn: failing, platform: 'linux' }),
+    );
+
+    assert.equal(code, 0);
+    assert.ok(errLines.some((l) => l.startsWith('codegraph init failed: ') && l.includes('codegraph exploded')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain with a pin different from the running version writes nothing, exits 1 and names both ways out', async () => {
+  const root = makeTmpClone('9.9.9');
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+    const machineManifest = fs.readFileSync(manifestPath(home));
+
+    const { code, outLines, errLines } = await captureConsole(() =>
+      syncMain(['--cwd', root, '--home', home], process.env, projectDeps()),
+    );
+
+    assert.equal(code, 1);
+    assert.deepEqual(outLines, []);
+    const message = errLines.join('\n');
+    assert.match(message, /9\.9\.9/);
+    assert.ok(message.includes(currentVersion()));
+    assert.ok(message.includes('npm i -g github:jsaristi/js-harness#v9.9.9'));
+    assert.match(message, /raise the pin.*harness\.json/i);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
+    assert.deepEqual(fs.readFileSync(manifestPath(home)), machineManifest); // the machine install is untouched too
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd names harness.json and exits 1 when it has no version', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ not json', 'utf8');
+
+    const { code, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 1);
+    assert.ok(errLines.some((l) => l.includes('harness.json') && l.includes('nothing was written')));
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd refuses a stale manifest with the same wording init uses, exit 1', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    assert.equal(initProject(root, currentVersion(), projectDeps()).code, 0);
+    fs.rmSync(path.join(root, 'harness.json'));
+
+    const { code, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 1);
+    assert.ok(errLines.some((l) => l.includes('was initialized before') && l.includes('harness.json is missing')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd reports a malformed manifest, exit 1', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    const initResult = initProject(root, currentVersion(), projectDeps());
+    fs.writeFileSync(initResult.manifestPath, '{ not json', 'utf8');
+
+    const { code, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 1);
+    assert.ok(errLines.some((l) => l.includes('is malformed')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd reports a failed write as "sync failed", says what was left behind, and exits 1', async () => {
+  const root = makeTmpClone();
+  try {
+    const open = () => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    const { code, errLines } = await captureConsole(() =>
+      syncMain(['--cwd', root], process.env, { ...projectDeps(), open }),
+    );
+
+    assert.equal(code, 1);
+    assert.ok(errLines.some((l) => l.startsWith('sync failed: ') && l.includes('ENOSPC') && l.includes('nothing was left behind')));
+    assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --cwd with a directory that does not exist says so, exit 1', async () => {
+  const missing = path.join(os.tmpdir(), 'js-harness-cli-sync-missing-dir');
+  const { code, errLines } = await captureConsole(() => syncMain(['--cwd', missing]));
+  assert.equal(code, 1);
+  assert.ok(errLines.includes(`no such directory: ${missing}`));
+});
+
+// An explicit `--cwd` names a project, so a folder that is not an initialized one is an error, never
+// a silent fall-through to the machine.
+for (const [label, makeCwd] of [
+  ['outside any git repository', () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-sync-notaproject-'))],
+  ['in a git repository init never touched', makeTmpProjectRepo],
+]) {
+  test(`syncMain --cwd ${label} exits 1, names --global and leaves the machine install alone`, async () => {
+    const home = makeTmpHome();
+    const cwd = makeCwd();
+    try {
+      await installMain(['--home', home]);
+      const before = fs.readFileSync(manifestPath(home));
+
+      const { code, outLines, errLines } = await captureConsole(() => syncMain(['--cwd', cwd, '--home', home]));
+
+      assert.equal(code, 1);
+      assert.deepEqual(outLines, []);
+      assert.ok(errLines.some((l) => l.includes('not an initialized project') && l.includes('--global')));
+      assert.deepEqual(fs.readFileSync(manifestPath(home)), before);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+}
+
+test('syncMain with no flags inside an uninitialized git repository exits 1 and names --global', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+    const before = fs.readFileSync(manifestPath(home));
+
+    const { code, outLines, errLines } = await inDir(root, () => captureConsole(() => syncMain(['--home', home])));
+
+    assert.equal(code, 1);
+    assert.deepEqual(outLines, []);
+    assert.ok(errLines.some((l) => l.includes('not an initialized project') && l.includes('--global')));
+    assert.deepEqual(fs.readFileSync(manifestPath(home)), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain with no flags inside an initialized project syncs the project, not the machine', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    assert.equal(initProject(root, currentVersion(), projectDeps()).code, 0);
+    fs.rmSync(path.join(root, '.git', 'hooks', 'pre-commit'));
+
+    const { code, outLines } = await inDir(root, () =>
+      captureConsole(() => syncMain(['--home', home], process.env, projectDeps())),
+    );
+
+    assert.equal(code, 0);
+    assert.ok(outLines.includes('wrote .git/hooks/pre-commit'));
+    assert.equal(fs.existsSync(manifestPath(home)), false); // nothing was installed on the machine
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain --global reaches the machine even from inside an initialized project, leaving it untouched', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    const initResult = initProject(root, currentVersion(), projectDeps());
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, '.git', 'hooks', 'pre-commit'));
+    await installMain(['--home', home]);
+
+    const { code, outLines } = await inDir(root, () => captureConsole(() => syncMain(['--global', '--home', home])));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.some((l) => l.startsWith('synced js-harness ')));
+    assert.equal(readManifest(home).version, currentVersion());
+    // The project is completely untouched: the gone hook stays gone.
+    assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain with no flags outside any git repository still syncs the machine install', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-sync-nogit-'));
+  const home = makeTmpHome();
+  try {
+    await installMain(['--home', home]);
+
+    const { code, outLines } = await inDir(dir, () => captureConsole(() => syncMain(['--home', home])));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.some((l) => l.startsWith('synced js-harness ')));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });

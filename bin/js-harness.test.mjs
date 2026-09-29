@@ -173,3 +173,9 @@ test('runs when invoked through a linked directory', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// T4 (project-init): sync covers two scopes as well, and the usage line says so.
+test('--help describes sync\'s two scopes (project vs. machine/--global)', () => {
+  const result = run(['--help']);
+  assert.match(result.stdout, /sync\s+.*project.*pin.*machine install.*--global.*outside a git repository/);
+});
