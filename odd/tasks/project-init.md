@@ -357,7 +357,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `npm i -g @openai/codex` then `codex login` (Codex P2); a hook-level test with a list fix
   (R3-001) — route: delegated writer (the T6 writer, resumed: `doctor.mjs`, `stack.mjs`,
   `latest.mjs` and their tests)
-- [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
+- [x] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
   skipped review is caught (see "T7 design"): `js-harness codex-review --base <rev>` runs the
   plugin's review and records it, `--unavailable <reason>` records an explicit skip — route:
   delegated writer (a new command, its record library and the dispatcher, with tests)
@@ -365,6 +365,14 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `.githooks/pre-push` runs it, and AGENTS.md, the installed skill and the roadmap name
   `codex-review` — route: delegated writer (the T7 writer, resumed: `check.mjs`, the hook, the
   skill text and their tests)
+- [ ] T7c Accepted review follow-ups on T7: an append after an unterminated last line starts on a
+  new line, so a damaged tail cannot swallow the next record (Codex P2); `codex-review` refuses to
+  run the review while tracked files have uncommitted changes, since the record claims the
+  committed range (R3-dirty-tree-recorded-as-reviewed); the companion gets the resolved base id,
+  so the record and the review are the same range (R3-companion-gets-unresolved-base); a
+  dispatcher-level test of `codex-review` (R3-dispatch-untested); the accumulate test asserts
+  each exit code (R3-accumulate-test-ignores-codes) — route: delegated writer (the T7 writer,
+  resumed, before T7b)
 
 ## Progress
 - 2026-09-28: T1 measured before any change. `npm i -g github:jsaristi/js-harness` through the
@@ -922,8 +930,22 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 - 2026-09-29: T7 explored on `feat/codex-review-record` (from `main` at 8e0dea6); design recorded
   in "T7 design", split into T7 (the command and its record) and T7b (the check and the gate).
   Slice 7 = T7–T7b, forecast about 500 authored lines, one pull request against `main`.
+- 2026-09-29: T7 done by a delegated writer: `bin/codex-review.mjs` (`codexReviewMain`) and
+  `bin/lib/codex-reviews.mjs` (record path under the git common dir, append, tolerant reader),
+  wired into the dispatcher. RED: both new suites failed with `ERR_MODULE_NOT_FOUND`. GREEN: the
+  two suites 23/23; `node --test` → `tests 625 / pass 618 / fail 0 / skipped 7`; `npm run check`
+  exit 0; `npm run e2e` exit 0, 14 PASS. Parent spot check: the two suites 23/23.
+- 2026-09-29: T7 committed as c6e95b3. Assessed (`--base-ref 8e0dea6`): risk `medium`, 617
+  lines, `review_due` (`slice_budget_reached`). Native review lineage review-dcab5f33b9234927:
+  consent granted (pre-granted), one lens (reliability), approved and acknowledged, one WARNING
+  (R3-dirty-tree-recorded-as-reviewed) and three SUGGESTION (R3-companion-gets-unresolved-base,
+  R3-dispatch-untested, R3-accumulate-test-ignores-codes). Codex, run through the new command
+  (`node bin/js-harness.mjs codex-review --base 8e0dea6`, exit 0, which recorded
+  8e0dea6..c6e95b3 in `.git/js-harness/codex-reviews.jsonl`): one P2, an append after an
+  unterminated last line joins the new record to it. All five accepted as T7c. The run printed a
+  `DEP0190` warning from the companion's own spawn, not from js-harness (`codex-review.mjs`
+  spawns an argv, no shell).
 
 ## Next step
-T7 by a delegated writer, then T7b by the same writer resumed, each with its gentle-ai and Codex
-reviews. The installed skill on this machine still carries the old text until `js-harness` is
+T7c, then T7b, by the T7 writer resumed, each with its gentle-ai and Codex reviews. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
