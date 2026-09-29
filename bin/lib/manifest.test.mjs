@@ -713,3 +713,14 @@ test('the installed skill names the --global forms for the machine and the proje
   assert.doesNotMatch(text, /`js-harness (status|sync|uninstall)` /, 'no unqualified machine command left');
   assert.equal(components[1].content('0.1.0'), text, 'Claude and Codex read the same text');
 });
+
+// The skill is where an agent learns the review record exists; without it `codex-review` is only
+// discoverable by reading the source.
+test('the installed skill names codex-review and check --push', () => {
+  const text = components[0].content('0.1.0');
+  assert.match(text, /js-harness codex-review --base/);
+  assert.match(text, /--unavailable/);
+  assert.match(text, /js-harness check --push/);
+  assert.match(text, /only check it runs/);
+  assert.match(text, /default branch/);
+});

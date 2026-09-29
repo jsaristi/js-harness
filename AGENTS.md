@@ -48,8 +48,9 @@ so when `gentle-ai review start` returns its consent envelope, run the `granted`
 without asking. The review itself always runs; only the question is skipped, because his answer
 is always yes and the question only stalls the work. If the envelope has no `granted` choice or
 does not parse, ask him instead. After gentle-ai approves a slice with code, Codex reviews the
-same range with the Codex plugin's `codex-companion.mjs review --wait --base <boundary>`; treat
-its findings like gentle-ai's. If Codex rejects its model, report that and go on without it.
+same range with `js-harness codex-review --base <boundary>`, which records the review; the
+pre-push hook refuses a branch whose code commits no record covers. Treat its findings like
+gentle-ai's. If Codex cannot run, report that and record the skip with `--unavailable <reason>`.
 
 Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain-language summary and close with a recap of
