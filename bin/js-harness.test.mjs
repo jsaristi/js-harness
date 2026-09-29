@@ -33,7 +33,7 @@ test('unknown command exits 2', () => {
   assert.equal(result.status, 2);
 });
 
-test('--help lists init, install, sync, uninstall, status, update, upgrade, doctor and progress', () => {
+test('--help lists init, install, sync, uninstall, status, update, upgrade, doctor, progress and codex-review', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /init/);
   assert.match(result.stdout, /install/);
@@ -44,6 +44,7 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /upgrade/);
   assert.match(result.stdout, /doctor/);
   assert.match(result.stdout, /progress/);
+  assert.match(result.stdout, /codex-review/);
 });
 
 // T3 (project-init): uninstall now covers two scopes — the usage line must say so, not just name
