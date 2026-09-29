@@ -147,6 +147,33 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - Exit codes: 0 in sync (skips and kept files are reported, not failures), 1 a pin mismatch, a bad
   `harness.json`, a stale manifest, a not-initialized project or a failed write, 2 usage error.
 
+## T5 design
+- Menu by location (Sebastián, 2026-09-29: inside a repository he wants the machine commands too,
+  "so everything gets updated"). Outside a git repository the menu is today's machine menu,
+  unchanged. Inside one it shows a `project` section first, then a `machine` section with today's
+  machine items, then Quit. The project section is Init when the repository is not initialized, and
+  Sync, Status and Uninstall when it is (a stale manifest or a bad `harness.json` counts as
+  initialized, since `status` and `sync` name the problem and `uninstall` clears a stale manifest).
+  Section headers are not selectable.
+- Project items run with `--cwd <root>`; the machine items that act by location (`status`,
+  `uninstall`) pass `--global`, so the same Enter never changes scope with the folder. The two
+  uninstalls confirm with different questions: "Undo js-harness in this project?" and today's
+  machine one.
+- After a command runs, the TUI re-reads its location and rebuilds the menu (an `init` turns Init
+  into Sync/Status/Uninstall, a project `uninstall` turns it back), keeping the selection in range.
+- `status` gains the project level, by the "Command scope" rule: `js-harness status [--cwd <dir>]
+  [--home <dir>] [--global]` (plus today's `--source`/`--pm`). Inside an initialized project it
+  reports the project root, the pinned version, the running version, whether this clone is set up
+  (a manifest present, else "js-harness sync sets it up") and whether pin and running version match
+  (if not, "js-harness sync names the ways out"); exit 0. A bad `harness.json` or a stale manifest
+  exits 1 naming it, with the same messages `sync` gives. A git repository that is not initialized,
+  or an explicit `--cwd` that is not one, exits 1 naming `js-harness init` and `--global`. Outside a
+  git repository with no `--cwd`, or with `--global`, it is today's machine status. Unknown flags,
+  a missing value or `--global` with `--cwd` exit 2.
+- One read-only function in `bin/lib/project.mjs` answers where a folder stands (not a repository,
+  a repository not initialized, an initialized project with its pin, manifest presence, or its
+  stale/invalid state), sharing `syncProject`'s pin reading; both the TUI and `status` use it.
+
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
@@ -224,8 +251,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T4c Accepted whole-slice review follow-up: a pin that is not semver is an invalid
   `harness.json`, since a cloned repository's pin is printed inside a suggested install command
   (R1-001) — route: inline (one check and its tests)
-- [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
-  — route: delegated writer
+- [ ] T5 The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and
+  the machine commands outside one; `status` acts by location (see "T5 design") — route: delegated
+  writer (touches `bin/tui.mjs`, `bin/update.mjs`, `bin/lib/project.mjs` and their tests)
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -603,6 +631,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
+- 2026-09-29: slice 5 (T5) starts on `feat/project-tui` from 7d8fe3e. Sebastián chose that inside
+  a repository the menu shows the project commands and, below them, the machine ones (see "T5
+  design"); `status` gets the project level so the menu's project Status has something to show.
+
 ## Next step
-T5 (the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one)
-on a new branch from `main`, in a new session.
+T5 on `feat/project-tui`: a delegated writer implements "T5 design" test-first.
