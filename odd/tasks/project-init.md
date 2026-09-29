@@ -361,7 +361,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   skipped review is caught (see "T7 design"): `js-harness codex-review --base <rev>` runs the
   plugin's review and records it, `--unavailable <reason>` records an explicit skip — route:
   delegated writer (a new command, its record library and the dispatcher, with tests)
-- [ ] T7b `check --push` verifies that every code commit on the branch lies in a recorded range,
+- [x] T7b `check --push` verifies that every code commit on the branch lies in a recorded range,
   `.githooks/pre-push` runs it, and AGENTS.md, the installed skill and the roadmap name
   `codex-review` — route: delegated writer (the T7 writer, resumed: `check.mjs`, the hook, the
   skill text and their tests)
@@ -373,6 +373,18 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   dispatcher-level test of `codex-review` (R3-dispatch-untested); the accumulate test asserts
   each exit code (R3-accumulate-test-ignores-codes) — route: delegated writer (the T7 writer,
   resumed, before T7b)
+- [ ] T7d Accepted review follow-ups on T7c–T7b: the push range starts at the remote's default
+  branch (`refs/remotes/<remote>/HEAD`, else `<remote>/main`, else `<remote>/master`, the remote
+  named by the hook), never at a local branch, and with none the row fails naming
+  `git remote set-head <remote> --auto` (Codex P1, R3-push-range-ignores-remote-sha); `check --push`
+  runs only the `codex-review` row, since the budget and test rows read the working tree, not the
+  pushed commit, and pre-commit already ran them on every commit (Codex P2,
+  R3-push-rows-check-worktree-not-pushed-sha, R4-push-hook-full-suite-per-ref); a failed `git
+  status` refuses the review instead of reading as clean (Codex P2); only records whose head lies in
+  the checked range are expanded (R4-per-record-git-spawn-unbounded); the hook's `node` reads
+  `/dev/null`, not the ref list (R3-hook-child-stdin); no `^` hint for a root commit
+  (R3-root-commit-fix-hint); the three comments R2 found wrong or missing — route: delegated
+  writer (the T7 writer, resumed)
 
 ## Progress
 - 2026-09-28: T1 measured before any change. `npm i -g github:jsaristi/js-harness` through the
@@ -956,7 +968,27 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 - 2026-09-29: T7c committed as 1d31b84. Assessed (`--base-ref 7a8e60f`, the passive docs commit
   7a8e60f having advanced the boundary from c6e95b3): risk `medium`, 104 lines, `under_budget`,
   so its review waits in the slice for T7b; so does its Codex review.
+- 2026-09-29: T7b done by the T7 writer, resumed: `checkCodexReviews` and the `--push`/`--head`
+  flags in `bin/check.mjs`; `.githooks/pre-push`; `.gitattributes` keeps `.githooks/*` LF so a
+  CRLF checkout cannot break `sh` (the writer's addition, kept); AGENTS.md and the installed skill
+  name `codex-review` and `check --push` (budget 1156/1500). RED: 43 tests, 8 failing, plus the new
+  coverage suite failing at import. GREEN: focused suites 92/92; `node --test` → `tests 659 / pass
+  652 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS. In this repo
+  `node bin/check.mjs --push` (parent spot check) → `FAIL codex-review 2 of 3 code commits since
+  origin/main have no Codex review record`, naming 8c42bf5 and 1d31b84: the gate catching the
+  reviews still owed.
+- 2026-09-29: T7b committed as 8c42bf5. Assessed (`--base-ref 7a8e60f`, T7c included): risk
+  `high`, 670 lines, `review_due` (`high_risk`). Native review lineage review-01d8d8a9e2fe4b02:
+  consent granted (pre-granted), four lenses, approved and acknowledged; four WARNING
+  (R4-push-hook-full-suite-per-ref, R4-per-record-git-spawn-unbounded,
+  R3-push-range-ignores-remote-sha, R3-push-rows-check-worktree-not-pushed-sha) and five SUGGESTION
+  (R2-log-format-comment-mismatch, R2-md-regex-optional-quote-unexplained,
+  R2-merge-test-comment-misleading, R3-hook-child-stdin, R3-root-commit-fix-hint). Codex, through
+  `js-harness codex-review --base 7a8e60f` (exit 0, recorded 7a8e60f..8c42bf5): one P1, a push of
+  `main` without `origin/HEAD` checks the empty `main..main`; two P2, the budget and test rows read
+  the working tree instead of the pushed commit, and a failed `git status` reads as clean. All
+  accepted as T7d.
 
 ## Next step
-T7b by the T7 writer resumed, then the gentle-ai and Codex reviews of 7a8e60f..T7b (T7c included). The installed skill on this machine still carries the old text until `js-harness` is
+T7d by the T7 writer resumed, its reviews, then the PR-range review of slice 7. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
