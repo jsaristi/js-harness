@@ -823,8 +823,16 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   lens (reliability), approved and acknowledged, one SUGGESTION (R3-refetch-stamp-same-ms). Codex
   (`--base 578a2a8`): no actionable regressions; its sandbox could not run the tests. Accepted as
   T6c, done inline by the parent: `doctor.test.mjs` 37/37.
+- 2026-09-29: T6c committed as 7edf366; the same commit stores this document with LF again (the
+  parent's scripts had written CRLF into its blob since 578a2a8, which `autocrlf` then kept).
+  Assessed (`--base-ref d4c4ca0`): risk `medium`, `review_due` (1637 lines, the line-ending
+  change counted). Native review lineage review-ed7a7187fef3aa79: approved and acknowledged, one
+  SUGGESTION (R3-next-step-stale-after-t6c: "Next step" still named T6), fixed in this closing
+  commit. Codex (`--base d4c4ca0`): no actionable regression. Slice 6 is complete: T6 through T6c.
 
 ## Next step
-T6 (`doctor` reports the Codex plugin `codex@openai-codex`: installed, enabled and logged in,
-with its fix command) on a new branch from `main`, in a new session. The installed skill on this
-machine still carries the old text until `js-harness` is reinstalled from `main` and synced.
+Slice 6 (T6–T6c on `feat/codex-plugin-doctor`) is complete, each commit reviewed by gentle-ai and
+Codex. Next: the review of the exact PR range `4b5cef7..HEAD`, then the pull request on
+Sebastián's go-ahead; then T7 (a verifiable record of the Codex review of each approved slice) in
+a new session. The installed skill on this machine still carries the old text until `js-harness`
+is reinstalled from `main` and synced.
