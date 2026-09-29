@@ -363,3 +363,21 @@ test('the review text is shown even when the companion fails', async () => {
   assert.equal(result.code, 1);
   assert.equal(result.shown, 'partial output\n');
 });
+
+test('the review output may exceed 1 MiB, and an overflow is named as such, not as a failed start', async () => {
+  const { root } = makeRepo();
+  const { home } = makeHome(0);
+  let companionOpts;
+  const overflow = Object.assign(new Error('spawnSync node ENOBUFS'), { code: 'ENOBUFS' });
+  const spawn = (cmd, args, opts) => {
+    if (cmd === 'git') return spawnSync(cmd, args, opts);
+    companionOpts = opts;
+    return { status: null, signal: 'SIGTERM', error: overflow, stdout: 'partial' };
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
+  assert.ok(companionOpts.maxBuffer > 1024 * 1024, `maxBuffer ${companionOpts.maxBuffer}`);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /output exceeded/);
+  assert.doesNotMatch(result.err, /could not start/);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+});

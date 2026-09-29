@@ -1081,6 +1081,18 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   (`codex-review.mjs` and its test). RED: 24 tests, 5 failing. GREEN: `node --test
   bin/codex-review.test.mjs` 24/24; `node --test` → `tests 691 / pass 684 / fail 0 / skipped 7`;
   `npm run check` exit 0. Parent spot check: the suite 24/24.
+- 2026-09-29: committed as 438364a. Assessed (`--base-ref main`): risk `medium`, 146 lines,
+  `under_budget`; as the slice's only commit it was reviewed whole. Native review lineage
+  review-cb64d83a7b625fb2: consent granted (pre-granted), one lens (reliability), approved and
+  acknowledged; one WARNING, R3-maxbuffer (the piped stdout kept Node's 1 MiB `spawnSync` default,
+  so a long review would end as a misleading "could not start it"), accepted and fixed in the next
+  commit (`maxBuffer` 64 MiB, ENOBUFS named; RED 1 failing, GREEN 25/25); two SUGGESTION carried:
+  R3-buffered-output (the review text now appears when the companion exits, not streamed) and
+  R3-classifier-false-positive ("changes are unverified" or "incomplete review" said in passing
+  would refuse a real review; the cost is a rerun, the phrases seen so far are only the four).
+  Codex (`js-harness codex-review --base main`): the turn failed, 400 "The 'gpt-6.1-sol' model is
+  not supported when using Codex with a ChatGPT account" (`model = "gpt-6.1-sol"` in
+  `~/.codex/config.toml`, Sebastián's); the command exited 1 and wrote nothing, as it should.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are

@@ -82,6 +82,8 @@ export function saysReviewNotInspected(text) {
   return typeof text === 'string' && NOT_INSPECTED.some((pattern) => pattern.test(text));
 }
 
+const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
+
 const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (for git
@@ -143,11 +145,13 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     let result;
     try {
-      // stdout is piped so the review text can be read; stderr (the progress) stays live.
+      // stdout is piped so the review text can be read; stderr (the progress) stays live. The
+      // buffer is far above Node's 1 MiB default, which a long review could reach after a costly turn.
       result = spawn(process.execPath, [companion, 'review', '--wait', '--base', base], {
         cwd: root,
         stdio: ['inherit', 'pipe', 'inherit'],
         encoding: 'utf8',
+        maxBuffer: REVIEW_MAX_BUFFER,
       });
     } catch (err) {
       result = { status: null, error: err };
@@ -155,7 +159,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const review = typeof result?.stdout === 'string' ? result.stdout : '';
     if (review) write(review);
     if (result?.status !== 0) {
-      const reason = result?.error ? `could not start it: ${result.error.message}` : `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`;
+      const reason = result?.error?.code === 'ENOBUFS'
+        ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
+        : result?.error ? `could not start it: ${result.error.message}` : `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`;
       error(`The Codex review did not complete (${reason}); no record was written.\n${WAYS_ON}`);
       return result?.status ?? 1;
     }
