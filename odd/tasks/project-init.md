@@ -747,9 +747,18 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   new removal runs after another that could throw), carried as follow-ups rather than a fourth
   round, since they matter only once setup has already failed. Codex (`--base ebefc02`): no
   actionable regression. Slice 5 is complete: T5 through T5f, each reviewed by gentle-ai and Codex.
+- 2026-09-29: review of the exact PR range `7d8fe3e..d0c6e0e` (risk `high`, 1864 lines), started from
+  the gentle-ai Stop hook's START. Native review lineage review-21a108c866330bc0: consent granted
+  (pre-granted), four lenses, approved and acknowledged, four SUGGESTION carried as follow-ups:
+  R2-skill-omits-outside-repo-scope (the installed skill does not say that outside a git repository
+  the plain forms reach the machine), R2-status-switch-implicit-fallthrough (`statusMain`'s machine
+  path is reached by falling out of the switch), R3-after-hook-undefined-configdir (the T5f point
+  again), R3-status-value-dash-prefix (a flag value starting with `--` is read as missing).
 - Follow-ups carried from slice 5, none blocking: R3-002 (a plain `status` in a repository that is
   not initialized exits 1, by the "Command scope" rule); the two whole-slice SUGGESTION above; the
-  unguarded `after` cleanup (R4-after-hook-undefined-configdir, R3-001, R3-002 of the T5f review).
+  unguarded `after` cleanup (R4-after-hook-undefined-configdir, R3-001, R3-002 of the T5f review);
+  the PR-range SUGGESTION above, of which the skill's missing outside-a-repository case is the one
+  worth doing first, since agents read that text.
 
 ## Next step
 Open PR slice 5 (`feat/project-tui`) against `main`, on Sebastián's go-ahead; after it merges, T6
