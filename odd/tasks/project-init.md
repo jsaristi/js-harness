@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -183,16 +183,23 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   "Logged in using ChatGPT", exit 0; with an empty `CODEX_HOME`, "Not logged in", exit 1);
   `project` is `n/a`.
 - The login probe runs with `CODEX_HOME=<home>/.codex`, so `--home` means the same Codex home the
-  MCP probes already read, and a fixture home never reads the real one. Exit 0 is `ok`; a timeout
-  is `unknown`; any other exit, or no `codex` on PATH (on win32 through the shell that is exit 1
-  too), is `missing`. It reads Codex's own answer, never `auth.json`.
+  MCP probes already read, and a fixture home never reads the real one; a `CODEX_HOME` the user set
+  is kept when `home` is the real home (T6b). Exit 0 is `ok`; a timeout is `unknown`; any other
+  exit, or no `codex` on PATH (on win32 through the shell that is exit 1 too), is `missing`, and
+  then `codex --version` tells a missing CLI from a logged-out one for the fix (T6d). With the
+  plugin not installed the cell is `n/a` and nothing is spawned (T6b). It reads Codex's own answer,
+  never `auth.json`.
 - Up to date: the latest version comes from the local `openai-codex` marketplace file
   (`~/.claude/plugins/marketplaces/openai-codex/.claude-plugin/marketplace.json`, plugin `codex`),
-  the offline source typescript-lsp already uses; the reader takes the marketplace name.
-- Fix commands, the tool's own: installed `claude plugin marketplace add openai/codex-plugin-cc;
-  claude plugin install codex@openai-codex` (the marketplace source recorded in
-  `known_marketplaces.json`); claude `claude plugin enable codex@openai-codex`; codex `codex login`;
-  upToDate `claude plugin update codex@openai-codex`.
+  the offline source typescript-lsp already uses; the reader takes the marketplace name. Both
+  marketplace sources are read on every run, online or `--offline`, and never cached (T6d).
+- Fix commands, the tool's own; a fix of several steps is a list printed one command per line,
+  since no separator works in both `cmd.exe` and Windows PowerShell 5.1 (T6b): installed
+  `claude plugin marketplace add openai/codex-plugin-cc` then `claude plugin install
+  codex@openai-codex` (the marketplace source recorded in `known_marketplaces.json`); claude
+  `claude plugin enable codex@openai-codex`; codex `codex login`, preceded by
+  `npm i -g @openai/codex` when the CLI is missing (T6d); upToDate
+  `claude plugin update codex@openai-codex`.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -853,9 +860,24 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   595 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL;
   `node bin/js-harness.mjs doctor --offline` → `codex-plugin 1.0.6 ok ok n/a ok` and typescript-lsp
   `ok`, both real offline now.
+- 2026-09-29: T6d committed as 69f533c. Assessed (`--base-ref 1440dc2`): risk `medium`, 557 lines,
+  `review_due`. Native review lineage review-3018d2a09389347a: approved and acknowledged, two
+  SUGGESTION carried (R3-codex-version-timeout-classified-ok: a timed-out `codex --version` counts
+  as a present CLI; R3-extra-probe-latency-on-logged-out-path: a logged-out run can spend two probe
+  timeouts). Codex (`--base 1440dc2`): no actionable regression.
+- 2026-09-29: review of the exact PR range `4b5cef7..69f533c` (risk `medium`), started from the
+  Stop hook's START. Native review lineage review-45fbd2168851e1c5: approved and acknowledged, one
+  SUGGESTION (R3-t6-design-fix-separator-stale: "T6 design" still showed the `;` fix), fixed in this
+  closing commit together with the rest of the design's T6b and T6d changes. Slice 6 is complete:
+  T6 through T6d.
+- Follow-ups carried from slice 6, none blocking: the two T6d SUGGESTION above; the MCP probes read
+  `<home>/.codex` even when the user set `CODEX_HOME` (pre-existing, noted in `codexLoginState`).
+  On this machine `doctor` reports codegraph not registered in Codex and outdated (1.6.0), which is
+  codegraph's own fix to run, not this repository's.
+
 ## Next step
-Slice 6 (T6–T6c on `feat/codex-plugin-doctor`) is complete, each commit reviewed by gentle-ai and
-Codex. Next: the review of the exact PR range `4b5cef7..HEAD`, then the pull request on
-Sebastián's go-ahead; then T7 (a verifiable record of the Codex review of each approved slice) in
-a new session. The installed skill on this machine still carries the old text until `js-harness`
-is reinstalled from `main` and synced.
+Slice 6 (T6–T6d on `feat/codex-plugin-doctor`) is complete: every commit reviewed by gentle-ai and
+Codex, the exact PR range by gentle-ai (Codex last saw the whole range at 1440dc2). Next: the pull request on Sebastián's go-ahead, then its merge;
+then T7 (a verifiable record of the Codex review of each approved slice) in a new session. The
+installed skill on this machine still carries the old text until `js-harness` is reinstalled from
+`main` and synced.
