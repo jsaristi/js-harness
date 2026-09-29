@@ -373,7 +373,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   dispatcher-level test of `codex-review` (R3-dispatch-untested); the accumulate test asserts
   each exit code (R3-accumulate-test-ignores-codes) — route: delegated writer (the T7 writer,
   resumed, before T7b)
-- [ ] T7d Accepted review follow-ups on T7c–T7b: the push range starts at the remote's default
+- [x] T7d Accepted review follow-ups on T7c–T7b: the push range starts at the remote's default
   branch (`refs/remotes/<remote>/HEAD`, else `<remote>/main`, else `<remote>/master`, the remote
   named by the hook), never at a local branch, and with none the row fails naming
   `git remote set-head <remote> --auto` (Codex P1, R3-push-range-ignores-remote-sha); `check --push`
@@ -988,7 +988,20 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `main` without `origin/HEAD` checks the empty `main..main`; two P2, the budget and test rows read
   the working tree instead of the pushed commit, and a failed `git status` reads as clean. All
   accepted as T7d.
+- 2026-09-29: T7d done by the T7 writer, resumed: the base comes only from the remote's refs
+  (`refs/remotes/<remote>/HEAD`, `<remote>/main`, `<remote>/master`; none fails naming `git remote
+  set-head <remote> --auto`), `--remote <name>` (default `origin`) passed by the hook as `$1`;
+  `check --push` builds only the `codex-review` row; a failed `git status` refuses the review;
+  only records whose head lies in the checked range are expanded; the hook's `node` reads
+  `/dev/null`; the three comments. One deviation, kept: the root-commit hint names `--base
+  origin/main` instead of saying a root commit cannot be covered, since a range from unrelated
+  history does reach it (tested). RED: 53 tests, 16 failing. GREEN: focused suites 119/119; `node
+  --test` → `tests 668 / pass 661 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e`
+  exit 0, 14 PASS. Parent spot check: `node bin/check.mjs --push` prints only `FAIL codex-review 1
+  of 4 code commits since origin/main have no Codex review record`, naming 4c3cc5c, exit 1.
+- 2026-09-29: T7d committed as 4c3cc5c. Assessed (`--base-ref ec7af8f`): risk `medium`, 285 lines,
+  `under_budget`; the PR-range review of slice 7 covers it.
 
 ## Next step
-T7d by the T7 writer resumed, its reviews, then the PR-range review of slice 7. The installed skill on this machine still carries the old text until `js-harness` is
+The PR-range review of slice 7 (`8e0dea6..` its tip), gentle-ai then Codex. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
