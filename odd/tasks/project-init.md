@@ -485,9 +485,22 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   returning no count — both built to finish rather than hang on the old loop — and the empty outside
   chain removed). GREEN: `node --test` → `tests 425 / pass 418 / fail 0 / skipped 7`; `npm run
   e2e` 14 steps PASS.
+- 2026-09-28: T3c committed as 9efcc91. Assessed (`--base-ref ae471e7`): risk `medium`, 98 lines,
+  `under_budget`; reviewed anyway as the slice's last code commit. Native review lineage
+  review-7fa4f2ce8d9975ff: approved and acknowledged with two SUGGESTION, carried as follow-ups:
+  R3-dir-containment-absent-dir-uncovered (a deleted recorded directory; by code reading `realish`
+  appends a missing segment lexically, so it stays inside and reaches the silent `ENOENT`, but no
+  test pins it) and R3-dir-containment-gitdir-branch-untested (a `gitDir: true` directory under
+  the new check). Codex (`--base ae471e7`): no actionable regression; process creation was denied,
+  so it compared the git objects instead of running the tests. Slice 3 is complete: T2e, T2f, T2g,
+  T3, T3b and T3c, each reviewed by gentle-ai and Codex.
+- Follow-ups carried from slice 3, none blocking: the two T3c SUGGESTION above; a lexically
+  outside `core.hooksPath` that links resolve back inside is recorded as a `../` path (T2f
+  note); `dirs` pruning trusts a missing directory's lexical path.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Review T3c (gentle-ai, then Codex); then slice 3's PR, which Sebastián opens or asks for.
+Slice 3's PR (`feat/project-uninstall` → `main`), when Sebastián asks for it; after the merge, T4
+(`sync` in a project, by the same location rule) on a new branch from `main`.
