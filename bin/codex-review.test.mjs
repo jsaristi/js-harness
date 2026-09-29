@@ -99,7 +99,8 @@ test('a completed review appends a reviewed record with full commit ids and exit
   assert.match(result.out, /recorded/i);
   assert.ok(result.out.includes('codex-reviews.jsonl'));
   const call = JSON.parse(fs.readFileSync(callLog, 'utf8'));
-  assert.deepEqual(call.args, ['review', '--wait', '--base', 'HEAD~1']);
+  // The resolved id, not the raw `HEAD~1`: the record and the review cover the same range.
+  assert.deepEqual(call.args, ['review', '--wait', '--base', base]);
   assert.equal(fs.realpathSync(call.cwd), fs.realpathSync(root));
 });
 
@@ -120,6 +121,45 @@ test('a failed companion writes nothing, returns its code and names the two ways
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
   assert.match(result.err, /no record was written/i);
   assert.match(result.err, /--unavailable <reason>/);
+});
+
+test('uncommitted changes to tracked files refuse the review: nothing written, companion not spawned', async () => {
+  const { root } = makeRepo();
+  const { home, callLog } = makeHome(0);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /base\.\.HEAD/);
+  assert.match(result.err, /commit or stash/i);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.equal(fs.existsSync(callLog), false);
+});
+
+test('staged but uncommitted changes refuse the review too', async () => {
+  const { root } = makeRepo();
+  const { home, callLog } = makeHome(0);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'staged only', 'utf8');
+  git(root, 'add', 'f.txt');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(callLog), false);
+});
+
+test('an untracked file does not block the review', async () => {
+  const { root } = makeRepo();
+  const { home } = makeHome(0);
+  fs.writeFileSync(path.join(root, 'scratch.txt'), 'not tracked', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 0);
+});
+
+test('--unavailable is recorded even with uncommitted changes, since it reviews nothing', async () => {
+  const { root } = makeRepo();
+  const home = tmp('js-harness-codex-review-emptyhome-');
+  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--unavailable', 'model rejected', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 0);
+  assert.equal(readCodexReviews(root).length, 1);
 });
 
 test('any other non-zero companion code is returned as is', async () => {
@@ -181,8 +221,8 @@ test('--unavailable records the skip with its reason and spawns no companion', a
 test('records accumulate, one line each', async () => {
   const { root } = makeRepo();
   const { home } = makeHome(0);
-  await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  await run(['--base', 'HEAD~1', '--unavailable', 'later', '--cwd', root, '--home', home]);
+  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root, '--home', home])).code, 0);
+  assert.equal((await run(['--base', 'HEAD~1', '--unavailable', 'later', '--cwd', root, '--home', home])).code, 0);
   assert.deepEqual(readCodexReviews(root).map((r) => r.outcome), ['reviewed', 'unavailable']);
 });
 

@@ -84,6 +84,23 @@ test('append returns the path it wrote and the reader returns the records back',
   assert.deepEqual(readCodexReviews(root), [record]);
 });
 
+test('an append after an unterminated last line starts on a new line, so the new record survives', () => {
+  const root = makeRepo();
+  const file = appendCodexReview(root, record);
+  fs.appendFileSync(file, '{"schema":"js-harness.codex-review/v1","base":"dead', 'utf8');
+  const later = { ...record, head: 'c'.repeat(40) };
+  appendCodexReview(root, later);
+  assert.deepEqual(readCodexReviews(root), [record, later]);
+  assert.equal(fs.readFileSync(file, 'utf8').endsWith('\n'), true);
+});
+
+test('an append to a well-formed file adds no blank line', () => {
+  const root = makeRepo();
+  const file = appendCodexReview(root, record);
+  appendCodexReview(root, record);
+  assert.equal(fs.readFileSync(file, 'utf8').split('\n').filter((l) => !l.trim()).length, 1);
+});
+
 test('append outside a git repository throws instead of writing somewhere else', () => {
   assert.throws(() => appendCodexReview(tmp('js-harness-codex-reviews-nongit-'), record), /git/i);
 });

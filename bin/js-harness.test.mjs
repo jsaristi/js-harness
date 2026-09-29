@@ -47,6 +47,14 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /codex-review/);
 });
 
+// R3-dispatch-untested: the command is wired through the real dispatcher, not only importable.
+test('codex-review without --base exits 2 with its usage through the dispatcher', () => {
+  const result = run(['codex-review']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--base is required/);
+  assert.match(result.stderr, /Usage: js-harness codex-review/);
+});
+
 // T3 (project-init): uninstall now covers two scopes — the usage line must say so, not just name
 // the command (the assertion above already covered before this change, and would have kept passing
 // even with the old, single-scope wording).

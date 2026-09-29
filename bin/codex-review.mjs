@@ -107,9 +107,19 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    // The record claims the committed range base..HEAD, so the review must see exactly that: a
+    // dirty tracked tree would be reviewed and then recorded as if it were committed.
+    const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
+    if (dirty) {
+      error(
+        `Tracked files have uncommitted changes, but the record claims the committed range base..HEAD (${base.slice(0, 7)}..HEAD); ` +
+          `commit or stash them first, then rerun.\n${dirty}`,
+      );
+      return 1;
+    }
     let result;
     try {
-      result = spawn(process.execPath, [companion, 'review', '--wait', '--base', args.base], { cwd: root, stdio: 'inherit' });
+      result = spawn(process.execPath, [companion, 'review', '--wait', '--base', base], { cwd: root, stdio: 'inherit' });
     } catch (err) {
       result = { status: null, error: err };
     }
