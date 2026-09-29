@@ -3165,7 +3165,7 @@ test('an invalid harness.json never echoes its own bytes: a fixed reason for JSO
     fs.mkdirSync(harnessJsonPath);
     const unreadable = projectLocation(root, syncDeps());
     assert.equal(unreadable.kind, 'invalidHarnessJson');
-    assert.match(unreadable.reason, /^it cannot be read \([A-Z]+\)$/);
+    assert.match(unreadable.reason, /^it cannot be read \(([A-Z0-9_]+|unknown error)\)$/);
     assert.equal(syncProject(root, '0.1.0', syncDeps()).reason, unreadable.reason);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

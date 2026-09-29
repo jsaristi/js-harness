@@ -860,6 +860,30 @@ for (const [label, fail] of [
   });
 }
 
+test('runTui strips C0 and C1 control characters from a failed command line (U+009B is a CSI on some terminals)', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const commands = {
+    ...noCommands,
+    status: () => {
+      throw new Error('bad \u001b[2J \u009b2J \u0085 \u007f end');
+    },
+  };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+
+  const { lines } = await silently(async () => {
+    stdin.emit('data', '\r');
+    await flush();
+  });
+
+  assert.equal(lines.length, 1);
+  assert.doesNotMatch(lines[0], /[\u0000-\u001f\u007f-\u009f]/);
+  assert.match(lines[0], /status failed: bad \[2J 2J {2} end$/);
+
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
 for (const [label, fail] of [
   ['rejects', () => Promise.reject(new Error('cannot read'))],
   [

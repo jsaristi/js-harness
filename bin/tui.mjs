@@ -218,11 +218,12 @@ export function render(state) {
   return lines;
 }
 
-/** An error as one printable line: its first line, without control characters. */
+/** An error as one printable line: its first line, without C0, DEL or C1 control characters (U+009B is a
+ * one-byte CSI on some terminals, so an untrusted message must not keep it). */
 function oneLine(err) {
   return String(err?.message ?? err)
     .split('\n')[0]
-    .replace(/[\u0000-\u001f\u007f]/g, '');
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 }
 
 function screenText(state) {
@@ -302,7 +303,8 @@ export function runTui({
  * whatever the TUI opened on, and takes the location the menu was last built for: it acts on that
  * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
  * that moves, while the TUI is open never leaves a menu item without a command or bound to a stale root.
- * `root` is only the fallback for a call with no location. */
+ * `root` serves direct callers and tests that call a project command with no location; the TUI always
+ * passes one, so there the location is authoritative. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
