@@ -309,6 +309,14 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T6c Accepted review follow-up on T6b: the cache-restamp test builds its fresh stamp a minute
   in the past, so a run inside one millisecond cannot fail it (R3-refetch-stamp-same-ms) — route:
   inline (one test line)
+- [x] T6d Accepted PR-range review follow-ups (the last round for slice 6; later findings are
+  carried): a latest version read from a local marketplace file is read on every run, online or
+  `--offline`, never taken from the cache, so a plugin installed after a run that cached `null`
+  is compared at once (Codex P2); when the login probe fails, `codex --version` tells a missing
+  Codex CLI from a logged-out one, and the `codex` fix for a missing CLI installs it first,
+  `npm i -g @openai/codex` then `codex login` (Codex P2); a hook-level test with a list fix
+  (R3-001) — route: delegated writer (the T6 writer, resumed: `doctor.mjs`, `stack.mjs`,
+  `latest.mjs` and their tests)
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
   skipped review is caught — route: to be decided after exploration
 
@@ -830,6 +838,21 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   SUGGESTION (R3-next-step-stale-after-t6c: "Next step" still named T6), fixed in this closing
   commit. Codex (`--base d4c4ca0`): no actionable regression. Slice 6 is complete: T6 through T6c.
 
+- 2026-09-29: review of the exact PR range `4b5cef7..1440dc2` (risk `medium`, 929 lines). Native
+  review lineage review-1ee2cd9f1eb9835c: consent granted (pre-granted), one lens (reliability),
+  approved and acknowledged, one SUGGESTION (R3-001: no hook- or TUI-level test meets a list fix;
+  only `doctor.mjs` reads `fix`, checked with `grep`). Codex (`--base 4b5cef7`): two P2 — a
+  cached `null` for the plugin's marketplace version outlives its installation for up to 6 h, and
+  a missing Codex CLI gets `codex login` as its fix. Both P2 and R3-001 accepted as T6d.
+- 2026-09-29: T6d done by the T6 writer, resumed: the two marketplace sources move to
+  `LOCAL_SOURCES` (`bin/lib/latest.mjs`), read on every run and never cached, overlaid on the
+  cache-backed network versions (`resolveNetworkVersions`); a failed login spawns `codex --version`
+  and reports `codexCli`, which `probeTool` hands to `fix` as its second argument without copying it
+  into the row; a hook test with a list fix. RED: 583 tests, 13 failing (`latest.test.mjs` at import,
+  the local-row, missing-CLI and `codex --version` cases). GREEN: `node --test` → `tests 602 / pass
+  595 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL;
+  `node bin/js-harness.mjs doctor --offline` → `codex-plugin 1.0.6 ok ok n/a ok` and typescript-lsp
+  `ok`, both real offline now.
 ## Next step
 Slice 6 (T6–T6c on `feat/codex-plugin-doctor`) is complete, each commit reviewed by gentle-ai and
 Codex. Next: the review of the exact PR range `4b5cef7..HEAD`, then the pull request on

@@ -176,6 +176,42 @@ test('doctor --hook prints nothing and stores an empty digest when there are no 
   }
 });
 
+// R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
+// care — its message only counts gaps, so one report carrying two list fixes (codex-plugin
+// `installed`, gentle-ai `upToDate`) is still exactly one well-formed count line.
+test('doctor --hook prints one well-formed count line for a report whose gaps have list fixes', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    // Only the Codex plugin goes missing (a list `installed` fix); typescript-lsp stays installed.
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+      plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    });
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () =>
+        url.includes('registry.npmjs.org')
+          ? { version: '0.0.1' }
+          : { tag_name: url.includes('Gentleman-Programming/gentle-ai') ? 'v99.0.0' : 'v0.0.1' },
+    });
+
+    const { code, stdout, stderr } = await runHook(
+      ['--hook', '--home', home, '--cwd', project],
+      {},
+      { spawn: healthySpawn(project), fetch: fetchImpl },
+    );
+
+    assert.equal(code, 0);
+    assert.equal(stderr, '');
+    assert.equal(stdout.split('\n').filter(Boolean).length, 1, 'exactly one line on stdout');
+    assert.deepEqual(JSON.parse(stdout), { systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // R3-101 (accepted T2/T3 review follow-up) made `writeCache` itself best-effort, so a `--home`
 // that is a file no longer throws there — the hook now computes and reports its (very real: an
 // unreadable home reads every dimension as missing) gaps normally instead of going silent.

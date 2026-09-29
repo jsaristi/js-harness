@@ -580,6 +580,147 @@ test('codex-plugin login answer comes only from the probe, never from an auth.js
   }
 });
 
+// --- T6d (Codex P2): when the login probe fails, `codex --version` tells a missing Codex CLI from a
+// logged-out one. The `codex` cell is `missing` either way; only the fix differs. ---
+
+/** A fake spawn answering per command line (`codex login status`, `codex --version`), recording each. */
+function commandSpawn(answers, calls = []) {
+  return (cmd, args, opts) => {
+    const line = [cmd, ...args].join(' ');
+    calls.push({ line, opts });
+    return answers[line] ?? { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
+  };
+}
+
+const LOGGED_OUT = { status: 1, stdout: '', stderr: 'Not logged in' };
+const CLI_VERSION = { status: 0, stdout: 'codex-cli 0.130.0\n', stderr: '' };
+
+test('a healthy login probe never spawns codex --version', () => {
+  const home = makeCodexHome();
+  try {
+    const calls = [];
+    const spawn = commandSpawn({ 'codex login status': { status: 0, stdout: 'Logged in\n' } }, calls);
+    const configured = findTool('codex-plugin').configured({ home, spawn, platform: 'linux' });
+    assert.equal(configured.codex, 'ok');
+    assert.deepEqual(calls.map((c) => c.line), ['codex login status']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a timed-out login probe does not spawn codex --version either', () => {
+  const home = makeCodexHome();
+  try {
+    const calls = [];
+    const spawn = commandSpawn({ 'codex login status': { status: null, signal: 'SIGTERM', stdout: '' } }, calls);
+    assert.equal(findTool('codex-plugin').configured({ home, spawn, platform: 'linux' }).codex, 'unknown');
+    assert.deepEqual(calls.map((c) => c.line), ['codex login status']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a failed login with a working Codex CLI is logged out: codex missing, fix is just `codex login`', () => {
+  const home = makeCodexHome();
+  try {
+    const calls = [];
+    const spawn = commandSpawn({ 'codex login status': LOGGED_OUT, 'codex --version': CLI_VERSION }, calls);
+    const tool = findTool('codex-plugin');
+    const configured = tool.configured({ home, spawn, platform: 'linux' });
+    assert.equal(configured.codex, 'missing');
+    assert.equal(configured.codexCli, 'ok');
+    assert.deepEqual(calls.map((c) => c.line), ['codex login status', 'codex --version']);
+    assert.equal(tool.fix({}, configured).codex, 'codex login');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a failed login with no Codex CLI is a missing CLI: codex missing, fix installs it first', () => {
+  const home = makeCodexHome();
+  try {
+    const tool = findTool('codex-plugin');
+    for (const spawn of [
+      commandSpawn({ 'codex login status': LOGGED_OUT, 'codex --version': { status: 1, stdout: '' } }),
+      commandSpawn({}),
+      () => {
+        throw new Error('spawn blew up');
+      },
+    ]) {
+      const configured = tool.configured({ home, spawn, platform: 'linux' });
+      assert.equal(configured.codex, 'missing');
+      assert.equal(configured.codexCli, 'missing');
+      assert.deepEqual(tool.fix({}, configured).codex, ['npm i -g @openai/codex', 'codex login']);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the codex --version probe reuses the login probe\'s CODEX_HOME, timeout and win32 shell form', () => {
+  const home = makeCodexHome();
+  try {
+    const calls = [];
+    const spawn = commandSpawn({ 'codex login status': LOGGED_OUT, 'codex --version': CLI_VERSION }, calls);
+    findTool('codex-plugin').configured({ home, spawn, platform: 'linux', env: {}, homedir: path.join(home, 'x') });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].opts.env.CODEX_HOME, path.join(home, '.codex'));
+    assert.equal(calls[1].opts.timeout, 5000);
+
+    const win = [];
+    const winSpawn = (cmd, args, opts) => {
+      win.push({ cmd, args, opts });
+      return cmd === 'codex --version' ? CLI_VERSION : LOGGED_OUT;
+    };
+    findTool('codex-plugin').configured({ home, spawn: winSpawn, platform: 'win32' });
+    assert.deepEqual(win.map((c) => [c.cmd, c.args, c.opts.shell]), [
+      ['codex login status', [], true],
+      ['codex --version', [], true],
+    ]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a kept user CODEX_HOME applies to the codex --version probe too', () => {
+  const home = makeCodexHome();
+  try {
+    const calls = [];
+    const spawn = commandSpawn({ 'codex login status': LOGGED_OUT, 'codex --version': CLI_VERSION }, calls);
+    findTool('codex-plugin').configured({ home, spawn, platform: 'linux', env: { CODEX_HOME: '/own' }, homedir: home });
+    assert.equal(calls.length, 2);
+    for (const call of calls) assert.equal('env' in call.opts, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('probeTool hands the probed result to fix and keeps the internal codexCli field out of the row', () => {
+  const home = makeCodexHome();
+  const project = makeTmpHome('js-harness-stack-project5-');
+  try {
+    writeJson(path.join(home, '.claude', 'settings.json'), { enabledPlugins: { 'codex@openai-codex': true } });
+    const spawn = commandSpawn({ 'codex login status': LOGGED_OUT });
+    const row = probeTool(findTool('codex-plugin'), { home, project, spawn, platform: 'linux' });
+    assert.equal(row.codex, 'missing');
+    assert.equal('codexCli' in row, false);
+    assert.deepEqual(row.fix.codex, ['npm i -g @openai/codex', 'codex login']);
+
+    const loggedOut = commandSpawn({ 'codex login status': LOGGED_OUT, 'codex --version': CLI_VERSION });
+    const other = probeTool(findTool('codex-plugin'), { home, project, spawn: loggedOut, platform: 'linux' });
+    assert.equal(other.fix.codex, 'codex login');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('every other tool ignores fix\'s second argument', () => {
+  for (const tool of tools.filter((t) => t.id !== 'codex-plugin')) {
+    assert.deepEqual(tool.fix({ project: '/p' }, { codexCli: 'missing' }), tool.fix({ project: '/p' }));
+  }
+});
+
 // R3-login-probe-runs-when-plugin-absent (accepted T6 review follow-up): no plugin, nothing to be
 // logged in for — the `codex` cell is `n/a` and `codex login status` is never spawned.
 test('codex-plugin codex is n/a and the login probe never spawns when the plugin is not installed', () => {

@@ -153,16 +153,21 @@ function sameDirectory(a, b, platform) {
  * own `CODEX_HOME`: that one is kept, since it is where their login actually lives (R3-codex-home-
  * overrides-user-env). `env` and `homedir` are injectable so tests never touch `process.env`. The
  * MCP probes still read `<home>/.codex` regardless — a pre-existing gap, out of scope here.
- * `unknown` on a timeout; any other outcome (not logged in, no `codex` on PATH, a spawn that
- * throws) is `missing`. Never reads `auth.json`. */
-function codexLoggedIn({ home, env: userEnv = process.env, homedir = os.homedir(), ...deps }) {
+ * `codex` is `unknown` on a timeout; any other outcome (not logged in, no `codex` on PATH, a spawn
+ * that throws) is `missing`. Only then is `codex --version` spawned (same env, same timeout) to tell
+ * a logged-out Codex from a missing CLI, reported as `codexCli` (T6d, Codex P2) — the `codex` cell is
+ * `missing` either way, and only the fix differs. `codexCli` is absent when nothing was probed for
+ * it. Never reads `auth.json`. */
+function codexLoginState({ home, env: userEnv = process.env, homedir = os.homedir(), ...deps }) {
   const platform = deps.platform ?? process.platform;
   const keepUsersCodexHome = Boolean(userEnv.CODEX_HOME) && sameDirectory(home, homedir, platform);
   const env = keepUsersCodexHome ? undefined : { CODEX_HOME: path.join(home, '.codex') };
-  const result = spawnProbe('codex', ['login', 'status'], { ...deps, env });
-  if (!result) return 'missing';
-  if (probeTimedOut(result)) return 'unknown';
-  return !result.error && result.status === 0 ? 'ok' : 'missing';
+  const probeDeps = { ...deps, env };
+  const result = spawnProbe('codex', ['login', 'status'], probeDeps);
+  if (result && probeTimedOut(result)) return { codex: 'unknown' };
+  if (result && !result.error && result.status === 0) return { codex: 'ok', codexCli: 'ok' };
+  const cli = probeVersionCommand('codex', ['--version'], probeDeps);
+  return { codex: 'missing', codexCli: cli.state === 'missing' ? 'missing' : 'ok' };
 }
 
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
@@ -173,7 +178,9 @@ function codexLoggedIn({ home, env: userEnv = process.env, homedir = os.homedir(
  * or an array of commands to run in order when it takes several steps: no single separator works
  * in both `cmd.exe` (no `;`) and Windows PowerShell 5.1 (no `&&`). `fix`
  * takes the same `deps` bag as the other probes, since codegraph's `project` fix must carry the
- * actual resolved project root, not a placeholder. Adding a tool never touches
+ * actual resolved project root, not a placeholder; it also gets `configured`'s own result as a
+ * second argument (the Codex plugin reads its probed `codexCli` there; every other tool ignores
+ * it). Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
  * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`, `gentle-ai
  * --help`) — see odd/tasks/stack-doctor.md. */
@@ -268,16 +275,20 @@ export const tools = [
     // recorded in `known_marketplaces.json`).
     id: 'codex-plugin',
     installed: ({ home }) => pluginInstalledVersion(home, 'codex@openai-codex'),
+    // `codexCli` is internal: `probeTool` hands it to `fix` but never copies it into the row.
     configured: (deps) => ({
       claude: claudeEnabledPlugin(deps.home, 'codex@openai-codex'),
       // No plugin, nothing to be logged in for: `n/a`, and `codex login status` is never spawned.
-      codex: pluginInstalledVersion(deps.home, 'codex@openai-codex').state === 'ok' ? codexLoggedIn(deps) : 'n/a',
+      ...(pluginInstalledVersion(deps.home, 'codex@openai-codex').state === 'ok'
+        ? codexLoginState(deps)
+        : { codex: 'n/a' }),
     }),
     project: () => 'n/a',
-    fix: () => ({
+    fix: (_deps, configured) => ({
       installed: ['claude plugin marketplace add openai/codex-plugin-cc', 'claude plugin install codex@openai-codex'],
       claude: 'claude plugin enable codex@openai-codex',
-      codex: 'codex login',
+      // A missing Codex CLI needs installing before there is anything to log in to.
+      codex: configured?.codexCli === 'missing' ? ['npm i -g @openai/codex', 'codex login'] : 'codex login',
       upToDate: 'claude plugin update codex@openai-codex',
     }),
   },
@@ -308,7 +319,7 @@ export function probeTool(tool, deps) {
     codex: configured.codex,
     project: tool.project(deps),
     upToDate: 'unknown',
-    fix: tool.fix(deps),
+    fix: tool.fix(deps, configured),
   };
 }
 

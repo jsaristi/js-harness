@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
-import { fetchLatestVersions, isLookupAttempted } from './lib/latest.mjs';
+import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { gapList, gapDigest } from './lib/digest.mjs';
 
 const GAP_STATES = new Set(['missing', 'outdated']);
@@ -85,7 +85,19 @@ function computeUpToDate(row, latestVersion) {
  * that could not be resolved this time keeps whatever was cached for it before (`null` if there
  * was nothing), so a partial outage never wipes out data that was fine an hour ago. Exported for
  * its own tests (R3-004 below needs a row set smaller than the real stack). */
-export async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
+export async function resolveLatestVersions(rows, deps) {
+  // T6d (Codex P2): a latest version read from a local marketplace file is never taken from the
+  // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
+  // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
+  // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
+  const local = readLocalLatestVersions(rows, { home: deps.home });
+  const networkRows = rows.filter((row) => !isLocalSource(row));
+  return { ...(await resolveNetworkVersions(networkRows, deps)), ...local };
+}
+
+/** The cache-backed half of `resolveLatestVersions`: every row here is a network lookup (or has no
+ * source at all), served from the cache alone in `--offline` mode or while it is still fresh. */
+async function resolveNetworkVersions(rows, { home, offline, fetch: fetchImpl, now }) {
   const cache = readCache(home);
   if (offline) return cache.latest.versions;
   // Codex P2 (accepted T6 review follow-up): a fresh cache that predates a row (no key for its id)
