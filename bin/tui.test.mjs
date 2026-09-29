@@ -15,7 +15,11 @@ import {
   worstState,
   summarizeStackRow,
   computeStackState,
+  buildCommands,
 } from './tui.mjs';
+import { installMain } from './install.mjs';
+import { manifestPath } from './lib/manifest.mjs';
+import { spawnSync } from 'node:child_process';
 
 function makeFakeStdin() {
   const emitter = new EventEmitter();
@@ -427,4 +431,29 @@ test('runTui keeps a command\'s output on screen and draws the menu below it', a
 
   stdin.emit('data', 'q');
   await done;
+});
+
+// The TUI runs outside or inside a project alike, and its uninstall entry is the machine one: it
+// must pass --global, or inside a git repository it would act on (or refuse for) that project.
+test('buildCommands uninstall undoes the machine install even when run inside a git repository', async () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-repo-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
+  const originalCwd = process.cwd();
+  const originalLog = console.log;
+  try {
+    assert.equal(spawnSync('git', ['init'], { cwd: repo, encoding: 'utf8' }).status, 0);
+    console.log = () => {};
+    await installMain(['--home', home]);
+    process.chdir(repo);
+
+    const code = await buildCommands({ home }).uninstall();
+
+    assert.equal(code, 0);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    process.chdir(originalCwd);
+    console.log = originalLog;
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

@@ -17,7 +17,7 @@ Commands:
   init        Enable js-harness in this project: harness.json, AGENTS.md, the pre-commit gate.
   install     Write the skills and record a manifest under a home.
   sync        Re-write installed files for the running version.
-  uninstall   Remove exactly what install wrote.
+  uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository).
   status      Show installed, manifest and latest available versions.
   update      Check whether a newer release exists.
   upgrade     Install the newer release, then sync.

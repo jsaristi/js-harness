@@ -1,7 +1,8 @@
 # Project init
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
-`feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2)
+`feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e, T3)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -42,7 +43,8 @@ Mode: strict (source: user global config). Runner: `node --test`.
 Forecast: well over 400 authored lines across the seven tasks (T2–T5 alone add a command, a
 manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-to-main`, chosen
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
-1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`feat/project-init-cmd`).
+1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
+b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -65,6 +67,55 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   to the root + sha256), each one it kept and why, and whether it created `.codegraph/`, so T3's
   `uninstall` can restore the repo exactly.
 - Exit codes: 0 done (skips are reported, not failures), 1 not a git repository, 2 usage error.
+
+## T2e design
+- `harness.json` is written last, after the manifest (which already lists it), so a killed run
+  leaves either nothing `init` can trip on or a manifest without `harness.json`, which `init`
+  refuses and `uninstall` (T3) clears.
+- When this run created `.codegraph/` and the manifest that would record it cannot be written (a
+  fresh run's rollback or a codegraph retry), `.codegraph/` is removed too, so nothing unrecorded
+  is left; if that removal fails it is named in "could not remove".
+- The manifest's temporary file is created exclusively (`wx`, a unique name ending in `.tmp`),
+  never through an existing file or link, then renamed over the manifest.
+- The pre-commit hook may live in the git dir outside the working tree (a linked worktree, a
+  submodule): containment is judged against the real working tree *and* the real git dir and
+  common git dir (`git rev-parse --git-dir` / `--git-common-dir`). A file in a git dir outside
+  the working tree is recorded by its absolute forward-slashed path with `gitDir: true`. Only
+  symlinks below the real base (working tree or git dir) make a hook path occupied, not links
+  above it (macOS `/tmp`, a linked drive).
+- The manifest gains `dirs`: the shallowest directory of each chain this run created (the hooks
+  directory, say), in the same path shape as `files`, so `uninstall` can remove it when empty.
+  The manifest's own directory is not listed; `uninstall` removes it when empty.
+- An outside hook's reason names a link when a link, not `core.hooksPath`, sends it outside.
+- Tests that run real `git` isolate it from the host's global and system config
+  (`GIT_CONFIG_GLOBAL` pointed at an empty file, `GIT_CONFIG_NOSYSTEM=1`), and the three
+  "could not remove" wordings of a failed `init` are tested.
+
+## T3 design
+- Scope by location (Sebastián, 2026-09-28; roadmap, Decided: "Command scope"): `js-harness
+  uninstall [--cwd <dir>] [--home <dir>] [--global]`. Inside a git repository whose top-level has
+  `harness.json` or a project manifest, it undoes the project; anywhere else, or with `--global`,
+  it undoes the machine install exactly as today. Flags are strict like `init`'s: an unknown flag,
+  a missing value, or `--global` with `--cwd` is a usage error (exit 2).
+- Project undo, from the manifest at `git rev-parse --git-path js-harness/manifest.json`: each
+  file in `files` is removed when its content still hashes to the recorded sha256 (CRLF read as
+  LF, since git may rewrite line endings on checkout), kept and reported when changed, reported as
+  already gone when absent, and never followed through a symlink. Each directory in `dirs` is
+  removed when empty. `.codegraph/` is removed when `codegraph.createdDir` is true (never
+  `codegraph uninit`: user rule). `kept` entries were never written by `init` and are left
+  alone. Last, the manifest and its directory when empty.
+- If any removal fails, the manifest stays so a second `uninstall` finishes the job, and the exit
+  is 1. A project with `harness.json` but no manifest in this clone (a fresh clone of an
+  initialized project) writes nothing and exits 1: those files are committed, so git removes
+  them, and `--global` reaches the machine install.
+- Exit codes: 0 done (kept files are reported, not failures), 1 a failed removal or no manifest,
+  2 usage error.
+- An explicit `--cwd` names a project: when it is not an initialized one, `uninstall` exits 1 and
+  names `--global`, never falling through to the machine (found by the parent in review of T3).
+  With no flags, the same holds inside any git repository that is not an initialized project;
+  only outside a git repository does a plain `uninstall` reach the machine (Sebastián,
+  2026-09-28, answering R3-implicit-rerun-falls-to-machine). The TUI's uninstall passes
+  `--global`.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -91,7 +142,7 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   R3-realish-dangling-symlink-escape); `createdDir` is observed on a failed codegraph run too, and
   a run that made `.codegraph/` can be retried (Codex P2); manifest writes are atomic, tmp then
   rename (Codex P2) — route: the same delegated writer
-- [ ] T2e Follow-ups from the whole-slice reviews, left for after slice 2 (no fourth round):
+- [x] T2e Follow-ups from the whole-slice reviews, left for after slice 2 (no fourth round):
   write `harness.json` last, so a killed run can be resumed by running `init` again
   (R3-harness-json-written-before-manifest); keep `.codegraph/` ownership when a manifest write
   fails, on a fresh run or a retry (R3-retry-manifest-failure-loses-codegraph-ownership, Codex
@@ -105,7 +156,35 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   well); count only links below the real root as occupying the hook
   (R3-realish-flags-symlinks-above-repo-root) — route: delegated writer, likely with T3, which
   reads the same manifest
-- [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
+- [x] T2f Accepted review follow-ups on T2e: on `EEXIST` the manifest temp write must not delete
+  the entry it did not create (Codex P2, R3-wx-tmp-cleanup-deletes-foreign-file); record the
+  shallowest missing directory within the containing git dir, not only within the working tree
+  (Codex P2); count symlink hops from the first segment at or below a base, not on exact string
+  equality with it (R3-realish-base-detection-equality-only); test a kept hook and a created hooks
+  directory in an outside git dir, and a submodule (R3-gitdir-occupied-and-submodule-untested) —
+  route: delegated writer, the one that wrote T2e
+- [x] T2g Accepted review follow-ups on T2f: a temp file the exclusive write created and then
+  failed to fill is still removed; only `EEXIST` leaves the path alone (Codex P2, R3-001); the
+  directory climb compares the lexical hooks directory against its base with the same
+  realpath- and case-aware containment used elsewhere, so a symlinked root or a win32 case
+  difference still records the whole chain (Codex P2, R3-002, a regression from T2f); test the
+  case folding and a hooks directory under a linked root where this machine allows it (R3-003)
+  — route: the same delegated writer
+- [x] T3 `uninstall` in a project restores it exactly — route: delegated writer
+- [x] T3b Accepted review follow-ups on T3: before removing a recorded file, check its real
+  containment through every ancestor and keep an entry a link moved outside (Codex P1); prune only
+  the directory chain init created, never an empty directory added later (Codex P2); only absence
+  is benign — any other read or `lstat` failure is a failed removal that keeps the manifest (Codex
+  P2); write the manifest in full before renaming (Codex P2); validate every manifest entry's shape
+  and containment before any removal, a malformed one being `malformedManifest`, exit 1 (Codex P2,
+  R3-manifest-entry-shape-unvalidated); pin the older machine-scope `uninstallMain` tests with
+  `--global` so a test run never touches the checkout it starts in
+  (R3-uninstall-cwd-dependent-machine-tests) — route: the same delegated writer
+- [x] T3c Accepted review follow-ups on T3b: a recorded directory gets the same real-containment
+  check a file does, so an empty directory reached through a link to outside is kept
+  (R3-dir-prune-follows-ancestor-link); a manifest write that makes no progress fails instead of
+  spinning or passing a truncated file (Codex P2, R3-short-write-loop-no-progress-guard) — route:
+  inline (one file and its test, both understood)
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
@@ -270,10 +349,158 @@ by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in 
   slice, which is also the PR candidate: native review lineage review-a95098352b5dd5b5 (range
   `222110f..dc49d6d`, one lens) approved and acknowledged, with three WARNING and one SUGGESTION,
   all advisory. Codex on the same range: no P1, two P2. All six go to T2e.
+- 2026-09-28: slice 2 merged as b22ecc9 (`jsaristi/js-harness#9`); slice 3 starts on
+  `feat/project-uninstall` from it. Sebastián chose how `uninstall` picks its scope: by location,
+  like npm, with `--global` for the machine (roadmap, Decided: "Command scope"). T2e and T3
+  designed above; T2e goes first because T3 reads the manifest shape it settles.
+- 2026-09-28: T2e done by a delegated writer (4 files: `bin/lib/project.mjs`, `bin/init.mjs` and
+  their tests; +697/−141). New: `gitDirs`, containment against the working tree and both git
+  dirs, `manifestEntry` (repo-relative, or absolute with `gitDir: true`), `dirs` in the
+  manifest, symlink hops counted only at or below the containing base, the link wording, a unique
+  `wx` temp file, `harness.json` written after the manifest, `.codegraph/` rolled back when
+  this run created it and its manifest never landed, and an injectable `rm` so each "could not
+  remove" wording is tested; `InitWriteError.codegraphDirLeftBehind` is gone, folded into
+  `notRemoved`. TDD was not followed by the writer on its first pass (it implemented, then ran
+  the old tests), so RED was taken by the parent: the new tests against the old engine (plus a
+  `gitDirs` stub so the import resolves) → 10 failures, among them the worktree, `gitDirs`, the
+  three wordings and the `.codegraph/` rollbacks; the writer's second pass added the write-order
+  and `wx` tests, RED against the old engine too (3 failures; its "rolls back everything when the
+  harness.json write throws" test also passes on the old code, where that write came first). GREEN:
+  `node --test` → `tests 369 / pass 364 / fail 0 / skipped 5`, re-run by the parent; `npm run
+  check` PASS. Item 5 (links above the base) rests on code reading: `git rev-parse
+  --show-toplevel` already resolves those links here and this account cannot create symlinks.
+  Real run in a scratch repo with a linked worktree (real git, real codegraph): `init --cwd <wt>`
+  → the hook written at `<main>/.git/hooks/pre-commit` and recorded absolute with `gitDir:
+  true`, the manifest at `<main>/.git/worktrees/wt/js-harness/manifest.json`, exit 0.
+  The first commit attempt was blocked by the pre-commit gate: inside a hook git exports
+  `GIT_INDEX_FILE` and friends, and the worktree test's `git worktree add` inherited them
+  (`Unable to create '<tmp>/.git/index.lock'`). RED outside the hook: `GIT_INDEX_FILE=.git/index
+  node --test bin/lib/project.test.mjs` → 1 failure (that test). Fixed in the parent: both test
+  files drop every inherited `GIT_*` variable before isolating the config; GREEN with
+  `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 57 / pass 54 / skipped 3`.
+- 2026-09-28: T2e committed as 6d3e0a0. Assessed (`--base-ref b22ecc9 --committed-only`): risk
+  `medium`, 935 lines, `review_due: true` (`slice_budget_reached`). Native review lineage
+  review-42da9bfd954b4742: consent granted (pre-granted), one lens (reliability), approved and
+  acknowledged (authority burned), with two WARNING (R3-wx-tmp-cleanup-deletes-foreign-file: on
+  `EEXIST` the catch removes the file already at the temp path, and the test never checks it
+  survives; R3-realish-base-detection-equality-only: hop counting starts only on exact equality
+  with a base, so a link that lands below a base, or a case difference on win32, skips it) and one
+  SUGGESTION (R3-gitdir-occupied-and-submodule-untested). Codex (`--base b22ecc9`): P2 the same
+  temp cleanup; P2 in an outside git dir `shallowestMissingAncestor` stops at the working-tree
+  root, so a created chain is recorded by its deepest directory only. All accepted as T2f.
+- 2026-09-28: T2f done by the same writer (`bin/lib/project.mjs` and its test, +354/−30). The
+  `wx` create sits outside the cleanup, so only a temp file this call created is removed;
+  `resolveHookContainment` returns the containing `base`, which bounds `mkdirTracked` for the
+  hook's directory; `isWithinBase` (at or below, case-folded on win32) replaces exact equality in
+  `realish` and is checked after every hop. RED (new tests against 6d3e0a0's engine): 4 failures
+  — the foreign temp file deleted, the outside chain recorded and rolled back by its deepest
+  directory only, a hop below a base not counted. The junction-above-root, junction-below-root,
+  kept-hook-in-a-git-dir and submodule tests pass on the old engine too: coverage, not
+  discriminators. The above-root case is built with an absolute `core.hooksPath` through a
+  junction, since `git rev-parse --show-toplevel` already resolves links above the root. GREEN:
+  `node --test` → `tests 377 / pass 372 / fail 0 / skipped 5`, re-run by the parent; `npm run
+  check` PASS; with `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 54 / pass 51 / skipped 3`.
+  Observed by the writer, not fixed: when `core.hooksPath` is lexically outside but links resolve
+  it back inside, the manifest records the lexical path as a `../`-relative one. `uninstall`
+  resolves it lexically to the same file, so it still works; the shape is only odd.
+- 2026-09-28: T2f committed as e187fd2. Assessed (`--base-ref 3064173 --committed-only`): risk
+  `medium`, 404 lines, `review_due: true`. Native review lineage review-5cb0b7e551a007ef: consent
+  granted (pre-granted), one lens (reliability), approved and acknowledged, with two WARNING
+  (R3-001: moving the `wx` write out of the `try` leaks a temp file it created when the write
+  itself fails; R3-002: `mkdirTracked` now climbs the lexical directory against a realpath base
+  with a case-sensitive `startsWith`, so a symlinked root, an 8.3 name or a case difference
+  records only the deepest directory, a regression for the working tree too) and one SUGGESTION
+  (R3-003: case folding and a linked root untested). Codex (`--base 3064173`): the first run could
+  not assess (process creation denied); the retry found the same two, as P2. Accepted as T2g.
+- 2026-09-28: T2g done by the same writer (`bin/lib/project.mjs` +80/−33, its test +183/−63,
+  `bin/init.test.mjs` +6/−4). The manifest temp write goes through an injectable `{ open, write,
+  close }` (`fs.openSync(tmp, 'wx')` by default): a failure in `open` touches nothing, a failure
+  after it removes the temp file; the fault-injecting tests moved from `writeFile` to that seam.
+  `shallowestMissingAncestor` climbs on `fs.existsSync` and checks containment once, with
+  `isWithinBase` on the real form of the first existing parent. The parent dropped a
+  `writeFile` parameter `alreadyInitialized` no longer used. RED (new tests against e187fd2's
+  engine): 12 failures, among them the case-mismatched hooks path in the ordinary working tree
+  recorded as `custom/nested/hooks` instead of `custom` — R3-002 reproduced live; the other ten
+  are the migrated tests, whose faults the old engine never triggers. GREEN: `node --test` →
+  `tests 381 / pass 375 / fail 0 / skipped 6`, re-run by the parent; `npm run check` PASS; with
+  `GIT_INDEX_FILE` and `GIT_DIR` set → `tests 58 / pass 54 / skipped 4`. The 8.3 short-name
+  case is a new explicit skip: `os.tmpdir()` and both realpath forms are identical on this host.
+  T2g is the last correction round on the containment code: later findings there become
+  follow-ups unless severe, the rule slice 2 used.
+- 2026-09-28: T3 done by the same writer. `uninstallProject` in `bin/lib/project.mjs` (+203) and
+  its tests (+392); `uninstallMain` in `bin/install.mjs` parses `--cwd`/`--home`/`--global`
+  strictly and routes by location (+124/−3, tests +160/−1); the dispatcher's usage line names both
+  scopes. Files are removed when their content (CRLF read as LF) matches the recorded sha256,
+  never through a link; `dirs` are pruned bottom-up only when empty; `.codegraph/` goes when
+  `createdDir`; the manifest stays when a removal fails. RED against f725b72: `install.test.mjs`
+  6 failures, `js-harness.test.mjs` 1, and `project.test.mjs` failed on the missing export; the
+  parent re-ran it with an `uninstallProject` stub → 16 failures, every new `uninstallProject`
+  test. Reading `uninstallMain`, the parent found that `uninstall --cwd <repo>` on a repo not
+  initialized fell through to the machine, so a second run would remove the machine install, and
+  the writer had pinned that in a test. Fixed inline: RED 2 failures (outside a repo, in an
+  untouched repo), GREEN `install.test.mjs` 17/17. GREEN: `node --test` → `tests 408 / pass 401
+  / fail 0 / skipped 7`; `npm run check` PASS; `npm run e2e` every step PASS (its `uninstall`
+  step restores both hook files byte for byte). Real runs in scratch repos (real git, real
+  codegraph): init then uninstall → `git status --porcelain` empty, hook, `.codegraph/` and
+  manifest gone (the writer's); with `AGENTS.md` edited after init → `kept AGENTS.md (changed
+  since init)`, the rest removed, exit 0 (the parent's).
+- 2026-09-28: T3 committed as 0ad11dd. Assessed (`--base-ref fa96953 --committed-only`, T2g and T3):
+  risk `medium`, 1323 lines, `review_due: true`. Native review lineage review-8a51cf5f7fba849d:
+  consent granted (pre-granted), one lens (reliability), approved and acknowledged, with two WARNING
+  (R3-uninstall-cwd-dependent-machine-tests: the older machine tests pass no `--global` or
+  `--cwd`, so in an initialized checkout a test run would undo that project;
+  R3-manifest-entry-shape-unvalidated: an entry without a string `path` crashes instead of
+  `malformedManifest`) and one SUGGESTION (R3-implicit-rerun-falls-to-machine: a second plain
+  `uninstall` inside the same repo finds it uninitialized and removes the machine install; this
+  follows the scope rule Sebastián chose, so it is his call). Codex (`--base fa96953`): P1 a
+  recorded file behind an ancestor later replaced by a link to outside is deleted there; P2
+  unrecorded empty subdirectories are pruned; P2 `EACCES` reads as already gone and the manifest is
+  dropped; P2 a short `writeSync` is renamed into place; P2 manifest paths are not checked for
+  containment. All but the SUGGESTION accepted as T3b.
+- 2026-09-28: T3b done by the same writer (`bin/lib/project.mjs` +201/−56, its test +248,
+  `bin/install.test.mjs` +5/−2, `scripts/e2e.mjs` +4/−1): each recorded file's real location is
+  re-checked against its base before removal (`kept (moved outside)` otherwise); `dirs` pruning
+  touches only the chain init created, derived from `dirs` and `files` without walking the disk;
+  only `ENOENT`/`ENOTDIR` count as absent; manifest writes loop until every byte is written; the
+  whole manifest is validated (shape and containment) before any removal; the older machine tests
+  and the e2e `uninstall` pass `--global`. RED against d359829: 10 failures, one per new test;
+  the junction test showed the old engine reporting `removed custom/nested/hooks/pre-commit` for
+  the file outside. The writer's own call: `dirs` pruning checks emptiness, not real
+  containment, since removing a directory junction removes the link, not its target. It also
+  found the TUI's uninstall passed no `--global`. Sebastián then chose that a plain
+  `uninstall` inside an uninitialized git repository refuses (see "T3 design"); the parent
+  implemented it and the TUI's `--global` inline, extracting `buildCommands` from `tuiMain`
+  so it can be tested. RED: `install.test.mjs` 2 failures (an uninitialized repo, a second run in
+  the same project); `tui.test.mjs` 1 once the rule was in (the menu's uninstall refused inside a
+  repo); the usage line 1. GREEN: `node --test` → `tests 422 / pass 415 / fail 0 / skipped 7`;
+  `npm run e2e` 14 steps PASS; `npm run check` PASS through the commit hook.
+- 2026-09-28: T3b committed as ae471e7. Assessed (`--base-ref d359829 --committed-only`): risk
+  `medium`, 678 lines, `review_due: true`. Native review lineage review-c51aeeefefd93719: consent
+  granted (pre-granted), one lens (reliability), approved and acknowledged, with one WARNING
+  (R3-dir-prune-follows-ancestor-link: `dirs` pruning never re-checks real containment, so an
+  empty chain reached through a replaced ancestor is removed outside the project — the writer's
+  junction argument covered the link, not what it reaches) and one SUGGESTION
+  (R3-short-write-loop-no-progress-guard). Codex (`--base d359829`): P2 the same no-progress loop.
+  Both accepted as T3c, done inline by the parent. RED: 3 failures (a write returning 0, a write
+  returning no count — both built to finish rather than hang on the old loop — and the empty outside
+  chain removed). GREEN: `node --test` → `tests 425 / pass 418 / fail 0 / skipped 7`; `npm run
+  e2e` 14 steps PASS.
+- 2026-09-28: T3c committed as 9efcc91. Assessed (`--base-ref ae471e7`): risk `medium`, 98 lines,
+  `under_budget`; reviewed anyway as the slice's last code commit. Native review lineage
+  review-7fa4f2ce8d9975ff: approved and acknowledged with two SUGGESTION, carried as follow-ups:
+  R3-dir-containment-absent-dir-uncovered (a deleted recorded directory; by code reading `realish`
+  appends a missing segment lexically, so it stays inside and reaches the silent `ENOENT`, but no
+  test pins it) and R3-dir-containment-gitdir-branch-untested (a `gitDir: true` directory under
+  the new check). Codex (`--base ae471e7`): no actionable regression; process creation was denied,
+  so it compared the git objects instead of running the tests. Slice 3 is complete: T2e, T2f, T2g,
+  T3, T3b and T3c, each reviewed by gentle-ai and Codex.
+- Follow-ups carried from slice 3, none blocking: the two T3c SUGGESTION above; a lexically
+  outside `core.hooksPath` that links resolve back inside is recorded as a `../` path (T2f
+  note); `dirs` pruning trusts a missing directory's lexical path.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Sebastián merges slice 2's PR; then slice 3 on a new branch from `main`: T3 (`uninstall` in a
-project, from the manifest T2 writes) together with T2e, which changes the same manifest.
+Sebastián merges `jsaristi/js-harness#10` (slice 3); then T4 (`sync` in a project, by the same
+location rule) on a new branch from `main`, in a new session.

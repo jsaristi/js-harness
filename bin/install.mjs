@@ -1,13 +1,112 @@
 #!/usr/bin/env node
-// CLI surface over the manifest engine: `install`, `sync`, `uninstall`.
+// CLI surface over the manifest engine: `install`, `sync`, `uninstall`. `uninstall` also covers the
+// *project* undo (T3 design): inside a git repository that `js-harness init` touched, it routes to
+// `uninstallProject` instead of the machine engine below — see bin/lib/project.mjs and
+// odd/tasks/project-init.md, "T3 design".
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, sync, uninstall } from './lib/manifest.mjs';
+import { uninstallProject } from './lib/project.mjs';
 
 function parseHome(argv, env) {
   const i = argv.indexOf('--home');
   return i !== -1 ? argv[i + 1] : (env.JS_HARNESS_HOME ?? os.homedir());
+}
+
+const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
+
+class UninstallArgError extends Error {}
+
+function requireUninstallValue(argv, i, flag) {
+  const value = argv[i + 1];
+  if (value === undefined || value.startsWith('--')) throw new UninstallArgError(`${flag} requires a value`);
+  return value;
+}
+
+/** Strict like `init`'s parsing (an unknown flag or a missing value is an error, not silently
+ * ignored) plus one more rule T3 design calls for: `--global` forces the machine scope below even
+ * from inside an initialized project, so combining it with `--cwd` (which only means anything for
+ * the *project* scope) is a usage error rather than a silently-ignored flag. */
+function parseUninstallArgs(argv, env) {
+  let cwd;
+  let home;
+  let global = false;
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === '--cwd') {
+      cwd = requireUninstallValue(argv, i, token);
+      i++;
+    } else if (token === '--home') {
+      home = requireUninstallValue(argv, i, token);
+      i++;
+    } else if (token === '--global') {
+      global = true;
+    } else {
+      throw new UninstallArgError(`unknown flag: ${token}`);
+    }
+  }
+  if (global && cwd !== undefined) {
+    throw new UninstallArgError('--global cannot be combined with --cwd');
+  }
+  return {
+    cwd: cwd ?? process.cwd(),
+    cwdExplicit: cwd !== undefined,
+    home: home ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    global,
+  };
+}
+
+function logUninstallProjectAction(action) {
+  switch (action.kind) {
+    case 'removed':
+      console.log(`removed ${action.path}`);
+      break;
+    case 'alreadyGone':
+      console.log(`already gone ${action.path}`);
+      break;
+    case 'kept':
+      console.error(`kept ${action.path} (${action.reason})`);
+      break;
+    case 'codegraphRemoved':
+      console.log('removed .codegraph/');
+      break;
+    case 'failed':
+      console.error(`could not remove ${action.path}: ${action.reason}`);
+      break;
+    case 'manifestRemoved':
+      console.log(`removed manifest ${action.path}`);
+      break;
+    default:
+      break;
+  }
+}
+
+/** Renders `uninstallProject`'s result and returns the exit code — the project-scope half of
+ * `uninstallMain` below. `result.notGitRepo`/`result.notInitialized` are never reached here: the
+ * caller treats those as "fall through to the machine uninstall" instead (T3 design's "anywhere
+ * else"), not as project-scope outcomes to report. */
+function reportUninstallProject(result) {
+  if (result.noSuchDirectory) {
+    console.error(`no such directory: ${result.cwd}`);
+    return 1;
+  }
+  if (result.noManifestFile) {
+    console.error(
+      `harness.json is present but no project manifest was found (looked for ${result.manifestPath}): ` +
+        'those files are committed, so git already removes them; js-harness uninstall --global still ' +
+        'reaches the machine install',
+    );
+    return 1;
+  }
+  if (result.malformedManifest) {
+    console.error(
+      `project manifest at ${result.manifestPath} is malformed` + (result.reason ? `: ${result.reason}` : ''),
+    );
+    return 1;
+  }
+  for (const action of result.actions) logUninstallProjectAction(action);
+  return result.code;
 }
 
 /** This package's own version, read from its package.json (never the installed target's). */
@@ -63,8 +162,39 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
-export async function uninstallMain(argv, env = process.env) {
-  const home = parseHome(argv, env);
+/** Scope by location (T3 design): inside a git repository `js-harness init` touched (`harness.json`
+ * or a project manifest present), undo the project; anywhere else, or with `--global`, undo the
+ * machine install exactly as before T3. `--global` skips the project check entirely rather than
+ * running it and discarding the result — `--cwd` (project-only) is a usage error alongside it, so
+ * there is nothing project-scoped left to even attempt. `deps` (`spawn`/`rm`) reaches only
+ * `uninstallProject`; the machine engine below takes none. */
+export async function uninstallMain(argv, env = process.env, deps = {}) {
+  let parsed;
+  try {
+    parsed = parseUninstallArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
+    return 2;
+  }
+
+  if (!parsed.global) {
+    const projectResult = uninstallProject(parsed.cwd, deps);
+    if (!projectResult.notGitRepo && !projectResult.notInitialized) {
+      return reportUninstallProject(projectResult);
+    }
+    // An explicit --cwd names a project, and so does a git repository around the cwd: when it is not
+    // an initialized one, say so rather than falling through, or a second `uninstall` in the same
+    // repository would remove the machine install (Sebastián, roadmap Decided: "Command scope").
+    if (parsed.cwdExplicit || projectResult.notInitialized) {
+      console.error(
+        `not an initialized project: ${parsed.cwd}; js-harness uninstall --global removes the machine install`,
+      );
+      return 1;
+    }
+    // Outside any git repository, with no --cwd: fall through to the machine uninstall below.
+  }
+
+  const home = parsed.home;
   const result = uninstall(home);
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const p of result.kept) console.log(`kept (modified by you) ${p}`);

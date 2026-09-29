@@ -1,10 +1,26 @@
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initMain } from './init.mjs';
+
+// T2e item 8 (R3-tests-depend-on-host-git-config): isolate every real `git` call this file makes
+// (directly, or through the engine's default `spawnSync`, which inherits `process.env`) from the
+// host's own global/system config — see bin/lib/project.test.mjs's identical `before` hook.
+before(() => {
+  // A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
+  // committed; inherited here, they would send every git call below to that repository instead
+  // of the test's own (a pre-commit run of this suite broke `git worktree add` that way).
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) delete process.env[key];
+  }
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-init-cli-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
 
 function makeTmpRepo(prefix = 'js-harness-init-cli-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -226,7 +242,9 @@ test('initMain reports a rolled-back write failure on stderr and exits 1', async
   }
 });
 
-// T2c R3-retry-manifest-write-unguarded + R3-nothing-left-behind-overclaims
+// T2c R3-retry-manifest-write-unguarded; T2e item 2 (.codegraph/ removal is now attempted, and
+// this scenario's directory did not exist before the retry, so it succeeds — "nothing was left
+// behind" is the truthful message now, not "removed everything it wrote except .codegraph/").
 test('initMain reports a codegraph-retry manifest write failure on stderr and exits 1', async () => {
   const root = makeTmpRepo();
   try {
@@ -238,11 +256,12 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
       fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
       return { status: 0, stdout: '', stderr: '' };
     };
-    // The manifest is written to a `.tmp` file first (T2d atomic manifest writes) — that's the
-    // actual target this injected failure needs to hit.
-    const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json.tmp')) throw new Error('EACCES: permission denied');
-      fs.writeFileSync(target, content, enc);
+    // T2e item 3: the manifest's temp file now has a unique name, not a fixed `<target>.tmp`.
+    // T2g R3-001: the manifest's own exclusive-create write is injected separately from the general
+    // `writeFile` (see `writeManifestAtomic` in bin/lib/project.mjs) — faulting it here means
+    // failing the `open` step, not `writeFile`.
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
     };
     let stderr = '';
     const origError = console.error;
@@ -251,14 +270,15 @@ test('initMain reports a codegraph-retry manifest write failure on stderr and ex
     };
     let code;
     try {
-      code = await initMain(['--cwd', root], process.env, { spawn: okSpawn, platform: 'linux', writeFile });
+      code = await initMain(['--cwd', root], process.env, { spawn: okSpawn, platform: 'linux', open });
     } finally {
       console.error = origError;
     }
     assert.equal(code, 1);
     assert.match(stderr, /init failed:/);
     assert.match(stderr, /manifest could not be updated/);
-    assert.match(stderr, /removed everything it wrote except \.codegraph\//);
+    assert.match(stderr, /nothing was left behind/);
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

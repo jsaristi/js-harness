@@ -46,6 +46,14 @@ test('--help lists init, install, sync, uninstall, status, update, upgrade, doct
   assert.match(result.stdout, /progress/);
 });
 
+// T3 (project-init): uninstall now covers two scopes — the usage line must say so, not just name
+// the command (the assertion above already covered before this change, and would have kept passing
+// even with the old, single-scope wording).
+test('--help describes uninstall\'s two scopes (project vs. machine/--global)', () => {
+  const result = run(['--help']);
+  assert.match(result.stdout, /uninstall\s+Undo the project.*machine install.*--global.*outside a git repository/);
+});
+
 test('--help mentions the JS_HARNESS_HOME/SOURCE/PREFIX environment overrides', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /JS_HARNESS_HOME/);

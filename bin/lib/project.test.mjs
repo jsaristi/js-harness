@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,13 +6,34 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   initProject,
+  uninstallProject,
   gitTopLevel,
   resolveGitPath,
+  gitDirs,
   agentsTemplate,
   runCodegraphInit,
   InitWriteError,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
+
+// T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
+// `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
+// up the *host's* global or system config (a `core.hooksPath`, a signing key, an alias...) and
+// change what a test observes. Pointing `GIT_CONFIG_GLOBAL` at an empty file and setting
+// `GIT_CONFIG_NOSYSTEM=1` isolates every `git` call this file makes — both the ones tests spawn
+// directly and the engine's own default `spawnSync`, which inherits `process.env` the same way.
+before(() => {
+  // A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
+  // committed; inherited here, they would send every git call below to that repository instead
+  // of the test's own (a pre-commit run of this suite broke `git worktree add` that way).
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) delete process.env[key];
+  }
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-project-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
 
 function makeTmpRepo(prefix = 'js-harness-project-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -23,6 +44,21 @@ function makeTmpRepo(prefix = 'js-harness-project-') {
 
 function makeTmpDir(prefix = 'js-harness-project-nongit-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+/** A repo with one commit, so `git worktree add` (which refuses an unborn HEAD) has something to
+ * check out. Local `user.name`/`user.email` — the isolated `GIT_CONFIG_GLOBAL` above is empty, so
+ * a commit needs its own identity, not the host's. */
+function makeTmpRepoWithCommit(prefix = 'js-harness-project-wt-main-') {
+  const root = makeTmpRepo(prefix);
+  spawnSync('git', ['config', 'user.email', 'js-harness-test@example.invalid'], { cwd: root, encoding: 'utf8' });
+  spawnSync('git', ['config', 'user.name', 'js-harness test'], { cwd: root, encoding: 'utf8' });
+  fs.writeFileSync(path.join(root, 'f.txt'), 'x', 'utf8');
+  const add = spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' });
+  assert.equal(add.status, 0, `git add failed: ${add.stderr}`);
+  const commit = spawnSync('git', ['commit', '-m', 'init'], { cwd: root, encoding: 'utf8' });
+  assert.equal(commit.status, 0, `git commit failed: ${commit.stderr}`);
+  return root;
 }
 
 /** A spawn that runs `git` for real (tests use real repos) but never touches a real `codegraph`
@@ -44,6 +80,10 @@ function makeSpawn(codegraphResult = { status: 0, stdout: '', stderr: '' }) {
   spawn.codegraphCalls = codegraphCalls;
   return spawn;
 }
+
+// T2e item 3: the manifest's temp file has a unique name (`<target>.<pid>.<random>.tmp`), not a
+// fixed `<target>.tmp` — every fault-injecting `open` below matches on that looser shape.
+const isManifestTmp = (target) => target.includes('manifest.json.') && target.endsWith('.tmp');
 
 // --- not a git repository ---
 
@@ -106,6 +146,9 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     }
     assert.deepEqual(result.manifest.kept, []);
     assert.deepEqual(result.manifest.codegraph, { createdDir: true, status: 'ok' });
+    // T2e item 6: `.git/hooks` already exists (git creates it on `git init`), so nothing was
+    // created for it here — `dirs` stays empty.
+    assert.deepEqual(result.manifest.dirs, []);
 
     assert.ok(fs.existsSync(result.manifestPath));
     assert.deepEqual(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8')), result.manifest);
@@ -115,6 +158,73 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
       fs.realpathSync(result.manifestPath),
       fs.realpathSync(path.join(root, '.git', 'js-harness', 'manifest.json')),
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- T2e item 1: harness.json is written last, after the manifest ---
+
+test('initProject writes harness.json last, after the manifest\'s temp file, among every write this run makes', () => {
+  const root = makeTmpRepo();
+  try {
+    const writeCalls = [];
+    const writeFile = (target, content, options) => {
+      writeCalls.push(target);
+      fs.writeFileSync(target, content, options);
+    };
+    const open = (tmp) => {
+      writeCalls.push(tmp);
+      return fs.openSync(tmp, 'wx');
+    };
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile, open });
+
+    assert.equal(result.code, 0);
+    assert.ok(writeCalls.length >= 3, `expected at least 3 writes, got ${writeCalls.length}`);
+    const harnessJsonIndex = writeCalls.findIndex((p) => p.endsWith('harness.json'));
+    const manifestTmpIndex = writeCalls.findIndex((p) => isManifestTmp(p));
+    assert.ok(harnessJsonIndex !== -1, 'expected a harness.json write');
+    assert.ok(manifestTmpIndex !== -1, 'expected a manifest .tmp write');
+    // harness.json is the very last write of the run, strictly after the manifest's temp write.
+    assert.equal(harnessJsonIndex, writeCalls.length - 1);
+    assert.ok(manifestTmpIndex < harnessJsonIndex);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back everything, the manifest included, when the harness.json write throws', () => {
+  const root = makeTmpRepo();
+  try {
+    const before = fs.readdirSync(root);
+    const writeFile = (target, content, options) => {
+      if (target.endsWith('harness.json')) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      fs.writeFileSync(target, content, options);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /EACCES|permission denied/);
+
+    // Byte-identical: nothing this run wrote survives — the manifest included, even though it was
+    // the very last thing successfully written to disk before the harness.json write threw.
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'manifest.json')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+    assert.deepEqual(fs.readdirSync(root), before);
+
+    const retry = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(retry.code, 0);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -328,6 +438,10 @@ test('initProject keeps (never writes) a pre-commit hook whose core.hooksPath re
     assert.equal(path.resolve(keptEntry.path.split('/').join(path.sep)), path.join(fs.realpathSync(outsideDir), 'pre-commit'));
     assert.match(keptEntry.reason, /outside the repository/);
     assert.match(keptEntry.reason, /js-harness check/);
+    // T2e item 7: no symlink was involved — `core.hooksPath` itself points outside — so the
+    // reason names it, not "a link".
+    assert.match(keptEntry.reason, /\(core\.hooksPath\)/);
+    assert.doesNotMatch(keptEntry.reason, /a link/);
 
     // Every other kept/written entry stays plain (no `outside` field).
     for (const entry of result.manifest.kept) {
@@ -395,6 +509,10 @@ test('initProject treats an in-repo symlink pointing outside the repo as an outs
       path.resolve(keptEntry.path.split('/').join(path.sep)),
       path.join(fs.realpathSync(outsideDir), 'pre-commit'),
     );
+    // T2e item 7: the *configured* path (`hooks-link`) was lexically inside the repo — a symlink
+    // is what sent it outside — so the reason names a link, not "(core.hooksPath)".
+    assert.match(keptEntry.reason, /a link/);
+    assert.doesNotMatch(keptEntry.reason, /core\.hooksPath/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
@@ -539,42 +657,263 @@ test('initProject rolls back everything, including a directory it created, when 
     const retry = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(retry.code, 0);
     assert.ok(fs.existsSync(path.join(root, 'nested', 'hooks', 'dir', 'pre-commit')));
+    // T2e item 6: the shallowest directory this run actually created (`nested`, not
+    // `nested/hooks/dir`) is recorded in `dirs`, repo-relative like `files`; the manifest's own
+    // directory (`.git/js-harness`) is never in there.
+    assert.deepEqual(retry.manifest.dirs, [{ path: 'nested' }]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('initProject rolls back a failed manifest write and reports what could not be removed', () => {
+test('initProject creates the manifest temp file exclusively with a unique <pid>.<hex> name, never reused across runs', () => {
   const root = makeTmpRepo();
   try {
-    // T2d Codex P2 atomic manifest writes: the manifest is written to a `.tmp` file first, so
-    // that's the actual target this injected failure needs to hit.
-    const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json.tmp')) throw new Error('ENOSPC: no space left on device');
-      fs.writeFileSync(target, content, enc);
+    const opens = [];
+    const open = (tmp) => {
+      opens.push(tmp);
+      return fs.openSync(tmp, 'wx');
+    };
+
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
+    assert.equal(first.code, 0);
+    assert.equal(opens.length, 1);
+    const tmpName = path.basename(opens[0]);
+    assert.match(tmpName, new RegExp(`^manifest\\.json\\.${process.pid}\\.[0-9a-f]+\\.tmp$`));
+
+    // A second run (the codegraph retry path) writes the manifest again, exclusively, under a
+    // different unique name — the temp filename is never reused across separate writes.
+    const okSpawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    fs.rmSync(path.join(root, '.codegraph'), { recursive: true, force: true });
+    // Force a retry by marking the prior codegraph run as failed on disk.
+    const manifestOnDisk = JSON.parse(fs.readFileSync(first.manifestPath, 'utf8'));
+    manifestOnDisk.codegraph = { createdDir: false, status: 'failed' };
+    fs.writeFileSync(first.manifestPath, JSON.stringify(manifestOnDisk, null, 2) + '\n', 'utf8');
+
+    const second = initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
+    assert.equal(second.code, 0);
+    assert.equal(opens.length, 2);
+    assert.notEqual(opens[0], opens[1]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2e item 3: `flag: 'wx'` means the temp file is always a brand-new file — the real
+// `fs.openSync(path, 'wx')` (via an injected `open` that just delegates to it, no fault of its own)
+// refuses to open a path that already exists, rather than silently overwriting whatever was there.
+test('initProject fails, rather than overwrites, when something already sits at the manifest temp path', () => {
+  const root = makeTmpRepo();
+  try {
+    // Pre-create the manifest's own directory so it is *not* something this run creates (and so
+    // rollback never recursively removes it as a directory chain it owns) — isolates this test to
+    // `writeManifestAtomic`'s own foreign-file handling, not the surrounding directory rollback.
+    fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
+
+    let tmpPathUsed = null;
+    const foreignContent = 'not js-harness content';
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      // Pre-create the exact path this run is about to use for its manifest .tmp file, holding
+      // content that must never be silently replaced or removed — then let the real exclusive open
+      // genuinely fail with EEXIST, the same way it would for any other foreign file.
+      fs.writeFileSync(tmp, foreignContent, 'utf8');
+      return fs.openSync(tmp, 'wx');
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /EEXIST/);
+    // Nothing this run wrote survives, and the manifest was never actually produced.
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'manifest.json')), false);
+    // T2f item 1 (R3-wx-tmp-cleanup-deletes-foreign-file, Codex P2): this write never created the
+    // foreign file at the temp path (the exclusive open itself is what failed), so it must not be
+    // the one to remove it either — the pre-existing content survives byte-identical.
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run tried to use');
+    assert.ok(fs.existsSync(tmpPathUsed), 'expected the foreign file at the temp path to survive');
+    assert.equal(fs.readFileSync(tmpPathUsed, 'utf8'), foreignContent);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2f item 1: a successfully-created temp file (the exclusive open itself succeeds) *is* this
+// write's own responsibility — if the later rename fails, that temp file must be cleaned up.
+test('initProject removes its own temp file when the rename after a successful exclusive create fails', () => {
+  const root = makeTmpRepo();
+  try {
+    let tmpPathUsed = null;
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      return fs.openSync(tmp, 'wx');
+    };
+    const originalRename = fs.renameSync;
+    fs.renameSync = (from, to) => {
+      if (isManifestTmp(from)) throw new Error('EPERM: simulated rename failure');
+      return originalRename(from, to);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    } finally {
+      fs.renameSync = originalRename;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /EPERM|simulated rename failure/);
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run created');
+    // This write's own temp file — the exclusive create succeeded — is cleaned up on the later
+    // rename failure, unlike the foreign-file case above.
+    assert.equal(fs.existsSync(tmpPathUsed), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2g R3-001, Codex P2, a regression from T2f: moving the exclusive-create write outside the
+// try/catch (so an `EEXIST` failure never deletes a foreign file — the test above) correctly left
+// a *failed* create's non-existent tmp alone, but also left a *successful* create's own tmp leaking
+// when the failure happens later, filling it (ENOSPC, EIO) — nothing removed it, since the whole
+// open+write+close was one opaque call from the outside. Splitting `open` from `write` (see
+// `writeManifestAtomic`) lets this be told apart from the EEXIST case above: the open here really
+// does succeed (the real `fs.openSync(tmp, 'wx')` genuinely creates the file), so a failure in the
+// injected `write` step afterward is unambiguously this call's own file to clean up.
+test('initProject removes its own temp file when the write itself fails after a successful exclusive create', () => {
+  const root = makeTmpRepo();
+  try {
+    let tmpPathUsed = null;
+    const open = (tmp) => {
+      tmpPathUsed = tmp;
+      return fs.openSync(tmp, 'wx'); // the exclusive create really happens — this call owns tmp
+    };
+    const write = () => {
+      throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, write });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    assert.match(caught.message, /ENOSPC/);
+    assert.ok(tmpPathUsed, 'expected to have captured the temp path this run created');
+    assert.equal(fs.existsSync(tmpPathUsed), false);
+    assert.deepEqual(caught.notRemoved, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back a failed manifest write, including .codegraph it created this run, and reports what could not be removed', () => {
+  const root = makeTmpRepo();
+  try {
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
     }
     assert.ok(caught instanceof InitWriteError);
     assert.match(caught.message, /ENOSPC/);
+    // T2e item 2: codegraph ran and created .codegraph/ this run, and the manifest that would have
+    // recorded owning it never reached disk — so it is rolled back too, same as everything else.
     assert.deepEqual(caught.notRemoved, []);
-    // T2c R3-nothing-left-behind-overclaims: codegraph ran and created .codegraph/ this run, and
-    // that is deliberately not rolled back — the error must disclose it, not imply a clean sweep.
-    assert.equal(caught.codegraphDirLeftBehind, true);
+    assert.ok(!('codegraphDirLeftBehind' in caught));
 
     assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
     assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), false);
     assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);
-    // The manifest dir this run created for itself is gone; codegraph (which ran and succeeded
-    // before the manifest write failed) is untouched — it never participates in this atomicity,
-    // same as a normal codegraph failure never blocks the rest of a run.
     assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
+
+    const retry = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(retry.code, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2e item 2 / R3-cleanup-clause-partial-branches-untested: when the ordinary rollback also fails
+// to remove something, and .codegraph/ removal fails too, both show up in `notRemoved`.
+test('initProject reports both an ordinary removal failure and a failed .codegraph removal', () => {
+  const root = makeTmpRepo();
+  try {
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+    const rm = (target, options) => {
+      if (target.endsWith('AGENTS.md') || target.endsWith('.codegraph')) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      }
+      fs.rmSync(target, options);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, rm });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof InitWriteError);
+    assert.ok(caught.notRemoved.includes('AGENTS.md'));
+    assert.ok(caught.notRemoved.includes('.codegraph'));
+    assert.equal(caught.notRemoved.length, 2);
+  } finally {
+    // The injected `rm` above is gone now; use a real one to actually clean up the fixture.
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// R3-cleanup-clause-partial-branches-untested: an ordinary removal failure with no .codegraph
+// involved at all (it never ran/created anything this run — pre-existing, so the step is skipped).
+test('initProject reports only the ordinary removal failure when .codegraph never participated', () => {
+  const root = makeTmpRepo();
+  try {
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+    const rm = (target, options) => {
+      if (target.endsWith('AGENTS.md')) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open, rm });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof InitWriteError);
+    assert.deepEqual(caught.notRemoved, ['AGENTS.md']);
+    // .codegraph/ pre-existed and this run never touched it — nothing to report either way.
     assert.ok(fs.existsSync(path.join(root, '.codegraph')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -682,23 +1021,23 @@ test('initProject retries codegraph even when .codegraph exists, if the failed r
 });
 
 // T2c R3-retry-manifest-write-unguarded + T2d Codex P2 atomic manifest writes
-test('initProject throws InitWriteError when the codegraph-retry manifest update fails, leaving the original manifest byte-identical', () => {
+test('initProject throws InitWriteError when the codegraph-retry manifest update fails, removing .codegraph it created this retry, leaving the original manifest byte-identical', () => {
   const root = makeTmpRepo();
   try {
+    // The first run's codegraph fails without creating .codegraph/ at all (status 1, and makeSpawn
+    // only creates the directory on a successful exit) — so it did not exist before the retry below.
     const first = initProject(root, '0.1.0', { spawn: makeSpawn({ status: 1, stdout: '', stderr: 'boom' }), platform: 'linux' });
+    assert.deepEqual(first.manifest.codegraph, { createdDir: false, status: 'failed' });
     const originalBytes = fs.readFileSync(first.manifestPath, 'utf8');
 
     const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' }); // creates .codegraph on success
-    // The manifest is written to a `.tmp` file first (T2d atomic manifest writes) — that's the
-    // actual target this injected failure needs to hit; the real manifest.json is never opened.
-    const writeFile = (target, content, enc) => {
-      if (target.endsWith('manifest.json.tmp')) throw new Error('EACCES: permission denied');
-      fs.writeFileSync(target, content, enc);
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
     };
 
     let caught;
     try {
-      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', writeFile });
+      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
       assert.fail('expected initProject to throw');
     } catch (err) {
       caught = err;
@@ -708,16 +1047,60 @@ test('initProject throws InitWriteError when the codegraph-retry manifest update
     assert.match(caught.message, /codegraph init ran/);
     assert.match(caught.message, /manifest could not be updated/);
     assert.match(caught.message, /EACCES|permission denied/);
+    // T2e item 2: .codegraph/ did not exist before this retry, so its own creation this retry is
+    // rolled back too — the failed manifest rewrite is the only record that would have owned it,
+    // and that record never reached disk.
     assert.deepEqual(caught.notRemoved, []);
-    // codegraph really ran (the retry's precondition is that .codegraph was absent) and created
-    // .codegraph/ this run — the manifest update failing does not roll that back either.
-    assert.equal(caught.codegraphDirLeftBehind, true);
-    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+    assert.ok(!('codegraphDirLeftBehind' in caught));
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
 
     // T2d Codex P2: the original manifest (from the first, failed run) is exactly what it was —
-    // the failed retry write never touched it, and its own .tmp file was cleaned up.
+    // the failed retry write never touched it, and its own uniquely-named .tmp sibling was cleaned
+    // up (T2e item 3: the fixed `${manifestPath}.tmp` no longer exists at all, so checking for it
+    // specifically would be vacuous — look for *any* leftover .tmp file in the manifest's directory
+    // instead).
     assert.equal(fs.readFileSync(first.manifestPath, 'utf8'), originalBytes);
-    assert.equal(fs.existsSync(`${first.manifestPath}.tmp`), false);
+    const leftoverTmp = fs.readdirSync(path.dirname(first.manifestPath)).filter((f) => f.endsWith('.tmp'));
+    assert.deepEqual(leftoverTmp, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2e item 2's carve-out: when .codegraph/ already existed *before* this retry — only possible
+// because the stale, still-intact manifest already recorded `createdDir: true` from an earlier
+// failed run — a failed retry rewrite leaves it alone: that older manifest still truthfully owns it.
+test('initProject leaves .codegraph alone when the codegraph-retry manifest update fails but the directory already existed before the retry', () => {
+  const root = makeTmpRepo();
+  try {
+    const failCreatingSpawn = (cmd, args, opts) => {
+      if (cmd === 'git') return spawnSync('git', args, opts);
+      fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+      return { status: 1, stdout: '', stderr: 'boom' };
+    };
+    const first = initProject(root, '0.1.0', { spawn: failCreatingSpawn, platform: 'linux' });
+    assert.deepEqual(first.manifest.codegraph, { createdDir: true, status: 'failed' });
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+
+    const okSpawn = makeSpawn({ status: 0, stdout: '', stderr: '' });
+    const open = (tmp) => {
+      throw new Error('EACCES: permission denied');
+    };
+
+    let caught;
+    try {
+      initProject(root, '0.1.0', { spawn: okSpawn, platform: 'linux', open });
+      assert.fail('expected initProject to throw');
+    } catch (err) {
+      caught = err;
+    }
+
+    assert.ok(caught instanceof InitWriteError);
+    // Never attempted, so no removal failure to report either — this is not "left behind by a
+    // failed rollback", it is simply not this retry's to touch.
+    assert.deepEqual(caught.notRemoved, []);
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+    assert.deepEqual(JSON.parse(fs.readFileSync(first.manifestPath, 'utf8')).codegraph, { createdDir: true, status: 'failed' });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -806,6 +1189,389 @@ test('resolveGitPath resolves a relative git-path result against root', () => {
   }
 });
 
+// --- gitDirs (T2e item 4) ---
+
+test('gitDirs resolves both to the same <root>/.git in an ordinary repository', () => {
+  const root = makeTmpRepo();
+  try {
+    const { gitDir, commonGitDir } = gitDirs(root, spawnSync);
+    assert.equal(gitDir, path.join(root, '.git'));
+    assert.equal(commonGitDir, path.join(root, '.git'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('gitDirs returns null on both when run outside a git repository', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(gitDirs(dir, spawnSync), { gitDir: null, commonGitDir: null });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- worktrees and submodules: the shared hooks directory lives outside the working tree ---
+// (T2e item 4, R3-worktree-submodule-hook-misclassified-outside)
+
+test('initProject writes the pre-commit hook into a linked worktree\'s common git dir, recorded absolute with gitDir: true', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-linked-');
+  fs.rmSync(worktree, { recursive: true, force: true }); // `git worktree add` needs the path free
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    // git normalizes to forward slashes; compare real paths, like the fresh-repo test does.
+    assert.equal(fs.realpathSync(result.root), fs.realpathSync(worktree));
+
+    const hookInCommonDir = path.join(main, '.git', 'hooks', 'pre-commit');
+    assert.ok(fs.existsSync(hookInCommonDir), 'expected the hook in the main repo\'s common git dir');
+    assert.equal(fs.existsSync(path.join(worktree, '.git')), true); // the worktree's own (file) .git
+    assert.equal(fs.existsSync(path.join(worktree, 'hooks', 'pre-commit')), false); // never here
+
+    const fileEntry = result.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.ok(fileEntry, 'expected the hook recorded in manifest.files');
+    assert.equal(fileEntry.gitDir, true);
+    assert.doesNotMatch(fileEntry.path, /\\/);
+    assert.ok(path.isAbsolute(fileEntry.path.split('/').join(path.sep)));
+    assert.equal(
+      fs.realpathSync(fileEntry.path.split('/').join(path.sep)),
+      fs.realpathSync(hookInCommonDir),
+    );
+
+    const wroteAction = result.actions.find((a) => a.kind === 'wrote' && a.path.endsWith('hooks/pre-commit'));
+    assert.equal(wroteAction.gitDir, true);
+
+    // harness.json and AGENTS.md are always in the working tree itself, plain repo-relative.
+    for (const f of result.manifest.files) {
+      if (f.path.endsWith('harness.json') || f.path.endsWith('AGENTS.md')) assert.ok(!('gitDir' in f));
+    }
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+// --- T2f item 2 (Codex P2): shallowestMissingAncestor must bound its climb by the base that
+// actually contains the directory (working tree, git dir, or common git dir), not always the
+// working tree — otherwise, for a multi-level missing chain inside a git dir outside the working
+// tree, only the deepest directory is recorded, and its newly created parents leak on rollback or
+// uninstall. ---
+
+test('initProject records the shallowest created directory chain in an outside git dir, not just the deepest', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
+    assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false); // both levels missing
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(hooksDir, 'pre-commit')));
+    // The shallowest directory this run created (`custom`), not the deepest (`custom/nested/hooks`).
+    const expectedShallowest = path.join(commonGitDir, 'custom').split(path.sep).join('/');
+    assert.deepEqual(result.manifest.dirs, [{ path: expectedShallowest, gitDir: true }]);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back the whole created directory chain in an outside git dir, not just the deepest directory', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-rb-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs-rb'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    assert.throws(
+      () => initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
+      (err) => err instanceof InitWriteError,
+    );
+
+    // The whole chain this run created (custom, custom/nested, custom/nested/hooks) is gone, not
+    // just the deepest directory.
+    assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+// --- T2g R3-002, Codex P2, a regression from T2f: `shallowestMissingAncestor` climbed the
+// *lexical* hooks directory against a *real* (`fs.realpathSync`-resolved) base using a plain,
+// case-sensitive `startsWith` — so whenever the two disagreed only on case (or an 8.3 short name),
+// the climb stopped on its very first check, recording just the deepest directory. This affects the
+// ordinary working-tree case too, not just an outside git dir. ---
+
+test('initProject records the shallowest created directory chain even when the hooks path differs only by case from the real root (win32)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('case folding only matters on win32, where the filesystem is case-insensitive');
+    return;
+  }
+  const root = makeTmpRepo();
+  try {
+    const realRoot = fs.realpathSync(root);
+    // An absolute core.hooksPath built from an uppercased copy of the real root: `isWithinBase`
+    // (used by `resolveHookContainment`'s own containment check) already folds case, so this is
+    // correctly seen as inside the repo — but the *directory-creation climb*, before this fix,
+    // compared this same lexical (uppercased) path against the properly-cased real root with a
+    // case-sensitive `startsWith`, which never matched, so it never climbed past the deepest
+    // missing directory.
+    const casedRoot = realRoot.toUpperCase();
+    assert.notEqual(casedRoot, realRoot, 'expected the real root to contain a lowercase letter to flip');
+    const hooksDir = path.join(casedRoot, 'custom', 'nested', 'hooks');
+    assert.equal(fs.existsSync(path.join(realRoot, 'custom')), false); // both levels missing
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(realRoot, 'custom', 'nested', 'hooks', 'pre-commit')));
+    // The shallowest directory this run created (`custom`), not the deepest
+    // (`custom/nested/hooks`) — the case mismatch must not stop the climb early. This is the
+    // ordinary working tree, so the manifest records it repo-relative, same as `files`.
+    assert.deepEqual(result.manifest.dirs, [{ path: 'custom' }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject rolls back the whole created directory chain even when the hooks path differs only by case from the real root (win32)', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('case folding only matters on win32, where the filesystem is case-insensitive');
+    return;
+  }
+  const root = makeTmpRepo();
+  try {
+    const realRoot = fs.realpathSync(root);
+    const casedRoot = realRoot.toUpperCase();
+    const hooksDir = path.join(casedRoot, 'custom', 'nested', 'hooks');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const open = (tmp) => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    assert.throws(
+      () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
+      (err) => err instanceof InitWriteError,
+    );
+
+    // The whole chain this run created (custom, custom/nested, custom/nested/hooks) is gone, not
+    // just the deepest directory — without the fix, only the deepest would ever have been tracked
+    // (and removed), leaking `custom` and `custom/nested` behind.
+    assert.equal(fs.existsSync(path.join(realRoot, 'custom')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T2g R3-003: an 8.3 short-name mismatch (the other reported way `os.tmpdir()` can disagree with
+// `fs.realpathSync` on Windows) cannot be constructed on this machine — verified empirically before
+// writing this test: `os.tmpdir()`, `fs.realpathSync(os.tmpdir())`, and
+// `fs.realpathSync.native(os.tmpdir())` are all byte-identical here (no `~1`-style component), and a
+// freshly `mkdtempSync`-created directory under it round-trips through `fs.realpathSync` unchanged
+// too. `fsutil 8dot3name query` (volume-level) requires elevation this account does not have, but
+// that is moot: the practical question — does *this* host's TEMP directory ever hand back a short
+// name — is already answered, empirically, by the above. The case-folding tests above are the
+// closest reproduction available on this host for the same underlying bug class (a lexical path
+// disagreeing with its own real form).
+test('initProject: 8.3 short-name mismatch cannot be reproduced on this host (documented, not skipped silently)', (t) => {
+  t.skip(
+    'os.tmpdir(), fs.realpathSync(os.tmpdir()), and fs.realpathSync.native(os.tmpdir()) are identical ' +
+      'on this machine — no 8.3 short-name component to reproduce the mismatch with, and a volume-level ' +
+      'fsutil 8dot3name query needs elevation this account lacks',
+  );
+});
+
+// --- T2f item 3 (R3-realish-base-detection-equality-only): symlink-hop counting must start as
+// soon as the walk is at or below a base, checked after each hop as well as at segment starts, and
+// using the same at-or-below containment test everywhere else — not exact string equality with a
+// base, which misses a hop that lands (or chains through) a proper descendant of a base without
+// ever touching its exact path. ---
+
+test('initProject does not treat a junction above the repository root as occupying the hook', async (t) => {
+  const root = makeTmpRepo();
+  const outerJunction = makeTmpDir('js-harness-project-outerlink-');
+  fs.rmSync(outerJunction, { recursive: true, force: true });
+  try {
+    // core.hooksPath points *through* a junction that sits above (a sibling route back into) the
+    // repository root, landing on an ordinary subdirectory of the repo itself — the junction's own
+    // source position is outside every base, so it must never count as occupying anything inside.
+    const parentOfRoot = path.dirname(root);
+    if (!trySymlinkDir(parentOfRoot, outerJunction, t)) return;
+
+    const hooksPath = path.join(outerJunction, path.basename(root), 'somehooksdir');
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    const realHookPath = path.join(root, 'somehooksdir', 'pre-commit');
+    assert.ok(fs.existsSync(realHookPath), 'expected the hook to be written through, not kept as occupied');
+    const wroteAction = result.actions.find((a) => a.kind === 'wrote' && a.path.includes('somehooksdir'));
+    assert.ok(wroteAction, 'expected a wrote action for the hook, not kept as occupied');
+    assert.ok(!('gitDir' in wroteAction)); // it resolves back inside the working tree
+    assert.ok(!result.manifest.kept.some((k) => k.path.includes('somehooksdir')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outerJunction, { recursive: true, force: true });
+  }
+});
+
+test('initProject treats a junction below the root, inside the hooks path, as occupying the hook', async (t) => {
+  const root = makeTmpRepo();
+  const target = path.join(root, 'real-hooks-target');
+  fs.mkdirSync(target, { recursive: true });
+  const linkedHooks = path.join(root, 'linked-hooks');
+  try {
+    if (!trySymlinkDir(target, linkedHooks, t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'linked-hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.existsSync(path.join(target, 'pre-commit')), false); // never written through it
+    const keptEntry = result.manifest.kept.find((k) => k.path === 'linked-hooks/pre-commit');
+    assert.ok(keptEntry, 'expected the hook kept as occupied because of the junction in its path');
+    assert.ok(!keptEntry.outside);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject counts a symlink hop that lands at or below a base even though it never touches the base\'s exact path', async (t) => {
+  const root = makeTmpRepo();
+  const actualHooks = path.join(root, 'actual-hooks');
+  fs.mkdirSync(actualHooks, { recursive: true });
+  const nestedLink = path.join(root, 'nested-link'); // a junction fully inside root, one hop from actualHooks
+  const outsideDir = makeTmpDir('js-harness-project-chainhop-outside-');
+  const entry = path.join(outsideDir, 'entry'); // a junction whose *source* is outside every base
+  try {
+    if (!trySymlinkDir(actualHooks, nestedLink, t)) return;
+    if (!trySymlinkDir(nestedLink, entry, t)) return;
+
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', entry], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    // `entry` chains to `nested-link` (still being resolved for the *same* segment) to
+    // `actual-hooks`: the first hop's source (`entry`) is outside every base, so it must not count
+    // on its own — but the moment it lands on `nested-link`, that position is a base's descendant,
+    // and `nested-link` is *itself* a symlink, which must count from there on, even though `current`
+    // was never exactly equal to `root` (or any base) at any point in this walk. (Not asserting the
+    // exact recorded `path` shape here: `core.hooksPath` is configured from *outside* the repo but
+    // resolves back inside it, an exotic combination the manifest's repo-relative-vs-absolute
+    // choice — keyed off the lexical, unresolved hooksPath rather than its resolution — was never
+    // designed for; out of scope for this fix, which is only about `hadSymlink` detection.)
+    assert.equal(fs.existsSync(path.join(actualHooks, 'pre-commit')), false);
+    assert.equal(result.manifest.kept.length, 1);
+    assert.ok(!result.manifest.kept[0].outside);
+    assert.ok(!result.actions.some((a) => a.kind === 'wrote' && a.path.includes('pre-commit')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// --- T2f item 4 (R3-gitdir-occupied-and-submodule-untested) ---
+
+test('initProject keeps a pre-commit hook that already exists in an outside git dir (a linked worktree\'s common git dir)', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-existing-hook-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-existing'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const existingHookPath = path.join(main, '.git', 'hooks', 'pre-commit');
+    const original = '#!/bin/sh\necho custom\n';
+    fs.writeFileSync(existingHookPath, original, 'utf8');
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(existingHookPath, 'utf8'), original); // untouched
+
+    const keptAction = result.actions.find((a) => a.kind === 'kept' && a.path.endsWith('hooks/pre-commit'));
+    assert.ok(keptAction, 'expected a kept action for the existing hook');
+    assert.equal(keptAction.gitDir, true);
+    assert.ok(!('outside' in keptAction));
+
+    const keptEntry = result.manifest.kept.find((k) => k.path.endsWith('hooks/pre-commit'));
+    assert.ok(keptEntry, 'expected the existing hook recorded in manifest.kept');
+    assert.equal(keptEntry.gitDir, true);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes the pre-commit hook into a submodule\'s git dir under the superproject, recorded absolute with gitDir: true', () => {
+  const superRepo = makeTmpRepoWithCommit('js-harness-project-super-');
+  const subRepo = makeTmpRepoWithCommit('js-harness-project-sub-');
+  try {
+    const add = spawnSync(
+      'git',
+      ['-c', 'protocol.file.allow=always', 'submodule', 'add', subRepo.split(path.sep).join('/'), 'sub'],
+      { cwd: superRepo, encoding: 'utf8' },
+    );
+    assert.equal(add.status, 0, `git submodule add failed: ${add.stderr}`);
+
+    const subPath = path.join(superRepo, 'sub');
+    const result = initProject(subPath, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    const hookInSuperGitModules = path.join(superRepo, '.git', 'modules', 'sub', 'hooks', 'pre-commit');
+    assert.ok(fs.existsSync(hookInSuperGitModules), 'expected the hook under the superproject\'s .git/modules/sub');
+
+    const fileEntry = result.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.ok(fileEntry, 'expected the hook recorded in manifest.files');
+    assert.equal(fileEntry.gitDir, true);
+    assert.equal(
+      fs.realpathSync(fileEntry.path.split('/').join(path.sep)),
+      fs.realpathSync(hookInSuperGitModules),
+    );
+  } finally {
+    fs.rmSync(superRepo, { recursive: true, force: true });
+    fs.rmSync(subRepo, { recursive: true, force: true });
+  }
+});
+
 // --- agentsTemplate ---
 
 test('agentsTemplate titles the doc with the folder name and stays short', () => {
@@ -870,4 +1636,704 @@ test('runCodegraphInit reports ok:false with a reason when the binary is missing
   const result = runCodegraphInit('/root', { spawn, platform: 'linux' });
   assert.equal(result.ok, false);
   assert.match(result.reason, /ENOENT/);
+});
+
+// --- T3: uninstallProject, the counterpart of initProject (see "T3 design") ---
+
+/** Every file under `dir`, relative to `dir` with forward slashes, sorted — skipping any entry (or
+ * whole subtree) `shouldSkip` reports true for. Used for round-trip comparisons ("the tree is
+ * exactly what it was before init"): callers skip `.git` itself and separately compare `.git/hooks`
+ * on its own, so incidental git-internal churn (`.git/objects`, `.git/index`, ...) never enters the
+ * comparison at all — never even walked, not just filtered out afterward. */
+function listFilesRecursive(dir, shouldSkip = () => false) {
+  const results = [];
+  const walk = (current, rel) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (shouldSkip(entryRel)) continue;
+      const abs = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(abs, entryRel);
+      else results.push(entryRel);
+    }
+  };
+  walk(dir, '');
+  return results.sort();
+}
+
+/** The working tree (never descending into `.git` at all) plus, separately, whatever hooks
+ * directory actually matters for this run (the repo's own `.git/hooks` for a plain repo, or the
+ * common git dir's `hooks` for a worktree) — the two places `initProject`/`uninstallProject` can
+ * ever write outside `harness.json`/`AGENTS.md` themselves. */
+function repoTreeSnapshot(workingTreeRoot, hooksDir) {
+  const workingTree = listFilesRecursive(workingTreeRoot, (rel) => rel === '.git' || rel.startsWith('.git/'));
+  const hooks = listFilesRecursive(hooksDir);
+  return { workingTree, hooks };
+}
+
+test('uninstallProject leaves a plain repo byte-identical to before init', () => {
+  const root = makeTmpRepo();
+  try {
+    const hooksDir = path.join(root, '.git', 'hooks');
+    const before = repoTreeSnapshot(root, hooksDir);
+
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(root, hooksDir), before);
+    assert.equal(fs.existsSync(uninstallResult.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves a worktree and its common git dir byte-identical to before init', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-uninstall-wt-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-uninstall-wt'], {
+      cwd: main,
+      encoding: 'utf8',
+    });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'hooks');
+    const before = repoTreeSnapshot(worktree, hooksDir);
+
+    const initResult = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookEntry = initResult.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.equal(hookEntry.gitDir, true); // sanity: this is exactly the outside-working-tree case
+
+    const uninstallResult = uninstallProject(worktree, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(worktree, hooksDir), before);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves a repo byte-identical to before init when core.hooksPath created a multi-level directory', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const hooksDir = path.join(root, '.git', 'hooks'); // untouched: hooksPath points elsewhere
+    const before = repoTreeSnapshot(root, hooksDir);
+    assert.equal(fs.existsSync(path.join(root, 'custom')), false);
+
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.deepEqual(initResult.manifest.dirs, [{ path: 'custom' }]);
+    assert.ok(fs.existsSync(path.join(root, 'custom', 'nested', 'hooks', 'pre-commit')));
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(root, hooksDir), before);
+    assert.equal(fs.existsSync(path.join(root, 'custom')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports a changed file as kept and leaves it untouched', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const edited = `${fs.readFileSync(agentsPath, 'utf8')}\nedited by the user\n`;
+    fs.writeFileSync(agentsPath, edited, 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0); // a kept file is not a failure
+    const keptAction = result.actions.find((a) => a.path === 'AGENTS.md');
+    assert.deepEqual(keptAction, { kind: 'kept', path: 'AGENTS.md', reason: 'changed since init' });
+    assert.equal(fs.readFileSync(agentsPath, 'utf8'), edited);
+    // The manifest is removed regardless — a kept file is not a reason to keep it (only a genuine
+    // removal failure is, per T3 design).
+    assert.equal(fs.existsSync(result.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject removes a file whose content matches once CRLF is folded back to LF', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const original = fs.readFileSync(agentsPath, 'utf8');
+    // Simulate git rewriting line endings on checkout (core.autocrlf/.gitattributes) — same content,
+    // CRLF instead of LF.
+    fs.writeFileSync(agentsPath, original.replace(/\n/g, '\r\n'), 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    const action = result.actions.find((a) => a.path === 'AGENTS.md');
+    assert.deepEqual(action, { kind: 'removed', path: 'AGENTS.md' });
+    assert.equal(fs.existsSync(agentsPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports an already-removed file as already gone, not a failure', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, 'AGENTS.md'));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'AGENTS.md'),
+      { kind: 'alreadyGone', path: 'AGENTS.md' },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject never follows a symlink placed where a written file used to be', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-symlink-outside-');
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    fs.rmSync(agentsPath);
+    const target = path.join(outsideDir, 'elsewhere.md');
+    fs.writeFileSync(target, 'not the template', 'utf8');
+    if (!trySymlink(target, agentsPath, 'file', t)) return;
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'AGENTS.md'),
+      { kind: 'kept', path: 'AGENTS.md', reason: 'changed since init' },
+    );
+    assert.equal(fs.lstatSync(agentsPath).isSymbolicLink(), true); // the link itself untouched
+    assert.equal(fs.existsSync(target), true); // and never followed into removing its target
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject prunes empty directories bottom-up but leaves one with real content behind', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    // Something added after init, directly in the recorded shallowest directory.
+    fs.writeFileSync(path.join(root, 'custom', 'extra.txt'), 'not js-harness content', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0); // a non-empty directory is not a failure either
+    assert.equal(fs.existsSync(path.join(root, 'custom', 'nested')), false); // emptied, so removed
+    assert.equal(fs.existsSync(path.join(root, 'custom')), true); // has real content, so kept
+    assert.equal(fs.readFileSync(path.join(root, 'custom', 'extra.txt'), 'utf8'), 'not js-harness content');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("uninstallProject removes .codegraph/ when this project's own init created it", () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.equal(initResult.manifest.codegraph.createdDir, true);
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(result.actions.some((a) => a.kind === 'codegraphRemoved'));
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves .codegraph/ alone when it already existed before init', () => {
+  const root = makeTmpRepo();
+  try {
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.codegraph', 'preexisting.txt'), 'not js-harness', 'utf8');
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.equal(initResult.manifest.codegraph.createdDir, false);
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(!result.actions.some((a) => a.kind === 'codegraphRemoved'));
+    assert.equal(fs.readFileSync(path.join(root, '.codegraph', 'preexisting.txt'), 'utf8'), 'not js-harness');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves kept entries (an existing AGENTS.md init never wrote) alone and unreported', () => {
+  const root = makeTmpRepo();
+  try {
+    const original = '# My project\n\nAlready here.\n';
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), original, 'utf8');
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.ok(initResult.manifest.kept.some((k) => k.path === 'AGENTS.md'));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(!result.actions.some((a) => a.path === 'AGENTS.md'));
+    assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), original);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject keeps the manifest and reports a failure when a removal throws, and a rerun finishes the job', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const rm = (target, options) => {
+      if (target === agentsPath) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+
+    const first = uninstallProject(root, { spawn: spawnSync, rm });
+
+    assert.equal(first.code, 1);
+    assert.deepEqual(first.notRemoved, ['AGENTS.md']);
+    assert.ok(first.actions.some((a) => a.kind === 'failed' && a.path === 'AGENTS.md'));
+    assert.ok(fs.existsSync(agentsPath)); // the failed removal really did not happen
+    assert.ok(fs.existsSync(first.manifestPath)); // kept so a rerun can finish the job
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false); // other files still removed
+
+    const second = uninstallProject(root, { spawn: spawnSync }); // no fault this time
+
+    assert.equal(second.code, 0);
+    assert.equal(fs.existsSync(agentsPath), false);
+    assert.equal(fs.existsSync(second.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports notGitRepo outside a git repository', () => {
+  const dir = makeTmpDir();
+  try {
+    const result = uninstallProject(dir, { spawn: spawnSync });
+    assert.equal(result.code, 1);
+    assert.equal(result.notGitRepo, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports notInitialized inside a git repo js-harness never touched', () => {
+  const root = makeTmpRepo();
+  try {
+    const result = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(result.code, 1);
+    assert.equal(result.notInitialized, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports noManifestFile when harness.json exists but this clone has no manifest', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, '.git', 'js-harness'), { recursive: true, force: true }); // a fresh clone
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.noManifestFile, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json'))); // untouched — nothing was written
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports malformedManifest and writes nothing when the manifest does not parse', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.writeFileSync(initResult.manifestPath, '{ not json', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.malformedManifest, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json'))); // untouched
+    assert.equal(fs.readFileSync(result.manifestPath, 'utf8'), '{ not json');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T3 design's own promise, exercised end to end: init's staleManifest refusal ("run js-harness
+// uninstall first") is only useful if uninstall genuinely clears the way for a following init.
+test('after uninstall, a project initProject once refused to re-init over (staleManifest) inits cleanly', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, 'harness.json'));
+
+    const stale = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(stale.code, 1);
+    assert.equal(stale.staleManifest, true);
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+    assert.equal(fs.existsSync(uninstallResult.manifestPath), false);
+
+    const reinit = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(reinit.code, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- T3b: accepted review follow-ups on T3 (see the T3b line and its Progress entry) ---
+
+// Codex P1, item 1: a recorded file must still really be inside the base it was recorded under —
+// following every ancestor through realish/isWithinBase, not just trusting whatever `lstat` finds at
+// the recorded path once something is found there.
+test('uninstallProject keeps a recorded file whose ancestor was replaced by a junction to outside, never touching the outside file', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-ancestor-link-');
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookContent = fs.readFileSync(path.join(root, 'custom', 'nested', 'hooks', 'pre-commit'), 'utf8');
+
+    // Build the same `nested/hooks/pre-commit` structure, with byte-identical content, entirely
+    // outside the repo — then replace `custom` (the recorded `dirs` entry) with a junction to it.
+    fs.mkdirSync(path.join(outsideDir, 'nested', 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, 'nested', 'hooks', 'pre-commit'), hookContent, 'utf8');
+    fs.rmSync(path.join(root, 'custom'), { recursive: true, force: true });
+    if (!trySymlinkDir(outsideDir, path.join(root, 'custom'), t)) return;
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'custom/nested/hooks/pre-commit'),
+      { kind: 'kept', path: 'custom/nested/hooks/pre-commit', reason: 'moved outside' },
+    );
+    // The outside file — content-identical to what init wrote — survives untouched.
+    assert.ok(fs.existsSync(path.join(outsideDir, 'nested', 'hooks', 'pre-commit')));
+    assert.equal(fs.readFileSync(path.join(outsideDir, 'nested', 'hooks', 'pre-commit'), 'utf8'), hookContent);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// Codex P2, item 2: only the directory chain init actually created is ever a candidate for removal
+// — an empty directory added later, even directly alongside init's own chain, is never touched.
+test('uninstallProject never removes a directory it did not create, even an empty one added later', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.mkdirSync(path.join(root, 'custom', 'cache'), { recursive: true }); // unrelated to init
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    // init's own chain is gone...
+    assert.equal(fs.existsSync(path.join(root, 'custom', 'nested')), false);
+    // ...but `custom` stays (not empty: `cache/` is still there), and `cache/` itself — even though
+    // it is empty — was never init's to remove either, so it is never even considered.
+    assert.equal(fs.existsSync(path.join(root, 'custom')), true);
+    assert.equal(fs.existsSync(path.join(root, 'custom', 'cache')), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Codex P2, item 3: absence (ENOENT/ENOTDIR) is benign; any other lstat/read/readdir failure is a
+// real failure that keeps the manifest and fails the run.
+
+test('uninstallProject fails a file removal and keeps the manifest on a non-absence lstat error', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const lstat = (target) => {
+      if (target === agentsPath) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      return fs.lstatSync(target);
+    };
+
+    const result = uninstallProject(root, { spawn: spawnSync, lstat });
+
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.notRemoved, ['AGENTS.md']);
+    assert.ok(result.actions.some((a) => a.kind === 'failed' && a.path === 'AGENTS.md'));
+    assert.ok(fs.existsSync(agentsPath));
+    assert.ok(fs.existsSync(result.manifestPath));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject still treats a real ENOENT from the injected lstat as already gone, not a failure', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const lstat = (target) => {
+      if (target === agentsPath) throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+      return fs.lstatSync(target);
+    };
+
+    const result = uninstallProject(root, { spawn: spawnSync, lstat });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'AGENTS.md'),
+      { kind: 'alreadyGone', path: 'AGENTS.md' },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject fails a file removal and keeps the manifest on a non-absence read error', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const readFile = (target) => {
+      if (target === agentsPath) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      return fs.readFileSync(target, 'utf8');
+    };
+
+    const result = uninstallProject(root, { spawn: spawnSync, readFile });
+
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.notRemoved, ['AGENTS.md']);
+    assert.ok(result.actions.some((a) => a.kind === 'failed' && a.path === 'AGENTS.md'));
+    assert.ok(fs.existsSync(result.manifestPath));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject fails a directory prune and keeps the manifest on a non-absence readdir error', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const nestedDir = path.join(root, 'custom', 'nested');
+    const readdir = (target, ...rest) => {
+      if (target === nestedDir) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      return fs.readdirSync(target, ...rest);
+    };
+
+    const result = uninstallProject(root, { spawn: spawnSync, readdir });
+
+    assert.equal(result.code, 1);
+    assert.ok(result.notRemoved.length > 0);
+    assert.ok(result.actions.some((a) => a.kind === 'failed'));
+    assert.ok(fs.existsSync(result.manifestPath));
+    assert.ok(fs.existsSync(nestedDir)); // never removed: the check on it itself failed
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Codex P2, item 4: a short write (fewer bytes written than asked for) must be resumed, not treated
+// as if the whole buffer had been written.
+test('initProject loops the manifest write until every byte is written, handling a short write', () => {
+  const root = makeTmpRepo();
+  try {
+    let calls = 0;
+    const write = (fd, buffer, offset, length, position) => {
+      calls += 1;
+      if (calls === 1) {
+        const short = Math.max(1, Math.floor(length / 2));
+        return fs.writeSync(fd, buffer, offset, short, position);
+      }
+      return fs.writeSync(fd, buffer, offset, length, position);
+    };
+
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', write });
+
+    assert.equal(result.code, 0);
+    assert.ok(calls >= 2, `expected at least one short write followed by a continuation, got ${calls} call(s)`);
+    assert.deepEqual(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8')), result.manifest);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T3c (R3-short-write-loop-no-progress-guard, Codex P2): a write that makes no progress — 0 bytes,
+// or a non-number from an old-style writer — fails the write instead of spinning or passing a
+// truncated manifest. The fake writes nothing for its first calls and then writes for real, so the
+// old loop finishes (and this test fails) rather than hanging.
+for (const [label, stall] of [
+  ['returns 0', () => 0],
+  ['returns no byte count', () => undefined],
+]) {
+  test(`initProject fails the manifest write, leaving no temp file, when a write ${label}`, () => {
+    const root = makeTmpRepo();
+    try {
+      let calls = 0;
+      const write = (fd, buffer, offset, length, position) => {
+        calls += 1;
+        if (calls <= 3) return stall();
+        return fs.writeSync(fd, buffer, offset, length, position);
+      };
+
+      assert.throws(
+        () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', write }),
+        (err) => err instanceof InitWriteError,
+      );
+      const gitDirJs = path.join(root, '.git', 'js-harness');
+      const leftovers = fs.existsSync(gitDirJs) ? fs.readdirSync(gitDirJs).filter((n) => n.endsWith('.tmp')) : [];
+      assert.deepEqual(leftovers, []);
+      assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+// T3c (R3-dir-prune-follows-ancestor-link): a recorded directory reached through an ancestor a link
+// now sends outside is kept, so an empty directory outside the project is never removed.
+test('uninstallProject keeps a recorded directory whose ancestor was replaced by a junction, leaving the empty outside directories alone', (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-dir-link-');
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    assert.equal(initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+
+    // The same chain outside, empty, and `custom` replaced by a junction to it.
+    fs.mkdirSync(path.join(outsideDir, 'nested', 'hooks'), { recursive: true });
+    fs.rmSync(path.join(root, 'custom'), { recursive: true, force: true });
+    if (!trySymlinkDir(outsideDir, path.join(root, 'custom'), t)) return;
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(outsideDir, 'nested', 'hooks')), 'the empty outside chain survives');
+    assert.ok(
+      result.actions.some((a) => a.kind === 'kept' && a.reason === 'moved outside' && a.path.startsWith('custom/nested')),
+      `expected a kept, moved-outside directory; got ${JSON.stringify(result.actions)}`,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+// Codex P2 + R3-manifest-entry-shape-unvalidated, item 5: the whole manifest is validated, shape and
+// containment, before any removal at all — a malformed entry anywhere is malformedManifest, exit 1,
+// nothing written.
+
+test('uninstallProject reports malformedManifest when a files entry has no string path', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    delete manifest.files[0].path;
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.malformedManifest, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json'))); // untouched — nothing was removed
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports malformedManifest when a dirs entry escapes the working tree (../shared)', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    manifest.dirs = [{ path: '../shared' }];
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.malformedManifest, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports malformedManifest when a gitDir:true entry points outside every git dir', () => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-malformed-gitdir-');
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    const outsidePath = `${fs.realpathSync(outsideDir).split(path.sep).join('/')}/somewhere/pre-commit`;
+    manifest.files.push({ path: outsidePath, sha256: '0'.repeat(64), gitDir: true });
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.malformedManifest, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
 });
