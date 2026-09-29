@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, merged via `jsaristi/js-harness#13`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, merged via `jsaristi/js-harness#12`), `feat/codex-plugin-doctor` (T6–T6d, merged via `jsaristi/js-harness#13`), `feat/codex-review-record` (T7–T7b)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea). 6 = T6–T6d (`jsaristi/js-harness#13`, merged as 0d12e02).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, merged as 8ca30ea). 6 = T6–T6d (`jsaristi/js-harness#13`, merged as 0d12e02). 7 = T7–T7b (`feat/codex-review-record`).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -201,6 +201,39 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   `npm i -g @openai/codex` when the CLI is missing (T6d); upToDate
   `claude plugin update codex@openai-codex`.
 
+## T7 design
+Explored 2026-09-29. Neither side keeps a record a check could use: the Codex plugin's job state
+lives under `CLAUDE_PLUGIN_DATA` (or the OS temp dir), keyed by workspace and pruned
+(`scripts/lib/state.mjs` of `codex@openai-codex` 1.0.6); gentle-ai's terminal records in
+`.git/gentle-ai/review-transactions/terminal-consumption/v1/*.json` hold only opaque sha256
+targets, no commit range, in a format gentle-ai v4 may change. So js-harness writes its own.
+
+- Record: `js-harness codex-review --base <rev>` runs the plugin's own review, `node
+  <installPath>/scripts/codex-companion.mjs review --wait --base <rev>` in the repository (the
+  `installPath` of `codex@openai-codex` in `~/.claude/plugins/installed_plugins.json`), with its
+  output shown as is. The companion exits 0 when Codex's turn completed, findings or not, and 1
+  when the turn failed (`buildResultStatus` in `scripts/lib/codex.mjs`). On 0 it appends one
+  JSON line `{ schema, base, head, reviewedAt, outcome: "reviewed" }`, full commit ids, to
+  `<git common dir>/js-harness/codex-reviews.jsonl`; on anything else it writes nothing and exits
+  with the companion's code, naming the two ways on. When Codex cannot run (the model is
+  rejected, the plugin is missing), `--unavailable <reason>` records `outcome: "unavailable"` with
+  the reason and spawns nothing, so a skip is explicit instead of silent (AGENTS.md: report it and
+  go on). Findings stay in the feature document, as today.
+- Location: under the git common dir, like gentle-ai's own records and the project manifest, so it
+  adds no commit and no file to the project, and every worktree of a clone shares it. It is one
+  file, undone by deleting it. A fresh clone starts without records, so commits reviewed on
+  another machine need their review recorded again there.
+- Check: `js-harness check --push` adds a `codex-review` row. A commit needs a Codex review when it
+  is not a merge and changes a file that is not Markdown; it is covered when some record's
+  `base..head` contains it. The row covers `<default branch>..<head>` (the default branch from
+  `refs/remotes/origin/HEAD`, else `main`), passes with nothing to cover, lists `unavailable`
+  records as INFO lines, and fails naming each uncovered commit (short id and subject) and the
+  command that records it. Plain `check` (the pre-commit gate) does not run it, since a slice
+  under gentle-ai's review budget is committed before it is reviewed.
+- Gate: `.githooks/pre-push` runs `check --push --head <sha>` for each ref it pushes (skipping
+  deletes), so a skipped review stops the push, which precedes every pull request. `init` does not
+  write a pre-push hook yet; that is for a project that adopts this review flow.
+
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
@@ -325,7 +358,13 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   (R3-001) — route: delegated writer (the T6 writer, resumed: `doctor.mjs`, `stack.mjs`,
   `latest.mjs` and their tests)
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
-  skipped review is caught — route: to be decided after exploration
+  skipped review is caught (see "T7 design"): `js-harness codex-review --base <rev>` runs the
+  plugin's review and records it, `--unavailable <reason>` records an explicit skip — route:
+  delegated writer (a new command, its record library and the dispatcher, with tests)
+- [ ] T7b `check --push` verifies that every code commit on the branch lies in a recorded range,
+  `.githooks/pre-push` runs it, and AGENTS.md, the installed skill and the roadmap name
+  `codex-review` — route: delegated writer (the T7 writer, resumed: `check.mjs`, the hook, the
+  skill text and their tests)
 
 ## Progress
 - 2026-09-28: T1 measured before any change. `npm i -g github:jsaristi/js-harness` through the
@@ -880,8 +919,11 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   carried R3-codex-version-timeout-classified-ok again.
 - 2026-09-29: slice 6 merged as 0d12e02 (`jsaristi/js-harness#13`) by Sebastián's go-ahead.
 
+- 2026-09-29: T7 explored on `feat/codex-review-record` (from `main` at 8e0dea6); design recorded
+  in "T7 design", split into T7 (the command and its record) and T7b (the check and the gate).
+  Slice 7 = T7–T7b, forecast about 500 authored lines, one pull request against `main`.
+
 ## Next step
-T7 (the Codex review of each approved code slice leaves a record a check verifies, so a skipped
-review is caught) on a new branch from `main`, in a new session; its route is decided after
-exploration. The installed skill on this machine still carries the old text until `js-harness` is
+T7 by a delegated writer, then T7b by the same writer resumed, each with its gentle-ai and Codex
+reviews. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
