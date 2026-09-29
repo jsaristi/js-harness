@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, open).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -592,6 +592,7 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   review-c4909def058ac5e0 (`--base-ref e307e7a`, medium, 26 lines, one lens): approved and
   acknowledged, no findings. Codex (`--base e307e7a`): no regression; its sandbox blocked the
   tests, so it read the git objects.
+- 2026-09-29: slice 4 merged as 2b2f365 (`jsaristi/js-harness#11`) by Sebastián's go-ahead.
 - Follow-ups carried from slice 4, none blocking: the four remaining SUGGESTION from T4's review and
   R3-uptodate-ignores-createddirs (a directory is only created together with the hook written into
   it, so today it cannot change the verdict); the installed skill text in `bin/lib/manifest.mjs`
@@ -603,5 +604,5 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Sebastián merges slice 4's PR; then T5 (the TUI offers `init`/`sync`/`status` inside a project
-and `doctor`/`upgrade` outside one) on a new branch from `main`, in a new session.
+T5 (the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one)
+on a new branch from `main`, in a new session.
