@@ -1098,6 +1098,12 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `--unavailable` naming the rejected model; `node bin/check.mjs --push` → `PASS codex-review 2
   code commits since origin/main, all covered`, exit 0. Next: push and open the PR on Sebastián's
   go-ahead; a real Codex review of this range waits for a model the ChatGPT plan accepts.
+- 2026-09-29: the stop hook asked for the whole range `21c491d..f67509d` (risk `medium`, 190
+  lines). Native review lineage review-e085ada6d9e41ef8: consent granted (pre-granted), one lens,
+  approved and acknowledged; one WARNING, R3-classifier-pattern-coverage (every fixture also matched
+  the first pattern, so three regexes were untested), accepted: one sentence per pattern, and
+  breaking each of those three regexes in turn fails the new test (observed). Codex skip recorded
+  again for the range with this commit, same model rejection.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are

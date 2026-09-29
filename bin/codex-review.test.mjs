@@ -324,6 +324,17 @@ test('the classifier catches every review that says it could not inspect the dif
   assert.equal(saysReviewNotInspected(undefined), false);
 });
 
+test('each classifier pattern catches its wording on its own', () => {
+  // One sentence per pattern, none containing "could not assess": breaking any one regex fails here.
+  for (const text of [
+    'Git access was denied, so the correctness is unverified.',
+    'This is an incomplete review; the terminal was unavailable.',
+    'Treat this as a fail-closed verdict.',
+  ]) {
+    assert.equal(saysReviewNotInspected(text), true, text);
+  }
+});
+
 test('a completed turn whose review could not assess the patch writes nothing, returns 1 and names --unavailable', async () => {
   const { root } = makeRepo();
   const { home } = makeHome(0, `# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n`);
