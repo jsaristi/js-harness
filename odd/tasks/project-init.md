@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4b (`feat/project-sync`).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, open).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -221,6 +221,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   "up to date" means nothing was written, not that nothing was reported
   (R2-uptodate-conflates-reported-with-changed, R3-uptodate-counts-report-only-actions) — route:
   inline (one function and its tests, both understood)
+- [x] T4c Accepted whole-slice review follow-up: a pin that is not semver is an invalid
+  `harness.json`, since a cloned repository's pin is printed inside a suggested install command
+  (R1-001) — route: inline (one check and its tests)
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
@@ -575,6 +578,20 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   code commit. Native review lineage review-e4e4f47ab07943a6: one lens (reliability), approved and
   acknowledged, one SUGGESTION (R3-uptodate-ignores-createddirs). Codex (`--base 6b92b70`): no
   actionable regressions; its `npm run check` was denied a temp directory.
+- 2026-09-29: PR `jsaristi/js-harness#11` opened. The gentle-ai Stop hook then asked for the whole
+  slice as one candidate (range `588a501..e307e7a`, risk `high`, 1698 lines): native review lineage
+  review-a28346df3a98b863, consent granted (pre-granted), four lenses, approved and acknowledged,
+  with one WARNING (R1-001: the pin mismatch message prints `npm i -g ...#v<pin>` from the
+  committed `harness.json` after checking only that the version is a non-empty string, so a cloned
+  repository could plant shell metacharacters or terminal escapes in a command the user copies) and
+  six SUGGESTION, the same readability and rollback-coverage points as T4's review plus
+  `bin/install.mjs:244-248` (R2-005). R1-001 accepted as T4c, done inline by the parent. RED: three
+  new invalid-pin cases (shell metacharacters, a terminal escape, `latest`) → 3 failures; a
+  prerelease-with-build pin still reaching `pinMismatch` passed before and after. GREEN: those tests
+  9/9; full suite through the commit gate PASS. Committed as a4d871d. Native review lineage
+  review-c4909def058ac5e0 (`--base-ref e307e7a`, medium, 26 lines, one lens): approved and
+  acknowledged, no findings. Codex (`--base e307e7a`): no regression; its sandbox blocked the
+  tests, so it read the git objects.
 - Follow-ups carried from slice 4, none blocking: the four remaining SUGGESTION from T4's review and
   R3-uptodate-ignores-createddirs (a directory is only created together with the hook written into
   it, so today it cannot change the verdict); the installed skill text in `bin/lib/manifest.mjs`
