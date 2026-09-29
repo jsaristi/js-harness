@@ -13,6 +13,10 @@ const noopFetch = async () => {
   throw new Error('network disabled in tests');
 };
 
+// Every looked-up tool but gentle-ai, cached as "looked up, nothing found": a fresh cache with a key
+// for every row (a `null` counts as present) is what "nothing left to refetch" looks like.
+const NULL_VERSIONS = { engram: null, codegraph: null, context7: null, 'typescript-lsp': null, 'codex-plugin': null };
+
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-doctor-home-'));
 }
@@ -160,10 +164,12 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
     assert.match(output, /gentle-ai \(claude\): gentle-ai install/);
     assert.match(
       output,
-      /codex-plugin \(installed\): claude plugin marketplace add openai\/codex-plugin-cc; claude plugin install codex@openai-codex/,
+      /  codex-plugin \(installed\):\n    claude plugin marketplace add openai\/codex-plugin-cc\n    claude plugin install codex@openai-codex\n/,
     );
     assert.match(output, /codex-plugin \(claude\): claude plugin enable codex@openai-codex/);
-    assert.match(output, /codex-plugin \(codex\): codex login/);
+    // Not installed, so there is nothing to be logged in for: no `codex` gap for this row.
+    assert.match(output, /codex-plugin\s+missing\s+missing\s+n\/a\s+n\/a/);
+    assert.doesNotMatch(output, /codex-plugin \(codex\)/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -442,6 +448,175 @@ test('doctorMain compares the Codex plugin against its openai-codex marketplace 
   }
 });
 
+// --- T6b: a fix with several steps is a list, printed one command per line ---
+
+test('doctorMain prints a one-step fix on the gap line and a multi-step fix as a header plus indented lines', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    // Plugin and its enablement gone (one multi-step and one one-step gap), everything else healthy.
+    writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), { plugins: {} });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+
+    assert.match(output, /\n  codex-plugin \(installed\):\n    claude plugin marketplace add openai\/codex-plugin-cc\n    claude plugin install codex@openai-codex\n/);
+    assert.match(output, /\n  gentle-ai \(installed\): see https:\/\/github\.com\/Gentleman-Programming\/gentle-ai\n/);
+    // Once each command has its own line there is no `;` joining commands anywhere in the section.
+    assert.doesNotMatch(output.slice(output.indexOf('Fix:')), /;/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain --json carries a multi-step fix as an array, in the row fix map and in the gap', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const spawn = fakeSpawn({});
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    const row = JSON.parse(output).find((r) => r.id === 'codex-plugin');
+    const steps = ['claude plugin marketplace add openai/codex-plugin-cc', 'claude plugin install codex@openai-codex'];
+    assert.deepEqual(row.fix.installed, steps);
+    assert.deepEqual(row.gaps.find((g) => g.dimension === 'installed').fix, steps);
+    assert.equal(typeof JSON.parse(output).find((r) => r.id === 'codegraph').fix.installed, 'string');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- T6b (Codex P2): a fresh cache written before a row existed must not hide that row for 6 h ---
+
+/** The Codex plugin fixture for the cache tests: installed 1.0.6 with 1.0.6 in its marketplace. */
+function seedCodexMarketplace(home) {
+  writeJson(
+    path.join(home, '.claude', 'plugins', 'marketplaces', 'openai-codex', '.claude-plugin', 'marketplace.json'),
+    { plugins: [{ name: 'codex', version: '1.0.6' }] },
+  );
+}
+
+test('an online run refetches when a fresh cache has no key for a looked-up row, and fills it in', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    seedCodexMarketplace(home);
+    const freshAt = new Date().toISOString();
+    const { 'codex-plugin': _absent, ...withoutCodexPlugin } = NULL_VERSIONS;
+    writeCache(home, { latest: { checkedAt: freshAt, versions: { 'gentle-ai': '3.7.0', ...withoutCodexPlugin } }, notified: null });
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(JSON.parse(output).find((r) => r.id === 'codex-plugin').upToDate, 'ok');
+    const cache = readCache(home);
+    assert.equal(cache.latest.versions['codex-plugin'], '1.0.6');
+    assert.equal(cache.latest.versions['gentle-ai'], '3.7.0', 'a failed lookup keeps what was cached for it');
+    assert.notEqual(cache.latest.checkedAt, freshAt, 'the refetch succeeded for one row, so the cache is stamped again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--offline never refetches for a row the cache predates: it stays unknown', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    seedCodexMarketplace(home);
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0' } }, notified: null });
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called in --offline mode');
+    };
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json', '--offline'], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(fetchCalled, false);
+    assert.equal(JSON.parse(output).find((r) => r.id === 'codex-plugin').upToDate, 'unknown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('a cached null counts as present: an outage never retriggers the refetch on every run', async () => {
+  const home = makeTmpHome();
+  try {
+    const checkedAt = new Date().toISOString();
+    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': null } }, notified: null });
+    let fetchCalls = 0;
+    const fetchImpl = async () => {
+      fetchCalls += 1;
+      throw new Error('offline');
+    };
+    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+
+    await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now: () => new Date() });
+
+    assert.equal(fetchCalls, 0);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a refetch for a missing key that fails everywhere leaves checkedAt alone and stores a null, so the next run does not retry', async () => {
+  const home = makeTmpHome();
+  try {
+    const checkedAt = new Date(Date.now() - 60_000).toISOString();
+    writeCache(home, { latest: { checkedAt, versions: {} }, notified: null });
+    let fetchCalls = 0;
+    const fetchImpl = async () => {
+      fetchCalls += 1;
+      throw new Error('offline');
+    };
+    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+    const deps = { home, offline: false, fetch: fetchImpl, now: () => new Date() };
+
+    await resolveLatestVersions(rows, deps);
+    assert.equal(fetchCalls, 1);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt, 'no lookup succeeded, so the stamp does not move');
+    assert.equal(readCache(home).latest.versions['gentle-ai'], null);
+
+    await resolveLatestVersions(rows, deps);
+    assert.equal(fetchCalls, 1, 'the key is now present, so a still-fresh cache is not refetched again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a hosted context7 row (never looked up) does not count as a missing key', async () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: {} }, notified: null });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      throw new Error('must not be called');
+    };
+
+    await resolveLatestVersions([{ id: 'context7', version: 'hosted' }], {
+      home,
+      offline: false,
+      fetch: fetchImpl,
+      now: () => new Date(),
+    });
+
+    assert.equal(fetchCalled, false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- T2: latest-version lookup, cache, `outdated`, `--offline` ---
 
 test('doctorMain marks a tool ok when its installed version is at least the fetched latest', async () => {
@@ -475,7 +650,7 @@ test('doctorMain marks a tool outdated and lists its fix when the fetched latest
 
     assert.equal(code, 0);
     assert.match(output, /gentle-ai\s.*outdated/);
-    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\): gentle-ai upgrade; gentle-ai sync/);
+    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\):\n    gentle-ai upgrade\n    gentle-ai sync\n/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -518,7 +693,7 @@ test('doctorMain skips fetching when the cache was checked within the last 6 hou
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0' } },
+      latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0', ...NULL_VERSIONS } },
       notified: null,
     });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });

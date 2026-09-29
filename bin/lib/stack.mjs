@@ -6,6 +6,7 @@
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -140,12 +141,24 @@ function pluginInstalledVersion(home, pluginId) {
   return version ? { state: 'ok', version } : { state: 'missing', version: null };
 }
 
+/** Two paths are the same directory once resolved; win32 paths compare case-insensitively. */
+function sameDirectory(a, b, platform) {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
 /** Whether Codex is logged in, by asking Codex itself: `codex login status` exits 0 when it is.
- * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home the MCP probes read
- * and a fixture home never reads the real one. `unknown` on a timeout; any other outcome (not
- * logged in, no `codex` on PATH, a spawn that throws) is `missing`. Never reads `auth.json`. */
-function codexLoggedIn({ home, ...deps }) {
-  const env = { CODEX_HOME: path.join(home, '.codex') };
+ * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home and a fixture home
+ * never reads the real one — except when `home` is the real home and the user already set their
+ * own `CODEX_HOME`: that one is kept, since it is where their login actually lives (R3-codex-home-
+ * overrides-user-env). `env` and `homedir` are injectable so tests never touch `process.env`. The
+ * MCP probes still read `<home>/.codex` regardless — a pre-existing gap, out of scope here.
+ * `unknown` on a timeout; any other outcome (not logged in, no `codex` on PATH, a spawn that
+ * throws) is `missing`. Never reads `auth.json`. */
+function codexLoggedIn({ home, env: userEnv = process.env, homedir = os.homedir(), ...deps }) {
+  const platform = deps.platform ?? process.platform;
+  const keepUsersCodexHome = Boolean(userEnv.CODEX_HOME) && sameDirectory(home, homedir, platform);
+  const env = keepUsersCodexHome ? undefined : { CODEX_HOME: path.join(home, '.codex') };
   const result = spawnProbe('codex', ['login', 'status'], { ...deps, env });
   if (!result) return 'missing';
   if (probeTimedOut(result)) return 'unknown';
@@ -156,7 +169,9 @@ function codexLoggedIn({ home, ...deps }) {
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
  * for, e.g. context7 has no CLI to `installed`-fix, typescript-lsp has no Codex equivalent; the
- * Codex plugin's `codex` dimension is "logged in", not "registered"). `fix`
+ * Codex plugin's `codex` dimension is "logged in", not "registered"). A fix is one command string,
+ * or an array of commands to run in order when it takes several steps: no single separator works
+ * in both `cmd.exe` (no `;`) and Windows PowerShell 5.1 (no `&&`). `fix`
  * takes the same `deps` bag as the other probes, since codegraph's `project` fix must carry the
  * actual resolved project root, not a placeholder. Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
@@ -175,7 +190,7 @@ export const tools = [
       installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
       claude: 'gentle-ai install',
       codex: 'gentle-ai install',
-      upToDate: 'gentle-ai upgrade; gentle-ai sync',
+      upToDate: ['gentle-ai upgrade', 'gentle-ai sync'],
     }),
   },
   {
@@ -255,11 +270,12 @@ export const tools = [
     installed: ({ home }) => pluginInstalledVersion(home, 'codex@openai-codex'),
     configured: (deps) => ({
       claude: claudeEnabledPlugin(deps.home, 'codex@openai-codex'),
-      codex: codexLoggedIn(deps),
+      // No plugin, nothing to be logged in for: `n/a`, and `codex login status` is never spawned.
+      codex: pluginInstalledVersion(deps.home, 'codex@openai-codex').state === 'ok' ? codexLoggedIn(deps) : 'n/a',
     }),
     project: () => 'n/a',
     fix: () => ({
-      installed: 'claude plugin marketplace add openai/codex-plugin-cc; claude plugin install codex@openai-codex',
+      installed: ['claude plugin marketplace add openai/codex-plugin-cc', 'claude plugin install codex@openai-codex'],
       claude: 'claude plugin enable codex@openai-codex',
       codex: 'codex login',
       upToDate: 'claude plugin update codex@openai-codex',

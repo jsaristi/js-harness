@@ -298,6 +298,14 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command (see "T6 design") — route: delegated writer (touches
   `bin/lib/stack.mjs`, `bin/lib/latest.mjs` and the tests that count the stack's rows)
+- [x] T6b Accepted review follow-ups on T6: a fresh cache that predates a row (no entry for its
+  id) no longer hides that row's latest version for up to 6 h — an online run resolves it (Codex
+  P2); a fix with more than one step is a list of commands, printed one per line, since `;` does
+  not separate commands in `cmd.exe` (Codex P2; gentle-ai's `upToDate` fix had the same defect);
+  the login probe keeps a `CODEX_HOME` the user already set when `--home` is the real home
+  (R3-codex-home-overrides-user-env); no login probe when the plugin is not installed, the `codex`
+  cell being `n/a` then (R3-login-probe-runs-when-plugin-absent) — route: delegated writer (the T6
+  writer, resumed: `stack.mjs`, `doctor.mjs` and their tests)
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
   skipped review is caught — route: to be decided after exploration
 
@@ -790,6 +798,21 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   `npm run e2e` exit 0, 14 PASS, 0 FAIL; `node bin/js-harness.mjs doctor --offline` on this machine →
   `codex-plugin    1.0.6     ok        ok        n/a       unknown` (`unknown` because the offline
   cache has no entry for the new row yet).
+- 2026-09-29: T6 committed as 578a2a8. Assessed (`--base-ref 4b5cef7`): risk `medium`,
+  `review_due` (`slice_budget_reached`). Native review lineage review-c21a33f476e53c9d: consent
+  granted (pre-granted), one lens (reliability), approved and acknowledged, one WARNING
+  (R3-codex-home-overrides-user-env: the probe replaces a `CODEX_HOME` the user set) and one
+  SUGGESTION (R3-login-probe-runs-when-plugin-absent). Codex (`--base 4b5cef7`): two P2 — a fresh
+  cache from before the row keeps its `upToDate` `unknown` for up to 6 h, and the two-step install
+  fix joined by `;` fails in `cmd.exe`; its sandbox could not run the tests. All four accepted as T6b.
+- 2026-09-29: T6b done by the T6 writer, resumed: `resolveLatestVersions` refetches online when a
+  fresh cache has no key for a looked-up row (a cached `null` counts as present); a fix may be a
+  list, printed as a header line plus one indented command per line, and the codex-plugin install
+  and gentle-ai upgrade fixes are lists; `codexLoggedIn` keeps a user-set `CODEX_HOME` when `home`
+  is the real home (`env`/`homedir` injectable); the login is `n/a`, unprobed, unless the plugin
+  is installed. RED: 584 tests, 12 failing (the fix format, the cache predating a row, the
+  `CODEX_HOME` and not-installed cases). GREEN: `node --test` → `tests 584 / pass 577 / fail 0 /
+  skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL.
 
 ## Next step
 T6 (`doctor` reports the Codex plugin `codex@openai-codex`: installed, enabled and logged in,

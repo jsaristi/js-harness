@@ -38,7 +38,7 @@ test('tools carries exactly the six stack tools, in Design-table order', () => {
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
-      assert.doesNotMatch(fix, /codegraph upgrade/);
+      for (const command of [fix].flat()) assert.doesNotMatch(command, /codegraph upgrade/);
     }
   }
 });
@@ -89,13 +89,28 @@ test('typescript-lsp fix covers installed, claude and upToDate but has no codex 
 test('codex-plugin fix covers installed, claude, codex and upToDate with its own commands, and no project fix', () => {
   const fix = findTool('codex-plugin').fix({});
   assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
-  assert.equal(
-    fix.installed,
-    'claude plugin marketplace add openai/codex-plugin-cc; claude plugin install codex@openai-codex',
-  );
+  // A fix with more than one step is a list of commands run in order: no single separator works in
+  // both `cmd.exe` (no `;`) and Windows PowerShell 5.1 (no `&&`).
+  assert.deepEqual(fix.installed, [
+    'claude plugin marketplace add openai/codex-plugin-cc',
+    'claude plugin install codex@openai-codex',
+  ]);
   assert.equal(fix.claude, 'claude plugin enable codex@openai-codex');
   assert.equal(fix.codex, 'codex login');
   assert.equal(fix.upToDate, 'claude plugin update codex@openai-codex');
+});
+
+test('gentle-ai upToDate fix is a two-step list, not one line joined by a separator', () => {
+  assert.deepEqual(findTool('gentle-ai').fix({}).upToDate, ['gentle-ai upgrade', 'gentle-ai sync']);
+});
+
+test('no fix command string carries a shell separator (`;` or `&&`), and codegraph installed stays one string', () => {
+  for (const tool of tools) {
+    for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
+      for (const command of [fix].flat()) assert.doesNotMatch(command, /;|&&/);
+    }
+  }
+  assert.equal(typeof findTool('codegraph').fix({}).installed, 'string');
 });
 
 // --- installed + version: version-command tools (gentle-ai, engram, codegraph) ---
@@ -405,6 +420,15 @@ function loginSpawn(result, calls = []) {
   };
 }
 
+/** A fixture home with the Codex plugin installed: the login probe only runs for an installed plugin. */
+function makeCodexHome() {
+  const home = makeTmpHome();
+  writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+    plugins: { 'codex@openai-codex': [{ version: '1.0.6' }] },
+  });
+  return home;
+}
+
 test('codex-plugin claude is ok when settings.json enables codex@openai-codex', () => {
   const home = makeTmpHome();
   try {
@@ -430,7 +454,7 @@ test('codex-plugin claude is missing when it is disabled or only another plugin 
 });
 
 test('codex-plugin codex is ok when `codex login status` exits 0', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const configured = findTool('codex-plugin').configured({
       home,
@@ -443,7 +467,7 @@ test('codex-plugin codex is ok when `codex login status` exits 0', () => {
 });
 
 test('codex-plugin codex is missing when `codex login status` exits non-zero (not logged in)', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const configured = findTool('codex-plugin').configured({
       home,
@@ -456,7 +480,7 @@ test('codex-plugin codex is missing when `codex login status` exits non-zero (no
 });
 
 test('codex-plugin codex is unknown when the login probe is killed by a timeout signal', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const configured = findTool('codex-plugin').configured({
       home,
@@ -469,7 +493,7 @@ test('codex-plugin codex is unknown when the login probe is killed by a timeout 
 });
 
 test('codex-plugin codex is unknown when the login probe result carries an ETIMEDOUT error', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const error = new Error('spawnSync codex ETIMEDOUT');
     error.code = 'ETIMEDOUT';
@@ -484,7 +508,7 @@ test('codex-plugin codex is unknown when the login probe result carries an ETIME
 });
 
 test('codex-plugin codex is missing when codex is not on PATH (ENOENT) or the spawn throws', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const tool = findTool('codex-plugin');
     assert.equal(tool.configured({ home, spawn: fakeSpawnMissing() }).codex, 'missing');
@@ -499,7 +523,7 @@ test('codex-plugin codex is missing when codex is not on PATH (ENOENT) or the sp
 });
 
 test('codex-plugin login probe points CODEX_HOME at <home>/.codex and keeps the rest of the environment', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const calls = [];
     findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, calls), platform: 'linux' });
@@ -512,7 +536,7 @@ test('codex-plugin login probe points CODEX_HOME at <home>/.codex and keeps the 
 });
 
 test('codex-plugin login probe passes the 5000ms timeout, and no env is added to the version probes', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const calls = [];
     findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, calls) });
@@ -527,7 +551,7 @@ test('codex-plugin login probe passes the 5000ms timeout, and no env is added to
 });
 
 test('codex-plugin login probe is one shell command line with no args array on win32, an args array elsewhere', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     const win = [];
     findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, win), platform: 'win32' });
@@ -546,11 +570,95 @@ test('codex-plugin login probe is one shell command line with no args array on w
 });
 
 test('codex-plugin login answer comes only from the probe, never from an auth.json in the Codex home', () => {
-  const home = makeTmpHome();
+  const home = makeCodexHome();
   try {
     writeJson(path.join(home, '.codex', 'auth.json'), { tokens: { access_token: 'sentinel-secret' } });
     const configured = findTool('codex-plugin').configured({ home, spawn: loginSpawn({ status: 1, stdout: '' }) });
     assert.equal(configured.codex, 'missing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// R3-login-probe-runs-when-plugin-absent (accepted T6 review follow-up): no plugin, nothing to be
+// logged in for — the `codex` cell is `n/a` and `codex login status` is never spawned.
+test('codex-plugin codex is n/a and the login probe never spawns when the plugin is not installed', () => {
+  const tool = findTool('codex-plugin');
+  const cases = {
+    'no installed_plugins.json': () => {},
+    'no codex entry': (home) =>
+      writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+        plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+      }),
+    'malformed installed_plugins.json': (home) => {
+      fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), 'not json', 'utf8');
+    },
+  };
+  for (const [label, seed] of Object.entries(cases)) {
+    const home = makeTmpHome();
+    try {
+      seed(home);
+      const calls = [];
+      const configured = tool.configured({ home, spawn: loginSpawn({ status: 0, stdout: '' }, calls) });
+      assert.equal(configured.codex, 'n/a', label);
+      assert.equal(calls.length, 0, `${label}: codex login status must not be spawned`);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+// --- R3-codex-home-overrides-user-env (accepted T6 review follow-up): a `CODEX_HOME` the user
+// already set is kept when `home` is the real home. `env` and `homedir` are injectable so no test
+// ever touches `process.env`. The MCP probes still read `<home>/.codex` regardless — a pre-existing
+// gap, out of scope here. ---
+
+function loginEnvFor({ home, env, homedir, platform = 'linux' }) {
+  const calls = [];
+  findTool('codex-plugin').configured({ home, env, homedir, platform, spawn: loginSpawn({ status: 0, stdout: '' }, calls) });
+  assert.equal(calls.length, 1);
+  return calls[0].opts;
+}
+
+test('codex-plugin login probe keeps a CODEX_HOME the user set when home is the real home', () => {
+  const home = makeCodexHome();
+  try {
+    const opts = loginEnvFor({ home, env: { CODEX_HOME: '/users/own/codex' }, homedir: home });
+    assert.equal('env' in opts, false, 'the child must inherit the user\'s own CODEX_HOME untouched');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login probe overrides CODEX_HOME when home is not the real home', () => {
+  const home = makeCodexHome();
+  try {
+    const opts = loginEnvFor({ home, env: { CODEX_HOME: '/users/own/codex' }, homedir: path.join(home, 'elsewhere') });
+    assert.equal(opts.env.CODEX_HOME, path.join(home, '.codex'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('codex-plugin login probe sets <home>/.codex on the real home when the user has no CODEX_HOME', () => {
+  const home = makeCodexHome();
+  try {
+    const opts = loginEnvFor({ home, env: {}, homedir: home });
+    assert.equal(opts.env.CODEX_HOME, path.join(home, '.codex'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the real-home comparison ignores case on win32 only', () => {
+  const home = makeCodexHome();
+  try {
+    // Same directory, differing only in case (the tmp path always has lowercase letters).
+    const homedir = home.toUpperCase();
+    const env = { CODEX_HOME: '/users/own/codex' };
+    assert.equal('env' in loginEnvFor({ home, env, homedir, platform: 'win32' }), false);
+    assert.equal(loginEnvFor({ home, env, homedir, platform: 'linux' }).env.CODEX_HOME, path.join(home, '.codex'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

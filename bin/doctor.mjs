@@ -87,7 +87,13 @@ function computeUpToDate(row, latestVersion) {
  * its own tests (R3-004 below needs a row set smaller than the real stack). */
 export async function resolveLatestVersions(rows, { home, offline, fetch: fetchImpl, now }) {
   const cache = readCache(home);
-  if (offline || !isStale(cache.latest.checkedAt, now)) return cache.latest.versions;
+  if (offline) return cache.latest.versions;
+  // Codex P2 (accepted T6 review follow-up): a fresh cache that predates a row (no key for its id)
+  // would leave that row `unknown` for up to 6h, so an online run refetches for it. A cached `null`
+  // counts as present, so an outage — which stores `null` for what it could not resolve — never
+  // retriggers this on every run.
+  const predatesRow = rows.some((row) => isLookupAttempted(row) && !(row.id in cache.latest.versions));
+  if (!isStale(cache.latest.checkedAt, now) && !predatesRow) return cache.latest.versions;
 
   // R3-004 (accepted T4 review follow-up): a row never even attempted (context7 hosted has no
   // version of its own to look up) is not a failure — only a row that was actually looked up and
@@ -163,7 +169,15 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   const gapLines = rows.flatMap((row) => rowGaps(row).map((gap) => ({ id: row.id, ...gap })));
   if (gapLines.length > 0) {
     console.log('\nFix:');
-    for (const gap of gapLines) console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix ?? 'no fix command known'}`);
+    for (const gap of gapLines) {
+      // A multi-step fix is a list of commands: the header line, then one indented command per line.
+      if (Array.isArray(gap.fix)) {
+        console.log(`  ${gap.id} (${gap.dimension}):`);
+        for (const command of gap.fix) console.log(`    ${command}`);
+      } else {
+        console.log(`  ${gap.id} (${gap.dimension}): ${gap.fix ?? 'no fix command known'}`);
+      }
+    }
   }
 
   return 0;
