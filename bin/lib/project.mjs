@@ -1290,8 +1290,8 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
  * hook that is gone is written again and an absent `.codegraph/` is created by `codegraph init`
  * (`createdDir` recorded as observed, like the retry in `alreadyInitialized`); everything else stays as
  * is. The manifest is rewritten atomically only when its content actually changed. A failure rolls back
- * every file, directory and `.codegraph/` this run created — except a `.codegraph/` the untouched
- * manifest already records as created — so what is on disk and what the manifest says never disagree. */
+ * every file, directory and `.codegraph/` this run created, so what is on disk and what the manifest
+ * says never disagree. */
 function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps) {
   let manifest;
   try {
@@ -1309,6 +1309,7 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
   const createdPaths = [];
   const createdDirs = [];
   let codegraphCreatedThisRun = false;
+  let manifestChanged = false;
 
   try {
     if (next.version !== version) {
@@ -1324,10 +1325,13 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
         reason ? { kind: 'problem', path: 'codegraph init', reason } : { kind: 'ran', path: 'codegraph init' },
       );
     }
-    if (JSON.stringify(next) !== JSON.stringify(manifest)) writeManifestAtomic(manifestFilePath, next, manifestDeps);
+    manifestChanged = JSON.stringify(next) !== JSON.stringify(manifest);
+    if (manifestChanged) writeManifestAtomic(manifestFilePath, next, manifestDeps);
   } catch (err) {
     const notRemoved = rollback(root, createdPaths, createdDirs, rm);
-    if (codegraphCreatedThisRun && manifest.codegraph?.createdDir !== true) {
+    // codegraph only runs when `.codegraph/` is absent, so one it made is this run's alone, whatever
+    // the old manifest says about an earlier directory (T4b, Codex P2).
+    if (codegraphCreatedThisRun) {
       try {
         rm(codegraphDirPath(root), { recursive: true, force: true });
       } catch {
@@ -1337,7 +1341,10 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
     throw new InitWriteError(err.message, notRemoved);
   }
 
-  return { code: 0, root, manifestPath: manifestFilePath, actions, manifest: next, version, upToDate: actions.length === 0 };
+  // Up to date means nothing was written: a `kept` or `problem` action that repeats on every run only
+  // reports (T4b, R2-uptodate-conflates-reported-with-changed).
+  const upToDate = !manifestChanged && createdPaths.length === 0 && !codegraphCreatedThisRun;
+  return { code: 0, root, manifestPath: manifestFilePath, actions, manifest: next, version, upToDate };
 }
 
 /** Runs `js-harness sync` against the git repository at `cwd`'s top-level: moves the project to the

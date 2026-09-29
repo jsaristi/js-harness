@@ -2903,6 +2903,68 @@ test('syncProject rolls back the .codegraph it created when the manifest that wo
   }
 });
 
+test('syncProject rolls back a .codegraph it recreated even when the manifest already records it as created (T4b, Codex P2)', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.deepEqual(initResult.manifest.codegraph, { createdDir: true, status: 'ok' });
+    fs.rmSync(path.join(root, '.codegraph'), { recursive: true });
+    // An older recorded version forces a manifest rewrite, which then fails.
+    const recorded = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify({ ...recorded, version: '0.0.9' }, null, 2) + '\n');
+    const before = contentSnapshot(root);
+    const open = () => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+
+    assert.throws(() => syncProject(root, '0.1.0', syncDeps({ open })), InitWriteError);
+
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
+    assert.deepEqual(contentSnapshot(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject is up to date on a repeat run that only reports a hook a junction sends outside (T4b)', (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-sync-outside-');
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    fs.rmSync(path.join(root, '.git', 'hooks'), { recursive: true });
+    if (!trySymlinkDir(outsideDir, path.join(root, '.git', 'hooks'), t)) return;
+    const manifestBytes = fs.readFileSync(initResult.manifestPath);
+
+    const result = syncProject(root, '0.1.0', syncDeps());
+
+    assert.ok(result.actions.some((a) => a.kind === 'kept'));
+    assert.equal(result.upToDate, true);
+    assert.deepEqual(fs.readFileSync(initResult.manifestPath), manifestBytes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+test('syncProject is up to date on a repeat run whose codegraph init fails again and writes nothing (T4b)', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    fs.rmSync(path.join(root, '.codegraph'), { recursive: true });
+    const failing = () => syncDeps({ spawn: makeSpawn({ status: 1, stdout: '', stderr: 'nope' }) });
+    assert.equal(syncProject(root, '0.1.0', failing()).upToDate, false); // records the failure
+    const manifestBytes = fs.readFileSync(initResult.manifestPath);
+
+    const result = syncProject(root, '0.1.0', failing());
+
+    assert.ok(result.actions.some((a) => a.kind === 'problem'));
+    assert.equal(result.upToDate, true);
+    assert.deepEqual(fs.readFileSync(initResult.manifestPath), manifestBytes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('syncProject records the running version when the manifest carries an older one', () => {
   const root = makeTmpRepo();
   try {
