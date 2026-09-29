@@ -404,7 +404,12 @@ function writeManifestAtomic(target, data, deps = {}) {
   try {
     let written = 0;
     while (written < buffer.length) {
-      written += write(fd, buffer, written, buffer.length - written, written);
+      const count = write(fd, buffer, written, buffer.length - written, written);
+      // A write that makes no progress (0 bytes, or no byte count at all) would spin forever or pass
+      // a truncated manifest as complete; fail it so the cleanup below runs (T3c, Codex P2 +
+      // R3-short-write-loop-no-progress-guard).
+      if (!Number.isInteger(count) || count <= 0) throw new Error(`manifest write made no progress (${count})`);
+      written += count;
     }
     close(fd);
   } catch (err) {
@@ -982,9 +987,16 @@ function directoriesToPrune(manifest) {
  * Absence (`ENOENT`/`ENOTDIR`) is not a failure — the directory is already gone, nothing to report
  * either way; any other `readdir` failure keeps the manifest and fails the run, same as a file's
  * (T3b item 3). */
-function removeDirectoryIfEmpty(root, dirEntry, rm, readdir, notRemoved, actions) {
+function removeDirectoryIfEmpty(root, dirEntry, bases, rm, readdir, notRemoved, actions) {
   const abs = resolveManifestEntryPath(root, dirEntry);
   const isWorkingTreeDir = !dirEntry.gitDir;
+  // The same real-containment check a file gets: a directory reached through an ancestor a link now
+  // sends outside is not what `init` created, however empty it is (T3c,
+  // R3-dir-prune-follows-ancestor-link).
+  if (!stillWithinRecordedBase(abs, bases)) {
+    actions.push({ kind: 'kept', path: pathShapeFor(root, abs, isWorkingTreeDir), reason: 'moved outside' });
+    return;
+  }
   let remaining;
   try {
     remaining = readdir(abs);
@@ -1146,7 +1158,8 @@ export function uninstallProject(cwd, deps = {}) {
   }
 
   for (const dirEntry of directoriesToPrune(manifest)) {
-    removeDirectoryIfEmpty(root, dirEntry, rm, readdir, notRemoved, actions);
+    const bases = dirEntry.gitDir ? realGitDirBases : [realRoot];
+    removeDirectoryIfEmpty(root, dirEntry, bases, rm, readdir, notRemoved, actions);
   }
 
   if (manifest.codegraph?.createdDir === true) {

@@ -180,6 +180,11 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   R3-manifest-entry-shape-unvalidated); pin the older machine-scope `uninstallMain` tests with
   `--global` so a test run never touches the checkout it starts in
   (R3-uninstall-cwd-dependent-machine-tests) — route: the same delegated writer
+- [x] T3c Accepted review follow-ups on T3b: a recorded directory gets the same real-containment
+  check a file does, so an empty directory reached through a link to outside is kept
+  (R3-dir-prune-follows-ancestor-link); a manifest write that makes no progress fails instead of
+  spinning or passing a truncated file (Codex P2, R3-short-write-loop-no-progress-guard) — route:
+  inline (one file and its test, both understood)
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
@@ -469,9 +474,20 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   the same project); `tui.test.mjs` 1 once the rule was in (the menu's uninstall refused inside a
   repo); the usage line 1. GREEN: `node --test` → `tests 422 / pass 415 / fail 0 / skipped 7`;
   `npm run e2e` 14 steps PASS; `npm run check` PASS through the commit hook.
+- 2026-09-28: T3b committed as ae471e7. Assessed (`--base-ref d359829 --committed-only`): risk
+  `medium`, 678 lines, `review_due: true`. Native review lineage review-c51aeeefefd93719: consent
+  granted (pre-granted), one lens (reliability), approved and acknowledged, with one WARNING
+  (R3-dir-prune-follows-ancestor-link: `dirs` pruning never re-checks real containment, so an
+  empty chain reached through a replaced ancestor is removed outside the project — the writer's
+  junction argument covered the link, not what it reaches) and one SUGGESTION
+  (R3-short-write-loop-no-progress-guard). Codex (`--base d359829`): P2 the same no-progress loop.
+  Both accepted as T3c, done inline by the parent. RED: 3 failures (a write returning 0, a write
+  returning no count — both built to finish rather than hang on the old loop — and the empty outside
+  chain removed). GREEN: `node --test` → `tests 425 / pass 418 / fail 0 / skipped 7`; `npm run
+  e2e` 14 steps PASS.
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Review T3b (gentle-ai, then Codex); then slice 3's PR, which Sebastián opens or asks for.
+Review T3c (gentle-ai, then Codex); then slice 3's PR, which Sebastián opens or asks for.

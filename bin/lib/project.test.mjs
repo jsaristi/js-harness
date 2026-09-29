@@ -2213,6 +2213,67 @@ test('initProject loops the manifest write until every byte is written, handling
   }
 });
 
+// T3c (R3-short-write-loop-no-progress-guard, Codex P2): a write that makes no progress — 0 bytes,
+// or a non-number from an old-style writer — fails the write instead of spinning or passing a
+// truncated manifest. The fake writes nothing for its first calls and then writes for real, so the
+// old loop finishes (and this test fails) rather than hanging.
+for (const [label, stall] of [
+  ['returns 0', () => 0],
+  ['returns no byte count', () => undefined],
+]) {
+  test(`initProject fails the manifest write, leaving no temp file, when a write ${label}`, () => {
+    const root = makeTmpRepo();
+    try {
+      let calls = 0;
+      const write = (fd, buffer, offset, length, position) => {
+        calls += 1;
+        if (calls <= 3) return stall();
+        return fs.writeSync(fd, buffer, offset, length, position);
+      };
+
+      assert.throws(
+        () => initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', write }),
+        (err) => err instanceof InitWriteError,
+      );
+      const gitDirJs = path.join(root, '.git', 'js-harness');
+      const leftovers = fs.existsSync(gitDirJs) ? fs.readdirSync(gitDirJs).filter((n) => n.endsWith('.tmp')) : [];
+      assert.deepEqual(leftovers, []);
+      assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+// T3c (R3-dir-prune-follows-ancestor-link): a recorded directory reached through an ancestor a link
+// now sends outside is kept, so an empty directory outside the project is never removed.
+test('uninstallProject keeps a recorded directory whose ancestor was replaced by a junction, leaving the empty outside directories alone', (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-dir-link-');
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    assert.equal(initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+
+    // The same chain outside, empty, and `custom` replaced by a junction to it.
+    fs.mkdirSync(path.join(outsideDir, 'nested', 'hooks'), { recursive: true });
+    fs.rmSync(path.join(root, 'custom'), { recursive: true, force: true });
+    if (!trySymlinkDir(outsideDir, path.join(root, 'custom'), t)) return;
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(outsideDir, 'nested', 'hooks')), 'the empty outside chain survives');
+    assert.ok(
+      result.actions.some((a) => a.kind === 'kept' && a.reason === 'moved outside' && a.path.startsWith('custom/nested')),
+      `expected a kept, moved-outside directory; got ${JSON.stringify(result.actions)}`,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
 // Codex P2 + R3-manifest-entry-shape-unvalidated, item 5: the whole manifest is validated, shape and
 // containment, before any removal at all — a malformed entry anywhere is malformedManifest, exit 1,
 // nothing written.
