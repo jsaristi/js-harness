@@ -54,6 +54,7 @@ function makeRepo(remoteBranch = 'main') {
   git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
   const base = commit(root, 'a.js', 'one', 'init');
   if (remoteBranch) git(root, 'update-ref', `refs/remotes/origin/${remoteBranch}`, base);
   return { root, base };
@@ -185,7 +186,8 @@ test('a record whose base no longer resolves is ignored and counted', () => {
   record(root, '--upload-pack=x', head);
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, true);
-  assert.match(row.detail, /2 records ignored/);
+  assert.match(row.detail, /1 record ignored \(base or head not found\)/);
+  assert.match(row.detail, /1 invalid record ignored/);
 });
 
 test('ignoring a record can leave a commit uncovered', () => {
@@ -215,6 +217,94 @@ test('a record whose head is outside the checked range is not expanded at all', 
   assert.ok(expanded.includes(`${base}..${head}`), 'the record whose head is in the range is expanded');
   assert.ok(!expanded.includes(`${base}..${base}`), 'a head on the default branch is skipped');
   assert.ok(!expanded.some((range) => range.startsWith('e'.repeat(40))), 'an unknown head is skipped');
+});
+
+test('a record whose head lies past the pushed tip still covers the commits of its range it contains', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  const second = commit(root, 'c.js', 'three', 'feat: three');
+  assert.equal(checkCodexReviews(root, first).pass, false);
+  record(root, base, second);
+  const row = checkCodexReviews(root, first);
+  assert.equal(row.pass, true, `${row.detail}`);
+  assert.match(row.detail, /1 code commit since origin.main/);
+});
+
+test('a record on an unrelated branch is still not expanded, even when checking an older head', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'checkout', '-b', 'side', base);
+  const side = commit(root, 's.js', 'side', 'feat: side work');
+  record(root, base, side);
+  const expanded = [];
+  const spawn = (cmd, args, opts) => {
+    if (args[0] === 'rev-list') expanded.push(args[1]);
+    return spawnSync(cmd, args, opts);
+  };
+  const row = checkCodexReviews(root, first, { spawn });
+  assert.equal(row.pass, false);
+  assert.ok(!expanded.includes(`${base}..${side}`), expanded.join('\n'));
+});
+
+// --- only a valid record is evidence ---
+
+const INVALID_SHAPES = {
+  'a wrong schema': (r) => ({ ...r, schema: 'js-harness.codex-review/v2' }),
+  'no schema': ({ schema, ...r }) => r,
+  'a short base id': (r) => ({ ...r, base: r.base.slice(0, 12) }),
+  'a non-hex head id': (r) => ({ ...r, head: 'g'.repeat(40) }),
+  'a non-string base': (r) => ({ ...r, base: 42 }),
+  'a non-string reviewedAt': (r) => ({ ...r, reviewedAt: 1790000000 }),
+  'an unknown outcome': (r) => ({ ...r, outcome: 'approved' }),
+  'no outcome': ({ outcome, ...r }) => r,
+  'unavailable without a reason': (r) => ({ ...r, outcome: 'unavailable' }),
+  'unavailable with a blank reason': (r) => ({ ...r, outcome: 'unavailable', reason: '   ' }),
+  'unavailable with a non-string reason': (r) => ({ ...r, outcome: 'unavailable', reason: 7 }),
+};
+
+for (const [shape, invalidate] of Object.entries(INVALID_SHAPES)) {
+  test(`a record with ${shape} is not evidence, and the detail counts it`, () => {
+    const { root, base } = makeRepo();
+    feature(root);
+    const head = commit(root, 'b.js', 'two', 'feat: two');
+    const good = { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-09-29T00:00:00.000Z', outcome: 'reviewed' };
+    appendCodexReview(root, invalidate(good));
+    const row = checkCodexReviews(root, 'HEAD');
+    assert.equal(row.pass, false, row.detail);
+    assert.match(row.detail, /1 invalid record ignored/);
+  });
+}
+
+test('a valid record still counts next to invalid ones', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  appendCodexReview(root, { base, head });
+  record(root, base, head);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true);
+  assert.match(row.detail, /1 invalid record ignored/);
+});
+
+test('a remote that is not configured, such as the URL git passes to a hook, gets a hint that works', () => {
+  const { root } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const url = 'https://example.invalid/somewhere.git';
+  const row = checkCodexReviews(root, 'HEAD', { remote: url });
+  assert.equal(row.pass, false);
+  assert.match(row.detail, /not a configured remote/);
+  const lines = row.lines.join('\n');
+  assert.match(lines, /git remote add <name> <url>/);
+  assert.doesNotMatch(lines, /set-head/);
+});
+
+test('a configured remote with no default branch still names set-head', () => {
+  const { root } = makeRepo(null);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')));
 });
 
 test('a repository with no refs of the remote fails, naming the command that sets its default branch', () => {
@@ -271,6 +361,7 @@ test('a local main ahead of origin/main with no origin/HEAD reports the unreview
 
 test('--remote picks another remote', () => {
   const { root, base } = makeRepo(null);
+  git(root, 'remote', 'add', 'upstream', 'https://example.invalid/upstream.git');
   git(root, 'update-ref', 'refs/remotes/upstream/main', base);
   feature(root);
   commit(root, 'b.js', 'two', 'feat: two');
@@ -380,6 +471,7 @@ test('check --push needs no AGENTS.md: the budget row does not run', async () =>
 
 test('check --push --remote names the remote the range starts from', async () => {
   const { root, home } = projectWithUnreviewedCommit();
+  git(root, 'remote', 'add', 'mirror', 'https://example.invalid/mirror.git');
   git(root, 'update-ref', 'refs/remotes/mirror/main', 'main');
   const { output } = await runCheck(['--push', '--remote', 'mirror', '--cwd', root, '--home', home]);
   assert.match(output, /since mirror\/main/);

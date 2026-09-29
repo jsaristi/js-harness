@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `js-harness codex-review --base <rev>`: run the Codex plugin's review of `<rev>..HEAD` and record
 // that it ran, or record an explicit skip with `--unavailable <reason>`. The record is what
-// `check --push` will read to catch a slice that was never reviewed (T7 in odd/tasks/project-init.md).
+// `check --push` reads to catch a slice that was never reviewed (T7 in odd/tasks/project-init.md).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

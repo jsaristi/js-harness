@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
-import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 
 export { estimateTokens };
 
@@ -89,12 +89,19 @@ function defaultBranch(spawn, cwd, remote) {
   return ref ? { ref, label: ref.replace(/^refs\/remotes\//, '') } : null;
 }
 
-const FULL_ID = /^[0-9a-f]{40,64}$/;
+/** Whether git exits 0 for `git <args>` in `cwd` (for the yes/no commands such as
+ * `merge-base --is-ancestor`, where a non-zero exit is an answer, not a failure). */
+function gitYes(spawn, cwd, args) {
+  try {
+    const result = spawn('git', args, { cwd, encoding: 'utf8' });
+    return Boolean(result) && !result.error && result.status === 0;
+  } catch {
+    return false;
+  }
+}
 
-/** The commits `rec` covers, or `null` when its ids are not commit ids this repository knows. An id
- * is matched against a strict pattern first, so a hand-edited record cannot smuggle in an option. */
+/** The commits a valid `rec` covers, or `null` when its ids are not commits this repository knows. */
 function coveredBy(spawn, cwd, rec) {
-  if (!FULL_ID.test(rec.base ?? '') || !FULL_ID.test(rec.head ?? '')) return null;
   const listed = gitOut(spawn, cwd, ['rev-list', `${rec.base}..${rec.head}`]);
   return listed === null ? null : new Set(listed.split('\n').filter(Boolean));
 }
@@ -110,6 +117,14 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   if (!tip) {
     return fail(gitOut(spawn, cwd, ['rev-parse', '--git-dir']) === null ? `${cwd} is not a git repository` : `cannot resolve --head ${head} to a commit`);
   }
+  // Git hands a hook the URL, not a name, when the push names a URL: no ref of it can exist.
+  const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) {
+    return fail(`${remote} is not a configured remote, so there is no default branch to compare against`, [
+      'push through a configured remote: git remote add <name> <url>, then git push <name> ...',
+      'or name one that exists: js-harness check --push --remote <name>',
+    ]);
+  }
   const branch = defaultBranch(spawn, cwd, remote);
   if (!branch) {
     return fail(
@@ -119,7 +134,7 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   }
   const { ref: baseRef, label: base } = branch;
 
-  // Every commit of the range, merges included: a record is only worth expanding when its head is one.
+  // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${baseRef}..${tip}`]);
   if (inRange === null) return fail(`cannot list the commits in ${base}..${head}`);
   const rangeIds = new Set(inRange.split('\n').filter(Boolean));
@@ -143,18 +158,29 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const records = readCodexReviews(cwd, { spawn });
   const covers = [];
   let ignored = 0;
+  let invalid = 0;
   for (const rec of records) {
-    // A record whose head is outside the range covers nothing in it that another record's range
-    // would not, and expanding it would cost one git process per record ever written.
-    if (!rangeIds.has(rec.head)) continue;
+    if (!isValidCodexReview(rec)) {
+      invalid += 1;
+      continue;
+    }
+    // A record can cover part of the range only when its head is in it, or lies past the pushed tip
+    // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
+    // and expanding it would cost one git process per record ever written.
+    if (!rangeIds.has(rec.head) && !gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, rec.head])) continue;
     const covered = coveredBy(spawn, cwd, rec);
     if (covered) covers.push({ rec, covered });
     else ignored += 1;
   }
-  const note = ignored ? `; ${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '';
+  const noteParts = [
+    invalid ? `${invalid} invalid record${invalid === 1 ? '' : 's'} ignored` : '',
+    ignored ? `${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '',
+  ].filter(Boolean);
+  const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
 
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
   if (uncovered.length) {
+    // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
     // A root commit has no `<id>^` to use as a base; a range from the unrelated default branch does
     // reach it, and `--unavailable` records a skip instead of a review.

@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReview, codexReviewsPath, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
+import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -131,4 +131,35 @@ test("a linked worktree shares the clone's one record file", () => {
   const dirOf = (r) => fs.realpathSync(path.dirname(codexReviewsPath(r)));
   assert.equal(dirOf(worktree), dirOf(root));
   assert.deepEqual(readCodexReviews(worktree), [record]);
+});
+
+test('a well-formed reviewed or unavailable record is valid', () => {
+  assert.equal(isValidCodexReview(record), true);
+  assert.equal(isValidCodexReview({ ...record, base: 'a'.repeat(64), head: 'b'.repeat(64) }), true);
+  assert.equal(isValidCodexReview({ ...record, outcome: 'unavailable', reason: 'model rejected' }), true);
+});
+
+test('every way a record can be malformed makes it invalid', () => {
+  const { schema, ...noSchema } = record;
+  const { outcome, ...noOutcome } = record;
+  for (const bad of [
+    null,
+    'text',
+    [record],
+    {},
+    noSchema,
+    { ...record, schema: 'other/v1' },
+    { ...record, base: 'a'.repeat(39) },
+    { ...record, base: 'A'.repeat(40) },
+    { ...record, head: 'b'.repeat(65) },
+    { ...record, head: undefined },
+    { ...record, reviewedAt: 12 },
+    noOutcome,
+    { ...record, outcome: 'approved' },
+    { ...record, outcome: 'unavailable' },
+    { ...record, outcome: 'unavailable', reason: '  ' },
+    { ...record, outcome: 'unavailable', reason: 3 },
+  ]) {
+    assert.equal(isValidCodexReview(bad), false, JSON.stringify(bad));
+  }
 });

@@ -71,3 +71,18 @@ export function readCodexReviews(root, deps = {}) {
   }
   return records;
 }
+
+const COMMIT_ID = /^[0-9a-f]{40,64}$/;
+
+/** Whether `rec` is a record a check may treat as evidence: the v1 schema, full commit ids for
+ * `base` and `head` (which also keeps a hand-edited id from ever reaching git as an option), a
+ * string `reviewedAt`, and an outcome of `reviewed`, or `unavailable` with a reason that says why. */
+export function isValidCodexReview(rec) {
+  if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return false;
+  if (rec.schema !== CODEX_REVIEW_SCHEMA) return false;
+  if (typeof rec.base !== 'string' || !COMMIT_ID.test(rec.base)) return false;
+  if (typeof rec.head !== 'string' || !COMMIT_ID.test(rec.head)) return false;
+  if (typeof rec.reviewedAt !== 'string') return false;
+  if (rec.outcome === 'reviewed') return true;
+  return rec.outcome === 'unavailable' && typeof rec.reason === 'string' && rec.reason.trim() !== '';
+}
