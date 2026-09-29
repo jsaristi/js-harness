@@ -44,7 +44,7 @@ Forecast: well over 400 authored lines across the seven tasks (T2–T5 alone add
 manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-to-main`, chosen
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
-b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
+b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -502,5 +502,5 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-Slice 3's PR (`feat/project-uninstall` → `main`), when Sebastián asks for it; after the merge, T4
-(`sync` in a project, by the same location rule) on a new branch from `main`.
+Sebastián merges `jsaristi/js-harness#10` (slice 3); then T4 (`sync` in a project, by the same
+location rule) on a new branch from `main`, in a new session.
