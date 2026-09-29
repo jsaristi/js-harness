@@ -1,0 +1,2 @@
+# Hooks run under sh, so they keep LF endings even where core.autocrlf checks out CRLF.
+.githooks/* text eol=lf
