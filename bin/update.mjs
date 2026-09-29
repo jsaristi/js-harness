@@ -109,12 +109,14 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // Re-run the NEWLY installed binary's own sync, so files on disk match the new release
   // rather than whatever this (old) process would have written. With --prefix we know exactly
-  // where npm put it; without one, run whatever `js-harness` the shell resolves on PATH.
+  // where npm put it; without one, run whatever `js-harness` the shell resolves on PATH. `--global`
+  // (T4): upgrade runs from any folder, and inside a git repository a plain `sync` would act on that
+  // project (or refuse for it) instead of the machine install this is meant to bring up to date.
   const syncResult = opts.prefix
-    ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home], {
+    ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home, '--global'], {
         encoding: 'utf8',
       })
-    : spawn('js-harness', ['sync', '--home', quoteForShell(opts.home, platform)], {
+    : spawn('js-harness', ['sync', '--home', quoteForShell(opts.home, platform), '--global'], {
         shell: true,
         encoding: 'utf8',
       });
@@ -131,7 +133,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
     console.error(
       `sync ran, but the manifest under ${opts.home} reports ` +
         `${manifest ? manifest.version : '(not installed)'}, not ${latest.version}: the js-harness ` +
-        'found is not the upgraded one — run `js-harness sync` with the upgraded binary',
+        'found is not the upgraded one — run `js-harness sync --global` with the upgraded binary',
     );
     return 1;
   }

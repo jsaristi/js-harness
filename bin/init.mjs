@@ -3,7 +3,7 @@
 // manifest — see bin/lib/project.mjs and odd/tasks/project-init.md, "T2 design".
 import os from 'node:os';
 import { currentVersion } from './install.mjs';
-import { initProject, InitWriteError } from './lib/project.mjs';
+import { initProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
 
 const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
 
@@ -81,19 +81,6 @@ function logAlreadyInitialized(result) {
   console.log(`manifest: ${result.codegraphRetry.manifestPath}`);
 }
 
-/** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
- * overclaiming "nothing was left behind" when something could not be removed (T2c
- * R3-nothing-left-behind-overclaims). `.codegraph/` is now part of the same rollback as everything
- * else whenever this run is the one that created it (T2e item 2), so a failure to remove it shows
- * up in `notRemoved` exactly like any other path — no separate clause for it. The one case where
- * `.codegraph/` is deliberately left untouched (a codegraph retry whose directory already existed,
- * still truthfully owned by the older, unrewritten manifest) is not a removal failure at all, so it
- * never reaches `notRemoved` and needs no disclosure here. */
-function cleanupClause(err) {
-  if (err.notRemoved.length === 0) return 'nothing was left behind';
-  return `could not remove: ${err.notRemoved.join(', ')}`;
-}
-
 export async function initMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
@@ -129,10 +116,7 @@ export async function initMain(argv, env = process.env, deps = {}) {
   }
 
   if (result.staleManifest) {
-    console.error(
-      `this clone was initialized before (manifest: ${result.manifestPath}) but harness.json is missing: ` +
-        'restore harness.json, or run js-harness uninstall first',
-    );
+    console.error(staleManifestMessage(result.manifestPath));
     return 1;
   }
 

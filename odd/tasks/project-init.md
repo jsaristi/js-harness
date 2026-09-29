@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, open).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -118,6 +118,35 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   2026-09-28, answering R3-implicit-rerun-falls-to-machine). The TUI's uninstall passes
   `--global`.
 
+## T4 design
+- Nothing `init` writes depends on the version (the hook is a fixed `exec js-harness check`, and
+  `AGENTS.md` is the project's once written), so moving a project to its pin means matching the
+  running js-harness to `harness.json`. When they differ, `sync` writes nothing, exits 1 and names
+  both ways out: `npm i -g github:jsaristi/js-harness#v<pin>` (the decided release source; no tag
+  exists yet), or raising the pin to the running version in `harness.json` with a commit. It
+  never installs anything: one global install serves every project, so changing it from inside
+  one project would move the others (Sebastián, 2026-09-28; roadmap, Decided: "Per project").
+- Scope by location, the `uninstall` rule: `js-harness sync [--cwd <dir>] [--home <dir>]
+  [--global]`, strict flags (unknown flag, missing value, `--global` with `--cwd` → exit 2).
+  Inside a git repository whose top-level has `harness.json` or a project manifest, it syncs the
+  project; with `--global`, or outside any git repository with no `--cwd`, it is today's machine
+  sync. An explicit `--cwd` that is not an initialized project, or a git repository around the cwd
+  that is not one, exits 1 and names `--global`. The TUI's sync passes `--global` (T5 decides what
+  it offers inside a project).
+- `harness.json` without a string `version` (missing, unreadable, not JSON) → exit 1 naming it,
+  nothing written. A manifest without `harness.json` → exit 1, the same refusal `init` gives.
+- Pin equal to the running version, no manifest in this clone (a fresh clone of an initialized
+  project): sync sets the clone up the way `init` would — the pre-commit gate and `codegraph
+  init`, under the same containment rules — and writes a manifest, but `harness.json` and an
+  existing `AGENTS.md` are recorded as `kept` (committed), never as files this clone created, so
+  `uninstall` there removes only what the clone wrote.
+- Pin equal, manifest present: a recorded hook that is gone is written again (when its path is
+  free and still contained); `.codegraph/` recorded as created, or never created, and absent is
+  created by `codegraph init`; everything else is left as is. The manifest is rewritten
+  atomically only when something changed; otherwise "up to date", exit 0, nothing written.
+- Exit codes: 0 in sync (skips and kept files are reported, not failures), 1 a pin mismatch, a bad
+  `harness.json`, a stale manifest, a not-initialized project or a failed write, 2 usage error.
+
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
@@ -186,7 +215,15 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   (R3-dir-prune-follows-ancestor-link); a manifest write that makes no progress fails instead of
   spinning or passing a truncated file (Codex P2, R3-short-write-loop-no-progress-guard) — route:
   inline (one file and its test, both understood)
-- [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
+- [x] T4 `sync` moves a project to its pinned version — route: delegated writer
+- [x] T4b Accepted review follow-ups on T4: a `.codegraph/` this sync recreated is rolled back on a
+  failed manifest write even when the old manifest records an earlier one as created (Codex P2);
+  "up to date" means nothing was written, not that nothing was reported
+  (R2-uptodate-conflates-reported-with-changed, R3-uptodate-counts-report-only-actions) — route:
+  inline (one function and its tests, both understood)
+- [x] T4c Accepted whole-slice review follow-up: a pin that is not semver is an invalid
+  `harness.json`, since a cloned repository's pin is printed inside a suggested install command
+  (R1-001) — route: inline (one check and its tests)
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
@@ -498,10 +535,73 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - Follow-ups carried from slice 3, none blocking: the two T3c SUGGESTION above; a lexically
   outside `core.hooksPath` that links resolve back inside is recorded as a `../` path (T2f
   note); `dirs` pruning trusts a missing directory's lexical path.
+- 2026-09-28: slice 4 (T4) starts on `feat/project-sync` from 588a501. Sebastián chose that a
+  project `sync` whose pin differs from the running version reports and writes nothing (see "T4
+  design"; roadmap, Decided: "Per project").
+- 2026-09-29: T4 done by a delegated writer (`bin/lib/project.mjs` +283/−78 with `syncProject`,
+  `syncRecorded`, `restoreRecordedHook`, and `writeProject`'s hook and codegraph steps shared as
+  `writeHookGate`/`codegraphStep`; `bin/install.mjs` +123/−19 with `syncMain` by location; usage, TUI
+  and `upgrade` pass `--global` to the machine sync; ~980 of ~1,400 lines are tests). RED with a
+  throwing `syncProject` stub and the old `syncMain`: `project.test.mjs` 33 failures (every new
+  test), `install.test.mjs` 19, `update.test.mjs` 3, `js-harness.test.mjs` 1, `tui.test.mjs` 1.
+  GREEN: `node --test` → `tests 481 / pass 474 / fail 0 / skipped 7`, re-run by the parent;
+  `npm run check` PASS; `npm run e2e` 14 steps PASS. Real run (real git and codegraph, scratch
+  folder): `init` in an origin repo, clone, `sync --cwd <clone>` → `kept harness.json (committed)`,
+  `kept AGENTS.md (committed)`, `wrote .git/hooks/pre-commit`, exit 0; again → `up to date at
+  0.1.0`; pin edited to 9.9.9 → exit 1 naming both ways out, manifest and hook byte-identical;
+  `uninstall --cwd <clone>` → hook and manifest removed, `harness.json` and `AGENTS.md` kept,
+  `git status --porcelain` empty. Writer's calls, accepted: a clone lacking `AGENTS.md` gets a skip,
+  not a file; a present recorded hook is never overwritten, whatever its content; a manifest with an
+  older `version` records the running one; `upgrade` calls `sync --global`, since a plain sync
+  inside a repository would now refuse.
+- 2026-09-29: side effect of the writer's RED run: the old `syncMain` ignored the new tests' flags
+  and re-synced the real `~/.js-harness` at 0.1.0 (23:58). Checked by the parent: both `SKILL.md`
+  files match the manifest's sha256 and each host file holds one `js-harness doctor --hook` entry.
+  The gate's payload listing showed no such entry in either host just before that run (commit
+  bd749a8) and shows it after, so the entry the roadmap records as registered had gone missing
+  earlier, for an unknown reason, and that sync put it back. A stray `--global` folder it made in
+  the checkout was removed by the writer.
+- 2026-09-29: T4 committed as 6b92b70. Assessed (`--base-ref 588a501 --committed-only`): risk
+  `high` (`hot_path` on `bin/update.mjs`), 1566 lines, `review_due: true`. Native review lineage
+  review-54867637536910d4: consent granted (pre-granted), four lenses, approved and acknowledged
+  (authority burned), with one WARNING (R2-uptodate-conflates-reported-with-changed) and five
+  SUGGESTION (R2-clone-harness-json-comment-drift, R2-codegraph-step-duplicated,
+  R2-hook-write-duplicated-and-found-by-basename, R3-recorded-hook-rollback-untested,
+  R3-uptodate-counts-report-only-actions). Codex (`--base 588a501`; its `npm run check` failed in
+  its sandbox): P2 a `.codegraph/` recreated by a failed sync is left behind when the old manifest
+  says `createdDir: true`. The WARNING, its twin SUGGESTION and the P2 accepted as T4b.
+- 2026-09-29: T4b done inline by the parent. RED: 3 new tests, 3 failures (the recreated
+  `.codegraph/` left behind; a repeat sync reporting a hook a junction sends outside, and a repeat
+  codegraph failure, both not up to date). GREEN: `project.test.mjs` → `tests 124 / pass 119 / fail
+  0 / skipped 5`; full suite through the commit gate PASS. Committed as 759f43c. Assessed
+  (`--base-ref 6b92b70`): risk `medium`, 79 lines, `under_budget`; reviewed anyway as the slice's last
+  code commit. Native review lineage review-e4e4f47ab07943a6: one lens (reliability), approved and
+  acknowledged, one SUGGESTION (R3-uptodate-ignores-createddirs). Codex (`--base 6b92b70`): no
+  actionable regressions; its `npm run check` was denied a temp directory.
+- 2026-09-29: PR `jsaristi/js-harness#11` opened. The gentle-ai Stop hook then asked for the whole
+  slice as one candidate (range `588a501..e307e7a`, risk `high`, 1698 lines): native review lineage
+  review-a28346df3a98b863, consent granted (pre-granted), four lenses, approved and acknowledged,
+  with one WARNING (R1-001: the pin mismatch message prints `npm i -g ...#v<pin>` from the
+  committed `harness.json` after checking only that the version is a non-empty string, so a cloned
+  repository could plant shell metacharacters or terminal escapes in a command the user copies) and
+  six SUGGESTION, the same readability and rollback-coverage points as T4's review plus
+  `bin/install.mjs:244-248` (R2-005). R1-001 accepted as T4c, done inline by the parent. RED: three
+  new invalid-pin cases (shell metacharacters, a terminal escape, `latest`) → 3 failures; a
+  prerelease-with-build pin still reaching `pinMismatch` passed before and after. GREEN: those tests
+  9/9; full suite through the commit gate PASS. Committed as a4d871d. Native review lineage
+  review-c4909def058ac5e0 (`--base-ref e307e7a`, medium, 26 lines, one lens): approved and
+  acknowledged, no findings. Codex (`--base e307e7a`): no regression; its sandbox blocked the
+  tests, so it read the git objects.
+- Follow-ups carried from slice 4, none blocking: the four remaining SUGGESTION from T4's review and
+  R3-uptodate-ignores-createddirs (a directory is only created together with the hook written into
+  it, so today it cannot change the verdict); the installed skill text in `bin/lib/manifest.mjs`
+  still says `js-harness sync` unqualified; an initialized project whose `.codegraph/.gitignore` got
+  committed gives its clones a `.codegraph/`, so their sync skips `codegraph init` and records
+  `createdDir: false` (the writer's observation, not reproduced by the parent).
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T4 (`sync` in a project, by the same location rule as `uninstall`) on a new branch from `main`, in
-a new session.
+Sebastián merges slice 4's PR; then T5 (the TUI offers `init`/`sync`/`status` inside a project
+and `doctor`/`upgrade` outside one) on a new branch from `main`, in a new session.
