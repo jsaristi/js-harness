@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -117,6 +117,35 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   only outside a git repository does a plain `uninstall` reach the machine (Sebastián,
   2026-09-28, answering R3-implicit-rerun-falls-to-machine). The TUI's uninstall passes
   `--global`.
+
+## T4 design
+- Nothing `init` writes depends on the version (the hook is a fixed `exec js-harness check`, and
+  `AGENTS.md` is the project's once written), so moving a project to its pin means matching the
+  running js-harness to `harness.json`. When they differ, `sync` writes nothing, exits 1 and names
+  both ways out: `npm i -g github:jsaristi/js-harness#v<pin>` (the decided release source; no tag
+  exists yet), or raising the pin to the running version in `harness.json` with a commit. It
+  never installs anything: one global install serves every project, so changing it from inside
+  one project would move the others (Sebastián, 2026-09-28; roadmap, Decided: "Per project").
+- Scope by location, the `uninstall` rule: `js-harness sync [--cwd <dir>] [--home <dir>]
+  [--global]`, strict flags (unknown flag, missing value, `--global` with `--cwd` → exit 2).
+  Inside a git repository whose top-level has `harness.json` or a project manifest, it syncs the
+  project; with `--global`, or outside any git repository with no `--cwd`, it is today's machine
+  sync. An explicit `--cwd` that is not an initialized project, or a git repository around the cwd
+  that is not one, exits 1 and names `--global`. The TUI's sync passes `--global` (T5 decides what
+  it offers inside a project).
+- `harness.json` without a string `version` (missing, unreadable, not JSON) → exit 1 naming it,
+  nothing written. A manifest without `harness.json` → exit 1, the same refusal `init` gives.
+- Pin equal to the running version, no manifest in this clone (a fresh clone of an initialized
+  project): sync sets the clone up the way `init` would — the pre-commit gate and `codegraph
+  init`, under the same containment rules — and writes a manifest, but `harness.json` and an
+  existing `AGENTS.md` are recorded as `kept` (committed), never as files this clone created, so
+  `uninstall` there removes only what the clone wrote.
+- Pin equal, manifest present: a recorded hook that is gone is written again (when its path is
+  free and still contained); `.codegraph/` recorded as created, or never created, and absent is
+  created by `codegraph init`; everything else is left as is. The manifest is rewritten
+  atomically only when something changed; otherwise "up to date", exit 0, nothing written.
+- Exit codes: 0 in sync (skips and kept files are reported, not failures), 1 a pin mismatch, a bad
+  `harness.json`, a stale manifest, a not-initialized project or a failed write, 2 usage error.
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -498,6 +527,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - Follow-ups carried from slice 3, none blocking: the two T3c SUGGESTION above; a lexically
   outside `core.hooksPath` that links resolve back inside is recorded as a `../` path (T2f
   note); `dirs` pruning trusts a missing directory's lexical path.
+- 2026-09-28: slice 4 (T4) starts on `feat/project-sync` from 588a501. Sebastián chose that a
+  project `sync` whose pin differs from the running version reports and writes nothing (see "T4
+  design"; roadmap, Decided: "Per project").
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
