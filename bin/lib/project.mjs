@@ -830,3 +830,206 @@ export function initProject(cwd, version, deps = {}) {
 
   return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps);
 }
+
+/** Resolves one `files`/`dirs` manifest entry back to its absolute path: repo-relative against
+ * `root` for an ordinary working-tree entry, or the entry's own absolute forward-slashed `path`
+ * (converted back to the host's separator) when `gitDir: true` marks it as written into a git dir
+ * outside the working tree — the same two shapes `manifestEntry`/`pathShapeFor` produce on the way
+ * in (see there). */
+function resolveManifestEntryPath(root, entry) {
+  const segments = entry.path.split('/');
+  return entry.gitDir ? path.resolve(segments.join(path.sep)) : path.join(root, ...segments);
+}
+
+/** Whether `content` (as read from disk) is still what `init` wrote, judged the way T3 design calls
+ * for: an exact sha256 match, or a match once CRLF is folded back to LF — git may rewrite line
+ * endings on checkout (`core.autocrlf`, a `.gitattributes` rule), but `init` itself only ever writes
+ * LF (`PRE_COMMIT_HOOK`, `agentsTemplate`, harness.json's `JSON.stringify(...) + '\n'`), so the
+ * recorded hash is always for LF content — never the reverse, so no other direction needs checking. */
+function matchesRecordedHash(content, expectedHash) {
+  if (sha256(content) === expectedHash) return true;
+  return sha256(content.replace(/\r\n/g, '\n')) === expectedHash;
+}
+
+/** Removes `dir` and every descendant directory that ends up empty, deepest first — walking *down*
+ * from the recorded shallowest directory `init` created, the opposite direction from
+ * `manifest.mjs`'s `removeEmptyDirsUpTo` (which climbs up from a leaf toward a fixed stop). `dirs`
+ * only ever records the shallowest ancestor a single `mkdirSync(dir, { recursive: true })` actually
+ * created (see `shallowestMissingAncestor`), so by the time this runs — after every `files` entry is
+ * already handled — the whole chain below it should be empty; a directory that turns out to have
+ * real content left in it (something added after init, or a file above that was kept or failed) is
+ * silently left alone rather than forced empty, matching `dirs`' own "remove each when empty"
+ * contract (T3 design) — only an actual removal failure on a directory this walk itself confirmed
+ * *was* empty is reported. `isWorkingTreeDir` (constant for the whole walk, from the manifest
+ * entry's own `gitDir` flag) picks `pathShapeFor`'s report shape for any failure, at whatever depth
+ * it happens. */
+function pruneEmptyDirsBottomUp(root, dir, isWorkingTreeDir, rm, notRemoved, actions) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return; // already gone entirely — nothing to do
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      pruneEmptyDirsBottomUp(root, path.join(dir, entry.name), isWorkingTreeDir, rm, notRemoved, actions);
+    }
+  }
+  let remaining;
+  try {
+    remaining = fs.readdirSync(dir);
+  } catch {
+    return; // vanished during the recursion above (already handled by a deeper call)
+  }
+  if (remaining.length > 0) return; // real content left behind — never this walk's to remove
+  const label = pathShapeFor(root, dir, isWorkingTreeDir);
+  try {
+    rm(dir, { recursive: true, force: true });
+    actions.push({ kind: 'removed', path: label });
+  } catch (err) {
+    notRemoved.push(label);
+    actions.push({ kind: 'failed', path: label, reason: err.message });
+  }
+}
+
+/** Removes `dir` only if it is now empty — the manifest's own directory, once the manifest file
+ * itself is gone (T3 design: "the manifest, then its directory when empty"). Best-effort and never
+ * fatal: the manifest is already gone either way by the time this runs, so a failure here has
+ * nothing left to protect by turning `uninstallProject`'s overall result into a failure. */
+function removeManifestDirIfEmpty(dir, rm) {
+  let remaining;
+  try {
+    remaining = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  if (remaining.length !== 0) return;
+  try {
+    rm(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort; see the doc comment above.
+  }
+}
+
+/** Undoes exactly what `initProject` wrote, from the project manifest it left behind — the
+ * counterpart T3 design calls for. `deps.spawn`/`deps.rm` are injectable the same way `initProject`'s
+ * are; no `writeFile` here, since uninstall never writes anything.
+ *
+ * Returns one of:
+ * - `{ code: 1, noSuchDirectory: true, cwd }` — `cwd` itself does not exist.
+ * - `{ code: 1, notGitRepo: true }` — outside a git repository.
+ * - `{ code: 1, notInitialized: true }` — inside a git repository, but neither `harness.json` nor a
+ *   project manifest exists at its top-level: never a js-harness project, or already fully undone.
+ *   The caller (`uninstallMain`) treats this and `notGitRepo` as "fall through to the machine
+ *   uninstall" (T3 design's "anywhere else"), never as project-scope errors.
+ * - `{ code: 1, noManifestFile: true, manifestPath }` — `harness.json` exists but no manifest does
+ *   (a fresh clone of an initialized project: those files are already committed, so git has them).
+ * - `{ code: 1, malformedManifest: true, manifestPath, reason? }` — the manifest does not parse as
+ *   the shape `initProject` writes.
+ * - `{ code, root, manifestPath, actions, notRemoved }` — the ordinary result: `actions` is in
+ *   report order (`removed`/`kept`/`alreadyGone`/`codegraphRemoved`/`failed`/`manifestRemoved`),
+ *   `code` is 1 exactly when `notRemoved` is non-empty (a kept, unchanged file is not a failure —
+ *   T3 design). On any failure the manifest itself is left in place so a second `uninstallProject`
+ *   run can finish the job; anything already removed simply reports `alreadyGone` on that rerun. */
+export function uninstallProject(cwd, deps = {}) {
+  const spawn = deps.spawn ?? spawnSync;
+  const rm = deps.rm ?? fs.rmSync;
+
+  if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
+
+  const root = gitTopLevel(cwd, spawn);
+  if (!root) return { code: 1, notGitRepo: true };
+
+  const harnessJsonPath = path.join(root, 'harness.json');
+  const manifestFilePath =
+    resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
+
+  const harnessJsonPresent = isOccupied(harnessJsonPath);
+  const manifestPresent = isOccupied(manifestFilePath);
+
+  if (!harnessJsonPresent && !manifestPresent) return { code: 1, notInitialized: true };
+  if (!manifestPresent) return { code: 1, noManifestFile: true, manifestPath: manifestFilePath };
+
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestFilePath, 'utf8'));
+  } catch (err) {
+    return { code: 1, malformedManifest: true, manifestPath: manifestFilePath, reason: err.message };
+  }
+  if (!manifest || !Array.isArray(manifest.files)) {
+    return { code: 1, malformedManifest: true, manifestPath: manifestFilePath };
+  }
+
+  const actions = [];
+  const notRemoved = [];
+
+  for (const file of manifest.files) {
+    const abs = resolveManifestEntryPath(root, file);
+    let stat;
+    try {
+      stat = fs.lstatSync(abs);
+    } catch {
+      actions.push({ kind: 'alreadyGone', path: file.path });
+      continue;
+    }
+    if (!stat.isFile()) {
+      // A symlink (never followed, dangling or not) or anything else that isn't a plain file: not
+      // what `init` wrote, so never this run's to remove either.
+      actions.push({ kind: 'kept', path: file.path, reason: 'changed since init' });
+      continue;
+    }
+    let content;
+    try {
+      content = fs.readFileSync(abs, 'utf8');
+    } catch (err) {
+      notRemoved.push(file.path);
+      actions.push({ kind: 'failed', path: file.path, reason: err.message });
+      continue;
+    }
+    if (!matchesRecordedHash(content, file.sha256)) {
+      actions.push({ kind: 'kept', path: file.path, reason: 'changed since init' });
+      continue;
+    }
+    try {
+      rm(abs, { force: true });
+      actions.push({ kind: 'removed', path: file.path });
+    } catch (err) {
+      notRemoved.push(file.path);
+      actions.push({ kind: 'failed', path: file.path, reason: err.message });
+    }
+  }
+
+  for (const dir of manifest.dirs ?? []) {
+    const abs = resolveManifestEntryPath(root, dir);
+    pruneEmptyDirsBottomUp(root, abs, !dir.gitDir, rm, notRemoved, actions);
+  }
+
+  if (manifest.codegraph?.createdDir === true) {
+    try {
+      rm(codegraphDirPath(root), { recursive: true, force: true });
+      actions.push({ kind: 'codegraphRemoved' });
+    } catch (err) {
+      notRemoved.push('.codegraph');
+      actions.push({ kind: 'failed', path: '.codegraph', reason: err.message });
+    }
+  }
+
+  // `manifest.kept` entries were never written by `init` (an existing AGENTS.md, an existing hook,
+  // one outside the repository) — left alone entirely, not even reported here (T3 design).
+
+  if (notRemoved.length > 0) {
+    return { code: 1, root, manifestPath: manifestFilePath, actions, notRemoved };
+  }
+
+  try {
+    rm(manifestFilePath, { force: true });
+    actions.push({ kind: 'manifestRemoved', path: manifestFilePath });
+  } catch (err) {
+    notRemoved.push(manifestFilePath);
+    actions.push({ kind: 'failed', path: manifestFilePath, reason: err.message });
+    return { code: 1, root, manifestPath: manifestFilePath, actions, notRemoved };
+  }
+  removeManifestDirIfEmpty(path.dirname(manifestFilePath), rm);
+
+  return { code: 0, root, manifestPath: manifestFilePath, actions, notRemoved };
+}

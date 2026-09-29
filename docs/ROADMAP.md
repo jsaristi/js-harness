@@ -121,7 +121,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 ### Project init
 - [x] A git-spec global install works through the pnpm shim
 - [x] `init` writes `harness.json`, a base `AGENTS.md` if none exists, the pre-commit gate, and runs `codegraph init`, all recorded in a project manifest
-- [ ] `uninstall` in a project restores it exactly
+- [x] `uninstall` in a project restores it exactly
 - [ ] `sync` moves a project to its pinned version
 - [ ] The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
 - [ ] `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged in, with its fix command

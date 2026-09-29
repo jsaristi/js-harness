@@ -1,13 +1,63 @@
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
 import { manifestPath, readManifest } from './lib/manifest.mjs';
+import { initProject } from './lib/project.mjs';
+
+// T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
+// project.mjs's `gitTopLevel`/`resolveGitPath`) — isolate it from the host's global/system git
+// config and from a git hook's own inherited GIT_DIR/GIT_INDEX_FILE, the same way
+// bin/lib/project.test.mjs's `before` hook does (a pre-commit run of *that* suite broke `git
+// worktree add` this exact way).
+before(() => {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) delete process.env[key];
+  }
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-gitconfig-'));
+  process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-home-'));
+}
+
+function makeTmpProjectRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-project-'));
+  const init = spawnSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(init.status, 0, `git init failed: ${init.stderr}`);
+  return dir;
+}
+
+/** A spawn for `initProject` that runs `git` for real but never touches a real `codegraph` binary —
+ * only needed to seed an initialized project fixture; `uninstallMain`'s own project-scope path never
+ * spawns codegraph at all. */
+function fakeCodegraphSpawn() {
+  return (cmd, args, opts) => {
+    if (cmd === 'git') return spawnSync('git', args, opts);
+    if (opts?.cwd) fs.mkdirSync(path.join(opts.cwd, '.codegraph'), { recursive: true });
+    return { status: 0, stdout: '', stderr: '' };
+  };
+}
+
+function captureConsole(fn) {
+  const outLines = [];
+  const errLines = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = (line) => outLines.push(String(line));
+  console.error = (line) => errLines.push(String(line));
+  return fn()
+    .then((code) => ({ code, outLines, errLines }))
+    .finally(() => {
+      console.log = originalLog;
+      console.error = originalError;
+    });
 }
 
 test('currentVersion reads this package\'s own package.json version', () => {
@@ -140,6 +190,124 @@ test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --h
     assert.equal(uninstallCode, 0);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- T3 (project-init): uninstallMain's scope routing — see project.mjs's uninstallProject and
+// "T3 design" ---
+
+test('uninstallMain rejects an unknown flag with usage and exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => uninstallMain(['--bogus']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('unknown flag: --bogus')));
+  assert.ok(errLines.some((l) => l.includes('Usage: js-harness uninstall')));
+});
+
+test('uninstallMain rejects --cwd with no value, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => uninstallMain(['--cwd']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--cwd requires a value')));
+});
+
+test('uninstallMain rejects --home with no value, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => uninstallMain(['--home']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--home requires a value')));
+});
+
+test('uninstallMain rejects --global combined with --cwd, exit 2', async () => {
+  const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--cwd', '/tmp/whatever']));
+  assert.equal(code, 2);
+  assert.ok(errLines.some((l) => l.includes('--global cannot be combined with --cwd')));
+});
+
+test('uninstallMain --cwd undoes the project and prints its own report', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--cwd', root]));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.includes('removed harness.json'));
+    assert.ok(outLines.includes('removed AGENTS.md'));
+    assert.ok(outLines.includes('removed .codegraph/'));
+    assert.ok(outLines.some((l) => l.startsWith('removed manifest ')));
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --cwd reports a kept file on stderr with its reason', async () => {
+  const root = makeTmpProjectRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'edited by hand\n', 'utf8');
+
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--cwd', root]));
+
+    assert.equal(code, 0); // a kept file is not a failure
+    assert.ok(errLines.includes('kept AGENTS.md (changed since init)'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// An explicit `--cwd` names a project, so a folder that is not an initialized one is an error, never
+// a silent fall-through to the machine: a second `uninstall --cwd <repo>` after the first one would
+// otherwise remove the machine install.
+for (const [label, makeCwd] of [
+  ['outside any git repository', () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-notaproject-'))],
+  ['in a git repository init never touched', makeTmpProjectRepo],
+]) {
+  test(`uninstallMain --cwd ${label} exits 1 and leaves the machine install alone`, async () => {
+    const home = makeTmpHome();
+    const cwd = makeCwd();
+    try {
+      await installMain(['--home', home]);
+
+      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--cwd', cwd, '--home', home]));
+
+      assert.equal(code, 1);
+      assert.equal(fs.existsSync(manifestPath(home)), true);
+      assert.deepEqual(outLines, []);
+      assert.ok(errLines.some((l) => l.includes('not an initialized project') && l.includes('--global')));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+}
+
+test('uninstallMain --global reaches the machine even from inside an initialized project, leaving it untouched', async () => {
+  const root = makeTmpProjectRepo();
+  const home = makeTmpHome();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: fakeCodegraphSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    await installMain(['--home', home]);
+
+    const originalCwd = process.cwd();
+    process.chdir(root);
+    let result;
+    try {
+      result = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.existsSync(manifestPath(home)), false); // the machine install was reached
+    // The project itself is completely untouched.
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+    assert.ok(fs.existsSync(initResult.manifestPath));
+    assert.ok(fs.existsSync(path.join(root, 'AGENTS.md')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
   }
 });

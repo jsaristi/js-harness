@@ -110,6 +110,8 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   them, and `--global` reaches the machine install.
 - Exit codes: 0 done (kept files are reported, not failures), 1 a failed removal or no manifest,
   2 usage error.
+- An explicit `--cwd` names a project: when it is not an initialized one, `uninstall` exits 1 and
+  names `--global`, never falling through to the machine (found by the parent in review of T3).
 
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
@@ -164,7 +166,7 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   difference still records the whole chain (Codex P2, R3-002, a regression from T2f); test the
   case folding and a hooks directory under a linked root where this machine allows it (R3-003)
   — route: the same delegated writer
-- [ ] T3 `uninstall` in a project restores it exactly — route: delegated writer
+- [x] T3 `uninstall` in a project restores it exactly — route: delegated writer
 - [ ] T4 `sync` moves a project to its pinned version — route: delegated writer
 - [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
   — route: delegated writer
@@ -407,10 +409,27 @@ b22ecc9); 3 = T2e + T3 (`feat/project-uninstall`).
   case is a new explicit skip: `os.tmpdir()` and both realpath forms are identical on this host.
   T2g is the last correction round on the containment code: later findings there become
   follow-ups unless severe, the rule slice 2 used.
+- 2026-09-28: T3 done by the same writer. `uninstallProject` in `bin/lib/project.mjs` (+203) and
+  its tests (+392); `uninstallMain` in `bin/install.mjs` parses `--cwd`/`--home`/`--global`
+  strictly and routes by location (+124/−3, tests +160/−1); the dispatcher's usage line names both
+  scopes. Files are removed when their content (CRLF read as LF) matches the recorded sha256,
+  never through a link; `dirs` are pruned bottom-up only when empty; `.codegraph/` goes when
+  `createdDir`; the manifest stays when a removal fails. RED against f725b72: `install.test.mjs`
+  6 failures, `js-harness.test.mjs` 1, and `project.test.mjs` failed on the missing export; the
+  parent re-ran it with an `uninstallProject` stub → 16 failures, every new `uninstallProject`
+  test. Reading `uninstallMain`, the parent found that `uninstall --cwd <repo>` on a repo not
+  initialized fell through to the machine, so a second run would remove the machine install, and
+  the writer had pinned that in a test. Fixed inline: RED 2 failures (outside a repo, in an
+  untouched repo), GREEN `install.test.mjs` 17/17. GREEN: `node --test` → `tests 408 / pass 401
+  / fail 0 / skipped 7`; `npm run check` PASS; `npm run e2e` every step PASS (its `uninstall`
+  step restores both hook files byte for byte). Real runs in scratch repos (real git, real
+  codegraph): init then uninstall → `git status --porcelain` empty, hook, `.codegraph/` and
+  manifest gone (the writer's); with `AGENTS.md` edited after init → `kept AGENTS.md (changed
+  since init)`, the rest removed, exit 0 (the parent's).
 - Observed, out of scope: `js-harness status` reports `latest available: (unknown)` because it
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
 ## Next step
-T2g reviewed (gentle-ai, then Codex); then T3 by the same writer, committed and reviewed; then
-slice 3's PR.
+Review the range fa96953..T3 (T2g stayed under budget, so it is reviewed with T3): gentle-ai,
+then Codex; then slice 3's PR.

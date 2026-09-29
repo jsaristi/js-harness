@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   initProject,
+  uninstallProject,
   gitTopLevel,
   resolveGitPath,
   gitDirs,
@@ -1635,4 +1636,395 @@ test('runCodegraphInit reports ok:false with a reason when the binary is missing
   const result = runCodegraphInit('/root', { spawn, platform: 'linux' });
   assert.equal(result.ok, false);
   assert.match(result.reason, /ENOENT/);
+});
+
+// --- T3: uninstallProject, the counterpart of initProject (see "T3 design") ---
+
+/** Every file under `dir`, relative to `dir` with forward slashes, sorted — skipping any entry (or
+ * whole subtree) `shouldSkip` reports true for. Used for round-trip comparisons ("the tree is
+ * exactly what it was before init"): callers skip `.git` itself and separately compare `.git/hooks`
+ * on its own, so incidental git-internal churn (`.git/objects`, `.git/index`, ...) never enters the
+ * comparison at all — never even walked, not just filtered out afterward. */
+function listFilesRecursive(dir, shouldSkip = () => false) {
+  const results = [];
+  const walk = (current, rel) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (shouldSkip(entryRel)) continue;
+      const abs = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(abs, entryRel);
+      else results.push(entryRel);
+    }
+  };
+  walk(dir, '');
+  return results.sort();
+}
+
+/** The working tree (never descending into `.git` at all) plus, separately, whatever hooks
+ * directory actually matters for this run (the repo's own `.git/hooks` for a plain repo, or the
+ * common git dir's `hooks` for a worktree) — the two places `initProject`/`uninstallProject` can
+ * ever write outside `harness.json`/`AGENTS.md` themselves. */
+function repoTreeSnapshot(workingTreeRoot, hooksDir) {
+  const workingTree = listFilesRecursive(workingTreeRoot, (rel) => rel === '.git' || rel.startsWith('.git/'));
+  const hooks = listFilesRecursive(hooksDir);
+  return { workingTree, hooks };
+}
+
+test('uninstallProject leaves a plain repo byte-identical to before init', () => {
+  const root = makeTmpRepo();
+  try {
+    const hooksDir = path.join(root, '.git', 'hooks');
+    const before = repoTreeSnapshot(root, hooksDir);
+
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(root, hooksDir), before);
+    assert.equal(fs.existsSync(uninstallResult.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves a worktree and its common git dir byte-identical to before init', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-uninstall-wt-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-uninstall-wt'], {
+      cwd: main,
+      encoding: 'utf8',
+    });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hooksDir = path.join(commonGitDir, 'hooks');
+    const before = repoTreeSnapshot(worktree, hooksDir);
+
+    const initResult = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookEntry = initResult.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.equal(hookEntry.gitDir, true); // sanity: this is exactly the outside-working-tree case
+
+    const uninstallResult = uninstallProject(worktree, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(worktree, hooksDir), before);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves a repo byte-identical to before init when core.hooksPath created a multi-level directory', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const hooksDir = path.join(root, '.git', 'hooks'); // untouched: hooksPath points elsewhere
+    const before = repoTreeSnapshot(root, hooksDir);
+    assert.equal(fs.existsSync(path.join(root, 'custom')), false);
+
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.deepEqual(initResult.manifest.dirs, [{ path: 'custom' }]);
+    assert.ok(fs.existsSync(path.join(root, 'custom', 'nested', 'hooks', 'pre-commit')));
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(root, hooksDir), before);
+    assert.equal(fs.existsSync(path.join(root, 'custom')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports a changed file as kept and leaves it untouched', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const edited = `${fs.readFileSync(agentsPath, 'utf8')}\nedited by the user\n`;
+    fs.writeFileSync(agentsPath, edited, 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0); // a kept file is not a failure
+    const keptAction = result.actions.find((a) => a.path === 'AGENTS.md');
+    assert.deepEqual(keptAction, { kind: 'kept', path: 'AGENTS.md', reason: 'changed since init' });
+    assert.equal(fs.readFileSync(agentsPath, 'utf8'), edited);
+    // The manifest is removed regardless — a kept file is not a reason to keep it (only a genuine
+    // removal failure is, per T3 design).
+    assert.equal(fs.existsSync(result.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject removes a file whose content matches once CRLF is folded back to LF', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const original = fs.readFileSync(agentsPath, 'utf8');
+    // Simulate git rewriting line endings on checkout (core.autocrlf/.gitattributes) — same content,
+    // CRLF instead of LF.
+    fs.writeFileSync(agentsPath, original.replace(/\n/g, '\r\n'), 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    const action = result.actions.find((a) => a.path === 'AGENTS.md');
+    assert.deepEqual(action, { kind: 'removed', path: 'AGENTS.md' });
+    assert.equal(fs.existsSync(agentsPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports an already-removed file as already gone, not a failure', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, 'AGENTS.md'));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'AGENTS.md'),
+      { kind: 'alreadyGone', path: 'AGENTS.md' },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject never follows a symlink placed where a written file used to be', async (t) => {
+  const root = makeTmpRepo();
+  const outsideDir = makeTmpDir('js-harness-project-uninstall-symlink-outside-');
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    fs.rmSync(agentsPath);
+    const target = path.join(outsideDir, 'elsewhere.md');
+    fs.writeFileSync(target, 'not the template', 'utf8');
+    if (!trySymlink(target, agentsPath, 'file', t)) return;
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(
+      result.actions.find((a) => a.path === 'AGENTS.md'),
+      { kind: 'kept', path: 'AGENTS.md', reason: 'changed since init' },
+    );
+    assert.equal(fs.lstatSync(agentsPath).isSymbolicLink(), true); // the link itself untouched
+    assert.equal(fs.existsSync(target), true); // and never followed into removing its target
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject prunes empty directories bottom-up but leaves one with real content behind', () => {
+  const root = makeTmpRepo();
+  try {
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', 'custom/nested/hooks'], { cwd: root, encoding: 'utf8' });
+    assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    // Something added after init, directly in the recorded shallowest directory.
+    fs.writeFileSync(path.join(root, 'custom', 'extra.txt'), 'not js-harness content', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0); // a non-empty directory is not a failure either
+    assert.equal(fs.existsSync(path.join(root, 'custom', 'nested')), false); // emptied, so removed
+    assert.equal(fs.existsSync(path.join(root, 'custom')), true); // has real content, so kept
+    assert.equal(fs.readFileSync(path.join(root, 'custom', 'extra.txt'), 'utf8'), 'not js-harness content');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("uninstallProject removes .codegraph/ when this project's own init created it", () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.equal(initResult.manifest.codegraph.createdDir, true);
+    assert.ok(fs.existsSync(path.join(root, '.codegraph')));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(result.actions.some((a) => a.kind === 'codegraphRemoved'));
+    assert.equal(fs.existsSync(path.join(root, '.codegraph')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves .codegraph/ alone when it already existed before init', () => {
+  const root = makeTmpRepo();
+  try {
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.codegraph', 'preexisting.txt'), 'not js-harness', 'utf8');
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.equal(initResult.manifest.codegraph.createdDir, false);
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(!result.actions.some((a) => a.kind === 'codegraphRemoved'));
+    assert.equal(fs.readFileSync(path.join(root, '.codegraph', 'preexisting.txt'), 'utf8'), 'not js-harness');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject leaves kept entries (an existing AGENTS.md init never wrote) alone and unreported', () => {
+  const root = makeTmpRepo();
+  try {
+    const original = '# My project\n\nAlready here.\n';
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), original, 'utf8');
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    assert.ok(initResult.manifest.kept.some((k) => k.path === 'AGENTS.md'));
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 0);
+    assert.ok(!result.actions.some((a) => a.path === 'AGENTS.md'));
+    assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), original);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject keeps the manifest and reports a failure when a removal throws, and a rerun finishes the job', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const agentsPath = path.join(root, 'AGENTS.md');
+    const rm = (target, options) => {
+      if (target === agentsPath) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+
+    const first = uninstallProject(root, { spawn: spawnSync, rm });
+
+    assert.equal(first.code, 1);
+    assert.deepEqual(first.notRemoved, ['AGENTS.md']);
+    assert.ok(first.actions.some((a) => a.kind === 'failed' && a.path === 'AGENTS.md'));
+    assert.ok(fs.existsSync(agentsPath)); // the failed removal really did not happen
+    assert.ok(fs.existsSync(first.manifestPath)); // kept so a rerun can finish the job
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false); // other files still removed
+
+    const second = uninstallProject(root, { spawn: spawnSync }); // no fault this time
+
+    assert.equal(second.code, 0);
+    assert.equal(fs.existsSync(agentsPath), false);
+    assert.equal(fs.existsSync(second.manifestPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports notGitRepo outside a git repository', () => {
+  const dir = makeTmpDir();
+  try {
+    const result = uninstallProject(dir, { spawn: spawnSync });
+    assert.equal(result.code, 1);
+    assert.equal(result.notGitRepo, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports notInitialized inside a git repo js-harness never touched', () => {
+  const root = makeTmpRepo();
+  try {
+    const result = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(result.code, 1);
+    assert.equal(result.notInitialized, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports noManifestFile when harness.json exists but this clone has no manifest', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, '.git', 'js-harness'), { recursive: true, force: true }); // a fresh clone
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.noManifestFile, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json'))); // untouched — nothing was written
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('uninstallProject reports malformedManifest and writes nothing when the manifest does not parse', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.writeFileSync(initResult.manifestPath, '{ not json', 'utf8');
+
+    const result = uninstallProject(root, { spawn: spawnSync });
+
+    assert.equal(result.code, 1);
+    assert.equal(result.malformedManifest, true);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json'))); // untouched
+    assert.equal(fs.readFileSync(result.manifestPath, 'utf8'), '{ not json');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T3 design's own promise, exercised end to end: init's staleManifest refusal ("run js-harness
+// uninstall first") is only useful if uninstall genuinely clears the way for a following init.
+test('after uninstall, a project initProject once refused to re-init over (staleManifest) inits cleanly', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    fs.rmSync(path.join(root, 'harness.json'));
+
+    const stale = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(stale.code, 1);
+    assert.equal(stale.staleManifest, true);
+
+    const uninstallResult = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+    assert.equal(fs.existsSync(uninstallResult.manifestPath), false);
+
+    const reinit = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(reinit.code, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
