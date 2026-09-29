@@ -700,3 +700,16 @@ test('R3-005: uninstall preserves 4-space indentation when it rewrites (rather t
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// The skill is what agents read to decide which command to run. Plain `status`/`sync`/`uninstall` act by
+// location (on the project inside an initialized repository), so the machine forms must say `--global`.
+test('the installed skill names the --global forms for the machine and the project-scope behavior of the plain ones', () => {
+  const text = components[0].content('0.1.0');
+  for (const command of ['status', 'sync', 'uninstall']) {
+    assert.match(text, new RegExp(`js-harness ${command} --global`), command);
+  }
+  assert.match(text, /initialized repository/);
+  assert.match(text, /refuse/);
+  assert.doesNotMatch(text, /`js-harness (status|sync|uninstall)` /, 'no unqualified machine command left');
+  assert.equal(components[1].content('0.1.0'), text, 'Claude and Codex read the same text');
+});

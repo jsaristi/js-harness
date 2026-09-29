@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/project-init.md` · Engram mirror: `odd/project-init/tasks` · Branches:
 `feat/project-init` (T1, merged via `jsaristi/js-harness#8`), `feat/project-init-cmd` (T2, merged via
-`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`)
+`jsaristi/js-harness#9`), `feat/project-uninstall` (T2e–T3c, merged via `jsaristi/js-harness#10`), `feat/project-sync` (T4–T4c, merged via `jsaristi/js-harness#11`), `feat/project-tui` (T5–T5f, `jsaristi/js-harness#12`)
 
 ## Objective
 Enable js-harness per project, like `git init`: `js-harness init` writes the committed per-project
@@ -45,7 +45,7 @@ manifest and the TUI changes). Strategy: `ask-on-risk`; chain strategy `stacked-
 by Sebastián on 2026-09-28: each slice is its own PR against `main`, merged in order. Slices:
 1 = T1 (`jsaristi/js-harness#8`, merged as 222110f); 2 = T2 (`jsaristi/js-harness#9`, merged as
 b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
-50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365).
+50cb262); 4 = T4–T4c (`jsaristi/js-harness#11`, merged as 2b2f365). 5 = T5–T5f (`jsaristi/js-harness#12`, open).
 
 ## T2 design
 - `js-harness init [--cwd <dir>] [--home <dir>]` works on the git top-level of `--cwd`. Outside a
@@ -147,6 +147,33 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - Exit codes: 0 in sync (skips and kept files are reported, not failures), 1 a pin mismatch, a bad
   `harness.json`, a stale manifest, a not-initialized project or a failed write, 2 usage error.
 
+## T5 design
+- Menu by location (Sebastián, 2026-09-29: inside a repository he wants the machine commands too,
+  "so everything gets updated"). Outside a git repository the menu is today's machine menu,
+  unchanged. Inside one it shows a `project` section first, then a `machine` section with today's
+  machine items, then Quit. The project section is Init when the repository is not initialized, and
+  Sync, Status and Uninstall when it is (a stale manifest or a bad `harness.json` counts as
+  initialized, since `status` and `sync` name the problem and `uninstall` clears a stale manifest).
+  Section headers are not selectable.
+- Project items run with `--cwd <root>`; the machine items that act by location (`status`,
+  `sync`, `uninstall`) pass `--global`, so the same Enter never changes scope with the folder. The two
+  uninstalls confirm with different questions: "Undo js-harness in this project?" and today's
+  machine one.
+- After a command runs, the TUI re-reads its location and rebuilds the menu (an `init` turns Init
+  into Sync/Status/Uninstall, a project `uninstall` turns it back), keeping the selection in range.
+- `status` gains the project level, by the "Command scope" rule: `js-harness status [--cwd <dir>]
+  [--home <dir>] [--global]` (plus today's `--source`/`--pm`). Inside an initialized project it
+  reports the project root, the pinned version, the running version, whether this clone is set up
+  (a manifest present, else "js-harness sync sets it up") and whether pin and running version match
+  (if not, "js-harness sync names the ways out"); exit 0. A bad `harness.json` or a stale manifest
+  exits 1 naming it, with the same messages `sync` gives. A git repository that is not initialized,
+  or an explicit `--cwd` that is not one, exits 1 naming `js-harness init` and `--global`. Outside a
+  git repository with no `--cwd`, or with `--global`, it is today's machine status. Unknown flags,
+  a missing value or `--global` with `--cwd` exit 2.
+- One read-only function in `bin/lib/project.mjs` answers where a folder stands (not a repository,
+  a repository not initialized, an initialized project with its pin, manifest presence, or its
+  stale/invalid state), sharing `syncProject`'s pin reading; both the TUI and `status` use it.
+
 ## Tasks
 - [x] T1 A git-spec global install works through the pnpm shim: drop the `prepare` script that
   pnpm refuses for git-hosted packages, prove the install with no extra flag, and leave the global
@@ -224,8 +251,30 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
 - [x] T4c Accepted whole-slice review follow-up: a pin that is not semver is an invalid
   `harness.json`, since a cloned repository's pin is printed inside a suggested install command
   (R1-001) — route: inline (one check and its tests)
-- [ ] T5 The TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one
-  — route: delegated writer
+- [x] T5 The TUI offers `init`/`sync`/`status` inside a project, above the machine commands, and
+  the machine commands outside one; `status` acts by location (see "T5 design") — route: delegated
+  writer (touches `bin/tui.mjs`, `bin/update.mjs`, `bin/lib/project.mjs` and their tests)
+- [x] T5b Accepted review follow-ups on T5: the TUI binds project commands to the location it just
+  read, so a rebuilt menu never offers an unbound item, and a failing command or location re-read
+  resumes stdin and redraws (R4-stale-command-binding, R3-001); an invalid `harness.json` is
+  reported with a fixed reason, never `JSON.parse`'s text (R1-status-reason-echo); the three
+  readability points (R2-*) — route: delegated writer (the T5 writer, resumed: two non-trivial
+  files and their tests)
+- [x] T5c Accepted review follow-ups on T5b: the TUI's error line drops C1 controls too
+  (R3-oneline-c1-controls), the unreadable-pin test accepts every code shape (R2-002), and
+  `buildCommands` says what `root` is for (R2-001) — route: inline (one regex, one test pattern,
+  one comment)
+- [x] T5d Accepted whole-slice review follow-ups: the TUI refreshes the stack block after a command
+  (Codex P2); the installed skill names `status --global` and `sync --global` for the machine
+  (Codex P2, and the slice-4 follow-up); `statusMain` says why it uses real git
+  (R2-status-spawn-not-forwarded-unexplained); the missing-directory test builds its path under a
+  unique parent (R3-nosuchdir-fixed-path) — route: delegated writer (the T5 writer, resumed)
+- [x] T5e Accepted review follow-ups on T5d: the reverse independence test (a failed location
+  re-read still refreshes the stack; R2-001, R3-001) and the comment saying why `fetch` stays unused
+  on the offline stack refresh (R2-002) — route: inline (one test, one comment)
+- [x] T5f Accepted final whole-slice review follow-up: every suite that creates an empty git
+  config in the temp directory removes it when it ends (Codex P3) — route: inline (the same
+  mechanical hook in five test files)
 - [ ] T6 `doctor` reports the Codex plugin (`codex@openai-codex`): installed, enabled and logged
   in, with its fix command — route: delegated writer
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
@@ -603,6 +652,115 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   asks the npm registry, where the package is not published; the decided release source for a
   private repo is `git ls-remote --tags`, and no tag exists yet.
 
+- 2026-09-29: slice 5 (T5) starts on `feat/project-tui` from 7d8fe3e. Sebastián chose that inside
+  a repository the menu shows the project commands and, below them, the machine ones (see "T5
+  design"); `status` gets the project level so the menu's project Status has something to show.
+  Design committed as 2393109.
+- 2026-09-29: T5 done by a delegated writer: `projectLocation` in `bin/lib/project.mjs` (sharing
+  `readPin`/`projectFiles` with `syncProject`, and `invalidHarnessJsonMessage` with `sync`),
+  `status` by location in `bin/update.mjs`, the menu as data (`buildMenu`, `withLocation`) in
+  `bin/tui.mjs`; 10 files, +1126/−66, most of it tests. RED: `project.test.mjs` 10 of 138,
+  `update.test.mjs` 12 of 31, `tui.test.mjs` 14 of 50, `js-harness.test.mjs` 1 of 15 (every RED call
+  with a fixture `--home`). GREEN: `node --test` → `tests 532 / pass 525 / fail 0 / skipped 7`,
+  re-run by the parent; `npm run check` PASS; `npm run e2e` every step PASS. Real run by the parent in
+  a scratch repo: `status` before `init` → exit 1 naming `js-harness init` and `status --global`;
+  after → root, pin 0.1.0, running 0.1.0, clone set up, match, exit 0; `status --global` → the machine
+  report; the initialized menu renders `project` (Sync, Status, Uninstall) above `machine`; project
+  `uninstall` → `git status --porcelain` empty. Writer's calls, accepted: this checkout is a git
+  repository that is not initialized, so a plain `status` here now exits 1 and the machine-status
+  tests and the e2e step pass `--global`; after `init` the selection lands on Sync, after a project
+  `uninstall` on Init; location always uses real `git`, never the injected package-manager `spawn`;
+  the menu's `doctor` passes `--cwd`, like the stack block. Committed as 52eaafa. Assessed
+  (`--base-ref 7d8fe3e --committed-only`): risk `high`, 1235 lines, `review_due: true`
+  (`high_risk`). Native review lineage review-4906b65b0638431f: consent granted (pre-granted), four
+  lenses, approved and acknowledged (authority burned), with three WARNING and four SUGGESTION, all
+  non-blocking: R4-stale-command-binding (the command table is bound once, so a menu rebuilt after
+  `git init` elsewhere offers an unbound Init whose Enter throws with stdin paused and hangs the
+  TUI), R1-status-reason-echo (a malformed `harness.json` in a clone reaches the terminal through
+  `JSON.parse`'s message, escapes included; `sync` already did this), R2-buildcommands-doc-contradicts-doctor-cwd,
+  R2-update-header-overstates-status-scope, R2-confirm-mode-name-and-duplicated-default, R3-001 (a
+  throwing location re-read leaves stdin paused) and R3-002 (a plain `status` in a repository that is
+  not initialized now exits 1). All but R3-002 accepted as T5b; R3-002 is the "Command scope" rule
+  the design chose, and the one caller in this repo (e2e) moved to `--global`. Codex (`--base
+  7d8fe3e`): three P2, the same defects as R4-stale-command-binding, R1-status-reason-echo and
+  R3-001; its sandbox could not run the tests, so it read the diff and probed `JSON.parse`.
+- 2026-09-29: T5b done by the T5 writer, resumed: project commands take the location the menu was
+  last built for (`argsAt(location)`), a failing command or re-read prints one line and gives the
+  terminal back, `readPin` reports "it is not valid JSON" or "it cannot be read (<code>)", one
+  `confirm` mode driven by `CONFIRM_PROMPTS`, two comments corrected; 7 files, +270/−36. RED:
+  `tui.test.mjs` 11 of 56, `project.test.mjs` 1 of 139, `update.test.mjs` 1 of 32,
+  `install.test.mjs` 1 of 42. GREEN: `node --test` → `tests 541 / pass 534 / fail 0 / skipped 7`;
+  `npm run check` PASS; `npm run e2e` exit 0, 14 PASS, 0 FAIL (exit code captured by the parent).
+  Committed as e090e80. Assessed (`--base-ref 1030a87`): risk `high`, 306 lines, `review_due`.
+  Native review lineage review-1aaca18091b58a5c: consent granted (pre-granted), four lenses,
+  approved and acknowledged, three SUGGESTION (R2-001 `root` kept alive mostly by tests, R2-002 a
+  test pattern narrower than the codes, R3-oneline-c1-controls). Codex (`--base 1030a87`, run in
+  parallel with the native review rather than after it): no actionable regression; its sandbox
+  could not create a temp directory for the tests. All three SUGGESTION accepted as T5c.
+- 2026-09-29: T5c done inline by the parent. RED: the new C1 test failed (`\x9B` and `\x85` reached
+  stderr). GREEN: `tui.test.mjs` + `project.test.mjs` → `tests 196 / pass 191 / fail 0 / skipped 5`;
+  full suite through the commit gate PASS. Committed as 6353163. Assessed (`--base-ref e090e80`):
+  risk `medium`, `under_budget`; left to the whole-slice review, the slice's last code commit.
+- 2026-09-29: whole-slice review of `7d8fe3e..b7ac70a` (risk `high`, 1565 lines). Native review
+  lineage review-e091a94b7c602ecf: consent granted (pre-granted), four lenses, approved and
+  acknowledged, three SUGGESTION: R2-status-spawn-not-forwarded-unexplained (`statusMain` uses real
+  git for the location without saying why), R2-design-doc-omits-sync-global (fixed in "T5 design"
+  by the parent), R3-nosuchdir-fixed-path (a test path a leftover folder could break). Codex
+  (`--base 7d8fe3e`): two P2 — the stack block is not refreshed after a project command, so Init's
+  codegraph setup stays shown as missing; and the installed skill (`bin/lib/manifest.mjs:15`) still
+  tells agents that a plain `js-harness status` reports the machine. Both P2, the two remaining
+  SUGGESTION and the carried follow-up (the skill's unqualified `js-harness sync`) accepted as T5d.
+- 2026-09-29: T5d done by the T5 writer, resumed: `runTui` takes `readStack` and re-probes the stack
+  offline after a command, in its own guard (a failure keeps the previous block); the installed
+  skill names `status`/`sync`/`uninstall --global` and says what the plain forms do in a project
+  (a new test pins the wording; nothing pinned it or its sha256 before); a comment in `statusMain`;
+  the missing-directory test under a unique parent. RED: `tui.test.mjs` 3 of 61,
+  `manifest.test.mjs` 1 of 35 (the test path refactor has none). GREEN: `node --test` → `tests 547 /
+  pass 540 / fail 0 / skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL.
+  Committed as 6930435. Assessed (`--base-ref b7ac70a`): risk `high`, `review_due`. Native review
+  lineage review-ebf4dc62453c0a4d: consent granted (pre-granted), four lenses, approved and
+  acknowledged, one WARNING and two SUGGESTION: a test titled for both directions of independence
+  checked one (R2-001, R3-001), and the offline comment did not say why `fetch` is passed (R2-002).
+  Codex (`--base b7ac70a`, docs stashed so it saw only code): no actionable defect; its sandbox
+  could not run the tests. All three accepted as T5e.
+- 2026-09-29: T5e done inline by the parent: the reverse test (a rejected location re-read still
+  redraws the refreshed stack) passed on first run, since it covers behavior T5d already had, so
+  there is no RED; the comment now cites `offline: true`, which `resolveLatestVersions` answers from
+  the cache without calling `fetch` (`bin/doctor.mjs:90`). GREEN: `tui.test.mjs` 62/62.
+  Committed as 012da1f.
+- 2026-09-29: final whole-slice review of `7d8fe3e..ebefc02` (risk `high`, 1800 lines). Native review
+  lineage review-fc3af9150637cb0a: consent granted (pre-granted), four lenses, approved and
+  acknowledged, two SUGGESTION carried as follow-ups: R2-withlocation-pending-mode-invariant
+  (`withLocation` clears `pending` but keeps `mode`; only called after a command, so unreachable
+  today) and R2-duplicated-git-env-isolation (the git-isolation `before` block and a tree-snapshot
+  helper are copied across suites). Codex (`--base 7d8fe3e`): one P3 — the tui and update suites
+  leave their empty git config folder in the system temp directory on every run. Accepted as T5f,
+  wider than reported: the same copied block leaked in the init, install and project suites too,
+  and 339 such folders had piled up on this machine.
+- 2026-09-29: T5f done inline by the parent: each of the five suites keeps the folder's path and
+  removes it in an `after` hook. Evidence: `node --test` → `tests 548 / pass 541 / fail 0 /
+  skipped 7`, and the count of `*-gitconfig-*` folders in the temp directory was 339 before the run
+  and 339 after (each run used to add five). The 339 existing folders are left for Sebastián to
+  remove. Committed as 45c0737. Assessed (`--base-ref ebefc02`): risk `high`, 40 lines. Native review
+  lineage review-232e1b7fd4672c9b: approved and acknowledged, three SUGGESTION of one kind (an
+  `after` hook would throw on an undefined path if `before` failed first, and in tui.test.mjs the
+  new removal runs after another that could throw), carried as follow-ups rather than a fourth
+  round, since they matter only once setup has already failed. Codex (`--base ebefc02`): no
+  actionable regression. Slice 5 is complete: T5 through T5f, each reviewed by gentle-ai and Codex.
+- 2026-09-29: review of the exact PR range `7d8fe3e..d0c6e0e` (risk `high`, 1864 lines), started from
+  the gentle-ai Stop hook's START. Native review lineage review-21a108c866330bc0: consent granted
+  (pre-granted), four lenses, approved and acknowledged, four SUGGESTION carried as follow-ups:
+  R2-skill-omits-outside-repo-scope (the installed skill does not say that outside a git repository
+  the plain forms reach the machine), R2-status-switch-implicit-fallthrough (`statusMain`'s machine
+  path is reached by falling out of the switch), R3-after-hook-undefined-configdir (the T5f point
+  again), R3-status-value-dash-prefix (a flag value starting with `--` is read as missing).
+- Follow-ups carried from slice 5, none blocking: R3-002 (a plain `status` in a repository that is
+  not initialized exits 1, by the "Command scope" rule); the two whole-slice SUGGESTION above; the
+  unguarded `after` cleanup (R4-after-hook-undefined-configdir, R3-001, R3-002 of the T5f review);
+  the PR-range SUGGESTION above, of which the skill's missing outside-a-repository case is the one
+  worth doing first, since agents read that text.
+- 2026-09-29: PR `jsaristi/js-harness#12` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
+
 ## Next step
-T5 (the TUI offers `init`/`sync`/`status` inside a project and `doctor`/`upgrade` outside one)
-on a new branch from `main`, in a new session.
+Merge `jsaristi/js-harness#12` on Sebastián's go-ahead; after it merges, T6
+(`doctor` reports the Codex plugin) in a new session.

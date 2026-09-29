@@ -176,8 +176,8 @@ async function main() {
       );
     });
 
-    step('`js-harness status --source` reports the 0.2.0 update', () => {
-      const result = run(process.execPath, [binPath, 'status', '--source', releasesDir, '--home', home]);
+    step('`js-harness status --global --source` reports the 0.2.0 update', () => {
+      const result = run(process.execPath, [binPath, 'status', '--global', '--source', releasesDir, '--home', home]);
       assertThat(result.status === 0, `status exited ${result.status}: ${result.stderr}`);
       assertThat(
         /latest available: 0\.2\.0/.test(result.stdout),

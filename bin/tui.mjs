@@ -4,10 +4,14 @@
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
+import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
+import { projectLocation } from './lib/project.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
 
+/** The machine-level menu items, in order: the whole menu outside a git repository, and the section
+ * below `project` inside one. */
 export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
 const MENU_LABELS = {
   status: 'Status',
@@ -17,7 +21,70 @@ const MENU_LABELS = {
   upgrade: 'Upgrade',
   uninstall: 'Uninstall',
   quit: 'Quit',
+  'project-init': 'Init',
+  'project-sync': 'Sync',
+  'project-status': 'Status',
+  'project-uninstall': 'Uninstall',
 };
+// The uninstalls ask before they run; each prompt names what it undoes. A command has a prompt here
+// exactly when it asks first, and `state.pending` names the command the open prompt is for.
+const CONFIRM_PROMPTS = {
+  uninstall: 'Uninstall js-harness from this home? (y/N)',
+  'project-uninstall': 'Undo js-harness in this project? (y/N)',
+};
+
+// --- T5: the menu by location. Data built by a pure function, so it is tested without a terminal ---
+
+const item = (id) => ({ id, label: MENU_LABELS[id] });
+const header = (label) => ({ header: true, label });
+
+/** The menu for where the TUI opened (a `projectLocation` result): outside a git repository exactly the
+ * machine menu; inside one, a non-selectable `project` header with Init (not initialized) or Sync, Status
+ * and Uninstall (initialized, a stale manifest or a bad `harness.json` included: `status` and `sync` name
+ * the problem and `uninstall` clears it), then a non-selectable `machine` header with the machine items.
+ * Entries are `{ id, label }`, or `{ header: true, label }` for a section header. */
+export function buildMenu(location = { kind: 'notGit' }) {
+  const machine = MENU_ITEMS.map(item);
+  if (location.kind === 'notInitialized') return [header('project'), item('project-init'), header('machine'), ...machine];
+  if (['initialized', 'staleManifest', 'invalidHarnessJson'].includes(location.kind)) {
+    const project = ['project-sync', 'project-status', 'project-uninstall'].map(item);
+    return [header('project'), ...project, header('machine'), ...machine];
+  }
+  return machine;
+}
+
+function firstSelectable(menu) {
+  return menu.findIndex((entry) => !entry.header);
+}
+
+/** The next selectable index from `from` in direction `dir` (+1/-1), wrapping and skipping headers. A
+ * menu always ends in Quit, so there is always something to land on. */
+function stepSelection(menu, from, dir) {
+  let i = from;
+  do {
+    i = (i + dir + menu.length) % menu.length;
+  } while (menu[i].header);
+  return i;
+}
+
+/** Pure: the state for a re-read location. The menu is rebuilt; the selection stays on the same item when
+ * it survives, else (an `init` turned Init into Sync, a project `uninstall` turned Sync back into Init)
+ * on the top of the project section when the item was a project one, else on the nearest selectable index
+ * in range. */
+export function withLocation(state, location) {
+  const menu = buildMenu(location);
+  const previous = state.menu?.[state.selected];
+  let selected = previous?.id === undefined ? -1 : menu.findIndex((entry) => entry.id === previous.id);
+  if (selected === -1) {
+    if (previous?.id?.startsWith('project-')) {
+      selected = firstSelectable(menu);
+    } else {
+      selected = Math.min(state.selected, menu.length - 1);
+      if (menu[selected].header) selected = stepSelection(menu, selected, 1);
+    }
+  }
+  return { ...state, location, menu, selected, pending: undefined };
+}
 
 // --- T5: the stack block — one compact line per tool, from local probes + cache only ---
 
@@ -68,9 +135,19 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
 
 /** Builds the initial menu state from the version info the caller already resolved. `stack` is the
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
- * stack block simply does not render (see `render` below), so older callers keep working. */
-export function initialState({ installedVersion, updateAvailable, stack }) {
-  return { mode: 'menu', selected: 0, installedVersion, updateAvailable, stack };
+ * stack block simply does not render (see `render` below), so older callers keep working. `location` is
+ * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
+export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' } }) {
+  const menu = buildMenu(location);
+  return {
+    mode: 'menu',
+    selected: firstSelectable(menu),
+    installedVersion,
+    updateAvailable,
+    stack,
+    location,
+    menu,
+  };
 }
 
 /** Maps a raw terminal chunk to a normalized key token; unrecognized input passes through. */
@@ -93,26 +170,23 @@ export function normalizeKey(chunk) {
  * `{ type: 'run', command }`, or `{ type: 'quit' }` — the shell performs it, the reducer never does.
  */
 export function handleKey(state, key) {
-  if (state.mode === 'confirm-uninstall') {
-    if (key === 'y') return { state: { ...state, mode: 'menu' }, effect: { type: 'run', command: 'uninstall' } };
-    return { state: { ...state, mode: 'menu' }, effect: null };
+  if (state.mode === 'confirm') {
+    const next = { ...state, mode: 'menu', pending: undefined };
+    if (key === 'y') return { state: next, effect: { type: 'run', command: state.pending } };
+    return { state: next, effect: null };
   }
 
-  if (key === 'up') {
-    const selected = (state.selected - 1 + MENU_ITEMS.length) % MENU_ITEMS.length;
-    return { state: { ...state, selected }, effect: null };
-  }
-  if (key === 'down') {
-    const selected = (state.selected + 1) % MENU_ITEMS.length;
+  if (key === 'up' || key === 'down') {
+    const selected = stepSelection(state.menu, state.selected, key === 'up' ? -1 : 1);
     return { state: { ...state, selected }, effect: null };
   }
   if (key === 'quit' || key === 'escape') {
     return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
   }
   if (key === 'enter') {
-    const command = MENU_ITEMS[state.selected];
+    const command = state.menu[state.selected].id;
     if (command === 'quit') return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
-    if (command === 'uninstall') return { state: { ...state, mode: 'confirm-uninstall' }, effect: null };
+    if (Object.hasOwn(CONFIRM_PROMPTS, command)) return { state: { ...state, mode: 'confirm', pending: command }, effect: null };
     return { state, effect: { type: 'run', command } };
   }
   return { state, effect: null };
@@ -131,30 +205,48 @@ export function render(state) {
     lines.push('  stack: unknown');
   }
   lines.push('');
-  for (const [i, item] of MENU_ITEMS.entries()) {
-    const marker = i === state.selected ? '>' : ' ';
-    lines.push(`${marker} ${MENU_LABELS[item]}`);
+  for (const [i, entry] of state.menu.entries()) {
+    if (entry.header) {
+      lines.push(entry.label);
+    } else {
+      lines.push(`${i === state.selected ? '>' : ' '} ${entry.label}`);
+    }
   }
-  if (state.mode === 'confirm-uninstall') {
-    lines.push('', 'Uninstall js-harness from this home? (y/N)');
+  if (state.mode === 'confirm') {
+    lines.push('', CONFIRM_PROMPTS[state.pending]);
   }
   return lines;
+}
+
+/** An error as one printable line: its first line, without C0, DEL or C1 control characters (U+009B is a
+ * one-byte CSI on some terminals, so an untrusted message must not keep it). */
+function oneLine(err) {
+  return String(err?.message ?? err)
+    .split('\n')[0]
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 }
 
 function screenText(state) {
   return `${render(state).join('\n')}\n`;
 }
 
-/** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. */
+/** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. `location` is the
+ * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
+ * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
+ * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
+ * codegraph's project state, and `uninstall` the reverse. */
 export function runTui({
   installedVersion,
   updateAvailable,
   stack,
+  location,
+  readLocation,
+  readStack,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack });
+  let state = initialState({ installedVersion, updateAvailable, stack, location });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -177,7 +269,27 @@ export function runTui({
 
       if (effect?.type === 'run') {
         stdin.pause();
-        await commands[effect.command]();
+        // Whatever the command or the re-read does, the terminal comes back: a failure is one line on
+        // stderr, the previous location stays, and the menu is drawn again below.
+        try {
+          await commands[effect.command](state.location);
+        } catch (err) {
+          console.error(`${effect.command} failed: ${oneLine(err)}`);
+        }
+        if (readLocation) {
+          try {
+            state = withLocation(state, await readLocation());
+          } catch (err) {
+            console.error(`reading the project failed: ${oneLine(err)}`);
+          }
+        }
+        if (readStack) {
+          try {
+            state = { ...state, stack: await readStack() };
+          } catch (err) {
+            console.error(`refreshing the stack failed: ${oneLine(err)}`);
+          }
+        }
         stdin.resume();
         drawn = 0; // keep the command's output; redraw the menu below it
       }
@@ -195,30 +307,54 @@ export function runTui({
   });
 }
 
-/** CLI entry point: gathers version info, binds the real commands to a home, computes the stack
- * block (offline, never blocking on the network — see `computeStackState`), opens the TUI. `io` may
- * also carry `fetch`/`now` overrides for tests; production leaves them at their real defaults. */
-/** The machine-level commands the menu runs, each bound to `home`. */
-export function buildCommands({ home, env = process.env, spawn = spawnSync, fetch: fetchImpl = fetch, now } = {}) {
+/** The commands the menu runs, each bound to `home`. The machine ones do not change scope with the folder:
+ * `status`, `sync` and `uninstall` pass `--global`, so the same Enter never acts on a project. (`doctor`
+ * reads the folder's project, like the stack block, so it gets `--cwd`.) Every project command exists
+ * whatever the TUI opened on, and takes the location the menu was last built for: it acts on that
+ * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
+ * that moves, while the TUI is open never leaves a menu item without a command or bound to a stale root.
+ * `root` serves direct callers and tests that call a project command with no location; the TUI always
+ * passes one, so there the location is authoritative. */
+export function buildCommands({
+  home,
+  cwd = process.cwd(),
+  root,
+  env = process.env,
+  spawn = spawnSync,
+  fetch: fetchImpl = fetch,
+  now,
+} = {}) {
+  const argsAt = (location) => {
+    const at = location?.root ?? root;
+    if (!at) throw new Error('no project to act on');
+    return ['--cwd', at, '--home', home];
+  };
   return {
-    status: () => statusMain(['--home', home], env, spawn),
-    doctor: () => doctorMain(['--home', home], env, { spawn, fetch: fetchImpl, now }),
+    'project-init': async (location) => initMain(argsAt(location), env),
+    'project-sync': async (location) => syncMain(argsAt(location), env),
+    'project-status': async (location) => statusMain(argsAt(location), env, spawn),
+    'project-uninstall': async (location) => uninstallMain(argsAt(location), env),
+    status: () => statusMain(['--global', '--home', home], env, spawn),
+    doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
     install: () => installMain(['--home', home]),
     update: () => updateMain(['--home', home], env, spawn),
     upgrade: () => upgradeMain(['--home', home], env, spawn),
-    // --global: the menu's uninstall and sync are the machine ones, wherever the TUI was opened.
-    // (T5 decides what the menu offers inside a project.)
     sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
   };
 }
 
+/** CLI entry point: gathers version info, reads where it opened (`--cwd`, default the current folder),
+ * binds the real commands to a home, computes the stack block (offline, never blocking on the network —
+ * see `computeStackState`), opens the TUI. `io` may also carry `fetch`/`now` overrides for tests;
+ * production leaves them at their real defaults. */
 export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {}) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? argv[i + 1] : undefined;
   };
   const home = get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir();
+  const cwd = get('--cwd') ?? process.cwd();
   const installedVersion = currentVersion();
   const { fetch: fetchImpl = fetch, now } = io;
 
@@ -231,9 +367,22 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     updateAvailable = null;
   }
 
-  const stack = await computeStackState({ home, cwd: process.cwd(), spawn, fetch: fetchImpl, now });
+  // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
+  const location = projectLocation(cwd);
+  const stack = await computeStackState({ home, cwd, spawn, fetch: fetchImpl, now });
 
-  const commands = buildCommands({ home, env, spawn, fetch: fetchImpl, now });
+  const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now });
 
-  return runTui({ installedVersion, updateAvailable, stack, commands, ...io });
+  return runTui({
+    installedVersion,
+    updateAvailable,
+    stack,
+    location,
+    readLocation: () => projectLocation(cwd),
+    // The same offline probes as at start, never the network: `computeStackState` always calls
+    // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
+    readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
+    commands,
+    ...io,
+  });
 }

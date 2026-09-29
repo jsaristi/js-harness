@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,14 +13,19 @@ import { initProject } from './lib/project.mjs';
 // config and from a git hook's own inherited GIT_DIR/GIT_INDEX_FILE, the same way
 // bin/lib/project.test.mjs's `before` hook does (a pre-commit run of *that* suite broke `git
 // worktree add` this exact way).
+let configDir;
 before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+// The empty git config lives outside the repository, so it is removed with the suite.
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeTmpHome() {
@@ -696,5 +701,19 @@ test('syncMain with no flags outside any git repository still syncs the machine 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('syncMain never prints the bytes of a malformed harness.json (terminal escapes included)', async () => {
+  const root = makeTmpClone();
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ "version": "\u001b[2J\u001b]0;pwned\u0007", oops', 'utf8');
+    const { code, outLines, errLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+
+    assert.equal(code, 1);
+    assert.ok(errLines.some((l) => /harness\.json: it is not valid JSON; nothing was written$/.test(l)));
+    assert.doesNotMatch([...outLines, ...errLines].join('\n'), /\u001b|\u0007/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

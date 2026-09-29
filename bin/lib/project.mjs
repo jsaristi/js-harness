@@ -1232,6 +1232,12 @@ export function staleManifestMessage(manifestPath) {
   );
 }
 
+/** The refusal `sync` and `status` share for a `harness.json` whose pin cannot be used (T4 design, T5
+ * design): the file and the reason `readPin` gave, without a claim about writes — `sync` adds its own. */
+export function invalidHarnessJsonMessage(harnessJsonPath, reason) {
+  return `cannot read the pin from ${harnessJsonPath}: ${reason}`;
+}
+
 /** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
  * overclaiming "nothing was left behind" when something could not be removed (T2c
  * R3-nothing-left-behind-overclaims). Shared by `init` and `sync`, which both throw `InitWriteError`.
@@ -1351,6 +1357,71 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
   return { code: 0, root, manifestPath: manifestFilePath, actions, manifest: next, version, upToDate };
 }
 
+/** Where a repository keeps what `init` leaves: the committed `harness.json` and this clone's project
+ * manifest (under the git dir, resolved the way git itself does), and whether each is there. Occupied
+ * counts a dangling link as present, like every other check in this module (see `isOccupied`). */
+function projectFiles(root, spawn) {
+  const harnessJsonPath = path.join(root, 'harness.json');
+  const manifestFilePath =
+    resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
+  return {
+    harnessJsonPath,
+    manifestFilePath,
+    harnessJsonPresent: isOccupied(harnessJsonPath),
+    manifestPresent: isOccupied(manifestFilePath),
+  };
+}
+
+/** The version `harness.json` pins: `{ pin }`, or `{ invalid: reason }` when the file cannot be read, is
+ * not JSON, has no string `version`, or has one that is not semver. A committed pin reaches the terminal
+ * inside a suggested install command, so a cloned repository must not be able to smuggle shell or escape
+ * sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
+ * code, never the parser's message (which quotes the file's own bytes). The one reading `syncProject`
+ * and `projectLocation` share. */
+function readPin(harnessJsonPath) {
+  let text;
+  try {
+    text = fs.readFileSync(harnessJsonPath, 'utf8');
+  } catch (err) {
+    return { invalid: `it cannot be read (${/^[A-Z0-9_]+$/.test(err?.code) ? err.code : 'unknown error'})` };
+  }
+  let pin;
+  try {
+    pin = JSON.parse(text)?.version;
+  } catch {
+    return { invalid: 'it is not valid JSON' };
+  }
+  if (typeof pin !== 'string' || pin.length === 0) return { invalid: 'it has no string "version"' };
+  if (!SEMVER.test(pin)) return { invalid: 'its "version" is not a semver version' };
+  return { pin };
+}
+
+/** Where a folder stands, read-only (T5 design): what the TUI's menu and `status` both branch on. Writes
+ * nothing, ever, and takes only `deps.spawn` (for `git`). One of:
+ * - `{ kind: 'noSuchDirectory', cwd }`
+ * - `{ kind: 'notGit' }` — outside any git repository.
+ * - `{ kind: 'notInitialized', root }` — a repository `init` never touched (no `harness.json`, no manifest).
+ * - `{ kind: 'initialized', root, pin, harnessJsonPath, manifestPath, manifestPresent }` — `manifestPresent`
+ *   is false in a fresh clone of an initialized project, until `sync` sets it up.
+ * - `{ kind: 'staleManifest', root, manifestPath }` — a manifest survives without `harness.json`.
+ * - `{ kind: 'invalidHarnessJson', root, harnessJsonPath, reason }` — the pin is unusable, for the same
+ *   reasons `syncProject` gives. */
+export function projectLocation(cwd, deps = {}) {
+  const spawn = deps.spawn ?? spawnSync;
+  if (!fs.existsSync(cwd)) return { kind: 'noSuchDirectory', cwd };
+
+  const root = gitTopLevel(cwd, spawn);
+  if (!root) return { kind: 'notGit' };
+
+  const { harnessJsonPath, manifestFilePath, harnessJsonPresent, manifestPresent } = projectFiles(root, spawn);
+  if (!harnessJsonPresent && !manifestPresent) return { kind: 'notInitialized', root };
+  if (!harnessJsonPresent) return { kind: 'staleManifest', root, manifestPath: manifestFilePath };
+
+  const pinned = readPin(harnessJsonPath);
+  if (pinned.invalid) return { kind: 'invalidHarnessJson', root, harnessJsonPath, reason: pinned.invalid };
+  return { kind: 'initialized', root, pin: pinned.pin, harnessJsonPath, manifestPath: manifestFilePath, manifestPresent };
+}
+
 /** Runs `js-harness sync` against the git repository at `cwd`'s top-level: moves the project to the
  * version its `harness.json` pins. `version` is the running js-harness. Nothing `init` writes depends on
  * the version, so this never installs or rewrites anything for a version change: a pin different from
@@ -1381,29 +1452,14 @@ export function syncProject(cwd, version, deps = {}) {
   const root = gitTopLevel(cwd, spawn);
   if (!root) return { code: 1, notGitRepo: true };
 
-  const harnessJsonPath = path.join(root, 'harness.json');
-  const manifestFilePath =
-    resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
-  const harnessJsonPresent = isOccupied(harnessJsonPath);
-  const manifestPresent = isOccupied(manifestFilePath);
+  const { harnessJsonPath, manifestFilePath, harnessJsonPresent, manifestPresent } = projectFiles(root, spawn);
 
   if (!harnessJsonPresent && !manifestPresent) return { code: 1, notInitialized: true };
   if (!harnessJsonPresent) return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
 
-  let pin;
-  try {
-    pin = JSON.parse(fs.readFileSync(harnessJsonPath, 'utf8'))?.version;
-  } catch (err) {
-    return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: err.message };
-  }
-  if (typeof pin !== 'string' || pin.length === 0) {
-    return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: 'it has no string "version"' };
-  }
-  // A committed pin reaches the terminal inside a suggested install command, so a cloned repository
-  // must not be able to smuggle shell or escape sequences through it (T4c, R1-001).
-  if (!SEMVER.test(pin)) {
-    return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: 'its "version" is not a semver version' };
-  }
+  const pinned = readPin(harnessJsonPath);
+  if (pinned.invalid) return { code: 1, invalidHarnessJson: true, harnessJsonPath, reason: pinned.invalid };
+  const { pin } = pinned;
   if (pin !== version) return { code: 1, pinMismatch: true, pin, version };
 
   if (!manifestPresent) {

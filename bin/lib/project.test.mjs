@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,6 +8,7 @@ import {
   initProject,
   uninstallProject,
   syncProject,
+  projectLocation,
   gitTopLevel,
   resolveGitPath,
   gitDirs,
@@ -23,6 +24,7 @@ import { sha256 } from './manifest.mjs';
 // change what a test observes. Pointing `GIT_CONFIG_GLOBAL` at an empty file and setting
 // `GIT_CONFIG_NOSYSTEM=1` isolates every `git` call this file makes — both the ones tests spawn
 // directly and the engine's own default `spawnSync`, which inherits `process.env` the same way.
+let configDir;
 before(() => {
   // A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
   // committed; inherited here, they would send every git call below to that repository instead
@@ -30,10 +32,14 @@ before(() => {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GIT_')) delete process.env[key];
   }
-  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-project-gitconfig-'));
+  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-project-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+});
+// The empty git config lives outside the repository, so it is removed with the suite.
+after(() => {
+  fs.rmSync(configDir, { recursive: true, force: true });
 });
 
 function makeTmpRepo(prefix = 'js-harness-project-') {
@@ -3036,6 +3042,142 @@ test('syncProject reports malformedManifest when an entry escapes the working tr
     assert.equal(result.malformedManifest, true);
     assert.equal(spawn.codegraphCalls.length, 0);
     assert.deepEqual(contentSnapshot(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- T5: projectLocation, the read-only answer to "where does this folder stand" ---
+
+test('projectLocation reports noSuchDirectory when the cwd does not exist', () => {
+  // A missing child of a fresh parent, so a leftover folder can never make it exist.
+  const parent = makeTmpDir();
+  try {
+    const cwd = path.join(parent, 'does-not-exist');
+    assert.deepEqual(projectLocation(cwd, syncDeps()), { kind: 'noSuchDirectory', cwd });
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test('projectLocation reports notGit outside a git repository and writes nothing', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(projectLocation(dir, syncDeps()), { kind: 'notGit' });
+    assert.deepEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('projectLocation reports notInitialized with the repository root, from a subfolder too', () => {
+  const root = makeTmpRepo();
+  try {
+    const sub = path.join(root, 'sub');
+    fs.mkdirSync(sub);
+    const before = contentSnapshot(root);
+    for (const cwd of [root, sub]) {
+      const result = projectLocation(cwd, syncDeps());
+      assert.equal(result.kind, 'notInitialized');
+      assert.equal(fs.realpathSync(result.root), fs.realpathSync(root));
+    }
+    assert.deepEqual(contentSnapshot(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('projectLocation reports an initialized project with its pin, and whether this clone has a manifest', () => {
+  const clone = makeClone({ version: '1.2.3' });
+  const inited = makeTmpRepo();
+  try {
+    const before = contentSnapshot(clone);
+    const fresh = projectLocation(clone, syncDeps());
+    assert.equal(fresh.kind, 'initialized');
+    assert.equal(fs.realpathSync(fresh.root), fs.realpathSync(clone));
+    assert.equal(fresh.pin, '1.2.3');
+    assert.equal(fresh.manifestPresent, false);
+    assert.deepEqual(contentSnapshot(clone), before);
+
+    assert.equal(initProject(inited, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+    const beforeInit = contentSnapshot(inited);
+    const set = projectLocation(inited, syncDeps());
+    assert.equal(set.kind, 'initialized');
+    assert.equal(set.pin, '0.1.0');
+    assert.equal(set.manifestPresent, true);
+    assert.equal(fs.realpathSync(set.manifestPath), fs.realpathSync(path.join(inited, ...MANIFEST_REL)));
+    assert.deepEqual(contentSnapshot(inited), beforeInit);
+  } finally {
+    fs.rmSync(clone, { recursive: true, force: true });
+    fs.rmSync(inited, { recursive: true, force: true });
+  }
+});
+
+test('projectLocation reports a stale manifest (harness.json gone) with its path', () => {
+  const root = makeTmpRepo();
+  try {
+    assert.equal(initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).code, 0);
+    fs.rmSync(path.join(root, 'harness.json'));
+    const before = contentSnapshot(root);
+
+    const result = projectLocation(root, syncDeps());
+
+    assert.equal(result.kind, 'staleManifest');
+    assert.equal(fs.realpathSync(result.root), fs.realpathSync(root));
+    assert.equal(fs.realpathSync(result.manifestPath), fs.realpathSync(path.join(root, ...MANIFEST_REL)));
+    assert.deepEqual(contentSnapshot(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The same harness.json failures syncProject names, with the same reasons: one reading of the pin.
+for (const [label, write] of [
+  ['is not JSON', (p) => fs.writeFileSync(p, '{ not json', 'utf8')],
+  ['has no version', (p) => fs.writeFileSync(p, '{}\n', 'utf8')],
+  ['is not readable (a directory)', (p) => fs.mkdirSync(p)],
+  ['has a version that is not semver', (p) => fs.writeFileSync(p, JSON.stringify({ version: 'latest' }))],
+  ['has a version with a terminal escape', (p) => fs.writeFileSync(p, JSON.stringify({ version: '1.0.0\u001b[2J' }))],
+]) {
+  test(`projectLocation reports invalidHarnessJson, with syncProject's reason, when harness.json ${label}`, () => {
+    const root = makeTmpRepo();
+    try {
+      write(path.join(root, 'harness.json'));
+      const before = contentSnapshot(root);
+
+      const result = projectLocation(root, syncDeps());
+      const synced = syncProject(root, '0.1.0', syncDeps());
+
+      assert.equal(result.kind, 'invalidHarnessJson');
+      assert.equal(fs.realpathSync(result.root), fs.realpathSync(root));
+      assert.equal(result.harnessJsonPath, synced.harnessJsonPath);
+      assert.equal(result.reason, synced.reason);
+      assert.deepEqual(contentSnapshot(root), before);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+// R1-status-reason-echo: a JSON syntax error quotes the bytes it choked on, and harness.json is committed
+// by whoever owns the repository — so the reason is fixed text, never the parser's or the OS's message.
+test('an invalid harness.json never echoes its own bytes: a fixed reason for JSON, only the error code for a read', () => {
+  const root = makeTmpRepo();
+  try {
+    const harnessJsonPath = path.join(root, 'harness.json');
+    fs.writeFileSync(harnessJsonPath, '{ "version": "\u001b[2J\u001b]0;pwned\u0007", oops', 'utf8');
+
+    const located = projectLocation(root, syncDeps());
+    const synced = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(located.reason, 'it is not valid JSON');
+    assert.equal(synced.reason, 'it is not valid JSON');
+
+    fs.rmSync(harnessJsonPath);
+    fs.mkdirSync(harnessJsonPath);
+    const unreadable = projectLocation(root, syncDeps());
+    assert.equal(unreadable.kind, 'invalidHarnessJson');
+    assert.match(unreadable.reason, /^it cannot be read \(([A-Z0-9_]+|unknown error)\)$/);
+    assert.equal(syncProject(root, '0.1.0', syncDeps()).reason, unreadable.reason);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
