@@ -306,6 +306,9 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   (R3-codex-home-overrides-user-env); no login probe when the plugin is not installed, the `codex`
   cell being `n/a` then (R3-login-probe-runs-when-plugin-absent) — route: delegated writer (the T6
   writer, resumed: `stack.mjs`, `doctor.mjs` and their tests)
+- [x] T6c Accepted review follow-up on T6b: the cache-restamp test builds its fresh stamp a minute
+  in the past, so a run inside one millisecond cannot fail it (R3-refetch-stamp-same-ms) — route:
+  inline (one test line)
 - [ ] T7 The Codex review of each approved code slice leaves a record a check verifies, so a
   skipped review is caught — route: to be decided after exploration
 
@@ -790,7 +793,8 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   worth doing first, since agents read that text.
 - 2026-09-29: PR `jsaristi/js-harness#12` opened on Sebastián's go-ahead (mergeable, clean; the repository has no CI checks).
 - 2026-09-29: slice 5 merged as 8ca30ea (`jsaristi/js-harness#12`) by Sebastián's go-ahead.
-- 2026-09-29: T6 done by a delegated writer on `feat/codex-plugin-doctor`: a sixth `tools` row,
+
+- 2026-09-29: T6 done by a delegated writer on `feat/codex-plugin-doctor`: a sixth `tools` row,
   `codex-plugin` (see "T6 design"); a shared `spawnProbe`/`probeTimedOut` under the version and
   login probes; `pluginInstalledVersion` and `readMarketplacePluginVersion` take the plugin id and
   the marketplace. RED: `node --test` → 570 tests, 30 failing, all because the row did not exist.
@@ -805,7 +809,8 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   SUGGESTION (R3-login-probe-runs-when-plugin-absent). Codex (`--base 4b5cef7`): two P2 — a fresh
   cache from before the row keeps its `upToDate` `unknown` for up to 6 h, and the two-step install
   fix joined by `;` fails in `cmd.exe`; its sandbox could not run the tests. All four accepted as T6b.
-- 2026-09-29: T6b done by the T6 writer, resumed: `resolveLatestVersions` refetches online when a
+
+- 2026-09-29: T6b done by the T6 writer, resumed: `resolveLatestVersions` refetches online when a
   fresh cache has no key for a looked-up row (a cached `null` counts as present); a fix may be a
   list, printed as a header line plus one indented command per line, and the codex-plugin install
   and gentle-ai upgrade fixes are lists; `codexLoggedIn` keeps a user-set `CODEX_HOME` when `home`
@@ -813,6 +818,11 @@ b22ecc9); 3 = T2e–T3c (`jsaristi/js-harness#10`, merged as
   is installed. RED: 584 tests, 12 failing (the fix format, the cache predating a row, the
   `CODEX_HOME` and not-installed cases). GREEN: `node --test` → `tests 584 / pass 577 / fail 0 /
   skipped 7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS, 0 FAIL.
+- 2026-09-29: T6b committed as d4c4ca0. Assessed (`--base-ref 578a2a8`): risk `medium`, 410 lines,
+  `review_due`. Native review lineage review-bcd1b28a2e539ad1: consent granted (pre-granted), one
+  lens (reliability), approved and acknowledged, one SUGGESTION (R3-refetch-stamp-same-ms). Codex
+  (`--base 578a2a8`): no actionable regressions; its sandbox could not run the tests. Accepted as
+  T6c, done inline by the parent: `doctor.test.mjs` 37/37.
 
 ## Next step
 T6 (`doctor` reports the Codex plugin `codex@openai-codex`: installed, enabled and logged in,

@@ -506,7 +506,8 @@ test('an online run refetches when a fresh cache has no key for a looked-up row,
   try {
     seedHealthyHome(home);
     seedCodexMarketplace(home);
-    const freshAt = new Date().toISOString();
+    // A minute old: still fresh, and a restamp can never land on the same millisecond.
+    const freshAt = new Date(Date.now() - 60_000).toISOString();
     const { 'codex-plugin': _absent, ...withoutCodexPlugin } = NULL_VERSIONS;
     writeCache(home, { latest: { checkedAt: freshAt, versions: { 'gentle-ai': '3.7.0', ...withoutCodexPlugin } }, notified: null });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
