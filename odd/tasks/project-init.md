@@ -390,7 +390,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   `/dev/null`, not the ref list (R3-hook-child-stdin); no `^` hint for a root commit
   (R3-root-commit-fix-hint); the three comments R2 found wrong or missing — route: delegated
   writer (the T7 writer, resumed)
-- [ ] T7e Accepted PR-range review follow-ups (the last round for slice 7; later findings are
+- [x] T7e Accepted PR-range review follow-ups (the last round for slice 7; later findings are
   carried): a record whose head lies past the pushed tip still covers the commits in its range
   (Codex P2, R3-record-head-beyond-pushed-tip-dropped); only a valid record counts as evidence —
   the v1 schema, `reviewed` or `unavailable` with a reason, full commit ids (Codex P2); a push to a
@@ -1026,7 +1026,42 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   T7e. Carried: R4-companion-no-timeout (a Codex review can rightly take many minutes, so a timeout
   needs a measured bound) and R2-duplicated-git-helper (a shared git helper across `check.mjs` and
   `codex-review.mjs`).
+- 2026-09-29: T7e done by the T7 writer, resumed: `isValidCodexReview` in
+  `bin/lib/codex-reviews.mjs` is the one place a record is judged, and the check counts invalid
+  records apart; a record is expanded when its head is in the range or descends from the pushed
+  tip (`git merge-base --is-ancestor`); a remote `git remote` does not list fails with `git remote
+  add` and `--remote` hints; the header tense and the newest-first comment. RED: 44 tests, 16
+  failing. GREEN: focused suites 96/96; `node --test` → `tests 686 / pass 679 / fail 0 / skipped
+  7`; `npm run check` exit 0; `npm run e2e` exit 0, 14 PASS. Parent spot check: the two record
+  suites 56/56.
+- 2026-09-29: T7e committed as c5458b3. Assessed (`--base-ref 315794e`): risk `medium`, 190 lines,
+  `under_budget`; as the slice's last commit it is covered by a final review of the whole PR range
+  `8e0dea6..c5458b3` (risk `high`, 1692 lines). Native review lineage review-5533b08a00422e90:
+  consent granted (pre-granted), four lenses, approved and acknowledged; two WARNING
+  (R4-ancestor-probe-per-record-unbounded: one `merge-base` per record outside the range, so the
+  cost still grows with every record written; R2-t7e-status-stale, fixed by this commit) and three
+  SUGGESTION (R2-git-helper-triplicated, the carried helper point; R3-merge-resolution-code-unchecked:
+  a merge whose conflict resolution adds code is exempt; R3-unrelated-record-still-spawns, the same
+  cost as R4).
+- 2026-09-29: Codex on T7e (`js-harness codex-review --base 315794e`), run twice: both times its
+  sandbox denied process launch, so it could not read the diff and said so, yet its turn completed,
+  the companion exited 0, and the command recorded `reviewed`. Both false records were removed
+  from `.git/js-harness/codex-reviews.jsonl` (the file is ours; the three earlier records stay) and
+  the skip recorded explicitly: `--unavailable "Codex's sandbox denied process launch, so it could
+  not read the diff (two runs, 2026-09-29)"`. `node bin/check.mjs --push` → `PASS codex-review 5
+  code commits since origin/main, all covered by a Codex review record`, the unavailable range
+  listed under it. Slice 7 is complete: T7 through T7e.
+- Follow-ups carried from slice 7, none blocking the gate's purpose (a skipped review is caught):
+  first, **a completed Codex turn that could not inspect the diff is recorded as `reviewed`**,
+  because the companion's exit 0 means the turn completed, not that the review ran (seen twice
+  above); the command needs a signal from Codex's result, not its exit code, and until then the
+  agent reads the verdict and replaces such a record with `--unavailable`. Then
+  R4-ancestor-probe-per-record-unbounded with R3-unrelated-record-still-spawns (one batched
+  ancestry query), R3-merge-resolution-code-unchecked, R2-git-helper-triplicated,
+  R4-companion-no-timeout, and `init` writing the pre-push hook for projects that adopt the flow.
 
 ## Next step
-T7e by the T7 writer resumed, its gentle-ai and Codex reviews, then the pull request of slice 7 on Sebastián's go-ahead. The installed skill on this machine still carries the old text until `js-harness` is
+The pull request of slice 7 (`feat/codex-review-record` against `main`) on Sebastián's go-ahead;
+after it merges, Project init is complete. The first carried follow-up (a Codex turn that could not
+inspect recorded as `reviewed`) is the next work worth doing on this gate. The installed skill on this machine still carries the old text until `js-harness` is
 reinstalled from `main` and synced.
