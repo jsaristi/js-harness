@@ -677,3 +677,19 @@ test('updateMain and upgradeMain keep ignoring flags they do not know (parsing u
     console.log = original;
   }
 });
+
+test('status never prints the bytes of a malformed harness.json (terminal escapes included)', async () => {
+  const root = makeProject({ version: '1.0.0' });
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ "version": "\u001b[2J\u001b]0;pwned\u0007", oops', 'utf8');
+    const { code, out, err } = await runStatus(['--cwd', root, '--home', home], {}, noPackageManager);
+
+    assert.equal(code, 1);
+    assert.match(err, /cannot read the pin from .*harness\.json: it is not valid JSON$/);
+    assert.doesNotMatch(`${out}${err}`, /\u001b|\u0007/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

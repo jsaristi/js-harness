@@ -26,8 +26,8 @@ const MENU_LABELS = {
   'project-status': 'Status',
   'project-uninstall': 'Uninstall',
 };
-// The uninstalls ask before they run; each prompt names what it undoes.
-const CONFIRMS = new Set(['uninstall', 'project-uninstall']);
+// The uninstalls ask before they run; each prompt names what it undoes. A command has a prompt here
+// exactly when it asks first, and `state.pending` names the command the open prompt is for.
 const CONFIRM_PROMPTS = {
   uninstall: 'Uninstall js-harness from this home? (y/N)',
   'project-uninstall': 'Undo js-harness in this project? (y/N)',
@@ -170,9 +170,9 @@ export function normalizeKey(chunk) {
  * `{ type: 'run', command }`, or `{ type: 'quit' }` — the shell performs it, the reducer never does.
  */
 export function handleKey(state, key) {
-  if (state.mode === 'confirm-uninstall') {
+  if (state.mode === 'confirm') {
     const next = { ...state, mode: 'menu', pending: undefined };
-    if (key === 'y') return { state: next, effect: { type: 'run', command: state.pending ?? 'uninstall' } };
+    if (key === 'y') return { state: next, effect: { type: 'run', command: state.pending } };
     return { state: next, effect: null };
   }
 
@@ -186,7 +186,7 @@ export function handleKey(state, key) {
   if (key === 'enter') {
     const command = state.menu[state.selected].id;
     if (command === 'quit') return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
-    if (CONFIRMS.has(command)) return { state: { ...state, mode: 'confirm-uninstall', pending: command }, effect: null };
+    if (Object.hasOwn(CONFIRM_PROMPTS, command)) return { state: { ...state, mode: 'confirm', pending: command }, effect: null };
     return { state, effect: { type: 'run', command } };
   }
   return { state, effect: null };
@@ -212,10 +212,17 @@ export function render(state) {
       lines.push(`${i === state.selected ? '>' : ' '} ${entry.label}`);
     }
   }
-  if (state.mode === 'confirm-uninstall') {
-    lines.push('', CONFIRM_PROMPTS[state.pending ?? 'uninstall']);
+  if (state.mode === 'confirm') {
+    lines.push('', CONFIRM_PROMPTS[state.pending]);
   }
   return lines;
+}
+
+/** An error as one printable line: its first line, without control characters. */
+function oneLine(err) {
+  return String(err?.message ?? err)
+    .split('\n')[0]
+    .replace(/[\u0000-\u001f\u007f]/g, '');
 }
 
 function screenText(state) {
@@ -258,8 +265,20 @@ export function runTui({
 
       if (effect?.type === 'run') {
         stdin.pause();
-        await commands[effect.command]();
-        if (readLocation) state = withLocation(state, await readLocation());
+        // Whatever the command or the re-read does, the terminal comes back: a failure is one line on
+        // stderr, the previous location stays, and the menu is drawn again below.
+        try {
+          await commands[effect.command](state.location);
+        } catch (err) {
+          console.error(`${effect.command} failed: ${oneLine(err)}`);
+        }
+        if (readLocation) {
+          try {
+            state = withLocation(state, await readLocation());
+          } catch (err) {
+            console.error(`reading the project failed: ${oneLine(err)}`);
+          }
+        }
         stdin.resume();
         drawn = 0; // keep the command's output; redraw the menu below it
       }
@@ -277,9 +296,13 @@ export function runTui({
   });
 }
 
-/** The commands the menu runs, each bound to `home`. The machine ones never depend on the folder: `status`,
- * `sync` and `uninstall` pass `--global`, so the same Enter never changes scope with where the TUI opened.
- * The project ones exist only with a `root` (the repository's top-level) and run with `--cwd <root>`. */
+/** The commands the menu runs, each bound to `home`. The machine ones do not change scope with the folder:
+ * `status`, `sync` and `uninstall` pass `--global`, so the same Enter never acts on a project. (`doctor`
+ * reads the folder's project, like the stack block, so it gets `--cwd`.) Every project command exists
+ * whatever the TUI opened on, and takes the location the menu was last built for: it acts on that
+ * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
+ * that moves, while the TUI is open never leaves a menu item without a command or bound to a stale root.
+ * `root` is only the fallback for a call with no location. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
@@ -289,16 +312,16 @@ export function buildCommands({
   fetch: fetchImpl = fetch,
   now,
 } = {}) {
-  const project = root
-    ? {
-        'project-init': () => initMain(['--cwd', root, '--home', home], env),
-        'project-sync': () => syncMain(['--cwd', root, '--home', home], env),
-        'project-status': () => statusMain(['--cwd', root, '--home', home], env, spawn),
-        'project-uninstall': () => uninstallMain(['--cwd', root, '--home', home], env),
-      }
-    : {};
+  const argsAt = (location) => {
+    const at = location?.root ?? root;
+    if (!at) throw new Error('no project to act on');
+    return ['--cwd', at, '--home', home];
+  };
   return {
-    ...project,
+    'project-init': async (location) => initMain(argsAt(location), env),
+    'project-sync': async (location) => syncMain(argsAt(location), env),
+    'project-status': async (location) => statusMain(argsAt(location), env, spawn),
+    'project-uninstall': async (location) => uninstallMain(argsAt(location), env),
     status: () => statusMain(['--global', '--home', home], env, spawn),
     doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
     install: () => installMain(['--home', home]),
@@ -336,7 +359,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const location = projectLocation(cwd);
   const stack = await computeStackState({ home, cwd, spawn, fetch: fetchImpl, now });
 
-  const commands = buildCommands({ home, cwd, root: location.root, env, spawn, fetch: fetchImpl, now });
+  const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now });
 
   return runTui({
     installedVersion,

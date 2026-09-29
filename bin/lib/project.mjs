@@ -1375,13 +1375,21 @@ function projectFiles(root, spawn) {
 /** The version `harness.json` pins: `{ pin }`, or `{ invalid: reason }` when the file cannot be read, is
  * not JSON, has no string `version`, or has one that is not semver. A committed pin reaches the terminal
  * inside a suggested install command, so a cloned repository must not be able to smuggle shell or escape
- * sequences through it (T4c, R1-001). The one reading `syncProject` and `projectLocation` share. */
+ * sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
+ * code, never the parser's message (which quotes the file's own bytes). The one reading `syncProject`
+ * and `projectLocation` share. */
 function readPin(harnessJsonPath) {
+  let text;
+  try {
+    text = fs.readFileSync(harnessJsonPath, 'utf8');
+  } catch (err) {
+    return { invalid: `it cannot be read (${/^[A-Z0-9_]+$/.test(err?.code) ? err.code : 'unknown error'})` };
+  }
   let pin;
   try {
-    pin = JSON.parse(fs.readFileSync(harnessJsonPath, 'utf8'))?.version;
-  } catch (err) {
-    return { invalid: err.message };
+    pin = JSON.parse(text)?.version;
+  } catch {
+    return { invalid: 'it is not valid JSON' };
   }
   if (typeof pin !== 'string' || pin.length === 0) return { invalid: 'it has no string "version"' };
   if (!SEMVER.test(pin)) return { invalid: 'its "version" is not a semver version' };

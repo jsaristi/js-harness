@@ -3147,3 +3147,27 @@ for (const [label, write] of [
     }
   });
 }
+
+// R1-status-reason-echo: a JSON syntax error quotes the bytes it choked on, and harness.json is committed
+// by whoever owns the repository — so the reason is fixed text, never the parser's or the OS's message.
+test('an invalid harness.json never echoes its own bytes: a fixed reason for JSON, only the error code for a read', () => {
+  const root = makeTmpRepo();
+  try {
+    const harnessJsonPath = path.join(root, 'harness.json');
+    fs.writeFileSync(harnessJsonPath, '{ "version": "\u001b[2J\u001b]0;pwned\u0007", oops', 'utf8');
+
+    const located = projectLocation(root, syncDeps());
+    const synced = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(located.reason, 'it is not valid JSON');
+    assert.equal(synced.reason, 'it is not valid JSON');
+
+    fs.rmSync(harnessJsonPath);
+    fs.mkdirSync(harnessJsonPath);
+    const unreadable = projectLocation(root, syncDeps());
+    assert.equal(unreadable.kind, 'invalidHarnessJson');
+    assert.match(unreadable.reason, /^it cannot be read \([A-Z]+\)$/);
+    assert.equal(syncProject(root, '0.1.0', syncDeps()).reason, unreadable.reason);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

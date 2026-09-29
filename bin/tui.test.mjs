@@ -98,8 +98,9 @@ test('render notes an available update in the header', () => {
   assert.match(render(state).join('\n'), /update available: 0\.2\.0/);
 });
 
-test('render shows a confirmation prompt in confirm-uninstall mode', () => {
-  const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), mode: 'confirm-uninstall' };
+test('render shows a confirmation prompt in confirm mode', () => {
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
+  const state = { ...base, mode: 'confirm', pending: 'uninstall' };
   assert.match(render(state).join('\n'), /Uninstall.*\(y\/N\)/);
 });
 
@@ -127,12 +128,14 @@ test('enter on Uninstall asks for confirmation instead of running it directly', 
   const uninstallIndex = MENU_ITEMS.indexOf('uninstall');
   state = { ...state, selected: uninstallIndex };
   const { state: next, effect } = handleKey(state, 'enter');
-  assert.equal(next.mode, 'confirm-uninstall');
+  assert.equal(next.mode, 'confirm');
+  assert.equal(next.pending, 'uninstall');
   assert.equal(effect, null);
 });
 
 test('y confirms the uninstall; anything else cancels back to the menu', () => {
-  const confirming = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), mode: 'confirm-uninstall' };
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
+  const confirming = { ...base, mode: 'confirm', pending: 'uninstall' };
 
   const yes = handleKey(confirming, 'y');
   assert.equal(yes.state.mode, 'menu');
@@ -611,14 +614,16 @@ test('Init is a selectable project command; Sync and Status run directly', () =>
 test('the two uninstalls ask different questions and run different commands', () => {
   const project = press(stateAt(INITIALIZED, 'project-uninstall'), 'enter');
   assert.equal(project.effect, null);
-  assert.equal(project.state.mode, 'confirm-uninstall');
+  assert.equal(project.state.mode, 'confirm');
+  assert.equal(project.state.pending, 'project-uninstall');
   assert.match(render(project.state).join('\n'), /Undo js-harness in this project\? \(y\/N\)/);
   assert.doesNotMatch(render(project.state).join('\n'), /from this home/);
   assert.deepEqual(handleKey(project.state, 'y').effect, { type: 'run', command: 'project-uninstall' });
   assert.equal(handleKey(project.state, 'n').effect, null);
 
   const machine = press(stateAt(INITIALIZED, 'uninstall'), 'enter');
-  assert.equal(machine.state.mode, 'confirm-uninstall');
+  assert.equal(machine.state.mode, 'confirm');
+  assert.equal(machine.state.pending, 'uninstall');
   assert.match(render(machine.state).join('\n'), /Uninstall js-harness from this home\? \(y\/N\)/);
   assert.doesNotMatch(render(machine.state).join('\n'), /in this project/);
   assert.deepEqual(handleKey(machine.state, 'y').effect, { type: 'run', command: 'uninstall' });
@@ -745,12 +750,156 @@ test('buildCommands binds the project commands to the root: init, status, sync, 
   }
 });
 
-test('buildCommands leaves the project commands out when there is no project root', () => {
+// R4-stale-command-binding: a menu item never lacks its command, and the project it acts on is the one
+// the menu was last built for, not the one the TUI happened to open on.
+test('buildCommands has every project command with no root, and each refuses cleanly without a location', async () => {
   const commands = buildCommands({ home: os.tmpdir() });
   for (const id of ['project-init', 'project-sync', 'project-status', 'project-uninstall']) {
-    assert.equal(commands[id], undefined, id);
+    assert.equal(typeof commands[id], 'function', id);
+    await assert.rejects(() => commands[id](), /no project/, id);
   }
 });
+
+test('project commands act on the root of the location they are given, not the one they were built with', async () => {
+  const opened = makeFixtureRepo('js-harness-tui-opened-');
+  const current = makeFixtureRepo('js-harness-tui-current-');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-rebind-home-'));
+  try {
+    const commands = buildCommands({ home, root: opened });
+
+    const init = await silently(() => commands['project-init']({ kind: 'notInitialized', root: current }));
+
+    assert.equal(init.result, 0, init.lines.join('\n'));
+    assert.ok(fs.existsSync(path.join(current, 'harness.json')));
+    assert.equal(fs.existsSync(path.join(opened, 'harness.json')), false);
+
+    const bare = buildCommands({ home });
+    const again = await silently(() => bare['project-status']({ kind: 'initialized', root: current }));
+    assert.equal(again.result, 0);
+    assert.match(again.lines.join('\n'), /pinned version: /);
+  } finally {
+    for (const dir of [opened, current, home]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runTui hands the command the location just read: open outside a repository, then Init on the new one', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const calls = [];
+  let location = NOT_GIT;
+  const commands = {
+    ...noCommands,
+    status: async () => {
+      location = { kind: 'notInitialized', root: '/became/a/repo' }; // e.g. `git init` in another terminal
+    },
+    'project-init': async (at) => calls.push(at.root),
+  };
+  const done = runTui({
+    installedVersion: '0.1.0',
+    updateAvailable: null,
+    location,
+    readLocation: () => location,
+    commands,
+    stdin,
+    stdout,
+  });
+
+  stdin.emit('data', '\r'); // Status (machine) runs, then the re-read finds a repository
+  await flush();
+  assert.match(stdout.chunks.at(-1), /^project$/m);
+  stdin.emit('data', 'k'); // up, over the [machine] header, to Init
+  stdin.emit('data', '\r');
+  await flush();
+
+  assert.deepEqual(calls, ['/became/a/repo']);
+  stdin.emit('data', 'q');
+  await done;
+});
+
+// R3-001: whatever a command or the re-read does, the terminal comes back.
+function pausable(stdin) {
+  const state = { paused: false };
+  stdin.pause = () => {
+    state.paused = true;
+  };
+  stdin.resume = () => {
+    state.paused = false;
+  };
+  return state;
+}
+
+for (const [label, fail] of [
+  ['rejects', () => Promise.reject(new Error('boom\nsecond line'))],
+  [
+    'throws',
+    () => {
+      throw new Error('boom\nsecond line');
+    },
+  ],
+]) {
+  test(`runTui survives a command that ${label}: one line on stderr, stdin resumed, menu redrawn, q still quits`, async () => {
+    const stdin = makeFakeStdin();
+    const stdout = makeFakeStdout();
+    const input = pausable(stdin);
+    const commands = { ...noCommands, status: fail };
+    const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+    const before = stdout.chunks.length;
+
+    const { lines } = await silently(async () => {
+      stdin.emit('data', '\r');
+      await flush();
+    });
+
+    assert.equal(input.paused, false, 'stdin must be resumed');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /status failed: boom$/);
+    assert.ok(stdout.chunks.length > before && /^> Status$/m.test(stdout.chunks.at(-1)), 'the menu is drawn again');
+
+    stdin.emit('data', 'q');
+    assert.equal(await done, 0);
+  });
+}
+
+for (const [label, fail] of [
+  ['rejects', () => Promise.reject(new Error('cannot read'))],
+  [
+    'throws',
+    () => {
+      throw new Error('cannot read');
+    },
+  ],
+]) {
+  test(`runTui keeps the previous location when the re-read ${label}, and still redraws and quits`, async () => {
+    const stdin = makeFakeStdin();
+    const stdout = makeFakeStdout();
+    const input = pausable(stdin);
+    const done = runTui({
+      installedVersion: '0.1.0',
+      updateAvailable: null,
+      location: NOT_INITIALIZED,
+      readLocation: fail,
+      commands: { ...noCommands, status: async () => {} },
+      stdin,
+      stdout,
+    });
+    stdin.emit('data', 'j'); // to machine Status
+    const { lines } = await silently(async () => {
+      stdin.emit('data', '\r');
+      await flush();
+    });
+
+    assert.equal(input.paused, false);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /reading the project failed: cannot read$/);
+    const redraw = stdout.chunks.at(-1);
+    assert.match(redraw, /^project$/m, 'the menu of the previous location is drawn again');
+    assert.match(redraw, /^> Status$/m);
+    assert.match(redraw, /Init/);
+
+    stdin.emit('data', 'q');
+    assert.equal(await done, 0);
+  });
+}
 
 // The machine status is the machine's wherever the TUI opened: inside a repository a plain `status`
 // would report that project instead (or refuse for it).

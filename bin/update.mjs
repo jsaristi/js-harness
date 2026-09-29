@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // `status`, `update`, `upgrade`: version detection and upgrade. The package manager and the
 // release source are both injectable because on this machine `npm` on PATH is a pnpm shim. `status`
-// also answers by location (T5 design): inside a git repository it reports the project, anywhere else
-// (or with `--global`) the machine install.
+// also answers by location (T5 design); see `statusMain` for which folders report the project, the
+// machine install, or refuse.
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
