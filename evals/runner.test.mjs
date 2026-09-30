@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, readResults, runSuite, runTrial, summarizeUsage, trialKey,
+  childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, readResults, runProcess, runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +66,14 @@ test('summarizeUsage adds the cache tokens to the input and reads the turns', ()
 test('summarizeUsage reports unknown, never zero, when the output has no usage', () => {
   assert.deepEqual(summarizeUsage(null), { inputTokens: null, outputTokens: null, turns: null, usage: null });
   assert.deepEqual(summarizeUsage({ type: 'result' }), { inputTokens: null, outputTokens: null, turns: null, usage: null });
+});
+
+test('summarizeUsage gives null, not 0, for a count whose field is missing', () => {
+  const partial = summarizeUsage({ num_turns: 2, usage: { input_tokens: 10, cache_read_input_tokens: 30 } });
+  assert.equal(partial.inputTokens, null, 'cache_creation_input_tokens is unknown, so the sum is');
+  assert.equal(partial.outputTokens, null);
+  assert.equal(partial.turns, 2);
+  assert.equal(summarizeUsage({ usage: { output_tokens: 7 } }).outputTokens, 7);
 });
 
 test('trialKey names the four axes in a stable order', () => {
@@ -337,12 +347,13 @@ test('output that is not a result object is recorded as unparsable, with unknown
   assert.equal(record.score, 2 / 3);
 });
 
-test('an agent command that cannot be spawned is recorded and graded', async () => {
+test('an agent command that cannot be spawned stops the trial without a record and cleans up', async () => {
   const config = fakeConfig('noop', {}, { command: path.join(scratch, 'no-such-agent') });
   const { options, workRoot } = trialEnv('noop', { config });
-  const { record } = await runTrial(options);
-  assert.equal(record.error, 'agent-spawn-failed');
-  assert.equal(record.score, 2 / 3);
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'stopped');
+  assert.equal(outcome.reason, 'spawn');
+  assert.match(outcome.message, /ENOENT/);
   assert.deepEqual(entriesOf(workRoot), []);
 });
 
@@ -548,4 +559,91 @@ test('a suite against a fake agent that hits the cap stops and leaves the result
   assert.deepEqual(result, { status: 'stopped', reason: 'cap', message: "You've hit your monthly spend limit", completed: 0 });
   assert.deepEqual(readResults(options.resultsPath), []);
   assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('a suite whose agent cannot be spawned stops with reason spawn and records nothing', async () => {
+  const options = {
+    tasks: [loadTask(SAMPLE)],
+    configs: [fakeConfig('noop', {}, { command: path.join(scratch, 'no-such-agent') })],
+    efforts: ['medium'],
+    repeats: 2,
+    resultsPath: path.join(tmp('results'), 'results.jsonl'),
+    runsDir: tmp('runs'),
+    workRoot: tmp('work'),
+    readVersion: () => null,
+  };
+  const result = await runSuite(options);
+  assert.equal(result.status, 'stopped');
+  assert.equal(result.reason, 'spawn');
+  assert.match(result.message, /ENOENT/);
+  assert.equal(result.completed, 0);
+  assert.deepEqual(readResults(options.resultsPath), []);
+});
+
+test('a results file that ends in a torn line still keeps the next record readable', async () => {
+  const options = suiteOptions({ repeats: 1 });
+  fs.mkdirSync(path.dirname(options.resultsPath), { recursive: true });
+  fs.writeFileSync(options.resultsPath, JSON.stringify({ task: 'old', config: 'x', effort: 'medium', repeat: 1 }) + '\n{"task": "a", "conf');
+  const result = await runSuite({ ...options, runTrial: stubTrial([]) });
+  assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 0 });
+  assert.deepEqual(readResults(options.resultsPath).map(trialKey), ['old|x|medium|1', 'a|x|medium|1']);
+  const resumed = await runSuite({ ...options, runTrial: stubTrial([]) });
+  assert.deepEqual(resumed, { status: 'complete', completed: 0, skipped: 1 }, 'the recorded trial is not run again');
+});
+
+test('planTrials rejects names that would make a trial key or a log file name ambiguous', () => {
+  const axes = { tasks: [{ id: 'a' }], configs: [{ name: 'x' }], efforts: ['medium'], repeats: 1 };
+  for (const bad of ['', 'a b', 'a|b', 'a/b', 'a\\b', 'a:b', 'é', '_a', 'a_', 'a__b']) {
+    assert.throws(() => planTrials({ ...axes, tasks: [{ id: bad }] }), /task id/, 'task ' + JSON.stringify(bad));
+    assert.throws(() => planTrials({ ...axes, configs: [{ name: bad }] }), /config name/, 'config ' + JSON.stringify(bad));
+    assert.throws(() => planTrials({ ...axes, efforts: [bad] }), /effort/, 'effort ' + JSON.stringify(bad));
+  }
+  assert.doesNotThrow(() => planTrials({ ...axes, tasks: [{ id: 'long-horizon_2.v1' }], configs: [{ name: 'minimal' }] }));
+});
+
+test('runSuite rejects a bad name before running or recording anything', async () => {
+  const asked = [];
+  const options = suiteOptions({ configs: [{ name: 'bad name', command: 'x' }], runTrial: stubTrial(asked) });
+  await assert.rejects(runSuite(options), /config name/);
+  assert.deepEqual(asked, []);
+  assert.deepEqual(readResults(options.resultsPath), []);
+});
+
+// ---- process tree and timer -------------------------------------------------------------------------
+
+test('a descendant that keeps the pipes open after the root exits is killed, not left into grading', async () => {
+  const report = path.join(tmp('report'), 'report.json');
+  const run = await runProcess({
+    command: process.execPath,
+    args: [FAKE_AGENT],
+    env: childEnv({ FAKE_AGENT_MODE: 'orphan', FAKE_AGENT_REPORT: report }),
+    cwd: tmp('cwd'),
+    input: 'hi',
+    timeoutMs: 30000,
+    graceMs: 300,
+  });
+  assert.equal(run.exitCode, 0);
+  assert.equal(run.timedOut, false);
+  assert.equal(JSON.parse(run.stdout).result, 'orphaned');
+  const { grandchildPid } = JSON.parse(fs.readFileSync(report, 'utf8'));
+  assert.ok(await waitUntil(() => !isAlive(grandchildPid)), 'grandchild ' + grandchildPid + ' still runs');
+});
+
+test('the timeout timer is cleared when the child exits, so a survivor holding the pipes is not a timeout', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const kills = [];
+  const pending = runProcess({
+    command: 'agent',
+    input: 'prompt',
+    timeoutMs: 50,
+    graceMs: 250,
+    spawn: () => child,
+    kill: () => kills.push('tree'),
+    killSurvivors: () => kills.push('survivors'),
+  });
+  setTimeout(() => child.emit('exit', 0, null), 10); // in time; 'close' never comes, as if a descendant held the pipes
+  const run = await pending;
+  assert.equal(run.timedOut, false);
+  assert.equal(run.exitCode, 0);
+  assert.deepEqual(kills, ['survivors'], 'the exited root is cleaned up as a survivor hunt, not killed as a tree');
 });

@@ -48,10 +48,12 @@ export function parseAgentOutput(stdout) {
  * a zero would read as a measurement. */
 export function summarizeUsage(output) {
   const usage = isObject(output?.usage) ? output.usage : null;
-  const num = (value) => (Number.isFinite(value) ? value : 0);
+  // Per count: a usage object that lacks one of the fields a count is summed from leaves that count
+  // unknown, rather than a sum of whatever happened to be there.
+  const sum = (...fields) => (usage && fields.every((field) => Number.isFinite(usage[field])) ? fields.reduce((total, field) => total + usage[field], 0) : null);
   return {
-    inputTokens: usage ? num(usage.input_tokens) + num(usage.cache_creation_input_tokens) + num(usage.cache_read_input_tokens) : null,
-    outputTokens: usage ? num(usage.output_tokens) : null,
+    inputTokens: sum('input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'),
+    outputTokens: sum('output_tokens'),
     turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
     usage,
   };
@@ -131,12 +133,34 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
   return env;
 }
 
+/** Kills what a root that has already exited left behind. POSIX: the group outlives its leader, so the
+ * group kill still reaches it. Windows: `taskkill /T` needs a live root, so the root's direct children
+ * are looked up by parent pid (which outlives the parent) and each is killed with its tree. A survivor
+ * whose own parent exited first is unreachable that way. Mirrors `killSurvivors` in `bin/check.mjs`,
+ * which is not exported; without it a descendant holding the pipes would run on into grading and
+ * workspace deletion. */
+export function killSurvivors(child, { platform = process.platform, spawnSync: sync = spawnSync } = {}) {
+  if (child.pid === undefined) return;
+  if (platform !== 'win32') {
+    killTree(child);
+    return;
+  }
+  const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
+  sync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
+}
+
 /** Runs one child to its end and resolves to `{ stdout, stderr, exitCode, signal, timedOut,
  * spawnError }`; it never rejects. `input`, when given, is written to stdin. Past `timeoutMs` the whole
  * process tree is killed (see `killTree`) and `timedOut` is set. No shell is involved: `command` is
  * spawned directly, so there is no quoting to get wrong on Windows and nothing for a prompt to inject
- * into. */
-export function runProcess({ command, args = [], env, cwd, input, timeoutMs, spawn = spawnChild, kill = killTree }) {
+ * into.
+ *
+ * Once the root exits the timeout no longer applies: it ran in time, and a descendant that still holds
+ * the pipes is not a timeout. If the pipes stay open for `graceMs` after the exit, `sweep` (default
+ * `killSurvivors`) kills what is left and the run ends with the root's own status. */
+export function runProcess({
+  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors,
+}) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
@@ -191,10 +215,12 @@ export function runProcess({ command, args = [], env, cwd, input, timeoutMs, spa
     });
     child.on('exit', (exitCode, signal) => {
       exit = { exitCode, signal };
+      clearTimeout(timer);
+      clearTimeout(grace);
       grace = setTimeout(() => {
-        kill(child);
+        sweep(child);
         finish();
-      }, PIPE_GRACE_MS);
+      }, graceMs);
     });
     child.on('close', finish);
     if (input !== undefined) {
@@ -206,7 +232,7 @@ export function runProcess({ command, args = [], env, cwd, input, timeoutMs, spa
       timer = setTimeout(() => {
         timedOut = true;
         kill(child);
-        grace = setTimeout(finish, PIPE_GRACE_MS);
+        grace = setTimeout(finish, graceMs);
       }, timeoutMs);
     }
   });
@@ -255,7 +281,6 @@ export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEO
 
 /** The short error string for an agent run that did not finish cleanly, else `null`. */
 function agentError(run, output) {
-  if (run.spawnError) return 'agent-spawn-failed';
   if (run.timedOut) return 'timeout';
   if (run.exitCode !== 0) return `agent-exit-${run.exitCode ?? run.signal}`;
   if (!output) return 'agent-output-unparsable';
@@ -268,7 +293,8 @@ const rawStem = ({ task, config, effort, repeat }) => [task, config, effort, rep
 const DEFAULT_RUNS_DIR = fileURLToPath(new URL('./runs/', import.meta.url));
 
 /** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
- * message }` when the agent died of the usage cap or of authentication. A stopped trial records
+ * message }` when the agent died of the usage cap or of authentication (`reason` `cap` or `auth`), or
+ * never started (`spawn`). A stopped trial records
  * nothing: a zero there would measure the machine, not the configuration.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
@@ -308,6 +334,10 @@ export async function runTrial({
     fs.writeFileSync(path.join(runsDir, `${stem}.stdout.log`), run.stdout);
     fs.writeFileSync(path.join(runsDir, `${stem}.stderr.log`), run.stderr);
 
+    // The agent never started (missing binary, a Windows .cmd shim): every trial of this configuration
+    // would fail the same way, and a recorded one would score the untouched fixture and, on resume, be
+    // skipped for good. Stop like a cap instead.
+    if (run.spawnError) return { status: 'stopped', reason: 'spawn', message: run.spawnError.message };
     const stop = classifyAgentFailure(run);
     if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
 
@@ -338,11 +368,26 @@ export async function runTrial({
   }
 }
 
+// Names end up in the trial key and in raw log file names. Only these characters are allowed, and an
+// underscore only between two of them, so `__` (the log stem separator) never occurs inside a name and
+// two different trials can never share a key or a stem.
+const NAME_PATTERN = /^[A-Za-z0-9.-]+(_[A-Za-z0-9.-]+)*$/;
+
+function assertName(kind, value) {
+  if (typeof value !== 'string' || !NAME_PATTERN.test(value)) {
+    throw new Error(`${kind} ${JSON.stringify(value)} is not usable in a trial key: use letters, digits, ".", "-" and a single "_" between them`);
+  }
+}
+
 /** Every trial of a suite, in the order they run. Repeats are the outermost loop: a suite cut short
  * by the usage cap then holds one full pass over every task, configuration and effort before a second
  * repeat of any, which keeps a partial A/B comparison balanced instead of complete for one arm only.
- * Repeats count from 1. */
+ * Repeats count from 1. Throws before any trial when a task id, configuration name or effort is not
+ * safe in a trial key. */
 export function planTrials({ tasks, configs, efforts, repeats }) {
+  for (const task of tasks) assertName('task id', task.id);
+  for (const config of configs) assertName('config name', config.name);
+  for (const effort of efforts) assertName('effort', effort);
   const plan = [];
   for (let repeat = 1; repeat <= repeats; repeat += 1) {
     for (const task of tasks) {
@@ -371,6 +416,26 @@ export function readResults(resultsPath) {
   return records;
 }
 
+/** Appends `record` as one JSON line. If the file does not end in a newline (a write torn by a crash),
+ * a newline goes first, so the fragment stays an isolated invalid line that `readResults` skips, instead
+ * of the new record being glued onto it and lost. The fragment is kept, not truncated away: nothing is
+ * rewritten, so there is no second way to lose data. */
+function appendRecord(resultsPath, record) {
+  fs.mkdirSync(path.dirname(resultsPath), { recursive: true });
+  let prefix = '';
+  if (fs.existsSync(resultsPath) && fs.statSync(resultsPath).size > 0) {
+    const fd = fs.openSync(resultsPath, 'r');
+    try {
+      const last = Buffer.alloc(1);
+      fs.readSync(fd, last, 0, 1, fs.fstatSync(fd).size - 1);
+      if (last[0] !== 0x0a) prefix = '\n';
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  fs.appendFileSync(resultsPath, `${prefix}${JSON.stringify(record)}\n`);
+}
+
 /** The first line of `<agent command> --version` (or `config.versionArgs`), else `null`. Recorded per
  * trial because a CLI update changes what a score means. */
 export function probeVersion(config) {
@@ -387,7 +452,7 @@ export function probeVersion(config) {
 /** Runs every trial of the suite that the results file does not already hold, appending each record
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
- * at the first usage-cap or authentication stop, with nothing recorded for that trial.
+ * at the first usage-cap, authentication or agent-spawn stop, with nothing recorded for that trial.
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
  * running the same call again. `readVersion` and `runTrial` are injectable for tests. */
@@ -424,8 +489,7 @@ export async function runSuite({
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }
-    fs.mkdirSync(path.dirname(resultsPath), { recursive: true });
-    fs.appendFileSync(resultsPath, `${JSON.stringify(outcome.record)}\n`);
+    appendRecord(resultsPath, outcome.record);
     completed += 1;
   }
   return { status: 'complete', completed, skipped };

@@ -2,7 +2,7 @@
 // A stand-in for `claude --print --output-format json`, so the runner is proven end to end without a
 // real model. The mode comes from the environment, because the runner owns the real agent's argv.
 //
-//   FAKE_AGENT_MODE    solve | noop | hang | cap | auth | exit | agent-error | garbage  (default noop)
+//   FAKE_AGENT_MODE    solve | noop | hang | orphan | cap | auth | exit | agent-error | garbage  (default noop)
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
 import fs from 'node:fs';
@@ -68,6 +68,17 @@ switch (mode) {
     report.grandchildPid = grandchild.pid;
     writeReport();
     setInterval(() => {}, 1000);
+    break;
+  }
+  case 'orphan': {
+    // The root exits at once while a grandchild keeps this process's stdout open: a survivor holding
+    // the pipes, reachable only through its dead parent's pid. Detached on Windows for the same reason
+    // as in `hang`.
+    const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit'], detached: process.platform === 'win32' });
+    grandchild.unref();
+    report.grandchildPid = grandchild.pid;
+    writeReport();
+    console.log(success('orphaned'));
     break;
   }
   case 'cap':
