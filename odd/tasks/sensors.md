@@ -75,7 +75,7 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   tests are two non-trivial files)
 - [x] T2 Budget: prove with a fixture project that the budget row holds a project's `AGENTS.md`,
   and check off the roadmap step (route: inline, one test)
-- [ ] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
+- [x] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
 - [ ] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
 
@@ -109,5 +109,24 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   is Sebastián's call), and in-session LSP diagnostics come from the `typescript-lsp` plugin that
   `doctor` already reports.
 
+- T3 (61a1490, delegated writer, on `feat/sensors-review` stacked on `feat/sensors` so slice 1
+  stays its own branch): `checkReview` runs `gentle-ai review mode status --json` then `review
+  assess --json` without a shell and prints an INFO `review` row; `deps.gentleAi` lets tests fake
+  it. RED: the new tests failed at import (1 failed); GREEN: 58 pass. Its own pre-commit printed
+  `INFO review medium risk, 2 paths, 295 lines: review not due (under_budget)`.
+- Slice review: gentle-ai assess from 922e5e8: `medium`, 475 lines, `slice_budget_reached`; one
+  lens, approved and acknowledged (lineage `review-b10be8c609142f54`, authority burned); one
+  WARNING (a null entry in `reasons` threw out of the fail-open row) and one SUGGESTION (a
+  schema-tagged envelope missing fields printed `undefined`), both fixed in 2012aa5 (RED 2 failed,
+  GREEN 60). Codex (`c672aeb..2012aa5`) found one P2: gentle-ai answers `changed_paths: 0` also
+  when it cannot build the candidate, which the row reported as a clean tree; fixed in 4b53504
+  (RED 1 failed, GREEN 61), and Codex (`2012aa5..4b53504`) found nothing more. gentle-ai: the two
+  fixes are under budget, pending in the slice (last reviewed boundary 61a1490).
+- T4 (inline): `AGENTS.md` says the gate reports whether review is due; the roadmap records the
+  Sensors decision, checks "RDD-by-risk wired", and points Next at merging the two slices.
+  Closing F4 waits on the merges.
+
 ## Next
-Slice 1 (T1–T2) is ready for push and a PR against `main`, on Sebastián's go-ahead. Then T3.
+Push `feat/sensors` (slice 1: e66a77b..a7d9a68) and open its PR against `main`, on Sebastián's
+go-ahead; after it merges, rebase `feat/sensors-review` (slice 2) onto `main` and open its PR.
+After both merge, mark F4 done in the roadmap and check off T4.

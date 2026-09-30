@@ -15,7 +15,8 @@ When something can be checked by a command, it belongs in `bin/`, not in prose.
 
 `bin/` holds plain Node commands with zero dependencies, so they run in any host on any machine
 without an install step. Each command sits next to its `*.test.mjs`; `node --test` runs them all.
-`npm run check` is the single gate: it runs the tests and holds this file to its token budget.
+`npm run check` is the single gate: it runs the tests, holds this file to its token budget, and
+says whether the pending change is due a gentle-ai review.
 The pre-commit hook runs the same gate (`npm run hooks` wires it in a fresh clone), so a red check
 means the commit is not ready yet.
 
