@@ -647,3 +647,93 @@ test('the timeout timer is cleared when the child exits, so a survivor holding t
   assert.equal(run.exitCode, 0);
   assert.deepEqual(kills, ['survivors'], 'the exited root is cleaned up as a survivor hunt, not killed as a tree');
 });
+
+// ---- second review round ----------------------------------------------------------------------------
+
+// Shape verified read-only in the installed CLI (claude.exe 2.1.284): an error result has no `result`
+// field; `errors` is an array of strings carrying the same text as stderr.
+const errorsJson = (errors, extra = {}) => JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, errors, ...extra });
+
+test('classifyAgentFailure reads the errors array of an error result, strings or objects with a message', () => {
+  assert.deepEqual(classifyAgentFailure({ stdout: errorsJson(["You've hit your monthly spend limit"]), exitCode: 1 }), {
+    kind: 'cap',
+    message: "You've hit your monthly spend limit",
+  });
+  assert.equal(classifyAgentFailure({ stdout: errorsJson(['Not logged in · Please run /login']) }).kind, 'auth');
+  assert.equal(classifyAgentFailure({ stdout: errorsJson([{ message: 'Invalid API key' }]) }).kind, 'auth');
+  assert.equal(classifyAgentFailure({ stdout: errorsJson(['something odd', { message: 'Claude usage limit reached' }, 42, null]) }).kind, 'cap');
+  assert.equal(classifyAgentFailure({ stdout: errorsJson([], { result: 'Not logged in' }) }).kind, 'auth', 'result is still read');
+});
+
+test('classifyAgentFailure ignores errors it cannot read and errors on a successful result', () => {
+  assert.equal(classifyAgentFailure({ stdout: errorsJson(['the model refused']) }), null);
+  assert.equal(classifyAgentFailure({ stdout: errorsJson('rate limit') }), null, 'a bare string is not the documented shape');
+  assert.equal(classifyAgentFailure({ stdout: errorsJson([{ code: 7 }]) }), null);
+  const ok = JSON.stringify({ type: 'result', is_error: false, errors: ['rate limit'] });
+  assert.equal(classifyAgentFailure({ stdout: ok, exitCode: 0 }), null);
+});
+
+test('classifyAgentFailure never reads raw text of a run that was killed by the timeout or had no exit code', () => {
+  const text = { stdout: '', stderr: 'API Error: rate limit exceeded' };
+  assert.equal(classifyAgentFailure({ ...text, exitCode: 1 }).kind, 'cap');
+  assert.equal(classifyAgentFailure({ ...text, exitCode: 1, timedOut: true }), null);
+  assert.equal(classifyAgentFailure({ ...text, exitCode: null }), null);
+});
+
+for (const [mode, reason, message] of [
+  ['cap-errors', 'cap', "You've hit your monthly spend limit"],
+  ['auth-errors', 'auth', 'Not logged in · Please run /login'],
+]) {
+  test(`a ${reason} message in the errors array stops the trial without a record`, async () => {
+    const { options, workRoot } = trialEnv(mode);
+    assert.deepEqual(await runTrial(options), { status: 'stopped', reason, message });
+    assert.deepEqual(entriesOf(workRoot), []);
+  });
+}
+
+test('a hung agent that logged cap-like text before the kill is a timeout record, not a cap stop', async () => {
+  const task = { ...loadTask(SAMPLE), timeoutMs: 2500 };
+  const { options, workRoot } = trialEnv('hang-noisy', { task });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.equal(outcome.record.error, 'timeout');
+  assert.equal(outcome.record.score, 2 / 3);
+  assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('an agent that reports an error but exits 0 is recorded as agent-error and graded', async () => {
+  const { options } = trialEnv('soft-error');
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.equal(outcome.record.error, 'agent-error');
+  assert.equal(outcome.record.score, 2 / 3);
+});
+
+test('a descendant that ignores the pipes and outlives a normally exiting root is killed before the run resolves', async () => {
+  const report = path.join(tmp('report'), 'report.json');
+  const run = await runProcess({
+    command: process.execPath,
+    args: [FAKE_AGENT],
+    env: childEnv({ FAKE_AGENT_MODE: 'detached-quiet', FAKE_AGENT_REPORT: report }),
+    cwd: tmp('cwd'),
+    input: 'hi',
+    timeoutMs: 30000,
+  });
+  assert.equal(run.exitCode, 0);
+  assert.equal(JSON.parse(run.stdout).result, 'left one behind');
+  const { grandchildPid } = JSON.parse(fs.readFileSync(report, 'utf8'));
+  assert.ok(await waitUntil(() => !isAlive(grandchildPid)), `grandchild ${grandchildPid} still runs`);
+});
+
+test('every close path sweeps the survivors exactly once, also when the pipes close at once', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const kills = [];
+  const pending = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 1000, spawn: () => child, kill: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+  setTimeout(() => {
+    child.emit('exit', 0, null);
+    child.emit('close', 0, null);
+  }, 10);
+  const run = await pending;
+  assert.equal(run.exitCode, 0);
+  assert.deepEqual(kills, ['survivors']);
+});

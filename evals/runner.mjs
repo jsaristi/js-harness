@@ -62,21 +62,37 @@ export function summarizeUsage(output) {
 const CAP_PATTERN = /usage limit|hit your .*limit|limit reached|rate limit/i;
 const AUTH_PATTERN = /not logged in|please run \/login|invalid api key|oauth token/i;
 
+/** The texts an error result carries. Claude Code reports some failures as `result`, and others, such as
+ * a startup failure, with no `result` at all and the same text as stderr in `errors` (an array of
+ * strings in the installed CLI's schema). Objects with a `message` are read too, defensively. */
+function errorTexts(parsed) {
+  const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+  return [parsed.result, ...errors.map((error) => (isObject(error) ? error.message : error))].filter(
+    (text) => typeof text === 'string' && text.trim() !== '',
+  );
+}
+
 /** Whether an agent run died of the plan's usage cap or of authentication: `{ kind: 'cap' | 'auth',
  * message }`, else `null`. Both mean the machine, not the configuration, failed the trial, so the suite
  * must stop instead of recording a zero (the predecessor lost 141 trials that way).
  *
- * A parsed result counts only when it is an error (`is_error`): a successful answer that merely talks
- * about rate limits is not one. With no parsable result, the raw text counts only when the agent also
- * exited non-zero, for the same reason. */
-export function classifyAgentFailure({ stdout = '', stderr = '', exitCode = null }) {
+ * A parsed result counts only when it is an error (`is_error`), and then its `result` and `errors` are
+ * read: a successful answer that merely talks about rate limits is not a cap. With no parsable result,
+ * the raw text counts only for a real non-zero exit code, and never for a run the timeout killed: a hung
+ * agent that logged "rate limit" before the kill timed out, which is a recorded result, where a cap
+ * stop would rerun that long trial on every resume. */
+export function classifyAgentFailure({ stdout = '', stderr = '', exitCode = null, timedOut = false }) {
   const parsed = parseAgentOutput(stdout);
-  const message = parsed
-    ? parsed.is_error === true && typeof parsed.result === 'string' ? parsed.result : null
-    : exitCode !== 0 ? `${stdout}\n${stderr}`.trim() : null;
-  if (!message) return null;
-  if (AUTH_PATTERN.test(message)) return { kind: 'auth', message };
-  if (CAP_PATTERN.test(message)) return { kind: 'cap', message };
+  let texts = [];
+  if (parsed) {
+    if (parsed.is_error === true) texts = errorTexts(parsed);
+  } else if (!timedOut && Number.isInteger(exitCode) && exitCode !== 0) {
+    texts = [`${stdout}\n${stderr}`.trim()];
+  }
+  for (const message of texts) {
+    if (AUTH_PATTERN.test(message)) return { kind: 'auth', message };
+    if (CAP_PATTERN.test(message)) return { kind: 'cap', message };
+  }
   return null;
 }
 
@@ -156,8 +172,9 @@ export function killSurvivors(child, { platform = process.platform, spawnSync: s
  * into.
  *
  * Once the root exits the timeout no longer applies: it ran in time, and a descendant that still holds
- * the pipes is not a timeout. If the pipes stay open for `graceMs` after the exit, `sweep` (default
- * `killSurvivors`) kills what is left and the run ends with the root's own status. */
+ * the pipes is not a timeout. If the pipes stay open for `graceMs` after the exit, the run ends with the
+ * root's own status. Every way of ending calls `sweep` (default `killSurvivors`) once first, to kill
+ * what the root left behind, holding the pipes or not. */
 export function runProcess({
   command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors,
 }) {
@@ -199,6 +216,9 @@ export function runProcess({
       for (const name of signals) process.removeListener(name, forward);
       clearTimeout(timer);
       clearTimeout(grace);
+      // Whatever the root left running (stdio ignored or redirected, so no pipe kept the run open) must
+      // not outlive the run into grading and workspace deletion.
+      sweep(child);
       child.stdout.destroy();
       child.stderr.destroy();
       resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }) });
@@ -217,10 +237,7 @@ export function runProcess({
       exit = { exitCode, signal };
       clearTimeout(timer);
       clearTimeout(grace);
-      grace = setTimeout(() => {
-        sweep(child);
-        finish();
-      }, graceMs);
+      grace = setTimeout(finish, graceMs);
     });
     child.on('close', finish);
     if (input !== undefined) {
