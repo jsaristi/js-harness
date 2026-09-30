@@ -145,6 +145,14 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   exits 0 (75 s); no orphaned `node` process left after the suite. The POSIX path is untested
   here (this machine is Windows only). gentle-ai assess from d6be17c: `medium`, 222 lines,
   `under_budget`.
+- Slice 2 review (`1cd7f64..c7c20a8`): gentle-ai approved and acknowledged (lineage
+  `review-f7cbc1d4bdab478f`) with three suggestions; Codex found one P2 that matched one of them:
+  a shell that exits while a background descendant holds its pipes left that descendant running
+  and reported success. Fixed in 230fd04 (same writer): the survivors are killed on that path (the
+  group on POSIX; the shell's direct children, found by `ParentProcessId`, on Windows), the
+  throwaway home is removed best-effort, and a review reason without a string `code` is skipped.
+  RED: 3 failed; GREEN: 66 pass; `npm run check` exits 0; no fixture process left. Codex
+  (`c7c20a8..230fd04`): no findings.
 
 ## Follow-ups
 - The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
@@ -157,9 +165,10 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   grandchildren running the same way; `runSensor` could serve both.
 - The sensor runner's POSIX path (process-group kill, signal forwarding) has no test on a POSIX
   machine yet.
+- On Windows, a survivor whose own parent exited before the shell is not a direct child of the
+  shell, so the `ParentProcessId` lookup after the shell exits does not find it.
 
 ## Next
-Slice 2 (`feat/sensors-review`, main..HEAD) is ready for its review round (gentle-ai, then Codex
-over `origin/main..HEAD`, since the rebase changed the ids the old Codex records cover), then push
-and a PR against `main` on Sebastián's go-ahead. After it merges, mark F4 done in the roadmap and
+Slice 2 (`feat/sensors-review`, `origin/main..HEAD`) is reviewed by Codex end to end and ready
+for push and a PR against `main` on Sebastián's go-ahead. After it merges, mark F4 done in the roadmap and
 check off T4.
