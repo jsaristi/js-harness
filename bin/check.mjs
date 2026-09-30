@@ -134,9 +134,24 @@ function killTree(child) {
   }
 }
 
+/** Kills what a shell that has already exited left behind. POSIX: the group outlives its leader, so
+ * the group kill still reaches it. Windows: `taskkill /T` needs a live root, so the shell's direct
+ * children are looked up by parent pid and each is killed with its tree. A survivor whose own parent
+ * exited first is unreachable that way; only the shell's direct children are. */
+function killSurvivors(child) {
+  if (child.pid === undefined) return;
+  if (process.platform !== 'win32') {
+    killTree(child);
+    return;
+  }
+  const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
+  spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
+}
+
 /** Runs `command` through the shell and resolves to a `spawnSync`-shaped `{ status, signal, stdout,
  * stderr, error? }`. Past `timeout` ms it kills the whole process tree and reports `error.code ===
- * 'ETIMEDOUT'`. Output beyond 64 MiB per stream is dropped, so a noisy command is never ENOBUFS. */
+ * 'ETIMEDOUT'`. Whatever still holds the pipes after the shell exited is killed too; the result keeps the
+ * shell's own status. Output beyond 64 MiB per stream is dropped, so a noisy command is never ENOBUFS. */
 export function runSensor(command, { cwd, env, timeout }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
@@ -183,7 +198,12 @@ export function runSensor(command, { cwd, env, timeout }) {
       exit = { status, signal };
       clearTimeout(timer);
       clearTimeout(grace);
-      grace = setTimeout(() => finish(), PIPE_GRACE_MS);
+      // Pipes still open this long after the shell exited: a descendant holds them. Kill it, or a test
+      // server the script started would run on after every commit.
+      grace = setTimeout(() => {
+        killSurvivors(child);
+        finish();
+      }, PIPE_GRACE_MS);
     });
     child.on('close', () => finish());
     if (timeout > 0) {
@@ -216,7 +236,12 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   try {
     result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
   } finally {
-    fs.rmSync(home, { recursive: true, force: true });
+    // Best effort: on Windows a survivor can still hold the home as its cwd, and that must not fail check.
+    try {
+      fs.rmSync(home, { recursive: true, force: true });
+    } catch {
+      // left behind in the temp directory
+    }
   }
   const { name, command } = sensor;
   const pass = !result.error && result.status === 0;
@@ -302,7 +327,7 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   const wellFormed = typeof risk === 'string' && Number.isInteger(paths) && Number.isInteger(changed) &&
     typeof due === 'boolean' && typeof dueReason === 'string';
   if (!wellFormed) return row('gentle-ai review assess gave no assessment (unexpected shape)');
-  const reasons = (Array.isArray(assessed.reasons) ? assessed.reasons : []).filter(isObject);
+  const reasons = (Array.isArray(assessed.reasons) ? assessed.reasons : []).filter((reason) => isObject(reason) && typeof reason.code === 'string');
   const lines = reasons.map((reason) => `${reason.code} ${reason.path ?? reason.detail ?? ''}`.trim());
   if (paths === 0) {
     // gentle-ai answers high and due both for a clean tree and for a candidate it could not build;

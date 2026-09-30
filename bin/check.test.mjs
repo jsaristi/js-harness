@@ -335,6 +335,44 @@ test('checkSensor stops a command that never exits, with its whole process tree,
   }
 });
 
+// A test server or worker a script left running holds the pipes after the shell is gone; the sensor
+// is judged by the shell's own exit status, but the leftover must not outlive the run.
+test('checkSensor kills a background process the command left behind, and still passes', async () => {
+  const dir = makeTmpDir();
+  try {
+    const pidFile = path.join(dir, 'survivor.pid');
+    fs.writeFileSync(path.join(dir, 'child.js'), `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`);
+    // The shell exits 0 at once; the survivor is its own child and inherits the output pipes.
+    const command = process.platform === 'win32' ? 'start /b node child.js' : 'node child.js &';
+    const started = Date.now();
+    const row = await checkSensor(dir, { name: 'tests', command });
+    assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
+    assert.equal(row.pass, true, row.output);
+    assert.equal(row.detail, `${command} passed`);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(await goneWithin(pid), `survivor ${pid} is still running`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(fs.existsSync(dir), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// On Windows a survivor can hold the throwaway home as its cwd; that must not throw out of check.
+test('checkSensor does not throw when the throwaway home cannot be removed', async () => {
+  const realRmSync = fs.rmSync;
+  fs.rmSync = (target, ...rest) => {
+    if (path.basename(String(target)).startsWith('js-harness-test-home-')) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    return realRmSync(target, ...rest);
+  };
+  try {
+    const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn: () => ({ status: 0, stdout: '', stderr: '' }) });
+    assert.equal(row.pass, true);
+  } finally {
+    fs.rmSync = realRmSync;
+  }
+});
+
 test('checkSensor keeps what the command printed before it timed out', async () => {
   const dir = makeTmpDir();
   try {
@@ -794,8 +832,8 @@ test('checkReview says gentle-ai was not found, and assesses nothing', () => {
 
 // Fail-open covers a schema-tagged envelope of the wrong shape too: it must neither throw nor print
 // `undefined` as if it were an assessment.
-test('checkReview skips reasons that are not objects instead of throwing', () => {
-  const spawn = fakeGentleAi({ assess: ok(assessment({ reasons: [null, 'x', { code: 'executable_change', path: 'a.mjs' }] })) });
+test('checkReview skips reasons that are not objects, or have no string code, instead of throwing', () => {
+  const spawn = fakeGentleAi({ assess: ok(assessment({ reasons: [null, 'x', { path: 'a.mjs' }, { code: 7 }, { code: 'executable_change', path: 'a.mjs' }] })) });
   const row = checkReview('/proj', { spawn });
   assert.equal(row.pass, true);
   assert.deepEqual(row.lines.filter((line) => !line.startsWith('next:')), ['executable_change a.mjs']);
