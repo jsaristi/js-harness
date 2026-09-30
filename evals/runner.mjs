@@ -1,0 +1,432 @@
+// The eval runner: one trial is one agent run in a fresh workspace, graded by hidden tests, and
+// recorded. Zero deps, plain Node. Side effects (spawning, clock, directories) are injectable so the
+// whole path is proven against a fake agent command and no test ever calls a real model.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn as spawnChild, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { killTree } from '../bin/codex-review.mjs';
+
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** The identity of a trial. A results file is resumed by these four fields, so they must be enough to
+ * tell any two trials of a suite apart. */
+export function trialKey({ task, config, effort, repeat }) {
+  return [task, config, effort, repeat].join('|');
+}
+
+/** The pass/fail counts from TAP's closing summary (`# tests N`, `# pass N`, `# fail N`), or `null`
+ * when there is no usable one. The last summary wins, so a test that itself ran a nested suite cannot
+ * set the score. `null` for zero tests too: a grader that ran nothing proved nothing, and must not be
+ * read as a pass (or as a NaN score). */
+export function parseTap(text) {
+  const last = (name) => [...String(text).matchAll(new RegExp(String.raw`^# ${name} (\d+)\s*$`, 'gm'))].pop()?.[1];
+  const [tests, pass, fail] = ['tests', 'pass', 'fail'].map((name) => {
+    const value = last(name);
+    return value === undefined ? null : Number(value);
+  });
+  if (tests === null || pass === null || fail === null || tests === 0 || pass > tests) return null;
+  return { tests, pass, fail };
+}
+
+/** The `type: "result"` object of `claude --print --output-format json` stdout, or `null`. Newer CLIs
+ * may print an array of messages; the result is then its last `result` element. */
+export function parseAgentOutput(stdout) {
+  let value;
+  try {
+    value = JSON.parse(String(stdout).trim());
+  } catch {
+    return null;
+  }
+  if (Array.isArray(value)) value = value.filter((item) => isObject(item) && item.type === 'result').pop();
+  return isObject(value) && value.type === 'result' ? value : null;
+}
+
+/** Tokens and turns from a parsed agent result. Input counts the cache-creation and cache-read tokens
+ * too, because they are all tokens the plan's usage cap charges for. Missing data is `null`, never 0:
+ * a zero would read as a measurement. */
+export function summarizeUsage(output) {
+  const usage = isObject(output?.usage) ? output.usage : null;
+  const num = (value) => (Number.isFinite(value) ? value : 0);
+  return {
+    inputTokens: usage ? num(usage.input_tokens) + num(usage.cache_creation_input_tokens) + num(usage.cache_read_input_tokens) : null,
+    outputTokens: usage ? num(usage.output_tokens) : null,
+    turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
+    usage,
+  };
+}
+
+const CAP_PATTERN = /usage limit|hit your .*limit|limit reached|rate limit/i;
+const AUTH_PATTERN = /not logged in|please run \/login|invalid api key|oauth token/i;
+
+/** Whether an agent run died of the plan's usage cap or of authentication: `{ kind: 'cap' | 'auth',
+ * message }`, else `null`. Both mean the machine, not the configuration, failed the trial, so the suite
+ * must stop instead of recording a zero (the predecessor lost 141 trials that way).
+ *
+ * A parsed result counts only when it is an error (`is_error`): a successful answer that merely talks
+ * about rate limits is not one. With no parsable result, the raw text counts only when the agent also
+ * exited non-zero, for the same reason. */
+export function classifyAgentFailure({ stdout = '', stderr = '', exitCode = null }) {
+  const parsed = parseAgentOutput(stdout);
+  const message = parsed
+    ? parsed.is_error === true && typeof parsed.result === 'string' ? parsed.result : null
+    : exitCode !== 0 ? `${stdout}\n${stderr}`.trim() : null;
+  if (!message) return null;
+  if (AUTH_PATTERN.test(message)) return { kind: 'auth', message };
+  if (CAP_PATTERN.test(message)) return { kind: 'cap', message };
+  return null;
+}
+
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
+
+/** Loads a task directory (`evals/tasks/<id>/`): `task.md` (the prompt, verbatim), `task.json` (the
+ * grader command and the agent's timeout), `fixture/` (the repo the agent starts in) and `grader/`
+ * (hidden tests). Throws an error naming the file and field when any part is missing or malformed: a
+ * task that loaded half-wrong would score every config the same and look like a result. */
+export function loadTask(dir) {
+  const id = path.basename(path.resolve(dir));
+  const fixtureDir = path.join(dir, 'fixture');
+  const graderDir = path.join(dir, 'grader');
+  for (const [name, isDir] of [['task.md', false], ['task.json', false], ['fixture', true], ['grader', true]]) {
+    const stat = fs.statSync(path.join(dir, name), { throwIfNoEntry: false });
+    if (!stat || stat.isDirectory() !== isDir) throw new Error(`task ${id}: ${name} is missing in ${dir}`);
+  }
+  const prompt = fs.readFileSync(path.join(dir, 'task.md'), 'utf8');
+  if (prompt.trim() === '') throw new Error(`task ${id}: task.md is empty`);
+
+  let spec;
+  try {
+    spec = JSON.parse(fs.readFileSync(path.join(dir, 'task.json'), 'utf8'));
+  } catch (err) {
+    throw new Error(`task ${id}: task.json is not valid JSON: ${err.message}`);
+  }
+  const bad = (field, rule) => new Error(`task ${id}: task.json "${field}" ${rule}`);
+  if (!isObject(spec)) throw new Error(`task ${id}: task.json must be a JSON object`);
+  if (!isObject(spec.grader)) throw bad('grader', 'must be an object with a "command"');
+  if (!isNonEmptyString(spec.grader.command)) throw bad('grader.command', 'must be a non-empty string');
+  const args = spec.grader.args ?? [];
+  if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string')) throw bad('grader.args', 'must be an array of strings');
+  if (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs <= 0) throw bad('timeoutMs', 'must be a positive integer (milliseconds)');
+  return { id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir };
+}
+
+// Once the child has exited its pipes should close at once; a descendant that kept them open must not
+// hold the suite, so we stop waiting for them after this.
+const PIPE_GRACE_MS = 2000;
+const OUTPUT_LIMIT = 64 * 1024 * 1024;
+
+/** The environment a child runs in: the inherited one with `overrides` on top. A `null` or `undefined`
+ * override removes the variable. `NODE_TEST_CONTEXT` is always dropped: this runner may itself run
+ * under `node --test`, and a nested `node --test` that inherits it acts as a child process and prints
+ * v8 frames instead of TAP, so a grader would come back unparsable. On Windows variable names are
+ * case-insensitive, so an override also replaces an inherited key that differs only in case. */
+export function childEnv(overrides = {}, inherited = process.env, platform = process.platform) {
+  const fold = (key) => (platform === 'win32' ? key.toLowerCase() : key);
+  const replaced = new Set([...Object.keys(overrides), 'NODE_TEST_CONTEXT'].map(fold));
+  const env = Object.fromEntries(Object.entries(inherited).filter(([key]) => !replaced.has(fold(key))));
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== null && value !== undefined) env[key] = String(value);
+  }
+  return env;
+}
+
+/** Runs one child to its end and resolves to `{ stdout, stderr, exitCode, signal, timedOut,
+ * spawnError }`; it never rejects. `input`, when given, is written to stdin. Past `timeoutMs` the whole
+ * process tree is killed (see `killTree`) and `timedOut` is set. No shell is involved: `command` is
+ * spawned directly, so there is no quoting to get wrong on Windows and nothing for a prompt to inject
+ * into. */
+export function runProcess({ command, args = [], env, cwd, input, timeoutMs, spawn = spawnChild, kill = killTree }) {
+  return new Promise((resolve) => {
+    const out = { stdout: '', stderr: '' };
+    let child;
+    try {
+      child = spawn(command, args, {
+        cwd,
+        env,
+        windowsHide: true,
+        // On POSIX the child leads its own process group so `killTree` can take its descendants too.
+        detached: process.platform !== 'win32',
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      });
+    } catch (spawnError) {
+      resolve({ ...out, exitCode: null, signal: null, timedOut: false, spawnError });
+      return;
+    }
+    // A detached child no longer gets the terminal's Ctrl-C, so pass it on, or an interrupted suite
+    // would leave agents running (and spending) in the background.
+    const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    const forward = (signal) => {
+      kill(child);
+      for (const name of signals) process.removeListener(name, forward);
+      process.kill(process.pid, signal);
+    };
+    for (const name of signals) process.once(name, forward);
+
+    let exit = { exitCode: null, signal: null };
+    let timedOut = false;
+    let spawnError;
+    let done = false;
+    let timer;
+    let grace;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      for (const name of signals) process.removeListener(name, forward);
+      clearTimeout(timer);
+      clearTimeout(grace);
+      child.stdout.destroy();
+      child.stderr.destroy();
+      resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }) });
+    };
+    for (const stream of ['stdout', 'stderr']) {
+      child[stream].setEncoding('utf8');
+      child[stream].on('data', (chunk) => {
+        if (out[stream].length < OUTPUT_LIMIT) out[stream] += chunk;
+      });
+    }
+    child.on('error', (error) => {
+      spawnError = error;
+      finish();
+    });
+    child.on('exit', (exitCode, signal) => {
+      exit = { exitCode, signal };
+      grace = setTimeout(() => {
+        kill(child);
+        finish();
+      }, PIPE_GRACE_MS);
+    });
+    child.on('close', finish);
+    if (input !== undefined) {
+      // The agent may exit without reading its prompt; that is its result, not a crash of ours.
+      child.stdin.on('error', () => {});
+      child.stdin.end(input);
+    }
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        kill(child);
+        grace = setTimeout(finish, PIPE_GRACE_MS);
+      }, timeoutMs);
+    }
+  });
+}
+
+/** The `{ command, args, env }` to spawn for `config`. `args` and `env` may be plain values or
+ * functions of `{ effort, task }`, so one configuration can vary by effort without being rebuilt by
+ * hand for every cell of the suite. */
+export function resolveAgent(config, context) {
+  const pick = (value) => (typeof value === 'function' ? value(context) : value);
+  return { command: config.command, args: pick(config.args) ?? [], env: pick(config.env) ?? {} };
+}
+
+// The grader is a separate process with its own bound: a hidden test that hangs must cost one trial,
+// not the suite.
+const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Copies the hidden grader into the workspace and runs it there; resolves to `{ score, passed, total,
+ * error }`. The copy replaces `.eval-grader/` outright, so nothing the agent left under that name can
+ * stand in for the real grader. The score is `pass / tests` of the grader's TAP summary. Output that
+ * does not parse, or reports no tests, scores 0 with `grader-unparsable`: a silent 1 or a NaN would
+ * both read as a result. `node` runs as this process's own `node`, so the grader does not depend on
+ * PATH and runs on the same version as the runner.
+ *
+ * TAP is asked for by the task's own `args` (`--test-reporter=tap`), not added here: the runner then
+ * knows nothing about the grader beyond "prints a TAP summary", so a task may use any command. */
+export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS } = {}) {
+  const graderDir = path.join(workspace, '.eval-grader');
+  fs.rmSync(graderDir, { recursive: true, force: true });
+  fs.cpSync(task.graderDir, graderDir, { recursive: true });
+  const { command, args } = task.grader;
+  const run = await runProcess({
+    command: command === 'node' ? process.execPath : command,
+    args,
+    env: childEnv(),
+    cwd: workspace,
+    timeoutMs,
+  });
+  const fail = (error) => ({ score: 0, passed: null, total: null, error });
+  if (run.spawnError) return fail('grader-spawn-failed');
+  if (run.timedOut) return fail('grader-timeout');
+  const tap = parseTap(run.stdout);
+  if (!tap) return fail('grader-unparsable');
+  return { score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null };
+}
+
+/** The short error string for an agent run that did not finish cleanly, else `null`. */
+function agentError(run, output) {
+  if (run.spawnError) return 'agent-spawn-failed';
+  if (run.timedOut) return 'timeout';
+  if (run.exitCode !== 0) return `agent-exit-${run.exitCode ?? run.signal}`;
+  if (!output) return 'agent-output-unparsable';
+  return output.is_error === true ? 'agent-error' : null;
+}
+
+/** The file stem for a trial's raw agent output. */
+const rawStem = ({ task, config, effort, repeat }) => [task, config, effort, repeat].join('__').replace(/[^A-Za-z0-9._-]/g, '_');
+
+const DEFAULT_RUNS_DIR = fileURLToPath(new URL('./runs/', import.meta.url));
+
+/** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
+ * message }` when the agent died of the usage cap or of authentication. A stopped trial records
+ * nothing: a zero there would measure the machine, not the configuration.
+ *
+ * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
+ * after it exits. The workspace is removed on every path, in a `finally`. An agent that fails for any
+ * other reason (timeout, non-zero exit, unreadable output) is still graded and recorded with its
+ * error, because its workspace may hold work worth scoring and a failure rate is itself a result. */
+export async function runTrial({
+  task,
+  config,
+  effort,
+  repeat,
+  cliVersion = null,
+  workRoot = os.tmpdir(),
+  runsDir = DEFAULT_RUNS_DIR,
+  graderTimeoutMs,
+  now = () => new Date(),
+  log = (message) => console.error(message),
+}) {
+  const startedAt = now().toISOString();
+  fs.mkdirSync(workRoot, { recursive: true });
+  const workspace = fs.mkdtempSync(path.join(workRoot, 'eval-'));
+  try {
+    fs.cpSync(task.fixtureDir, workspace, { recursive: true });
+    const agent = resolveAgent(config, { effort, task });
+    const began = Date.now();
+    const run = await runProcess({
+      ...agent,
+      env: childEnv(agent.env),
+      cwd: workspace,
+      input: task.prompt,
+      timeoutMs: task.timeoutMs,
+    });
+    const wallMs = Date.now() - began;
+
+    const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.writeFileSync(path.join(runsDir, `${stem}.stdout.log`), run.stdout);
+    fs.writeFileSync(path.join(runsDir, `${stem}.stderr.log`), run.stderr);
+
+    const stop = classifyAgentFailure(run);
+    if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
+
+    const output = parseAgentOutput(run.stdout);
+    const { error: graderError, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs });
+    return {
+      status: 'recorded',
+      record: {
+        task: task.id,
+        config: config.name,
+        effort,
+        repeat,
+        ...scored,
+        ...summarizeUsage(output),
+        wallMs,
+        cliVersion,
+        error: agentError(run, output) ?? graderError,
+        startedAt,
+      },
+    };
+  } finally {
+    try {
+      fs.rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (err) {
+      // A record is worth more than a tidy disk, but a leak must not go unnoticed.
+      log(`could not remove workspace ${workspace}: ${err.message}`);
+    }
+  }
+}
+
+/** Every trial of a suite, in the order they run. Repeats are the outermost loop: a suite cut short
+ * by the usage cap then holds one full pass over every task, configuration and effort before a second
+ * repeat of any, which keeps a partial A/B comparison balanced instead of complete for one arm only.
+ * Repeats count from 1. */
+export function planTrials({ tasks, configs, efforts, repeats }) {
+  const plan = [];
+  for (let repeat = 1; repeat <= repeats; repeat += 1) {
+    for (const task of tasks) {
+      for (const config of configs) {
+        for (const effort of efforts) plan.push({ task, config, effort, repeat });
+      }
+    }
+  }
+  return plan;
+}
+
+/** The trial records in a JSON Lines results file. A missing file is an empty history; a blank or
+ * corrupt line (a write torn by a crash) is skipped, so that trial simply runs again. */
+export function readResults(resultsPath) {
+  if (!fs.existsSync(resultsPath)) return [];
+  const records = [];
+  for (const line of fs.readFileSync(resultsPath, 'utf8').split('\n')) {
+    if (line.trim() === '') continue;
+    try {
+      const record = JSON.parse(line);
+      if (isObject(record)) records.push(record);
+    } catch {
+      // torn line: ignored
+    }
+  }
+  return records;
+}
+
+/** The first line of `<agent command> --version` (or `config.versionArgs`), else `null`. Recorded per
+ * trial because a CLI update changes what a score means. */
+export function probeVersion(config) {
+  const result = spawnSync(config.command, config.versionArgs ?? ['--version'], {
+    encoding: 'utf8',
+    env: childEnv(),
+    timeout: 30000,
+    windowsHide: true,
+  });
+  const line = result.error || result.status !== 0 ? '' : result.stdout.trim().split('\n')[0].trim();
+  return line || null;
+}
+
+/** Runs every trial of the suite that the results file does not already hold, appending each record
+ * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
+ * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
+ * at the first usage-cap or authentication stop, with nothing recorded for that trial.
+ *
+ * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
+ * running the same call again. `readVersion` and `runTrial` are injectable for tests. */
+export async function runSuite({
+  tasks,
+  configs,
+  efforts,
+  repeats,
+  resultsPath,
+  runsDir,
+  workRoot,
+  graderTimeoutMs,
+  readVersion = probeVersion,
+  runTrial: run = runTrial,
+  log,
+}) {
+  const done = new Set(readResults(resultsPath).map(trialKey));
+  const versions = new Map();
+  const versionOf = (config) => {
+    // One probe per distinct agent command, and none when every trial is already recorded.
+    const key = JSON.stringify([config.command, config.versionArgs ?? null]);
+    if (!versions.has(key)) versions.set(key, readVersion(config));
+    return versions.get(key);
+  };
+
+  let completed = 0;
+  let skipped = 0;
+  for (const { task, config, effort, repeat } of planTrials({ tasks, configs, efforts, repeats })) {
+    if (done.has(trialKey({ task: task.id, config: config.name, effort, repeat }))) {
+      skipped += 1;
+      continue;
+    }
+    const outcome = await run({ task, config, effort, repeat, cliVersion: versionOf(config), workRoot, runsDir, graderTimeoutMs, log });
+    if (outcome.status === 'stopped') {
+      return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
+    }
+    fs.mkdirSync(path.dirname(resultsPath), { recursive: true });
+    fs.appendFileSync(resultsPath, `${JSON.stringify(outcome.record)}\n`);
+    completed += 1;
+  }
+  return { status: 'complete', completed, skipped };
+}
