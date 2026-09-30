@@ -125,6 +125,15 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
 - T4 (inline): `AGENTS.md` says the gate reports whether review is due; the roadmap records the
   Sensors decision, checks "RDD-by-risk wired", and points Next at merging the two slices.
   Closing F4 waits on the merges.
+- Whole-branch review (the stop hook's candidate, 9e7def8..838e673, 944 lines): gentle-ai one
+  lens, approved and acknowledged (lineage `review-bb058dd562b275b7`, authority burned), so the two
+  fixes left under budget are now reviewed too. Two suggestions, carried as follow-ups below.
+
+## Follow-ups
+- The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
+  to a commit; a shared deadline, or a short one for `mode status`, would bound it.
+- A clean tree is recognised by gentle-ai's English detail "no pending changes"; if gentle-ai adds
+  a stable code for it, match that instead, or pin the phrase in a test against real output.
 
 ## Next
 Push `feat/sensors` (slice 1: e66a77b..a7d9a68) and open its PR against `main`, on Sebastián's
