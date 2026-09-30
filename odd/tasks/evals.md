@@ -92,7 +92,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - The A/B run: 2 configs × 2 efforts × the kept tasks × 3 repeats.
 
 ## Tasks
-- [ ] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
+- [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
   hidden grader copied in after exit, score, record, cleanup, resume, stop on cap (route:
   delegated writer — runner and its tests are two non-trivial files)
 - [ ] T2 Configs: minimal and current as runner inputs, with the current config's isolation
@@ -113,6 +113,40 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - 2026-09-30: F5 opened. Spend decision taken: no USD ceiling. The predecessor's runner and its
   "0 of 32" were mapped (`D:\harness\bin\eval.mjs`, `PLAN.md:661`); the cause was ceiling, not
   noise alone.
+- 2026-09-30: T1 done (delegated writer), commit `05ed391`. `evals/runner.mjs` (`loadTask`,
+  `runTrial`, `planTrials`, `runSuite`, `classifyAgentFailure`, `parseTap`),
+  `evals/runner.test.mjs` (45 tests), `evals/fixtures/fake-agent.mjs` and a sample task;
+  `evals/runs/` gitignored. Evidence: `node --test "evals/**/*.test.mjs"` 45/45 pass; `npm test`
+  0 fail; `npm run check` exits 0. TDD: RED observed per export (module or export missing), then
+  GREEN; the failure-path tests (timeout, exit code, unparsable output, grader timeout, cleanup on
+  throw, cap and auth) were written after their branches and passed first time, so they were
+  proven by mutation instead: breaking each branch in a copy made its test fail. ~1,120 lines
+  (half tests), over the ~400 heuristic; the runner, its tests and the fake agent are one unit.
+  Review assessment: medium, `slice_budget_reached`, so review is due on this commit alone.
+
+## T1 decisions (carried into T2–T6)
+- Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
+  of `{ effort, task }`, so `--effort` lives in the argv. `env` merges over `process.env`, `null`
+  removes a variable, and `NODE_TEST_CONTEXT` is always dropped (a nested `node --test` grader
+  otherwise prints no TAP). The version probe runs once per distinct command, only if a trial runs.
+- Agents spawn without a shell, so T2 must point at the real `claude` binary or its node entry,
+  not a Windows `.cmd` shim (EINVAL).
+- The grader asks for TAP in `task.json` args (`--test-reporter=tap`), so any TAP-emitting grader
+  works; its own bound is `graderTimeoutMs` (default 120 s, error `grader-timeout`, score 0).
+- Trial order is repeat outermost, then task, config, effort, so a run cut by the cap still
+  leaves a balanced A/B.
+- Unknown is `null`, never 0: tokens, turns and usage of a killed or unparsable agent, `passed`
+  and `total` of a failed grader. The report (T6) must handle `null`.
+- The recorded `error` is the agent's if any, else the grader's. A cap or auth stop saves the raw
+  logs but records no trial; raw text is classified only when the agent exited non-zero with no
+  parsable JSON, so an answer that mentions a limit is never a cap.
+- Raw logs: `evals/runs/<task>__<config>__<effort>__<repeat>.{stdout,stderr}.log`; the grader
+  lands in `.eval-grader/` in the workspace, replacing anything the agent left there.
+- T3 graders import the agent's modules inside each test, so a broken module fails one test, not
+  all, and the score stays fractional; grader files are `*.grade.mjs` so bare `node --test` never
+  runs them.
 
 ## Next step
-T1, the runner against a fake agent command.
+Review of `05ed391` (gentle-ai, then Codex), then T2: the minimal and current configs, starting
+with one mapping of where the current config writes (engram, `~/.claude/projects`, gentle-ai
+state).
