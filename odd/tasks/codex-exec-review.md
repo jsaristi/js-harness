@@ -64,7 +64,13 @@ Mode: strict (source: user global config). Runner: `node --test`.
   the exact argv — route: delegated writer (`bin/codex-review.mjs` and its test)
 - [x] T2 Docs follow the code: the T7 design in `odd/tasks/project-init.md`, the roadmap's Review
   row, the installed skill text in `bin/lib/manifest.mjs` — route: same writer
-- [ ] T3 A real run on this branch records `reviewed` — route: inline
+- [x] T3 A real run on this branch records `reviewed` — route: inline
+- [ ] T4 Evidence from what Codex saw, not from how its commands read: every changed line of
+  `base..HEAD` (from our own `git diff`, compared ASCII-normalized, since PowerShell 5.1 re-encodes
+  non-ASCII) appears in the output of a successful command; the command-string parser goes —
+  route: delegated writer (the T1 writer, resumed)
+- [ ] T5 The review spawn is asynchronous with its own timer, and a timeout kills the whole process
+  tree (`taskkill /T /F` on Windows), so a stall cannot outlive the bound — route: same writer
 
 ## Acceptance criteria
 - A real `js-harness codex-review --base main` on this machine runs shell commands successfully and
@@ -107,5 +113,19 @@ Mode: strict (source: user global config). Runner: `node --test`.
   existing fixture used a pathspec for length and now uses `--unified=`. GREEN: 46/46; `node --test`
   → 713 / 706 / 0 fail / 7 skipped.
 
+- 2026-09-29: committed as 77733e5. Last native round, lineage review-f691c6cc89f9146d (1138
+  lines): approved and acknowledged; R3-win32-timeout-unbounded (WARNING: the timeout kills only the
+  `cmd.exe` shim; the Codex grandchild keeps the stdout pipe open, so spawnSync may not return) and
+  R3-readsdiff-partial-range (a diff to an earlier commit, `git log -p -1`) → T5 and T4.
+- 2026-09-29: T3. `node bin/js-harness.mjs codex-review --base main` → Codex (gpt-6.1-sol, high)
+  ran 8 commands through `powershell.exe` 5.1, all exit 0, `git diff` among them, no REPL call;
+  recorded `reviewed` for `21c491d..77733e5`. Its review: P1 a chained command's exit 0 hides a
+  failed `git diff` (`git diff <base> --bad; git status`), P2 `git diff <base> <base>` and `git log
+  -p <base>` name the base but not the range, P2 implicit pathspecs (`git diff <base> file`), P2
+  `--stat -p` prints the patch but is refused. All four come from judging command text, the same
+  trap as the classifier one level down. Probe: in the stored probe run, the outputs of the
+  successful commands contain 281 of the 281 changed lines of the true `git diff` (ASCII-normalized),
+  so the output itself is the evidence → T4, which answers all four and R3-readsdiff-partial-range.
+
 ## Next step
-T3: a real `js-harness codex-review --base main` records `reviewed`.
+T4 and T5.
