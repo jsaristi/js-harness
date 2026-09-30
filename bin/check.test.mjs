@@ -257,6 +257,30 @@ test('checkSensor keeps what the command printed before a spawn error such as EN
   assert.match(row.output, /partial-err/);
 });
 
+// Windows dedupes environment keys case-insensitively and keeps the uppercase one, so an inherited
+// NPM_CONFIG_CACHE would win over the lowercase override; npm also reads either case.
+test('checkSensor drops inherited case variants of the variables it overrides', () => {
+  const saved = { ...process.env };
+  let env;
+  const spawn = (_command, options) => {
+    env = options.env;
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  try {
+    process.env.NPM_CONFIG_CACHE = 'real-cache';
+    process.env.Home = 'real-home';
+    checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  for (const name of ['npm_config_cache', 'HOME']) {
+    const keys = Object.keys(env).filter((key) => key.toLowerCase() === name.toLowerCase());
+    assert.deepEqual(keys, [name], `${name} keys: ${keys}`);
+  }
+  assert.ok(env.npm_config_cache.startsWith(env.HOME));
+});
+
 test('checkSensor names the signal when the command is killed by one', () => {
   const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: 'out', stderr: '' });
   const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });

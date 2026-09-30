@@ -117,10 +117,13 @@ export function checkSensor(cwd, sensor, { spawn = spawnSync } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
   // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, not under HOME, so `npm run` is
   // pointed into the throwaway home as well.
-  const npmCache = path.join(home, '.npm-cache');
-  const env = { ...process.env, JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: npmCache };
-  // Set when check itself runs under `node --test`; the nested runner would act as a child and skip files.
-  delete env.NODE_TEST_CONTEXT;
+  const overrides = { JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: path.join(home, '.npm-cache') };
+  // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act
+  // as a child and skip files. Every case variant of an override goes too: Windows keeps the
+  // uppercase one of two keys that differ only in case, and npm reads either.
+  const replaced = new Set([...Object.keys(overrides), 'NODE_TEST_CONTEXT'].map((key) => key.toLowerCase()));
+  const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
+  const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
   try {
     result = spawn(sensor.command, { cwd, env, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
