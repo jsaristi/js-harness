@@ -37,17 +37,18 @@ including `git diff 438364a…`), no REPL call, one `agent_message` with two P2 
 `turn.completed`.
 
 ## Design
-- `codex-review --base <rev>` spawns `codex exec review --json --ephemeral --base <full base id>`
+- `codex-review --base <rev>` spawns `codex exec review --json --ephemeral --base <merge-base of
+  rev and HEAD>`
   with `-c sandbox_mode=read-only -c approval_policy=never` and the two desktop plugins disabled,
   stdin ignored, from the repository root; on win32 the child's PATH drops every
   `\Microsoft\WindowsApps` entry. The Claude Code plugin is no longer involved (it stays useful for
   `/codex:*` commands).
 - Evidence: `reviewed` is recorded only when the JSONL has `turn.completed`, a non-empty final
-  `agent_message`, and at least one completed `command_execution` with exit 0 that prints the
-  patch of the range: a command segment that starts with `git diff`, or `git log -p`/`--patch`, and
-  names the base commit, without `--stat`/`--name-only`/`--check`-style options, a `<rev>:<path>`
-  argument or a pathspec after `--` (`git show` shows one commit, so it does not count; history in
-  Progress). Otherwise nothing is written
+  `agent_message`, and every changed line of our own `git diff <merge-base> HEAD` (inside hunks,
+  ASCII-normalized since PowerShell 5.1 re-encodes the rest, blank ones dropped) appears in the
+  output of a completed `command_execution` with exit 0. What Codex saw is the evidence, not how
+  its commands read (the command-text rule it replaced leaked; history in Progress). Otherwise
+  nothing is written
   and it exits 1, listing the commands that ran with their exit codes and the two ways on. A
   failed turn or non-zero exit prints Codex's error events (e.g. a rejected model).
 - The text classifier is removed; the review text is still shown as is.
@@ -143,5 +144,15 @@ Mode: strict (source: user global config). Runner: `node --test`.
   Parent: off Windows the detached child no longer got Ctrl-C, so SIGINT/SIGTERM now kill the tree
   first (`signals` dep, handlers removed after; RED 1 failing, GREEN 65/65, suite 732/725/0/7).
 
+- 2026-09-29: committed as c517cc9. Native review lineage review-43fc8d457a39efc2 (1525 lines):
+  approved and acknowledged. Accepted, inline: R3-expected-diff-not-merge-base (a base past the
+  fork point put foreign commits into the two-point diff; the expected patch and Codex's `--base`
+  now come from the merge-base, the record keeps the base asked for), R3-stop-leaves-pipe-referenced
+  (on a stop the stdout pipe is destroyed and the child unref'd), R3-docs-describe-old-evidence-rule
+  (this Design section, the T7 bullet, the roadmap row, the installed skill text). RED 1 and 1
+  failing; GREEN 66/66. Carried: R3-exact-coverage-large-range (exact coverage could refuse a large
+  range if Codex truncates output or reads by file; fail-closed, needs measured runs before any
+  tolerance).
+
 ## Next step
-The native review of the branch, then a real `js-harness codex-review --base main`.
+A real `js-harness codex-review --base main`.

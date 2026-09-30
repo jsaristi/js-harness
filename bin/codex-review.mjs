@@ -254,6 +254,10 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
       } catch {
         // Nothing more to do: the run is reported as stopped either way.
       }
+      // A descendant the kill missed could still hold the pipe; releasing it and the child lets this
+      // process exit anyway.
+      child?.stdout?.destroy?.();
+      child?.unref?.();
       finish({ signal: 'SIGKILL', error });
     };
     try {
@@ -356,10 +360,18 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    // The branch's own changes start at the merge-base: a base that moved past the fork point (a
+    // fetched main) would add its newer commits to a two-point diff, lines no review of the branch
+    // prints. Codex reviews from the same commit, so both sides mean the same patch.
+    const from = git(spawn, root, ['merge-base', base, 'HEAD']);
+    if (!from) {
+      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
+      return 1;
+    }
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
-    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', base, 'HEAD'], { maxBuffer: REVIEW_MAX_BUFFER });
+    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, 'HEAD'], { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
-      error(`Could not run \`git diff ${base.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
+      error(`Could not run \`git diff ${from.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
     }
     const expected = changedLines(patch);
@@ -371,7 +383,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
     // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
     // stays live.
-    const result = await runReview(spawnAsync, kill, platform, codexArgs(base), {
+    const result = await runReview(spawnAsync, kill, platform, codexArgs(from), {
       cwd: root,
       stdio: ['ignore', 'pipe', 'inherit'],
       env: codexEnv,

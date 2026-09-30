@@ -545,12 +545,40 @@ test('junk lines in the JSONL are ignored', async () => {
 test('a review that never ends is stopped at the timeout: the tree is killed and the run reports it', async () => {
   const { root } = makeRepo();
   const fake = fakeCodex('', { hang: true });
-  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30 });
+  let child;
+  let unrefed = false;
+  const spawnAsync = (...args) => {
+    child = fake.spawnAsync(...args);
+    child.unref = () => { unrefed = true; };
+    return child;
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawnAsync, timeoutMs: 30 });
   assert.equal(result.code, 1);
   assert.deepEqual(fake.killed, [4242]);
+  assert.equal(child.stdout.destroyed, true, 'the pipe is released, so it cannot keep the process alive');
+  assert.equal(unrefed, true, 'the child no longer holds the event loop');
   assert.match(result.err, /ran past 30 minutes/);
   assert.doesNotMatch(result.err, /could not start/);
   assert.equal(wrote(root), false);
+});
+
+test('a base that moved past the fork point: Codex reviews from the merge-base, and that patch is the evidence', async () => {
+  const { root, base: fork } = makeRepo();
+  const head = git(root, 'rev-parse', 'HEAD');
+  // `main` moves on from the fork point with a commit the branch does not have.
+  git(root, 'checkout', '-q', '-b', 'main-ahead', fork);
+  fs.writeFileSync(path.join(root, 'other.txt'), 'only on main', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'main moves on');
+  const movedBase = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '-q', head);
+  const fake = fakeCodex(reviewed(root, fork));
+  const result = await run(['--base', movedBase, '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  const args = fake.calls[0].args.join(' ');
+  assert.ok(args.includes(`--base ${fork}`), `codex reviews from the merge-base: ${args}`);
+  const [record] = readCodexReviews(root);
+  assert.equal(record.base, movedBase, 'the record keeps the base it was asked for');
 });
 
 test('Ctrl-C during the review kills the tree first, so Codex is not left running; nothing is written', async () => {
