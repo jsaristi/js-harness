@@ -51,10 +51,13 @@ function makeRepo() {
   return { root, base, head: git(root, 'rev-parse', 'HEAD') };
 }
 
+// A rendered review that found nothing: the default output of the fake companion.
+const CLEAN_REVIEW = '# Codex Review\n\nTarget: x\n\nNo actionable regression was found in the diff.\n';
+
 /** A home whose plugin record points at a fake companion that logs its argv and cwd next to
  * itself, prints `stdout` (the rendered review) and exits with `exitCode`. Returns the home and
  * where the call is logged. */
-function makeHome(exitCode = 0, stdout = '') {
+function makeHome(exitCode = 0, stdout = CLEAN_REVIEW) {
   const home = tmp('js-harness-codex-review-home-');
   const installPath = path.join(home, 'plugin-cache', 'codex');
   fs.mkdirSync(path.join(installPath, 'scripts'), { recursive: true });
@@ -320,8 +323,9 @@ test('a failed git status refuses the review instead of reading as a clean tree'
 test('the classifier catches every review that says it could not inspect the diff, and none that did', () => {
   for (const text of NOT_INSPECTED) assert.equal(saysReviewNotInspected(text), true, text);
   for (const text of INSPECTED) assert.equal(saysReviewNotInspected(text), false, text);
-  assert.equal(saysReviewNotInspected(''), false);
-  assert.equal(saysReviewNotInspected(undefined), false);
+  // Nothing said, nothing inspected: an empty or missing review fails closed.
+  assert.equal(saysReviewNotInspected(''), true);
+  assert.equal(saysReviewNotInspected(undefined), true);
 });
 
 test('each classifier pattern catches its wording on its own', () => {
@@ -400,6 +404,53 @@ test('a completed review whose findings quote the refusal wording is recorded', 
   assert.deepEqual(readCodexReviews(root), [
     { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
   ]);
+});
+
+// The plugin's renderer appends stderr and reasoning after the review text.
+const CLEAN_SUMMARY = '# Codex Review\n\nTarget: branch diff against abc123\n\nNo actionable regression was found.\n';
+const REASONING_RENDER =
+  `${CLEAN_SUMMARY}\nReasoning:\n- I could not inspect the changes using git; I then compared the Git objects directly.\n`;
+const STDERR_RENDER = `${CLEAN_SUMMARY}\nstderr:\n\n\`\`\`text\nI could not assess the patch with git.\n\`\`\`\n`;
+const EMPTY_RENDER = '# Codex Review\n\nTarget: x\n\nCodex review completed without any stdout output.\n';
+
+test('the appended Reasoning and stderr sections are not the review summary', () => {
+  assert.equal(saysReviewNotInspected(REASONING_RENDER), false);
+  assert.equal(saysReviewNotInspected(STDERR_RENDER), false);
+  // A real refusal in the summary is still caught with those sections present.
+  assert.equal(saysReviewNotInspected(`# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n\nReasoning:\n- read nothing\n`), true);
+});
+
+test('a review with no text is not a review that inspected the diff', () => {
+  assert.equal(saysReviewNotInspected(EMPTY_RENDER), true);
+  assert.equal(saysReviewNotInspected(`${EMPTY_RENDER}\nstderr:\n\n\`\`\`text\nboom\n\`\`\`\n`), true);
+  assert.equal(saysReviewNotInspected('# Codex Review\n\nTarget: x\n\n'), true);
+  assert.equal(saysReviewNotInspected('  \n'), true);
+});
+
+test('the patch\'s own correctness being unverified is a claim about the patch', () => {
+  assert.equal(saysReviewNotInspected("The patch's correctness is unverified."), true);
+  assert.equal(saysReviewNotInspected('The patch’s correctness remains unverified.'), true);
+});
+
+test('a completed review whose Reasoning says it could not inspect with git is recorded', async () => {
+  const { root, base, head } = makeRepo();
+  const { home } = makeHome(0, REASONING_RENDER);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  assert.equal(result.code, 0);
+  assert.deepEqual(readCodexReviews(root), [
+    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
+  ]);
+});
+
+test('an empty review, rendered or not, exits 1 and records nothing', async () => {
+  for (const stdout of [EMPTY_RENDER, '']) {
+    const { root } = makeRepo();
+    const { home } = makeHome(0, stdout);
+    const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+    assert.equal(result.code, 1, JSON.stringify(stdout));
+    assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+    assert.match(result.err, /--unavailable <reason>/);
+  }
 });
 
 test('a completed turn whose review could not assess the patch writes nothing, returns 1 and names --unavailable', async () => {

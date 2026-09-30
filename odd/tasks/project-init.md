@@ -1130,6 +1130,19 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   uninspected reviews (`rendered` in their job files) contain no `- [P<n>]` line (checked), so the
   short-circuit does not hide them; carried as a possible verbatim fixture. R3-roadmap-effort-row-stale:
   the Effort row now names `gpt-6.1-sol` at `high`, fixed in this commit.
+- 2026-09-29: committed as 0d66848; its native review (lineage review-3aa5c3fc2da4de63, the whole
+  range, 322 lines) approved and acknowledged, two SUGGESTION: R3-empty-review-recorded (exit 0
+  with no review text recorded `reviewed`) and R3-possessive-patch-false-negative ("the patch's
+  correctness is unverified" missed). The first real Codex review since the model change
+  (`js-harness codex-review --base main`, `gpt-6.1-sol` at `high`): recorded `reviewed` for
+  `21c491d..0d66848` (it listed a finding, so the new short-circuit held), one P2: the plugin's
+  renderer appends `stderr:` and `Reasoning:` sections after the review (`renderNativeReviewResult`,
+  `scripts/lib/render.mjs:288-313` of the plugin, checked), and the summary included them. All
+  three accepted: the summary is cut at those sections too; an empty review, or the renderer's
+  "Codex review completed without any stdout output.", fails closed; the patch as possessor
+  matches. Route: delegated writer, resumed. RED: 37 tests, 6 failing. GREEN: 37/37; `node --test`
+  → `tests 704 / pass 697 / fail 0 / skipped 7`; `npm run check` passes. Parent: the refusal
+  message now says "is empty or says it could not inspect"; suite 37/37.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are

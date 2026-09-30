@@ -75,6 +75,8 @@ const NOT_INSPECTED = [
   // Only the patch or correctness as a whole, and not a possessed subject ("the tests' correctness is
   // unverified" is about the tests; a reviewer that read the diff says it).
   /(?<!['’]s |s['’] )\b(?:patch|correctness) (?:is|remains) unverified\b/i,
+  // The patch is the possessor here, so this one is about the patch.
+  /\bpatch['’]s correctness (?:is|remains) unverified\b/i,
   // Negated, the phrase denies the very thing it names ("this is not an incomplete review").
   /(?<!\b(?:not(?: an?)?|no) )\bincomplete review\b/i,
   /(?<!\b(?:not(?: an?)?|no) )\bfail-closed verdict\b/i,
@@ -84,19 +86,27 @@ const NOT_INSPECTED = [
 // The single-quote span needs a quote-like position so apostrophes ("Codex's", "tests'") stay text.
 const QUOTED = [/`[^`\n]*`/g, /"[^"\n]*"/g, /“[^”\n]*”/g, /(?<=^|[\s(])'[^'\n]*'(?=$|[\s.,;:!?)])/g];
 
-/** The rendered review's summary: without its heading and Target lines, and up to its findings. */
+// What the plugin's renderer prints for a review with no text at all.
+const EMPTY_REVIEW = 'Codex review completed without any stdout output.';
+
+/** The rendered review's summary: without its heading and Target lines, and up to its findings or
+ * the `stderr:` / `Reasoning:` sections the renderer appends (those are not the review). */
 function reviewSummary(text) {
   const body = text.replace(/^\s*# Codex Review[^\n]*\n/, '').replace(/^\s*Target:[^\n]*\n/, '');
-  const cut = body.search(/^\s*(?:Full review comments|Review comment):/m);
-  return cut === -1 ? body : body.slice(0, cut);
+  const cut = body.search(/^[ \t]*(?:(?:Full review comments|Review comment):|(?:Reasoning|stderr):[ \t]*$)/m);
+  return (cut === -1 ? body : body.slice(0, cut)).trim();
 }
 
-/** Whether the review text says Codex could not inspect the diff. A review that lists findings
- * (`- [P2] …`) read the diff; otherwise only its summary is classified. */
+/** Whether the review did not inspect the diff: it says so, or says nothing (an empty review fails
+ * closed). A review that lists findings (`- [P2] …`) read the diff; otherwise only its summary is
+ * classified. */
 export function saysReviewNotInspected(text) {
-  if (typeof text !== 'string' || /^\s*- \[P\d+\]/m.test(text)) return false;
-  const summary = QUOTED.reduce((rest, quoted) => rest.replace(quoted, ' '), reviewSummary(text));
-  return NOT_INSPECTED.some((pattern) => pattern.test(summary));
+  if (typeof text !== 'string') return true;
+  if (/^\s*- \[P\d+\]/m.test(text)) return false;
+  const summary = reviewSummary(text);
+  if (!summary || summary === EMPTY_REVIEW) return true;
+  const said = QUOTED.reduce((rest, quoted) => rest.replace(quoted, ' '), summary);
+  return NOT_INSPECTED.some((pattern) => pattern.test(said));
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -183,7 +193,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return result?.status ?? 1;
     }
     if (saysReviewNotInspected(review)) {
-      error(`Codex's turn completed, but its review says it could not inspect the diff; nothing was recorded.\n${WAYS_ON}`);
+      error(`Codex's turn completed, but its review is empty or says it could not inspect the diff; nothing was recorded.\n${WAYS_ON}`);
       return 1;
     }
     outcome = 'reviewed';
