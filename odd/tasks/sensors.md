@@ -136,6 +136,6 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   a stable code for it, match that instead, or pin the phrase in a test against real output.
 
 ## Next
-Push `feat/sensors` (slice 1: e66a77b..a7d9a68) and open its PR against `main`, on Sebastián's
-go-ahead; after it merges, rebase `feat/sensors-review` (slice 2) onto `main` and open its PR.
+Slice 1 (`feat/sensors`, e66a77b..a7d9a68) is pushed and open as `jsaristi/js-harness#17` against
+`main` (582 changed lines, asks for `size:exception`), awaiting Sebastián's merge; after it merges, rebase `feat/sensors-review` (slice 2) onto `main` and open its PR.
 After both merge, mark F4 done in the roadmap and check off T4.
