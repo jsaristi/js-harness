@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
+import { discoverContracts, validateEntries } from './contract.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 
 export { estimateTokens };
@@ -23,6 +24,21 @@ export function checkBudget(cwd) {
   const pass = tokens <= TOKEN_BUDGET;
   const detail = `${tokens} estimated tokens (budget ${TOKEN_BUDGET})`;
   return { name: 'budget', pass, detail };
+}
+
+/** The `contracts` row: every contract under `odd/tasks/` must pass `js-harness contract check`.
+ * Static only: it never runs a done-when command, which may be `npm run check` itself. */
+export function checkContracts(cwd) {
+  const name = 'contracts';
+  const results = validateEntries(discoverContracts(cwd));
+  if (results.length === 0) return { name, pass: true, detail: 'no contracts under odd/tasks' };
+  const plural = (n) => `${n} contract${n === 1 ? '' : 's'}`;
+  const failed = results.filter((result) => !result.ok);
+  if (failed.length === 0) {
+    return { name, pass: true, detail: `${plural(results.length)} checked`, lines: results.map((result) => result.label) };
+  }
+  const lines = failed.flatMap(({ label, errors }) => [label, ...errors.map((reason) => `  ${reason}`)]);
+  return { name, pass: false, detail: `${failed.length} of ${plural(results.length)} fail`, lines };
 }
 
 /** Shortens `filePath` to start with `~` when it lies under `home`, so rows stay readable. */
@@ -251,7 +267,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [checkBudget(cwd), ...checkPayload(cwd, home)];
+    : [checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: the inner `node --test` this spawns must not spawn its own.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {

@@ -46,7 +46,8 @@ First request of a one-word prompt, estimated tokens:
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
-| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), and a TUI over the same commands |
+| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), and a TUI over the same commands |
+| Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
 | Command scope | A command that exists at both levels acts by location, like npm: inside an initialized project (a git repo with `harness.json` or a project manifest) it acts on the project, anywhere else on the machine; `--global` forces the machine from anywhere. Inside a git repository that is not an initialized project, or with an explicit `--cwd` that is not one, the command refuses and names `--global`, so repeating it never reaches the machine by accident. `uninstall` first, `sync` next (decided 2026-09-28) |
@@ -73,7 +74,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | Progress view | The phases in this file carry checkbox steps; `js-harness progress` reads a project's `docs/ROADMAP.md` and `odd/tasks/*.md` and prints every phase and feature with checked and pending steps, percentages and what remains; `--json` returns the same data; tests use fixtures; js-harness uses it on itself first | Done, reviewed, merged to `main` 2026-09-27 via `jsaristi/js-harness#6` (`odd/tasks/progress-view.md`); every later phase is tracked with it |
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Measurement done, reviewed, merged to `main` 2026-09-28 via `jsaristi/js-harness#7` (`odd/tasks/f2-context-diet.md`); the two remaining steps wait on gentle-ai (v3.7.0 is the latest release and #4036 is open, checked 2026-09-28) |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project, above the machine commands (Sebastián, 2026-09-29), and the machine commands outside one; `doctor` reports the Codex plugin, and the Codex review of each approved code slice leaves a record a check verifies (today it depends on the agent remembering, and nothing notices a skip) | Done 2026-09-29 (`odd/tasks/project-init.md`), seven slices stacked to `main`: the git-spec install through the pnpm shim works since `jsaristi/js-harness#8` (the package no longer runs `prepare`); `init` merged via `jsaristi/js-harness#9`; project `uninstall`, with `init`'s review follow-ups, merged via `jsaristi/js-harness#10` (2026-09-29); project `sync` by location merged via `jsaristi/js-harness#11` (2026-09-29); the TUI by location merged via `jsaristi/js-harness#12` (2026-09-29); the Codex plugin in `doctor` merged via `jsaristi/js-harness#13` (2026-09-29); the verifiable Codex review record (`js-harness codex-review` and the pre-push `check --push`) merged via `jsaristi/js-harness#14` (2026-09-29). Its follow-ups are carried in the feature document |
-| F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | — |
+| F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Built and reviewed on `feat/task-contract` 2026-09-29 (`odd/tasks/task-contract.md`); not yet merged |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | — |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
@@ -128,9 +129,9 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] The Codex review of each approved code slice leaves a record a check verifies, so a skipped review is caught
 
 ### F3 Task contract
-- [ ] Contract template from origin.md
-- [ ] Validator rejects a contract without a done-when command
-- [ ] Fits the ODD feature doc and `/goal`
+- [x] Contract template from origin.md
+- [x] Validator rejects a contract without a done-when command
+- [x] Fits the ODD feature doc and `/goal`
 
 ### F4 Sensors
 - [ ] Tests wired to pre-commit and `check`
@@ -152,7 +153,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. F3 Task contract.
+1. Merge F3 (`feat/task-contract`), then F4 Sensors, opened with its own task contract.
 2. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
    can be taken at any time.
 

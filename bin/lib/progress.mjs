@@ -39,37 +39,98 @@ function isFenceClose(line, fence) {
   );
 }
 
+/** Index of the first backtick run of exactly `length` backticks in `line` at or after `from`, or -1. */
+function findClosingRun(line, from, length) {
+  let i = from;
+  while (i < line.length) {
+    if (line[i] !== '`') {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (line[end] === '`') end += 1;
+    if (end - i === length) return i;
+    i = end;
+  }
+  return -1;
+}
+
+/** `line` without its HTML comments: `{ text, inComment }`, where `inComment` says a comment is still
+ * open at the end of the line (`open` says whether one was open at its start). An unterminated
+ * comment runs to the end of the document. A `<!--` inside an inline code span (a backtick run with a
+ * closing run of the same length on the line) is content, not a comment. */
+function uncomment(line, open) {
+  let text = '';
+  let i = 0;
+  let inComment = open;
+  while (i < line.length) {
+    if (inComment) {
+      const end = line.indexOf('-->', i);
+      if (end === -1) return { text, inComment: true };
+      i = end + 3;
+      inComment = false;
+    } else if (line.startsWith('<!--', i)) {
+      inComment = true;
+      i += 4;
+    } else if (line[i] === '`') {
+      let runEnd = i;
+      while (line[runEnd] === '`') runEnd += 1;
+      const length = runEnd - i;
+      const close = findClosingRun(line, runEnd, length);
+      // A span is copied through its closer verbatim; an opener with no closer is plain backticks.
+      const stop = close === -1 ? runEnd : close + length;
+      text += line.slice(i, stop);
+      i = stop;
+    } else {
+      text += line[i];
+      i += 1;
+    }
+  }
+  return { text, inComment };
+}
+
 /** Splits markdown into lines and tags each one as a fence toggle, a heading, a checkbox step, or
  * plain text — a single fence-aware pass every parser below builds on, so a heading or checkbox
  * that only appears inside a fenced example (or inside a *nested*, mismatched fence marker) is
- * never mistaken for a real one. An opener with no matching closer runs to end of file. */
-function tokenize(markdown) {
+ * never mistaken for a real one. An opener with no matching closer runs to end of file. Every token
+ * keeps its `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. With
+ * `stripComments`, HTML comments (also multi-line ones) are removed from every line outside a
+ * fence before it is classified, so a commented-out heading or list item is never read; a `<!--`
+ * inside a fence is fenced content, and a fence marker inside a comment is not a fence. */
+export function tokenize(markdown, { stripComments = false } = {}) {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
   let fence = null; // { char, length } of the currently open fence, or null outside any fence
-  for (const raw of lines) {
+  let inComment = false;
+  for (const original of lines) {
+    let raw = original;
+    // A line that opens a fence is fenced content from its marker on, so it is not uncommented: a
+    // `<!--` after the marker must not leave a comment open once the fence closes.
+    if (!fence && stripComments && (inComment || !matchFenceOpen(original))) {
+      ({ text: raw, inComment } = uncomment(original, inComment));
+    }
     if (fence) {
       if (isFenceClose(raw, fence)) fence = null;
-      tokens.push({ fence: true });
+      tokens.push({ fence: true, line: raw });
       continue;
     }
     const opened = matchFenceOpen(raw);
     if (opened) {
       fence = opened;
-      tokens.push({ fence: true });
+      tokens.push({ fence: true, line: raw });
       continue;
     }
     const heading = raw.match(HEADING_PATTERN);
     if (heading) {
-      tokens.push({ heading: { level: heading[1].length, title: heading[2].trim() } });
+      tokens.push({ heading: { level: heading[1].length, title: heading[2].trim() }, line: raw });
       continue;
     }
     const step = raw.match(STEP_PATTERN);
     if (step) {
-      tokens.push({ step: { text: step[2].trim(), done: step[1].toLowerCase() === 'x' } });
+      tokens.push({ step: { text: step[2].trim(), done: step[1].toLowerCase() === 'x' }, line: raw });
       continue;
     }
-    tokens.push({});
+    tokens.push({ line: raw });
   }
   return tokens;
 }

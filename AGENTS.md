@@ -24,6 +24,10 @@ The plan is `docs/ROADMAP.md`: what is decided, done, next and still open. A ses
 `odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram. Read it before resuming
 a feature; together with the roadmap it is the handoff, and nothing else is.
 
+A new feature document opens with the task contract (`js-harness contract template`), so its end
+is a set of commands that exit 0, not an opinion. `check` validates every contract; `js-harness
+contract goal <doc>` prints the `/goal` condition that runs them.
+
 ## What good looks like
 
 A behavior change arrives with the test that proves it, written first. A claim about this repo

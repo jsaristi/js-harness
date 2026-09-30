@@ -167,6 +167,13 @@ test('progress dispatches to a temp cwd and exits 0, hermetically (never this re
   }
 });
 
+test('--help lists contract, and contract template dispatches through the real dispatcher', () => {
+  assert.match(run(['--help']).stdout, /^ {2}contract /m);
+  const result = run(['contract', 'template']);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /^## Goal$/m);
+});
+
 // A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.
 test('runs when invoked through a linked directory', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));

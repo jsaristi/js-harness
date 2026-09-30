@@ -6,6 +6,7 @@ import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { doctorMain } from './doctor.mjs';
 import { progressMain } from './progress.mjs';
+import { contractMain } from './contract.mjs';
 import { codexReviewMain } from './codex-review.mjs';
 import { tuiMain } from './tui.mjs';
 import { realpathSync } from 'node:fs';
@@ -24,6 +25,7 @@ Commands:
   upgrade     Install the newer release, then sync.
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
+  contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
@@ -40,6 +42,7 @@ const commands = {
   upgrade: upgradeMain,
   doctor: doctorMain,
   progress: progressMain,
+  contract: contractMain,
   'codex-review': codexReviewMain,
 };
 

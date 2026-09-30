@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { estimateTokens, checkBudget, checkPayload, checkTests, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, checkTests, main } from './check.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -218,4 +218,100 @@ test('main errors with usage on stderr and exits 2 when --home is immediately fo
 test('main runs no row when args are invalid', async () => {
   const { output } = await runCheck(['--home'], { JS_HARNESS_CHECK_INNER: '1' });
   assert.equal(output, '');
+});
+
+// --- the contracts row: static only, so the gate stays fast and never recurses into a done-when ---
+
+const CONTRACT = [
+  '# A feature', '', '## Goal', 'Ship it.', '', '## Why', 'Evidence.', '', '## Done when',
+  '- `npm run check` exits 0', '', '## In scope / Out of scope', '- In: bin/', '', '## Constraints',
+  '- None — because none', '', '## Effort', 'high', '', '## Ask me before', 'Spend.', '',
+].join('\n');
+
+/** `CONTRACT` with a `## Done when` that is prose only, so it fails validation. */
+const BAD_CONTRACT = CONTRACT.replace('`npm run check` exits 0', 'It works');
+
+function writeTask(dir, name, content) {
+  fs.mkdirSync(path.join(dir, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'odd', 'tasks', name), content);
+}
+
+test('checkContracts passes and says so when there are no contracts', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(checkContracts(dir), { name: 'contracts', pass: true, detail: 'no contracts under odd/tasks' });
+    writeTask(dir, 'old.md', '# Old\n\n## Tasks\n- [x] T1\n'); // history, not a contract
+    assert.equal(checkContracts(dir).detail, 'no contracts under odd/tasks');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkContracts passes and lists the contracts it checked', () => {
+  const dir = makeTmpDir();
+  try {
+    writeTask(dir, 'a.md', CONTRACT);
+    writeTask(dir, 'b.md', CONTRACT);
+    const row = checkContracts(dir);
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /2 contracts checked/);
+    assert.deepEqual(row.lines, ['odd/tasks/a.md', 'odd/tasks/b.md']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkContracts fails naming each failing contract and its reasons', () => {
+  const dir = makeTmpDir();
+  try {
+    writeTask(dir, 'good.md', CONTRACT);
+    writeTask(dir, 'bad.md', BAD_CONTRACT.replace('high', 'low'));
+    const row = checkContracts(dir);
+    assert.equal(row.pass, false);
+    assert.match(row.detail, /1 of 2 contracts fail/);
+    assert.ok(row.lines.includes('odd/tasks/bad.md'), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /has no command/.test(line)), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /Effort/.test(line)), row.lines.join('\n'));
+    assert.ok(!row.lines.some((line) => line.includes('good.md')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkContracts never runs a done-when command', () => {
+  const dir = makeTmpDir();
+  try {
+    const marker = path.join(dir, 'ran.txt').replace(/\\/g, '/');
+    const command = `node -e "require('fs').writeFileSync('${marker}', 'x')"`;
+    writeTask(dir, 'a.md', CONTRACT.replace('`npm run check`', `\`${command}\``));
+    assert.equal(checkContracts(dir).pass, true);
+    assert.equal(fs.existsSync(marker), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main runs the contracts row, and a failing contract makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    writeTask(dir, 'bad.md', BAD_CONTRACT);
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir });
+    assert.equal(code, 1);
+    assert.match(output, /^FAIL {2}contracts /m);
+    assert.match(output, /odd\/tasks\/bad\.md/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main --push does not run the contracts row', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeTask(dir, 'bad.md', BAD_CONTRACT);
+    const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
+    assert.doesNotMatch(output, /contracts/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
