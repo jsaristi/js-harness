@@ -724,6 +724,23 @@ test('checkReview says gentle-ai was not found, and assesses nothing', () => {
   assert.equal(assessCalls(spawn).length, 0);
 });
 
+// Fail-open covers a schema-tagged envelope of the wrong shape too: it must neither throw nor print
+// `undefined` as if it were an assessment.
+test('checkReview skips reasons that are not objects instead of throwing', () => {
+  const spawn = fakeGentleAi({ assess: ok(assessment({ reasons: [null, 'x', { code: 'executable_change', path: 'a.mjs' }] })) });
+  const row = checkReview('/proj', { spawn });
+  assert.equal(row.pass, true);
+  assert.deepEqual(row.lines.filter((line) => !line.startsWith('next:')), ['executable_change a.mjs']);
+});
+
+test('checkReview reports an assessment missing its fields as having no assessment', () => {
+  for (const over of [{ risk: undefined }, { changed_lines: '442' }, { review_due: 'yes' }, { review_due_reason: 3 }]) {
+    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment(over)) }) });
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /gave no assessment \(unexpected shape\)/, JSON.stringify(over));
+  }
+});
+
 test('checkReview reports RDD off with its source and does not run assess', () => {
   const spawn = fakeGentleAi({ mode: ok(MODE_OFF) });
   const row = checkReview('/proj', { spawn });
