@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, main } from './check.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -479,8 +479,16 @@ test('main passes with a large machine payload when AGENTS.md is within budget',
 
 // --- home precedence: --home flag, then env.JS_HARNESS_HOME, then os.homedir() (matches doctor.mjs) ---
 
+/** Stands in for gentle-ai being absent, so a test that reaches the review row never spawns the real one. */
+const gentleAiNotFound = () => ({
+  status: null,
+  stdout: '',
+  stderr: '',
+  error: Object.assign(new Error('spawnSync gentle-ai ENOENT'), { code: 'ENOENT' }),
+});
+
 /** Runs `main`, capturing everything it printed via console.log/console.error and the exit code. */
-async function runCheck(argv, env) {
+async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
   const originalLog = console.log;
@@ -492,7 +500,7 @@ async function runCheck(argv, env) {
     errOutput += `${line}\n`;
   };
   try {
-    const code = await main(argv, env);
+    const code = await main(argv, env, deps);
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -653,6 +661,219 @@ test('main --push does not run the contracts row', async () => {
     writeTask(dir, 'bad.md', BAD_CONTRACT);
     const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.doesNotMatch(output, /contracts/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- review row: whether the pending change is due a gentle-ai review, informational and fail-open ---
+
+const MODE_ON = JSON.stringify({
+  schema: 'gentle-ai.review-mode/v1',
+  operation: 'status',
+  scope: 'both',
+  status: { schema: 'gentle-ai.rdd-mode-status/v1', global: 'on', clone_local: '', effective: 'on', source: 'global' },
+});
+const MODE_OFF = MODE_ON.replace('"effective":"on"', '"effective":"off"').replace('"source":"global"', '"source":"clone_local"');
+const assessment = (over = {}) =>
+  JSON.stringify({
+    schema: 'gentle-ai.review-assessment/v1',
+    risk: 'medium',
+    reasons: [{ code: 'executable_change', path: 'bin/check.mjs' }],
+    changed_paths: 3,
+    changed_lines: 442,
+    candidate: { kind: 'current-changes', consumed: false },
+    review_due: true,
+    review_due_reason: 'slice_budget_reached',
+    ...over,
+  });
+const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
+const spawnFailure = (code, message) => ({ status: null, stdout: '', stderr: '', error: Object.assign(new Error(message), { code }) });
+
+/** A stand-in for `spawnSync` that answers `gentle-ai review mode status` and `... assess` and records calls. */
+function fakeGentleAi({ mode = ok(MODE_ON), assess = ok(assessment()) } = {}) {
+  const calls = [];
+  const spawn = (program, args, options) => {
+    calls.push({ program, args, options });
+    return args.includes('assess') ? assess : mode;
+  };
+  return Object.assign(spawn, { calls });
+}
+const assessCalls = (spawn) => spawn.calls.filter((call) => call.args.includes('assess'));
+
+test('checkReview runs mode status then assess as gentle-ai, without a shell, in cwd', () => {
+  const spawn = fakeGentleAi();
+  checkReview('/proj', { spawn, timeout: 1234 });
+  assert.equal(spawn.calls.length, 2);
+  assert.deepEqual(spawn.calls[0].args, ['review', 'mode', 'status', '--cwd', '/proj', '--json']);
+  assert.deepEqual(spawn.calls[1].args, ['review', 'assess', '--cwd', '/proj', '--json']);
+  for (const call of spawn.calls) {
+    assert.equal(call.program, 'gentle-ai');
+    assert.equal(call.options.encoding, 'utf8');
+    assert.equal(call.options.timeout, 1234);
+    assert.ok(!call.options.shell);
+  }
+});
+
+test('checkReview says gentle-ai was not found, and assesses nothing', () => {
+  const spawn = fakeGentleAi({ mode: spawnFailure('ENOENT', 'spawnSync gentle-ai ENOENT') });
+  const row = checkReview('/proj', { spawn });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /gentle-ai was not found/);
+  assert.match(row.detail, /not assessed/);
+  assert.equal(assessCalls(spawn).length, 0);
+});
+
+test('checkReview reports RDD off with its source and does not run assess', () => {
+  const spawn = fakeGentleAi({ mode: ok(MODE_OFF) });
+  const row = checkReview('/proj', { spawn });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /RDD is off \(clone_local\)/);
+  assert.match(row.detail, /no review was assessed/);
+  assert.equal(assessCalls(spawn).length, 0);
+});
+
+test('checkReview still assesses when the mode is unknown (non-zero exit, bad JSON or a timeout)', () => {
+  const unknown = [
+    { status: 1, stdout: '', stderr: 'boom' },
+    ok('not json'),
+    ok(JSON.stringify({ status: { effective: 'maybe' } })),
+    spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT'),
+  ];
+  for (const mode of unknown) {
+    const spawn = fakeGentleAi({ mode });
+    const row = checkReview('/proj', { spawn });
+    assert.equal(assessCalls(spawn).length, 1);
+    assert.match(row.detail, /review due \(slice_budget_reached\)/);
+  }
+});
+
+test('checkReview reports no pending change instead of the clean tree high risk', () => {
+  const clean = assessment({
+    risk: 'high',
+    reasons: [{ code: 'unassessable', detail: 'the review assess candidate has no pending changes' }],
+    changed_paths: 0,
+    changed_lines: 0,
+    review_due: true,
+    review_due_reason: 'high_risk',
+  });
+  // gentle-ai exits non-zero on a clean tree but still prints the JSON.
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: clean, stderr: 'Error: no pending changes' } }) });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /no pending change to assess/);
+  assert.doesNotMatch(row.detail, /high|due/);
+  assert.equal(row.lines, undefined);
+});
+
+test('checkReview says a due review is due, with its risk, size and reason', () => {
+  const row = checkReview('/proj', { spawn: fakeGentleAi() });
+  assert.equal(row.detail, 'medium risk, 3 paths, 442 lines: review due (slice_budget_reached)');
+  assert.equal(row.pass, true);
+  assert.equal(row.info, true);
+});
+
+test('checkReview says a review is not due, and uses the singular for one path', () => {
+  const assess = ok(assessment({ changed_paths: 1, changed_lines: 1, review_due: false, review_due_reason: 'under_budget' }));
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
+  assert.equal(row.detail, 'medium risk, 1 path, 1 line: review not due (under_budget)');
+  assert.equal(row.lines.some((line) => line.startsWith('next:')), false);
+});
+
+test('checkReview lists each reason, and the next command only when a review is due', () => {
+  const reasons = [
+    { code: 'executable_change', path: 'bin/check.mjs' },
+    { code: 'unassessable', detail: 'could not read a file' },
+  ];
+  const next_transition = { command: 'gentle-ai review status --cwd /proj --base-ref abc' };
+  const due = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition })) }) });
+  assert.deepEqual(due.lines, [
+    'executable_change bin/check.mjs',
+    'unassessable could not read a file',
+    'next: gentle-ai review status --cwd /proj --base-ref abc',
+  ]);
+  const notDue = checkReview('/proj', {
+    spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition, review_due: false, review_due_reason: 'under_budget' })) }),
+  });
+  assert.deepEqual(notDue.lines, ['executable_change bin/check.mjs', 'unassessable could not read a file']);
+  const noCommand = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition: {} })) }) });
+  assert.equal(noCommand.lines.some((line) => line.startsWith('next:')), false);
+});
+
+test('checkReview gives no assessment when assess prints nothing usable, and stays INFO and passing', () => {
+  const timeout = spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT');
+  const cases = [
+    { status: 2, stdout: '', stderr: 'Error: something broke' },
+    ok('not json'),
+    ok(JSON.stringify({ schema: 'something-else/v1', risk: 'high' })),
+    ok('null'),
+    timeout,
+    spawnFailure('EPERM', 'spawn EPERM'),
+  ];
+  for (const assess of cases) {
+    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
+    assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+    assert.match(row.detail, /^gentle-ai review assess gave no assessment \(.+\)$/);
+  }
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: timeout }) });
+  assert.match(row.detail, /timed out/);
+});
+
+test('checkReview tolerates a spawn that throws', () => {
+  const row = checkReview('/proj', {
+    spawn: () => {
+      throw new Error('kaboom');
+    },
+  });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /no assessment/);
+});
+
+test('main prints the review row as INFO and still exits 0 when assess says high and due', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const high = assessment({ risk: 'high', review_due_reason: 'high_risk', next_transition: { command: 'gentle-ai review status --cwd x' } });
+    const gentleAi = fakeGentleAi({ assess: { status: 1, stdout: high, stderr: 'Error: due' } });
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}review {2}high risk, 3 paths, 442 lines: review due \(high_risk\)/m);
+    assert.match(output, /next: gentle-ai review status --cwd x/);
+    assert.deepEqual(gentleAi.calls[0].args.slice(-3), ['--cwd', dir, '--json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main runs the review row after the sensor rows', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const { output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi: fakeGentleAi() });
+    const at = (text) => output.indexOf(text);
+    assert.ok(at('PASS  tests') !== -1 && at('PASS  tests') < at('INFO  review'), output);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main exits 0 with a review row when gentle-ai is missing', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}review {2}gentle-ai was not found/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main runs no review row when it is the inner run, or a push', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const gentleAi = fakeGentleAi();
+    const inner = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.doesNotMatch(inner.output, /review/);
+    const push = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.doesNotMatch(push.output, /^(PASS|FAIL|INFO) {2}review /m);
+    assert.equal(gentleAi.calls.length, 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

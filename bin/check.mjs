@@ -64,6 +64,7 @@ export function checkPayload(cwd, home) {
 
 const NPM_PLACEHOLDER_TEST = 'echo "Error: no test specified" && exit 1';
 
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isCommand = (value) => typeof value === 'string' && value.trim() !== '';
 
 /** Reads and parses `<cwd>/<file>`: `{ value }`, `{ error }` naming the file when it is not JSON, or
@@ -86,7 +87,6 @@ export function discoverSensors(cwd) {
   const none = { sensors: [], source: null };
   const harness = readJson(cwd, 'harness.json');
   if (harness?.error) return { ...none, error: harness.error };
-  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
   const declared = harness?.value;
   if (harness && !isObject(declared)) return { ...none, error: 'harness.json must be a JSON object' };
   if (declared && 'sensors' in declared) {
@@ -152,6 +152,70 @@ export function checkSensors(cwd, deps) {
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
   return sensors.map((sensor) => checkSensor(cwd, sensor, deps));
+}
+
+/** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
+function runGentleAi(spawn, args, timeout) {
+  try {
+    return spawn('gentle-ai', args, { encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 }) ?? { error: new Error('no result') };
+  } catch (error) {
+    return { error };
+  }
+}
+
+/** Parses `text` as a JSON object, else `null`. */
+function jsonObject(text) {
+  try {
+    const value = JSON.parse(text);
+    return isObject(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Why a gentle-ai run gave nothing usable, in a few words. */
+function whyNoAssessment(result, timeout) {
+  if (result.error?.code === 'ETIMEDOUT') return `timed out after ${Math.round(timeout / 1000)}s`;
+  if (result.error) return result.error.message;
+  const said = String(result.stderr ?? '').trim().split('\n')[0];
+  const exit = result.status === null ? `killed by ${result.signal ?? 'a signal'}` : `exit ${result.status}`;
+  return said ? `${exit}: ${said}` : `${exit}, no assessment on stdout`;
+}
+
+/** The `review` row: whether the pending change is due a gentle-ai review by risk, so the answer shows
+ * at every commit instead of depending on anyone remembering to ask. Informational and fail-open: gentle-ai
+ * owns review and RDD is the user's switch, so a missing, failing or slow gentle-ai never turns a commit red.
+ * Only an explicit `off` skips the assessment; an unreadable mode counts as on, the switch's default. */
+export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
+  const row = (detail, lines) => ({ name: 'review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  const notFound = () => row('gentle-ai was not found, so review by risk was not assessed');
+  const isMissing = (result) => result.error?.code === 'ENOENT';
+
+  const mode = runGentleAi(spawn, ['review', 'mode', 'status', '--cwd', cwd, '--json'], timeout);
+  if (isMissing(mode)) return notFound();
+  const status = mode.error || mode.status !== 0 ? null : jsonObject(mode.stdout)?.status;
+  if (isObject(status) && status.effective === 'off') {
+    return row(`RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`);
+  }
+
+  // Parsed whatever the exit code: on a clean tree gentle-ai exits non-zero and still prints the JSON.
+  const result = runGentleAi(spawn, ['review', 'assess', '--cwd', cwd, '--json'], timeout);
+  if (isMissing(result)) return notFound();
+  const assessed = result.error ? null : jsonObject(result.stdout);
+  if (assessed?.schema !== 'gentle-ai.review-assessment/v1') {
+    const reason = assessed ? 'unexpected schema' : whyNoAssessment(result, timeout);
+    return row(`gentle-ai review assess gave no assessment (${reason})`);
+  }
+  // A clean tree is reported by gentle-ai as high risk and due; that is not a real finding.
+  if (assessed.changed_paths === 0) return row('no pending change to assess');
+
+  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+  const due = assessed.review_due === true;
+  const detail = `${assessed.risk} risk, ${count(assessed.changed_paths, 'path')}, ${count(assessed.changed_lines, 'line')}: review ${due ? 'due' : 'not due'} (${assessed.review_due_reason})`;
+  const lines = (Array.isArray(assessed.reasons) ? assessed.reasons : []).map((reason) => `${reason.code} ${reason.path ?? reason.detail ?? ''}`.trim());
+  const next = assessed.next_transition?.command;
+  if (due && typeof next === 'string') lines.push(`next: ${next}`);
+  return row(detail, lines);
 }
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. */
@@ -345,6 +409,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // and that inner check must not spawn the sensors that are running it.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     rows.push(...checkSensors(cwd, deps));
+    // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
+    rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }
 
   for (const row of rows) {
