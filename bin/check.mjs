@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
@@ -62,6 +62,10 @@ export function checkPayload(cwd, home) {
   });
 }
 
+// A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
+// gate forever; ten minutes is longer than a commit gate's suite should take, and still bounded.
+const SENSOR_TIMEOUT_MS = 10 * 60 * 1000;
+
 const NPM_PLACEHOLDER_TEST = 'echo "Error: no test specified" && exit 1';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -110,8 +114,92 @@ export function discoverSensors(cwd) {
   return { sensors, source: 'package.json' };
 }
 
-/** Runs one sensor's command in `cwd` through the shell and reports pass/fail. */
-export function checkSensor(cwd, sensor, { spawn = spawnSync } = {}) {
+// Once the shell has exited, the pipes should close at once; a grandchild that kept them open (a
+// daemon a script left behind) must not hold the gate, so we stop waiting for them after this.
+const PIPE_GRACE_MS = 2000;
+const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
+
+/** Kills `child` and everything it started. `spawnSync`'s own timeout kills only the shell, and the
+ * real command (`node` behind `cmd.exe`, `npm` behind `sh`) would keep running after every commit. */
+function killTree(child) {
+  if (child.pid === undefined) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL'); // the child leads its own group (see `detached` below)
+  } catch {
+    // ESRCH: the group is already gone.
+  }
+}
+
+/** Runs `command` through the shell and resolves to a `spawnSync`-shaped `{ status, signal, stdout,
+ * stderr, error? }`. Past `timeout` ms it kills the whole process tree and reports `error.code ===
+ * 'ETIMEDOUT'`. Output beyond 64 MiB per stream is dropped, so a noisy command is never ENOBUFS. */
+export function runSensor(command, { cwd, env, timeout }) {
+  return new Promise((resolve) => {
+    const out = { stdout: '', stderr: '' };
+    let child;
+    try {
+      child = spawnChild(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      resolve({ status: null, signal: null, ...out, error });
+      return;
+    }
+    // On POSIX the sensor leads its own process group, so a Ctrl-C at the terminal no longer reaches
+    // it: pass the signal on by killing the group, then let it end check as it would have.
+    const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    const forward = (signal) => {
+      killTree(child);
+      for (const name of signals) process.removeListener(name, forward);
+      process.kill(process.pid, signal);
+    };
+    for (const name of signals) process.once(name, forward);
+    let timedOut = false;
+    let exit = { status: null, signal: null };
+    let done = false;
+    let timer;
+    let grace;
+    const finish = (extra) => {
+      if (done) return;
+      done = true;
+      for (const name of signals) process.removeListener(name, forward);
+      clearTimeout(timer);
+      clearTimeout(grace);
+      child.stdout.destroy();
+      child.stderr.destroy();
+      const error = extra ?? (timedOut ? Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }) : undefined);
+      resolve({ ...exit, ...out, ...(error && { error }) });
+    };
+    for (const stream of ['stdout', 'stderr']) {
+      child[stream].setEncoding('utf8');
+      child[stream].on('data', (chunk) => {
+        if (out[stream].length < SENSOR_OUTPUT_LIMIT) out[stream] += chunk;
+      });
+    }
+    child.on('error', (error) => finish(error));
+    child.on('exit', (status, signal) => {
+      exit = { status, signal };
+      clearTimeout(timer);
+      clearTimeout(grace);
+      grace = setTimeout(() => finish(), PIPE_GRACE_MS);
+    });
+    child.on('close', () => finish());
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        killTree(child);
+        // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
+        grace = setTimeout(() => finish(), PIPE_GRACE_MS);
+      }, timeout);
+    }
+  });
+}
+
+/** Runs one sensor's command in `cwd` through the shell and reports pass/fail. `spawn` may return a
+ * plain result or a promise of one, so a test can stub it with either. */
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
@@ -126,14 +214,15 @@ export function checkSensor(cwd, sensor, { spawn = spawnSync } = {}) {
   const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
   try {
-    result = spawn(sensor.command, { cwd, env, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
+    result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
   const { name, command } = sensor;
   const pass = !result.error && result.status === 0;
   let detail = `${command} passed`;
-  if (result.error) detail = `${command} could not run: ${result.error.message}`;
+  if (result.error?.code === 'ETIMEDOUT') detail = `${command} timed out after ${sensorTimeout / 1000} s`;
+  else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
@@ -141,8 +230,9 @@ export function checkSensor(cwd, sensor, { spawn = spawnSync } = {}) {
   return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
-/** One row per sensor; a broken declaration is one FAIL row and no sensor at all is one INFO row. */
-export function checkSensors(cwd, deps) {
+/** One row per sensor, run one after another; a broken declaration is one FAIL row and no sensor at all
+ * is one INFO row. */
+export async function checkSensors(cwd, deps) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
   if (sensors.length === 0) {
@@ -151,7 +241,9 @@ export function checkSensors(cwd, deps) {
       : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
-  return sensors.map((sensor) => checkSensor(cwd, sensor, deps));
+  const rows = [];
+  for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, deps));
+  return rows;
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -416,7 +508,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    rows.push(...checkSensors(cwd, deps));
+    rows.push(...(await checkSensors(cwd, deps)));
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }

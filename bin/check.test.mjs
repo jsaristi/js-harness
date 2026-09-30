@@ -133,13 +133,13 @@ test('discoverSensors reports a harness.json that is not an object instead of fa
 
 // An explicit empty map is a deliberate opt-out, so it neither falls back to package.json nor
 // passes silently: the INFO row names the file that declared it.
-test('discoverSensors takes an empty harness.json sensors map as declaring none, and check says where', () => {
+test('discoverSensors takes an empty harness.json sensors map as declaring none, and check says where', async () => {
   const dir = makeTmpDir();
   try {
     writeJson(dir, 'harness.json', { sensors: {} });
     writeJson(dir, 'package.json', { scripts: { test: 'vitest run' } });
     assert.deepEqual(discoverSensors(dir), { sensors: [], source: 'harness.json' });
-    const [row] = checkSensors(dir);
+    const [row] = await checkSensors(dir);
     assert.equal(row.info, true);
     assert.match(row.detail, /harness\.json declares no sensors/);
   } finally {
@@ -217,21 +217,21 @@ test('discoverSensors finds nothing when neither file exists', () => {
   }
 });
 
-test('checkSensor passes when the command exits 0', () => {
+test('checkSensor passes when the command exits 0', async () => {
   const dir = makeTmpDir();
   try {
     const command = exits(0);
-    assert.deepEqual(checkSensor(dir, { name: 'lint', command }), { name: 'lint', pass: true, detail: `${command} passed`, output: '' });
+    assert.deepEqual(await checkSensor(dir, { name: 'lint', command }), { name: 'lint', pass: true, detail: `${command} passed`, output: '' });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("checkSensor fails with the exit status and keeps the command's output", () => {
+test("checkSensor fails with the exit status and keeps the command's output", async () => {
   const dir = makeTmpDir();
   try {
     const command = exits(3, "console.log('boom-out');console.error('boom-err');");
-    const row = checkSensor(dir, { name: 'tests', command });
+    const row = await checkSensor(dir, { name: 'tests', command });
     assert.equal(row.name, 'tests');
     assert.equal(row.pass, false);
     assert.equal(row.detail, `${command} exited 3`);
@@ -242,16 +242,16 @@ test("checkSensor fails with the exit status and keeps the command's output", ()
   }
 });
 
-test('checkSensor fails with the spawn error when the command cannot run', () => {
+test('checkSensor fails with the spawn error when the command cannot run', async () => {
   const spawn = () => ({ error: new Error('spawn ENOENT'), status: null });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'whatever' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'whatever' }, { spawn });
   assert.equal(row.pass, false);
   assert.match(row.detail, /spawn ENOENT/);
 });
 
-test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', () => {
+test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', async () => {
   const spawn = () => ({ error: new Error('spawnSync ENOBUFS'), status: null, stdout: 'partial-out', stderr: 'partial-err' });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'noisy' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'noisy' }, { spawn });
   assert.equal(row.pass, false);
   assert.match(row.output, /partial-out/);
   assert.match(row.output, /partial-err/);
@@ -259,7 +259,7 @@ test('checkSensor keeps what the command printed before a spawn error such as EN
 
 // Windows dedupes environment keys case-insensitively and keeps the uppercase one, so an inherited
 // NPM_CONFIG_CACHE would win over the lowercase override; npm also reads either case.
-test('checkSensor drops inherited case variants of the variables it overrides', () => {
+test('checkSensor drops inherited case variants of the variables it overrides', async () => {
   const saved = { ...process.env };
   let env;
   const spawn = (_command, options) => {
@@ -269,7 +269,7 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
   try {
     process.env.NPM_CONFIG_CACHE = 'real-cache';
     process.env.Home = 'real-home';
-    checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+    await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
@@ -281,23 +281,91 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
   assert.ok(env.npm_config_cache.startsWith(env.HOME));
 });
 
-test('checkSensor names the signal when the command is killed by one', () => {
+test('checkSensor gives every sensor a 10 minute timeout by default', async () => {
+  let options;
+  const spawn = (_command, opts) => {
+    options = opts;
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  assert.equal(options.timeout, 10 * 60 * 1000);
+});
+
+/** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
+async function goneWithin(pid, ms = 5000) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      return err.code === 'ESRCH';
+    }
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+// A watch-mode script or a linter waiting on stdin must not hold the pre-commit gate forever, and
+// killing only the shell would leave the real command running after every commit.
+test('checkSensor stops a command that never exits, with its whole process tree, and says it timed out', async () => {
+  const dir = makeTmpDir();
+  try {
+    const pidFile = path.join(dir, 'grandchild.pid');
+    // The grandchild writes its pid and sleeps; the parent waits for that file, then sleeps too.
+    const grandchild = `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`;
+    fs.writeFileSync(path.join(dir, 'hang.js'), [
+      "const { spawn } = require('child_process');",
+      "const fs = require('fs');",
+      `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'inherit' });`,
+      `while (!fs.existsSync(${JSON.stringify(pidFile)})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);`,
+      'setTimeout(() => {}, 120000);',
+    ].join('\n'));
+    const command = 'node hang.js';
+    const started = Date.now();
+    const row = await checkSensor(dir, { name: 'tests', command }, { sensorTimeout: 3000 });
+    assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
+    assert.equal(row.pass, false);
+    assert.equal(row.detail, `${command} timed out after 3 s`);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(await goneWithin(pid), `grandchild ${pid} is still running`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(fs.existsSync(dir), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensor keeps what the command printed before it timed out', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'chatty.js'), "console.log('before-timeout'); setTimeout(() => {}, 120000);");
+    const command = 'node chatty.js';
+    const row = await checkSensor(dir, { name: 'tests', command }, { sensorTimeout: 3000 });
+    assert.equal(row.pass, false);
+    assert.match(row.detail, /timed out after 3 s/);
+    assert.match(row.output, /before-timeout/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensor names the signal when the command is killed by one', async () => {
   const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: 'out', stderr: '' });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
   assert.equal(row.pass, false);
   assert.equal(row.detail, 'slow was killed by SIGTERM');
   assert.match(row.output, /out/);
 });
 
 // A test that forgets --home must land in a throwaway directory, never in the real home.
-test('checkSensor runs the command with the home directory pointed at a throwaway directory', () => {
+test('checkSensor runs the command with the home directory pointed at a throwaway directory', async () => {
   const dir = makeTmpDir();
   try {
     const seen = path.join(dir, 'seen-home.txt').replace(/\\/g, '/');
     const record =
       "require('os').homedir() + '|' + process.env.JS_HARNESS_CHECK_INNER + '|' + process.env.NODE_TEST_CONTEXT + '|' + process.env.npm_config_cache";
     const command = `node -e "require('fs').writeFileSync('${seen}', ${record})"`;
-    const row = checkSensor(dir, { name: 'tests', command });
+    const row = await checkSensor(dir, { name: 'tests', command });
     assert.equal(row.pass, true, row.output);
     const [home, inner, context, npmCache] = fs.readFileSync(seen, 'utf8').split('|');
     // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, outside HOME: `npm run` must too.
@@ -312,11 +380,11 @@ test('checkSensor runs the command with the home directory pointed at a throwawa
   }
 });
 
-test('checkSensors turns a discovery error into one FAIL row named sensors', () => {
+test('checkSensors turns a discovery error into one FAIL row named sensors', async () => {
   const dir = makeTmpDir();
   try {
     fs.writeFileSync(path.join(dir, 'harness.json'), '{ nope');
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, 'sensors');
     assert.equal(rows[0].pass, false);
@@ -326,10 +394,10 @@ test('checkSensors turns a discovery error into one FAIL row named sensors', () 
   }
 });
 
-test('checkSensors says so when no sensor is declared, naming both ways to declare one', () => {
+test('checkSensors says so when no sensor is declared, naming both ways to declare one', async () => {
   const dir = makeTmpDir();
   try {
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, 'sensors');
     assert.equal(rows[0].info, true);
@@ -342,11 +410,11 @@ test('checkSensors says so when no sensor is declared, naming both ways to decla
   }
 });
 
-test('checkSensors runs one row per sensor', () => {
+test('checkSensors runs one row per sensor', async () => {
   const dir = makeTmpDir();
   try {
     writeJson(dir, 'harness.json', { sensors: { tests: exits(0), lint: exits(1) } });
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.deepEqual(rows.map((row) => [row.name, row.pass]), [['tests', true], ['lint', false]]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
