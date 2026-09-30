@@ -212,7 +212,7 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   in the repository and appends one JSON line `{ schema, base, head, reviewedAt, outcome:
   "reviewed" }`, full commit ids, to `<git common dir>/js-harness/codex-reviews.jsonl`, but only
   on evidence that Codex read the diff: its JSONL events must show a completed turn, a final
-  message and a successful `git diff`/`git show`/`git log -p`, never the review's wording. The
+  message and a successful `git diff` or `git log -p` of the base commit, never the review's wording. The
   first version drove the plugin's companion and classified its text; that was replaced on
   2026-09-29 (design, probes and the evidence rule: `odd/tasks/codex-exec-review.md`). On
   anything else it writes nothing and exits non-zero, naming the two ways on. When Codex cannot

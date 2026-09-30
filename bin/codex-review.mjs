@@ -141,6 +141,9 @@ export function readsDiff(command, base) {
     const tokens = match[2].split(/\s+/).filter(Boolean);
     if (match[1] === 'log' && !tokens.some((t) => t === '-p' || t === '--patch')) return false;
     if (tokens.some((t) => NO_PATCH.test(t) || (!t.startsWith('-') && /(?<!:):(?!:)/.test(t)))) return false;
+    // A pathspec after `--` limits the diff to some files, so it did not read the whole range.
+    const dashes = tokens.indexOf('--');
+    if (dashes !== -1 && tokens.slice(dashes + 1).some((t) => t !== '.')) return false;
     return tokens.some((t) => namesBase(t, base));
   });
 }
@@ -209,6 +212,9 @@ function codexRuns(spawn, platform, env) {
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
+// Reviews seen so far took 1 to 15 minutes; a run past this has stalled (a hung sandboxed command,
+// a network stall), and without a bound the command would wait forever.
+const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
 
 const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
@@ -280,6 +286,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         stdio: ['ignore', 'pipe', 'inherit'],
         encoding: 'utf8',
         maxBuffer: REVIEW_MAX_BUFFER,
+        timeout: REVIEW_TIMEOUT_MS,
         env: codexEnv,
       });
     } catch (err) {
@@ -292,6 +299,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (result?.status !== 0 || !evidence.completed) {
       const reason = result?.error?.code === 'ENOBUFS'
         ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
+        : result?.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
         : result?.error ? `could not start it: ${result.error.message}`
           : result?.status !== 0 ? `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`
             : evidence.errors.length ? 'the turn failed' : 'the turn never completed';

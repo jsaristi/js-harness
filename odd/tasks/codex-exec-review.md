@@ -43,8 +43,11 @@ including `git diff 438364a…`), no REPL call, one `agent_message` with two P2 
   `\Microsoft\WindowsApps` entry. The Claude Code plugin is no longer involved (it stays useful for
   `/codex:*` commands).
 - Evidence: `reviewed` is recorded only when the JSONL has `turn.completed`, a non-empty final
-  `agent_message`, and at least one completed `command_execution` with exit 0 that reads the
-  diff (`git diff`, `git show`, or `git log` with `-p`/`--patch`). Otherwise nothing is written
+  `agent_message`, and at least one completed `command_execution` with exit 0 that prints the
+  patch of the range: a command segment that starts with `git diff`, or `git log -p`/`--patch`, and
+  names the base commit, without `--stat`/`--name-only`/`--check`-style options, a `<rev>:<path>`
+  argument or a pathspec after `--` (`git show` shows one commit, so it does not count; history in
+  Progress). Otherwise nothing is written
   and it exits 1, listing the commands that ran with their exit codes and the two ways on. A
   failed turn or non-zero exit prints Codex's error events (e.g. a rejected model).
 - The text classifier is removed; the review text is still shown as is.
@@ -94,6 +97,15 @@ Mode: strict (source: user global config). Runner: `node --test`.
   RED: 45 tests, 6 failing. GREEN: 45/45; `node --test` → 712 / 705 / 0 fail / 7 skipped; `npm run
   check` and `npm run e2e` (14 PASS) exit 0; the real probe returned `codex-cli 0.159.1`. Parent:
   no control characters in either file; suite 712/705/0/7.
+
+- 2026-09-29: committed as 8987523. Native review lineage review-89f0d26212a6aaf5 (1104 lines):
+  approved and acknowledged; all three accepted, inline: R3-pathspec-limited-diff-counts (a diff
+  limited by a pathspec after `--` read only some files; now refused, `-- .` allowed),
+  R3-review-spawn-no-timeout (the review spawn gets 30 minutes, reported as "ran past 30 minutes";
+  on Windows the timeout stops the `cmd.exe` shim, and a Codex child it leaves behind is not killed),
+  R3-docs-git-show-counts (this Design section and the T7 bullet). RED: 46 tests, 2 failing; one
+  existing fixture used a pathspec for length and now uses `--unified=`. GREEN: 46/46; `node --test`
+  → 713 / 706 / 0 fail / 7 skipped.
 
 ## Next step
 T3: a real `js-harness codex-review --base main` records `reviewed`.

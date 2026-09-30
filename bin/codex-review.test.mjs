@@ -131,15 +131,15 @@ test('a review that read the diff appends a reviewed record with full commit ids
 
 test('the review text is shown, and the commands Codex ran are listed with their exit codes', async () => {
   const { root, base } = makeRepo();
-  const long = `git diff ${base} -- ${'a'.repeat(300)}`;
+  const long = `git diff ${base} --unified=${'9'.repeat(300)}`;
   const { spawn } = fakeCodex(jsonl(thread, turn, cmd(long), cmd('git status', 128), msg(FINDINGS), done));
   const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 0);
   assert.ok(result.shown.includes(FINDINGS));
   assert.match(result.out, /reviewing|ran 2 commands/i);
-  assert.match(result.out, /exit 0.*git diff [0-9a-f]{40} -- a+/);
+  assert.match(result.out, /exit 0.*git diff [0-9a-f]{40} --unified=9+/);
   assert.match(result.out, /exit 128.*git status/);
-  assert.ok(!result.out.includes('a'.repeat(200)), 'a long command is truncated');
+  assert.ok(!result.out.includes('9'.repeat(200)), 'a long command is truncated');
 });
 
 test('Codex is spawned as `codex exec review` with the resolved base, a read-only sandbox and the desktop plugins off', async () => {
@@ -379,6 +379,18 @@ test('the review output may exceed 1 MiB, and an overflow is named as such, not 
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
 });
 
+test('a stalled review is stopped by a timeout and reported as such, not recorded', async () => {
+  const { root } = makeRepo();
+  const stalled = Object.assign(new Error('spawnSync codex ETIMEDOUT'), { code: 'ETIMEDOUT' });
+  const { spawn, calls } = fakeCodex('', { status: null, signal: 'SIGTERM', error: stalled });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.ok(calls[0].opts.timeout >= 20 * 60 * 1000, `timeout ${calls[0].opts.timeout}`);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /ran past \d+ minutes/);
+  assert.doesNotMatch(result.err, /could not start/);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+});
+
 // --- what the run refuses or skips ---
 
 test('uncommitted changes to tracked files refuse the review: nothing written, Codex not spawned', async () => {
@@ -570,6 +582,8 @@ test('readsDiff: commands that print the patch of the base range', () => {
     'git diff 438364',
     'git diff --stat 438364a',
     'git diff --check 438364a',
+    'git diff 438364a -- bin/x.mjs',
+    'git diff 438364a..HEAD -- bin docs',
     'git diff --name-only 438364a',
     'git diff --numstat 438364a',
     'git diff --shortstat 438364a',
