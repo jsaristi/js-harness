@@ -76,7 +76,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | F2 Context diet | The budget gate measures the full payload (global `CLAUDE.md` + hooks + `AGENTS.md`); codegraph prompt hook measured with and without; gentle-ai v4 adopted when released; block exclusion via gentle-ai #4036 if it ships | Measurement done, reviewed, merged to `main` 2026-09-28 via `jsaristi/js-harness#7` (`odd/tasks/f2-context-diet.md`); the two remaining steps wait on gentle-ai (v3.7.0 is the latest release and #4036 is open, checked 2026-09-28) |
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project, above the machine commands (Sebastián, 2026-09-29), and the machine commands outside one; `doctor` reports the Codex plugin, and the Codex review of each approved code slice leaves a record a check verifies (today it depends on the agent remembering, and nothing notices a skip) | Done 2026-09-29 (`odd/tasks/project-init.md`), seven slices stacked to `main`: the git-spec install through the pnpm shim works since `jsaristi/js-harness#8` (the package no longer runs `prepare`); `init` merged via `jsaristi/js-harness#9`; project `uninstall`, with `init`'s review follow-ups, merged via `jsaristi/js-harness#10` (2026-09-29); project `sync` by location merged via `jsaristi/js-harness#11` (2026-09-29); the TUI by location merged via `jsaristi/js-harness#12` (2026-09-29); the Codex plugin in `doctor` merged via `jsaristi/js-harness#13` (2026-09-29); the verifiable Codex review record (`js-harness codex-review` and the pre-push `check --push`) merged via `jsaristi/js-harness#14` (2026-09-29). Its follow-ups are carried in the feature document |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
-| F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Built and reviewed on `feat/sensors` (slice 1) and `feat/sensors-review` (slice 2), awaiting push and merge (`odd/tasks/sensors.md`) |
+| F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
@@ -154,8 +154,10 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. F4 Sensors: push and merge its two slices (`odd/tasks/sensors.md`, "Next"), then close the phase.
-2. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
+1. F5 Evals that discriminate, which needs Sebastián's spend ceiling first (open decision 4).
+2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
+   timed-out `contract run` command are the most concrete.
+3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
    can be taken at any time.
 
 ## Stack doctor notes
