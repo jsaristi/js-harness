@@ -146,6 +146,22 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 - 2026-09-29: T4a landed: `contract goal` emits `--cwd "<git top-level of the contract>"`, the
   `run` timeout is whole milliseconds and a plain decimal of at least 1 ms, and an emitted path
   holding `"`, a backtick, `$`, `%`, `!`, a newline or a trailing `\` is refused.
+- 2026-09-29: T4a (03f6dfe..d7a729a, 185 lines) assessed medium, `under_budget`. Codex: recorded,
+  one P2, carried as T4b.
+- 2026-09-29: T4b landed (a82749b): RED observed (`--cwd` emitted as the contract's folder), then
+  GREEN, 66 contract tests pass.
+- 2026-09-30: last slice (03f6dfe..a82749b, T4a and T4b) reviewed. gentle-ai: reliability lens
+  approved and acknowledged (lineage `review-47a767d7b533a6d7`, authority burned), 2 non-blocking
+  findings, left as follow-ups below. Codex (`--base d7a729a`): recorded, no findings. Every code
+  commit of the branch is covered by a Codex record and a burned gentle-ai authority.
+
+## Follow-ups (not in this PR)
+- R3-001: a project root at a drive root (`C:\`) makes `goal` refuse, because `path.resolve` keeps
+  the trailing backslash the quoting rule refuses; strip it for a bare drive root, with a test.
+- R3-002: the `goalFor` test helper reports the wrong `root` when `cwdFlag` is false; fix it before
+  an assertion relies on it.
+- `run` without `--cwd` roots at the caller's directory; only the `goal`-emitted command pins it.
+- R3-timeout-grandchild-pipes: the timeout's prompt return is verified on Windows only.
 
 ## Next step
 Open the PR against `main` and merge on Sebastián's go-ahead; F3 then closes in the roadmap.
