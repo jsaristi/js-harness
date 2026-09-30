@@ -74,13 +74,18 @@ function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
 
 /** The repository's top-level directory for `cwd`, else `cwd` itself: where `odd/tasks/` lives. */
 function projectRoot(cwd, spawn) {
+  return gitTopLevel(cwd, spawn) ?? cwd;
+}
+
+/** The git top-level of `cwd`, or `null` when git is missing or `cwd` is not in a repository. */
+function gitTopLevel(cwd, spawn) {
   try {
     const result = spawn('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' });
     if (result && !result.error && result.status === 0 && result.stdout.trim()) return path.resolve(result.stdout.trim());
   } catch {
-    // No git on PATH: fall back to the directory itself.
+    // No git on PATH: the caller falls back.
   }
-  return cwd;
+  return null;
 }
 
 /** Every `odd/tasks/*.md` under `root` that is a contract, sorted by name, as `{ label, markdown }`
@@ -265,9 +270,11 @@ function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, harnessPath
 
   // A /goal lives in one session on one machine, so absolute paths are right here: the command finds
   // the same contract from any working directory, runs this very js-harness, not one on PATH, and
-  // runs the checks in the contract's project, since `run` takes its root from `--cwd`.
+  // runs the checks in the contract's project, since `run` takes its root from `--cwd`. Outside a
+  // repository that project is the requested `--cwd`, as for a direct `run`, never the folder the
+  // contract happens to sit in.
   const contractPath = path.resolve(parsed.cwd, parsed.file);
-  const projectDir = projectRoot(path.dirname(contractPath), spawn);
+  const projectDir = gitTopLevel(path.dirname(contractPath), spawn) ?? projectRoot(parsed.cwd, spawn);
   const paths = [harnessPath, contractPath, projectDir];
   const quoted = paths.map(quoteArg);
   if (quoted.includes(null)) {

@@ -101,6 +101,9 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   in an emitted path too, with the doc comment stating exactly what and why
   (R3-quote-shell-residuals); the grandchild-pipes limit is recorded, not coded
   (R3-timeout-grandchild-pipes) — route: the same delegated writer
+- [x] T4b Review follow-up of T4a: outside a git repository `goal` pins the requested `--cwd`, as a
+  direct `run` does, not the folder the contract sits in (Codex P2) — route: inline (one function
+  and its test)
 
 ## Progress
 - 2026-09-29: contract written; design above.
@@ -134,7 +137,6 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   `AGENTS.md` pointer. This contract's own `contract run` printed `met` (both commands PASS), and
   its two hand checks hold: `progress` shows F3 3/3, and a contract with only prose under
   `## Done when` fails `contract check`, naming that `## Done when` has no command.
-
 - 2026-09-29: slice 3 (cc6607c..03f6dfe, which includes the T4 docs commit 03f6dfe) reviewed.
   gentle-ai: reliability lens approved and acknowledged (lineage `review-bcd0f08c7f603c49`,
   authority burned), 3 non-blocking findings. Codex: recorded, 2 P2. All carried as T4a.

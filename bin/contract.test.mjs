@@ -431,6 +431,20 @@ test('goal pins the project directory too: the git top-level of the contract, no
   assert.ok(!stdout.includes(`--cwd "${path.dirname(file)}"`));
 });
 
+test('goal outside a git repository pins the requested --cwd, not the directory the contract sits in', async () => {
+  const dir = makeTmpDir();
+  try {
+    const file = path.join(dir, 'odd', 'tasks', 'c.md');
+    writeFile(file, GOOD);
+    const spawn = () => ({ status: 128, stdout: '' }); // git finds no repository anywhere
+    const { code, stdout, stderr } = await run(['goal', 'odd/tasks/c.md', '--cwd', dir], { harnessPath: HARNESS, spawn });
+    assert.equal(code, 0, stderr);
+    assert.ok(stdout.includes(`contract run "${file}" --cwd "${dir}"\``), stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the emitted command, replayed from an unrelated directory, runs the checks in the project root', async () => {
   const { stdout, file, dir } = await goalFor(GOOD, { subdir: 'deep', inRepo: true });
   const argv = [...stdout.matchAll(/"([^"]+)"/g)].map((m) => m[1]); // harness, contract, --cwd value
