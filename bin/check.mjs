@@ -210,14 +210,17 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   const wellFormed = typeof risk === 'string' && Number.isInteger(paths) && Number.isInteger(changed) &&
     typeof due === 'boolean' && typeof dueReason === 'string';
   if (!wellFormed) return row('gentle-ai review assess gave no assessment (unexpected shape)');
-  // A clean tree is reported by gentle-ai as high risk and due; that is not a real finding.
-  if (paths === 0) return row('no pending change to assess');
+  const reasons = (Array.isArray(assessed.reasons) ? assessed.reasons : []).filter(isObject);
+  const lines = reasons.map((reason) => `${reason.code} ${reason.path ?? reason.detail ?? ''}`.trim());
+  if (paths === 0) {
+    // gentle-ai answers high and due both for a clean tree and for a candidate it could not build;
+    // only its explicit "no pending changes" reason is the clean tree, which is no finding.
+    const clean = reasons.some((reason) => reason.code === 'unassessable' && /no pending changes/.test(String(reason.detail)));
+    return clean ? row('no pending change to assess') : row('gentle-ai could not assess the pending change', lines);
+  }
 
   const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
   const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due ? 'due' : 'not due'} (${dueReason})`;
-  const lines = (Array.isArray(assessed.reasons) ? assessed.reasons : [])
-    .filter(isObject)
-    .map((reason) => `${reason.code} ${reason.path ?? reason.detail ?? ''}`.trim());
   const next = assessed.next_transition?.command;
   if (due && typeof next === 'string') lines.push(`next: ${next}`);
   return row(detail, lines);

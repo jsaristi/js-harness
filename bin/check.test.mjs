@@ -733,6 +733,23 @@ test('checkReview skips reasons that are not objects instead of throwing', () =>
   assert.deepEqual(row.lines.filter((line) => !line.startsWith('next:')), ['executable_change a.mjs']);
 });
 
+// gentle-ai also answers `changed_paths: 0`, high and due when it cannot build the candidate at all;
+// only its explicit "no pending changes" reason means a clean tree.
+test('checkReview reports an unassessable candidate as a failure, not as a clean tree', () => {
+  const unassessable = assessment({
+    risk: 'high',
+    changed_paths: 0,
+    changed_lines: 0,
+    review_due_reason: 'high_risk',
+    reasons: [{ code: 'unassessable', detail: 'open .git/index: Access is denied.' }],
+  });
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: unassessable, stderr: 'Error: denied' } }) });
+  assert.equal(row.pass, true);
+  assert.doesNotMatch(row.detail, /no pending change/);
+  assert.match(row.detail, /could not assess/);
+  assert.ok(row.lines.includes('unassessable open .git/index: Access is denied.'), row.lines.join('\n'));
+});
+
 test('checkReview reports an assessment missing its fields as having no assessment', () => {
   for (const over of [{ risk: undefined }, { changed_lines: '442' }, { review_due: 'yes' }, { review_due_reason: 3 }]) {
     const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment(over)) }) });
