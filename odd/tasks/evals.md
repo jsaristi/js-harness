@@ -132,8 +132,20 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   export it); a spawn failure was recorded with the fixture's score and skipped on resume
   forever, so it now stops the suite with reason `spawn` (gentle-ai WARNING); the timeout fired
   after the root exited in time; a missing usage field gave 0; names that made a trial key or log
-  stem ambiguous are now rejected. `7760d58` assessed medium, `under_budget`: it is reviewed with
-  T2's commits, the boundary stays `99272c5`.
+  stem ambiguous are now rejected.
+- 2026-09-30: second round, prompted by the Stop hook, over `8434947..c21e092`. gentle-ai
+  (lineage `review-3ae88bffb457be42`): approved and acknowledged, authority burned; one WARNING,
+  one suggestion. Codex (recorded): one P1, one P2. Fixed in `d292619` (61/61 pass, `npm run
+  check` exits 0), RED observed for all but the coverage gap: Claude's error results carry the
+  message in `errors`, not `result` (Codex P1; schema read from the `claude.exe` 2.1.284 bundle,
+  where `error_during_execution` has `errors: string[]` and no `result`), so a quota or auth
+  failure was recorded as a measurement; a timed-out agent that logged cap-like text was a cap
+  stop, rerun on every resume (gentle-ai WARNING); a descendant with ignored stdio outlived a
+  normal close (Codex P2; every close now sweeps, ~1 s per run on Windows for the PowerShell
+  sweep); `agent-error` with exit 0 now has a test, proven by mutation. `d292619` assessed
+  medium, `under_budget`: reviewed with T2's commits; the boundary is now `c21e092`.
+- `claude` on this machine is a native binary (`~/.local/bin/claude.exe`), so T2 spawns it
+  directly, with no `.cmd` shim.
 
 ## Follow-ups
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
@@ -167,4 +179,4 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 ## Next step
 T2: the minimal and current configs, starting with one mapping of where the current config
 writes (engram, `~/.claude/projects`, gentle-ai state). Review base for the next slice review:
-`99272c5` (it covers `7760d58` too).
+`c21e092` (it covers `d292619` too).
