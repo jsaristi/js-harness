@@ -95,6 +95,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
   hidden grader copied in after exit, score, record, cleanup, resume, stop on cap (route:
   delegated writer — runner and its tests are two non-trivial files)
+- [ ] T1r Runner hardening from review round 3 (gentle-ai `review-1cb41e850ccaa89c`, Codex over
+  `8434947..6755054`), done first in T2's slice: a grader that cannot spawn stops the suite
+  unrecorded, like an agent (both); duplicate task ids or config names are rejected
+  (gentle-ai); fixture symlinks stay inside the workspace or are rejected, so an agent never
+  writes through to the shared fixture (Codex); the CLI version is probed under the trial's own
+  env and cached per env (Codex) (route: delegated writer, strict TDD)
 - [ ] T2 Configs: minimal and current as runner inputs, with the current config's isolation
   proven (engram, projects, gentle-ai state untouched) (route: delegated writer after one
   mapping of where each of those writes lands)
@@ -144,6 +150,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   normal close (Codex P2; every close now sweeps, ~1 s per run on Windows for the PowerShell
   sweep); `agent-error` with exit 0 now has a test, proven by mutation. `d292619` assessed
   medium, `under_budget`: reviewed with T2's commits; the boundary is now `c21e092`.
+- 2026-09-30: third round, prompted by the Stop hook, over `8434947..6755054`. gentle-ai
+  (lineage `review-1cb41e850ccaa89c`): approved and acknowledged, authority burned, two WARNINGs.
+  Codex (recorded): three P2. Not fixed in this session: each round found new robustness gaps,
+  and the review contract forbids looping until clean, so the five findings became task T1r,
+  first in T2's slice. Every code commit so far is covered by a Codex record.
 - `claude` on this machine is a native binary (`~/.local/bin/claude.exe`), so T2 spawns it
   directly, with no `.cmd` shim.
 
@@ -177,6 +188,6 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   runs them.
 
 ## Next step
-T2: the minimal and current configs, starting with one mapping of where the current config
-writes (engram, `~/.claude/projects`, gentle-ai state). Review base for the next slice review:
-`c21e092` (it covers `d292619` too).
+T1r (the round-3 review findings), then T2: the minimal and current configs, starting with one
+mapping of where the current config writes (engram, `~/.claude/projects`, gentle-ai state).
+Review base for the next slice review: `6755054` (every commit up to it is reviewed).
