@@ -1,7 +1,8 @@
 # Codex review through `codex exec`
 
 Locator: `odd/tasks/codex-exec-review.md` · Engram mirror: `odd/codex-exec-review/tasks` · Branch:
-`fix/codex-review-uninspected` (on top of the classifier work, not yet pushed)
+`fix/codex-review-uninspected` (with the classifier work before it), merged via
+`jsaristi/js-harness#15` as b1e3462
 
 ## Objective
 `js-harness codex-review` runs Codex's review so that it can actually read the diff on this
@@ -192,5 +193,9 @@ Mode: strict (source: user global config). Runner: `node --test`.
 - `mcp_servers.context7.type` in `~/.codex/config.toml` is ignored by Codex 0.159.1 and warns on
   every run.
 
+- 2026-09-29: pushed on Sebastián's go-ahead; the pre-push hook passed on the real push (`PASS
+  codex-review 11 code commits since origin/main`). PR `jsaristi/js-harness#15` opened (mergeable,
+  clean; no CI checks) and merged as b1e3462 on his go-ahead.
+
 ## Next step
-Push `fix/codex-review-uninspected` and open its pull request, on Sebastián's go-ahead.
+None for this feature: it is complete. Its carried follow-ups (above) are separate later work.

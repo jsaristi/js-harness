@@ -1152,6 +1152,6 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
-`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entries): reviewed by
-gentle-ai and by Codex, ready to push; push and PR await Sebastián's go-ahead. The installed skill on this machine still carries
+`reviewed`, is done, merged via `jsaristi/js-harness#15` (b1e3462), and continued in
+`odd/tasks/codex-exec-review.md`, which replaced the plugin path with `codex exec review`. The installed skill on this machine still carries
 the old text until `js-harness` is reinstalled from `main` and synced.
