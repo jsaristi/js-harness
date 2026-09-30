@@ -116,6 +116,37 @@ test('discoverSensors reports a sensors value of the wrong shape instead of skip
   }
 });
 
+test('discoverSensors reports a harness.json that is not an object instead of falling back', () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'package.json', { scripts: { lint: 'eslint .' } });
+    for (const value of [[{ sensors: { tests: 'pytest' } }], 'pytest', null, 3]) {
+      writeJson(dir, 'harness.json', value);
+      const found = discoverSensors(dir);
+      assert.match(found.error ?? '', /harness\.json/, JSON.stringify(value));
+      assert.deepEqual(found.sensors, [], JSON.stringify(value));
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// An explicit empty map is a deliberate opt-out, so it neither falls back to package.json nor
+// passes silently: the INFO row names the file that declared it.
+test('discoverSensors takes an empty harness.json sensors map as declaring none, and check says where', () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: {} });
+    writeJson(dir, 'package.json', { scripts: { test: 'vitest run' } });
+    assert.deepEqual(discoverSensors(dir), { sensors: [], source: 'harness.json' });
+    const [row] = checkSensors(dir);
+    assert.equal(row.info, true);
+    assert.match(row.detail, /harness\.json declares no sensors/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('discoverSensors reports harness.json that is not valid JSON', () => {
   const dir = makeTmpDir();
   try {
@@ -150,6 +181,18 @@ test("discoverSensors treats npm's placeholder test script and empty scripts as 
       scripts: { test: 'echo "Error: no test specified" && exit 1', lint: '', typecheck: 7 },
     });
     assert.deepEqual(discoverSensors(dir), { sensors: [], source: 'package.json' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('discoverSensors keeps a real script that merely mentions the placeholder text', () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'package.json', {
+      scripts: { test: 'node --test --test-name-pattern="no test specified"', lint: 'echo "Error: no test specified" && exit 1' },
+    });
+    assert.deepEqual(discoverSensors(dir).sensors.map((s) => s.name), ['tests', 'lint']);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -206,16 +249,35 @@ test('checkSensor fails with the spawn error when the command cannot run', () =>
   assert.match(row.detail, /spawn ENOENT/);
 });
 
+test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', () => {
+  const spawn = () => ({ error: new Error('spawnSync ENOBUFS'), status: null, stdout: 'partial-out', stderr: 'partial-err' });
+  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'noisy' }, { spawn });
+  assert.equal(row.pass, false);
+  assert.match(row.output, /partial-out/);
+  assert.match(row.output, /partial-err/);
+});
+
+test('checkSensor names the signal when the command is killed by one', () => {
+  const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: 'out', stderr: '' });
+  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
+  assert.equal(row.pass, false);
+  assert.equal(row.detail, 'slow was killed by SIGTERM');
+  assert.match(row.output, /out/);
+});
+
 // A test that forgets --home must land in a throwaway directory, never in the real home.
 test('checkSensor runs the command with the home directory pointed at a throwaway directory', () => {
   const dir = makeTmpDir();
   try {
     const seen = path.join(dir, 'seen-home.txt').replace(/\\/g, '/');
-    const record = "require('os').homedir() + '|' + process.env.JS_HARNESS_CHECK_INNER + '|' + process.env.NODE_TEST_CONTEXT";
+    const record =
+      "require('os').homedir() + '|' + process.env.JS_HARNESS_CHECK_INNER + '|' + process.env.NODE_TEST_CONTEXT + '|' + process.env.npm_config_cache";
     const command = `node -e "require('fs').writeFileSync('${seen}', ${record})"`;
     const row = checkSensor(dir, { name: 'tests', command });
     assert.equal(row.pass, true, row.output);
-    const [home, inner, context] = fs.readFileSync(seen, 'utf8').split('|');
+    const [home, inner, context, npmCache] = fs.readFileSync(seen, 'utf8').split('|');
+    // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, outside HOME: `npm run` must too.
+    assert.ok(path.resolve(npmCache).startsWith(path.resolve(home)), `npm cache was ${npmCache}`);
     assert.notEqual(path.resolve(home), path.resolve(os.homedir()));
     assert.ok(path.resolve(home).startsWith(path.resolve(os.tmpdir())), `home was ${home}`);
     assert.equal(fs.existsSync(home), false, 'the throwaway home is removed afterwards');
