@@ -91,7 +91,7 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   is running instead of assuming `js-harness` on PATH (doubt 6); each done-when command has a
   timeout, 30 minutes by default, `--timeout <minutes>` to change it (R3-run-no-timeout) — route: the
   same delegated writer
-- [ ] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
+- [x] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
   passes its own contract — route: inline (docs)
 
 ## Progress
@@ -118,6 +118,15 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   `contract goal` emits `node "<running js-harness.mjs>" contract run "<absolute contract path>"`
   (refusing a path with a double quote, backtick or dollar sign), and `contract run` times each
   command out after 30 minutes, or `--timeout <minutes>`.
+- 2026-09-29: `contract run --timeout 0.1` on a real 60-second command returned after ~6 s with
+  `FAIL ... (timed out after 0.1 min)`, exit 1, on Windows: the writer's doubt that the shell kill
+  might hang on pipes did not reproduce. Slice 3 (cc6607c..6af6769, 262 lines) assessed medium,
+  `under_budget`, so it stays pending until the close.
+- 2026-09-29: T4 landed: roadmap Decided rows (Commands, Task contract), F3 checklist and state,
+  `AGENTS.md` pointer. This contract's own `contract run` printed `met` (both commands PASS), and
+  its two hand checks hold: `progress` shows F3 3/3, and a contract with only prose under
+  `## Done when` fails `contract check`, naming that `## Done when` has no command.
 
 ## Next step
-T4.
+Review the last slice (cc6607c..HEAD) with gentle-ai and Codex, then open the PR against `main`
+and merge on Sebastián's go-ahead. F3 then closes in the roadmap.
