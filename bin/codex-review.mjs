@@ -1,18 +1,16 @@
 #!/usr/bin/env node
-// `js-harness codex-review --base <rev>`: run the Codex plugin's review of `<rev>..HEAD` and record
-// that it ran, or record an explicit skip with `--unavailable <reason>`. The record is what
+// `js-harness codex-review --base <rev>`: run `codex exec review` over `<rev>..HEAD` and record that
+// it ran, or record an explicit skip with `--unavailable <reason>`. The record is what
 // `check --push` reads to catch a slice that was never reviewed (T7 in odd/tasks/project-init.md).
-// The companion's exit 0 only means Codex's turn completed, not that it read the diff (its sandbox
-// can deny process launch and it says so in the review), and the review text is the only signal it
-// exposes; so a zero exit is not trusted on its own: the text is read before a record is written.
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+// A completed Codex turn does not mean it read the diff (a sandbox that denies process launch still
+// completes, with a review that says so), and its wording is not evidence either. So the JSONL event
+// stream is read instead: a record is written only when a git command that reads the diff really ran
+// and succeeded (design and probes: odd/tasks/codex-exec-review.md).
 import { spawnSync } from 'node:child_process';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 
-const USAGE = 'Usage: js-harness codex-review --base <rev> [--unavailable <reason>] [--cwd <path>] [--home <path>]';
-const PLUGIN_ID = 'codex@openai-codex';
+// `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
+const USAGE = 'Usage: js-harness codex-review --base <rev> [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
 
 class ArgError extends Error {}
 
@@ -22,9 +20,8 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
-/** Parses `argv`. `--home` follows the same precedence as `check`: flag, `JS_HARNESS_HOME`, then
- * the home directory. `--base` is required even with `--unavailable`: the record needs its range. */
-function parseArgs(argv, env, defaultHome) {
+/** Parses `argv`. `--base` is required even with `--unavailable`: the record needs its range. */
+function parseArgs(argv) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? requireValue(argv, i, flag) : undefined;
@@ -33,12 +30,8 @@ function parseArgs(argv, env, defaultHome) {
   if (base === undefined) throw new ArgError('--base is required');
   const unavailable = get('--unavailable')?.trim();
   if (unavailable === '') throw new ArgError('--unavailable needs a non-empty reason');
-  return {
-    base,
-    unavailable,
-    cwd: get('--cwd') ?? process.cwd(),
-    home: get('--home') ?? env.JS_HARNESS_HOME ?? defaultHome,
-  };
+  get('--home');
+  return { base, unavailable, cwd: get('--cwd') ?? process.cwd() };
 }
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd` (empty when it printed nothing), else
@@ -53,76 +46,135 @@ function git(spawn, cwd, args) {
   return null;
 }
 
-/** The path of the plugin's companion script, from the plugin marketplace's record of what it
- * installed, or `null` when the plugin or the script is not there. */
-function findCompanion(home) {
-  let data;
-  try {
-    data = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8'));
-  } catch {
-    return null;
-  }
-  const installPath = data?.plugins?.[PLUGIN_ID]?.[0]?.installPath;
-  if (typeof installPath !== 'string' || !installPath) return null;
-  const companion = path.join(installPath, 'scripts', 'codex-companion.mjs');
-  return fs.existsSync(companion) ? companion : null;
-}
-
-// Codex's own words for a review that never saw the diff. Deliberately narrow: good reviews also say
-// "could not run `git diff`" or "tests could not run" after reading the Git objects directly.
-const NOT_INSPECTED = [
-  /\bcould(?: not|n't) (?:assess|inspect|review|evaluate) (?:the |this )?(?:patch|diff|changes)\b/i,
-  // Only the patch or correctness as a whole, and not a possessed subject ("the tests' correctness is
-  // unverified" is about the tests; a reviewer that read the diff says it).
-  /(?<!['’]s |s['’] )\b(?:patch|correctness) (?:is|remains) unverified\b/i,
-  // The patch is the possessor here, so this one is about the patch.
-  /\bpatch['’]s correctness (?:is|remains) unverified\b/i,
-  // Negated, the phrase denies the very thing it names ("this is not an incomplete review").
-  /(?<!\b(?:not(?: an?)?|no) )\bincomplete review\b/i,
-  /(?<!\b(?:not(?: an?)?|no) )\bfail-closed verdict\b/i,
+// Read-only sandbox, no approvals: the review reads the repository and nothing else. The two desktop
+// plugins are off because their REPL (`cua_repl`) cannot launch processes, and the model used it
+// instead of the shell in 6 of 41 stored reviews, so those never ran `git diff`.
+const CODEX_CONFIG = [
+  'sandbox_mode=read-only',
+  'approval_policy=never',
+  'plugins."unified-computer-use@openai-bundled".enabled=false',
+  'plugins."computer-use@openai-bundled".enabled=false',
 ];
 
-// Quoting a phrase is not saying it: a review of this classifier's own diff quotes its wording.
-// The single-quote span needs a quote-like position so apostrophes ("Codex's", "tests'") stay text.
-const QUOTED = [/`[^`\n]*`/g, /"[^"\n]*"/g, /“[^”\n]*”/g, /(?<=^|[\s(])'[^'\n]*'(?=$|[\s.,;:!?)])/g];
-
-// What the plugin's renderer prints for a review with no text at all.
-const EMPTY_REVIEW = 'Codex review completed without any stdout output.';
-
-/** The rendered review's summary: without its heading and Target lines, and up to its findings or
- * the `stderr:` / `Reasoning:` sections the renderer appends (those are not the review). */
-function reviewSummary(text) {
-  const body = text.replace(/^\s*# Codex Review[^\n]*\n/, '').replace(/^\s*Target:[^\n]*\n/, '');
-  const cut = body.search(/^[ \t]*(?:(?:Full review comments|Review comment):|(?:Reasoning|stderr):[ \t]*$)/m);
-  return (cut === -1 ? body : body.slice(0, cut)).trim();
+/** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. */
+export function codexArgs(base) {
+  return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CODEX_CONFIG.flatMap((setting) => ['-c', setting])];
 }
 
-/** Whether the review did not inspect the diff: it says so, or says nothing (an empty review fails
- * closed). A review that lists findings (`- [P2] …`) read the diff; otherwise only its summary is
- * classified. */
-export function saysReviewNotInspected(text) {
-  if (typeof text !== 'string') return true;
-  if (/^\s*- \[P\d+\]/m.test(text)) return false;
-  const summary = reviewSummary(text);
-  if (!summary || summary === EMPTY_REVIEW) return true;
-  const said = QUOTED.reduce((rest, quoted) => rest.replace(quoted, ' '), summary);
-  return NOT_INSPECTED.some((pattern) => pattern.test(said));
+const isWindowsApps = (dir) => /\\microsoft\\windowsapps$/i.test(dir.trim().replace(/^"|"$/g, '').replace(/\//g, '\\').replace(/\\+$/, ''));
+
+/** The environment Codex runs in. On Windows the PATH loses every `...\Microsoft\WindowsApps` entry:
+ * Codex finds the Store PowerShell 7 there (an app-exec alias), the unelevated sandbox cannot start it
+ * (`CreateProcessAsUserW failed: 5`), and every shell command of the review then fails; without it
+ * Codex falls back to `powershell.exe` 5.1, which works. Elsewhere the environment is untouched. */
+export function childEnv(env, platform) {
+  if (platform !== 'win32') return env;
+  const out = { ...env };
+  for (const key of Object.keys(out)) {
+    if (/^path$/i.test(key) && typeof out[key] === 'string') out[key] = out[key].split(';').filter((dir) => !isWindowsApps(dir)).join(';');
+  }
+  return out;
+}
+
+/** One argument of a Windows command line run through `cmd.exe /s /c`, quoted for the C runtime that
+ * parses it: double quotes, backslashes before a quote doubled, the quote escaped. Throws on what
+ * cmd.exe itself would act on; none of Codex's arguments contain any of it. */
+export function quoteWindowsArg(arg) {
+  if (/[&|<>^%\r\n]/.test(arg)) throw new Error(`Cannot pass ${JSON.stringify(arg)} through cmd.exe safely.`);
+  if (/^[\w.,:=@+/\\-]+$/.test(arg)) return arg;
+  return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+}
+
+/** `command` and its arguments as the one line `cmd.exe` gets. */
+export function windowsCommandLine(command, args) {
+  return [command, ...args.map(quoteWindowsArg)].join(' ');
+}
+
+/** The JSON objects among the lines of Codex's `--json` output; anything else is ignored. */
+export function parseEvents(text) {
+  const events = [];
+  for (const line of typeof text === 'string' ? text.split('\n') : []) {
+    try {
+      const event = JSON.parse(line);
+      if (event && typeof event === 'object' && !Array.isArray(event)) events.push(event);
+    } catch {
+      // Not an event: a banner, a blank line or a truncated tail.
+    }
+  }
+  return events;
+}
+
+// `git diff` and `git show` print the patch; `git log` only with `-p`/`--patch`. Options between
+// `git` and the subcommand (`--no-pager`, `-C <dir>`, `-c <k=v>`) are allowed. A command often
+// chains several (`git diff --stat x; git diff x`), so each segment is judged alone, and one that
+// asks for names or counts only (`--stat`, `--name-only`, `-s`, …) never counts, even beside `-p`.
+const GIT = String.raw`\bgit(?:\.exe)?(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+`;
+const DIFF_OR_SHOW = new RegExp(String.raw`${GIT}(?:diff|show)\b`);
+const LOG = new RegExp(String.raw`${GIT}log\b`);
+const PATCH = /\s(?:-p|--patch)(?=\s|$)/;
+const NO_PATCH = /\s(?:--(?:stat|shortstat|numstat|dirstat|summary|name-only|name-status|quiet|no-patch|raw)\b|-s(?=\s|$))/;
+
+/** Whether `command` runs git in a way that prints the patch itself. */
+function readsDiff(command) {
+  return command.split(/;|&&|\|\||\||\n/).some((segment) =>
+    !NO_PATCH.test(segment) && (DIFF_OR_SHOW.test(segment) || (LOG.test(segment) && PATCH.test(segment))));
+}
+
+/** What the event stream proves. `inspected` is the evidence rule: the turn completed and did not
+ * fail, it ended with a message, and a completed command that reads the diff exited 0. `errors` are
+ * the failed turn's messages; `warnings` are error items Codex raises without failing (an
+ * unrecognized configuration setting, for one). */
+export function reviewEvidence(events) {
+  let turnCompleted = false;
+  let turnFailed = false;
+  let review = '';
+  const commands = [];
+  const errors = [];
+  const warnings = [];
+  for (const event of events) {
+    const item = event.item;
+    if (event.type === 'turn.completed') turnCompleted = true;
+    else if (event.type === 'turn.failed' || event.type === 'error') {
+      if (event.type === 'turn.failed') turnFailed = true;
+      const message = event.error?.message ?? event.message ?? (typeof event.error === 'string' ? event.error : undefined);
+      if (message) errors.push(String(message));
+    } else if (event.type === 'item.completed' && item) {
+      if (item.type === 'agent_message' && typeof item.text === 'string') review = item.text.trim();
+      else if (item.type === 'command_execution') commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code });
+      else if (item.type === 'error' && item.message) warnings.push(String(item.message));
+    }
+  }
+  const completed = turnCompleted && !turnFailed;
+  const readDiff = commands.some((c) => c.exitCode === 0 && readsDiff(c.command));
+  return { inspected: completed && review !== '' && readDiff, completed, review, commands, errors, warnings };
+}
+
+/** The commands as one line each, `exit N  <command>`, cut to 100 characters. */
+function commandLines(commands) {
+  return commands.map(({ command, exitCode }) => {
+    const oneLine = command.replace(/\s+/g, ' ').trim();
+    return `  exit ${exitCode ?? '?'}  ${oneLine.length > 100 ? `${oneLine.slice(0, 99)}…` : oneLine}`;
+  });
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
 
 const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
+const NO_CODEX =
+  'Could not run `codex`. Install it with `npm i -g @openai/codex` and log in with `codex login`, ' +
+  'or record an explicit skip with `--unavailable <reason>`; nothing was recorded.';
+
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (for git
- * and the companion), `now`, `home`, `log`, `error` and `write` (the review passed through to
- * the user) so tests use fixtures. Exits 2 with usage on a bad flag; 1 when nothing could be
- * recorded or the review did not complete. */
+ * and Codex), `now`, `platform`, `log`, `error` and `write` (the review passed through to the user)
+ * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
+ * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
-  const { spawn = spawnSync, now = () => new Date(), log = console.log, error = console.error } = deps;
+  const { spawn = spawnSync, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
   try {
-    args = parseArgs(argv, env, deps.home ?? os.homedir());
+    args = parseArgs(argv);
   } catch (err) {
     if (!(err instanceof ArgError)) throw err;
     error(`${err.message}\n\n${USAGE}`);
@@ -147,15 +199,6 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
 
   let outcome = 'unavailable';
   if (args.unavailable === undefined) {
-    const companion = findCompanion(args.home);
-    if (!companion) {
-      error(
-        `The Codex plugin's codex-companion.mjs was not found (looked for ${PLUGIN_ID} under ${args.home}).\n` +
-          'Install it with `claude plugin install codex@openai-codex`, or record an explicit skip ' +
-          'with `--unavailable <reason>`.',
-      );
-      return 1;
-    }
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
     const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
@@ -170,32 +213,52 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
     let result;
     try {
-      // stdout is piped so the review text can be read; stderr (the progress) stays live. The
-      // buffer is far above Node's 1 MiB default, which a long review could reach after a costly turn.
-      result = spawn(process.execPath, [companion, 'review', '--wait', '--base', base], {
+      // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the
+      // progress) stays live. The buffer is far above Node's 1 MiB default, which a long review with
+      // command output could exceed. `codex` is a `.cmd` shim on Windows, which needs a shell.
+      const options = {
         cwd: root,
-        stdio: ['inherit', 'pipe', 'inherit'],
+        stdio: ['ignore', 'pipe', 'inherit'],
         encoding: 'utf8',
         maxBuffer: REVIEW_MAX_BUFFER,
-      });
+        env: childEnv(env, platform),
+      };
+      const codexArgv = codexArgs(base);
+      result = platform === 'win32'
+        ? spawn(windowsCommandLine('codex', codexArgv), [], { ...options, shell: true })
+        : spawn('codex', codexArgv, options);
     } catch (err) {
       result = { status: null, error: err };
     }
-    const review = typeof result?.stdout === 'string' ? result.stdout : '';
-    if (review) write(review);
-    if (result?.status !== 0) {
-      const reason = result?.error?.code === 'ENOBUFS'
-        ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
-        : result?.error ? `could not start it: ${result.error.message}` : `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`;
-      error(`The Codex review did not complete (${reason}); no record was written.\n${WAYS_ON}`);
-      return result?.status ?? 1;
-    }
-    if (saysReviewNotInspected(review)) {
-      error(`Codex's turn completed, but its review is empty or says it could not inspect the diff; nothing was recorded.\n${WAYS_ON}`);
+    const events = parseEvents(result?.stdout);
+    const evidence = reviewEvidence(events);
+    // A missing CLI: ENOENT, or on Windows the shell's own "not recognized" (exit 1 or 9009) with
+    // nothing on stdout.
+    if (result?.error?.code === 'ENOENT' || (platform === 'win32' && [1, 9009].includes(result?.status) && events.length === 0)) {
+      error(NO_CODEX);
       return 1;
     }
+    for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
+    if (evidence.review) write(`${evidence.review}\n`);
+    if (result?.status !== 0 || !evidence.completed) {
+      const reason = result?.error?.code === 'ENOBUFS'
+        ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
+        : result?.error ? `could not start it: ${result.error.message}`
+          : result?.status !== 0 ? `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`
+            : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
+      const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
+      error(`The Codex review did not complete (${reason}); no record was written.${said}\n${WAYS_ON}`);
+      return typeof result?.status === 'number' && result.status !== 0 ? result.status : 1;
+    }
+    const ran = evidence.commands.length ? ['Codex ran:', ...commandLines(evidence.commands)].join('\n') : 'Codex ran no commands.';
+    if (!evidence.inspected) {
+      error(`Codex's turn completed, but it ran no successful git command that reads the diff (git diff, git show or git log -p), or it ended without a review; nothing was recorded.\n${ran}\n${WAYS_ON}`);
+      return 1;
+    }
+    log(ran);
     outcome = 'reviewed';
   }
 

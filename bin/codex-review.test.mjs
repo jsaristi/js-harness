@@ -4,10 +4,10 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { codexReviewMain, saysReviewNotInspected } from './codex-review.mjs';
+import { childEnv, codexArgs, codexReviewMain, parseEvents, quoteWindowsArg, reviewEvidence, windowsCommandLine } from './codex-review.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
-// Real git and a fake companion script: no test ever calls a real Codex.
+// Real git and a fake `codex` (an injected spawn): no test ever calls a real Codex.
 let configDir;
 const made = [];
 before(() => {
@@ -51,220 +51,359 @@ function makeRepo() {
   return { root, base, head: git(root, 'rev-parse', 'HEAD') };
 }
 
-// A rendered review that found nothing: the default output of the fake companion.
-const CLEAN_REVIEW = '# Codex Review\n\nTarget: x\n\nNo actionable regression was found in the diff.\n';
+// The JSONL events `codex exec --json` prints, as seen live (Codex 0.159.1).
+const thread = { type: 'thread.started', thread_id: 't1' };
+const turn = { type: 'turn.started' };
+const done = { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } };
+const cmd = (command, exitCode = 0, output = '') => ({
+  type: 'item.completed',
+  item: { id: 'c', type: 'command_execution', command, aggregated_output: output, exit_code: exitCode, status: exitCode === 0 ? 'completed' : 'failed' },
+});
+const msg = (text) => ({ type: 'item.completed', item: { id: 'm', type: 'agent_message', text } });
+const itemError = (message) => ({ type: 'item.completed', item: { id: 'e', type: 'error', message } });
+const jsonl = (...events) => `${events.map((event) => JSON.stringify(event)).join('\n')}\n`;
 
-/** A home whose plugin record points at a fake companion that logs its argv and cwd next to
- * itself, prints `stdout` (the rendered review) and exits with `exitCode`. Returns the home and
- * where the call is logged. */
-function makeHome(exitCode = 0, stdout = CLEAN_REVIEW) {
-  const home = tmp('js-harness-codex-review-home-');
-  const installPath = path.join(home, 'plugin-cache', 'codex');
-  fs.mkdirSync(path.join(installPath, 'scripts'), { recursive: true });
-  const callLog = path.join(installPath, 'call.json');
-  fs.writeFileSync(
-    path.join(installPath, 'scripts', 'codex-companion.mjs'),
-    `import fs from 'node:fs';\n` +
-      `fs.writeFileSync(${JSON.stringify(callLog)}, JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }));\n` +
-      `process.stdout.write(${JSON.stringify(stdout)});\n` +
-      `process.exitCode = ${exitCode};\n`,
-    'utf8',
-  );
-  fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
-  fs.writeFileSync(
-    path.join(home, '.claude', 'plugins', 'installed_plugins.json'),
-    JSON.stringify({ version: 2, plugins: { 'codex@openai-codex': [{ scope: 'user', installPath, version: '1.0.6' }] } }),
-    'utf8',
-  );
-  return { home, callLog };
+const DIFF_CMD = '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff 438364a38653; git status"';
+const FINDINGS = '- [P2] Drops a record — bin/x.mjs:3\n  The last line is lost.';
+/** A review that read the diff and found something. */
+const REVIEWED = jsonl(thread, turn, cmd(DIFF_CMD), msg(FINDINGS), done);
+
+/** A spawn that runs real git and answers the `codex` call with `answer`, logging it. */
+function fakeCodex(stdout, answer = {}) {
+  const calls = [];
+  const spawn = (command, args, opts) => {
+    if (command === 'git') return spawnSync(command, args, opts);
+    calls.push({ command, args, opts });
+    return { status: 0, stdout, ...answer };
+  };
+  return { spawn, calls };
 }
 
-/** Runs the command with output captured; `now` is fixed so the record is comparable. `shown` is
- * what the review passed through to the user, `out` what the command itself logged. */
-async function run(argv, extra = {}) {
+/** Runs the command with output captured; `now` is fixed so the record is comparable, and the
+ * platform is fixed to linux unless a test says otherwise. `shown` is what the review passed
+ * through to the user, `out` what the command itself logged. */
+async function run(argv, extra = {}, env = {}) {
   const out = [];
   const err = [];
   const shown = [];
-  const code = await codexReviewMain(argv, {}, {
+  const code = await codexReviewMain(argv, env, {
     now: () => new Date('2026-09-29T12:00:00.000Z'),
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
+    platform: 'linux',
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
 }
 
-// Real review texts (2026-09-29). Codex's turn completes either way; only its words say whether it
-// saw the diff.
-const NOT_INSPECTED = [
-  'I could not assess the patch: the environment denied process creation, so `git diff 36f2abc` and `js-harness progress` could not run. This verdict means the patch is unverified, not that I found a defect.',
-  'I could not assess the patch: the environment denied process creation, so `git diff 3064abc` did not run. This verdict reflects an incomplete review, not an identified code defect.',
-  'I could not assess the patch: the requested git diff was blocked by a process-launch access-denied error. This verdict means correctness is unverified, not that I found a defect. Please provide the diff or restore command access for a review.',
-  'This is a fail-closed verdict, not a finding about the code. The terminal was denied access before `git diff` could run, so I could not inspect the changes or verify the patch; nothing else was checked.',
-];
-const INSPECTED = [
-  'The full test suite could not run in this read-only environment because process spawning and temporary-file creation were denied.',
-  'Focused tests could not be verified because the read-only sandbox denied process spawning.',
-  'No actionable defects were found in the four changed files. Command execution was denied, so I compared the base and head Git objects directly; tests were not rerun.',
-  'I found no actionable regression in the changed code or tests. Process creation was denied, so I could not run `git diff` or the tests; I compared the base and HEAD Git objects and verified the reviewed worktree files match HEAD.',
-  'I could not run `npm run check` because the read-only environment denied creation of its temporary test directory.',
-  'No actionable regression was found in the diff.',
-];
+const reviewedRecord = (base, head) => ({
+  schema: 'js-harness.codex-review/v1',
+  base,
+  head,
+  reviewedAt: '2026-09-29T12:00:00.000Z',
+  outcome: 'reviewed',
+});
 
-test('a completed review appends a reviewed record with full commit ids and exits 0', async () => {
+// --- the run ---
+
+test('a review that read the diff appends a reviewed record with full commit ids and exits 0', async () => {
   const { root, base, head } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 0);
   assert.match(base, /^[0-9a-f]{40}$/);
-  assert.deepEqual(readCodexReviews(root), [
-    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
-  ]);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
   assert.match(result.out, /recorded/i);
   assert.ok(result.out.includes('codex-reviews.jsonl'));
-  const call = JSON.parse(fs.readFileSync(callLog, 'utf8'));
-  // The resolved id, not the raw `HEAD~1`: the record and the review cover the same range.
-  assert.deepEqual(call.args, ['review', '--wait', '--base', base]);
-  assert.equal(fs.realpathSync(call.cwd), fs.realpathSync(root));
 });
 
-test('the companion runs from the repository root even when --cwd is a subdirectory', async () => {
+test('the review text is shown, and the commands Codex ran are listed with their exit codes', async () => {
+  const { root } = makeRepo();
+  const long = `git show ${'a'.repeat(300)}`;
+  const { spawn } = fakeCodex(jsonl(thread, turn, cmd(long), cmd('git status', 128), msg(FINDINGS), done));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 0);
+  assert.ok(result.shown.includes(FINDINGS));
+  assert.match(result.out, /reviewing|ran 2 commands/i);
+  assert.match(result.out, /exit 0.*git show a+/);
+  assert.match(result.out, /exit 128.*git status/);
+  assert.ok(!result.out.includes('a'.repeat(200)), 'a long command is truncated');
+});
+
+test('Codex is spawned as `codex exec review` with the resolved base, a read-only sandbox and the desktop plugins off', async () => {
+  const { root, base } = makeRepo();
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'codex');
+  // The resolved id, not the raw `HEAD~1`: the record and the review cover the same range.
+  assert.deepEqual(calls[0].args, [
+    'exec', 'review', '--json', '--ephemeral', '--base', base,
+    '-c', 'sandbox_mode=read-only',
+    '-c', 'approval_policy=never',
+    '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
+    '-c', 'plugins."computer-use@openai-bundled".enabled=false',
+  ]);
+  assert.deepEqual(calls[0].args, codexArgs(base));
+  assert.equal(fs.realpathSync(calls[0].opts.cwd), fs.realpathSync(root));
+  assert.equal(calls[0].opts.stdio[0], 'ignore', 'Codex would wait on an open stdin');
+  assert.equal(calls[0].opts.stdio[1], 'pipe');
+  assert.equal(calls[0].opts.stdio[2], 'inherit');
+  assert.equal(calls[0].opts.encoding, 'utf8');
+  assert.ok(!calls[0].opts.shell, 'no shell off Windows');
+});
+
+test('Codex runs from the repository root even when --cwd is a subdirectory', async () => {
   const { root } = makeRepo();
   fs.mkdirSync(path.join(root, 'sub'));
-  const { home, callLog } = makeHome(0);
-  const result = await run(['--base', 'HEAD~1', '--cwd', path.join(root, 'sub'), '--home', home]);
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'HEAD~1', '--cwd', path.join(root, 'sub')], { spawn });
   assert.equal(result.code, 0);
-  assert.equal(fs.realpathSync(JSON.parse(fs.readFileSync(callLog, 'utf8')).cwd), fs.realpathSync(root));
+  assert.equal(fs.realpathSync(calls[0].opts.cwd), fs.realpathSync(root));
 });
 
-test('a failed companion writes nothing, returns its code and names the two ways on', async () => {
+test('on Windows the .cmd shim runs through a shell as one quoted command line', async () => {
+  const { root, base } = makeRepo();
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn, platform: 'win32' });
+  assert.equal(result.code, 0);
+  assert.equal(calls[0].opts.shell, true);
+  assert.deepEqual(calls[0].args, []);
+  assert.equal(calls[0].command, windowsCommandLine('codex', codexArgs(base)));
+  assert.ok(calls[0].command.startsWith(`codex exec review --json --ephemeral --base ${base} `), calls[0].command);
+  assert.ok(calls[0].command.includes('"plugins.\\"unified-computer-use@openai-bundled\\".enabled=false"'), calls[0].command);
+});
+
+test('on Windows the child PATH drops the WindowsApps entries and keeps the rest of the environment', async () => {
   const { root } = makeRepo();
-  const { home } = makeHome(1);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const env = { Path: 'C:\\Windows;C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\;D:\\bin', SystemRoot: 'C:\\Windows' };
+  await run(['--base', 'HEAD~1', '--cwd', root], { spawn, platform: 'win32' }, env);
+  assert.deepEqual(calls[0].opts.env, { Path: 'C:\\Windows;D:\\bin', SystemRoot: 'C:\\Windows' });
+  assert.equal(env.Path.includes('WindowsApps'), true, 'the caller\'s environment is not mutated');
+});
+
+test('off Windows the environment is passed through untouched', async () => {
+  const { root } = makeRepo();
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const env = { PATH: '/usr/bin:/x/Microsoft/WindowsApps' };
+  await run(['--base', 'HEAD~1', '--cwd', root], { spawn }, env);
+  assert.deepEqual(calls[0].opts.env, env);
+});
+
+test('a completed turn whose commands all failed writes nothing, lists what ran and names the ways on', async () => {
+  const { root } = makeRepo();
+  const { spawn } = fakeCodex(jsonl(thread, turn, cmd('git diff abc', -1), cmd('git show abc', 1), msg('I could not read the patch.'), done));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 1);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.match(result.err, /no record was written/i);
+  assert.match(result.err, /no successful git command that reads the diff/i);
+  assert.match(result.err, /exit -1.*git diff abc/);
   assert.match(result.err, /--unavailable <reason>/);
+  assert.ok(result.shown.includes('I could not read the patch.'), 'the review text is still shown');
 });
 
-test('uncommitted changes to tracked files refuse the review: nothing written, companion not spawned', async () => {
+test('a completed turn whose successful commands never read the diff writes nothing', async () => {
   const { root } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(jsonl(thread, turn, cmd('git status'), cmd('git log --oneline'), cmd('Get-Content f.txt'), msg('Looks fine.'), done));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 1);
-  assert.match(result.err, /base\.\.HEAD/);
-  assert.match(result.err, /commit or stash/i);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.equal(fs.existsSync(callLog), false);
+  assert.match(result.err, /no successful git command that reads the diff/i);
 });
 
-test('staged but uncommitted changes refuse the review too', async () => {
+test('a completed turn with no command at all writes nothing', async () => {
   const { root } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  fs.writeFileSync(path.join(root, 'f.txt'), 'staged only', 'utf8');
-  git(root, 'add', 'f.txt');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(jsonl(thread, turn, msg('No actionable regression was found.'), done));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 1);
-  assert.equal(fs.existsSync(callLog), false);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
 });
 
-test('an untracked file does not block the review', async () => {
+test('a failed turn shows its error, writes nothing and exits 1 even when Codex exited 0', async () => {
   const { root } = makeRepo();
-  const { home } = makeHome(0);
-  fs.writeFileSync(path.join(root, 'scratch.txt'), 'not tracked', 'utf8');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 0);
+  const failed = jsonl(thread, turn, cmd(DIFF_CMD), { type: 'turn.failed', error: { message: 'The model is not supported with a ChatGPT account.' } });
+  for (const status of [0, 1]) {
+    const { spawn } = fakeCodex(failed, { status });
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+    assert.equal(result.code, 1);
+    assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+    assert.match(result.err, /did not complete/i);
+    assert.match(result.err, /model is not supported/);
+    assert.match(result.err, /--unavailable <reason>/);
+  }
 });
 
-test('--unavailable is recorded even with uncommitted changes, since it reviews nothing', async () => {
+test('a non-zero Codex exit is returned as is, even after a turn that read the diff', async () => {
   const { root } = makeRepo();
-  const home = tmp('js-harness-codex-review-emptyhome-');
-  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
-  const result = await run(['--base', 'HEAD~1', '--unavailable', 'model rejected', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 0);
-  assert.equal(readCodexReviews(root).length, 1);
-});
-
-test('any other non-zero companion code is returned as is', async () => {
-  const { root } = makeRepo();
-  const { home } = makeHome(7);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(REVIEWED, { status: 7 });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 7);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.match(result.err, /did not complete.*exited 7/is);
 });
 
-test('a companion killed by a signal or a spawn error writes nothing and returns 1', async () => {
+test('no turn.completed means the review did not complete', async () => {
   const { root } = makeRepo();
-  const { home } = makeHome(0);
-  for (const fake of [{ status: null, signal: 'SIGTERM' }, { status: null, error: new Error('boom') }]) {
-    const spawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync(cmd, args, opts) : fake);
-    const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
+  const { spawn } = fakeCodex(jsonl(thread, turn, cmd(DIFF_CMD), msg(FINDINGS)));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.match(result.err, /did not complete/i);
+});
+
+test('a signal or a spawn error writes nothing and returns 1', async () => {
+  const { root } = makeRepo();
+  for (const answer of [{ status: null, signal: 'SIGTERM' }, { status: null, error: new Error('boom') }]) {
+    const { spawn } = fakeCodex('', answer);
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
     assert.equal(result.code, 1);
+    assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+    assert.match(result.err, /did not complete/i);
+  }
+});
+
+test('a missing codex CLI names the install, the login and the explicit skip, and writes nothing', async () => {
+  const { root } = makeRepo();
+  const notFound = Object.assign(new Error('spawnSync codex ENOENT'), { code: 'ENOENT' });
+  // On Windows the shell answers for a missing command: exit 1 and nothing on stdout.
+  for (const [platform, answer] of [['linux', { status: null, error: notFound }], ['win32', { status: 1 }], ['win32', { status: 9009 }]]) {
+    const { spawn } = fakeCodex('', answer);
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn, platform });
+    assert.equal(result.code, 1, `${platform} ${answer.status}`);
+    assert.match(result.err, /npm i -g @openai\/codex/);
+    assert.match(result.err, /codex login/);
+    assert.match(result.err, /--unavailable <reason>/);
     assert.equal(fs.existsSync(codexReviewsPath(root)), false);
   }
 });
 
-test('a missing plugin names the fix and the explicit skip, writes nothing, exits 1', async () => {
+test('an exit 1 that came with events is a Codex failure, not a missing CLI', async () => {
   const { root } = makeRepo();
-  const home = tmp('js-harness-codex-review-emptyhome-');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(jsonl(thread, turn), { status: 1 });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn, platform: 'win32' });
   assert.equal(result.code, 1);
-  assert.match(result.err, /claude plugin install codex@openai-codex/);
-  assert.match(result.err, /--unavailable <reason>/);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.doesNotMatch(result.err, /npm i -g/);
+  assert.match(result.err, /did not complete/i);
 });
 
-test('a plugin record whose companion file is gone is treated as a missing plugin', async () => {
-  const { root } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  fs.rmSync(path.join(path.dirname(callLog), 'scripts'), { recursive: true });
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 1);
-  assert.match(result.err, /codex-companion\.mjs/);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-});
-
-test('--unavailable records the skip with its reason and spawns no companion', async () => {
+test('Codex\'s configuration warnings are passed on as warnings and do not fail the review', async () => {
   const { root, base, head } = makeRepo();
-  const home = tmp('js-harness-codex-review-emptyhome-');
-  const spawned = [];
-  const spawn = (cmd, args, opts) => {
-    spawned.push(cmd);
-    return spawnSync(cmd, args, opts);
-  };
-  const result = await run(['--base', 'HEAD~1', '--unavailable', '  model rejected  ', '--cwd', root, '--home', home], { spawn });
+  const { spawn } = fakeCodex(jsonl(thread, turn, itemError('Codex is ignoring 1 unrecognized configuration setting'), cmd(DIFF_CMD), msg(FINDINGS), done));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
   assert.equal(result.code, 0);
-  assert.ok(spawned.length > 0 && spawned.every((cmd) => cmd === 'git'));
-  assert.deepEqual(readCodexReviews(root), [
-    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'unavailable', reason: 'model rejected' },
-  ]);
+  assert.match(result.err, /ignoring 1 unrecognized configuration setting/);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('junk lines in the JSONL are ignored', async () => {
+  const { root } = makeRepo();
+  const { spawn } = fakeCodex(`Reading prompt from stdin...\n\n${REVIEWED}{"truncated":\n`);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 0);
+});
+
+test('the review output may exceed 1 MiB, and an overflow is named as such, not as a failed start', async () => {
+  const { root } = makeRepo();
+  const overflow = Object.assign(new Error('spawnSync codex ENOBUFS'), { code: 'ENOBUFS' });
+  const { spawn, calls } = fakeCodex('partial', { status: null, signal: 'SIGTERM', error: overflow });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.ok(calls[0].opts.maxBuffer > 1024 * 1024, `maxBuffer ${calls[0].opts.maxBuffer}`);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /output exceeded/);
+  assert.doesNotMatch(result.err, /could not start/);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+});
+
+// --- what the run refuses or skips ---
+
+test('uncommitted changes to tracked files refuse the review: nothing written, Codex not spawned', async () => {
+  const { root } = makeRepo();
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /base\.\.HEAD/);
+  assert.match(result.err, /commit or stash/i);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.equal(calls.length, 0);
+});
+
+test('staged but uncommitted changes refuse the review too', async () => {
+  const { root } = makeRepo();
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'staged only', 'utf8');
+  git(root, 'add', 'f.txt');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 1);
+  assert.equal(calls.length, 0);
+});
+
+test('an untracked file does not block the review', async () => {
+  const { root } = makeRepo();
+  const { spawn } = fakeCodex(REVIEWED);
+  fs.writeFileSync(path.join(root, 'scratch.txt'), 'not tracked', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 0);
+});
+
+test('a failed git status refuses the review instead of reading as a clean tree', async () => {
+  const { root } = makeRepo();
+  const { calls } = fakeCodex(REVIEWED);
+  const spawn = (command, args, opts) =>
+    command === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : spawnSync(command, args, opts);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { spawn });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /git status/);
+  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  assert.equal(calls.length, 0);
+});
+
+test('--unavailable is recorded even with uncommitted changes, since it reviews nothing', async () => {
+  const { root } = makeRepo();
+  fs.writeFileSync(path.join(root, 'f.txt'), 'edited but not committed', 'utf8');
+  const result = await run(['--base', 'HEAD~1', '--unavailable', 'model rejected', '--cwd', root]);
+  assert.equal(result.code, 0);
+  assert.equal(readCodexReviews(root).length, 1);
+});
+
+test('--unavailable records the skip with its reason and spawns no Codex', async () => {
+  const { root, base, head } = makeRepo();
+  const spawned = [];
+  const spawn = (command, args, opts) => {
+    spawned.push(command);
+    return spawnSync(command, args, opts);
+  };
+  const result = await run(['--base', 'HEAD~1', '--unavailable', '  model rejected  ', '--cwd', root], { spawn });
+  assert.equal(result.code, 0);
+  assert.ok(spawned.length > 0 && spawned.every((command) => command === 'git'));
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), outcome: 'unavailable', reason: 'model rejected' }]);
   assert.match(result.out, /unavailable/i);
 });
 
 test('records accumulate, one line each', async () => {
   const { root } = makeRepo();
-  const { home } = makeHome(0);
-  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root, '--home', home])).code, 0);
-  assert.equal((await run(['--base', 'HEAD~1', '--unavailable', 'later', '--cwd', root, '--home', home])).code, 0);
+  const { spawn } = fakeCodex(REVIEWED);
+  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root], { spawn })).code, 0);
+  assert.equal((await run(['--base', 'HEAD~1', '--unavailable', 'later', '--cwd', root], { spawn })).code, 0);
   assert.deepEqual(readCodexReviews(root).map((r) => r.outcome), ['reviewed', 'unavailable']);
 });
 
 test('an unknown base is an error, and nothing is written or spawned', async () => {
   const { root } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  const result = await run(['--base', 'no-such-rev', '--cwd', root, '--home', home]);
+  const { spawn, calls } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'no-such-rev', '--cwd', root], { spawn });
   assert.equal(result.code, 1);
   assert.match(result.err, /no-such-rev/);
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.equal(fs.existsSync(callLog), false);
+  assert.equal(calls.length, 0);
 });
 
 test('outside a git repository it is a clear error, exit 1', async () => {
   const dir = tmp('js-harness-codex-review-nongit-');
-  const { home } = makeHome(0);
-  const result = await run(['--base', 'main', '--cwd', dir, '--home', home]);
+  const result = await run(['--base', 'main', '--cwd', dir]);
   assert.equal(result.code, 1);
   assert.match(result.err, /not a git repository/i);
 });
@@ -296,218 +435,144 @@ test('--base is required, and an empty --unavailable reason is a usage error', a
   assert.equal(fs.existsSync(codexReviewsPath(root)), false);
 });
 
-test('--home falls back to JS_HARNESS_HOME', async () => {
+test('--home is still accepted, though nothing reads it any more', async () => {
   const { root } = makeRepo();
-  const { home } = makeHome(0);
-  const code = await codexReviewMain(['--base', 'HEAD~1', '--cwd', root], { JS_HARNESS_HOME: home }, {
-    now: () => new Date('2026-09-29T12:00:00.000Z'),
-    log: () => {},
-    error: () => {},
-  });
-  assert.equal(code, 0);
-  assert.equal(readCodexReviews(root).length, 1);
-});
-
-test('a failed git status refuses the review instead of reading as a clean tree', async () => {
-  const { root } = makeRepo();
-  const { home, callLog } = makeHome(0);
-  const spawn = (cmd, args, opts) =>
-    cmd === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : spawnSync(cmd, args, opts);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
-  assert.equal(result.code, 1);
-  assert.match(result.err, /git status/);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.equal(fs.existsSync(callLog), false);
-});
-
-test('the classifier catches every review that says it could not inspect the diff, and none that did', () => {
-  for (const text of NOT_INSPECTED) assert.equal(saysReviewNotInspected(text), true, text);
-  for (const text of INSPECTED) assert.equal(saysReviewNotInspected(text), false, text);
-  // Nothing said, nothing inspected: an empty or missing review fails closed.
-  assert.equal(saysReviewNotInspected(''), true);
-  assert.equal(saysReviewNotInspected(undefined), true);
-});
-
-test('each classifier pattern catches its wording on its own', () => {
-  // One sentence per pattern, none containing "could not assess": breaking any one regex fails here.
-  for (const text of [
-    'Git access was denied, so the correctness is unverified.',
-    'This is an incomplete review; the terminal was unavailable.',
-    'Treat this as a fail-closed verdict.',
-  ]) {
-    assert.equal(saysReviewNotInspected(text), true, text);
-  }
-});
-
-test('a review that lists findings inspected the diff, even when a finding quotes the refusal wording', () => {
-  const text =
-    '# Codex Review\n\nTarget: branch diff against abc123\n\nOne issue.\n\nReview comment:\n\n' +
-    '- [P2] Classifier self-reference — D:\\x\\bin\\codex-review.mjs:70-85\n' +
-    '  A "fail-closed verdict" or "incomplete review" quoted here is refused. I could not assess the patch under test.\n';
-  assert.equal(saysReviewNotInspected(text), false);
-  // No "Review comment:" line to cut at: the finding itself is what marks the review as inspected.
-  assert.equal(saysReviewNotInspected('One issue.\n\n- [P1] Drops a record\n  I could not assess the patch fully.\n'), false);
-});
-
-test('negated wording is not a claim that the diff went uninspected', () => {
-  for (const text of [
-    'This is not an incomplete review.',
-    'Not a fail-closed verdict: the diff was read.',
-    'No incomplete review here.',
-  ]) {
-    assert.equal(saysReviewNotInspected(text), false, text);
-  }
-});
-
-test('"correctness is unverified" about a possessed subject is not a claim about the patch', () => {
-  for (const text of [
-    "The tests' correctness is unverified, but the diff was read.",
-    "The parser's correctness is unverified.",
-    'The parser’s correctness is unverified.',
-  ]) {
-    assert.equal(saysReviewNotInspected(text), false, text);
-  }
-  assert.equal(saysReviewNotInspected('This verdict means the patch is unverified.'), true);
-  assert.equal(saysReviewNotInspected('This verdict means correctness is unverified.'), true);
-});
-
-test('a quoted phrase in a summary is not said by it', () => {
-  for (const text of [
-    'The classifier now matches `fail-closed verdict`.',
-    'It adds the phrase "incomplete review" to the list.',
-    'It adds the phrase “incomplete review” to the list.',
-    "It adds 'could not assess the patch' to the patterns.",
-  ]) {
-    assert.equal(saysReviewNotInspected(text), false, text);
-  }
-  // An apostrophe is not a quote: the wording after it is still the review's own.
-  assert.equal(saysReviewNotInspected("Codex's run ended early. I could not assess the patch, and the tests' run is unverified."), true);
-});
-
-test('the heading and Target lines are not classified, the summary still is', () => {
-  const rendered = (summary) => `# Codex Review\n\nTarget: branch diff against abc123 (incomplete review of fail-closed verdict)\n\n${summary}\n`;
-  assert.equal(saysReviewNotInspected(rendered('No actionable defects were found.')), false);
-  assert.equal(saysReviewNotInspected(rendered(NOT_INSPECTED[0])), true);
-  assert.equal(saysReviewNotInspected(rendered(NOT_INSPECTED[3])), true);
-});
-
-test('a completed review whose findings quote the refusal wording is recorded', async () => {
-  const { root, base, head } = makeRepo();
-  const review =
-    '# Codex Review\n\nTarget: branch diff against abc123\n\nOne issue.\n\nFull review comments:\n\n' +
-    '- [P2] Self-reference — D:\\x\\bin\\codex-review.mjs:70-85\n' +
-    '  The text "fail-closed verdict" and "incomplete review" are matched anywhere in the review.\n';
-  const { home } = makeHome(0, review);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
+  const { spawn } = fakeCodex(REVIEWED);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', tmp('js-harness-codex-review-home-')], { spawn });
   assert.equal(result.code, 0);
-  assert.equal(result.shown, review);
-  assert.deepEqual(readCodexReviews(root), [
-    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
-  ]);
 });
 
-// The plugin's renderer appends stderr and reasoning after the review text.
-const CLEAN_SUMMARY = '# Codex Review\n\nTarget: branch diff against abc123\n\nNo actionable regression was found.\n';
-const REASONING_RENDER =
-  `${CLEAN_SUMMARY}\nReasoning:\n- I could not inspect the changes using git; I then compared the Git objects directly.\n`;
-const STDERR_RENDER = `${CLEAN_SUMMARY}\nstderr:\n\n\`\`\`text\nI could not assess the patch with git.\n\`\`\`\n`;
-const EMPTY_RENDER = '# Codex Review\n\nTarget: x\n\nCodex review completed without any stdout output.\n';
+// --- the evidence rule ---
 
-test('the appended Reasoning and stderr sections are not the review summary', () => {
-  assert.equal(saysReviewNotInspected(REASONING_RENDER), false);
-  assert.equal(saysReviewNotInspected(STDERR_RENDER), false);
-  // A real refusal in the summary is still caught with those sections present.
-  assert.equal(saysReviewNotInspected(`# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n\nReasoning:\n- read nothing\n`), true);
+test('reviewEvidence: inspected needs turn.completed, a final message and a successful diff-reading command', () => {
+  const evidence = reviewEvidence(parseEvents(REVIEWED));
+  assert.equal(evidence.inspected, true);
+  assert.equal(evidence.completed, true);
+  assert.equal(evidence.review, FINDINGS);
+  assert.deepEqual(evidence.commands, [{ command: DIFF_CMD, exitCode: 0 }]);
+  assert.deepEqual(evidence.errors, []);
 });
 
-test('a review with no text is not a review that inspected the diff', () => {
-  assert.equal(saysReviewNotInspected(EMPTY_RENDER), true);
-  assert.equal(saysReviewNotInspected(`${EMPTY_RENDER}\nstderr:\n\n\`\`\`text\nboom\n\`\`\`\n`), true);
-  assert.equal(saysReviewNotInspected('# Codex Review\n\nTarget: x\n\n'), true);
-  assert.equal(saysReviewNotInspected('  \n'), true);
-});
-
-test('the patch\'s own correctness being unverified is a claim about the patch', () => {
-  assert.equal(saysReviewNotInspected("The patch's correctness is unverified."), true);
-  assert.equal(saysReviewNotInspected('The patch’s correctness remains unverified.'), true);
-});
-
-test('a completed review whose Reasoning says it could not inspect with git is recorded', async () => {
-  const { root, base, head } = makeRepo();
-  const { home } = makeHome(0, REASONING_RENDER);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 0);
-  assert.deepEqual(readCodexReviews(root), [
-    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
-  ]);
-});
-
-test('an empty review, rendered or not, exits 1 and records nothing', async () => {
-  for (const stdout of [EMPTY_RENDER, '']) {
-    const { root } = makeRepo();
-    const { home } = makeHome(0, stdout);
-    const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-    assert.equal(result.code, 1, JSON.stringify(stdout));
-    assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-    assert.match(result.err, /--unavailable <reason>/);
-  }
-});
-
-test('a completed turn whose review could not assess the patch writes nothing, returns 1 and names --unavailable', async () => {
-  const { root } = makeRepo();
-  const { home } = makeHome(0, `# Codex Review\n\nTarget: x\n\n${NOT_INSPECTED[0]}\n`);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 1);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.match(result.err, /nothing was recorded/i);
-  assert.match(result.err, /--unavailable <reason>/);
-  assert.ok(result.shown.includes(NOT_INSPECTED[0]), 'the review text is still shown to the user');
-});
-
-test('the fail-closed wording is refused the same way', async () => {
-  const { root } = makeRepo();
-  const { home } = makeHome(0, `# Codex Review\n\n${NOT_INSPECTED[3]}\n`);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 1);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
-  assert.match(result.err, /--unavailable <reason>/);
-});
-
-test('a completed review with findings is recorded and its text is passed through unchanged', async () => {
-  const { root, base, head } = makeRepo();
-  const review = '# Codex Review\n\nTarget: x\n\n[high] bin/x.mjs:3 drops the last record.\nI compared the Git objects directly.\n';
-  const { home } = makeHome(0, review);
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 0);
-  assert.equal(result.shown, review);
-  assert.deepEqual(readCodexReviews(root), [
-    { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'reviewed' },
-  ]);
-});
-
-test('the review text is shown even when the companion fails', async () => {
-  const { root } = makeRepo();
-  const { home } = makeHome(1, 'partial output\n');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home]);
-  assert.equal(result.code, 1);
-  assert.equal(result.shown, 'partial output\n');
-});
-
-test('the review output may exceed 1 MiB, and an overflow is named as such, not as a failed start', async () => {
-  const { root } = makeRepo();
-  const { home } = makeHome(0);
-  let companionOpts;
-  const overflow = Object.assign(new Error('spawnSync node ENOBUFS'), { code: 'ENOBUFS' });
-  const spawn = (cmd, args, opts) => {
-    if (cmd === 'git') return spawnSync(cmd, args, opts);
-    companionOpts = opts;
-    return { status: null, signal: 'SIGTERM', error: overflow, stdout: 'partial' };
+test('reviewEvidence: each missing piece of evidence alone means not inspected', () => {
+  const cases = {
+    'no turn.completed': [thread, turn, cmd(DIFF_CMD), msg('ok')],
+    'a failed turn': [thread, turn, cmd(DIFF_CMD), msg('ok'), done, { type: 'turn.failed', error: { message: 'x' } }],
+    'no message': [thread, turn, cmd(DIFF_CMD), done],
+    'an empty message': [thread, turn, cmd(DIFF_CMD), msg('  \n'), done],
+    'a failed diff': [thread, turn, cmd(DIFF_CMD, 128), msg('ok'), done],
+    'no diff command': [thread, turn, cmd('git status'), msg('ok'), done],
+    'a diff that only started': [thread, turn, { type: 'item.started', item: { type: 'command_execution', command: DIFF_CMD, exit_code: null, status: 'in_progress' } }, msg('ok'), done],
   };
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], { spawn });
-  assert.ok(companionOpts.maxBuffer > 1024 * 1024, `maxBuffer ${companionOpts.maxBuffer}`);
-  assert.equal(result.code, 1);
-  assert.equal(result.shown, 'partial');
-  assert.match(result.err, /output exceeded/);
-  assert.doesNotMatch(result.err, /could not start/);
-  assert.equal(fs.existsSync(codexReviewsPath(root)), false);
+  for (const [name, events] of Object.entries(cases)) assert.equal(reviewEvidence(events).inspected, false, name);
+});
+
+test('reviewEvidence: the last message is the review, and one successful diff among failures is enough', () => {
+  const events = [thread, turn, cmd('git diff a', -1), msg('first'), cmd('git diff a'), msg('final'), done];
+  const evidence = reviewEvidence(events);
+  assert.equal(evidence.inspected, true);
+  assert.equal(evidence.review, 'final');
+  assert.deepEqual(evidence.commands.map((c) => c.exitCode), [-1, 0]);
+});
+
+test('reviewEvidence: which commands read the diff', () => {
+  const reads = [
+    'git diff abc',
+    'git diff --stat abc; git diff abc',
+    'git status && git show abc',
+    'git show abc',
+    'git.exe diff abc',
+    'git --no-pager diff abc',
+    'git -C D:\\repo diff abc',
+    'git log -p abc..HEAD',
+    'git log --patch abc..HEAD',
+    'git log -3 -p',
+    DIFF_CMD,
+    '/bin/bash -lc "cd repo && git diff abc | head"',
+  ];
+  const not = [
+    'git log',
+    'git log --oneline abc..HEAD',
+    'git log --pretty=%p',
+    'git diff --stat abc..HEAD',
+    'git diff --name-only abc',
+    'git diff --name-status abc',
+    'git diff --shortstat abc',
+    'git diff --numstat abc',
+    'git diff --quiet abc',
+    'git show --stat abc',
+    'git show -s abc',
+    'git show --no-patch abc',
+    'git log -p --stat --name-only abc',
+    'git diff --stat abc; git status',
+    'git status',
+    'git rev-parse HEAD',
+    'git difftool abc',
+    'Get-Content bin/x.mjs',
+    'echo diff',
+  ];
+  const inspected = (command) => reviewEvidence([done, cmd(command), msg('ok')]).inspected;
+  for (const command of reads) assert.equal(inspected(command), true, command);
+  for (const command of not) assert.equal(inspected(command), false, command);
+});
+
+test('reviewEvidence: error messages come from the failed turn, warnings from error items', () => {
+  const evidence = reviewEvidence([
+    itemError('unrecognized setting'),
+    { type: 'turn.failed', error: { message: 'model rejected' } },
+    { type: 'error', message: 'stream closed' },
+  ]);
+  assert.deepEqual(evidence.errors, ['model rejected', 'stream closed']);
+  assert.deepEqual(evidence.warnings, ['unrecognized setting']);
+  assert.equal(evidence.completed, false);
+});
+
+test('parseEvents keeps the JSON objects and drops everything else', () => {
+  const events = parseEvents('banner\n\n{"type":"turn.started"}\r\n[1]\n"str"\nnull\n{"type":\n{"type":"turn.completed"}');
+  assert.deepEqual(events, [{ type: 'turn.started' }, { type: 'turn.completed' }]);
+  assert.deepEqual(parseEvents(''), []);
+  assert.deepEqual(parseEvents(undefined), []);
+});
+
+// --- the Windows launch: PATH and quoting ---
+
+test('childEnv drops every WindowsApps entry on Windows, whatever the case, slash and trailing slash', () => {
+  const dirs = [
+    'C:\\Windows\\system32',
+    'C:\\Users\\Oficina\\AppData\\Local\\Microsoft\\WindowsApps',
+    'c:\\users\\oficina\\appdata\\local\\microsoft\\windowsapps\\',
+    'C:/Users/x/AppData/Local/Microsoft/WindowsApps/',
+    'C:\\Program Files\\WindowsApps\\Foo',
+    'D:\\bin',
+  ];
+  const env = { Path: dirs.join(';'), Other: 'kept' };
+  assert.deepEqual(childEnv(env, 'win32'), { Path: 'C:\\Windows\\system32;C:\\Program Files\\WindowsApps\\Foo;D:\\bin', Other: 'kept' });
+  assert.equal(env.Path, dirs.join(';'), 'the input is not mutated');
+  assert.deepEqual(childEnv({ PATH: 'D:\\Microsoft\\WindowsApps' }, 'win32'), { PATH: '' });
+});
+
+test('childEnv leaves other platforms and a missing PATH alone', () => {
+  const env = { PATH: '/a/Microsoft/WindowsApps:/b' };
+  assert.equal(childEnv(env, 'linux'), env);
+  assert.deepEqual(childEnv({ Other: '1' }, 'win32'), { Other: '1' });
+});
+
+test('quoteWindowsArg leaves plain words alone and quotes the rest for the C runtime', () => {
+  assert.equal(quoteWindowsArg('exec'), 'exec');
+  assert.equal(quoteWindowsArg('sandbox_mode=read-only'), 'sandbox_mode=read-only');
+  assert.equal(quoteWindowsArg('D:\\my repo'), '"D:\\my repo"');
+  assert.equal(quoteWindowsArg(''), '""');
+  assert.equal(quoteWindowsArg('plugins."a@b".enabled=false'), '"plugins.\\"a@b\\".enabled=false"');
+  // Backslashes before a quote are doubled, and so are trailing ones inside quotes.
+  assert.equal(quoteWindowsArg('a\\"b'), '"a\\\\\\"b"');
+  assert.equal(quoteWindowsArg('a b\\'), '"a b\\\\"');
+});
+
+test('quoteWindowsArg refuses what cmd.exe would act on', () => {
+  for (const arg of ['a&b', 'a|b', 'a<b', 'a>b', 'a^b', '%PATH%', 'a\nb']) {
+    assert.throws(() => quoteWindowsArg(arg), /cmd\.exe/, JSON.stringify(arg));
+  }
+});
+
+test('windowsCommandLine joins the command and its quoted arguments', () => {
+  assert.equal(windowsCommandLine('codex', ['exec', '--base', 'a b']), 'codex exec --base "a b"');
 });

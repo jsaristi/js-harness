@@ -208,22 +208,17 @@ lives under `CLAUDE_PLUGIN_DATA` (or the OS temp dir), keyed by workspace and pr
 `.git/gentle-ai/review-transactions/terminal-consumption/v1/*.json` hold only opaque sha256
 targets, no commit range, in a format gentle-ai v4 may change. So js-harness writes its own.
 
-- Record: `js-harness codex-review --base <rev>` runs the plugin's own review, `node
-  <installPath>/scripts/codex-companion.mjs review --wait --base <rev>` in the repository (the
-  `installPath` of `codex@openai-codex` in `~/.claude/plugins/installed_plugins.json`), with its
-  output shown as is. The companion exits 0 when Codex's turn completed, findings or not, and 1
-  when the turn failed (`buildResultStatus` in `scripts/lib/codex.mjs`), so exit 0 is not trusted
-  alone: a turn whose sandbox denied process launch completes with a review that says it could not
-  read the diff. The companion exposes only the review text, so its stdout is captured (stderr, the
-  progress, stays live), shown as is, and read with `saysReviewNotInspected`, a short list of
-  Codex's own phrases ("could not assess the patch", "correctness is unverified", "fail-closed
-  verdict"); a match writes nothing and exits 1 with the two ways on. On a clean 0 it appends one
-  JSON line `{ schema, base, head, reviewedAt, outcome: "reviewed" }`, full commit ids, to
-  `<git common dir>/js-harness/codex-reviews.jsonl`; on anything else it writes nothing and exits
-  with the companion's code, naming the two ways on. When Codex cannot run (the model is
-  rejected, the plugin is missing), `--unavailable <reason>` records `outcome: "unavailable"` with
-  the reason and spawns nothing, so a skip is explicit instead of silent (AGENTS.md: report it and
-  go on). Findings stay in the feature document, as today.
+- Record: `js-harness codex-review --base <rev>` runs `codex exec review --json` over `<rev>..HEAD`
+  in the repository and appends one JSON line `{ schema, base, head, reviewedAt, outcome:
+  "reviewed" }`, full commit ids, to `<git common dir>/js-harness/codex-reviews.jsonl`, but only
+  on evidence that Codex read the diff: its JSONL events must show a completed turn, a final
+  message and a successful `git diff`/`git show`/`git log -p`, never the review's wording. The
+  first version drove the plugin's companion and classified its text; that was replaced on
+  2026-09-29 (design, probes and the evidence rule: `odd/tasks/codex-exec-review.md`). On
+  anything else it writes nothing and exits non-zero, naming the two ways on. When Codex cannot
+  run (the model is rejected, the CLI is missing), `--unavailable <reason>` records `outcome:
+  "unavailable"` with the reason and spawns nothing, so a skip is explicit instead of silent
+  (AGENTS.md: report it and go on). Findings stay in the feature document, as today.
 - Location: under the git common dir, like gentle-ai's own records and the project manifest, so it
   adds no commit and no file to the project, and every worktree of a clone shares it. It is one
   file, undone by deleting it. A fresh clone starts without records, so commits reviewed on

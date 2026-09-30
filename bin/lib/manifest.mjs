@@ -18,7 +18,7 @@ js-harness commands:
 - \`js-harness update\` — check whether a newer release exists.
 - \`js-harness upgrade\` — install the newer release, then sync.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
-- \`js-harness codex-review --base <rev>\` — run the Codex plugin's review of <rev>..HEAD and record it; \`--unavailable <reason>\` records a skip when Codex cannot run.
+- \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its events show a successful git diff; \`--unavailable <reason>\` records a skip when Codex cannot run.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
