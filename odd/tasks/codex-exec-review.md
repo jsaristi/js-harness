@@ -83,5 +83,17 @@ Mode: strict (source: user global config). Runner: `node --test`.
   chained segment is now judged alone and `--stat`, `--name-only`, `-s` and the like never count
   (RED 1 failing, GREEN 42/42, suite 709/702/0/7).
 
+- 2026-09-29: committed as 3570bbf. Native review lineage review-a249dd24379872b3 (the branch,
+  955 lines): approved and acknowledged; both findings accepted. R3-readsdiff-textual-match (WARNING:
+  `rg "git diff"`, a bare `git diff` or `git show <rev>:<path>` counted): a segment now counts only
+  when it starts with git (after a stripped shell launcher), runs `diff` or `log -p`, prints the
+  patch, has no `<rev>:<path>` argument, and names the base commit (full id or 7+ hex prefix, also
+  as `base..`); `git show` no longer counts, and `--check` is excluded (the real probe ran `git diff
+  --check <base>`). R3-win32-missing-cli-misdiagnosis: a `codex --version` probe through the same
+  launch path runs before the review; the exit-code heuristic is gone. Route: the writer, resumed.
+  RED: 45 tests, 6 failing. GREEN: 45/45; `node --test` → 712 / 705 / 0 fail / 7 skipped; `npm run
+  check` and `npm run e2e` (14 PASS) exit 0; the real probe returned `codex-cli 0.159.1`. Parent:
+  no control characters in either file; suite 712/705/0/7.
+
 ## Next step
 T3: a real `js-harness codex-review --base main` records `reviewed`.

@@ -104,27 +104,52 @@ export function parseEvents(text) {
   return events;
 }
 
-// `git diff` and `git show` print the patch; `git log` only with `-p`/`--patch`. Options between
-// `git` and the subcommand (`--no-pager`, `-C <dir>`, `-c <k=v>`) are allowed. A command often
-// chains several (`git diff --stat x; git diff x`), so each segment is judged alone, and one that
-// asks for names or counts only (`--stat`, `--name-only`, `-s`, …) never counts, even beside `-p`.
-const GIT = String.raw`\bgit(?:\.exe)?(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+`;
-const DIFF_OR_SHOW = new RegExp(String.raw`${GIT}(?:diff|show)\b`);
-const LOG = new RegExp(String.raw`${GIT}log\b`);
-const PATCH = /\s(?:-p|--patch)(?=\s|$)/;
-const NO_PATCH = /\s(?:--(?:stat|shortstat|numstat|dirstat|summary|name-only|name-status|quiet|no-patch|raw)\b|-s(?=\s|$))/;
+// A shell launcher in front of the whole command (`powershell.exe -Command "…"`, `bash -lc "…"`):
+// an optionally quoted path ending in the shell's name, some flags, the switch that takes a command,
+// and its opening quote.
+const SHELL = String.raw`(?:powershell|pwsh|cmd|bash|sh)(?:\.exe)?`;
+const LAUNCHER = new RegExp(
+  String.raw`^\s*(?:"(?:[^"]*[\\/])?${SHELL}"|'(?:[^']*[\\/])?${SHELL}'|(?:\S*[\\/])?${SHELL})` +
+    String.raw`(?:\s+(?:-(?:NoProfile|NonInteractive|NoLogo|Login|l)(?![\w-])|-ExecutionPolicy\s+\S+))*` +
+    String.raw`\s+(?:-Command|-lc|-c|/c)\s*["']?`,
+  'i',
+);
+// `git`, options (`--no-pager`, `-C <dir>`, `-c <k=v>`), then `diff` or `log`.
+const GIT_DIFF_OR_LOG = /^git(?:\.exe)?(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+(diff|log)(?=\s|$)(.*)$/s;
+// Options that ask for names, counts or a status instead of the patch; they void a `-p` beside them.
+const NO_PATCH = /^(?:--(?:stat|shortstat|numstat|dirstat|summary|name-only|name-status|quiet|no-patch|raw|check)(?:=.*)?|-s)$/;
 
-/** Whether `command` runs git in a way that prints the patch itself. */
-function readsDiff(command) {
-  return command.split(/;|&&|\|\||\||\n/).some((segment) =>
-    !NO_PATCH.test(segment) && (DIFF_OR_SHOW.test(segment) || (LOG.test(segment) && PATCH.test(segment))));
+/** Whether `token` names the base commit: its full id or a prefix of 7+ hex characters, alone or as
+ * the left side of `..`/`...`. */
+function namesBase(token, base) {
+  const side = token.replace(/^["']|["']$/g, '').split(/\.\.\.?/)[0].toLowerCase();
+  return side.length >= 7 && /^[0-9a-f]+$/.test(side) && base.toLowerCase().startsWith(side);
+}
+
+/** Whether `command` prints the patch of the range from `base`: a segment (a command is often a
+ * chain, `git diff --stat x; git diff x`) that starts with `git diff`, or `git log -p`, over the
+ * base commit, and neither asks only for names or counts (`--stat`, `--name-only`, …) nor reads one
+ * file at a revision (`<rev>:<path>`). `git show` shows one commit, not the range, so it never
+ * counts. A search or echo that merely contains `git diff` starts with something else, and a bare
+ * `git diff` is the working tree against the index, which is empty on the clean tree reviewed here. */
+export function readsDiff(command, base) {
+  if (typeof base !== 'string' || !base) return false;
+  return command.replace(LAUNCHER, '').split(/;|&&|\|\||\||\n/).some((raw) => {
+    const segment = raw.replace(/^[\s(&"']+/, '').replace(/["')\s]+$/, '');
+    const match = GIT_DIFF_OR_LOG.exec(segment);
+    if (!match) return false;
+    const tokens = match[2].split(/\s+/).filter(Boolean);
+    if (match[1] === 'log' && !tokens.some((t) => t === '-p' || t === '--patch')) return false;
+    if (tokens.some((t) => NO_PATCH.test(t) || (!t.startsWith('-') && /(?<!:):(?!:)/.test(t)))) return false;
+    return tokens.some((t) => namesBase(t, base));
+  });
 }
 
 /** What the event stream proves. `inspected` is the evidence rule: the turn completed and did not
  * fail, it ended with a message, and a completed command that reads the diff exited 0. `errors` are
  * the failed turn's messages; `warnings` are error items Codex raises without failing (an
  * unrecognized configuration setting, for one). */
-export function reviewEvidence(events) {
+export function reviewEvidence(events, base) {
   let turnCompleted = false;
   let turnFailed = false;
   let review = '';
@@ -145,7 +170,7 @@ export function reviewEvidence(events) {
     }
   }
   const completed = turnCompleted && !turnFailed;
-  const readDiff = commands.some((c) => c.exitCode === 0 && readsDiff(c.command));
+  const readDiff = commands.some((c) => c.exitCode === 0 && readsDiff(c.command, base));
   return { inspected: completed && review !== '' && readDiff, completed, review, commands, errors, warnings };
 }
 
@@ -155,6 +180,32 @@ function commandLines(commands) {
     const oneLine = command.replace(/\s+/g, ' ').trim();
     return `  exit ${exitCode ?? '?'}  ${oneLine.length > 100 ? `${oneLine.slice(0, 99)}…` : oneLine}`;
   });
+}
+
+const PROBE_TIMEOUT_MS = 15000;
+
+/** Runs `codex <argv>`. `codex` is a `.cmd` shim on Windows, which only a shell can start. */
+function launchCodex(spawn, platform, argv, options) {
+  return platform === 'win32'
+    ? spawn(windowsCommandLine('codex', argv), [], { ...options, shell: true })
+    : spawn('codex', argv, options);
+}
+
+/** Whether `codex --version` answers, through the launch path and environment of the review: a
+ * missing CLI is told apart here, so a bad `-c`, a broken config or a failed login is never
+ * reported as one. */
+function codexRuns(spawn, platform, env) {
+  try {
+    const result = launchCodex(spawn, platform, ['--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      timeout: PROBE_TIMEOUT_MS,
+      env,
+    });
+    return Boolean(result) && !result.error && result.status === 0 && /\d+\.\d+\.\d+/.test(result.stdout ?? '');
+  } catch {
+    return false;
+  }
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -213,34 +264,29 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    const codexEnv = childEnv(env, platform);
+    if (!codexRuns(spawn, platform, codexEnv)) {
+      error(NO_CODEX);
+      return 1;
+    }
     log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
     let result;
     try {
       // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the
       // progress) stays live. The buffer is far above Node's 1 MiB default, which a long review with
       // command output could exceed. `codex` is a `.cmd` shim on Windows, which needs a shell.
-      const options = {
+      result = launchCodex(spawn, platform, codexArgs(base), {
         cwd: root,
         stdio: ['ignore', 'pipe', 'inherit'],
         encoding: 'utf8',
         maxBuffer: REVIEW_MAX_BUFFER,
-        env: childEnv(env, platform),
-      };
-      const codexArgv = codexArgs(base);
-      result = platform === 'win32'
-        ? spawn(windowsCommandLine('codex', codexArgv), [], { ...options, shell: true })
-        : spawn('codex', codexArgv, options);
+        env: codexEnv,
+      });
     } catch (err) {
       result = { status: null, error: err };
     }
     const events = parseEvents(result?.stdout);
-    const evidence = reviewEvidence(events);
-    // A missing CLI: ENOENT, or on Windows the shell's own "not recognized" (exit 1 or 9009) with
-    // nothing on stdout.
-    if (result?.error?.code === 'ENOENT' || (platform === 'win32' && [1, 9009].includes(result?.status) && events.length === 0)) {
-      error(NO_CODEX);
-      return 1;
-    }
+    const evidence = reviewEvidence(events, base);
     for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
     if (evidence.review) write(`${evidence.review}\n`);
     if (result?.status !== 0 || !evidence.completed) {
@@ -255,7 +301,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const ran = evidence.commands.length ? ['Codex ran:', ...commandLines(evidence.commands)].join('\n') : 'Codex ran no commands.';
     if (!evidence.inspected) {
-      error(`Codex's turn completed, but it ran no successful git command that reads the diff (git diff, git show or git log -p), or it ended without a review; nothing was recorded.\n${ran}\n${WAYS_ON}`);
+      error(`Codex's turn completed, but it ran no successful git command that reads the diff of the base commit (git diff or git log -p), or it ended without a review; nothing was recorded.\n${ran}\n${WAYS_ON}`);
       return 1;
     }
     log(ran);
