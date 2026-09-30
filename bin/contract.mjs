@@ -6,10 +6,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, parseContract, validateContract } from './lib/contract.mjs';
 
 const USAGE =
-  'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--cwd <dir>] | goal <file> [--cwd <dir>]';
+  'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>]';
+
+// Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise.
+const DEFAULT_TIMEOUT_MINUTES = 30;
+// The `js-harness.mjs` beside this file: the one that is running, whatever `js-harness` is on PATH.
+const RUNNING_HARNESS = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 
 // The documented `/goal` condition limit (https://code.claude.com/docs/en/goal).
 const GOAL_LIMIT = 4000;
@@ -27,21 +33,28 @@ function requireValue(argv, i, flag) {
 }
 
 /** Walks argv token by token, so an unknown flag is a usage error and never a silently ignored one. */
-function parseArgs(argv) {
+function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
   const files = [];
   let cwd;
+  let timeoutMinutes = DEFAULT_TIMEOUT_MINUTES;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--cwd') {
       cwd = requireValue(argv, i, token);
       i += 1; // consume the value too, so it is never re-read as a file
+    } else if (token === '--timeout' && allowTimeout) {
+      timeoutMinutes = Number(requireValue(argv, i, token));
+      if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+        throw new ContractArgError('--timeout requires a positive number of minutes');
+      }
+      i += 1;
     } else if (token.startsWith('--')) {
       throw new ContractArgError(`unknown argument: ${token}`);
     } else {
       files.push(token);
     }
   }
-  return { files, cwd };
+  return { files, cwd, timeoutMinutes };
 }
 
 /** The repository's top-level directory for `cwd`, else `cwd` itself: where `odd/tasks/` lives. */
@@ -140,12 +153,13 @@ function templateCommand(argv, { stdout, stderr }) {
 }
 
 /** The one contract file `run` and `goal` take: `{ file, cwd }`, or `{ code: 2 }` after printing
- * usage when the command line is not exactly one file plus an optional `--cwd`. */
-function parseOneFile(argv, stderr, defaultCwd) {
+ * usage when the command line is not exactly one file plus an optional `--cwd` (and, for `run`,
+ * `--timeout`), with the timeout in minutes. */
+function parseOneFile(argv, stderr, defaultCwd, options) {
   try {
-    const { files, cwd } = parseArgs(argv);
+    const { files, cwd, timeoutMinutes } = parseArgs(argv, options);
     if (files.length !== 1) throw new ContractArgError('expected exactly one contract file');
-    return { file: files[0], cwd: path.resolve(cwd ?? defaultCwd) };
+    return { file: files[0], cwd: path.resolve(cwd ?? defaultCwd), timeoutMinutes };
   } catch (err) {
     stderr(`${err.message}\n\n${USAGE}`);
     return { code: 2 };
@@ -162,7 +176,8 @@ function indented(...streams) {
 }
 
 /** Why a command that did not exit 0 failed, for its FAIL row. */
-function failure(result) {
+function failure(result, timeoutMinutes) {
+  if (result.error?.code === 'ETIMEDOUT') return `timed out after ${timeoutMinutes} min`;
   if (result.error) return `error ${result.error.code ?? result.error.message}`;
   if (result.status === null || result.status === undefined) return `signal ${result.signal ?? 'unknown'}`;
   return `exit ${result.status}`;
@@ -173,7 +188,7 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
     stderr(`contract run started inside another contract run (${RUN_GUARD} is set): a done-when command must not be \`contract run\` itself`);
     return 2;
   }
-  const parsed = parseOneFile(argv, stderr, defaultCwd);
+  const parsed = parseOneFile(argv, stderr, defaultCwd, { timeout: true });
   if (parsed.code) return parsed.code;
   const [entry] = explicitEntries([parsed.file], parsed.cwd);
   const [result] = validateEntries([entry]);
@@ -190,10 +205,17 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
   let met = true;
   // Every command runs, even after a failure: a /goal turn needs the whole picture, not the first red row.
   for (const command of commands) {
-    const outcome = spawn(command, { shell: true, cwd: root, env: childEnv, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const outcome = spawn(command, {
+      shell: true,
+      cwd: root,
+      env: childEnv,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: parsed.timeoutMinutes * 60 * 1000,
+    });
     const passed = outcome.status === 0 && !outcome.error;
     met &&= passed;
-    stdout(passed ? `PASS  ${command}` : `FAIL  ${command}  (${failure(outcome)})`);
+    stdout(passed ? `PASS  ${command}` : `FAIL  ${command}  (${failure(outcome, parsed.timeoutMinutes)})`);
     for (const line of indented(outcome.stdout ?? '', outcome.stderr ?? '')) stdout(line);
   }
   if (checks.length > 0) {
@@ -204,7 +226,14 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
   return met ? 0 : 1;
 }
 
-function goalCommand(argv, { cwd: defaultCwd, stdout, stderr }) {
+/** `value` in double quotes, which sh and PowerShell both read as one argument; `null` when it holds a
+ * character (a double quote, a backtick, a dollar sign) that could break out of them, because a
+ * fragile escape is worse than a refusal. */
+function quoteArg(value) {
+  return /["`$]/.test(value) ? null : `"${value}"`;
+}
+
+function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, harnessPath }) {
   const parsed = parseOneFile(argv, stderr, defaultCwd);
   if (parsed.code) return parsed.code;
   const [entry] = explicitEntries([parsed.file], parsed.cwd);
@@ -215,16 +244,26 @@ function goalCommand(argv, { cwd: defaultCwd, stdout, stderr }) {
     return 1;
   }
 
+  // A /goal lives in one session on one machine, so absolute paths are right here: the command finds
+  // the same contract from any working directory and runs this very js-harness, not one on PATH.
+  const contractPath = path.resolve(parsed.cwd, parsed.file);
+  const quoted = [harnessPath, contractPath].map(quoteArg);
+  if (quoted.includes(null)) {
+    const culprit = quoted[0] === null ? harnessPath : contractPath;
+    stderr(`cannot be quoted safely: a path holds a double quote, backtick or dollar sign (${culprit})`);
+    return 1;
+  }
+
   const { checks } = doneWhen(entry.markdown);
   const ask = parseContract(entry.markdown).get('Ask me before').replace(/\s+/g, ' ');
   const inlineAsk = ask.length <= ASK_INLINE_MAX ? `: ${trimmed(ask)}` : '';
   const condition = [
-    `\`js-harness contract run ${parsed.file}\` exits 0 and prints \`met\``,
+    `\`node ${quoted[0]} contract run ${quoted[1]}\` exits 0 and prints \`met\``,
     checks.length > 0 ? `; also true by hand: ${checks.map(trimmed).join('; ')}` : '',
-    `. Run it after each change and fix what fails; stop and ask if a step needs a decision listed under "Ask me before" in ${parsed.file}${inlineAsk}.`,
+    `. Run it after each change and fix what fails; stop and ask if a step needs a decision listed under "Ask me before" in ${contractPath}${inlineAsk}.`,
   ].join('');
   if (condition.length > GOAL_LIMIT) {
-    stderr(`the /goal condition is ${condition.length} characters, over the 4,000-character limit: shorten the hand-checkable items in ${parsed.file}`);
+    stderr(`the /goal condition is ${condition.length} characters, over the 4,000-character limit: shorten the hand-checkable items in ${contractPath}`);
     return 1;
   }
   stdout(condition);
@@ -236,12 +275,12 @@ const SUBCOMMANDS = { template: templateCommand, check: checkCommand, run: runCo
 export async function contractMain(
   argv,
   env = process.env,
-  { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync } = {},
+  { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, harnessPath = RUNNING_HARNESS } = {},
 ) {
   const [subcommand, ...rest] = argv;
   if (!Object.hasOwn(SUBCOMMANDS, subcommand ?? '')) {
     stderr(subcommand ? `unknown subcommand: ${subcommand}\n\n${USAGE}` : USAGE);
     return 2;
   }
-  return SUBCOMMANDS[subcommand](rest, { cwd, stdout, stderr, spawn, env });
+  return SUBCOMMANDS[subcommand](rest, { cwd, stdout, stderr, spawn, env, harnessPath });
 }

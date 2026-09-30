@@ -39,25 +39,51 @@ function isFenceClose(line, fence) {
   );
 }
 
+/** Index of the first backtick run of exactly `length` backticks in `line` at or after `from`, or -1. */
+function findClosingRun(line, from, length) {
+  let i = from;
+  while (i < line.length) {
+    if (line[i] !== '`') {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (line[end] === '`') end += 1;
+    if (end - i === length) return i;
+    i = end;
+  }
+  return -1;
+}
+
 /** `line` without its HTML comments: `{ text, inComment }`, where `inComment` says a comment is still
  * open at the end of the line (`open` says whether one was open at its start). An unterminated
- * comment runs to the end of the document. */
+ * comment runs to the end of the document. A `<!--` inside an inline code span (a backtick run with a
+ * closing run of the same length on the line) is content, not a comment. */
 function uncomment(line, open) {
   let text = '';
-  let rest = line;
+  let i = 0;
   let inComment = open;
-  while (rest !== '') {
+  while (i < line.length) {
     if (inComment) {
-      const end = rest.indexOf('-->');
+      const end = line.indexOf('-->', i);
       if (end === -1) return { text, inComment: true };
-      rest = rest.slice(end + 3);
+      i = end + 3;
       inComment = false;
-    } else {
-      const start = rest.indexOf('<!--');
-      if (start === -1) return { text: text + rest, inComment: false };
-      text += rest.slice(0, start);
-      rest = rest.slice(start + 4);
+    } else if (line.startsWith('<!--', i)) {
       inComment = true;
+      i += 4;
+    } else if (line[i] === '`') {
+      let runEnd = i;
+      while (line[runEnd] === '`') runEnd += 1;
+      const length = runEnd - i;
+      const close = findClosingRun(line, runEnd, length);
+      // A span is copied through its closer verbatim; an opener with no closer is plain backticks.
+      const stop = close === -1 ? runEnd : close + length;
+      text += line.slice(i, stop);
+      i = stop;
+    } else {
+      text += line[i];
+      i += 1;
     }
   }
   return { text, inComment };
@@ -78,7 +104,9 @@ export function tokenize(markdown, { stripComments = false } = {}) {
   let inComment = false;
   for (const original of lines) {
     let raw = original;
-    if (!fence && stripComments) {
+    // A line that opens a fence is fenced content from its marker on, so it is not uncommented: a
+    // `<!--` after the marker must not leave a comment open once the fence closes.
+    if (!fence && stripComments && (inComment || !matchFenceOpen(original))) {
       ({ text: raw, inComment } = uncomment(original, inComment));
     }
     if (fence) {

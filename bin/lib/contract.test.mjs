@@ -210,3 +210,31 @@ test('a code span that is empty after trimming is not a command', () => {
   assert.equal(ok, false);
   assert.ok(errors.some((e) => /no command/.test(e)), errors.join('\n'));
 });
+
+// --- review follow-ups (slice 2) ---
+
+test('comment markers inside an inline code span are content and survive unchanged', () => {
+  const command = `node -e "console.log('<!-- marker -->')"`;
+  const md = withSection('Done when', `- \`${command}\` exits 0`);
+  assert.deepEqual(doneWhen(md).commands, [command]);
+  assert.equal(validateContract(md).ok, true);
+});
+
+test('an unmatched <!-- inside a code span does not hide the sections after it', () => {
+  const md = withSection('Done when', "- `echo '<!--'` exits 0");
+  assert.deepEqual(doneWhen(md).commands, ["echo '<!--'"]);
+  assert.equal(parseContract(md).get('Effort'), 'high');
+  assert.equal(validateContract(md).ok, true);
+});
+
+test('a double-backtick span keeps a comment marker too, but a real comment next to a span is still removed', () => {
+  const md = withSection('Done when', '- ``a ` <!-- b`` exits 0 <!-- `hidden` exits 0 -->');
+  assert.deepEqual(doneWhen(md).commands, ['a ` <!-- b']);
+});
+
+test('a line that opens a fence with <!-- after the marker leaves no comment open after the fence closes', () => {
+  const md = GOOD.replace('Ship the thing.', 'Ship the thing.\n```text <!-- oops\nfenced\n```');
+  assert.match(parseContract(md).get('Goal'), /<!-- oops/);
+  assert.equal(parseContract(md).get('Why'), 'Because the loop needs evidence.');
+  assert.equal(validateContract(md).ok, true);
+});

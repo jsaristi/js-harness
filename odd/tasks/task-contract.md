@@ -83,6 +83,14 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   fails the row, on purpose, with a test (R3-unreadable-noncontract-fails-gate); the repository-root
   test skips without git (R3-git-dependent-test) — route: the same delegated writer
 - [x] T3 `contract run` and `contract goal` — route: delegated writer
+- [x] T3a Review follow-ups of slice 2: comment markers inside inline code spans are content, and an
+  unmatched `<!--` in a span hides nothing (Codex P2); a fence opener with `<!--` after its marker
+  leaves no comment open after the fence closes (R3-comment-after-fence-opener); `goal` emits the
+  absolute contract path, so the command works from any directory (Codex P2, R3-goal-ignores-cwd),
+  double-quoted, rejecting a path with a double quote (Codex P2), and runs the `js-harness.mjs` that
+  is running instead of assuming `js-harness` on PATH (doubt 6); each done-when command has a
+  timeout, 30 minutes by default, `--timeout <minutes>` to change it (R3-run-no-timeout) — route: the
+  same delegated writer
 - [ ] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
   passes its own contract — route: inline (docs)
 
@@ -103,6 +111,13 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 - 2026-09-29: T3 landed: `contract run <file>` (every done-when command from the repository root,
   PASS/FAIL rows, hand checks listed, `met`/`not met`, recursion guard) and `contract goal <file>`
   (one-paragraph `/goal` condition within the 4,000-character limit), with tests.
+- 2026-09-29: slice 2 (06e2743..cc6607c) reviewed. gentle-ai: reliability lens approved and
+  acknowledged (lineage `review-2c0b37a9ebc9e5b8`, authority burned), 3 non-blocking findings.
+  Codex: recorded, 3 P2. All carried as T3a.
+- 2026-09-29: T3a landed: comment markers in code spans and after a fence opener are content,
+  `contract goal` emits `node "<running js-harness.mjs>" contract run "<absolute contract path>"`
+  (refusing a path with a double quote, backtick or dollar sign), and `contract run` times each
+  command out after 30 minutes, or `--timeout <minutes>`.
 
 ## Next step
 T4.

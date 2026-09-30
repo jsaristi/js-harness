@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { contractMain, discoverContracts, validateEntries } from './contract.mjs';
 import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
 
@@ -211,7 +212,7 @@ const contractWith = (doneWhenBody) => GOOD.replace('- `npm run check` exits 0',
 /** Runs `contract run c.md` on `md` with a fake spawn that answers from `results` (default: exit 0)
  * and records each done-when command. The `git rev-parse` that finds the repository root is answered
  * "not a repository", so the root is the temp directory itself. */
-async function runWithFake(md, results, extra = {}) {
+async function runWithFake(md, results, { args = [], ...extra } = {}) {
   const dir = makeTmpDir();
   try {
     writeFile(path.join(dir, 'c.md'), md);
@@ -221,7 +222,7 @@ async function runWithFake(md, results, extra = {}) {
       calls.push({ command, opts: second });
       return results[command] ?? { status: 0, stdout: '', stderr: '' };
     };
-    const outcome = await run(['run', 'c.md', '--cwd', dir], { spawn, ...extra });
+    const outcome = await run(['run', 'c.md', '--cwd', dir, ...args], { spawn, ...extra });
     return { ...outcome, calls, dir };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -325,35 +326,108 @@ test('run from a subdirectory runs the commands from the repository root', { ski
   }
 });
 
+// --- run: a timeout for every command ---
+
+test('run gives each command a 30 minute timeout by default, and --timeout <minutes> changes it', async () => {
+  const md = contractWith('- `first` exits 0');
+  assert.equal((await runWithFake(md, {})).calls[0].opts.timeout, 30 * 60 * 1000);
+  assert.equal((await runWithFake(md, {}, { args: ['--timeout', '2'] })).calls[0].opts.timeout, 2 * 60 * 1000);
+});
+
+test('a command that times out is a FAIL row saying so, the next command still runs, and the run is not met', async () => {
+  const md = contractWith('- `first` exits 0\n- `second` exits 0');
+  const timedOut = { status: null, signal: 'SIGTERM', error: Object.assign(new Error('spawnSync ETIMEDOUT'), { code: 'ETIMEDOUT' }), stdout: 'partial\n', stderr: '' };
+  const { code, stdout, calls } = await runWithFake(md, { first: timedOut }, { args: ['--timeout', '2'] });
+  assert.equal(code, 1);
+  assert.deepEqual(calls.map((c) => c.command), ['first', 'second']);
+  assert.match(stdout, /^FAIL {2}first {2}\(timed out after 2 min\)$/m);
+  assert.match(stdout, /partial/);
+  assert.equal(stdout.split('\n').at(-1), 'not met');
+  assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
+});
+
+test('--timeout needs a positive number of minutes, and only run takes it (usage error, exit 2)', async () => {
+  for (const argv of [['run', 'c.md', '--timeout'], ['run', 'c.md', '--timeout', '0'], ['run', 'c.md', '--timeout', 'soon'], ['run', 'c.md', '--timeout', '-3'], ['goal', 'c.md', '--timeout', '5'], ['check', '--timeout', '5']]) {
+    const { code, stderr } = await run(argv);
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(stderr, /Usage: js-harness contract/, argv.join(' '));
+  }
+});
+
 // --- goal: the /goal condition ---
 
-async function goalFor(md) {
+const HARNESS = path.resolve('/opt/js-harness/bin/js-harness.mjs');
+const REAL_HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
+
+/** `contract goal` on `md`, saved as `<tmp>/<subdir>/c.md`; `file` is that absolute path. */
+async function goalFor(md, { subdir = '.', harnessPath = HARNESS, cwdFlag = true } = {}) {
   const dir = makeTmpDir();
   try {
-    writeFile(path.join(dir, 'c.md'), md);
-    return await run(['goal', 'c.md', '--cwd', dir]);
+    const file = path.join(dir, subdir, 'c.md');
+    writeFile(file, md);
+    const outcome = cwdFlag
+      ? await run(['goal', 'c.md', '--cwd', path.dirname(file)], { harnessPath })
+      : await run(['goal', file], { harnessPath, cwd: os.tmpdir() });
+    return { ...outcome, file };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 test('goal prints one paragraph: the run command, the hand checks and the Ask me before text', async () => {
-  const { code, stdout, stderr } = await goalFor(contractWith('- `npm run check` exits 0\n- The output names the file\n- Rows are sorted'));
+  const { code, stdout, stderr, file } = await goalFor(contractWith('- `npm run check` exits 0\n- The output names the file\n- Rows are sorted'));
   assert.equal(code, 0, stderr);
   assert.ok(!stdout.includes('\n'), 'one paragraph');
-  assert.ok(stdout.startsWith('`js-harness contract run c.md` exits 0 and prints `met`'), stdout);
-  assert.match(stdout, /also true by hand: The output names the file; Rows are sorted/);
+  assert.ok(stdout.startsWith(`\`node "${HARNESS}" contract run "${file}"\` exits 0 and prints \`met\``), stdout);
+  assert.ok(stdout.includes('also true by hand: The output names the file; Rows are sorted'), stdout);
   assert.match(stdout, /Run it after each change and fix what fails/);
-  assert.match(stdout, /"Ask me before" in c\.md: Changing the template\./);
+  assert.ok(stdout.includes(`"Ask me before" in ${file}: Changing the template.`), stdout);
+});
+
+test('goal emits absolute paths, so the command finds the contract from any working directory', async () => {
+  const { stdout, file } = await goalFor(GOOD, { subdir: 'deep', cwdFlag: false });
+  assert.ok(path.isAbsolute(file));
+  assert.ok(stdout.includes(`contract run "${file}"`), stdout);
+});
+
+test('goal without an injected harness path runs the js-harness.mjs that is running', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeFile(path.join(dir, 'c.md'), GOOD);
+    const { stdout } = await run(['goal', 'c.md', '--cwd', dir]);
+    assert.ok(stdout.startsWith(`\`node "${REAL_HARNESS}" contract run `), stdout);
+    assert.ok(fs.existsSync(REAL_HARNESS));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('goal double-quotes both paths, so a path with spaces replays as one argument', async () => {
+  const { code, stdout, file } = await goalFor(GOOD, { subdir: 'with space', harnessPath: path.resolve('/opt/js harness/js-harness.mjs') });
+  assert.equal(code, 0);
+  assert.ok(file.includes('with space'));
+  assert.ok(stdout.startsWith(`\`node "${path.resolve('/opt/js harness/js-harness.mjs')}" contract run "${file}"\``), stdout);
+});
+
+test('goal refuses a path that a double quote, backtick or dollar sign would break out of, and prints no condition', async () => {
+  for (const bad of ['"', '`', '$']) {
+    const { code, stdout, stderr } = await goalFor(GOOD, { harnessPath: path.resolve(`/opt/we${bad}ird/js-harness.mjs`) });
+    assert.equal(code, 1, bad);
+    assert.equal(stdout, '', bad);
+    assert.match(stderr, /cannot be quoted/, bad);
+  }
+  const dollar = await goalFor(GOOD, { subdir: 'cost$5' });
+  assert.equal(dollar.code, 1);
+  assert.match(dollar.stderr, /cannot be quoted/);
 });
 
 test('goal leaves out the hand-check clause when there is none, and a long Ask me before is only referenced', async () => {
   const long = 'x'.repeat(500);
-  const { code, stdout } = await goalFor(GOOD.replace('Changing the template.', long));
+  const { code, stdout, file } = await goalFor(GOOD.replace('Changing the template.', long));
   assert.equal(code, 0);
   assert.doesNotMatch(stdout, /by hand/);
   assert.ok(!stdout.includes(long));
-  assert.match(stdout, /"Ask me before" in c\.md/);
+  assert.ok(stdout.includes(`"Ask me before" in ${file}`), stdout);
 });
 
 test('goal refuses an invalid contract with its reasons on stderr and prints no condition', async () => {
