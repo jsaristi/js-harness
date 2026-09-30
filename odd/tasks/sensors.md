@@ -70,17 +70,44 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   says so. It is INFO, never FAIL.
 
 ## Tasks
-- [ ] T1 Sensor rows: tests, lint and typecheck from `harness.json` `sensors` or `package.json`
+- [x] T1 Sensor rows: tests, lint and typecheck from `harness.json` `sensors` or `package.json`
   scripts, each a row, run with a throwaway home (route: delegated writer — `check.mjs` and its
   tests are two non-trivial files)
-- [ ] T2 Budget: prove with a fixture project that the budget row holds a project's `AGENTS.md`,
+- [x] T2 Budget: prove with a fixture project that the budget row holds a project's `AGENTS.md`,
   and check off the roadmap step (route: inline, one test)
 - [ ] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
 - [ ] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
 
 ## Progress
-- 2026-09-30: branch `feat/sensors` from `main` at 9e7def8; contract written.
+- 2026-09-30: branch `feat/sensors` from `main` at 9e7def8; contract written (e66a77b).
+- T1 (922e5e8, delegated writer): `discoverSensors`, `checkSensor`, `checkSensors` replace the
+  hardcoded `checkTests`. RED: the new tests failed at import (1 failed, 0 passed); GREEN:
+  `node --test bin/check.test.mjs` 38 pass. `npm run check` exits 0 with `PASS tests npm run
+  test passed`.
+- T1 review: gentle-ai RDD `medium`, `slice_budget_reached` (442 lines, base 9e7def8), one lens
+  (`review-reliability`), approved and acknowledged (lineage `review-679b808bf30c6349`, authority
+  burned); three non-blocking suggestions. Codex (`9e7def8..922e5e8`, recorded) found three P2s:
+  a script merely mentioning npm's placeholder text was dropped, a non-object `harness.json` fell
+  back silently, and npm wrote its cache and logs under `%LOCALAPPDATA%`.
+- Fixes (89e33dd): exact placeholder match on `test` only; a non-object `harness.json` is an
+  error; `npm_config_cache` inside the throwaway home; plus the three gentle-ai suggestions: a
+  signal kill names the signal, a spawn error keeps the output, an empty `sensors` map is a named
+  opt-out. RED: 6 new tests failed; GREEN: 43 pass. gentle-ai assess: `medium`, `under_budget`
+  (110 lines), pending in the slice. Codex (`922e5e8..89e33dd`) found one more P2: an inherited
+  uppercase `NPM_CONFIG_CACHE` wins on Windows.
+- Fix (c672aeb): every case variant of an overridden variable is dropped. RED: 1 failed; GREEN: 44
+  pass; `npm run check` exits 0. Codex (`89e33dd..c672aeb`): no findings. gentle-ai: pending in
+  the slice, under budget.
+- T2: no code needed. `checkBudget(cwd)` already reads the `AGENTS.md` of whatever root `check`
+  runs in (`bin/check.mjs`, `checkBudget`), fixture projects prove it (`bin/check.test.mjs`,
+  "checkBudget passes at exactly the token limit" and the two after it, and "main exits 1 when a
+  row fails"), and `init` wires `exec js-harness check` into each project's pre-commit
+  (`bin/lib/project.mjs`, `PRE_COMMIT_HOOK`), so a project's commit is held to the budget.
+- Roadmap: "Tests", "Lint/LSP diagnostics" and "Budget" checked. Lint and typecheck are wired as
+  sensors; this repo declares neither (a typecheck would need TypeScript, a dev dependency, which
+  is Sebastián's call), and in-session LSP diagnostics come from the `typescript-lsp` plugin that
+  `doctor` already reports.
 
 ## Next
-T1.
+Slice 1 (T1–T2) is ready for push and a PR against `main`, on Sebastián's go-ahead. Then T3.
