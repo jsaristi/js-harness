@@ -75,7 +75,7 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   tests are two non-trivial files)
 - [x] T2 Budget: prove with a fixture project that the budget row holds a project's `AGENTS.md`,
   and check off the roadmap step (route: inline, one test)
-- [ ] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
+- [x] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
 - [ ] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
 
@@ -109,5 +109,66 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   is Sebastián's call), and in-session LSP diagnostics come from the `typescript-lsp` plugin that
   `doctor` already reports.
 
+- T3 (61a1490, delegated writer, on `feat/sensors-review` stacked on `feat/sensors` so slice 1
+  stays its own branch): `checkReview` runs `gentle-ai review mode status --json` then `review
+  assess --json` without a shell and prints an INFO `review` row; `deps.gentleAi` lets tests fake
+  it. RED: the new tests failed at import (1 failed); GREEN: 58 pass. Its own pre-commit printed
+  `INFO review medium risk, 2 paths, 295 lines: review not due (under_budget)`.
+- Slice review: gentle-ai assess from 922e5e8: `medium`, 475 lines, `slice_budget_reached`; one
+  lens, approved and acknowledged (lineage `review-b10be8c609142f54`, authority burned); one
+  WARNING (a null entry in `reasons` threw out of the fail-open row) and one SUGGESTION (a
+  schema-tagged envelope missing fields printed `undefined`), both fixed in 2012aa5 (RED 2 failed,
+  GREEN 60). Codex (`c672aeb..2012aa5`) found one P2: gentle-ai answers `changed_paths: 0` also
+  when it cannot build the candidate, which the row reported as a clean tree; fixed in 4b53504
+  (RED 1 failed, GREEN 61), and Codex (`2012aa5..4b53504`) found nothing more. gentle-ai: the two
+  fixes are under budget, pending in the slice (last reviewed boundary 61a1490).
+- T4 (inline): `AGENTS.md` says the gate reports whether review is due; the roadmap records the
+  Sensors decision, checks "RDD-by-risk wired", and points Next at merging the two slices.
+  Closing F4 waits on the merges.
+- Whole-branch review (the stop hook's candidate, 9e7def8..838e673, 944 lines): gentle-ai one
+  lens, approved and acknowledged (lineage `review-bb058dd562b275b7`, authority burned), so the two
+  fixes left under budget are now reviewed too. Two suggestions, carried as follow-ups below.
+
+- Review of `9e7def8..32c8fc4` (the stop hook's next candidate, docs only since the last one):
+  approved and acknowledged (lineage `review-7bcf1b01b8e4ca06`), with one WARNING: sensors had
+  no timeout, so a hung script (watch mode, a linter waiting on stdin) would hold the pre-commit
+  forever. It predates this feature (`checkTests` had none), but sensors now come from any project.
+- Slice 1 merged to `main` via `jsaristi/js-harness#17` as 1cd7f64 (2026-09-30, on Sebastián's
+  go-ahead); `feat/sensors-review` rebased onto it (`--onto origin/main a7d9a68`), so slice 2's
+  commits have new ids (T3 is f605617, its fixes b1bd8d3 and ba986a9).
+- Sensor timeout (c5de133, delegated writer, route recorded: two non-trivial files): every sensor
+  gets 10 minutes. `spawnSync`'s own timeout killed only the shell and left the real command
+  running (RED: the never-exits test's cleanup hit EPERM because the orphaned `node` grandchild
+  still held its cwd), so sensors run through an async `runSensor` that kills the tree —
+  `taskkill /T /F` on Windows, the process group elsewhere (`detached`), and on POSIX forwards
+  SIGINT/SIGTERM/SIGHUP to that group so a Ctrl-C still stops it. GREEN: 64 pass; `npm run check`
+  exits 0 (75 s); no orphaned `node` process left after the suite. The POSIX path is untested
+  here (this machine is Windows only). gentle-ai assess from d6be17c: `medium`, 222 lines,
+  `under_budget`.
+- Slice 2 review (`1cd7f64..c7c20a8`): gentle-ai approved and acknowledged (lineage
+  `review-f7cbc1d4bdab478f`) with three suggestions; Codex found one P2 that matched one of them:
+  a shell that exits while a background descendant holds its pipes left that descendant running
+  and reported success. Fixed in 230fd04 (same writer): the survivors are killed on that path (the
+  group on POSIX; the shell's direct children, found by `ParentProcessId`, on Windows), the
+  throwaway home is removed best-effort, and a review reason without a string `code` is skipped.
+  RED: 3 failed; GREEN: 66 pass; `npm run check` exits 0; no fixture process left. Codex
+  (`c7c20a8..230fd04`): no findings.
+
+## Follow-ups
+- The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
+  to a commit; a shared deadline, or a short one for `mode status`, would bound it.
+- A clean tree is recognised by gentle-ai's English detail "no pending changes"; if gentle-ai adds
+  a stable code for it, match that instead, or pin the phrase in a test against real output.
+- The review row spawns `gentle-ai` without a shell, so on Windows a `.cmd` or `.ps1` shim would
+  read as "not found"; gentle-ai installs as a Go binary today, so this is latent.
+- `contract run` uses `spawnSync` with a timeout too, so a timed-out done-when command leaves its
+  grandchildren running the same way; `runSensor` could serve both.
+- The sensor runner's POSIX path (process-group kill, signal forwarding) has no test on a POSIX
+  machine yet.
+- On Windows, a survivor whose own parent exited before the shell is not a direct child of the
+  shell, so the `ParentProcessId` lookup after the shell exits does not find it.
+
 ## Next
-Slice 1 (T1–T2) is ready for push and a PR against `main`, on Sebastián's go-ahead. Then T3.
+Slice 2 (`feat/sensors-review`, `origin/main..HEAD`) is reviewed by Codex end to end and ready
+for push and a PR against `main` on Sebastián's go-ahead. After it merges, mark F4 done in the roadmap and
+check off T4.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, main } from './check.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -133,13 +133,13 @@ test('discoverSensors reports a harness.json that is not an object instead of fa
 
 // An explicit empty map is a deliberate opt-out, so it neither falls back to package.json nor
 // passes silently: the INFO row names the file that declared it.
-test('discoverSensors takes an empty harness.json sensors map as declaring none, and check says where', () => {
+test('discoverSensors takes an empty harness.json sensors map as declaring none, and check says where', async () => {
   const dir = makeTmpDir();
   try {
     writeJson(dir, 'harness.json', { sensors: {} });
     writeJson(dir, 'package.json', { scripts: { test: 'vitest run' } });
     assert.deepEqual(discoverSensors(dir), { sensors: [], source: 'harness.json' });
-    const [row] = checkSensors(dir);
+    const [row] = await checkSensors(dir);
     assert.equal(row.info, true);
     assert.match(row.detail, /harness\.json declares no sensors/);
   } finally {
@@ -217,21 +217,21 @@ test('discoverSensors finds nothing when neither file exists', () => {
   }
 });
 
-test('checkSensor passes when the command exits 0', () => {
+test('checkSensor passes when the command exits 0', async () => {
   const dir = makeTmpDir();
   try {
     const command = exits(0);
-    assert.deepEqual(checkSensor(dir, { name: 'lint', command }), { name: 'lint', pass: true, detail: `${command} passed`, output: '' });
+    assert.deepEqual(await checkSensor(dir, { name: 'lint', command }), { name: 'lint', pass: true, detail: `${command} passed`, output: '' });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("checkSensor fails with the exit status and keeps the command's output", () => {
+test("checkSensor fails with the exit status and keeps the command's output", async () => {
   const dir = makeTmpDir();
   try {
     const command = exits(3, "console.log('boom-out');console.error('boom-err');");
-    const row = checkSensor(dir, { name: 'tests', command });
+    const row = await checkSensor(dir, { name: 'tests', command });
     assert.equal(row.name, 'tests');
     assert.equal(row.pass, false);
     assert.equal(row.detail, `${command} exited 3`);
@@ -242,16 +242,16 @@ test("checkSensor fails with the exit status and keeps the command's output", ()
   }
 });
 
-test('checkSensor fails with the spawn error when the command cannot run', () => {
+test('checkSensor fails with the spawn error when the command cannot run', async () => {
   const spawn = () => ({ error: new Error('spawn ENOENT'), status: null });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'whatever' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'whatever' }, { spawn });
   assert.equal(row.pass, false);
   assert.match(row.detail, /spawn ENOENT/);
 });
 
-test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', () => {
+test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', async () => {
   const spawn = () => ({ error: new Error('spawnSync ENOBUFS'), status: null, stdout: 'partial-out', stderr: 'partial-err' });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'noisy' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'noisy' }, { spawn });
   assert.equal(row.pass, false);
   assert.match(row.output, /partial-out/);
   assert.match(row.output, /partial-err/);
@@ -259,7 +259,7 @@ test('checkSensor keeps what the command printed before a spawn error such as EN
 
 // Windows dedupes environment keys case-insensitively and keeps the uppercase one, so an inherited
 // NPM_CONFIG_CACHE would win over the lowercase override; npm also reads either case.
-test('checkSensor drops inherited case variants of the variables it overrides', () => {
+test('checkSensor drops inherited case variants of the variables it overrides', async () => {
   const saved = { ...process.env };
   let env;
   const spawn = (_command, options) => {
@@ -269,7 +269,7 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
   try {
     process.env.NPM_CONFIG_CACHE = 'real-cache';
     process.env.Home = 'real-home';
-    checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+    await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
@@ -281,23 +281,129 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
   assert.ok(env.npm_config_cache.startsWith(env.HOME));
 });
 
-test('checkSensor names the signal when the command is killed by one', () => {
+test('checkSensor gives every sensor a 10 minute timeout by default', async () => {
+  let options;
+  const spawn = (_command, opts) => {
+    options = opts;
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  assert.equal(options.timeout, 10 * 60 * 1000);
+});
+
+/** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
+async function goneWithin(pid, ms = 5000) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      return err.code === 'ESRCH';
+    }
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+// A watch-mode script or a linter waiting on stdin must not hold the pre-commit gate forever, and
+// killing only the shell would leave the real command running after every commit.
+test('checkSensor stops a command that never exits, with its whole process tree, and says it timed out', async () => {
+  const dir = makeTmpDir();
+  try {
+    const pidFile = path.join(dir, 'grandchild.pid');
+    // The grandchild writes its pid and sleeps; the parent waits for that file, then sleeps too.
+    const grandchild = `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`;
+    fs.writeFileSync(path.join(dir, 'hang.js'), [
+      "const { spawn } = require('child_process');",
+      "const fs = require('fs');",
+      `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'inherit' });`,
+      `while (!fs.existsSync(${JSON.stringify(pidFile)})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);`,
+      'setTimeout(() => {}, 120000);',
+    ].join('\n'));
+    const command = 'node hang.js';
+    const started = Date.now();
+    const row = await checkSensor(dir, { name: 'tests', command }, { sensorTimeout: 3000 });
+    assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
+    assert.equal(row.pass, false);
+    assert.equal(row.detail, `${command} timed out after 3 s`);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(await goneWithin(pid), `grandchild ${pid} is still running`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(fs.existsSync(dir), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A test server or worker a script left running holds the pipes after the shell is gone; the sensor
+// is judged by the shell's own exit status, but the leftover must not outlive the run.
+test('checkSensor kills a background process the command left behind, and still passes', async () => {
+  const dir = makeTmpDir();
+  try {
+    const pidFile = path.join(dir, 'survivor.pid');
+    fs.writeFileSync(path.join(dir, 'child.js'), `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 120000);`);
+    // The shell exits 0 at once; the survivor is its own child and inherits the output pipes.
+    const command = process.platform === 'win32' ? 'start /b node child.js' : 'node child.js &';
+    const started = Date.now();
+    const row = await checkSensor(dir, { name: 'tests', command });
+    assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
+    assert.equal(row.pass, true, row.output);
+    assert.equal(row.detail, `${command} passed`);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(await goneWithin(pid), `survivor ${pid} is still running`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(fs.existsSync(dir), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// On Windows a survivor can hold the throwaway home as its cwd; that must not throw out of check.
+test('checkSensor does not throw when the throwaway home cannot be removed', async () => {
+  const realRmSync = fs.rmSync;
+  fs.rmSync = (target, ...rest) => {
+    if (path.basename(String(target)).startsWith('js-harness-test-home-')) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    return realRmSync(target, ...rest);
+  };
+  try {
+    const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn: () => ({ status: 0, stdout: '', stderr: '' }) });
+    assert.equal(row.pass, true);
+  } finally {
+    fs.rmSync = realRmSync;
+  }
+});
+
+test('checkSensor keeps what the command printed before it timed out', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'chatty.js'), "console.log('before-timeout'); setTimeout(() => {}, 120000);");
+    const command = 'node chatty.js';
+    const row = await checkSensor(dir, { name: 'tests', command }, { sensorTimeout: 3000 });
+    assert.equal(row.pass, false);
+    assert.match(row.detail, /timed out after 3 s/);
+    assert.match(row.output, /before-timeout/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensor names the signal when the command is killed by one', async () => {
   const spawn = () => ({ status: null, signal: 'SIGTERM', stdout: 'out', stderr: '' });
-  const row = checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
   assert.equal(row.pass, false);
   assert.equal(row.detail, 'slow was killed by SIGTERM');
   assert.match(row.output, /out/);
 });
 
 // A test that forgets --home must land in a throwaway directory, never in the real home.
-test('checkSensor runs the command with the home directory pointed at a throwaway directory', () => {
+test('checkSensor runs the command with the home directory pointed at a throwaway directory', async () => {
   const dir = makeTmpDir();
   try {
     const seen = path.join(dir, 'seen-home.txt').replace(/\\/g, '/');
     const record =
       "require('os').homedir() + '|' + process.env.JS_HARNESS_CHECK_INNER + '|' + process.env.NODE_TEST_CONTEXT + '|' + process.env.npm_config_cache";
     const command = `node -e "require('fs').writeFileSync('${seen}', ${record})"`;
-    const row = checkSensor(dir, { name: 'tests', command });
+    const row = await checkSensor(dir, { name: 'tests', command });
     assert.equal(row.pass, true, row.output);
     const [home, inner, context, npmCache] = fs.readFileSync(seen, 'utf8').split('|');
     // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, outside HOME: `npm run` must too.
@@ -312,11 +418,11 @@ test('checkSensor runs the command with the home directory pointed at a throwawa
   }
 });
 
-test('checkSensors turns a discovery error into one FAIL row named sensors', () => {
+test('checkSensors turns a discovery error into one FAIL row named sensors', async () => {
   const dir = makeTmpDir();
   try {
     fs.writeFileSync(path.join(dir, 'harness.json'), '{ nope');
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, 'sensors');
     assert.equal(rows[0].pass, false);
@@ -326,10 +432,10 @@ test('checkSensors turns a discovery error into one FAIL row named sensors', () 
   }
 });
 
-test('checkSensors says so when no sensor is declared, naming both ways to declare one', () => {
+test('checkSensors says so when no sensor is declared, naming both ways to declare one', async () => {
   const dir = makeTmpDir();
   try {
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, 'sensors');
     assert.equal(rows[0].info, true);
@@ -342,11 +448,11 @@ test('checkSensors says so when no sensor is declared, naming both ways to decla
   }
 });
 
-test('checkSensors runs one row per sensor', () => {
+test('checkSensors runs one row per sensor', async () => {
   const dir = makeTmpDir();
   try {
     writeJson(dir, 'harness.json', { sensors: { tests: exits(0), lint: exits(1) } });
-    const rows = checkSensors(dir);
+    const rows = await checkSensors(dir);
     assert.deepEqual(rows.map((row) => [row.name, row.pass]), [['tests', true], ['lint', false]]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -479,8 +585,16 @@ test('main passes with a large machine payload when AGENTS.md is within budget',
 
 // --- home precedence: --home flag, then env.JS_HARNESS_HOME, then os.homedir() (matches doctor.mjs) ---
 
+/** Stands in for gentle-ai being absent, so a test that reaches the review row never spawns the real one. */
+const gentleAiNotFound = () => ({
+  status: null,
+  stdout: '',
+  stderr: '',
+  error: Object.assign(new Error('spawnSync gentle-ai ENOENT'), { code: 'ENOENT' }),
+});
+
 /** Runs `main`, capturing everything it printed via console.log/console.error and the exit code. */
-async function runCheck(argv, env) {
+async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
   const originalLog = console.log;
@@ -492,7 +606,7 @@ async function runCheck(argv, env) {
     errOutput += `${line}\n`;
   };
   try {
-    const code = await main(argv, env);
+    const code = await main(argv, env, deps);
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -653,6 +767,253 @@ test('main --push does not run the contracts row', async () => {
     writeTask(dir, 'bad.md', BAD_CONTRACT);
     const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_CHECK_INNER: '1' });
     assert.doesNotMatch(output, /contracts/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- review row: whether the pending change is due a gentle-ai review, informational and fail-open ---
+
+const MODE_ON = JSON.stringify({
+  schema: 'gentle-ai.review-mode/v1',
+  operation: 'status',
+  scope: 'both',
+  status: { schema: 'gentle-ai.rdd-mode-status/v1', global: 'on', clone_local: '', effective: 'on', source: 'global' },
+});
+const MODE_OFF = MODE_ON.replace('"effective":"on"', '"effective":"off"').replace('"source":"global"', '"source":"clone_local"');
+const assessment = (over = {}) =>
+  JSON.stringify({
+    schema: 'gentle-ai.review-assessment/v1',
+    risk: 'medium',
+    reasons: [{ code: 'executable_change', path: 'bin/check.mjs' }],
+    changed_paths: 3,
+    changed_lines: 442,
+    candidate: { kind: 'current-changes', consumed: false },
+    review_due: true,
+    review_due_reason: 'slice_budget_reached',
+    ...over,
+  });
+const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
+const spawnFailure = (code, message) => ({ status: null, stdout: '', stderr: '', error: Object.assign(new Error(message), { code }) });
+
+/** A stand-in for `spawnSync` that answers `gentle-ai review mode status` and `... assess` and records calls. */
+function fakeGentleAi({ mode = ok(MODE_ON), assess = ok(assessment()) } = {}) {
+  const calls = [];
+  const spawn = (program, args, options) => {
+    calls.push({ program, args, options });
+    return args.includes('assess') ? assess : mode;
+  };
+  return Object.assign(spawn, { calls });
+}
+const assessCalls = (spawn) => spawn.calls.filter((call) => call.args.includes('assess'));
+
+test('checkReview runs mode status then assess as gentle-ai, without a shell, in cwd', () => {
+  const spawn = fakeGentleAi();
+  checkReview('/proj', { spawn, timeout: 1234 });
+  assert.equal(spawn.calls.length, 2);
+  assert.deepEqual(spawn.calls[0].args, ['review', 'mode', 'status', '--cwd', '/proj', '--json']);
+  assert.deepEqual(spawn.calls[1].args, ['review', 'assess', '--cwd', '/proj', '--json']);
+  for (const call of spawn.calls) {
+    assert.equal(call.program, 'gentle-ai');
+    assert.equal(call.options.encoding, 'utf8');
+    assert.equal(call.options.timeout, 1234);
+    assert.ok(!call.options.shell);
+  }
+});
+
+test('checkReview says gentle-ai was not found, and assesses nothing', () => {
+  const spawn = fakeGentleAi({ mode: spawnFailure('ENOENT', 'spawnSync gentle-ai ENOENT') });
+  const row = checkReview('/proj', { spawn });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /gentle-ai was not found/);
+  assert.match(row.detail, /not assessed/);
+  assert.equal(assessCalls(spawn).length, 0);
+});
+
+// Fail-open covers a schema-tagged envelope of the wrong shape too: it must neither throw nor print
+// `undefined` as if it were an assessment.
+test('checkReview skips reasons that are not objects, or have no string code, instead of throwing', () => {
+  const spawn = fakeGentleAi({ assess: ok(assessment({ reasons: [null, 'x', { path: 'a.mjs' }, { code: 7 }, { code: 'executable_change', path: 'a.mjs' }] })) });
+  const row = checkReview('/proj', { spawn });
+  assert.equal(row.pass, true);
+  assert.deepEqual(row.lines.filter((line) => !line.startsWith('next:')), ['executable_change a.mjs']);
+});
+
+// gentle-ai also answers `changed_paths: 0`, high and due when it cannot build the candidate at all;
+// only its explicit "no pending changes" reason means a clean tree.
+test('checkReview reports an unassessable candidate as a failure, not as a clean tree', () => {
+  const unassessable = assessment({
+    risk: 'high',
+    changed_paths: 0,
+    changed_lines: 0,
+    review_due_reason: 'high_risk',
+    reasons: [{ code: 'unassessable', detail: 'open .git/index: Access is denied.' }],
+  });
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: unassessable, stderr: 'Error: denied' } }) });
+  assert.equal(row.pass, true);
+  assert.doesNotMatch(row.detail, /no pending change/);
+  assert.match(row.detail, /could not assess/);
+  assert.ok(row.lines.includes('unassessable open .git/index: Access is denied.'), row.lines.join('\n'));
+});
+
+test('checkReview reports an assessment missing its fields as having no assessment', () => {
+  for (const over of [{ risk: undefined }, { changed_lines: '442' }, { review_due: 'yes' }, { review_due_reason: 3 }]) {
+    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment(over)) }) });
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /gave no assessment \(unexpected shape\)/, JSON.stringify(over));
+  }
+});
+
+test('checkReview reports RDD off with its source and does not run assess', () => {
+  const spawn = fakeGentleAi({ mode: ok(MODE_OFF) });
+  const row = checkReview('/proj', { spawn });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /RDD is off \(clone_local\)/);
+  assert.match(row.detail, /no review was assessed/);
+  assert.equal(assessCalls(spawn).length, 0);
+});
+
+test('checkReview still assesses when the mode is unknown (non-zero exit, bad JSON or a timeout)', () => {
+  const unknown = [
+    { status: 1, stdout: '', stderr: 'boom' },
+    ok('not json'),
+    ok(JSON.stringify({ status: { effective: 'maybe' } })),
+    spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT'),
+  ];
+  for (const mode of unknown) {
+    const spawn = fakeGentleAi({ mode });
+    const row = checkReview('/proj', { spawn });
+    assert.equal(assessCalls(spawn).length, 1);
+    assert.match(row.detail, /review due \(slice_budget_reached\)/);
+  }
+});
+
+test('checkReview reports no pending change instead of the clean tree high risk', () => {
+  const clean = assessment({
+    risk: 'high',
+    reasons: [{ code: 'unassessable', detail: 'the review assess candidate has no pending changes' }],
+    changed_paths: 0,
+    changed_lines: 0,
+    review_due: true,
+    review_due_reason: 'high_risk',
+  });
+  // gentle-ai exits non-zero on a clean tree but still prints the JSON.
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: clean, stderr: 'Error: no pending changes' } }) });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /no pending change to assess/);
+  assert.doesNotMatch(row.detail, /high|due/);
+  assert.equal(row.lines, undefined);
+});
+
+test('checkReview says a due review is due, with its risk, size and reason', () => {
+  const row = checkReview('/proj', { spawn: fakeGentleAi() });
+  assert.equal(row.detail, 'medium risk, 3 paths, 442 lines: review due (slice_budget_reached)');
+  assert.equal(row.pass, true);
+  assert.equal(row.info, true);
+});
+
+test('checkReview says a review is not due, and uses the singular for one path', () => {
+  const assess = ok(assessment({ changed_paths: 1, changed_lines: 1, review_due: false, review_due_reason: 'under_budget' }));
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
+  assert.equal(row.detail, 'medium risk, 1 path, 1 line: review not due (under_budget)');
+  assert.equal(row.lines.some((line) => line.startsWith('next:')), false);
+});
+
+test('checkReview lists each reason, and the next command only when a review is due', () => {
+  const reasons = [
+    { code: 'executable_change', path: 'bin/check.mjs' },
+    { code: 'unassessable', detail: 'could not read a file' },
+  ];
+  const next_transition = { command: 'gentle-ai review status --cwd /proj --base-ref abc' };
+  const due = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition })) }) });
+  assert.deepEqual(due.lines, [
+    'executable_change bin/check.mjs',
+    'unassessable could not read a file',
+    'next: gentle-ai review status --cwd /proj --base-ref abc',
+  ]);
+  const notDue = checkReview('/proj', {
+    spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition, review_due: false, review_due_reason: 'under_budget' })) }),
+  });
+  assert.deepEqual(notDue.lines, ['executable_change bin/check.mjs', 'unassessable could not read a file']);
+  const noCommand = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition: {} })) }) });
+  assert.equal(noCommand.lines.some((line) => line.startsWith('next:')), false);
+});
+
+test('checkReview gives no assessment when assess prints nothing usable, and stays INFO and passing', () => {
+  const timeout = spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT');
+  const cases = [
+    { status: 2, stdout: '', stderr: 'Error: something broke' },
+    ok('not json'),
+    ok(JSON.stringify({ schema: 'something-else/v1', risk: 'high' })),
+    ok('null'),
+    timeout,
+    spawnFailure('EPERM', 'spawn EPERM'),
+  ];
+  for (const assess of cases) {
+    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
+    assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+    assert.match(row.detail, /^gentle-ai review assess gave no assessment \(.+\)$/);
+  }
+  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: timeout }) });
+  assert.match(row.detail, /timed out/);
+});
+
+test('checkReview tolerates a spawn that throws', () => {
+  const row = checkReview('/proj', {
+    spawn: () => {
+      throw new Error('kaboom');
+    },
+  });
+  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
+  assert.match(row.detail, /no assessment/);
+});
+
+test('main prints the review row as INFO and still exits 0 when assess says high and due', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const high = assessment({ risk: 'high', review_due_reason: 'high_risk', next_transition: { command: 'gentle-ai review status --cwd x' } });
+    const gentleAi = fakeGentleAi({ assess: { status: 1, stdout: high, stderr: 'Error: due' } });
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}review {2}high risk, 3 paths, 442 lines: review due \(high_risk\)/m);
+    assert.match(output, /next: gentle-ai review status --cwd x/);
+    assert.deepEqual(gentleAi.calls[0].args.slice(-3), ['--cwd', dir, '--json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main runs the review row after the sensor rows', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const { output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi: fakeGentleAi() });
+    const at = (text) => output.indexOf(text);
+    assert.ok(at('PASS  tests') !== -1 && at('PASS  tests') < at('INFO  review'), output);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main exits 0 with a review row when gentle-ai is missing', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}review {2}gentle-ai was not found/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main runs no review row when it is the inner run, or a push', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const gentleAi = fakeGentleAi();
+    const inner = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.doesNotMatch(inner.output, /review/);
+    const push = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    assert.doesNotMatch(push.output, /^(PASS|FAIL|INFO) {2}review /m);
+    assert.equal(gentleAi.calls.length, 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
