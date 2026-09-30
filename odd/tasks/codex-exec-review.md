@@ -65,11 +65,11 @@ Mode: strict (source: user global config). Runner: `node --test`.
 - [x] T2 Docs follow the code: the T7 design in `odd/tasks/project-init.md`, the roadmap's Review
   row, the installed skill text in `bin/lib/manifest.mjs` — route: same writer
 - [x] T3 A real run on this branch records `reviewed` — route: inline
-- [ ] T4 Evidence from what Codex saw, not from how its commands read: every changed line of
+- [x] T4 Evidence from what Codex saw, not from how its commands read: every changed line of
   `base..HEAD` (from our own `git diff`, compared ASCII-normalized, since PowerShell 5.1 re-encodes
   non-ASCII) appears in the output of a successful command; the command-string parser goes —
   route: delegated writer (the T1 writer, resumed)
-- [ ] T5 The review spawn is asynchronous with its own timer, and a timeout kills the whole process
+- [x] T5 The review spawn is asynchronous with its own timer, and a timeout kills the whole process
   tree (`taskkill /T /F` on Windows), so a stall cannot outlive the bound — route: same writer
 
 ## Acceptance criteria
@@ -127,5 +127,21 @@ Mode: strict (source: user global config). Runner: `node --test`.
   successful commands contain 281 of the 281 changed lines of the true `git diff` (ASCII-normalized),
   so the output itself is the evidence → T4, which answers all four and R3-readsdiff-partial-range.
 
+- 2026-09-29: the stop hook's review of 72ad788 (lineage review-ab662fd6966e7f11, 1158 lines)
+  approved and acknowledged; its three WARNING (chained exit masks a failed diff, partial range,
+  win32 timeout) are T4 and T5.
+- 2026-09-29: T4 and T5 by the writer, resumed. T4: our own `git diff --no-color --no-ext-diff
+  <base> HEAD` gives the changed lines (inside hunks, ASCII-normalized, blank ones dropped,
+  deduped); `reviewEvidence(events, expectedLines)` needs every one of them in the pooled output
+  of successful commands; the command-text parser is gone. T5: the review is an async child with
+  its own timer; timeout or overflow kills the tree (`taskkill /PID <pid> /T /F` on Windows, the
+  process group elsewhere, where the child is detached) and resolves at once; one progress line
+  per completed command. RED: 64 tests, 44 failing. GREEN: 64/64; `node --test` → 731 / 724 / 0 /
+  7; `npm run check` and `npm run e2e` exit 0. Sanity check on the stored real run: 232 of 232
+  distinct changed lines seen (281 raw, 19 blank). Real spawn on this machine: the async launch
+  path runs; a real sleeper hit a 1.5 s timer and returned about 2 s later with no process left.
+  Parent: off Windows the detached child no longer got Ctrl-C, so SIGINT/SIGTERM now kill the tree
+  first (`signals` dep, handlers removed after; RED 1 failing, GREEN 65/65, suite 732/725/0/7).
+
 ## Next step
-T4 and T5.
+The native review of the branch, then a real `js-harness codex-review --base main`.

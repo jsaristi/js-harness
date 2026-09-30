@@ -3,10 +3,11 @@
 // it ran, or record an explicit skip with `--unavailable <reason>`. The record is what
 // `check --push` reads to catch a slice that was never reviewed (T7 in odd/tasks/project-init.md).
 // A completed Codex turn does not mean it read the diff (a sandbox that denies process launch still
-// completes, with a review that says so), and its wording is not evidence either. So the JSONL event
-// stream is read instead: a record is written only when a git command that reads the diff really ran
-// and succeeded (design and probes: odd/tasks/codex-exec-review.md).
-import { spawnSync } from 'node:child_process';
+// completes, with a review that says so), and neither its wording nor the text of the commands it
+// ran is evidence. What Codex saw is: the changed lines of `git diff <base> HEAD`, computed here, must
+// all appear in the output of the commands that succeeded in its JSONL event stream (design and
+// probes: odd/tasks/codex-exec-review.md).
+import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 
 // `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
@@ -34,11 +35,13 @@ function parseArgs(argv) {
   return { base, unavailable, cwd: get('--cwd') ?? process.cwd() };
 }
 
+const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
+
 /** Trimmed stdout of a successful `git <args>` run in `cwd` (empty when it printed nothing), else
- * `null`: a failed run and an empty answer are different things. */
-function git(spawn, cwd, args) {
+ * `null`: a failed run and an empty answer are different things. `options` extend the spawn's. */
+function git(spawn, cwd, args, options = {}) {
   try {
-    const result = spawn('git', args, { cwd, encoding: 'utf8' });
+    const result = spawn('git', args, { cwd, encoding: 'utf8', ...options });
     if (result && !result.error && result.status === 0) return (result.stdout ?? '').trim();
   } catch {
     // No git on PATH: the caller reports it as an unresolvable repository or revision.
@@ -90,6 +93,29 @@ export function windowsCommandLine(command, args) {
   return [command, ...args.map(quoteWindowsArg)].join(' ');
 }
 
+/** One line of a diff or of a command's output, comparable across shells: PowerShell 5.1 re-encodes
+ * non-ASCII text, so only printable ASCII is kept (which also drops `\r` and tabs), and trailing
+ * space goes. */
+const normalizeLine = (line) => line.replace(/[^\x20-\x7e]/g, '').trimEnd();
+
+/** The changed lines of a unified diff, normalized, deduplicated, in order: the `+`/`-` lines inside
+ * hunks (so file headers are not mistaken for changes, and an added line that starts with `++` is
+ * not mistaken for a header). A line that is just `+` or `-` (a blank line added or removed) is
+ * dropped: it carries no evidence. */
+export function changedLines(patch) {
+  const lines = new Set();
+  let inHunk = false;
+  for (const line of typeof patch === 'string' ? patch.split('\n') : []) {
+    if (line.startsWith('diff --git ')) inHunk = false;
+    else if (line.startsWith('@@')) inHunk = true;
+    else if (inHunk && (line.startsWith('+') || line.startsWith('-'))) {
+      const normalized = normalizeLine(line);
+      if (normalized !== '+' && normalized !== '-') lines.add(normalized);
+    }
+  }
+  return [...lines];
+}
+
 /** The JSON objects among the lines of Codex's `--json` output; anything else is ignored. */
 export function parseEvents(text) {
   const events = [];
@@ -104,61 +130,24 @@ export function parseEvents(text) {
   return events;
 }
 
-// A shell launcher in front of the whole command (`powershell.exe -Command "…"`, `bash -lc "…"`):
-// an optionally quoted path ending in the shell's name, some flags, the switch that takes a command,
-// and its opening quote.
-const SHELL = String.raw`(?:powershell|pwsh|cmd|bash|sh)(?:\.exe)?`;
-const LAUNCHER = new RegExp(
-  String.raw`^\s*(?:"(?:[^"]*[\\/])?${SHELL}"|'(?:[^']*[\\/])?${SHELL}'|(?:\S*[\\/])?${SHELL})` +
-    String.raw`(?:\s+(?:-(?:NoProfile|NonInteractive|NoLogo|Login|l)(?![\w-])|-ExecutionPolicy\s+\S+))*` +
-    String.raw`\s+(?:-Command|-lc|-c|/c)\s*["']?`,
-  'i',
-);
-// `git`, options (`--no-pager`, `-C <dir>`, `-c <k=v>`), then `diff` or `log`.
-const GIT_DIFF_OR_LOG = /^git(?:\.exe)?(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+(diff|log)(?=\s|$)(.*)$/s;
-// Options that ask for names, counts or a status instead of the patch; they void a `-p` beside them.
-const NO_PATCH = /^(?:--(?:stat|shortstat|numstat|dirstat|summary|name-only|name-status|quiet|no-patch|raw|check)(?:=.*)?|-s)$/;
-
-/** Whether `token` names the base commit: its full id or a prefix of 7+ hex characters, alone or as
- * the left side of `..`/`...`. */
-function namesBase(token, base) {
-  const side = token.replace(/^["']|["']$/g, '').split(/\.\.\.?/)[0].toLowerCase();
-  return side.length >= 7 && /^[0-9a-f]+$/.test(side) && base.toLowerCase().startsWith(side);
-}
-
-/** Whether `command` prints the patch of the range from `base`: a segment (a command is often a
- * chain, `git diff --stat x; git diff x`) that starts with `git diff`, or `git log -p`, over the
- * base commit, and neither asks only for names or counts (`--stat`, `--name-only`, …) nor reads one
- * file at a revision (`<rev>:<path>`). `git show` shows one commit, not the range, so it never
- * counts. A search or echo that merely contains `git diff` starts with something else, and a bare
- * `git diff` is the working tree against the index, which is empty on the clean tree reviewed here. */
-export function readsDiff(command, base) {
-  if (typeof base !== 'string' || !base) return false;
-  return command.replace(LAUNCHER, '').split(/;|&&|\|\||\||\n/).some((raw) => {
-    const segment = raw.replace(/^[\s(&"']+/, '').replace(/["')\s]+$/, '');
-    const match = GIT_DIFF_OR_LOG.exec(segment);
-    if (!match) return false;
-    const tokens = match[2].split(/\s+/).filter(Boolean);
-    if (match[1] === 'log' && !tokens.some((t) => t === '-p' || t === '--patch')) return false;
-    if (tokens.some((t) => NO_PATCH.test(t) || (!t.startsWith('-') && /(?<!:):(?!:)/.test(t)))) return false;
-    // A pathspec after `--` limits the diff to some files, so it did not read the whole range.
-    const dashes = tokens.indexOf('--');
-    if (dashes !== -1 && tokens.slice(dashes + 1).some((t) => t !== '.')) return false;
-    return tokens.some((t) => namesBase(t, base));
-  });
-}
-
 /** What the event stream proves. `inspected` is the evidence rule: the turn completed and did not
- * fail, it ended with a message, and a completed command that reads the diff exited 0. `errors` are
- * the failed turn's messages; `warnings` are error items Codex raises without failing (an
- * unrecognized configuration setting, for one). */
-export function reviewEvidence(events, base) {
+ * fail, it ended with a message, and every one of `expectedLines` (see `changedLines`) is a line of
+ * the output of a command that exited 0: the union over the commands, since Codex may read the diff
+ * in pieces, and never a failed command's, which may have printed the patch before failing. Exact
+ * coverage is the bar; 281 of 281 changed lines were found in a real run. With no expected lines (a
+ * range of binary files or blank lines only) there is nothing to match, so one successful command
+ * stands in. Without `expectedLines` nothing is inspected. `coverage` is how many were seen, and
+ * `missing` up to five that were not. `errors` are the failed turn's messages; `warnings` are error
+ * items Codex raises without failing (an unrecognized configuration setting, for one). */
+export function reviewEvidence(events, expectedLines = null) {
   let turnCompleted = false;
   let turnFailed = false;
   let review = '';
   const commands = [];
   const errors = [];
   const warnings = [];
+  const shown = new Set();
+  let succeeded = false;
   for (const event of events) {
     const item = event.item;
     if (event.type === 'turn.completed') turnCompleted = true;
@@ -168,30 +157,38 @@ export function reviewEvidence(events, base) {
       if (message) errors.push(String(message));
     } else if (event.type === 'item.completed' && item) {
       if (item.type === 'agent_message' && typeof item.text === 'string') review = item.text.trim();
-      else if (item.type === 'command_execution') commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code });
-      else if (item.type === 'error' && item.message) warnings.push(String(item.message));
+      else if (item.type === 'command_execution') {
+        commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code });
+        if (item.exit_code === 0) {
+          succeeded = true;
+          for (const line of String(item.aggregated_output ?? '').split('\n')) shown.add(normalizeLine(line));
+        }
+      } else if (item.type === 'error' && item.message) warnings.push(String(item.message));
     }
   }
   const completed = turnCompleted && !turnFailed;
-  const readDiff = commands.some((c) => c.exitCode === 0 && readsDiff(c.command, base));
-  return { inspected: completed && review !== '' && readDiff, completed, review, commands, errors, warnings };
+  const expected = Array.isArray(expectedLines) ? expectedLines : [];
+  const missingAll = expected.filter((line) => !shown.has(line));
+  const coverage = { seen: expected.length - missingAll.length, total: expected.length };
+  const covered = Array.isArray(expectedLines) && (expected.length === 0 ? succeeded : missingAll.length === 0);
+  return { inspected: completed && review !== '' && covered, completed, review, commands, errors, warnings, coverage, missing: missingAll.slice(0, 5) };
 }
 
-/** The commands as one line each, `exit N  <command>`, cut to 100 characters. */
-function commandLines(commands) {
-  return commands.map(({ command, exitCode }) => {
-    const oneLine = command.replace(/\s+/g, ' ').trim();
-    return `  exit ${exitCode ?? '?'}  ${oneLine.length > 100 ? `${oneLine.slice(0, 99)}…` : oneLine}`;
-  });
+const truncate = (text, length) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
+
+/** One command as one line, `  exit N  <command>`, cut to 100 characters. */
+function commandLine(command, exitCode) {
+  return `  exit ${exitCode ?? '?'}  ${truncate(command.replace(/\s+/g, ' ').trim(), 100)}`;
 }
 
 const PROBE_TIMEOUT_MS = 15000;
 
-/** Runs `codex <argv>`. `codex` is a `.cmd` shim on Windows, which only a shell can start. */
-function launchCodex(spawn, platform, argv, options) {
+/** Runs `codex <argv>` through `spawnFn` (sync or async, same signature). `codex` is a `.cmd` shim on
+ * Windows, which only a shell can start. */
+function launchCodex(spawnFn, platform, argv, options) {
   return platform === 'win32'
-    ? spawn(windowsCommandLine('codex', argv), [], { ...options, shell: true })
-    : spawn('codex', argv, options);
+    ? spawnFn(windowsCommandLine('codex', argv), [], { ...options, shell: true })
+    : spawnFn('codex', argv, options);
 }
 
 /** Whether `codex --version` answers, through the launch path and environment of the review: a
@@ -211,7 +208,82 @@ function codexRuns(spawn, platform, env) {
   }
 }
 
-const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
+/** Kills `child` and everything it started. On Windows the child is the `cmd.exe` shim, and killing
+ * only it leaves Codex running with the stdout pipe open, so `taskkill /T` takes the whole tree.
+ * Elsewhere the child leads its own process group (`detached`), which is killed. */
+export function killTree(child, { platform = process.platform, spawnSync: sync = spawnSync, kill = process.kill } = {}) {
+  if (platform === 'win32') {
+    if (child?.pid) sync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    else child?.kill?.();
+    return;
+  }
+  try {
+    kill(-child.pid, 'SIGKILL');
+  } catch {
+    child?.kill?.('SIGKILL');
+  }
+}
+
+/** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
+ * error }`. Unlike `spawnSync` it cannot be held by a grandchild that keeps the pipe open: on the
+ * timer or an overflow past `maxBuffer` it kills the tree and resolves at once, without waiting for
+ * the child to close. `onLine` gets each complete stdout line as it arrives. */
+function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBuffer, onLine, signals }) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let stdout = '';
+    let pending = '';
+    let bytes = 0;
+    let timer;
+    let child;
+    // Off Windows the child is detached, so Ctrl-C no longer reaches it: kill the tree ourselves
+    // before exiting, or Codex keeps running with nobody reading its output.
+    const interrupted = () => stop(Object.assign(new Error('codex interrupted'), { code: 'EINTR' }));
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signals.removeListener('SIGINT', interrupted);
+      signals.removeListener('SIGTERM', interrupted);
+      if (pending) onLine(pending);
+      resolve({ status: null, signal: null, ...result, stdout });
+    };
+    const stop = (error) => {
+      try {
+        kill(child);
+      } catch {
+        // Nothing more to do: the run is reported as stopped either way.
+      }
+      finish({ signal: 'SIGKILL', error });
+    };
+    try {
+      child = launchCodex(spawnAsync, platform, argv, { ...options, detached: platform !== 'win32' });
+    } catch (error) {
+      finish({ error });
+      return;
+    }
+    timer = setTimeout(() => stop(Object.assign(new Error('codex ETIMEDOUT'), { code: 'ETIMEDOUT' })), timeoutMs);
+    signals.once('SIGINT', interrupted);
+    signals.once('SIGTERM', interrupted);
+    child.stdout?.setEncoding?.('utf8');
+    child.stdout?.on('data', (chunk) => {
+      if (settled) return;
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > maxBuffer) {
+        stop(Object.assign(new Error('codex ENOBUFS'), { code: 'ENOBUFS' }));
+        return;
+      }
+      stdout += chunk;
+      pending += chunk;
+      const lines = pending.split('\n');
+      pending = lines.pop();
+      for (const line of lines) onLine(line);
+    });
+    child.on('error', (error) => finish({ error }));
+    child.on('close', (status, signal) => finish({ status, signal }));
+  });
+}
+
 // Reviews seen so far took 1 to 15 minutes; a run past this has stalled (a hung sandboxed command,
 // a network stall), and without a bound the command would wait forever.
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
@@ -222,12 +294,26 @@ const NO_CODEX =
   'Could not run `codex`. Install it with `npm i -g @openai/codex` and log in with `codex login`, ' +
   'or record an explicit skip with `--unavailable <reason>`; nothing was recorded.';
 
-/** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (for git
- * and Codex), `now`, `platform`, `log`, `error` and `write` (the review passed through to the user)
+/** Prints each command as it completes, so a long review shows progress. */
+function progressLine(line, log) {
+  try {
+    const event = JSON.parse(line);
+    if (event?.type === 'item.completed' && event.item?.type === 'command_execution') log(commandLine(String(event.item.command ?? ''), event.item.exit_code));
+  } catch {
+    // Not an event.
+  }
+}
+
+/** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
+ * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
+ * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now`, `platform`, `log`, `error` and
+ * `write` (the review passed through to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
-  const { spawn = spawnSync, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
+  const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
+  const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process } = deps;
+  const kill = deps.killTree ?? ((child) => killTree(child, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
   try {
@@ -270,49 +356,51 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
+    const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', base, 'HEAD'], { maxBuffer: REVIEW_MAX_BUFFER });
+    if (patch === null) {
+      error(`Could not run \`git diff ${base.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
+      return 1;
+    }
+    const expected = changedLines(patch);
     const codexEnv = childEnv(env, platform);
     if (!codexRuns(spawn, platform, codexEnv)) {
       error(NO_CODEX);
       return 1;
     }
     log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
-    let result;
-    try {
-      // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the
-      // progress) stays live. The buffer is far above Node's 1 MiB default, which a long review with
-      // command output could exceed. `codex` is a `.cmd` shim on Windows, which needs a shell.
-      result = launchCodex(spawn, platform, codexArgs(base), {
-        cwd: root,
-        stdio: ['ignore', 'pipe', 'inherit'],
-        encoding: 'utf8',
-        maxBuffer: REVIEW_MAX_BUFFER,
-        timeout: REVIEW_TIMEOUT_MS,
-        env: codexEnv,
-      });
-    } catch (err) {
-      result = { status: null, error: err };
-    }
-    const events = parseEvents(result?.stdout);
-    const evidence = reviewEvidence(events, base);
+    // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
+    // stays live.
+    const result = await runReview(spawnAsync, kill, platform, codexArgs(base), {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'inherit'],
+      env: codexEnv,
+    }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
+    const evidence = reviewEvidence(parseEvents(result.stdout), expected);
     for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
     if (evidence.review) write(`${evidence.review}\n`);
-    if (result?.status !== 0 || !evidence.completed) {
-      const reason = result?.error?.code === 'ENOBUFS'
+    if (result.status !== 0 || !evidence.completed) {
+      const reason = result.error?.code === 'ENOBUFS'
         ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
-        : result?.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
-        : result?.error ? `could not start it: ${result.error.message}`
-          : result?.status !== 0 ? `it exited ${result?.status ?? `on ${result?.signal ?? 'a signal'}`}`
+        : result.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
+        : result.error?.code === 'EINTR' ? 'it was interrupted and stopped'
+        : result.error ? `could not start it: ${result.error.message}`
+          : result.status !== 0 ? `it exited ${result.status ?? `on ${result.signal ?? 'a signal'}`}`
             : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
       const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
       error(`The Codex review did not complete (${reason}); no record was written.${said}\n${WAYS_ON}`);
-      return typeof result?.status === 'number' && result.status !== 0 ? result.status : 1;
+      return typeof result.status === 'number' && result.status !== 0 ? result.status : 1;
     }
-    const ran = evidence.commands.length ? ['Codex ran:', ...commandLines(evidence.commands)].join('\n') : 'Codex ran no commands.';
     if (!evidence.inspected) {
-      error(`Codex's turn completed, but it ran no successful git command that reads the diff of the base commit (git diff or git log -p), or it ended without a review; nothing was recorded.\n${ran}\n${WAYS_ON}`);
+      const { seen, total } = evidence.coverage;
+      const why = evidence.review === '' ? 'it ended without a review message'
+        : total === 0 ? 'it ran no successful command'
+          : `its successful commands showed ${seen} of ${total} changed lines of ${base.slice(0, 7)}..HEAD`;
+      const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
+      const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
+      error(`Codex's turn completed, but ${why}; nothing was recorded.${missing}${ran}\n${WAYS_ON}`);
       return 1;
     }
-    log(ran);
     outcome = 'reviewed';
   }
 
