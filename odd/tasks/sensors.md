@@ -1,6 +1,7 @@
 # Sensors
 
-Locator: `odd/tasks/sensors.md` · Engram mirror: `odd/sensors/tasks` · Branch: `feat/sensors`
+Locator: `odd/tasks/sensors.md` · Engram mirror: `odd/sensors/tasks` · Branches: `feat/sensors`, merged via
+`jsaristi/js-harness#17` as 1cd7f64; `feat/sensors-review`, merged via `jsaristi/js-harness#18` as 6197263
 
 ## Goal
 `js-harness check`, and so every pre-commit it guards, runs a project's own tests and lint or
@@ -77,7 +78,7 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   and check off the roadmap step (route: inline, one test)
 - [x] T3 Review row: the pending change's gentle-ai risk tier and `review_due`, INFO and fail-open
   (route: delegated writer)
-- [ ] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
+- [x] T4 Roadmap and `AGENTS.md` updated; F4 closed after review and merge (route: inline)
 
 ## Progress
 - 2026-09-30: branch `feat/sensors` from `main` at 9e7def8; contract written (e66a77b).
@@ -153,6 +154,11 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   throwaway home is removed best-effort, and a review reason without a string `code` is skipped.
   RED: 3 failed; GREEN: 66 pass; `npm run check` exits 0; no fixture process left. Codex
   (`c7c20a8..230fd04`): no findings.
+- Slice 2 review (`1cd7f64..63af976`, before the PR): gentle-ai approved and acknowledged (lineage
+  `review-eda96eb0bae0cd6f`) with three suggestions, carried below. Slice 2 pushed and merged via
+  `jsaristi/js-harness#18` as 6197263 (2026-09-30, on Sebastián's go-ahead; 699 changed lines,
+  `size:exception` asked in the PR, as #17 did with 582).
+- T4 closed on `docs/close-f4`: the roadmap marks F4 done and points Next at F5.
 
 ## Follow-ups
 - The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
@@ -167,8 +173,12 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   machine yet.
 - On Windows, a survivor whose own parent exited before the shell is not a direct child of the
   shell, so the `ParentProcessId` lookup after the shell exits does not find it.
+- `runSensor` keeps at most 64 MiB of each stream and drops the rest without saying so; the row
+  could note the truncation, and a test with a smaller injected limit would prove the cap.
+- The POSIX signal forwarding (SIGINT, SIGTERM, SIGHUP to the sensor's group, then re-raised) has
+  no test, and the re-raised signal ends check only if nothing else listens for it.
+- The review row checks that a reason's `code` is a string but prints `path` and `detail` without
+  checking their types.
 
 ## Next
-Slice 2 (`feat/sensors-review`, `origin/main..HEAD`) is reviewed by Codex end to end and ready
-for push and a PR against `main` on Sebastián's go-ahead. After it merges, mark F4 done in the roadmap and
-check off T4.
+F4 is closed. What remains are the follow-ups above; each is its own slice when it earns one.
