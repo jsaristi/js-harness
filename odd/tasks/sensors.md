@@ -129,13 +129,37 @@ its own PR against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4.
   lens, approved and acknowledged (lineage `review-bb058dd562b275b7`, authority burned), so the two
   fixes left under budget are now reviewed too. Two suggestions, carried as follow-ups below.
 
+- Review of `9e7def8..32c8fc4` (the stop hook's next candidate, docs only since the last one):
+  approved and acknowledged (lineage `review-7bcf1b01b8e4ca06`), with one WARNING: sensors had
+  no timeout, so a hung script (watch mode, a linter waiting on stdin) would hold the pre-commit
+  forever. It predates this feature (`checkTests` had none), but sensors now come from any project.
+- Slice 1 merged to `main` via `jsaristi/js-harness#17` as 1cd7f64 (2026-09-30, on Sebastián's
+  go-ahead); `feat/sensors-review` rebased onto it (`--onto origin/main a7d9a68`), so slice 2's
+  commits have new ids (T3 is f605617, its fixes b1bd8d3 and ba986a9).
+- Sensor timeout (c5de133, delegated writer, route recorded: two non-trivial files): every sensor
+  gets 10 minutes. `spawnSync`'s own timeout killed only the shell and left the real command
+  running (RED: the never-exits test's cleanup hit EPERM because the orphaned `node` grandchild
+  still held its cwd), so sensors run through an async `runSensor` that kills the tree —
+  `taskkill /T /F` on Windows, the process group elsewhere (`detached`), and on POSIX forwards
+  SIGINT/SIGTERM/SIGHUP to that group so a Ctrl-C still stops it. GREEN: 64 pass; `npm run check`
+  exits 0 (75 s); no orphaned `node` process left after the suite. The POSIX path is untested
+  here (this machine is Windows only). gentle-ai assess from d6be17c: `medium`, 222 lines,
+  `under_budget`.
+
 ## Follow-ups
 - The review row's two gentle-ai calls each get a 20 s timeout, so a hung gentle-ai can add ~40 s
   to a commit; a shared deadline, or a short one for `mode status`, would bound it.
 - A clean tree is recognised by gentle-ai's English detail "no pending changes"; if gentle-ai adds
   a stable code for it, match that instead, or pin the phrase in a test against real output.
+- The review row spawns `gentle-ai` without a shell, so on Windows a `.cmd` or `.ps1` shim would
+  read as "not found"; gentle-ai installs as a Go binary today, so this is latent.
+- `contract run` uses `spawnSync` with a timeout too, so a timed-out done-when command leaves its
+  grandchildren running the same way; `runSensor` could serve both.
+- The sensor runner's POSIX path (process-group kill, signal forwarding) has no test on a POSIX
+  machine yet.
 
 ## Next
-Slice 1 (`feat/sensors`, e66a77b..a7d9a68) is pushed and open as `jsaristi/js-harness#17` against
-`main` (582 changed lines, asks for `size:exception`), awaiting Sebastián's merge; after it merges, rebase `feat/sensors-review` (slice 2) onto `main` and open its PR.
-After both merge, mark F4 done in the roadmap and check off T4.
+Slice 2 (`feat/sensors-review`, main..HEAD) is ready for its review round (gentle-ai, then Codex
+over `origin/main..HEAD`, since the rebase changed the ids the old Codex records cover), then push
+and a PR against `main` on Sebastián's go-ahead. After it merges, mark F4 done in the roadmap and
+check off T4.
