@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 // `contract`: the task contract at the head of a feature document (see odd/tasks/task-contract.md
 // and bin/lib/contract.mjs). `template` prints the template; `check` validates contracts statically
-// and never runs the commands they name. Zero dependencies.
+// and never runs the commands they name; `run` runs them and reports met or not met; `goal` prints
+// the `/goal` condition that makes a session run `run`. Zero dependencies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { CONTRACT_TEMPLATE, isContract, validateContract } from './lib/contract.mjs';
+import { CONTRACT_TEMPLATE, doneWhen, isContract, parseContract, validateContract } from './lib/contract.mjs';
 
-const USAGE = 'Usage: js-harness contract template | js-harness contract check [file...] [--cwd <dir>]';
+const USAGE =
+  'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--cwd <dir>] | goal <file> [--cwd <dir>]';
+
+// The documented `/goal` condition limit (https://code.claude.com/docs/en/goal).
+const GOAL_LIMIT = 4000;
+// An Ask me before text longer than this is referenced by the condition, not copied into it.
+const ASK_INLINE_MAX = 200;
+// Set for every done-when command `run` starts, so a command that is `contract run` itself is refused.
+const RUN_GUARD = 'JS_HARNESS_CONTRACT_RUN';
 
 class ContractArgError extends Error {}
 
@@ -18,7 +27,7 @@ function requireValue(argv, i, flag) {
 }
 
 /** Walks argv token by token, so an unknown flag is a usage error and never a silently ignored one. */
-function parseCheckArgs(argv) {
+function parseArgs(argv) {
   const files = [];
   let cwd;
   for (let i = 0; i < argv.length; i++) {
@@ -102,7 +111,7 @@ function explicitEntries(files, cwd) {
 function checkCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
   let parsed;
   try {
-    parsed = parseCheckArgs(argv);
+    parsed = parseArgs(argv);
   } catch (err) {
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
@@ -130,8 +139,99 @@ function templateCommand(argv, { stdout, stderr }) {
   return 0;
 }
 
-// One entry per subcommand: `run` and `goal` (odd/tasks/task-contract.md, T3) join this table.
-const SUBCOMMANDS = { template: templateCommand, check: checkCommand };
+/** The one contract file `run` and `goal` take: `{ file, cwd }`, or `{ code: 2 }` after printing
+ * usage when the command line is not exactly one file plus an optional `--cwd`. */
+function parseOneFile(argv, stderr, defaultCwd) {
+  try {
+    const { files, cwd } = parseArgs(argv);
+    if (files.length !== 1) throw new ContractArgError('expected exactly one contract file');
+    return { file: files[0], cwd: path.resolve(cwd ?? defaultCwd) };
+  } catch (err) {
+    stderr(`${err.message}\n\n${USAGE}`);
+    return { code: 2 };
+  }
+}
+
+/** `text` with its trailing whitespace and periods dropped, so items join into a sentence cleanly. */
+const trimmed = (text) => text.replace(/[.\s]+$/, '');
+
+/** Lines of a command's captured output, indented under its PASS/FAIL row. */
+function indented(...streams) {
+  const text = streams.join('').replace(/\r\n/g, '\n').replace(/\s+$/, '');
+  return text === '' ? [] : text.split('\n').map((line) => `      ${line}`);
+}
+
+/** Why a command that did not exit 0 failed, for its FAIL row. */
+function failure(result) {
+  if (result.error) return `error ${result.error.code ?? result.error.message}`;
+  if (result.status === null || result.status === undefined) return `signal ${result.signal ?? 'unknown'}`;
+  return `exit ${result.status}`;
+}
+
+function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
+  if (env[RUN_GUARD] === '1') {
+    stderr(`contract run started inside another contract run (${RUN_GUARD} is set): a done-when command must not be \`contract run\` itself`);
+    return 2;
+  }
+  const parsed = parseOneFile(argv, stderr, defaultCwd);
+  if (parsed.code) return parsed.code;
+  const [entry] = explicitEntries([parsed.file], parsed.cwd);
+  const [result] = validateEntries([entry]);
+  if (!result.ok) {
+    stdout(`FAIL  ${result.label}`);
+    for (const reason of result.errors) stdout(`      ${reason}`);
+    stdout('not met');
+    return 1;
+  }
+
+  const { commands, checks } = doneWhen(entry.markdown);
+  const root = projectRoot(parsed.cwd, spawn);
+  const childEnv = { ...process.env, ...env, [RUN_GUARD]: '1' };
+  let met = true;
+  // Every command runs, even after a failure: a /goal turn needs the whole picture, not the first red row.
+  for (const command of commands) {
+    const outcome = spawn(command, { shell: true, cwd: root, env: childEnv, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const passed = outcome.status === 0 && !outcome.error;
+    met &&= passed;
+    stdout(passed ? `PASS  ${command}` : `FAIL  ${command}  (${failure(outcome)})`);
+    for (const line of indented(outcome.stdout ?? '', outcome.stderr ?? '')) stdout(line);
+  }
+  if (checks.length > 0) {
+    stdout('check by hand:');
+    for (const check of checks) stdout(`  - ${check}`);
+  }
+  stdout(met ? 'met' : 'not met');
+  return met ? 0 : 1;
+}
+
+function goalCommand(argv, { cwd: defaultCwd, stdout, stderr }) {
+  const parsed = parseOneFile(argv, stderr, defaultCwd);
+  if (parsed.code) return parsed.code;
+  const [entry] = explicitEntries([parsed.file], parsed.cwd);
+  const [result] = validateEntries([entry]);
+  if (!result.ok) {
+    stderr(`${result.label} is not a valid contract:`);
+    for (const reason of result.errors) stderr(`  ${reason}`);
+    return 1;
+  }
+
+  const { checks } = doneWhen(entry.markdown);
+  const ask = parseContract(entry.markdown).get('Ask me before').replace(/\s+/g, ' ');
+  const inlineAsk = ask.length <= ASK_INLINE_MAX ? `: ${trimmed(ask)}` : '';
+  const condition = [
+    `\`js-harness contract run ${parsed.file}\` exits 0 and prints \`met\``,
+    checks.length > 0 ? `; also true by hand: ${checks.map(trimmed).join('; ')}` : '',
+    `. Run it after each change and fix what fails; stop and ask if a step needs a decision listed under "Ask me before" in ${parsed.file}${inlineAsk}.`,
+  ].join('');
+  if (condition.length > GOAL_LIMIT) {
+    stderr(`the /goal condition is ${condition.length} characters, over the 4,000-character limit: shorten the hand-checkable items in ${parsed.file}`);
+    return 1;
+  }
+  stdout(condition);
+  return 0;
+}
+
+const SUBCOMMANDS = { template: templateCommand, check: checkCommand, run: runCommand, goal: goalCommand };
 
 export async function contractMain(
   argv,

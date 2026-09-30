@@ -25,7 +25,7 @@ Commands:
   upgrade     Install the newer release, then sync.
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
-  contract    Print the task contract template (template) or validate feature docs against it (check).
+  contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.

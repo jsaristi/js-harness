@@ -82,7 +82,7 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   error paths are tested (R3-discover-error-paths-untested); an unreadable `odd/tasks/*.md` still
   fails the row, on purpose, with a test (R3-unreadable-noncontract-fails-gate); the repository-root
   test skips without git (R3-git-dependent-test) — route: the same delegated writer
-- [ ] T3 `contract run` and `contract goal` — route: delegated writer
+- [x] T3 `contract run` and `contract goal` — route: delegated writer
 - [ ] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
   passes its own contract — route: inline (docs)
 
@@ -100,6 +100,9 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 - 2026-09-29: T2a landed: comments are stripped before parsing (fence-aware), a placeholder is a
   wholly-`<...>` span, an empty span is no command, discovery honours an injected `stat` with its
   error paths tested, and the git-root test skips without git.
+- 2026-09-29: T3 landed: `contract run <file>` (every done-when command from the repository root,
+  PASS/FAIL rows, hand checks listed, `met`/`not met`, recursion guard) and `contract goal <file>`
+  (one-paragraph `/goal` condition within the 4,000-character limit), with tests.
 
 ## Next step
-T3.
+T4.

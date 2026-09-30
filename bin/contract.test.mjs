@@ -48,10 +48,10 @@ function writeFile(filePath, content) {
 }
 
 /** Runs `contractMain`, capturing what it printed through the injected writers. */
-async function run(argv, opts = {}) {
+async function run(argv, { env = {}, ...deps } = {}) {
   const out = [];
   const err = [];
-  const code = await contractMain(argv, {}, { stdout: (line) => out.push(line), stderr: (line) => err.push(line), ...opts });
+  const code = await contractMain(argv, env, { stdout: (line) => out.push(line), stderr: (line) => err.push(line), ...deps });
   return { code, stdout: out.join('\n'), stderr: err.join('\n') };
 }
 
@@ -201,4 +201,172 @@ test('a file that cannot be stat-ed or read is a failing entry, and the others a
   const results = validateEntries(found);
   assert.deepEqual(results.map((r) => r.ok), [false, false, true]);
   assert.deepEqual(results[1].errors, ['cannot read: EACCES']);
+});
+
+// --- run: the done-when commands, with a fake spawn ---
+
+/** `GOOD` with its `## Done when` body replaced. */
+const contractWith = (doneWhenBody) => GOOD.replace('- `npm run check` exits 0', doneWhenBody);
+
+/** Runs `contract run c.md` on `md` with a fake spawn that answers from `results` (default: exit 0)
+ * and records each done-when command. The `git rev-parse` that finds the repository root is answered
+ * "not a repository", so the root is the temp directory itself. */
+async function runWithFake(md, results, extra = {}) {
+  const dir = makeTmpDir();
+  try {
+    writeFile(path.join(dir, 'c.md'), md);
+    const calls = [];
+    const spawn = (command, second) => {
+      if (Array.isArray(second)) return { status: 1, stdout: '', stderr: '' };
+      calls.push({ command, opts: second });
+      return results[command] ?? { status: 0, stdout: '', stderr: '' };
+    };
+    const outcome = await run(['run', 'c.md', '--cwd', dir], { spawn, ...extra });
+    return { ...outcome, calls, dir };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('run executes every command in order from the root, then lists the hand checks and prints met', async () => {
+  const md = contractWith('- `first` exits 0\n- `second` exits 0\n- The output names the file');
+  const { code, stdout, calls, dir } = await runWithFake(md, { first: { status: 0, stdout: 'hello\n', stderr: '' } });
+  assert.equal(code, 0);
+  assert.deepEqual(calls.map((c) => c.command), ['first', 'second']);
+  assert.equal(calls[0].opts.shell, true);
+  assert.equal(path.resolve(calls[0].opts.cwd), path.resolve(dir));
+  assert.equal(calls[0].opts.env.JS_HARNESS_CONTRACT_RUN, '1');
+  const lines = stdout.split('\n');
+  assert.equal(lines[0], 'PASS  first');
+  assert.match(stdout, /hello/);
+  assert.ok(lines.includes('PASS  second'));
+  assert.ok(lines.indexOf('check by hand:') > lines.indexOf('PASS  second'));
+  assert.match(stdout, /- The output names the file/);
+  assert.equal(lines.at(-1), 'met');
+});
+
+test('run keeps going after a failure, shows its output, and exits 1 with not met', async () => {
+  const md = contractWith('- `first` exits 0\n- `second` exits 0');
+  const { code, stdout, calls } = await runWithFake(md, { first: { status: 3, stdout: '', stderr: 'boom\n' } });
+  assert.equal(code, 1);
+  assert.deepEqual(calls.map((c) => c.command), ['first', 'second']);
+  assert.match(stdout, /^FAIL {2}first {2}\(exit 3\)$/m);
+  assert.match(stdout, /boom/);
+  assert.match(stdout, /^PASS {2}second$/m);
+  assert.equal(stdout.split('\n').at(-1), 'not met');
+  assert.doesNotMatch(stdout, /check by hand/);
+});
+
+test('run reports a command that could not start or was killed, and fails', async () => {
+  const md = contractWith('- `a` exits 0\n- `b` exits 0');
+  const { code, stdout } = await runWithFake(md, {
+    a: { status: null, signal: 'SIGTERM', stdout: '', stderr: '' },
+    b: { status: null, error: Object.assign(new Error('spawn'), { code: 'ENOENT' }), stdout: '', stderr: '' },
+  });
+  assert.equal(code, 1);
+  assert.match(stdout, /^FAIL {2}a {2}\(signal SIGTERM\)$/m);
+  assert.match(stdout, /^FAIL {2}b {2}\(error ENOENT\)$/m);
+});
+
+test('run refuses an invalid contract with its reasons and runs nothing', async () => {
+  const { code, stdout, calls } = await runWithFake(contractWith('- It works'), {});
+  assert.equal(code, 1);
+  assert.deepEqual(calls, []);
+  assert.match(stdout, /no command/);
+  assert.equal(stdout.split('\n').at(-1), 'not met');
+});
+
+test('run refuses to start inside another run, so a done-when cannot be contract run itself', async () => {
+  const { code, stdout, stderr, calls } = await runWithFake(GOOD, {}, { env: { JS_HARNESS_CONTRACT_RUN: '1' } });
+  assert.equal(code, 2);
+  assert.deepEqual(calls, []);
+  assert.equal(stdout, '');
+  assert.match(stderr, /inside another/);
+});
+
+test('run and goal need exactly one file (usage error, exit 2)', async () => {
+  for (const argv of [['run'], ['run', 'a.md', 'b.md'], ['goal'], ['goal', 'a.md', 'b.md'], ['run', 'a.md', '--nope']]) {
+    const { code, stderr } = await run(argv);
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(stderr, /Usage: js-harness contract/, argv.join(' '));
+  }
+});
+
+test('run really runs shell commands: a passing and a failing node -e give exit 1 and both rows', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeFile(
+      path.join(dir, 'c.md'),
+      contractWith('- `node -e "console.log(\'from-child\')"` exits 0\n- `node -e "process.exit(3)"` exits 0'),
+    );
+    const { code, stdout } = await run(['run', 'c.md', '--cwd', dir]);
+    assert.equal(code, 1);
+    assert.match(stdout, /^PASS {2}node -e .*from-child/m);
+    assert.match(stdout, /^ +from-child$/m);
+    assert.match(stdout, /^FAIL {2}node -e "process\.exit\(3\)" {2}\(exit 3\)$/m);
+    assert.equal(stdout.split('\n').at(-1), 'not met');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('run from a subdirectory runs the commands from the repository root', { skip: !hasGit && 'git is not on PATH' }, async () => {
+  const dir = makeTmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '-q'], { cwd: dir }).status, 0);
+    fs.mkdirSync(path.join(dir, 'sub'));
+    const command = 'node -e "console.log(require(\'path\').basename(process.cwd()))"';
+    writeFile(path.join(dir, 'c.md'), contractWith(`- \`${command}\` exits 0`));
+    const { code, stdout } = await run(['run', '../c.md', '--cwd', path.join(dir, 'sub')]);
+    assert.equal(code, 0);
+    assert.ok(stdout.split('\n').some((line) => line.trim() === path.basename(dir)), stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- goal: the /goal condition ---
+
+async function goalFor(md) {
+  const dir = makeTmpDir();
+  try {
+    writeFile(path.join(dir, 'c.md'), md);
+    return await run(['goal', 'c.md', '--cwd', dir]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('goal prints one paragraph: the run command, the hand checks and the Ask me before text', async () => {
+  const { code, stdout, stderr } = await goalFor(contractWith('- `npm run check` exits 0\n- The output names the file\n- Rows are sorted'));
+  assert.equal(code, 0, stderr);
+  assert.ok(!stdout.includes('\n'), 'one paragraph');
+  assert.ok(stdout.startsWith('`js-harness contract run c.md` exits 0 and prints `met`'), stdout);
+  assert.match(stdout, /also true by hand: The output names the file; Rows are sorted/);
+  assert.match(stdout, /Run it after each change and fix what fails/);
+  assert.match(stdout, /"Ask me before" in c\.md: Changing the template\./);
+});
+
+test('goal leaves out the hand-check clause when there is none, and a long Ask me before is only referenced', async () => {
+  const long = 'x'.repeat(500);
+  const { code, stdout } = await goalFor(GOOD.replace('Changing the template.', long));
+  assert.equal(code, 0);
+  assert.doesNotMatch(stdout, /by hand/);
+  assert.ok(!stdout.includes(long));
+  assert.match(stdout, /"Ask me before" in c\.md/);
+});
+
+test('goal refuses an invalid contract with its reasons on stderr and prints no condition', async () => {
+  const { code, stdout, stderr } = await goalFor(contractWith('- It works'));
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.match(stderr, /no command/);
+});
+
+test('goal exits 1 saying so when the condition is over the 4000-character /goal limit', async () => {
+  const items = Array.from({ length: 60 }, (_, i) => `- Check number ${i} ${'y'.repeat(80)}`).join('\n');
+  const { code, stdout, stderr } = await goalFor(contractWith(`- \`npm run check\` exits 0\n${items}`));
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.match(stderr, /4,000/);
 });
