@@ -98,22 +98,47 @@ export function windowsCommandLine(command, args) {
  * space goes. */
 const normalizeLine = (line) => line.replace(/[^\x20-\x7e]/g, '').trimEnd();
 
-/** The changed lines of a unified diff, normalized, deduplicated, in order: the `+`/`-` lines inside
- * hunks (so file headers are not mistaken for changes, and an added line that starts with `++` is
- * not mistaken for a header). A line that is just `+` or `-` (a blank line added or removed) is
- * dropped: it carries no evidence. */
-export function changedLines(patch) {
-  const lines = new Set();
+// Complete ANSI CSI sequences (`--color=always`, `color.ui=always`), then any ESC left over.
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+/** The file a `diff --git` header names, its new side: `a/X b/Y` gives Y, `--no-prefix` `X Y` gives Y.
+ * A path with spaces cannot be split at a space, so when both halves name the same path the header
+ * is cut at its midpoint, and otherwise (a rename) at the last ` b/`. */
+function headerFile(rest) {
+  const mid = (rest.length - 1) / 2;
+  if (Number.isInteger(mid) && rest[mid] === ' ') {
+    const [left, right] = [rest.slice(0, mid), rest.slice(mid + 1)];
+    if (left === right) return right;
+    if (left.startsWith('a/') && right.startsWith('b/') && left.slice(2) === right.slice(2)) return right.slice(2);
+  }
+  const at = rest.lastIndexOf(' b/');
+  return at !== -1 ? rest.slice(at + 3) : rest.slice(rest.lastIndexOf(' ') + 1);
+}
+
+/** The changes of a unified diff (or of a command's output that holds one) as keys `<file>\n<line>`,
+ * deduplicated, in order: the `+`/`-` lines inside the hunks of each `diff --git` file, so the same
+ * change in two files is two keys, file headers are not mistaken for changes (nor an added line that
+ * starts with `++`), and lines outside a `diff --git` and `@@` context (a file's own text) yield
+ * nothing. Colors are stripped first and both file and line are normalized. A line that is just `+`
+ * or `-` (a blank line added or removed) is dropped: it carries no evidence. Our own diff and each
+ * command's output go through this same parser, so they compare. */
+export function patchKeys(text) {
+  const keys = new Set();
+  let file = null;
   let inHunk = false;
-  for (const line of typeof patch === 'string' ? patch.split('\n') : []) {
-    if (line.startsWith('diff --git ')) inHunk = false;
-    else if (line.startsWith('@@')) inHunk = true;
+  const plain = typeof text === 'string' ? text.replace(ANSI, '').replace(/\x1b/g, '') : '';
+  for (const raw of plain.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith('diff --git ')) {
+      file = normalizeLine(headerFile(line.slice('diff --git '.length)));
+      inHunk = false;
+    } else if (line.startsWith('@@')) inHunk = file !== null;
     else if (inHunk && (line.startsWith('+') || line.startsWith('-'))) {
       const normalized = normalizeLine(line);
-      if (normalized !== '+' && normalized !== '-') lines.add(normalized);
+      if (normalized !== '+' && normalized !== '-') keys.add(`${file}\n${normalized}`);
     }
   }
-  return [...lines];
+  return [...keys];
 }
 
 /** The JSON objects among the lines of Codex's `--json` output; anything else is ignored. */
@@ -131,15 +156,16 @@ export function parseEvents(text) {
 }
 
 /** What the event stream proves. `inspected` is the evidence rule: the turn completed and did not
- * fail, it ended with a message, and every one of `expectedLines` (see `changedLines`) is a line of
- * the output of a command that exited 0: the union over the commands, since Codex may read the diff
- * in pieces, and never a failed command's, which may have printed the patch before failing. Exact
- * coverage is the bar; 281 of 281 changed lines were found in a real run. With no expected lines (a
+ * fail, it ended with a message, and every one of `expectedKeys` (see `patchKeys`) is among the keys
+ * of the output of a command that exited 0: the union over the commands, since Codex may read the
+ * diff in pieces, and never a failed command's, which may have printed the patch before failing.
+ * Exact coverage is the bar; every changed line of a real run was found. With no expected keys (a
  * range of binary files or blank lines only) there is nothing to match, so one successful command
- * stands in. Without `expectedLines` nothing is inspected. `coverage` is how many were seen, and
- * `missing` up to five that were not. `errors` are the failed turn's messages; `warnings` are error
- * items Codex raises without failing (an unrecognized configuration setting, for one). */
-export function reviewEvidence(events, expectedLines = null) {
+ * stands in. Without `expectedKeys` nothing is inspected. `coverage` is how many were seen, and
+ * `missing` up to five that were not, as `file: line`. `errors` are the failed turn's messages;
+ * `warnings` are error items Codex raises without failing (an unrecognized configuration setting, for
+ * one). */
+export function reviewEvidence(events, expectedKeys = null) {
   let turnCompleted = false;
   let turnFailed = false;
   let review = '';
@@ -161,17 +187,18 @@ export function reviewEvidence(events, expectedLines = null) {
         commands.push({ command: String(item.command ?? ''), exitCode: item.exit_code });
         if (item.exit_code === 0) {
           succeeded = true;
-          for (const line of String(item.aggregated_output ?? '').split('\n')) shown.add(normalizeLine(line));
+          for (const shownKey of patchKeys(String(item.aggregated_output ?? ''))) shown.add(shownKey);
         }
       } else if (item.type === 'error' && item.message) warnings.push(String(item.message));
     }
   }
   const completed = turnCompleted && !turnFailed;
-  const expected = Array.isArray(expectedLines) ? expectedLines : [];
-  const missingAll = expected.filter((line) => !shown.has(line));
+  const expected = Array.isArray(expectedKeys) ? expectedKeys : [];
+  const missingAll = expected.filter((expectedKey) => !shown.has(expectedKey));
   const coverage = { seen: expected.length - missingAll.length, total: expected.length };
-  const covered = Array.isArray(expectedLines) && (expected.length === 0 ? succeeded : missingAll.length === 0);
-  return { inspected: completed && review !== '' && covered, completed, review, commands, errors, warnings, coverage, missing: missingAll.slice(0, 5) };
+  const covered = Array.isArray(expectedKeys) && (expected.length === 0 ? succeeded : missingAll.length === 0);
+  const missing = missingAll.slice(0, 5).map((missingKey) => missingKey.replace('\n', ': '));
+  return { inspected: completed && review !== '' && covered, completed, review, commands, errors, warnings, coverage, missing };
 }
 
 const truncate = (text, length) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
@@ -374,7 +401,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`Could not run \`git diff ${from.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
     }
-    const expected = changedLines(patch);
+    const expected = patchKeys(patch);
     const codexEnv = childEnv(env, platform);
     if (!codexRuns(spawn, platform, codexEnv)) {
       error(NO_CODEX);

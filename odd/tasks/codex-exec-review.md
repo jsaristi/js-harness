@@ -44,9 +44,10 @@ including `git diff 438364a…`), no REPL call, one `agent_message` with two P2 
   `\Microsoft\WindowsApps` entry. The Claude Code plugin is no longer involved (it stays useful for
   `/codex:*` commands).
 - Evidence: `reviewed` is recorded only when the JSONL has `turn.completed`, a non-empty final
-  `agent_message`, and every changed line of our own `git diff <merge-base> HEAD` (inside hunks,
-  ASCII-normalized since PowerShell 5.1 re-encodes the rest, blank ones dropped) appears in the
-  output of a completed `command_execution` with exit 0. What Codex saw is the evidence, not how
+  `agent_message`, and every changed line of our own `git diff <merge-base> HEAD`, keyed by its
+  file (inside hunks, ANSI stripped, ASCII-normalized since PowerShell 5.1 re-encodes the rest,
+  blank ones dropped), appears under the same file in the diff output of a completed
+  `command_execution` with exit 0. What Codex saw is the evidence, not how
   its commands read (the command-text rule it replaced leaked; history in Progress). Otherwise
   nothing is written
   and it exits 1, listing the commands that ran with their exit codes and the two ways on. A
@@ -154,5 +155,16 @@ Mode: strict (source: user global config). Runner: `node --test`.
   range if Codex truncates output or reads by file; fail-closed, needs measured runs before any
   tolerance).
 
+- 2026-09-29: committed as d76fafb. Native review lineage review-b6355efefb4ebc66 (1577 lines):
+  approved and acknowledged; carried R3-probe-win32-timeout-unbounded (the `codex --version` probe
+  keeps spawnSync's shim-only timeout on Windows, the same pattern as `doctor`'s `spawnProbe`).
+  Real run: `js-harness codex-review --base main` streamed 13 commands (a `git diff 21c491d…` among
+  them, exit 0) and recorded `reviewed` for `21c491d..d76fafb`. Codex's two P2, accepted: file
+  identity was lost (the same change in two files was covered by one file's diff) and ANSI colour
+  codes left `[31m` fragments. The writer, resumed: `patchKeys` parses our patch and each output
+  alike, keys are `<file>` + line inside a `diff --git` hunk, ANSI CSI stripped; output without diff
+  context counts for nothing. RED: 74 tests, 14 failing. GREEN: 74/74; `node --test` → 741 / 734 /
+  0 / 7; `npm run check`, `npm run e2e` exit 0; stored real run: 232 of 232 keys seen.
+
 ## Next step
-A real `js-harness codex-review --base main`.
+The last review round (native, then Codex); later findings are carried.

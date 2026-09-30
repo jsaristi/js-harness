@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import {
-  changedLines, childEnv, codexArgs, codexReviewMain, killTree, parseEvents, quoteWindowsArg, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, killTree, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
@@ -758,7 +758,11 @@ test('--home is still accepted, though nothing reads it any more', async () => {
 
 // --- the evidence rule ---
 
-test('changedLines keeps the +/- lines of the hunks, without the file headers', () => {
+/** A minimal diff of `file` whose hunk holds `lines` (each `+...`, `-...` or ` ...`). */
+const diffOf = (file, ...lines) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1 +1 @@\n${lines.join('\n')}\n`;
+const key = (file, line) => `${file}\n${line}`;
+
+test('patchKeys keys the +/- lines of the hunks by file, without the file headers', () => {
   const patch = [
     'diff --git a/x b/x',
     'index 1..2 100644',
@@ -777,32 +781,64 @@ test('changedLines keeps the +/- lines of the hunks, without the file headers', 
     '-y1',
     '+y2',
   ].join('\n');
-  assert.deepEqual(changedLines(patch), ['-old', '+new', '+++ added line that looks like a header', '-y1', '+y2']);
+  assert.deepEqual(patchKeys(patch), [
+    key('x', '-old'), key('x', '+new'), key('x', '+++ added line that looks like a header'), key('y', '-y1'), key('y', '+y2'),
+  ]);
 });
 
-test('changedLines normalizes to printable ASCII, drops blank changes and duplicates', () => {
-  const patch = [
-    'diff --git a/x b/x',
-    '@@ -1 +1 @@',
-    '-it\u2019s  ',
-    '+it\u2019s\r',
-    '+\u2026',
-    '+',
-    '-',
-    '+   ',
-    '+dup',
-    '+dup',
-    '+tab\there',
-  ].join('\n');
+test('patchKeys normalizes to printable ASCII, drops blank changes and duplicates within a file', () => {
+  const patch = diffOf('x', '-it’s  ', '+it’s\r', '+…', '+', '-', '+   ', '+dup', '+dup', '+tab\there');
   // `+   ` keeps its meaning once trimmed to `+`, which carries no evidence.
-  assert.deepEqual(changedLines(patch), ['-its', '+its', '+dup', '+tabhere']);
-  assert.deepEqual(changedLines(''), []);
-  assert.deepEqual(changedLines(undefined), []);
+  assert.deepEqual(patchKeys(patch), [key('x', '-its'), key('x', '+its'), key('x', '+dup'), key('x', '+tabhere')]);
+  assert.deepEqual(patchKeys(''), []);
+  assert.deepEqual(patchKeys(undefined), []);
+});
+
+test('patchKeys keeps the same change in two files apart', () => {
+  const patch = diffOf('a.js', '-if (authorized)', '+if (true)') + diffOf('b.js', '-if (authorized)', '+if (true)');
+  assert.deepEqual(patchKeys(patch), [
+    key('a.js', '-if (authorized)'), key('a.js', '+if (true)'), key('b.js', '-if (authorized)'), key('b.js', '+if (true)'),
+  ]);
+});
+
+test('patchKeys reads the file from `diff --git`: prefixes, no prefixes, renames and spaces', () => {
+  const file = (header) => patchKeys(`${header}\n@@ -1 +1 @@\n+x\n`)[0];
+  assert.equal(file('diff --git a/src/f.js b/src/f.js'), key('src/f.js', '+x'));
+  assert.equal(file('diff --git src/f.js src/f.js'), key('src/f.js', '+x'), '--no-prefix');
+  assert.equal(file('diff --git a/my dir/my file.js b/my dir/my file.js'), key('my dir/my file.js', '+x'));
+  assert.equal(file('diff --git my dir/f.js my dir/f.js'), key('my dir/f.js', '+x'));
+  assert.equal(file('diff --git a/old.js b/new.js'), key('new.js', '+x'), 'a rename keys the new path');
+  assert.equal(file('diff --git old.js new.js'), key('new.js', '+x'));
+  assert.equal(file('diff --git a/café.js b/café.js'), key('caf.js', '+x'), 'the path is normalized like a line');
+  assert.equal(file('diff --git a/f.js b/f.js\r'), key('f.js', '+x'));
+});
+
+test('patchKeys strips ANSI colors before reading', () => {
+  const colored = [
+    '\x1b[1mdiff --git a/f b/f\x1b[m',
+    '\x1b[1mindex 1..2 100644\x1b[m',
+    '\x1b[1m--- a/f\x1b[m',
+    '\x1b[1m+++ b/f\x1b[m',
+    '\x1b[36m@@ -1 +1 @@\x1b[m',
+    '\x1b[31m-one\x1b[m',
+    '\x1b[32m+two\x1b[m',
+    '\x1b[32m+\x1b[41mtrailing \x1b[m',
+    '\x1b[?25h\x1b[32m+a\x1bb\x1b[m',
+  ].join('\n');
+  // A complete sequence goes, and so does a stray ESC.
+  assert.deepEqual(patchKeys(colored), [key('f', '-one'), key('f', '+two'), key('f', '+trailing'), key('f', '+ab')]);
+});
+
+test('patchKeys reads nothing outside a `diff --git` and a hunk', () => {
+  assert.deepEqual(patchKeys('-one\n+two\n'), [], 'bare +/- lines');
+  assert.deepEqual(patchKeys('@@ -1 +1 @@\n-one\n+two\n'), [], 'a hunk with no file');
+  assert.deepEqual(patchKeys('diff --git a/f b/f\n-one\n+two\n'), [], 'a file with no hunk');
+  assert.deepEqual(patchKeys('diff --git a/f b/f\n@@ -1 +1 @@\n+a\ndiff --git a/g b/g\n+b\n'), [key('f', '+a')], 'the hunk ends at the next file');
 });
 
 test('reviewEvidence: inspected needs a completed turn, a final message and every changed line in a successful output', () => {
-  const expected = ['-one', '+two'];
-  const events = [thread, turn, cmd('git diff', 0, 'diff --git a/f b/f\n-one\n+two\n'), msg(FINDINGS), done];
+  const expected = [key('f', '-one'), key('f', '+two')];
+  const events = [thread, turn, cmd('git diff', 0, diffOf('f', '-one', '+two')), msg(FINDINGS), done];
   const evidence = reviewEvidence(events, expected);
   assert.equal(evidence.inspected, true);
   assert.equal(evidence.completed, true);
@@ -814,16 +850,17 @@ test('reviewEvidence: inspected needs a completed turn, a final message and ever
 });
 
 test('reviewEvidence: each missing piece of evidence alone means not inspected', () => {
-  const expected = ['+two'];
-  const shown = cmd('git diff', 0, '+two');
+  const expected = [key('f', '+two')];
+  const out = diffOf('f', '+two');
+  const shown = cmd('git diff', 0, out);
   const cases = {
     'no turn.completed': [thread, turn, shown, msg('ok')],
     'a failed turn': [thread, turn, shown, msg('ok'), done, { type: 'turn.failed', error: { message: 'x' } }],
     'no message': [thread, turn, shown, done],
     'an empty message': [thread, turn, shown, msg('  \n'), done],
-    'a failed command': [thread, turn, cmd('git diff', 128, '+two'), msg('ok'), done],
+    'a failed command': [thread, turn, cmd('git diff', 128, out), msg('ok'), done],
     'no output': [thread, turn, cmd('git diff', 0, ''), msg('ok'), done],
-    'a command that only started': [thread, turn, { type: 'item.started', item: { type: 'command_execution', command: 'git diff', aggregated_output: '+two', exit_code: null, status: 'in_progress' } }, msg('ok'), done],
+    'a command that only started': [thread, turn, { type: 'item.started', item: { type: 'command_execution', command: 'git diff', aggregated_output: out, exit_code: null, status: 'in_progress' } }, msg('ok'), done],
   };
   for (const [name, events] of Object.entries(cases)) assert.equal(reviewEvidence(events, expected).inspected, false, name);
   assert.equal(reviewEvidence([thread, turn, shown, msg('ok'), done], expected).inspected, true);
@@ -831,22 +868,70 @@ test('reviewEvidence: each missing piece of evidence alone means not inspected',
   assert.equal(reviewEvidence([thread, turn, shown, msg('ok'), done]).inspected, false);
 });
 
-test('reviewEvidence: coverage counts the lines seen, and names up to five that were not', () => {
-  const expected = ['+a', '+b', '+c', '+d', '+e', '+f', '+g'];
-  const evidence = reviewEvidence([thread, turn, cmd('x', 0, '+a\n+b'), msg('ok'), done], expected);
+test('reviewEvidence: coverage counts the lines seen, and names up to five as `file: line`', () => {
+  const expected = ['+a', '+b', '+c', '+d', '+e', '+f', '+g'].map((line) => key('f.js', line));
+  const evidence = reviewEvidence([thread, turn, cmd('x', 0, diffOf('f.js', '+a', '+b')), msg('ok'), done], expected);
   assert.equal(evidence.inspected, false);
   assert.deepEqual(evidence.coverage, { seen: 2, total: 7 });
-  assert.deepEqual(evidence.missing, ['+c', '+d', '+e', '+f', '+g']);
+  assert.deepEqual(evidence.missing, ['f.js: +c', 'f.js: +d', 'f.js: +e', 'f.js: +f', 'f.js: +g']);
 });
 
 test('reviewEvidence: an output line is compared normalized, and only whole lines match', () => {
-  const expected = ['+its'];
-  const seen = (output) => reviewEvidence([done, cmd('x', 0, output), msg('ok')], expected).inspected;
-  assert.equal(seen('+it\u00e2\u20ac\u2122s\r\n'), true);
+  const expected = [key('f', '+its')];
+  const seen = (...lines) => reviewEvidence([done, cmd('x', 0, diffOf('f', ...lines)), msg('ok')], expected).inspected;
+  assert.equal(seen('+itâ€™s\r'), true);
   assert.equal(seen('+its   '), true);
   assert.equal(seen('+itself'), false, 'a longer line is not the line');
-  assert.equal(seen('x +its'), false, 'a fragment is not the line');
+  assert.equal(seen(' +its'), false, 'a fragment is not the line');
   assert.equal(seen('its'), false);
+});
+
+test('reviewEvidence: the same change in two files is covered only by a diff of both', () => {
+  const both = diffOf('a.js', '-if (authorized)', '+if (true)') + diffOf('b.js', '-if (authorized)', '+if (true)');
+  const expected = patchKeys(both);
+  assert.equal(expected.length, 4);
+  const one = reviewEvidence([thread, turn, cmd('git diff a.js', 0, diffOf('a.js', '-if (authorized)', '+if (true)')), msg('ok'), done], expected);
+  assert.equal(one.inspected, false);
+  assert.deepEqual(one.coverage, { seen: 2, total: 4 });
+  assert.deepEqual(one.missing, ['b.js: -if (authorized)', 'b.js: +if (true)']);
+  const pooled = reviewEvidence([
+    thread, turn,
+    cmd('git diff a.js', 0, diffOf('a.js', '-if (authorized)', '+if (true)')),
+    cmd('git diff b.js', 0, diffOf('b.js', '-if (authorized)', '+if (true)')),
+    msg('ok'), done,
+  ], expected);
+  assert.equal(pooled.inspected, true);
+  assert.equal(reviewEvidence([thread, turn, cmd('git diff', 0, both), msg('ok'), done], expected).inspected, true);
+});
+
+test('reviewEvidence: colored output of the whole diff is inspected', () => {
+  const colored = [
+    '\x1b[1mdiff --git a/f b/f\x1b[m',
+    '\x1b[1m--- a/f\x1b[m',
+    '\x1b[1m+++ b/f\x1b[m',
+    '\x1b[36m@@ -1 +1 @@\x1b[m',
+    '\x1b[31m-one\x1b[m',
+    '\x1b[32m+two\x1b[m',
+  ].join('\n');
+  const evidence = reviewEvidence([thread, turn, cmd('git diff --color=always', 0, colored), msg('ok'), done], [key('f', '-one'), key('f', '+two')]);
+  assert.equal(evidence.inspected, true);
+  assert.deepEqual(evidence.coverage, { seen: 2, total: 2 });
+});
+
+test('reviewEvidence: the right +/- lines with no `diff --git` and hunk around them are not a diff', () => {
+  const expected = [key('f', '-one'), key('f', '+two')];
+  for (const output of ['-one\n+two\n', '@@ -1 +1 @@\n-one\n+two\n', 'diff --git a/f b/f\n-one\n+two\n', 'Get-Content f\n-one\n+two\n']) {
+    assert.equal(reviewEvidence([thread, turn, cmd('x', 0, output), msg('ok'), done], expected).inspected, false, output);
+  }
+});
+
+test('reviewEvidence: a --no-prefix diff, and a path with spaces, are inspected', () => {
+  for (const header of ['diff --git f.js f.js', 'diff --git my dir/f.js my dir/f.js', 'diff --git a/my dir/f.js b/my dir/f.js']) {
+    const file = header.includes('my dir') ? 'my dir/f.js' : 'f.js';
+    const output = `${header}\n@@ -1 +1 @@\n-one\n+two\n`;
+    const evidence = reviewEvidence([thread, turn, cmd('git diff', 0, output), msg('ok'), done], [key(file, '-one'), key(file, '+two')]);
+    assert.equal(evidence.inspected, true, header);
+  }
 });
 
 test('reviewEvidence: with nothing to match, one successful command and a message are the evidence', () => {
@@ -858,7 +943,7 @@ test('reviewEvidence: with nothing to match, one successful command and a messag
 });
 
 test('reviewEvidence: the last message is the review', () => {
-  const evidence = reviewEvidence([thread, turn, msg('first'), cmd('git diff', 0, '+two'), msg('final'), done], ['+two']);
+  const evidence = reviewEvidence([thread, turn, msg('first'), cmd('git diff', 0, diffOf('f', '+two')), msg('final'), done], [key('f', '+two')]);
   assert.equal(evidence.inspected, true);
   assert.equal(evidence.review, 'final');
 });
