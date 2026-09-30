@@ -62,24 +62,96 @@ export function checkPayload(cwd, home) {
   });
 }
 
-/** Runs `node --test` in `cwd` as a child process and reports pass/fail. */
-export function checkTests(cwd) {
-  // The suite runs against a throwaway home, so a test that forgets `--home` cannot write into
+const NPM_PLACEHOLDER_TEST = 'echo "Error: no test specified" && exit 1';
+
+const isCommand = (value) => typeof value === 'string' && value.trim() !== '';
+
+/** Reads and parses `<cwd>/<file>`: `{ value }`, `{ error }` naming the file when it is not JSON, or
+ * `null` when it does not exist. */
+function readJson(cwd, file) {
+  const filePath = path.join(cwd, file);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return { value: JSON.parse(fs.readFileSync(filePath, 'utf8')) };
+  } catch (err) {
+    return { error: `${file} is not valid JSON: ${err.message}` };
+  }
+}
+
+/** The project's sensors: named commands that must exit 0. `harness.json` `sensors` wins, which serves
+ * any language; else the `test`, `lint` and `typecheck` scripts of `package.json`, run through npm so
+ * `node_modules/.bin` is on the path. A file that is unreadable or of the wrong shape is an `error`,
+ * never a silent skip: a gate that quietly ran nothing would look green. */
+export function discoverSensors(cwd) {
+  const none = { sensors: [], source: null };
+  const harness = readJson(cwd, 'harness.json');
+  if (harness?.error) return { ...none, error: harness.error };
+  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const declared = harness?.value;
+  if (harness && !isObject(declared)) return { ...none, error: 'harness.json must be a JSON object' };
+  if (declared && 'sensors' in declared) {
+    // An empty map is a deliberate opt-out: it declares no sensor and does not fall back to package.json.
+    const { sensors } = declared;
+    if (!isObject(sensors) || !Object.values(sensors).every(isCommand)) {
+      return { ...none, error: 'harness.json "sensors" must be an object of names to non-empty command strings' };
+    }
+    return { sensors: Object.entries(sensors).map(([name, command]) => ({ name, command })), source: 'harness.json' };
+  }
+
+  const pkg = readJson(cwd, 'package.json');
+  if (pkg?.error) return { ...none, error: pkg.error };
+  if (!pkg) return none;
+  const scripts = pkg.value?.scripts;
+  const scriptOf = (script) => (scripts && typeof scripts === 'object' ? scripts[script] : undefined);
+  const sensors = [['tests', 'test'], ['lint', 'lint'], ['typecheck', 'typecheck']]
+    // `npm init` writes this exact test script, which only fails; it is no test.
+    .filter(([, script]) => isCommand(scriptOf(script)) && !(script === 'test' && scriptOf(script) === NPM_PLACEHOLDER_TEST))
+    .map(([name, script]) => ({ name, command: `npm run ${script}` }));
+  return { sensors, source: 'package.json' };
+}
+
+/** Runs one sensor's command in `cwd` through the shell and reports pass/fail. */
+export function checkSensor(cwd, sensor, { spawn = spawnSync } = {}) {
+  // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
-  const env = { ...process.env, JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home };
-  // Set when check itself runs under `node --test`; the nested runner would act as a child and skip files.
-  delete env.NODE_TEST_CONTEXT;
+  // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, not under HOME, so `npm run` is
+  // pointed into the throwaway home as well.
+  const overrides = { JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: path.join(home, '.npm-cache') };
+  // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act
+  // as a child and skip files. Every case variant of an override goes too: Windows keeps the
+  // uppercase one of two keys that differ only in case, and npm reads either.
+  const replaced = new Set([...Object.keys(overrides), 'NODE_TEST_CONTEXT'].map((key) => key.toLowerCase()));
+  const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
+  const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
   try {
-    result = spawnSync(process.execPath, ['--test'], { cwd, env, encoding: 'utf8' });
+    result = spawn(sensor.command, { cwd, env, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
-  const pass = result.status === 0;
-  const detail = pass ? 'node --test passed' : `node --test exited ${result.status}`;
-  // Keep the runner's own report so a red row says which test failed, not just that one did.
-  return { name: 'tests', pass, detail, output: pass ? '' : `${result.stdout}${result.stderr}` };
+  const { name, command } = sensor;
+  const pass = !result.error && result.status === 0;
+  let detail = `${command} passed`;
+  if (result.error) detail = `${command} could not run: ${result.error.message}`;
+  else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
+  else if (!pass) detail = `${command} exited ${result.status}`;
+  // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
+  // red row says which test failed, not just that one did.
+  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}` };
+}
+
+/** One row per sensor; a broken declaration is one FAIL row and no sensor at all is one INFO row. */
+export function checkSensors(cwd, deps) {
+  const { sensors, source, error } = discoverSensors(cwd);
+  if (error) return [{ name: 'sensors', pass: false, detail: error }];
+  if (sensors.length === 0) {
+    const detail = source === 'harness.json'
+      ? 'harness.json declares no sensors, so none ran'
+      : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
+    return [{ name: 'sensors', pass: true, info: true, detail }];
+  }
+  return sensors.map((sensor) => checkSensor(cwd, sensor, deps));
 }
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. */
@@ -263,15 +335,16 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     return 2;
   }
   const { cwd, home, push, head, remote } = parsed;
-  // A push runs only the Codex review row. The budget, payload and test rows read the working tree,
+  // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
     : [checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
 
-  // Guard against recursion: the inner `node --test` this spawns must not spawn its own.
+  // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
+  // and that inner check must not spawn the sensors that are running it.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    rows.push(checkTests(cwd));
+    rows.push(...checkSensors(cwd, deps));
   }
 
   for (const row of rows) {

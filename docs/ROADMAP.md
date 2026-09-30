@@ -134,9 +134,9 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Fits the ODD feature doc and `/goal`
 
 ### F4 Sensors
-- [ ] Tests wired to pre-commit and `check`
-- [ ] Lint/LSP diagnostics wired
-- [ ] Budget wired
+- [x] Tests wired to pre-commit and `check`
+- [x] Lint/LSP diagnostics wired
+- [x] Budget wired
 - [ ] RDD-by-risk wired
 
 ### F5 Evals that discriminate
