@@ -53,9 +53,9 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit through the `codex@openai-codex` plugin, run by `js-harness codex-review --base <boundary>`, which records the review (or an explicit `--unavailable` skip) under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6-sol` at `xhigh` (`~/.codex/config.toml`), dropping to `high` if the plan's usage runs short; ChatGPT Plus is active and `codex exec -m gpt-6-sol` answered at `xhigh` on 2026-09-27 (it returned 400 on the free plan) |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6.1-sol` at `high` (`~/.codex/config.toml`; Sebastián, 2026-09-29), replacing `gpt-6-sol` at `xhigh`; `codex exec -m gpt-6.1-sol` answered at `high` on 2026-09-29, after a review earlier that day got a 400 for the same model |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
-| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6-sol`): `xhigh` (see Review) |
+| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6.1-sol`): `high` (see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
 
@@ -152,12 +152,8 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. The Codex review record's first carried follow-up: a Codex turn that could not inspect the diff
-   is recorded as `reviewed`, because the companion's exit 0 means the turn completed, not that
-   the review ran (seen twice on 2026-09-29; `odd/tasks/project-init.md`, Progress). Until it is
-   fixed the agent reads Codex's verdict and records such a run with `--unavailable`.
-2. F3 Task contract.
-3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
+1. F3 Task contract.
+2. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
    can be taken at any time.
 
 ## Stack doctor notes

@@ -208,17 +208,18 @@ lives under `CLAUDE_PLUGIN_DATA` (or the OS temp dir), keyed by workspace and pr
 `.git/gentle-ai/review-transactions/terminal-consumption/v1/*.json` hold only opaque sha256
 targets, no commit range, in a format gentle-ai v4 may change. So js-harness writes its own.
 
-- Record: `js-harness codex-review --base <rev>` runs the plugin's own review, `node
-  <installPath>/scripts/codex-companion.mjs review --wait --base <rev>` in the repository (the
-  `installPath` of `codex@openai-codex` in `~/.claude/plugins/installed_plugins.json`), with its
-  output shown as is. The companion exits 0 when Codex's turn completed, findings or not, and 1
-  when the turn failed (`buildResultStatus` in `scripts/lib/codex.mjs`). On 0 it appends one
-  JSON line `{ schema, base, head, reviewedAt, outcome: "reviewed" }`, full commit ids, to
-  `<git common dir>/js-harness/codex-reviews.jsonl`; on anything else it writes nothing and exits
-  with the companion's code, naming the two ways on. When Codex cannot run (the model is
-  rejected, the plugin is missing), `--unavailable <reason>` records `outcome: "unavailable"` with
-  the reason and spawns nothing, so a skip is explicit instead of silent (AGENTS.md: report it and
-  go on). Findings stay in the feature document, as today.
+- Record: `js-harness codex-review --base <rev>` runs `codex exec review --json` over `<rev>..HEAD`
+  in the repository and appends one JSON line `{ schema, base, head, reviewedAt, outcome:
+  "reviewed" }`, full commit ids, to `<git common dir>/js-harness/codex-reviews.jsonl`, but only
+  on evidence that Codex read the diff: its JSONL events must show a completed turn, a final
+  message and every changed line of the branch's patch in the output of its successful commands,
+  never the review's wording. The
+  first version drove the plugin's companion and classified its text; that was replaced on
+  2026-09-29 (design, probes and the evidence rule: `odd/tasks/codex-exec-review.md`). On
+  anything else it writes nothing and exits non-zero, naming the two ways on. When Codex cannot
+  run (the model is rejected, the CLI is missing), `--unavailable <reason>` records `outcome:
+  "unavailable"` with the reason and spawns nothing, so a skip is explicit instead of silent
+  (AGENTS.md: report it and go on). Findings stay in the feature document, as today.
 - Location: under the git common dir, like gentle-ai's own records and the project manifest, so it
   adds no commit and no file to the project, and every worktree of a clone shares it. It is one
   file, undone by deleting it. A fresh clone starts without records, so commits reviewed on
@@ -1065,8 +1066,92 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 - 2026-09-29: slice 7 merged as 94b9544 (`jsaristi/js-harness#14`) by Sebastián's go-ahead. The
   seven roadmap steps under "Project init" hold; the feature is complete.
 
+- 2026-09-29: follow-up, a Codex turn that could not inspect the diff is no longer recorded as
+  `reviewed` (branch `fix/codex-review-uninspected`). The companion exposes no structured signal:
+  its native review returns only text. Of the 36 reviews stored under the plugin's data dir for
+  this repo, the 4 that never saw the diff all said so ("I could not assess the patch", "could not
+  inspect the changes", "correctness is unverified", "fail-closed verdict"), and none of the 32
+  that did uses those phrases; several of those say tests or even `git diff` could not run, since
+  they read the Git objects directly, so the patterns stay narrow. A new phrasing would still pass
+  as `reviewed`, as before; the agent keeps reading the verdict. Route: delegated writer
+  (`codex-review.mjs` and its test). RED: 24 tests, 5 failing. GREEN: `node --test
+  bin/codex-review.test.mjs` 24/24; `node --test` → `tests 691 / pass 684 / fail 0 / skipped 7`;
+  `npm run check` exit 0. Parent spot check: the suite 24/24.
+- 2026-09-29: committed as 438364a. Assessed (`--base-ref main`): risk `medium`, 146 lines,
+  `under_budget`; as the slice's only commit it was reviewed whole. Native review lineage
+  review-cb64d83a7b625fb2: consent granted (pre-granted), one lens (reliability), approved and
+  acknowledged; one WARNING, R3-maxbuffer (the piped stdout kept Node's 1 MiB `spawnSync` default,
+  so a long review would end as a misleading "could not start it"), accepted and fixed in the next
+  commit (`maxBuffer` 64 MiB, ENOBUFS named; RED 1 failing, GREEN 25/25); two SUGGESTION carried:
+  R3-buffered-output (the review text now appears when the companion exits, not streamed) and
+  R3-classifier-false-positive ("changes are unverified" or "incomplete review" said in passing
+  would refuse a real review; the cost is a rerun, the phrases seen so far are only the four).
+  Codex (`js-harness codex-review --base main`): the turn failed, 400 "The 'gpt-6.1-sol' model is
+  not supported when using Codex with a ChatGPT account" (`model = "gpt-6.1-sol"` in
+  `~/.codex/config.toml`, Sebastián's); the command exited 1 and wrote nothing, as it should.
+- 2026-09-29: the R3-maxbuffer fix committed as 5d584b9 (assessed `--base-ref 438364a`: risk
+  `medium`, 40 lines, `under_budget`). Codex skip recorded for `21c491d..5d584b9` with
+  `--unavailable` naming the rejected model; `node bin/check.mjs --push` → `PASS codex-review 2
+  code commits since origin/main, all covered`, exit 0. Next: push and open the PR on Sebastián's
+  go-ahead; a real Codex review of this range waits for a model the ChatGPT plan accepts.
+- 2026-09-29: the stop hook asked for the whole range `21c491d..f67509d` (risk `medium`, 190
+  lines). Native review lineage review-e085ada6d9e41ef8: consent granted (pre-granted), one lens,
+  approved and acknowledged; one WARNING, R3-classifier-pattern-coverage (every fixture also matched
+  the first pattern, so three regexes were untested), accepted: one sentence per pattern, and
+  breaking each of those three regexes in turn fails the new test (observed). Codex skip recorded
+  again for the range with this commit, same model rejection.
+- 2026-09-29: committed as fbeefd8; last round, native review lineage review-8cbf241c40c8c8ba of
+  `21c491d..fbeefd8` (risk `medium`, 207 lines): approved and acknowledged. Carried, not fixed
+  (no further round): R3-classifier-self-reference (WARNING: the text is classified whole, so a
+  review that really inspected a diff but quotes "incomplete review" or "fail-closed verdict",
+  such as a Codex review of this very change, is refused on every rerun; a likely fix is to
+  classify only reviews without findings, or only the summary before them) and
+  R3-overflow-passthrough-unasserted (SUGGESTION: assert the partial review is shown on ENOBUFS).
+- 2026-09-29: a further round over `21c491d..89b4dc0` (lineage review-a2d444f692f2fc95, after two
+  docs commits) approved and acknowledged, repeating the two carried findings and adding
+  R3-classifier-substring-false-positive (no negation or context guard). Codex answered a probe
+  with `gpt-6.1-sol` at `high` (Sebastián's model from now on, roadmap Decided), so the three are
+  fixed on this branch by Sebastián's request, with R3-overflow-passthrough-unasserted: a review
+  listing findings (`- [P2] …`) read the diff and is never refused; otherwise only its summary is
+  read (heading and Target dropped, cut at the findings header), with quoted spans (backticks,
+  double, curly, and single quotes in a quote-like position) removed first; `unverified` only for
+  the patch or correctness and not after a possessive; `incomplete review` and `fail-closed
+  verdict` not after `not`/`no`. Route: delegated writer. RED: 32 tests, 6 failing. GREEN: 32/32;
+  `node --test` → `tests 699 / pass 692 / fail 0 / skipped 7`; `npm run check` passes. Mutation:
+  without the findings short-circuit, a findings list with no header fails. Parent spot check
+  32/32.
+- 2026-09-29: committed as b85b5b2. Native review of `21c491d..b85b5b2` (risk `medium`, 314
+  lines), lineage review-7661134792b95c8b: approved and acknowledged, two SUGGESTION.
+  R3-findings-shortcircuit-unproved-on-real-render: the stored full renders of the four
+  uninspected reviews (`rendered` in their job files) contain no `- [P<n>]` line (checked), so the
+  short-circuit does not hide them; carried as a possible verbatim fixture. R3-roadmap-effort-row-stale:
+  the Effort row now names `gpt-6.1-sol` at `high`, fixed in this commit.
+- 2026-09-29: committed as 0d66848; its native review (lineage review-3aa5c3fc2da4de63, the whole
+  range, 322 lines) approved and acknowledged, two SUGGESTION: R3-empty-review-recorded (exit 0
+  with no review text recorded `reviewed`) and R3-possessive-patch-false-negative ("the patch's
+  correctness is unverified" missed). The first real Codex review since the model change
+  (`js-harness codex-review --base main`, `gpt-6.1-sol` at `high`): recorded `reviewed` for
+  `21c491d..0d66848` (it listed a finding, so the new short-circuit held), one P2: the plugin's
+  renderer appends `stderr:` and `Reasoning:` sections after the review (`renderNativeReviewResult`,
+  `scripts/lib/render.mjs:288-313` of the plugin, checked), and the summary included them. All
+  three accepted: the summary is cut at those sections too; an empty review, or the renderer's
+  "Codex review completed without any stdout output.", fails closed; the patch as possessor
+  matches. Route: delegated writer, resumed. RED: 37 tests, 6 failing. GREEN: 37/37; `node --test`
+  → `tests 704 / pass 697 / fail 0 / skipped 7`; `npm run check` passes. Parent: the refusal
+  message now says "is empty or says it could not inspect"; suite 37/37.
+- 2026-09-29: committed as 6cd64b2. Last round over `21c491d..6cd64b2` (396 lines). Native review
+  lineage review-b348f1e0c38aec2b approved and acknowledged; one SUGGESTION, R3-crlf-section-cut
+  (a CRLF review would keep the appended sections), not applicable: the renderer joins its lines
+  with `
+` (`render.mjs:312` of the plugin), so the `Reasoning:` and `stderr:` headers always end
+  in LF; carried only as a note. Codex (`js-harness codex-review --base main`, `gpt-6.1-sol` at
+  `high`): no actionable regressions, recorded `reviewed` for `21c491d..6cd64b2`; it said `git
+  diff` could not run but it read the Git objects, and the classifier rightly let it through.
+  The branch is ready to push.
+
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
-`reviewed`, is item 1 of the roadmap's "Next". The installed skill on this machine still carries
+`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entries): reviewed by
+gentle-ai and by Codex, ready to push; push and PR await Sebastián's go-ahead. The installed skill on this machine still carries
 the old text until `js-harness` is reinstalled from `main` and synced.
