@@ -57,6 +57,7 @@ First request of a one-word prompt, estimated tokens:
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
 | Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6.1-sol` at `high` (`~/.codex/config.toml`; Sebastián, 2026-09-29), replacing `gpt-6-sol` at `xhigh`; `codex exec -m gpt-6.1-sol` answered at `high` on 2026-09-29, after a review earlier that day got a 400 for the same model |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
+| Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6.1-sol`): `high` (see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
@@ -77,7 +78,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project, above the machine commands (Sebastián, 2026-09-29), and the machine commands outside one; `doctor` reports the Codex plugin, and the Codex review of each approved code slice leaves a record a check verifies (today it depends on the agent remembering, and nothing notices a skip) | Done 2026-09-29 (`odd/tasks/project-init.md`), seven slices stacked to `main`: the git-spec install through the pnpm shim works since `jsaristi/js-harness#8` (the package no longer runs `prepare`); `init` merged via `jsaristi/js-harness#9`; project `uninstall`, with `init`'s review follow-ups, merged via `jsaristi/js-harness#10` (2026-09-29); project `sync` by location merged via `jsaristi/js-harness#11` (2026-09-29); the TUI by location merged via `jsaristi/js-harness#12` (2026-09-29); the Codex plugin in `doctor` merged via `jsaristi/js-harness#13` (2026-09-29); the verifiable Codex review record (`js-harness codex-review` and the pre-push `check --push`) merged via `jsaristi/js-harness#14` (2026-09-29). Its follow-ups are carried in the feature document |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
-| F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | — needs Sebastián's spend approval |
+| F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | In progress on `feat/evals` (`odd/tasks/evals.md`); spend approved 2026-09-30, no USD ceiling |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
@@ -141,7 +142,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] RDD-by-risk wired
 
 ### F5 Evals that discriminate
-- [ ] Spend approved by Sebastián
+- [x] Spend approved by Sebastián
 - [ ] Tasks hard enough to separate configs
 - [ ] A/B minimal vs current config at medium and high
 
@@ -154,10 +155,11 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ## Next
 
-1. F5 Evals that discriminate, which needs Sebastián's spend ceiling first (open decision 4).
+1. F5 Evals that discriminate (`odd/tasks/evals.md`): the runner first, then candidate tasks
+   with hidden graders, a headroom screen, and the A/B run.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
-3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 5 (the codegraph hook)
+3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 4 (the codegraph hook)
    can be taken at any time.
 
 ## Stack doctor notes
@@ -191,12 +193,13 @@ Resolved while building (details in `odd/tasks/stack-doctor.md`):
 1. Disconnecting the unused Magnific connector (the largest single per-turn item).
 2. Permission mode: currently `bypassPermissions`; the documented alternative is auto mode. He changes it himself.
 3. Whether the Gentleman persona stays part of the stack.
-4. Spend ceiling for F5.
-5. The codegraph `UserPromptSubmit` hook: keep, narrow or drop it. Replaying this project's 55
+4. The codegraph `UserPromptSubmit` hook: keep, narrow or drop it. Replaying this project's 55
    real prompts, it fired on 33; 16 of those injected a full ~4k-token code exploration, often
    for prompts with no code intent — ~1.2k tokens per prompt on average, kept in the history
    (evidence in `odd/tasks/f2-context-diet.md`, T3). It is codegraph's config, so js-harness
    only reports it.
+
+Closed: the F5 spend ceiling (none; see Decided, Eval spend).
 
 ## Risks
 
