@@ -1143,10 +1143,19 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   matches. Route: delegated writer, resumed. RED: 37 tests, 6 failing. GREEN: 37/37; `node --test`
   → `tests 704 / pass 697 / fail 0 / skipped 7`; `npm run check` passes. Parent: the refusal
   message now says "is empty or says it could not inspect"; suite 37/37.
+- 2026-09-29: committed as 6cd64b2. Last round over `21c491d..6cd64b2` (396 lines). Native review
+  lineage review-b348f1e0c38aec2b approved and acknowledged; one SUGGESTION, R3-crlf-section-cut
+  (a CRLF review would keep the appended sections), not applicable: the renderer joins its lines
+  with `
+` (`render.mjs:312` of the plugin), so the `Reasoning:` and `stderr:` headers always end
+  in LF; carried only as a note. Codex (`js-harness codex-review --base main`, `gpt-6.1-sol` at
+  `high`): no actionable regressions, recorded `reviewed` for `21c491d..6cd64b2`; it said `git
+  diff` could not run but it read the Git objects, and the classifier rightly let it through.
+  The branch is ready to push.
 
 ## Next step
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
-`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entries), awaiting push and
-PR on Sebastián's go-ahead. The installed skill on this machine still carries
+`reviewed`, is done on `fix/codex-review-uninspected` (Progress, last entries): reviewed by
+gentle-ai and by Codex, ready to push; push and PR await Sebastián's go-ahead. The installed skill on this machine still carries
 the old text until `js-harness` is reinstalled from `main` and synced.
