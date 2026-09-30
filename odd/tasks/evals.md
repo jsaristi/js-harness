@@ -123,6 +123,24 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   proven by mutation instead: breaking each branch in a copy made its test fail. ~1,120 lines
   (half tests), over the ~400 heuristic; the runner, its tests and the fake agent are one unit.
   Review assessment: medium, `slice_budget_reached`, so review is due on this commit alone.
+- 2026-09-30: T1 reviewed over `8434947..99272c5`. gentle-ai (lens reliability, lineage
+  `review-9112dfecb52e2684`): approved and acknowledged, authority burned, with one WARNING and
+  four suggestions, all advisory. Codex (`js-harness codex-review --base 8434947`, recorded): two
+  P2. Fixed in `7760d58` with a RED test each (52/52 pass, `npm run check` exits 0): a torn
+  results tail swallowed the next record (Codex); on Windows a descendant holding the pipes
+  outlived its exited root (Codex; `killSurvivors` mirrored from `bin/check.mjs`, which does not
+  export it); a spawn failure was recorded with the fixture's score and skipped on resume
+  forever, so it now stops the suite with reason `spawn` (gentle-ai WARNING); the timeout fired
+  after the root exited in time; a missing usage field gave 0; names that made a trial key or log
+  stem ambiguous are now rejected. `7760d58` assessed medium, `under_budget`: it is reviewed with
+  T2's commits, the boundary stays `99272c5`.
+
+## Follow-ups
+- Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
+  re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
+  workspace (gentle-ai suggestion, left as is).
+- `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
+  place when either changes.
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
@@ -147,6 +165,6 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   runs them.
 
 ## Next step
-Review of `05ed391` (gentle-ai, then Codex), then T2: the minimal and current configs, starting
-with one mapping of where the current config writes (engram, `~/.claude/projects`, gentle-ai
-state).
+T2: the minimal and current configs, starting with one mapping of where the current config
+writes (engram, `~/.claude/projects`, gentle-ai state). Review base for the next slice review:
+`99272c5` (it covers `7760d58` too).
