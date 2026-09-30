@@ -346,11 +346,43 @@ test('a command that times out is a FAIL row saying so, the next command still r
   assert.match((await runWithFake(md, { first: timedOut })).stdout, /\(timed out after 30 min\)/);
 });
 
-test('--timeout needs a positive number of minutes, and only run takes it (usage error, exit 2)', async () => {
-  for (const argv of [['run', 'c.md', '--timeout'], ['run', 'c.md', '--timeout', '0'], ['run', 'c.md', '--timeout', 'soon'], ['run', 'c.md', '--timeout', '-3'], ['goal', 'c.md', '--timeout', '5'], ['check', '--timeout', '5']]) {
+test('--timeout needs a plain decimal number of minutes, and only run takes it (usage error, exit 2)', async () => {
+  const bad = ['0', 'soon', '-3', '0x10', '1e2', 'Infinity', '1_0', '', '0.000001', '99999999'];
+  const argvs = [['run', 'c.md', '--timeout'], ['goal', 'c.md', '--timeout', '5'], ['check', '--timeout', '5']];
+  for (const value of bad) argvs.push(['run', 'c.md', '--timeout', value]);
+  for (const argv of argvs) {
     const { code, stderr } = await run(argv);
     assert.equal(code, 2, argv.join(' '));
     assert.match(stderr, /Usage: js-harness contract/, argv.join(' '));
+  }
+});
+
+test('the timeout handed to spawn is a whole number of milliseconds', async () => {
+  const md = contractWith('- `first` exits 0');
+  for (const [minutes, ms] of [['0.03', 1800], ['1.5', 90000], ['.5', 30000], ['0.00002', 1], ['0.100001', 6000]]) {
+    const { calls, code } = await runWithFake(md, {}, { args: ['--timeout', minutes] });
+    assert.equal(code, 0, minutes);
+    assert.equal(calls[0].opts.timeout, ms, minutes);
+    assert.ok(Number.isInteger(calls[0].opts.timeout), minutes);
+  }
+});
+
+test('run takes its root from the git top-level of --cwd, whatever the caller\'s own directory is', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeFile(path.join(dir, 'c.md'), contractWith('- `first` exits 0'));
+    fs.mkdirSync(path.join(dir, 'sub'));
+    const calls = [];
+    const spawn = (command, second) => {
+      if (Array.isArray(second)) return { status: 0, stdout: `${dir}\n`, stderr: '' }; // git rev-parse --show-toplevel
+      calls.push(second);
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const { code } = await run(['run', path.join(dir, 'c.md'), '--cwd', path.join(dir, 'sub')], { spawn, cwd: os.tmpdir() });
+    assert.equal(code, 0);
+    assert.equal(path.resolve(calls[0].cwd), path.resolve(dir));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -359,26 +391,29 @@ test('--timeout needs a positive number of minutes, and only run takes it (usage
 const HARNESS = path.resolve('/opt/js-harness/bin/js-harness.mjs');
 const REAL_HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
 
-/** `contract goal` on `md`, saved as `<tmp>/<subdir>/c.md`; `file` is that absolute path. */
-async function goalFor(md, { subdir = '.', harnessPath = HARNESS, cwdFlag = true } = {}) {
+/** `contract goal` on `md`, saved as `<tmp>/<subdir>/c.md`; `file` is that absolute path. With
+ * `inRepo`, a fake git says the temp directory is the repository top-level; otherwise it says "not a
+ * repository", so `root` (the `--cwd` the condition must carry) is the contract's own directory. */
+async function goalFor(md, { subdir = '.', harnessPath = HARNESS, cwdFlag = true, inRepo = false } = {}) {
   const dir = makeTmpDir();
   try {
     const file = path.join(dir, subdir, 'c.md');
     writeFile(file, md);
+    const spawn = (command, second) => (Array.isArray(second) && inRepo ? { status: 0, stdout: `${dir}\n` } : { status: 1, stdout: '' });
     const outcome = cwdFlag
-      ? await run(['goal', 'c.md', '--cwd', path.dirname(file)], { harnessPath })
-      : await run(['goal', file], { harnessPath, cwd: os.tmpdir() });
-    return { ...outcome, file };
+      ? await run(['goal', 'c.md', '--cwd', path.dirname(file)], { harnessPath, spawn })
+      : await run(['goal', file], { harnessPath, spawn, cwd: os.tmpdir() });
+    return { ...outcome, file, dir, root: inRepo ? dir : path.dirname(file) };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 test('goal prints one paragraph: the run command, the hand checks and the Ask me before text', async () => {
-  const { code, stdout, stderr, file } = await goalFor(contractWith('- `npm run check` exits 0\n- The output names the file\n- Rows are sorted'));
+  const { code, stdout, stderr, file, root } = await goalFor(contractWith('- `npm run check` exits 0\n- The output names the file\n- Rows are sorted'));
   assert.equal(code, 0, stderr);
   assert.ok(!stdout.includes('\n'), 'one paragraph');
-  assert.ok(stdout.startsWith(`\`node "${HARNESS}" contract run "${file}"\` exits 0 and prints \`met\``), stdout);
+  assert.ok(stdout.startsWith(`\`node "${HARNESS}" contract run "${file}" --cwd "${root}"\` exits 0 and prints \`met\``), stdout);
   assert.ok(stdout.includes('also true by hand: The output names the file; Rows are sorted'), stdout);
   assert.match(stdout, /Run it after each change and fix what fails/);
   assert.ok(stdout.includes(`"Ask me before" in ${file}: Changing the template.`), stdout);
@@ -388,6 +423,34 @@ test('goal emits absolute paths, so the command finds the contract from any work
   const { stdout, file } = await goalFor(GOOD, { subdir: 'deep', cwdFlag: false });
   assert.ok(path.isAbsolute(file));
   assert.ok(stdout.includes(`contract run "${file}"`), stdout);
+});
+
+test('goal pins the project directory too: the git top-level of the contract, not the directory it sits in', async () => {
+  const { stdout, file, dir } = await goalFor(GOOD, { subdir: 'deep', inRepo: true });
+  assert.ok(stdout.includes(`contract run "${file}" --cwd "${dir}"\``), stdout);
+  assert.ok(!stdout.includes(`--cwd "${path.dirname(file)}"`));
+});
+
+test('the emitted command, replayed from an unrelated directory, runs the checks in the project root', async () => {
+  const { stdout, file, dir } = await goalFor(GOOD, { subdir: 'deep', inRepo: true });
+  const argv = [...stdout.matchAll(/"([^"]+)"/g)].map((m) => m[1]); // harness, contract, --cwd value
+  assert.deepEqual(argv.slice(0, 3), [HARNESS, file, dir]);
+  const tmp = makeTmpDir();
+  try {
+    writeFile(argv[1], contractWith('- `first` exits 0'));
+    const calls = [];
+    const spawn = (command, second) => {
+      if (Array.isArray(second)) return { status: 0, stdout: `${tmp}\n` };
+      calls.push(second);
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const code = await contractMain(['run', argv[1], '--cwd', argv[2]], {}, { spawn, cwd: os.tmpdir(), stdout() {}, stderr() {} });
+    assert.equal(code, 0);
+    assert.equal(path.resolve(calls[0].cwd), path.resolve(tmp)); // the git top-level of --cwd, not os.tmpdir()
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('goal without an injected harness path runs the js-harness.mjs that is running', async () => {
@@ -403,22 +466,32 @@ test('goal without an injected harness path runs the js-harness.mjs that is runn
 });
 
 test('goal double-quotes both paths, so a path with spaces replays as one argument', async () => {
-  const { code, stdout, file } = await goalFor(GOOD, { subdir: 'with space', harnessPath: path.resolve('/opt/js harness/js-harness.mjs') });
+  const { code, stdout, file, root } = await goalFor(GOOD, { subdir: 'with space', harnessPath: path.resolve('/opt/js harness/js-harness.mjs') });
   assert.equal(code, 0);
   assert.ok(file.includes('with space'));
-  assert.ok(stdout.startsWith(`\`node "${path.resolve('/opt/js harness/js-harness.mjs')}" contract run "${file}"\``), stdout);
+  assert.ok(stdout.startsWith(`\`node "${path.resolve('/opt/js harness/js-harness.mjs')}" contract run "${file}" --cwd "${root}"\``), stdout);
 });
 
-test('goal refuses a path that a double quote, backtick or dollar sign would break out of, and prints no condition', async () => {
-  for (const bad of ['"', '`', '$']) {
-    const { code, stdout, stderr } = await goalFor(GOOD, { harnessPath: path.resolve(`/opt/we${bad}ird/js-harness.mjs`) });
-    assert.equal(code, 1, bad);
-    assert.equal(stdout, '', bad);
-    assert.match(stderr, /cannot be quoted/, bad);
+test('goal refuses a path the shell could expand or split, and prints no condition', async () => {
+  // A double quote, backtick, $, %, ! and a newline anywhere; a backslash only at the end.
+  const harnessPaths = ['"', '`', '$', '%', '!', '\n'].map((bad) => path.resolve(`/opt/we${bad}ird/js-harness.mjs`));
+  harnessPaths.push('/opt/js-harness\\'); // raw: path.resolve would drop the trailing backslash
+  for (const harnessPath of harnessPaths) {
+    const { code, stdout, stderr } = await goalFor(GOOD, { harnessPath });
+    assert.equal(code, 1, JSON.stringify(harnessPath));
+    assert.equal(stdout, '', JSON.stringify(harnessPath));
+    assert.match(stderr, /cannot be quoted/, JSON.stringify(harnessPath));
   }
-  const dollar = await goalFor(GOOD, { subdir: 'cost$5' });
-  assert.equal(dollar.code, 1);
-  assert.match(dollar.stderr, /cannot be quoted/);
+  for (const subdir of ['cost$5', 'wow!', '100%']) {
+    const refused = await goalFor(GOOD, { subdir });
+    assert.equal(refused.code, 1, subdir);
+    assert.match(refused.stderr, /cannot be quoted/, subdir);
+  }
+});
+
+test('a backslash inside a path is fine: only a trailing one is refused', async () => {
+  const { code } = await goalFor(GOOD, { harnessPath: 'C:\\tools\\js-harness.mjs' });
+  assert.equal(code, 0);
 });
 
 test('goal leaves out the hand-check clause when there is none, and a long Ask me before is only referenced', async () => {

@@ -93,6 +93,14 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   same delegated writer
 - [x] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
   passes its own contract — route: inline (docs)
+- [x] T4a Review follow-ups of slice 3: `goal` also emits `--cwd "<project root>"` (the git
+  top-level of the contract), because `run` takes its root from `--cwd` and a replay from another
+  directory would run the checks in the wrong project (Codex P2); the timeout is handed to spawn as
+  whole milliseconds, and one that is not a plain decimal or rounds below 1 ms is a usage error
+  (Codex P2, R3-fractional-timeout-crash); `%`, `!`, a newline and a trailing backslash are refused
+  in an emitted path too, with the doc comment stating exactly what and why
+  (R3-quote-shell-residuals); the grandchild-pipes limit is recorded, not coded
+  (R3-timeout-grandchild-pipes) — route: the same delegated writer
 
 ## Progress
 - 2026-09-29: contract written; design above.
@@ -127,6 +135,15 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   its two hand checks hold: `progress` shows F3 3/3, and a contract with only prose under
   `## Done when` fails `contract check`, naming that `## Done when` has no command.
 
+- 2026-09-29: slice 3 (cc6607c..03f6dfe, which includes the T4 docs commit 03f6dfe) reviewed.
+  gentle-ai: reliability lens approved and acknowledged (lineage `review-bcd0f08c7f603c49`,
+  authority burned), 3 non-blocking findings. Codex: recorded, 2 P2. All carried as T4a.
+- 2026-09-29: R3-timeout-grandchild-pipes: a timed-out command's grandchild can keep the pipes open
+  and delay `spawnSync`'s return. Verified on Windows only (the 6 s return in the entry above);
+  left as a known POSIX limit, with no code change.
+- 2026-09-29: T4a landed: `contract goal` emits `--cwd "<git top-level of the contract>"`, the
+  `run` timeout is whole milliseconds and a plain decimal of at least 1 ms, and an emitted path
+  holding `"`, a backtick, `$`, `%`, `!`, a newline or a trailing `\` is refused.
+
 ## Next step
-Review the last slice (cc6607c..HEAD) with gentle-ai and Codex, then open the PR against `main`
-and merge on Sebastián's go-ahead. F3 then closes in the roadmap.
+Open the PR against `main` and merge on Sebastián's go-ahead; F3 then closes in the roadmap.

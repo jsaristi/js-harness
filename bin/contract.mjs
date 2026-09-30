@@ -32,6 +32,24 @@ function requireValue(argv, i, flag) {
   return value;
 }
 
+// A plain decimal: no sign, hex, exponent or `Infinity`, which `Number()` would all accept.
+const DECIMAL_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
+const MAX_TIMEOUT_MS = 2 ** 31 - 1; // what a Node timer can hold
+
+/** A `--timeout` value in minutes: a plain decimal that is at least 1 ms and at most a Node timer
+ * can hold, once converted to whole milliseconds. */
+function parseMinutes(raw) {
+  const minutes = DECIMAL_PATTERN.test(raw) ? Number(raw) : NaN;
+  const ms = toMilliseconds(minutes);
+  if (!(ms >= 1 && ms <= MAX_TIMEOUT_MS)) {
+    throw new ContractArgError('--timeout requires a plain decimal number of minutes, from 0.00002 (1 ms) up to about 35,791');
+  }
+  return minutes;
+}
+
+/** Minutes as the whole milliseconds `spawn` takes: a fractional `timeout` would be rejected or truncated. */
+const toMilliseconds = (minutes) => Math.round(minutes * 60 * 1000);
+
 /** Walks argv token by token, so an unknown flag is a usage error and never a silently ignored one. */
 function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
   const files = [];
@@ -43,10 +61,7 @@ function parseArgs(argv, { timeout: allowTimeout = false } = {}) {
       cwd = requireValue(argv, i, token);
       i += 1; // consume the value too, so it is never re-read as a file
     } else if (token === '--timeout' && allowTimeout) {
-      timeoutMinutes = Number(requireValue(argv, i, token));
-      if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
-        throw new ContractArgError('--timeout requires a positive number of minutes');
-      }
+      timeoutMinutes = parseMinutes(requireValue(argv, i, token));
       i += 1;
     } else if (token.startsWith('--')) {
       throw new ContractArgError(`unknown argument: ${token}`);
@@ -211,7 +226,7 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
       env: childEnv,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
-      timeout: parsed.timeoutMinutes * 60 * 1000,
+      timeout: toMilliseconds(parsed.timeoutMinutes),
     });
     const passed = outcome.status === 0 && !outcome.error;
     met &&= passed;
@@ -226,14 +241,18 @@ function runCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, env }) {
   return met ? 0 : 1;
 }
 
-/** `value` in double quotes, which sh and PowerShell both read as one argument; `null` when it holds a
- * character (a double quote, a backtick, a dollar sign) that could break out of them, because a
- * fragile escape is worse than a refusal. */
+// What a path may not hold to sit safely inside double quotes: `"` closes them; `` ` `` and `$` are
+// expanded by sh and PowerShell; `%` (cmd.exe) and `!` (bash history) are expanded by other shells a
+// pasted command may reach; a newline splits the command; a trailing `\` escapes the closing quote.
+const UNQUOTABLE_PATTERN = /["`$%!\r\n]|\\$/;
+
+/** `value` in double quotes, which sh and PowerShell both read as one argument; `null` when it holds
+ * anything in `UNQUOTABLE_PATTERN`, because a fragile escape is worse than a refusal. */
 function quoteArg(value) {
-  return /["`$]/.test(value) ? null : `"${value}"`;
+  return UNQUOTABLE_PATTERN.test(value) ? null : `"${value}"`;
 }
 
-function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, harnessPath }) {
+function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn, harnessPath }) {
   const parsed = parseOneFile(argv, stderr, defaultCwd);
   if (parsed.code) return parsed.code;
   const [entry] = explicitEntries([parsed.file], parsed.cwd);
@@ -245,12 +264,14 @@ function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, harnessPath }) {
   }
 
   // A /goal lives in one session on one machine, so absolute paths are right here: the command finds
-  // the same contract from any working directory and runs this very js-harness, not one on PATH.
+  // the same contract from any working directory, runs this very js-harness, not one on PATH, and
+  // runs the checks in the contract's project, since `run` takes its root from `--cwd`.
   const contractPath = path.resolve(parsed.cwd, parsed.file);
-  const quoted = [harnessPath, contractPath].map(quoteArg);
+  const projectDir = projectRoot(path.dirname(contractPath), spawn);
+  const paths = [harnessPath, contractPath, projectDir];
+  const quoted = paths.map(quoteArg);
   if (quoted.includes(null)) {
-    const culprit = quoted[0] === null ? harnessPath : contractPath;
-    stderr(`cannot be quoted safely: a path holds a double quote, backtick or dollar sign (${culprit})`);
+    stderr(`cannot be quoted safely: a path holds a double quote, backtick, dollar sign, %, !, newline or trailing backslash (${paths[quoted.indexOf(null)]})`);
     return 1;
   }
 
@@ -258,7 +279,7 @@ function goalCommand(argv, { cwd: defaultCwd, stdout, stderr, harnessPath }) {
   const ask = parseContract(entry.markdown).get('Ask me before').replace(/\s+/g, ' ');
   const inlineAsk = ask.length <= ASK_INLINE_MAX ? `: ${trimmed(ask)}` : '';
   const condition = [
-    `\`node ${quoted[0]} contract run ${quoted[1]}\` exits 0 and prints \`met\``,
+    `\`node ${quoted[0]} contract run ${quoted[1]} --cwd ${quoted[2]}\` exits 0 and prints \`met\``,
     checks.length > 0 ? `; also true by hand: ${checks.map(trimmed).join('; ')}` : '',
     `. Run it after each change and fix what fails; stop and ask if a step needs a decision listed under "Ask me before" in ${contractPath}${inlineAsk}.`,
   ].join('');
