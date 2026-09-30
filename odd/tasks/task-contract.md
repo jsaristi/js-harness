@@ -72,7 +72,7 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 ## Tasks
 - [x] T1 `bin/lib/contract.mjs`: template, parser and validator, with tests — route: delegated
   writer (writer trigger: a new lib and its test file)
-- [ ] T2 `js-harness contract template|check`, the dispatcher entry and the `check` row — route:
+- [x] T2 `js-harness contract template|check`, the dispatcher entry and the `check` row — route:
   delegated writer
 - [ ] T3 `contract run` and `contract goal` — route: delegated writer
 - [ ] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
@@ -82,6 +82,8 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 - 2026-09-29: contract written; design above.
 - 2026-09-29: T1 landed: `bin/lib/contract.mjs` (template, parser, `validateContract`, `doneWhen`) on
   the fence-aware tokenizer now exported from `bin/lib/progress.mjs`, with tests.
+- 2026-09-29: T2 landed: `js-harness contract template|check`, its dispatcher entry and the static
+  `contracts` row in `check` (non-push path), with tests.
 
 ## Next step
-T2.
+T3.
