@@ -1,7 +1,7 @@
 # Task contract
 
 Locator: `odd/tasks/task-contract.md` · Engram mirror: `odd/task-contract/tasks` · Branch:
-`feat/task-contract`
+`feat/task-contract`, merged via `jsaristi/js-harness#16` as 8624fc4
 
 ## Goal
 A feature document opens with a task contract that a command validates, and `/goal` can drive the
@@ -164,4 +164,5 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 - R3-timeout-grandchild-pipes: the timeout's prompt return is verified on Windows only.
 
 ## Next step
-Open the PR against `main` and merge on Sebastián's go-ahead; F3 then closes in the roadmap.
+None: F3 is closed (merged 2026-09-30 via `jsaristi/js-harness#16`). The follow-ups above are open
+work for a later session.
