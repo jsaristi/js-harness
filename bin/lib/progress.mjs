@@ -42,34 +42,35 @@ function isFenceClose(line, fence) {
 /** Splits markdown into lines and tags each one as a fence toggle, a heading, a checkbox step, or
  * plain text — a single fence-aware pass every parser below builds on, so a heading or checkbox
  * that only appears inside a fenced example (or inside a *nested*, mismatched fence marker) is
- * never mistaken for a real one. An opener with no matching closer runs to end of file. */
-function tokenize(markdown) {
+ * never mistaken for a real one. An opener with no matching closer runs to end of file. Every token
+ * keeps its raw `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. */
+export function tokenize(markdown) {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
   let fence = null; // { char, length } of the currently open fence, or null outside any fence
   for (const raw of lines) {
     if (fence) {
       if (isFenceClose(raw, fence)) fence = null;
-      tokens.push({ fence: true });
+      tokens.push({ fence: true, line: raw });
       continue;
     }
     const opened = matchFenceOpen(raw);
     if (opened) {
       fence = opened;
-      tokens.push({ fence: true });
+      tokens.push({ fence: true, line: raw });
       continue;
     }
     const heading = raw.match(HEADING_PATTERN);
     if (heading) {
-      tokens.push({ heading: { level: heading[1].length, title: heading[2].trim() } });
+      tokens.push({ heading: { level: heading[1].length, title: heading[2].trim() }, line: raw });
       continue;
     }
     const step = raw.match(STEP_PATTERN);
     if (step) {
-      tokens.push({ step: { text: step[2].trim(), done: step[1].toLowerCase() === 'x' } });
+      tokens.push({ step: { text: step[2].trim(), done: step[1].toLowerCase() === 'x' }, line: raw });
       continue;
     }
-    tokens.push({});
+    tokens.push({ line: raw });
   }
   return tokens;
 }

@@ -70,7 +70,7 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   none, the row passes and says so.
 
 ## Tasks
-- [ ] T1 `bin/lib/contract.mjs`: template, parser and validator, with tests — route: delegated
+- [x] T1 `bin/lib/contract.mjs`: template, parser and validator, with tests — route: delegated
   writer (writer trigger: a new lib and its test file)
 - [ ] T2 `js-harness contract template|check`, the dispatcher entry and the `check` row — route:
   delegated writer
@@ -80,6 +80,8 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
 
 ## Progress
 - 2026-09-29: contract written; design above.
+- 2026-09-29: T1 landed: `bin/lib/contract.mjs` (template, parser, `validateContract`, `doneWhen`) on
+  the fence-aware tokenizer now exported from `bin/lib/progress.mjs`, with tests.
 
 ## Next step
-T1.
+T2.
