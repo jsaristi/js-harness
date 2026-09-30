@@ -166,5 +166,31 @@ Mode: strict (source: user global config). Runner: `node --test`.
   context counts for nothing. RED: 74 tests, 14 failing. GREEN: 74/74; `node --test` → 741 / 734 /
   0 / 7; `npm run check`, `npm run e2e` exit 0; stored real run: 232 of 232 keys seen.
 
+- 2026-09-29: committed as 0983f46; the last round. Native review lineage review-8f2668e536618ad4
+  (1701 lines): approved and acknowledged, one SUGGESTION carried (R3-stop-reason-ignores-injected-
+  bounds: the timeout and overflow messages print the module constants, not injected bounds; only
+  tests inject them). Codex (`js-harness codex-review --base main`): 9 commands, all exit 0, a `git
+  diff 21c491d…` among them; recorded `reviewed` for `21c491d..0983f46`. Its three P2 are carried
+  with their trade-offs: identical changes in two hunks of one file collapse to one key (keying by
+  hunk header would refuse a review that used other context, `-U10`; counting occurrences can be
+  fooled by a repeated diff), non-ASCII file names that normalize alike collide (`café.js`,
+  `cafè.js`), and a git-quoted path on one side and `core.quotePath=false` on the other give
+  different keys (a false refusal, fail-closed). All three need non-ASCII names or repeated identical
+  hunks. Carried from earlier rounds: R3-exact-coverage-large-range, R3-probe-win32-timeout-unbounded.
+
+## Carried follow-ups
+- Coverage identity: identical changes in two hunks of one file; non-ASCII names that normalize
+  alike; git-quoted versus unquoted paths (Codex, last round).
+- Exact coverage on a large range if Codex truncates output or reads by file; measure real runs
+  before any tolerance (R3-exact-coverage-large-range).
+- The `codex --version` probe's timeout on Windows stops only the shim (R3-probe-win32-timeout-
+  unbounded), shared with `doctor`'s `spawnProbe`.
+- Failure messages print the constant bounds, not injected ones (R3-stop-reason-ignores-injected-
+  bounds).
+- The user's own Codex sessions still reach the Store PowerShell; a non-Store PowerShell 7
+  (`winget install --id Microsoft.PowerShell --source winget`) fixes them (Sebastián's call).
+- `mcp_servers.context7.type` in `~/.codex/config.toml` is ignored by Codex 0.159.1 and warns on
+  every run.
+
 ## Next step
-The last review round (native, then Codex); later findings are carried.
+Push `fix/codex-review-uninspected` and open its pull request, on Sebastián's go-ahead.
