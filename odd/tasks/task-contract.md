@@ -58,7 +58,8 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   counting the same checkboxes.
 - `contract check [file...]` rejects, naming each reason: a missing or empty section; a
   `Done when` with no command, where a command is a list item that opens with an inline code span
-  and says `exits 0`; a command still holding a template placeholder (`<...>`); an `Effort` other
+  and says `exits 0`; a command that is wholly a template placeholder (`<...>`), or empty; HTML comments are not
+  content; an `Effort` other
   than `medium` or `high`. With no file it checks every `odd/tasks/*.md` that has `## Goal`.
 - `contract template` prints the template, so a project without `docs/origin.md` has it.
 - `contract run <file>` runs each done-when command from the repository root, prints one
@@ -74,6 +75,13 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   writer (writer trigger: a new lib and its test file)
 - [x] T2 `js-harness contract template|check`, the dispatcher entry and the `check` row — route:
   delegated writer
+- [x] T2a Review follow-ups of slice 1: HTML comments are dropped before sections and list items
+  are parsed (Codex P2); a placeholder is a code span that is wholly one `<...>`, so `<ok>` inside
+  a real command or a shell redirect passes (Codex P2); a code span empty after trimming is not a
+  command (Codex P2); discovery honours an injected `stat` (R3-stat-bypasses-injected-fs) and its
+  error paths are tested (R3-discover-error-paths-untested); an unreadable `odd/tasks/*.md` still
+  fails the row, on purpose, with a test (R3-unreadable-noncontract-fails-gate); the repository-root
+  test skips without git (R3-git-dependent-test) — route: the same delegated writer
 - [ ] T3 `contract run` and `contract goal` — route: delegated writer
 - [ ] T4 Roadmap Decided row and checklist, `AGENTS.md` pointer within budget, this document
   passes its own contract — route: inline (docs)
@@ -84,6 +92,14 @@ Slices: 1 = T1–T2 on `feat/task-contract`.
   the fence-aware tokenizer now exported from `bin/lib/progress.mjs`, with tests.
 - 2026-09-29: T2 landed: `js-harness contract template|check`, its dispatcher entry and the static
   `contracts` row in `check` (non-push path), with tests.
+- 2026-09-29: slice 1 (21e5e24..06e2743, 827 changed lines) reviewed. gentle-ai: medium risk, one
+  lens (reliability), approved and acknowledged (lineage `review-50c11c1316271493`, authority
+  burned), four non-blocking findings. Codex (`codex-review --base 21e5e24`): recorded, three P2.
+  All seven carried as T2a. An unreadable file stays a failure: it is not known to be a
+  non-contract, and a gate must not hide a file it cannot read.
+- 2026-09-29: T2a landed: comments are stripped before parsing (fence-aware), a placeholder is a
+  wholly-`<...>` span, an empty span is no command, discovery honours an injected `stat` with its
+  error paths tested, and the git-root test skips without git.
 
 ## Next step
 T3.

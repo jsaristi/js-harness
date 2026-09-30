@@ -96,10 +96,10 @@ test('"exits 0" without a leading code span is not a command', () => {
 });
 
 test('a command that still holds a placeholder is rejected and quoted', () => {
-  const md = withSection('Done when', '- `npm run <script>` exits 0');
+  const md = withSection('Done when', '- `<script>` exits 0');
   const { ok, errors } = validateContract(md);
   assert.equal(ok, false);
-  assert.ok(errors.some((e) => /placeholder/.test(e) && e.includes('npm run <script>')), errors.join('\n'));
+  assert.ok(errors.some((e) => /placeholder/.test(e) && e.includes('<script>')), errors.join('\n'));
 });
 
 test('a redirect in a real command is not mistaken for a placeholder', () => {
@@ -162,4 +162,51 @@ test('doneWhen joins a wrapped list item and skips fenced lines', () => {
 
 test('doneWhen of a document with no Done when is empty', () => {
   assert.deepEqual(doneWhen('# x\n'), { commands: [], checks: [] });
+});
+
+// --- review follow-ups (Codex P2 x3) ---
+
+test('a commented-out command never counts, on one line or across several', () => {
+  for (const body of ['- <!-- `npm test` exits 0 -->\n- It works', '<!--\n- `npm test` exits 0\n-->\n- It works']) {
+    const { ok, errors } = validateContract(withSection('Done when', body));
+    assert.equal(ok, false, body);
+    assert.ok(errors.some((e) => /no command/.test(e)), errors.join('\n'));
+    assert.deepEqual(doneWhen(withSection('Done when', body)).commands, [], body);
+  }
+});
+
+test('a comment can hide a heading: a commented ## Goal makes no contract and a commented section is not a section', () => {
+  assert.equal(isContract('# x\n\n<!--\n## Goal\nnope\n-->\n'), false);
+  const md = GOOD.replace('## Why', '<!--\n## Constraints\nghost\n-->\n## Why');
+  assert.equal(parseContract(md).get('Constraints'), '- Zero dependencies — because it must run anywhere');
+});
+
+test('text around a comment on the same line is kept', () => {
+  const md = withSection('Done when', '- `npm run check` <!-- note --> exits 0');
+  assert.deepEqual(doneWhen(md).commands, ['npm run check']);
+});
+
+test('a comment opener inside a code fence is content, not a comment', () => {
+  const md = GOOD.replace('Ship the thing.', 'Ship the thing.\n```\n<!-- not a comment\n```');
+  assert.match(parseContract(md).get('Goal'), /<!-- not a comment/);
+  assert.equal(parseContract(md).get('Why'), 'Because the loop needs evidence.'); // a real opener would swallow it
+});
+
+test('a placeholder is a code span that is wholly one <...>; an <ok> inside a real command passes', () => {
+  for (const good of ['node -e "console.log(\'<ok>\')"', 'cmd <in.txt >out.txt', 'npm run <script> --silent']) {
+    assert.equal(validateContract(withSection('Done when', `- \`${good}\` exits 0`)).ok, true, good);
+  }
+  for (const bad of ['<command>', '  <the check>  ']) {
+    const { ok, errors } = validateContract(withSection('Done when', `- \`${bad}\` exits 0`));
+    assert.equal(ok, false, bad);
+    assert.ok(errors.some((e) => /placeholder/.test(e)), errors.join('\n'));
+  }
+});
+
+test('a code span that is empty after trimming is not a command', () => {
+  const md = withSection('Done when', '- ` ` exits 0');
+  assert.deepEqual(doneWhen(md).commands, []);
+  const { ok, errors } = validateContract(md);
+  assert.equal(ok, false);
+  assert.ok(errors.some((e) => /no command/.test(e)), errors.join('\n'));
 });

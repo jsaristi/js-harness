@@ -50,7 +50,10 @@ function projectRoot(cwd, spawn) {
  * (label: the repo-relative path). A file that cannot be read comes back as `{ label, error }` so a
  * gate reports it instead of skipping it; an absent `odd/tasks/` is simply no contracts. Shared with
  * the `contracts` row of `bin/check.mjs`. */
-export function discoverContracts(root, { readFile = (p) => fs.readFileSync(p, 'utf8'), readdir = (p) => fs.readdirSync(p) } = {}) {
+export function discoverContracts(
+  root,
+  { readFile = (p) => fs.readFileSync(p, 'utf8'), readdir = (p) => fs.readdirSync(p), stat = (p) => fs.statSync(p) } = {},
+) {
   const dir = path.join(root, 'odd', 'tasks');
   let names;
   try {
@@ -63,10 +66,12 @@ export function discoverContracts(root, { readFile = (p) => fs.readFileSync(p, '
     const label = `odd/tasks/${name}`;
     try {
       const absolute = path.join(dir, name);
-      if (!fs.statSync(absolute).isFile()) continue; // e.g. a directory named `x.md`
+      if (!stat(absolute).isFile()) continue; // e.g. a directory named `x.md`
       const markdown = readFile(absolute);
       if (isContract(markdown)) found.push({ label, markdown });
     } catch (err) {
+      // Fail closed on purpose: a file we cannot read is not known to be a non-contract, and a gate
+      // must not hide it.
       found.push({ label, error: err.code ?? err.message });
     }
   }

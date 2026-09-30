@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { contractMain } from './contract.mjs';
+import { contractMain, discoverContracts, validateEntries } from './contract.mjs';
 import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
 
 const GOOD = [
@@ -128,7 +128,9 @@ test('check with files resolves them from --cwd; a file that is not a contract, 
   }
 });
 
-test('check with no files run from a subdirectory of a repository reads the repository root', async () => {
+const hasGit = spawnSync('git', ['--version']).status === 0;
+
+test('check with no files run from a subdirectory of a repository reads the repository root', { skip: !hasGit && 'git is not on PATH' }, async () => {
   const dir = makeTmpDir();
   try {
     assert.equal(spawnSync('git', ['init', '-q'], { cwd: dir }).status, 0);
@@ -140,4 +142,63 @@ test('check with no files run from a subdirectory of a repository reads the repo
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- discovery: injected fs, and every error path ---
+
+const fsError = (code) => Object.assign(new Error(code), { code });
+const isFile = () => ({ isFile: () => true });
+
+test('discoverContracts uses only the injected fs, stat included, and keeps contracts only', () => {
+  const files = { 'good.md': GOOD, 'old.md': NOT_A_CONTRACT, 'notes.txt': GOOD };
+  const found = discoverContracts('/nowhere', {
+    readdir: () => Object.keys(files),
+    stat: isFile,
+    readFile: (p) => files[path.basename(p)],
+  });
+  assert.deepEqual(found, [{ label: 'odd/tasks/good.md', markdown: GOOD }]);
+});
+
+test('a missing odd/tasks is no contracts; any other readdir error is reported, not swallowed', () => {
+  assert.deepEqual(discoverContracts('/x', { readdir: () => { throw fsError('ENOENT'); } }), []);
+  assert.deepEqual(discoverContracts('/x', { readdir: () => { throw fsError('EACCES'); } }), [{ label: 'odd/tasks', error: 'EACCES' }]);
+});
+
+test('a directory named x.md is skipped silently', () => {
+  const found = discoverContracts('/x', {
+    readdir: () => ['x.md', 'good.md'],
+    stat: (p) => ({ isFile: () => path.basename(p) !== 'x.md' }),
+    readFile: () => GOOD,
+  });
+  assert.deepEqual(found.map((entry) => entry.label), ['odd/tasks/good.md']);
+  const dir = makeTmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'odd', 'tasks', 'x.md'), { recursive: true });
+    assert.deepEqual(discoverContracts(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A gate must not hide a file it cannot read: it is not known to be a non-contract, so it fails.
+test('a file that cannot be stat-ed or read is a failing entry, and the others are still checked', () => {
+  const found = discoverContracts('/x', {
+    readdir: () => ['a-stat.md', 'b-read.md', 'c-good.md'],
+    stat: (p) => {
+      if (path.basename(p) === 'a-stat.md') throw fsError('EIO');
+      return { isFile: () => true };
+    },
+    readFile: (p) => {
+      if (path.basename(p) === 'b-read.md') throw fsError('EACCES');
+      return GOOD;
+    },
+  });
+  assert.deepEqual(found.map((entry) => [entry.label, entry.error ?? 'ok']), [
+    ['odd/tasks/a-stat.md', 'EIO'],
+    ['odd/tasks/b-read.md', 'EACCES'],
+    ['odd/tasks/c-good.md', 'ok'],
+  ]);
+  const results = validateEntries(found);
+  assert.deepEqual(results.map((r) => r.ok), [false, false, true]);
+  assert.deepEqual(results[1].errors, ['cannot read: EACCES']);
 });

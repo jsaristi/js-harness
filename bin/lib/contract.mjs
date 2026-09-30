@@ -35,9 +35,9 @@ const ITEM_PATTERN = /^\s*[-*+]\s+(.*)$/;
 // An inline code span at the very start of an item, then the rest of the item.
 const COMMAND_PATTERN = /^(`+)(.+?)\1(?!`)\s*(.*)$/s;
 const EXITS_ZERO_PATTERN = /\bexits 0\b/i;
-// `<...>` with something inside: a template placeholder, not a shell redirect (`> out.txt`).
-const PLACEHOLDER_PATTERN = /<[^<>\s][^<>]*>/;
-const COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
+// A code span that is wholly one `<...>` is a template placeholder (`<command>`); an `<ok>` inside a
+// real command, or a shell redirect (`cmd <in.txt >out.txt`), is not.
+const PLACEHOLDER_PATTERN = /^<[^<>]+>$/;
 
 /** Every `## ` section outside a fence, as `title -> tokens` in document order; the tokens are the
  * shared fence-aware ones, so a `## Goal` inside a fenced example never opens a section. A title
@@ -45,7 +45,7 @@ const COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
 function readSections(markdown) {
   const sections = new Map();
   let current = null;
-  for (const token of tokenize(markdown)) {
+  for (const token of tokenize(markdown, { stripComments: true })) {
     if (token.heading?.level === 2) {
       const { title } = token.heading;
       current = sections.has(title) ? null : [];
@@ -63,18 +63,13 @@ export function isContract(markdown) {
 }
 
 /** Each `## ` section's body by title, in document order: its lines up to the next `## ` heading,
- * trimmed. `### ` subheadings and fenced lines belong to the body. */
+ * trimmed, HTML comments removed. `### ` subheadings and fenced lines belong to the body. */
 export function parseContract(markdown) {
   const bodies = new Map();
   for (const [title, tokens] of readSections(markdown)) {
     bodies.set(title, tokens.map((token) => token.line).join('\n').trim());
   }
   return bodies;
-}
-
-/** A section's text without HTML comments and surrounding whitespace. */
-function meaningful(body) {
-  return body.replace(COMMENT_PATTERN, '').trim();
 }
 
 /** The `## Done when` list items, one string per item: a wrapped item is joined onto one line, and
@@ -107,7 +102,9 @@ export function doneWhen(markdown) {
   const checks = [];
   for (const item of doneWhenItems(readSections(markdown).get('Done when') ?? [])) {
     const command = item.match(COMMAND_PATTERN);
-    if (command && EXITS_ZERO_PATTERN.test(command[3])) commands.push(command[2].trim());
+    const span = command?.[2].trim();
+    // An empty code span is no command: there is nothing to run.
+    if (span && EXITS_ZERO_PATTERN.test(command[3])) commands.push(span);
     else checks.push(item);
   }
   return { commands, checks };
@@ -122,7 +119,7 @@ export function validateContract(markdown) {
   const usable = new Set();
   for (const title of REQUIRED_SECTIONS) {
     if (!bodies.has(title)) errors.push(`missing section "## ${title}"`);
-    else if (meaningful(bodies.get(title)) === '') errors.push(`section "## ${title}" is empty`);
+    else if (bodies.get(title) === '') errors.push(`section "## ${title}" is empty`);
     else usable.add(title);
   }
 
@@ -137,7 +134,7 @@ export function validateContract(markdown) {
   }
 
   if (usable.has('Effort')) {
-    const effort = meaningful(bodies.get('Effort'));
+    const effort = bodies.get('Effort');
     if (!EFFORTS.includes(effort.toLowerCase())) {
       errors.push(`"## Effort" must be exactly "medium" or "high", found "${effort}"`);
     }

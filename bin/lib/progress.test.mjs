@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSteps, parseRoadmap, parseFeature } from './progress.mjs';
+import { parseSteps, parseRoadmap, parseFeature, tokenize } from './progress.mjs';
 
 // --- parseSteps ---
 
@@ -309,4 +309,10 @@ test('parseFeature falls back to the id when there is no `# ` heading', () => {
 test('parseFeature trims the title text', () => {
   const md = '#   Spaced title   \n';
   assert.equal(parseFeature(md, 'x').title, 'Spaced title');
+});
+
+test('tokenize keeps HTML comments unless stripComments is set, so progress counts are unchanged', () => {
+  const md = '<!--\n- [ ] hidden\n-->\n- [x] shown\n';
+  assert.equal(parseSteps(md).length, 2);
+  assert.deepEqual(tokenize(md, { stripComments: true }).filter((t) => t.step).map((t) => t.step.text), ['shown']);
 });

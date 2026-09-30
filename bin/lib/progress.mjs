@@ -39,16 +39,48 @@ function isFenceClose(line, fence) {
   );
 }
 
+/** `line` without its HTML comments: `{ text, inComment }`, where `inComment` says a comment is still
+ * open at the end of the line (`open` says whether one was open at its start). An unterminated
+ * comment runs to the end of the document. */
+function uncomment(line, open) {
+  let text = '';
+  let rest = line;
+  let inComment = open;
+  while (rest !== '') {
+    if (inComment) {
+      const end = rest.indexOf('-->');
+      if (end === -1) return { text, inComment: true };
+      rest = rest.slice(end + 3);
+      inComment = false;
+    } else {
+      const start = rest.indexOf('<!--');
+      if (start === -1) return { text: text + rest, inComment: false };
+      text += rest.slice(0, start);
+      rest = rest.slice(start + 4);
+      inComment = true;
+    }
+  }
+  return { text, inComment };
+}
+
 /** Splits markdown into lines and tags each one as a fence toggle, a heading, a checkbox step, or
  * plain text — a single fence-aware pass every parser below builds on, so a heading or checkbox
  * that only appears inside a fenced example (or inside a *nested*, mismatched fence marker) is
  * never mistaken for a real one. An opener with no matching closer runs to end of file. Every token
- * keeps its raw `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. */
-export function tokenize(markdown) {
+ * keeps its `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. With
+ * `stripComments`, HTML comments (also multi-line ones) are removed from every line outside a
+ * fence before it is classified, so a commented-out heading or list item is never read; a `<!--`
+ * inside a fence is fenced content, and a fence marker inside a comment is not a fence. */
+export function tokenize(markdown, { stripComments = false } = {}) {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
   let fence = null; // { char, length } of the currently open fence, or null outside any fence
-  for (const raw of lines) {
+  let inComment = false;
+  for (const original of lines) {
+    let raw = original;
+    if (!fence && stripComments) {
+      ({ text: raw, inComment } = uncomment(original, inComment));
+    }
     if (fence) {
       if (isFenceClose(raw, fence)) fence = null;
       tokens.push({ fence: true, line: raw });
