@@ -130,9 +130,21 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
   scanned (Codex); the sandbox env test asserts the effective child env (Codex); the `hang`
   fixture really hangs (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
-  proven by a reference solution that scores 1 and the untouched fixture that scores below it
-  (route: delegated writer)
+- [ ] T3a Task proof: `evals/task-proof.mjs` grades a candidate's untouched fixture, its fixture
+  plus reference overlay and an empty workspace with the runner's own grader, and lists every
+  way the candidate fails the rules of "T3 design"; `evals/tasks.test.mjs` runs it over
+  `evals/tasks/*` (route: delegated writer, strict TDD; trigger: module, its tests and the suite
+  are three non-trivial files)
+- [ ] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
+  in a dozen places; the prompt names the drift, not the places (route: delegated writer)
+- [ ] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
+  the prompt never mentions, decide most of the hidden tests (route: delegated writer)
+- [ ] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
+  locked versions, peers and deterministic output (route: delegated writer)
+- [ ] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
+  interleaved writers and failing disks, from a symptom report (route: delegated writer)
+- [ ] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
+  report, import/export and CLI, with old files still loading (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -417,6 +429,41 @@ the docs):
   the `LOCALAPPDATA` override breaks no tool, `plugins/marketplaces` is not changed at startup,
   and `-p` writes no `history.jsonl`.
 
+## T3 design
+Decided 2026-10-01, before the first candidate was written:
+
+- **A candidate is `evals/tasks/<id>/`**: `task.md`, `task.json`, `fixture/`, `grader/` and
+  `reference/`, an overlay holding only the files a correct solution changes or adds. The runner
+  copies `fixture/` alone, so the agent never sees the grader or the reference. `task.json`
+  `proof` pins `{ total, fixturePassed }`, so a grader that drifts is a failing test.
+- **Proof by three workspaces**, graded with the runner's own `gradeWorkspace`: fixture plus
+  reference scores exactly 1; the untouched fixture scores `fixturePassed / total`, below 1; an
+  empty workspace scores 0 with the same `total` — because a hidden test that fails as a whole
+  file when one module is broken would turn a fractional score into a 0 (T1 decisions).
+- **Visible tests are `tests/**/*.spec.mjs`**, run by the fixture's own `npm test`
+  (`node --test "tests/**/*.spec.mjs"`), green on the fixture and with the reference. No file
+  under `evals/tasks/` matches Node's default test patterns — because this repo's bare
+  `node --test` would otherwise run every fixture's tests, and a reference overlay's tests cannot
+  resolve the modules it does not overlay.
+- **Fair graders**: every hidden test names the prompt sentence or the fixture document clause it
+  checks, and asserts only what that source specifies (error codes, exit codes, documented
+  formats), never wording nobody wrote down — because a test the agent could not have derived
+  measures luck. Deterministic: no wall clock, network or randomness; time comes from an injected
+  clock.
+- **No `AGENTS.md`, `CLAUDE.md` or `.claude` in a fixture**: the project layer is what
+  `js-harness init` adds to the current arm, and a fixture that brought its own would hand it to
+  both. Repo rules live in `README.md`, `CONTRIBUTING.md` and `docs/`.
+- **`evals/tasks/**` is `eol=lf`** in `.gitattributes`: this machine checks out CRLF
+  (`core.autocrlf=true`), and a fixture's data files must be the same bytes on every machine.
+- **Five candidates, each hard in a different way**, since which kind separates the configs is
+  the question: thoroughness of an audit (`spec-drift`), rules nobody pointed at
+  (`house-rules`), an algorithm with a long spec (`resolver`), interleavings (`lost-updates`),
+  and breadth of a cross-cutting change (`format-v2`). Whether any has headroom is T4's to
+  measure; if fewer than three survive it, more candidates are written then.
+- **Size**: a fixture of 500–700 lines over 10–16 files, so a task commit is ~1,200–1,500 lines,
+  one work unit each. The Delivery forecast (~400–700 lines for all fixtures and graders) was
+  written before the tasks were designed and is too low by about a factor of ten.
+
 ## Follow-ups
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
   re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
@@ -462,7 +509,7 @@ the docs):
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). Next: T3, in a new session,
-on `feat/evals`; slice 2 (T3–T4) starts from `5ab2ae6`.
+Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). Next: T3a, then T3b–T3f one
+at a time, on `feat/evals`; slice 2 (T3–T4) starts from `5ab2ae6`.
 Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
 Reviewed boundary: `db0253b`.
