@@ -360,10 +360,14 @@ test('the discovery rule says what it says for each file name', () => {
 
 test('the discovery rule agrees with the files this Node runs when given no arguments', async () => {
   const dir = tmp('discovery');
+  // Each file that runs leaves a marker in a directory of its own. Reading the names back from the
+  // reporter's output instead lost one now and then when the whole suite ran at once (`a_test.ts`, twice).
+  const marks = tmp('discovery-ran');
   for (const name of DISCOVERY_CASES) {
     const file = path.join(dir, name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, `console.log('RAN ${name}');\n`);
+    const mark = JSON.stringify(path.join(marks, encodeURIComponent(name)));
+    fs.writeFileSync(file, `process.getBuiltinModule('node:fs').writeFileSync(${mark}, '');\n`);
   }
   // Whether the child runs .ts/.mts/.cts depends on its Node (type stripping is on by default only since
   // 22.18 / 23.6) and on the NODE_OPTIONS it inherits, so ask a child with the same environment.
@@ -373,13 +377,12 @@ test('the discovery rule agrees with the files this Node runs when given no argu
   const runnable = (name) => strips || !/\.(?:cts|mts|ts)$/.test(name);
   const run = await runProcess({ command: process.execPath, args: ['--test', '--test-reporter=tap'], env: childEnv(), cwd: dir, timeoutMs: 60 * 1000 });
   assert.ok(!run.spawnError && !run.timedOut, 'node --test ran');
-  // The child prints its name; a name prefixed by the TAP comment marker is still matched.
-  const ran = new Set([...run.stdout.matchAll(/RAN (\S+)/g)].map((match) => match[1]));
+  const ran = new Set(fs.readdirSync(marks).map((mark) => decodeURIComponent(mark)));
   assert.ok(ran.has('a.test.mjs'), 'the run did discover tests, so the comparison means something');
   // Whether Node matches file names case-insensitively depends on the platform (Windows does; Linux does
   // not), and `isDiscovered` flags the CASED names either way, so for them only "what ran is flagged" holds.
   const exact = (names) => names.filter((name) => !CASED.includes(name));
-  assert.deepEqual(exact(DISCOVERY_CASES.filter(runnable).filter(isDiscovered)).sort(), exact([...ran]).sort());
+  assert.deepEqual(exact(DISCOVERY_CASES.filter(runnable).filter(isDiscovered)).sort(), exact([...ran]).sort(), `node --test output:\n${run.stdout.slice(-4000)}`);
   for (const name of CASED.filter((candidate) => ran.has(candidate))) assert.ok(isDiscovered(name), name);
 });
 
