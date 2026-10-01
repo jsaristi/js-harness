@@ -1,4 +1,5 @@
 # Hooks run under sh, so they keep LF endings even where core.autocrlf checks out CRLF.
 .githooks/* text eol=lf
 # Eval task fixtures must be the same bytes on every machine, and this one checks out CRLF (core.autocrlf=true).
-evals/tasks/** text eol=lf
+# `text=auto`, not `text`: a binary fixture file keeps its bytes, and only what Git detects as text is converted.
+evals/tasks/** text=auto eol=lf

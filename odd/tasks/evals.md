@@ -130,13 +130,23 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
   scanned (Codex); the sandbox env test asserts the effective child env (Codex); the `hang`
   fixture really hangs (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T3a Task proof: `evals/task-proof.mjs` grades a candidate's untouched fixture, its fixture
+- [x] T3a Task proof: `evals/task-proof.mjs` grades a candidate's untouched fixture, its fixture
   plus reference overlay and an empty workspace with the runner's own grader, and lists every
   way the candidate fails the rules of "T3 design"; `evals/tasks.test.mjs` runs it over
   `evals/tasks/*` (route: delegated writer, strict TDD; trigger: module, its tests and the suite
   are three non-trivial files)
-- [ ] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
+- [x] T3r T3a review findings: `.gitattributes` uses `text=auto eol=lf`, so a binary fixture
+  keeps its bytes (gentle-ai, Codex); the visible suite runs in its own copies, so its side
+  effects never reach a graded workspace (Codex); test discovery matches Node 24's real patterns,
+  `.ts`/`.mts`/`.cts` included and non-script files excluded (Codex); the malformed-proof test
+  caps its concurrency (gentle-ai suggestion) (route: delegated writer, strict TDD)
+- [x] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
   in a dozen places; the prompt names the drift, not the places (route: delegated writer)
+- [ ] T3br T3b review findings: the grader runs the workspace's visible suite as one hidden test
+  (Codex); a parcel with valid weight and bad dimensions before a parcel with a bad weight throws
+  `INVALID_WEIGHT`, as SPEC §2.2 orders the rules, in the reference and in a new hidden test
+  (Codex); the §7.3 tie (equal volume and promo discounts give `source: 'promo'`) gets a hidden
+  test (gentle-ai suggestion) (route: delegated writer)
 - [ ] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
   the prompt never mentions, decide most of the hidden tests (route: delegated writer)
 - [ ] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
@@ -359,6 +369,53 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `review-0808ae7f1fdc8d62`, lens reliability): approved and acknowledged, authority burned; one
   WARNING and two suggestions, all under Follow-ups. Codex (recorded): no actionable regressions.
   Reviewed boundary: `db0253b`. T1–T2 (slice 1 of the delivery plan) is complete.
+- 2026-10-01: slice 2 opened; T3 split into T3a–T3f with the rules in "T3 design" (`05692b0`).
+- 2026-10-01: T3a done (delegated writer), commit `bd3f5e4`: `evals/task-proof.mjs`
+  (`applyReference`, `proveTask`), `evals/task-proof.test.mjs` (29 tests), `evals/tasks.test.mjs`,
+  `.gitattributes` `evals/tasks/**` LF. RED observed for 28 of 29 tests against a stub returning
+  no problems; the near-miss names test was proven by mutation; ten mutations, all killed.
+  Evidence: `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 30/30 (rerun by the
+  parent); `node --test "evals/**/*.test.mjs"` 303 pass, 1 skipped; `npm run check` exits 0. A
+  proof costs ~3.3 s (five child processes, each with the Windows survivor sweep). Assessed
+  medium, `slice_budget_reached` over `db0253b..bd3f5e4`. gentle-ai (lineage
+  `review-25c5e88054fe58a2`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING (`text` forces conversion on binary fixtures) and one suggestion (six proofs at once can
+  time out on a slow host). Codex (recorded, from a detached worktree): three P2, the binary one
+  again, visible-suite side effects reaching the graded workspace, and discovery patterns that
+  are not Node 24's. All became T3r. Reviewed boundary: `bd3f5e4`.
+- 2026-10-01: T3b done (delegated writer), commit `ace4044`: `evals/tasks/spec-drift/`, a
+  shipping-quote library (`parcel-quote`) with 16 seeded deviations from its 170-line
+  `docs/SPEC.md`, spread over weight, zones, rates, surcharges, discounts, quote and parse; two
+  visible tests and one README line encode a drift. 48 hidden tests (36 on deviations, 12 guards
+  including hashes of the spec and the data and the export list), each citing its clause. Proof:
+  fixture 12/48, fixture plus reference 48/48, empty 0/48; grader ~0.6 s. Isolation matrix (each
+  fix alone, and each leave-one-out): every fix turns exactly its own 2–3 tests green, no test
+  needs two fixes. The writer's first draft left an unused `INSURANCE_MINIMUM_CENTS` next to a
+  deviation, which the TypeScript language server flagged; since the current arm runs that LSP, it
+  would have handed that arm the answer, so the rule "no unused declaration in a fixture" was added
+  to the writer brief and checked with `tsc --checkJs --noUnusedLocals --noUnusedParameters`.
+  1,535 lines, one unit. Assessed medium, `slice_budget_reached`: review due on
+  `bd3f5e4..ace4044`.
+- 2026-10-01: T3b reviewed over `bd3f5e4..ace4044`. gentle-ai (lineage
+  `review-99acc9fa317393d5`, lens reliability): approved and acknowledged, authority burned; one
+  suggestion (the §7.3 tie is untested). Codex (recorded): two P2, reproduced read-only: the
+  reference's source files alone score 48/48 while two visible tests stay red, so an agent could
+  score full marks with `npm test` failing; and the reference checks one parcel's dimensions
+  before a later parcel's weight, against the order SPEC §2.2 gives. All three became T3br; the
+  first became a rule for every candidate (T3 design). The gentle-ai lifecycle now runs through a
+  scratch driver that executes only the commands and tokens each envelope returns. Reviewed
+  boundary: `ace4044`.
+- 2026-10-01: T3r done (delegated writer). `.gitattributes` `evals/tasks/** text=auto eol=lf`,
+  proven in a temp repo with `core.autocrlf=true` that reads the real line: a file with a NUL and
+  CR LF pairs keeps its bytes, a CRLF text file is stored with LF (RED on the old line). The
+  visible suites run in two copies of their own, so five workspaces per proof (RED: a visible spec
+  that rewrote the module gave "the untouched fixture scores 1"). `isDiscovered` (exported) now
+  matches what Node 24.15.0 ran with no arguments, observed in a temp dir and kept as a test that
+  diffs the two: `*.test.X`, `*-test.X`, `*_test.X`, `test-*.X`, `test.X` and any X under a
+  directory named `test`, X one of cjs/mjs/js/cts/mts/ts, file names case-insensitive; not `.jsx`,
+  `.json`, `.txt`, `a.spec.X` or `tests/`. The malformed-proof test runs its six proofs in turn
+  (no RED possible for a concurrency cap). Evidence: `node --test evals/task-proof.test.mjs
+  evals/tasks.test.mjs` 34/34; `npm run check` exits 0. +124/-32.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -450,6 +507,13 @@ Decided 2026-10-01, before the first candidate was written:
   formats), never wording nobody wrote down — because a test the agent could not have derived
   measures luck. Deterministic: no wall clock, network or randomness; time comes from an injected
   clock.
+- **A red `npm test` costs a point**: every grader holds one hidden test that runs the
+  workspace's own visible suite and expects it green — because otherwise an agent that fixes the
+  code and leaves the tests it broke, or the tests that encode a drift, red scores full marks
+  (Codex on T3b).
+- **No unused declaration or dead branch in a fixture**: the current arm runs a TypeScript
+  language server, and a diagnostic next to a seeded defect would point that arm, and only that
+  arm, at the answer. A defect is wrong code that reads as intended.
 - **No `AGENTS.md`, `CLAUDE.md` or `.claude` in a fixture**: the project layer is what
   `js-harness init` adds to the current arm, and a fixture that brought its own would hand it to
   both. Repo rules live in `README.md`, `CONTRIBUTING.md` and `docs/`.

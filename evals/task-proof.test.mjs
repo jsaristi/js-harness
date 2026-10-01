@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyReference, proveTask } from './task-proof.mjs';
+import { spawnSync } from 'node:child_process';
+import { childEnv, runProcess } from './runner.mjs';
+import { applyReference, isDiscovered, proveTask } from './task-proof.mjs';
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-proof-test-'));
@@ -214,9 +216,8 @@ test('runs that disagree on the number of hidden tests are reported', async () =
 
 test('a task.json without a proof, or with a malformed one, is reported', async () => {
   const proofs = [null, 'nope', { total: '3', fixturePassed: 2 }, { total: 3 }, { total: 0, fixturePassed: 0 }, { total: 3, fixturePassed: 4 }];
-  // Side by side: each proof costs a few seconds of process cleanup on Windows.
-  const results = await Promise.all(proofs.map((proof) => prove({ ...validFiles(), 'task.json': taskJson({ proof }) })));
-  for (const result of results) only(result, /"proof" must be/);
+  // One after another: on a slow host a proof that times out adds a problem and fails `only` for the wrong reason.
+  for (const proof of proofs) only(await prove({ ...validFiles(), 'task.json': taskJson({ proof }) }), /"proof" must be/);
 });
 
 test('a proof whose total differs from the measured one is reported', async () => {
@@ -260,26 +261,75 @@ test('a visible suite that runs no test is reported for both workspaces', async 
   some(result, /visible suite.*fixture plus reference.*no test/);
 });
 
-test('the visible suite runs before the hidden grader is copied in', async () => {
+test('the visible suite never sees the hidden grader', async () => {
   const noGrader = "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\n\ntest('no grader yet', () => assert.equal(fs.existsSync('.eval-grader'), false));\n";
   const result = await prove({ ...validFiles(), 'fixture/tests/clean.spec.mjs': noGrader });
   assert.deepEqual(result.problems, []);
   assert.equal(result.visible.fixture.total, 3);
 });
 
+test('a visible suite that rewrites or deletes a source file does not change what the hidden grader measures', async () => {
+  const touch = (action) => `import { test } from 'node:test';
+import fs from 'node:fs';
+
+test('touches the workspace', () => {
+  const calc = new URL('../calc.mjs', import.meta.url);
+  ${action}
+});
+`;
+  const solve = `fs.writeFileSync(calc, ${JSON.stringify(CALC_SOLVED)});`;
+  for (const action of [solve, 'fs.rmSync(calc);']) {
+    const result = await prove({ ...validFiles(), 'fixture/tests/touch.spec.mjs': touch(action) });
+    assert.deepEqual(result.problems, [], action);
+    assert.equal(result.fixture.passed, 2, 'the graded fixture is the one nobody touched');
+  }
+});
+
 // ---- rule k: nothing under the task is found by bare `node --test` -------------------------------------------------
 
 test('every file Node would discover as a test is reported, wherever it is in the task', async () => {
-  const found = ['fixture/lib/a.test.mjs', 'fixture/b-test.js', 'grader/c_test.mjs', 'fixture/test-d.mjs', 'reference/test.js', 'fixture/test/helper.mjs', 'grader/test/data.txt'];
+  const found = ['fixture/lib/a.test.mjs', 'fixture/b-test.js', 'grader/c_test.mjs', 'fixture/test-d.mjs', 'reference/test.js', 'fixture/test/helper.mjs', 'fixture/lib/e.test.ts', 'fixture/lib/f.test.mts', 'fixture/lib/g.test.cts', 'grader/test/h.ts'];
   const result = await prove({ ...validFiles(), ...Object.fromEntries(found.map((name) => [name, '\n'])) });
   only(result, /Node's default test discovery/);
   for (const name of found) assert.ok(result.problems[0].includes(name), `${name} is named`);
 });
 
 test('names that only look like tests are not reported', async () => {
-  const near = ['fixture/lib/latest.mjs', 'fixture/lib/testing.mjs', 'fixture/lib/contest.js', 'fixture/lib/mytest.mjs', 'fixture/lib/test.json', 'fixture/tests/helper.mjs'];
+  const near = ['fixture/lib/latest.mjs', 'fixture/lib/testing.mjs', 'fixture/lib/contest.js', 'fixture/lib/mytest.mjs', 'fixture/lib/test.json', 'fixture/tests/helper.mjs', 'fixture/test/data.txt', 'grader/report-test.json', 'fixture/lib/a.test.jsx'];
   const result = await prove({ ...validFiles(), ...Object.fromEntries(near.map((name) => [name, '\n'])) });
   assert.deepEqual(result.problems, []);
+});
+
+// Observed on Node 24.15 with `node --test --test-reporter=tap` and no arguments (Windows): it runs
+// *.test.X, *-test.X, *_test.X, test-*.X, test.X and every X file under a directory named test, for X in
+// cjs, mjs, js, cts, mts, ts, and nothing else; `test-.js` counts, `test_a.js`, `a.spec.js` and `tests/` do not.
+const SCRIPTS = ['cjs', 'mjs', 'js', 'cts', 'mts', 'ts'];
+const DISCOVERY_CASES = [
+  ...SCRIPTS.flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `a_test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`, `lib/test/deep/x.${ext}`]),
+  ...['jsx', 'tsx', 'json', 'txt', 'md'].flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`]),
+  ...SCRIPTS.flatMap((ext) => [`test_a.${ext}`, `a.tests.${ext}`, `a.spec.${ext}`, `atest.${ext}`, `tests/x.${ext}`, `a.test.b.${ext}`, `lib/latest/x.${ext}`]),
+];
+
+test('the discovery rule says what it says for each file name', () => {
+  const yes = SCRIPTS.flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `a_test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`, `lib/test/deep/x.${ext}`]);
+  for (const name of yes) assert.equal(isDiscovered(name), true, name);
+  for (const name of DISCOVERY_CASES.filter((candidate) => !yes.includes(candidate))) assert.equal(isDiscovered(name), false, name);
+  assert.equal(isDiscovered('test-.js'), true);
+});
+
+test('the discovery rule agrees with the files this Node runs when given no arguments', async () => {
+  const dir = tmp('discovery');
+  for (const name of DISCOVERY_CASES) {
+    const file = path.join(dir, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `console.log('RAN ${name}');\n`);
+  }
+  const run = await runProcess({ command: process.execPath, args: ['--test', '--test-reporter=tap'], env: childEnv(), cwd: dir, timeoutMs: 60 * 1000 });
+  assert.ok(!run.spawnError && !run.timedOut, 'node --test ran');
+  // The child prints its name; a name prefixed by the TAP comment marker is still matched.
+  const ran = new Set([...run.stdout.matchAll(/RAN (\S+)/g)].map((match) => match[1]));
+  assert.ok(ran.has('a.test.mjs'), 'the run did discover tests, so the comparison means something');
+  assert.deepEqual(DISCOVERY_CASES.filter(isDiscovered).sort(), [...ran].sort());
 });
 
 // ---- rule l: the grader has a grader file --------------------------------------------------------------------------
@@ -329,4 +379,33 @@ test('a text file with a CRLF line ending is reported by its path, and a binary 
   const [problem] = result.problems;
   for (const name of ['task.md', 'fixture/README.md', 'grader/notes.txt', 'reference/NOTES.md']) assert.ok(problem.includes(name), `${name} is named`);
   assert.ok(!problem.includes('logo.bin'));
+});
+
+// ---- .gitattributes: a binary fixture file keeps its bytes -----------------------------------------------------------
+
+test('the real evals/tasks line of .gitattributes keeps a binary file\'s bytes and stores a text file with LF', () => {
+  const root = path.resolve(import.meta.dirname, '..');
+  const line = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8').split(/\r?\n/).find((entry) => entry.startsWith('evals/tasks/**'));
+  assert.ok(line, '.gitattributes has a line for evals/tasks/**');
+
+  // A temp repo with this machine's setting (core.autocrlf=true) and nothing else from the user's git config.
+  const repo = tmp('gitattributes');
+  const env = childEnv({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(repo, 'no-global-config'), HOME: repo, USERPROFILE: repo });
+  const git = (...args) => {
+    const run = spawnSync('git', ['-c', 'core.autocrlf=true', ...args], { cwd: repo, env, encoding: 'buffer' });
+    assert.equal(run.status, 0, `git ${args.join(' ')}: ${run.stderr}`);
+    return run.stdout;
+  };
+  git('init', '--quiet');
+  fs.writeFileSync(path.join(repo, '.gitattributes'), `${line}\n`);
+  const binary = Buffer.from([0, 1, 13, 10, 2, 13, 10]);
+  const text = Buffer.from('a\r\nb\r\n');
+  fs.mkdirSync(path.join(repo, 'evals', 'tasks', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'evals', 'tasks', 'x', 'logo.bin'), binary);
+  fs.writeFileSync(path.join(repo, 'evals', 'tasks', 'x', 'notes.txt'), text);
+  git('add', '--all');
+
+  const blob = (name) => git('cat-file', 'blob', `:evals/tasks/x/${name}`);
+  assert.ok(blob('logo.bin').equals(binary), 'the binary file is stored with the bytes it had');
+  assert.equal(blob('notes.txt').toString(), 'a\nb\n', 'the text file is stored with LF');
 });

@@ -14,12 +14,18 @@ const VISIBLE_TIMEOUT_MS = 60 * 1000;
 const AGENT_CONTEXT = ['agents.md', 'claude.md', 'claude.local.md', '.claude', 'node_modules'];
 
 // What `node --test` (the repo's own `npm test`) runs without being told: it would run a candidate's
-// tests and, for a reference overlay, fail on modules the overlay does not hold.
-const DISCOVERED = [/\.test\.(js|mjs|cjs)$/, /[-_]test\..+$/, /^test-.+\..+$/, /^test\.(js|mjs|cjs)$/];
-const isDiscovered = (file) => {
+// tests and, for a reference overlay, fail on modules the overlay does not hold. These are Node 24's
+// default patterns, checked against the real thing (see the discovery test): a script file named
+// `*.test.X`, `*-test.X`, `*_test.X`, `test-*.X` or `test.X`, or any script under a directory named
+// `test`; a non-script such as `test/data.txt` is not run. Names match case-insensitively (observed on
+// Windows; stricter than POSIX, which only over-reports).
+const SCRIPT = String.raw`(?:cjs|mjs|js|cts|mts|ts)`;
+const DISCOVERED = [`\\.test\\.${SCRIPT}$`, `[-_]test\\.${SCRIPT}$`, `^test-.*\\.${SCRIPT}$`, `^test\\.${SCRIPT}$`].map((source) => new RegExp(source, 'i'));
+const SCRIPT_FILE = new RegExp(`\\.${SCRIPT}$`, 'i');
+export const isDiscovered = (file) => {
   const segments = file.split('/');
   const name = segments.pop();
-  return segments.includes('test') || DISCOVERED.some((pattern) => pattern.test(name));
+  return (segments.includes('test') && SCRIPT_FILE.test(name)) || DISCOVERED.some((pattern) => pattern.test(name));
 };
 
 const isDirectory = (target) => fs.statSync(target, { throwIfNoEntry: false })?.isDirectory() === true;
@@ -53,7 +59,7 @@ export function applyReference(taskDir, workspace) {
 
 /** The fixture's own visible suite, run as `npm test` would, in `workspace`: `{ passed, total, failed,
  * error }`, with `error` `spawn`, `timeout` or `unparsable` (no TAP summary, or zero tests: a suite that
- * ran nothing proved nothing). Run before the hidden grader is copied in, so it sees what an agent sees. */
+ * ran nothing proved nothing). Run in a copy of its own, so it sees what an agent sees. */
 async function runVisible(workspace) {
   const run = await runProcess({
     command: process.execPath,
@@ -69,38 +75,44 @@ async function runVisible(workspace) {
   return tap ? { passed: tap.pass, total: tap.tests, failed: tap.fail, error: null } : unknown('unparsable');
 }
 
-/** Grades the three workspaces side by side (each run costs about a second of process cleanup on Windows, so
- * one after the other would make a proof the slowest test of the suite). Each is a fresh directory under
- * `workRoot`, and every one is removed on every path, after all three have finished. A reference that is
- * not a directory is not applied: there is nothing to run. */
+/** Runs the five measurements side by side (each costs about a second of process cleanup on Windows, so
+ * one after the other would make a proof the slowest test of the suite): the grader on the untouched
+ * fixture, on the fixture plus reference, and on an empty workspace, and the visible suite on the first
+ * two. The visible suites get copies of their own, never the graded ones: a visible test that writes or
+ * deletes a file must not change what the hidden grader measures. Each is a fresh directory under
+ * `workRoot`, and every one is removed on every path, after all have finished. A reference that is not a
+ * directory is not applied: there is nothing to run. */
 async function measure(task, taskDir, workRoot) {
   fs.mkdirSync(workRoot, { recursive: true });
   const made = [];
-  const workspace = () => {
+  const workspace = (prepare) => {
     const dir = fs.mkdtempSync(path.join(workRoot, 'proof-'));
     made.push(dir);
+    prepare(dir);
     return dir;
   };
-  // The visible suite runs first, before the grader is copied in, so it sees what an agent sees.
-  const run = async (prepare, { visible = true } = {}) => {
-    const dir = workspace();
-    prepare(dir);
-    return { visible: visible ? await runVisible(dir) : null, graded: await gradeWorkspace(task, dir) };
-  };
+  const fixture = (dir) => copyFixture(task, dir);
+  const reference = (dir) => { copyFixture(task, dir); applyReference(taskDir, dir); };
+  const hasReference = isDirectory(path.join(taskDir, 'reference'));
+  const graded = (prepare) => gradeWorkspace(task, workspace(prepare));
+  // The visible suite runs in a copy that is never graded, so it sees what an agent sees.
+  const visible = (prepare) => runVisible(workspace(prepare));
   try {
     const settled = await Promise.allSettled([
-      run((dir) => copyFixture(task, dir)),
-      isDirectory(path.join(taskDir, 'reference')) ? run((dir) => { copyFixture(task, dir); applyReference(taskDir, dir); }) : null,
-      run(() => {}, { visible: false }),
+      graded(fixture),
+      hasReference ? graded(reference) : null,
+      graded(() => {}),
+      visible(fixture),
+      hasReference ? visible(reference) : null,
     ]);
     const failed = settled.find((outcome) => outcome.status === 'rejected');
     if (failed) throw failed.reason;
-    const [fixture, reference, empty] = settled.map((outcome) => outcome.value);
+    const [gradedFixture, gradedReference, empty, visibleFixture, visibleReference] = settled.map((outcome) => outcome.value);
     return {
-      fixture: fixture.graded,
-      reference: reference?.graded ?? null,
-      empty: empty.graded,
-      visible: { fixture: fixture.visible, reference: reference?.visible ?? null },
+      fixture: gradedFixture,
+      reference: gradedReference,
+      empty,
+      visible: { fixture: visibleFixture, reference: visibleReference },
     };
   } finally {
     for (const dir of made) removeDir(dir, 'workspace', (message) => console.error(message));
