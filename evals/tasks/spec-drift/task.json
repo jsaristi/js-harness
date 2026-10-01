@@ -4,5 +4,5 @@
     "args": ["--test", "--test-reporter=tap", ".eval-grader/spec-drift.grade.mjs"]
   },
   "timeoutMs": 1800000,
-  "proof": { "total": 48, "fixturePassed": 12 }
+  "proof": { "total": 51, "fixturePassed": 13 }
 }

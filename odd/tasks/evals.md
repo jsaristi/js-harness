@@ -140,9 +140,16 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   effects never reach a graded workspace (Codex); test discovery matches Node 24's real patterns,
   `.ts`/`.mts`/`.cts` included and non-script files excluded (Codex); the malformed-proof test
   caps its concurrency (gentle-ai suggestion) (route: delegated writer, strict TDD)
+- [ ] T3rr T3r review findings: a workspace preparation that throws settles like a failed run, so
+  cleanup waits for every grader already started (gentle-ai WARNING, Codex); the discovery
+  comparison follows the child Node's type-stripping support (`process.features.typescript` or an
+  inherited `--no-experimental-strip-types`), while `isDiscovered` stays conservative (gentle-ai
+  WARNING, Codex); a `Test` directory counts like its file names do, with a case in the matrix, and
+  the `.gitattributes` test skips with a reason when `git` cannot be spawned (gentle-ai
+  suggestions) (route: delegated writer, strict TDD)
 - [x] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
   in a dozen places; the prompt names the drift, not the places (route: delegated writer)
-- [ ] T3br T3b review findings: the grader runs the workspace's visible suite as one hidden test
+- [x] T3br T3b review findings: the grader runs the workspace's visible suite as one hidden test
   (Codex); a parcel with valid weight and bad dimensions before a parcel with a bad weight throws
   `INVALID_WEIGHT`, as SPEC §2.2 orders the rules, in the reference and in a new hidden test
   (Codex); the §7.3 tie (equal volume and promo discounts give `source: 'promo'`) gets a hidden
@@ -415,7 +422,25 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   directory named `test`, X one of cjs/mjs/js/cts/mts/ts, file names case-insensitive; not `.jsx`,
   `.json`, `.txt`, `a.spec.X` or `tests/`. The malformed-proof test runs its six proofs in turn
   (no RED possible for a concurrency cap). Evidence: `node --test evals/task-proof.test.mjs
-  evals/tasks.test.mjs` 34/34; `npm run check` exits 0. +124/-32.
+  evals/tasks.test.mjs` 34/34; `npm run check` exits 0. +124/-32. Commit `9d02179`, assessed
+  medium, `under_budget`.
+- 2026-10-01: T3r reviewed on its own over `ace4044..9d02179`, because the Stop hook offered the
+  whole branch from `5ab2ae6` and this commit was the only part of it not yet covered; reviewing
+  it alone keeps the candidate a work unit. gentle-ai (lineage `review-1178e582ded658a6`, lens
+  reliability): approved and acknowledged, authority burned; two WARNINGs and two suggestions.
+  Codex (recorded): two P2, the same two defects as the WARNINGs, found independently: preparing a
+  workspace now runs synchronously while the `Promise.allSettled` array is built, so a throw
+  there skips the wait and `finally` deletes workspaces under graders still running; and the
+  discovery comparison always expects `.ts` files, which a Node without type stripping (or
+  `NODE_OPTIONS=--no-experimental-strip-types`, which `childEnv()` keeps) does not run, turning
+  the check gate red. All four became T3rr. Reviewed boundary: `9d02179`.
+- 2026-10-01: T3br done (delegated writer): `spec-drift` gains the own-suite hidden test, a
+  validation-order test (SPEC §2.2 "checks the rules below in this order": every weight before any
+  dimensions; the reference's `parse.mjs` now validates in that order) and the §7.3 tie test
+  (5 parcels, `FLAT5`, base 10000: both discounts 500, `source: 'promo'`). Proof 48/12 → 51/13:
+  fixture 13/51, fixture plus reference 51/51, the reference's `src/` alone 50/51 (the own-suite
+  test fails on the two drifted visible tests, which is the finding). Each new test fails on the
+  fixture through one deviation only. Grader 1.3–2.4 s.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

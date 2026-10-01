@@ -26,11 +26,14 @@ function isCalendarDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function checkParcel(parcel) {
-  const { weightKg } = parcel ?? {};
+function checkWeight(parcel) {
+  const weightKg = parcel?.weightKg;
   if (!isNumber(weightKg) || weightKg <= 0 || weightKg > MAX_WEIGHT_KG) {
     throw new QuoteError('INVALID_WEIGHT', `weightKg must be above 0 and at most ${MAX_WEIGHT_KG}`);
   }
+}
+
+function checkDimensions(parcel) {
   for (const side of ['length', 'width', 'height']) {
     if (!isNumber(parcel[side]) || parcel[side] <= 0 || parcel[side] > MAX_SIDE_CM) {
       throw new QuoteError('INVALID_DIMENSIONS', `${side} must be above 0 and at most ${MAX_SIDE_CM}`);
@@ -49,7 +52,8 @@ export function parseOrder(input) {
   if (!Number.isInteger(declaredValue) || declaredValue < 0) throw new QuoteError('INVALID_VALUE');
   if (!Array.isArray(parcels) || parcels.length === 0) throw new QuoteError('EMPTY_ORDER');
   if (parcels.length > MAX_PARCELS) throw new QuoteError('TOO_MANY_PARCELS');
-  parcels.forEach(checkParcel);
+  parcels.forEach(checkWeight);
+  parcels.forEach(checkDimensions);
   return {
     orderDate,
     service,

@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const load = () => import('../src/index.mjs');
 const T = { timeout: 5000 };
@@ -197,6 +198,13 @@ test('a better promo replaces the volume discount', T, async () => {
   assert.deepEqual(result, { cents: 1000, source: 'promo' });
 });
 
+// SPEC 7.3: on a tie the source is "promo": 5 parcels give 500 and FLAT5 gives 500, and only one applies
+test('equal volume and promo discounts give the promo as the source', T, async () => {
+  const { discountFor } = await load();
+  const result = discountFor({ baseCents: 10000, parcelCount: 5, promoCode: 'FLAT5', orderDate: '2025-03-15' });
+  assert.deepEqual(result, { cents: 500, source: 'promo' });
+});
+
 // SPEC 7.3: 10 parcels give 1000, FLAT5 gives 500; only the larger applies
 test('a better volume discount replaces the promo', T, async () => {
   const { discountFor } = await load();
@@ -317,6 +325,17 @@ test('a negative declared value is rejected with INVALID_VALUE', T, async () => 
 test('a fractional declared value is rejected with INVALID_VALUE', T, async () => {
   const { quote } = await load();
   assert.throws(() => quote(order({ declaredValue: 99.5 })), { code: 'INVALID_VALUE' });
+});
+
+// ---- 2.2 the order of the rules ---------------------------------------------------------------------
+
+// SPEC 2.2: the rules are checked in the order of the table and the first failure throws; the weight rule
+// ("every weightKg") comes before the dimensions rule, so a bad weight on a later parcel wins over bad
+// dimensions on an earlier one
+test('a bad weight on a later parcel is reported before bad dimensions on an earlier one', T, async () => {
+  const { parseOrder } = await load();
+  assert.throws(() => parseOrder(order({ parcels: [parcel(1, 201, 10, 10), parcel(0)] })), { code: 'INVALID_WEIGHT' });
+  assert.throws(() => parseOrder(order({ parcels: [parcel(5, 10, 0, 10), parcel(30.5)] })), { code: 'INVALID_WEIGHT' });
 });
 
 // ---- regression guards: behaviour that is right today and must stay right ---------------------------
@@ -452,6 +471,20 @@ test('guard: a plain standard quote end to end', T, async () => {
   assert.equal(result.discountSource, null);
   assert.equal(result.taxCents, 187);
   assert.equal(result.totalCents, 1170);
+});
+
+// Definition of done: the project's own tests are green when the work ends. With the spec as the
+// contract, a test that encodes a drift has to be corrected too.
+test("the project's own test suite passes", { timeout: 30000 }, () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
+  const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'tests/**/*.spec.mjs'], {
+    cwd: new URL('..', import.meta.url),
+    env,
+    encoding: 'utf8',
+    timeout: 25000,
+  });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.match(run.stdout, /^# tests [1-9]\d*$/m);
 });
 
 // The contract is not part of the work.
