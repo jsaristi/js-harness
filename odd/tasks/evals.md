@@ -110,6 +110,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   patched `.claude.json`, rewritten plugin paths, gentle-ai `state.json`) and the workspace's
   project layer (`git init`, `js-harness init`), proven against a fake real-home fixture whose
   hash tree stays unchanged (route: delegated writer, strict TDD)
+- [x] T2r T2b review findings: a failed template build leaves nothing behind (gentle-ai, Codex);
+  template containment resolved through links and compared by path component (Codex);
+  `GIT_CONFIG_NOSYSTEM` for the fixture commit (gentle-ai); `wallMs` on a monotonic clock
+  separate from the timestamp clock (gentle-ai suggestion) (route: delegated writer, strict TDD)
 - [ ] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
   loopback fake Messages API (zero spend), then a nonce scan and a before/after hash of the real
   trees (route: delegated writer for the probe, inline run; needs Sebastián's go-ahead, see Ask
@@ -226,6 +230,24 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   2.5 s; seed 2.4–2.7 s per trial, 22 MB of it `plugins/marketplaces`. ~1,000 authored lines,
   one unit with its proof. Assessed medium, `slice_budget_reached`: review due on
   `b862f02..9a42ab4`.
+- 2026-09-30: T2b slice reviewed over `b862f02..00eb9ec`. gentle-ai (lineage
+  `review-f22214f4ec371ab4`, lens reliability): approved and acknowledged, authority burned; two
+  WARNINGs (a failed build leaves a markerless partial template that `removeTemplate` refuses;
+  the fixture commit still reads the system gitconfig) and one suggestion (`wallMs` collapses to
+  0 under a pinned `now`). Codex (recorded): two P2, the partial template again, and a lexical
+  containment check that a junction into the real home, or a directory named `..templates`,
+  gets past. All four became T2r. Reviewed boundary: `00eb9ec`.
+- 2026-09-30: T2r done (delegated writer), commit `caf7a7c`. RED observed for all four: the
+  payload left after each failed build; a junction into the real home and `..templates` both
+  accepted; the fixture commit failing on a fake system config (`commit.gpgsign`, a failing
+  `core.hooksPath`); `wallMs` 0 under a pinned `now`. Rollback chosen over an "incomplete" marker,
+  because the payload holds account data that must not outlive a failed build. New seams:
+  `buildTemplate({ copyFile })`, `prepareSandbox({ env })` (with `GIT_CONFIG_NOSYSTEM=1` placed
+  after the caller's env), `runTrial({ clock })`. Every fix proven by mutation too. Evidence:
+  `node --test "evals/**/*.test.mjs"` 158 pass, 1 skipped (file symlink, EPERM), rerun by the
+  parent; `npm run check` exits 0. Untested: a rollback that itself fails (a locked file on
+  Windows) rethrows and leaves the partial template; a dangling link at the template path throws
+  "cannot resolve". Assessed medium, `under_budget` (265 lines): reviewed with the next slice.
 - Left open by T2b, to settle in T2c: whether `plugins/marketplaces` is needed (included: a
   missing marketplace may trigger a re-clone); `settings.json` is copied verbatim, so a hook that
   names an absolute path in the real home runs that real script (its writes still follow the
@@ -336,6 +358,6 @@ the docs):
 
 ## Next step
 T2c once Sebastián allows the real-binary probe (a run of `claude` under the sandbox against a
-loopback fake API, zero spend), then T3. Before T4: his `claude setup-token`
-and his choice of permission mode. Review base for the next slice review: `b862f02` until the
-`9a42ab4` slice review is recorded here.
+loopback fake API, zero spend; asked 2026-09-30), then T3. Before T4: his `claude setup-token`
+and his choice of permission mode. Review base for the next slice review: `00eb9ec` (every
+commit up to it is reviewed by gentle-ai and Codex; `caf7a7c` is pending, under budget).
