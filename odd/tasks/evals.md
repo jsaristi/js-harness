@@ -177,7 +177,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   key is any string, with no hidden test of the quirk (Codex, adapted); the G7 child scenario
   parses adapter data through the guarded helper the grader already has (gentle-ai suggestion)
   (route: delegated writer)
-- [ ] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
+- [x] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
@@ -569,7 +569,21 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `undefined`, checked by script), `DESIGN.md` says a key is any string, the guarded parse is a
   shared `grader/json.mjs` used by the G7 scenarios; proof unchanged 13/43, five identical runs.
   No language-server diagnostic anywhere. Rule added to the writer brief: a reference never
-  indexes a plain object with a user-supplied string.
+  indexes a plain object with a user-supplied string. Commit `25b696c`.
+- 2026-10-01: T3f done (same writer), `evals/tasks/format-v2/`: an inventory tool (fixture 719
+  lines, 16 files) with an accepted proposal `docs/proposals/format-v2.md` (structured prices in
+  minor units per currency, split locations, tag arrays, per-currency valuation, v2 CSV that still
+  imports v1, new CLI flags) and a standing format policy in `docs/DATA.md` (migrate in memory,
+  write the newest, keep unknown fields, back up once before the first rewrite, refuse a newer
+  version with `EVERSION`, read-only commands never write). The prompt says only: implement v2,
+  keep v1 files working, follow the policy. 46 hidden tests across every module and the CLI.
+  Proof: fixture 12/46 (exactly the guards), fixture plus reference 46/46, empty 0/46; grader
+  ~1.1 s. A narrow implementation (three fields and `valuation` only) scores 15/46, because CSV
+  and CLI break on object prices; the full reference without the policy rules scores 36/46 (0.78).
+  The proposal pins what the tests needed: `validateItem` field names, the `byWarehouse` shape,
+  `list` output, a v1 price read as the decimal written (`1.005 EUR` → 101), v1 CSV rows priced in
+  EUR. Not derivable from a document: `importCsv` returning the new state, which the fixture's own
+  docstring says. No language-server diagnostic; the reference uses `Map`/`Object.fromEntries`.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
