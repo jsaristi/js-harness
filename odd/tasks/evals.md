@@ -74,7 +74,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   found no cut under 400 (single work-unit commits are 1,124 and 2,725 lines), and Sebastián
   accepted one PR with a size exception (2026-10-01). No `size:exception` label exists in the
   repo, so the exception and the three reading ranges are in the PR body. The repo has no CI
-  checks; the gate is the pre-push `check --push`, which passed.
+  checks; the gate is the pre-push `check --push`, which passed. Merged on Sebastián's go-ahead
+  (2026-10-01) as merge commit `5ab2ae6`; `feat/evals` carries on for slices 2 and 3.
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -461,7 +462,7 @@ the docs):
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is open as PR jsaristi/js-harness#20; merging it is Sebastián's call. Then T3, in
-a new session.
+Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). Next: T3, in a new session,
+on `feat/evals`; slice 2 (T3–T4) starts from `5ab2ae6`.
 Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
 Reviewed boundary: `db0253b`.
