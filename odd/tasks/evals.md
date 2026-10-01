@@ -177,7 +177,13 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   key is any string, with no hidden test of the quirk (Codex, adapted); the G7 child scenario
   parses adapter data through the guarded helper the grader already has (gentle-ai suggestion)
   (route: delegated writer)
-- [x] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
+- [x] T3f Candidate `format-v2`
+- [x] T3fr T3f review findings: v1 prices in exponent form migrate (a hidden test, since v1 files
+  must keep working) (Codex); the proposal defines "the decimal as written" as the shortest
+  round-trip decimal of a JSON number and the field text of a CSV price, and the reference's v1
+  CSV import reads the text (Codex, adapted; gentle-ai); the reference normalizes v2 CSV tags,
+  treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
+  suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
@@ -584,6 +590,36 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `list` output, a v1 price read as the decimal written (`1.005 EUR` → 101), v1 CSV rows priced in
   EUR. Not derivable from a document: `importCsv` returning the new state, which the fixture's own
   docstring says. No language-server diagnostic; the reference uses `Map`/`Object.fromEntries`.
+  Commit `465a06a`, assessed medium, `slice_budget_reached`.
+- 2026-10-01: `08da909..465a06a` reviewed as two candidates to stay inside the reviewers'
+  context. gentle-ai over `08da909..` (lineage `review-d0c89b289dc34f5b`; `--committed-only`
+  reviews up to HEAD, so it covered `format-v2` too) and over `25b696c..465a06a` (lineage
+  `review-c06051121fb4ae64`): both approved and acknowledged, authority burned; four suggestions,
+  all on the `format-v2` reference (v2 CSV tags not normalized, a malformed v2 item crashes with a
+  TypeError, the v1 CSV price goes through `Number()`, a missing `bin` prints `undefined`). Codex:
+  nothing actionable over `08da909..25b696c`; two P2 over `25b696c..465a06a`, reproduced in
+  memory: a valid v1 price like `0.0000001` (`1e-7` as a string) fails migration with `EFORMAT`,
+  and "the decimal as written" cannot hold for JSON digits beyond a double. All became T3fr: the
+  first gets a hidden test (v1 files must keep working), the second a precise definition in the
+  proposal instead of a test. Reviewed boundary: `465a06a`.
+- 2026-10-01: T3fr done (delegated writer, one parent edit). The reference's `toMinor` reads a
+  decimal's digits and shifts the point by its exponent, with no float (exponent capped at three
+  digits); a new hidden test migrates v1 prices written `0.0000001` and `5e-7` to 0 and runs `list`
+  and `move` on such a file (RED: 46/47 on the old reference). The writer's test also expected
+  `1e21` to migrate to `1e23`; the parent removed that case, because the proposal says nothing
+  about amounts beyond the safe-integer range and an implementation rejecting them would be as
+  correct. The proposal now defines a JSON price's decimal as the shortest round-trip form
+  (exponent included) and a CSV price's as the field text; the reference's v1 CSV import reads
+  the text; v2 CSV tags are cleaned like v1 tag lists (one proposal sentence); a missing `bin`
+  reads as `null`; a malformed v2 item is `EFORMAT`. Proof 46/12 → 47/12, fixture plus reference
+  47/47; all five candidates proven (`node --test evals/tasks.test.mjs` 5/5, rerun by the parent);
+  no language-server diagnostic.
+- 2026-10-01: the flaky discovery test's real cause: its first T3fr commit attempt failed again,
+  this time with the markers, and the nested run's TAP showed the missing files' child processes
+  exiting `3221225794` (`0xC0000142`, `STATUS_DLL_INIT_FAILED`): Windows failing to start processes
+  when ~120 are spawned at once while the whole suite runs in parallel. The markers fixed nothing
+  (the reporter was never the problem); the nested `node --test` now runs with
+  `--test-concurrency=2` (5.4 s alone). The same limit may bite T4: a trial spawns many processes.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

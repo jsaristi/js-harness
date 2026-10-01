@@ -377,7 +377,10 @@ test('the discovery rule agrees with the files this Node runs when given no argu
   assert.ok(!feature.spawnError && !feature.timedOut, 'the child reported its features');
   const strips = ['strip', 'transform'].includes(feature.stdout.trim());
   const runnable = (name) => strips || !/\.(?:cts|mts|ts)$/.test(name);
-  const run = await runProcess({ command: process.execPath, args: ['--test', '--test-reporter=tap'], env: childEnv(), cwd: dir, timeoutMs: 60 * 1000 });
+  // Two files at a time: about 120 child processes started at once, while the rest of the suite runs in
+  // parallel, made Windows fail some at startup (exit 0xC0000142, STATUS_DLL_INIT_FAILED), so their
+  // markers were missing. Discovery does not depend on concurrency.
+  const run = await runProcess({ command: process.execPath, args: ['--test', '--test-reporter=tap', '--test-concurrency=2'], env: childEnv(), cwd: dir, timeoutMs: 120 * 1000 });
   assert.ok(!run.spawnError && !run.timedOut, 'node --test ran');
   const ran = new Set(fs.readdirSync(marks).map((mark) => decodeURIComponent(mark)));
   assert.ok(ran.has('a.test.mjs'), 'the run did discover tests, so the comparison means something');
