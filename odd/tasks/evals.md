@@ -140,7 +140,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   effects never reach a graded workspace (Codex); test discovery matches Node 24's real patterns,
   `.ts`/`.mts`/`.cts` included and non-script files excluded (Codex); the malformed-proof test
   caps its concurrency (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T3rr T3r review findings: a workspace preparation that throws settles like a failed run, so
+- [x] T3rr T3r review findings: a workspace preparation that throws settles like a failed run, so
   cleanup waits for every grader already started (gentle-ai WARNING, Codex); the discovery
   comparison follows the child Node's type-stripping support (`process.features.typescript` or an
   inherited `--no-experimental-strip-types`), while `isDiscovered` stays conservative (gentle-ai
@@ -156,6 +156,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   test (gentle-ai suggestion) (route: delegated writer)
 - [x] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
   the prompt never mentions, decide most of the hidden tests (route: delegated writer)
+- [ ] T3cr T3c review findings: the fixture's own code follows its `CONTRIBUTING.md`, because the
+  task rewards imitating it: ids never reused after a deletion (a high-water mark) and `list`
+  sorted by id (Codex); the reference's export filters by age only when `--since` is given, so a
+  task with a bad `created` is not silently dropped (gentle-ai suggestion); the registry guard test
+  names its command list once (gentle-ai suggestion); the README's Node requirement matches the
+  glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
 - [ ] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
   locked versions, peers and deterministic output (route: delegated writer)
 - [ ] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
@@ -454,6 +460,25 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `async` to clear an "await has no effect" hint). `ctx.io.out(text)` writes text as given rather
   than one call per line, so CSV can reach stdout with CRLF. Risk, named by the writer: an agent
   that reads `CONTRIBUTING.md` and imitates the existing commands may score near 1; T4 decides.
+  Commit `11b451e`, assessed high (`high_risk`): review due on `9d02179..11b451e` (T3br and T3c).
+- 2026-10-01: T3br and T3c reviewed over `9d02179..11b451e`. gentle-ai (lineage
+  `review-61f213a662057f45`, four lenses: risk, resilience, readability, reliability): approved and
+  acknowledged, authority burned; three suggestions. Codex (recorded): two P2, reproduced
+  read-only: the fixture's `add` reuses the id of a deleted last task, and `list` keeps the store's
+  order, both against the fixture's own `CONTRIBUTING.md`. All five became T3cr. Reviewed
+  boundary: `11b451e`.
+- 2026-10-01: T3rr done (delegated writer). Each run's preparation is now inside its own async run,
+  so a throw is a rejection `allSettled` waits for; `proveTask` still rejects with it, after every
+  started grader has finished and the workspaces are gone (RED: a reference file named like a
+  fixture directory, a slow grader marking start and finish outside the workspace: "0 !== 1", and
+  the orphaned grader had kept the scratch directory locked). The live discovery comparison asks
+  the child Node for `process.features.typescript` and compares only the extensions it runs; RED
+  under `NODE_OPTIONS=--no-experimental-strip-types`. `isDiscovered` matches the `test` directory
+  case-insensitively, conservatively: Node 24 on Windows did not run `Test/x.mjs` (it compares the
+  on-disk case) but did run `A.TEST.MJS`; RED `Test/x.mjs: false !== true`. The `.gitattributes`
+  test skips when `git` cannot spawn (proven by mutation with `git` off `PATH`). Evidence:
+  `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 36/36; the same with
+  `NODE_OPTIONS=--no-experimental-strip-types` 34/34; `npm run check` exits 0. +66/-11.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

@@ -189,6 +189,39 @@ test('a grader command that cannot be spawned is reported for all three runs, an
   assert.deepEqual(fs.readdirSync(workRoot), []);
 });
 
+test('a workspace that cannot be prepared rejects only after every grader already started has finished', async () => {
+  const marks = tmp('marks');
+  // A slow grader that records when it starts and when it ends, outside the workspace it grades.
+  const slow = taskJson({
+    args: ['-e', `
+const fs = require('node:fs');
+fs.appendFileSync(${JSON.stringify(path.join(marks, 'started'))}, 'x\\n');
+setTimeout(() => {
+  fs.appendFileSync(${JSON.stringify(path.join(marks, 'finished'))}, 'x\\n');
+  console.log('# tests 3\\n# pass 2\\n# fail 1');
+}, 1500);
+`],
+  });
+  // The fixture holds a directory `lib/` and the reference a file of that name: laying one over the other throws
+  // (the code differs by platform: EIO on Windows, ERR_FS_CP_NON_DIR_TO_DIR elsewhere).
+  const files = { ...validFiles(), 'task.json': slow, 'fixture/lib/x.mjs': '\n', 'reference/lib': 'a file\n' };
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  const workRoot = tmp('work');
+  try {
+    await assert.rejects(proveTask(writeTask(files), { workRoot }), Error);
+    const count = (name) => (fs.existsSync(path.join(marks, name)) ? fs.readFileSync(path.join(marks, name), 'utf8').split('\n').length - 1 : 0);
+    assert.ok(count('started') > 0, 'a grader had started when the preparation threw');
+    assert.equal(count('finished'), count('started'), 'the rejection came after every started grader finished');
+    assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed, and only then');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, [], 'no promise is left rejecting unhandled');
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
 // ---- rule f: every hidden test fails in an empty workspace -------------------------------------------------------
 
 test('a hidden test that passes in an empty workspace is reported', async () => {
@@ -304,16 +337,24 @@ test('names that only look like tests are not reported', async () => {
 // *.test.X, *-test.X, *_test.X, test-*.X, test.X and every X file under a directory named test, for X in
 // cjs, mjs, js, cts, mts, ts, and nothing else; `test-.js` counts, `test_a.js`, `a.spec.js` and `tests/` do not.
 const SCRIPTS = ['cjs', 'mjs', 'js', 'cts', 'mts', 'ts'];
+// File names are matched case-insensitively (observed: these ran). Under `lib/` so none shares a name with
+// a lowercase one on a case-insensitive disk.
+const CASED = ['lib/A.TEST.MJS', 'lib/a-Test.js', 'lib/Test-a.mjs', 'lib/a_TEST.cjs'];
 const DISCOVERY_CASES = [
   ...SCRIPTS.flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `a_test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`, `lib/test/deep/x.${ext}`]),
   ...['jsx', 'tsx', 'json', 'txt', 'md'].flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`]),
   ...SCRIPTS.flatMap((ext) => [`test_a.${ext}`, `a.tests.${ext}`, `a.spec.${ext}`, `atest.${ext}`, `tests/x.${ext}`, `a.test.b.${ext}`, `lib/latest/x.${ext}`]),
+  ...CASED,
 ];
+// A directory named `Test` or `TEST` is not one Node looks into (observed on Windows: its files did not
+// run), but `isDiscovered` flags it: over-reporting is the safe side. Not part of the live comparison.
+const OVER_REPORTED = ['Test/x.mjs', 'TEST/x.mjs', 'lib/Test/deep/x.js', 'tests/Test/x.cjs', ...SCRIPTS.map((ext) => `Test/data.${ext}`)];
 
 test('the discovery rule says what it says for each file name', () => {
   const yes = SCRIPTS.flatMap((ext) => [`a.test.${ext}`, `a-test.${ext}`, `a_test.${ext}`, `test-a.${ext}`, `test.${ext}`, `test/data.${ext}`, `lib/test/deep/x.${ext}`]);
-  for (const name of yes) assert.equal(isDiscovered(name), true, name);
-  for (const name of DISCOVERY_CASES.filter((candidate) => !yes.includes(candidate))) assert.equal(isDiscovered(name), false, name);
+  for (const name of [...yes, ...CASED, ...OVER_REPORTED]) assert.equal(isDiscovered(name), true, name);
+  for (const name of DISCOVERY_CASES.filter((candidate) => !yes.includes(candidate) && !CASED.includes(candidate))) assert.equal(isDiscovered(name), false, name);
+  for (const name of ['Test/data.json', 'Test/data.txt', 'lib/TESTS/x.mjs', 'Tests/x.mjs']) assert.equal(isDiscovered(name), false, name);
   assert.equal(isDiscovered('test-.js'), true);
 });
 
@@ -324,12 +365,18 @@ test('the discovery rule agrees with the files this Node runs when given no argu
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, `console.log('RAN ${name}');\n`);
   }
+  // Whether the child runs .ts/.mts/.cts depends on its Node (type stripping is on by default only since
+  // 22.18 / 23.6) and on the NODE_OPTIONS it inherits, so ask a child with the same environment.
+  const feature = await runProcess({ command: process.execPath, args: ['-p', 'String(process.features.typescript)'], env: childEnv(), timeoutMs: 30 * 1000 });
+  assert.ok(!feature.spawnError && !feature.timedOut, 'the child reported its features');
+  const strips = ['strip', 'transform'].includes(feature.stdout.trim());
+  const runnable = (name) => strips || !/\.(?:cts|mts|ts)$/.test(name);
   const run = await runProcess({ command: process.execPath, args: ['--test', '--test-reporter=tap'], env: childEnv(), cwd: dir, timeoutMs: 60 * 1000 });
   assert.ok(!run.spawnError && !run.timedOut, 'node --test ran');
   // The child prints its name; a name prefixed by the TAP comment marker is still matched.
   const ran = new Set([...run.stdout.matchAll(/RAN (\S+)/g)].map((match) => match[1]));
   assert.ok(ran.has('a.test.mjs'), 'the run did discover tests, so the comparison means something');
-  assert.deepEqual(DISCOVERY_CASES.filter(isDiscovered).sort(), [...ran].sort());
+  assert.deepEqual(DISCOVERY_CASES.filter(runnable).filter(isDiscovered).sort(), [...ran].sort());
 });
 
 // ---- rule l: the grader has a grader file --------------------------------------------------------------------------
@@ -383,7 +430,8 @@ test('a text file with a CRLF line ending is reported by its path, and a binary 
 
 // ---- .gitattributes: a binary fixture file keeps its bytes -----------------------------------------------------------
 
-test('the real evals/tasks line of .gitattributes keeps a binary file\'s bytes and stores a text file with LF', () => {
+test('the real evals/tasks line of .gitattributes keeps a binary file\'s bytes and stores a text file with LF', (t) => {
+  if (spawnSync('git', ['--version'], { env: childEnv() }).error) return t.skip('git is not available');
   const root = path.resolve(import.meta.dirname, '..');
   const line = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8').split(/\r?\n/).find((entry) => entry.startsWith('evals/tasks/**'));
   assert.ok(line, '.gitattributes has a line for evals/tasks/**');

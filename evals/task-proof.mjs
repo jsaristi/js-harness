@@ -18,14 +18,17 @@ const AGENT_CONTEXT = ['agents.md', 'claude.md', 'claude.local.md', '.claude', '
 // default patterns, checked against the real thing (see the discovery test): a script file named
 // `*.test.X`, `*-test.X`, `*_test.X`, `test-*.X` or `test.X`, or any script under a directory named
 // `test`; a non-script such as `test/data.txt` is not run. Names match case-insensitively (observed on
-// Windows; stricter than POSIX, which only over-reports).
+// Windows; stricter than POSIX, which only over-reports). The `test` directory is matched
+// case-insensitively too, though Node does not look into a directory named `Test` (observed on Windows):
+// a candidate must not leak into any Node, so over-reporting is the safe direction. The script list holds
+// `.ts`, `.mts` and `.cts` for the same reason: only a Node with type stripping runs them.
 const SCRIPT = String.raw`(?:cjs|mjs|js|cts|mts|ts)`;
 const DISCOVERED = [`\\.test\\.${SCRIPT}$`, `[-_]test\\.${SCRIPT}$`, `^test-.*\\.${SCRIPT}$`, `^test\\.${SCRIPT}$`].map((source) => new RegExp(source, 'i'));
 const SCRIPT_FILE = new RegExp(`\\.${SCRIPT}$`, 'i');
 export const isDiscovered = (file) => {
   const segments = file.split('/');
   const name = segments.pop();
-  return (segments.includes('test') && SCRIPT_FILE.test(name)) || DISCOVERED.some((pattern) => pattern.test(name));
+  return (segments.some((segment) => segment.toLowerCase() === 'test') && SCRIPT_FILE.test(name)) || DISCOVERED.some((pattern) => pattern.test(name));
 };
 
 const isDirectory = (target) => fs.statSync(target, { throwIfNoEntry: false })?.isDirectory() === true;
@@ -81,22 +84,26 @@ async function runVisible(workspace) {
  * two. The visible suites get copies of their own, never the graded ones: a visible test that writes or
  * deletes a file must not change what the hidden grader measures. Each is a fresh directory under
  * `workRoot`, and every one is removed on every path, after all have finished. A reference that is not a
- * directory is not applied: there is nothing to run. */
+ * directory is not applied: there is nothing to run.
+ *
+ * Preparing a workspace is part of its own run, so a preparation that throws (a reference file that
+ * cannot be laid over the fixture) is one rejected run like any other: the wait still covers every grader
+ * already started, nothing is removed under a live process, and the first rejection is rethrown after it. */
 async function measure(task, taskDir, workRoot) {
   fs.mkdirSync(workRoot, { recursive: true });
   const made = [];
-  const workspace = (prepare) => {
+  const run = async (prepare, work) => {
     const dir = fs.mkdtempSync(path.join(workRoot, 'proof-'));
     made.push(dir);
     prepare(dir);
-    return dir;
+    return work(dir);
   };
   const fixture = (dir) => copyFixture(task, dir);
   const reference = (dir) => { copyFixture(task, dir); applyReference(taskDir, dir); };
   const hasReference = isDirectory(path.join(taskDir, 'reference'));
-  const graded = (prepare) => gradeWorkspace(task, workspace(prepare));
+  const graded = (prepare) => run(prepare, (dir) => gradeWorkspace(task, dir));
   // The visible suite runs in a copy that is never graded, so it sees what an agent sees.
-  const visible = (prepare) => runVisible(workspace(prepare));
+  const visible = (prepare) => run(prepare, runVisible);
   try {
     const settled = await Promise.allSettled([
       graded(fixture),
