@@ -48,11 +48,15 @@ function parse(text) {
 /** The version a file is in. */
 export const versionOf = (text) => parse(text).version;
 
+/** Whether an item has the two objects that the readers of a version 2 item go into. */
+const hasStructure = (item) => isObject(item) && isObject(item.price) && isObject(item.location);
+
 /** The state a file holds, migrated to the newest version. */
 export function readInventory(text) {
   let state = parse(text);
   if (!Array.isArray(state.items)) throw new InventoryError('EFORMAT', 'the file is not an inventory');
   while (state.version < VERSION) state = MIGRATIONS.get(state.version)(state);
+  if (!state.items.every(hasStructure)) throw new InventoryError('EFORMAT', 'an item has no price or no location');
   return state;
 }
 

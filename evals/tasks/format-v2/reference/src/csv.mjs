@@ -1,5 +1,5 @@
 import { migrateItemV1 } from './format.mjs';
-import { InventoryError, validateInventory } from './model.mjs';
+import { InventoryError, parseTags, validateInventory } from './model.mjs';
 import { DEFAULT_CURRENCY } from './money.mjs';
 
 const COLUMNS = ['sku', 'name', 'price_amount', 'price_currency', 'qty', 'warehouse', 'bin', 'tags'];
@@ -17,14 +17,14 @@ function itemOfV2(fields) {
     price: { amount: number(amount), currency },
     qty: number(qty),
     location: { warehouse, bin: bin === '' ? null : bin },
-    tags: tags === '' ? [] : tags.split(';'),
+    tags: parseTags(tags, ';'),
   };
 }
 
-/** An item of a row with the columns of version 1, converted like the items of a version 1 file. */
+/** An item of a row with the columns of version 1, converted like the items of a version 1 file; its price is the text of its field. */
 function itemOfV1(fields) {
   const [sku, name, price, qty, location, tags] = fields;
-  return migrateItemV1({ sku, name, price: number(price), qty: number(qty), location, tags }, DEFAULT_CURRENCY);
+  return migrateItemV1({ sku, name, price: price.trim(), qty: number(qty), location, tags }, DEFAULT_CURRENCY);
 }
 
 /** The row formats an import accepts, told apart by their header row, and how each turns a row into an item. */

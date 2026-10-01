@@ -81,6 +81,21 @@ test('a v1 price is read as the decimal that is written', T, async () => {
   assert.deepEqual(await migratedPrice(1.255, 'EUR'), price(126, 'EUR'));
 });
 
+// prompt ("Existing v1 files must keep working"), proposal "Price": v1 accepted every non-negative number, so a
+// file whose price JSON.parse reads as 1e-7 still migrates, to the whole minor units of its decimal. Large
+// amounts are left out: the proposal says nothing about amounts beyond the safe-integer range.
+test('a v1 price that is a very small number still migrates', T, async () => {
+  const text = (written) => `{"version":1,"currency":"EUR","items":[{"sku":"A","name":"Alpha","price":${written},"qty":1,"location":"WH1","tags":""}]}`;
+  const amountOf = async (written) => (await read(text(written))).items[0].price.amount;
+  assert.equal(await amountOf('0.0000001'), 0);
+  assert.equal(await amountOf('5e-7'), 0);
+  await withFile(text('0.0000001'), async ({ file, stock }) => {
+    assert.equal((await stock('list')).out.split('\t')[2], '0.00 EUR');
+    assert.equal((await stock('move', 'A', 'WH2')).code, 0);
+    assert.deepEqual(readJson(file).items[0].price, price(0));
+  });
+});
+
 // proposal "Price": a file without a currency is in EUR, and the top-level currency no longer exists
 test('a file without a currency is in EUR, and no v2 state has a top-level currency', T, async () => {
   const withoutCurrency = await read(JSON.stringify({ version: 1, items: [old({ price: 12.5 })] }));
@@ -608,6 +623,6 @@ test("the project's own test suite passes", { timeout: 30000 }, () => {
 
 // The accepted proposal and the currency data are not part of the work.
 test('guard: the proposal and the currency data are unchanged', T, () => {
-  assert.equal(sha256('../docs/proposals/format-v2.md'), '69bbd6ab3397d3f39affb8805d91ae016369020004392db32b494f314b35dbe6');
+  assert.equal(sha256('../docs/proposals/format-v2.md'), '35de296ca1d19582091255c7cbc4dabaf28fc11f7ed7af3d3cdb84f306dc4948');
   assert.equal(sha256('../data/currencies.json'), 'ac4555945f0e9e21769a834b2a8e3f454632ed4b04d9e4737e391a2ae639ec7f');
 });

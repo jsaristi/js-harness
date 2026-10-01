@@ -4,5 +4,5 @@
     "args": ["--test", "--test-reporter=tap", ".eval-grader/format-v2.grade.mjs"]
   },
   "timeoutMs": 1800000,
-  "proof": { "total": 46, "fixturePassed": 12 }
+  "proof": { "total": 47, "fixturePassed": 12 }
 }

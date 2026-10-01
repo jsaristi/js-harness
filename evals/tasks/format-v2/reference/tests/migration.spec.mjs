@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { main } from '../src/cli.mjs';
+import { importCsv } from '../src/csv.mjs';
 import { readInventory, writeInventory } from '../src/format.mjs';
+import { formatLocation } from '../src/model.mjs';
 import { toMinor } from '../src/money.mjs';
 
 const V1 = {
@@ -50,6 +52,30 @@ test('prices are rounded half away from zero, on the decimal that is written', (
   assert.equal(toMinor('1.005', 'EUR'), 101);
   assert.ok(Number.isNaN(toMinor(-1, 'EUR')));
   assert.ok(Number.isNaN(toMinor(1, 'XXX')));
+});
+
+test('a price that is written with an exponent is read as its decimal', () => {
+  assert.equal(toMinor(1e-7, 'EUR'), 0);
+  assert.equal(toMinor('5e-3', 'EUR'), 1);
+  assert.equal(toMinor(1.5e21, 'JPY'), 1.5e21);
+  const text = '{"version":1,"items":[{"sku":"A","name":"A","price":0.0000001,"qty":1,"location":"WH1","tags":""}]}';
+  assert.deepEqual(readInventory(text).items[0].price, { amount: 0, currency: 'EUR' });
+});
+
+test('a v1 CSV row is converted from the text of its price, and a v2 row has its tags cleaned', () => {
+  const v1 = importCsv('sku,name,price,qty,location,tags\nA,A,1.005,1,WH1,\n', { version: 2, items: [] });
+  assert.equal(v1.items[0].price.amount, 101);
+  const v2 = importCsv('sku,name,price_amount,price_currency,qty,warehouse,bin,tags\nA,A,1,EUR,1,WH1,," Red;small;RED;"\n', { version: 2, items: [] });
+  assert.deepEqual(v2.items[0].tags, ['red', 'small']);
+});
+
+test('an item without a price or a location is an error of the format, and a missing bin is no bin', () => {
+  const file = (item) => JSON.stringify({ version: 2, items: [item] });
+  const location = { warehouse: 'WH1', bin: null };
+  assert.throws(() => readInventory(file({ sku: 'A', location })), { code: 'EFORMAT' });
+  assert.throws(() => readInventory(file({ sku: 'A', price: { amount: 1, currency: 'EUR' } })), { code: 'EFORMAT' });
+  assert.throws(() => readInventory(file(null)), { code: 'EFORMAT' });
+  assert.equal(formatLocation({ warehouse: 'WH1' }), 'WH1');
 });
 
 test('the first write to a v1 file keeps a backup of its bytes, and a read does not touch the file', (t) => {

@@ -33,10 +33,12 @@ here relaxes it.
 its currency, which is the number of decimals `data/currencies.json` gives for it (`EUR` has 2, so
 12.5 euro is 1250).
 
-A v1 price is converted with the top-level `currency` of its file, `EUR` when the file has none. The
-v1 price is the decimal number as written in the file: `1.005` is exactly one and five thousandths,
-not the binary number nearest to it. It is rounded to a whole number of minor units, half away from
-zero, so `0.125` EUR is 13, `1.5` JPY is 2, `2.0005` KWD is 2001 and `1.005` EUR is 101.
+A v1 price is converted with the top-level `currency` of its file, `EUR` when the file has none. A
+v1 price is a decimal, never the binary number nearest to it: `1.005` is exactly one and five
+thousandths. For a JSON file it is the shortest decimal that reads back as the number the file holds,
+with an exponent where the number needs one (`0.0000001` is `1e-7`); for a CSV file it is the text of
+the field. It is rounded to a whole number of minor units, half away from zero, so `0.125` EUR is 13,
+`1.5` JPY is 2, `2.0005` KWD is 2001 and `1.005` EUR is 101.
 
 The top-level `currency` field no longer exists in v2: it has moved into each price.
 
@@ -90,7 +92,7 @@ joined with `;`.
 `sku,name,price,qty,location,tags`, and decides by the header row. The v1 rows are converted as
 in this document: the price is a v1 price in `EUR` (a v1 row has no currency, and a file in v2 has
 none to give it), the location and the tags are v1 text. In a v2 row an empty `bin` field is no bin,
-and `tags` is split on `;`, an empty field being no tags.
+and `tags` is split on `;` and cleaned like a v1 tag list, an empty field being no tags.
 
 ## Command line
 

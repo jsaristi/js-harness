@@ -18,11 +18,14 @@ export function parseLocation(text) {
   return slash === -1 ? { warehouse: text, bin: null } : { warehouse: text.slice(0, slash), bin: text.slice(slash + 1) };
 }
 
-/** A location as text: `WH1/B12`, or `WH1` when it has no bin. */
-export const formatLocation = ({ warehouse, bin }) => (bin === null ? warehouse : `${warehouse}/${bin}`);
+/**
+ * A location as text: `WH1/B12`, or `WH1` when it has no bin.
+ * @param {{ warehouse: string, bin?: string | null }} location
+ */
+export const formatLocation = ({ warehouse, bin }) => (bin === null || bin === undefined ? warehouse : `${warehouse}/${bin}`);
 
-/** The tags of a comma-separated list: trimmed, lower-cased, without empty tags or repeats. */
-export const parseTags = (text) => [...new Set(text.split(',').map((tag) => tag.trim().toLowerCase()).filter((tag) => tag !== ''))];
+/** The tags of a list separated by `separator`: trimmed, lower-cased, without empty tags or repeats. */
+export const parseTags = (text, separator = ',') => [...new Set(text.split(separator).map((tag) => tag.trim().toLowerCase()).filter((tag) => tag !== ''))];
 
 /** The problems of one item as `{ field, code }`; none when the item is valid. */
 export function validateItem(item) {
