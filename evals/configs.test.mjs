@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, currentConfig, ensureSandboxDirs, minimalConfig, sandboxEnv, sandboxPaths } from './configs.mjs';
+import { SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, currentConfig, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths } from './configs.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -402,6 +402,29 @@ for (const [name, build] of BUILDERS) {
     await assert.rejects(build(OPTIONS).prepare({ home: path.join(tmp('edge'), 'home'), workspace: 'rel', effort: 'medium', task: { id: 't' } }), /absolute workspace/);
   });
 }
+
+test('prepare ignores the system git config: one a commit would honour does not touch the fixture commit', () => {
+  // GIT_CONFIG_SYSTEM stands in for Git for Windows' own system file (autocrlf, credential helpers, and
+  // at worst a signing requirement or a hooks directory). It is outside the allowlist, so the seam passes
+  // it to prepareSandbox's git on purpose: with GIT_CONFIG_NOSYSTEM set, git must not read it at all.
+  const hooks = tmp('system-hooks');
+  fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const system = path.join(tmp('system'), 'gitconfig');
+  fs.writeFileSync(system, `[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = no-such-gpg-program\n[core]\n\thooksPath = ${hooks.split(path.sep).join('/')}\n`);
+  // The second variant tries to lift the switch itself: the caller's env must not be able to.
+  for (const env of [{ GIT_CONFIG_SYSTEM: system }, { GIT_CONFIG_SYSTEM: system, GIT_CONFIG_NOSYSTEM: '0' }]) {
+    const home = path.join(tmp('nosystem'), 'home');
+    const workspace = tmp('ws');
+    writeFixtureFiles(workspace);
+    prepareSandbox({ home, workspace, env });
+    assert.equal(gitUnderSandbox(home, workspace, 'log', '--format=%s'), 'fixture', 'the commit was made');
+  }
+});
+
+test('the agent keeps the system git config: GIT_CONFIG_NOSYSTEM is set for the fixture commit only, never in the sandbox env', () => {
+  assert.ok(!('GIT_CONFIG_NOSYSTEM' in sandboxEnv({ home: HOME })));
+  assert.ok(!SANDBOX_ALLOWLIST.includes('GIT_CONFIG_NOSYSTEM'));
+});
 
 test('both arms get a byte-identical .gitconfig', async () => {
   const configs = [];

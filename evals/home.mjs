@@ -115,8 +115,39 @@ function copyEntry(source, target, ctx, label) {
     ctx.active.delete(real);
   } else if (stat.isFile()) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(from, target);
+    (ctx.copyFile ?? fs.copyFileSync)(from, target);
   }
+}
+
+/** `target` as the file system resolves it: its deepest existing ancestor through `realpathSync` (so a
+ * junction or symlink anywhere on the way is followed), with the part that does not exist yet put back
+ * on. A path may be spelled many ways, a link among them, and only the resolved one says where a write
+ * would land. A link that exists but cannot be resolved (dangling) is an error: nothing about where it
+ * leads can be said. */
+function resolveReal(target) {
+  let existing = path.resolve(target);
+  const missing = [];
+  while (!exists(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    missing.unshift(path.basename(existing));
+    existing = parent;
+  }
+  let real;
+  try {
+    real = fs.realpathSync(existing);
+  } catch (err) {
+    throw new Error(`cannot resolve ${existing}: ${err.message}`);
+  }
+  return path.join(real, ...missing);
+}
+
+/** Whether `child` is `parent` or below it, by path components: `..templates` is a name, and only a
+ * first component of exactly `..` leaves the parent. Case-insensitive on Windows, because `path.relative` is there. Both are resolved
+ * absolute paths (`resolveReal`). */
+function isWithin(parent, child) {
+  const relative = path.relative(parent, child);
+  return !(relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
 }
 
 /** The files below `root` as `{ path, size }`, `/`-separated and sorted. */
@@ -152,25 +183,53 @@ function countRealHome(text, realHome) {
  * that runs a file there runs the real one, though anything it writes through `HOME` lands in the sandbox).
  * A real home without a `.claude` directory, or a JSON file that does not parse, is an error: a template
  * missing the setup it stands for would be measured as if it were the setup. */
-export function buildTemplate({ realHome, templateDir }) {
+export function buildTemplate({ realHome, templateDir, copyFile }) {
   requireAbsolute('real home', realHome);
   requireAbsolute('template directory', templateDir);
   if (!isDirectory(realHome)) throw new Error(`the real home ${realHome} is not a directory`);
   const claude = path.join(realHome, '.claude');
   if (!isDirectory(claude)) throw new Error(`the real home ${realHome} has no .claude directory`);
-  const relativeToHome = path.relative(path.resolve(realHome), path.resolve(templateDir));
-  if (relativeToHome === '' || (!relativeToHome.startsWith('..') && !path.isAbsolute(relativeToHome))) {
+  const resolvedHome = resolveReal(realHome);
+  const resolvedTemplate = resolveReal(templateDir);
+  if (isWithin(resolvedHome, resolvedTemplate)) {
     throw new Error(`the template directory ${templateDir} is inside the real home: the template must not be a place the real setup can read`);
+  }
+  if (isWithin(resolvedTemplate, resolvedHome)) {
+    throw new Error(`the template directory ${templateDir} contains the real home: building there would copy the real home into itself`);
   }
   if (exists(templateDir) && (!isDirectory(templateDir) || fs.readdirSync(templateDir).length > 0)) {
     throw new Error(`the template directory ${templateDir} is not empty`);
   }
 
+  // Rolled back on failure, not marked incomplete: the payload holds copies of the real home (an
+  // account id, MCP headers), so a failed build must not leave it on disk waiting for someone to notice
+  // a marker, and "empty or missing" is the only state `buildTemplate` accepts, so a retry needs
+  // exactly that back. Everything this call created goes: the directory if it made it, with any parent
+  // it had to make, or else only what it put inside the empty one it was given.
+  let firstCreated = templateDir;
+  while (!exists(path.dirname(firstCreated)) && path.dirname(firstCreated) !== firstCreated) firstCreated = path.dirname(firstCreated);
+  const created = !exists(templateDir);
+  try {
+    return writeTemplate({ realHome, templateDir, claude, copyFile });
+  } catch (err) {
+    const remove = (target) => fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    try {
+      if (created) remove(firstCreated);
+      else for (const entry of fs.readdirSync(templateDir)) remove(path.join(templateDir, entry));
+    } catch {
+      // The build's own error is the one worth reporting; a stuck cleanup must not replace it.
+    }
+    throw err;
+  }
+}
+
+/** The body of `buildTemplate`: everything that writes, so a failure anywhere in it can be undone as one. */
+function writeTemplate({ realHome, templateDir, claude, copyFile }) {
   const payload = path.join(templateDir, PAYLOAD);
   fs.mkdirSync(payload, { recursive: true });
   const warnings = [];
   const copy = (source, target, what) => {
-    if (exists(source)) copyEntry(source, target, { followLinks: true, active: new Set(), warnings, what }, what);
+    if (exists(source)) copyEntry(source, target, { followLinks: true, active: new Set(), warnings, what, copyFile }, what);
   };
   const claudeTarget = path.join(payload, '.claude');
   for (const item of CLAUDE_ITEMS) copy(path.join(claude, item), path.join(claudeTarget, item), item);

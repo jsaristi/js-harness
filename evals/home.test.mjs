@@ -188,6 +188,114 @@ test('buildTemplate refuses a template directory that is relative, not empty, or
   assert.doesNotThrow(() => buildTemplate({ realHome, templateDir: emptyDir }), 'an existing empty directory is fine');
 });
 
+// ---- containment is by resolved path, not by spelling -------------------------------------------------------
+
+test('buildTemplate refuses a template directory that is a junction into the real home, and writes nothing there', () => {
+  const realHome = makeRealHome();
+  const target = path.join(realHome, '.claude', 'somewhere');
+  fs.mkdirSync(target);
+  const link = path.join(tmp('outside'), 'tpl-link');
+  linkDir(target, link);
+  const before = hashTree(realHome);
+  assert.throws(() => buildTemplate({ realHome, templateDir: link }), /inside the real home/, 'the link itself');
+  assert.throws(() => buildTemplate({ realHome, templateDir: path.join(link, 'not-yet', 'tpl') }), /inside the real home/, 'a missing path below the link');
+  assert.deepEqual(hashTree(realHome), before, 'the real home is untouched');
+});
+
+test('buildTemplate refuses a real home that sits inside the template directory, through a link too', () => {
+  const realHome = makeRealHome();
+  assert.throws(() => buildTemplate({ realHome, templateDir: path.dirname(realHome) }), /real home/);
+  const link = path.join(tmp('outside'), 'tpl-link');
+  linkDir(path.dirname(realHome), link);
+  assert.throws(() => buildTemplate({ realHome, templateDir: link }), /real home/);
+});
+
+test('buildTemplate judges containment by path components: a directory named ..templates is not a parent traversal, either way', () => {
+  const realHome = makeRealHome();
+  // Inside the real home, whatever it is called: refused (a prefix test on ".." took it for "outside").
+  const inside = path.join(realHome, '..templates', 'tpl');
+  assert.throws(() => buildTemplate({ realHome, templateDir: inside }), /inside the real home/);
+  assert.equal(fs.existsSync(path.join(realHome, '..templates')), false, 'and nothing was written there');
+  // Outside it, next to it, with the same odd name: a legal place for a template.
+  const sibling = path.join(path.dirname(realHome), '..templates', 'tpl');
+  assert.doesNotThrow(() => buildTemplate({ realHome, templateDir: sibling }));
+  // A real home whose own name begins with two dots, inside the template directory: refused, not mistaken for outside.
+  const odd = path.join(tmp('odd-parent'), '..person');
+  write(path.join(odd, '.claude', 'settings.json'), '{}\n');
+  assert.throws(() => buildTemplate({ realHome: odd, templateDir: path.dirname(odd) }), /real home/);
+});
+
+test('buildTemplate compares paths case-insensitively on Windows, where one directory has many spellings', (t) => {
+  if (process.platform !== 'win32') return t.skip('Windows paths only');
+  const realHome = makeRealHome();
+  const respelled = path.join(realHome.toUpperCase(), '.claude', 'tpl');
+  assert.throws(() => buildTemplate({ realHome, templateDir: respelled }), /inside the real home/);
+});
+
+// ---- a failed build leaves nothing behind -----------------------------------------------------------------
+
+/** Every path below `root`, or `null` when `root` does not exist. */
+const snapshot = (root) => (fs.existsSync(root) ? [...hashTree(root)] : null);
+
+/** Ways a build fails after the first files were already copied: a bad JSON file (read after the copy
+ * list, so skills, agents and the plugin cache are on disk by then), a link cycle, and a copy that throws. */
+const BUILD_FAILURES = [
+  ['a malformed .claude.json', (realHome) => fs.writeFileSync(path.join(realHome, '.claude.json'), '{ nope'), () => ({}), /\.claude\.json/],
+  ['a malformed plugin file', (realHome) => fs.writeFileSync(path.join(realHome, '.claude', 'plugins', 'known_marketplaces.json'), '{ nope'), () => ({}), /known_marketplaces\.json/],
+  ['a link cycle', (realHome) => linkDir(path.join(realHome, '.claude', 'skills'), path.join(realHome, '.claude', 'skills', 'demo', 'loop')), () => ({}), /cycle/],
+  ['a copy that throws', () => {}, () => {
+    let count = 0;
+    return { copyFile: (from, to) => {
+      if ((count += 1) > 3) throw new Error('simulated copy failure');
+      fs.copyFileSync(from, to);
+    } };
+  }, /simulated copy failure/],
+];
+
+for (const [kind, breakHome, makeExtra, expected] of BUILD_FAILURES) {
+  test(`a build that fails on ${kind} leaves the template directory as it found it, and a retry on a fixed home succeeds`, () => {
+    const realHome = makeRealHome();
+    const original = fs.readFileSync(path.join(realHome, '.claude.json'), 'utf8');
+    breakHome(realHome);
+    // Already there, empty: it stays, and stays empty.
+    const empty = tmp('empty-template');
+    // Missing, under a parent that is missing too: the build creates both, so the rollback removes both.
+    const parent = path.join(tmp('fresh'), 'made-by-build');
+    const missing = path.join(parent, 'tpl');
+    for (const templateDir of [empty, missing]) {
+      assert.throws(() => buildTemplate({ realHome, templateDir, ...makeExtra() }), expected);
+    }
+    assert.deepEqual(snapshot(empty), [], 'an empty directory is left empty: no payload, no marker');
+    assert.equal(fs.existsSync(parent), false, 'what the build created is removed, the parent it made too');
+    assert.equal(fs.existsSync(path.join(realHome, 'template.json')), false);
+    // The real home is fixed (the cycle's link removed, the JSON restored) and the same directories work.
+    fs.rmSync(path.join(realHome, '.claude', 'skills', 'demo', 'loop'), { force: true });
+    fs.writeFileSync(path.join(realHome, '.claude.json'), original);
+    write(path.join(realHome, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ mk: { installLocation: path.join(realHome, '.claude', 'plugins', 'marketplaces', 'mk') } }));
+    for (const templateDir of [empty, missing]) {
+      const summary = buildTemplate({ realHome, templateDir });
+      assert.ok(summary.files > 0);
+      assert.equal(readJson(path.join(templateDir, 'template.json')).kind, 'js-harness-eval-home-template');
+      removeTemplate(templateDir);
+    }
+  });
+}
+
+test('a failed build leaves a directory that was empty exactly as it was, and the original error is the one thrown', () => {
+  const realHome = makeRealHome();
+  fs.writeFileSync(path.join(realHome, '.claude.json'), '{ nope');
+  const templateDir = tmp('empty-template');
+  let thrown;
+  try {
+    buildTemplate({ realHome, templateDir });
+  } catch (err) {
+    thrown = err;
+  }
+  assert.match(thrown?.message ?? '', /\.claude\.json is not valid JSON/, 'the cause, not a cleanup error');
+  assert.deepEqual(fs.readdirSync(templateDir), []);
+  assert.ok(fs.statSync(templateDir).isDirectory());
+});
+
 test('buildTemplate names the file that is not valid JSON instead of leaving it out', () => {
   for (const [rel, expected] of [[['.claude.json'], /\.claude\.json/], [['.claude', 'plugins', 'installed_plugins.json'], /installed_plugins\.json/], [['.claude', 'plugins', 'known_marketplaces.json'], /known_marketplaces\.json/]]) {
     const realHome = makeRealHome();

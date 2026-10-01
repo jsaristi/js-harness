@@ -1051,10 +1051,11 @@ test('the version is probed under the trial env, after prepare and before the ag
 });
 
 test('wallMs measures the agent run only, not prepare or the version probe', async () => {
-  // A fake clock that only the setup steps advance: if wallMs were measured from the start of the trial,
-  // it would hold their 3000 ms; measured around the agent run alone it holds none. No real time is
-  // compared, so a slow host cannot flake it.
+  // A fake monotonic clock that only the setup steps advance: if wallMs were measured from the start of
+  // the trial, it would hold their 3000 ms; measured around the agent run alone it holds none. No real
+  // time is compared, so a slow host cannot flake it.
   let ticks = 0;
+  const clock = () => ticks;
   const now = () => new Date(Date.UTC(2026, 0, 1) + ticks);
   const { options } = trialEnv('solve', {
     configExtra: { prepare: () => { ticks += 1500; } },
@@ -1063,10 +1064,23 @@ test('wallMs measures the agent run only, not prepare or the version probe', asy
       return '1.0.0';
     },
     now,
+    clock,
   });
   const { record } = await runTrial(options);
   assert.equal(record.wallMs, 0, 'the 3000 ms of setup are outside wallMs');
   assert.equal(record.startedAt, '2026-01-01T00:00:00.000Z', 'startedAt is still the start of the trial');
+});
+
+test('a pinned now() still gives a real wallMs: the timestamp source and the stopwatch are separate', async () => {
+  // `now` is injected to make startedAt deterministic. Measuring the agent run with it too collapsed
+  // wallMs to 0 for any pinned clock, so the duration comes from a monotonic `clock` that defaults to
+  // performance.now(). The only claim is that the agent's run took time (a real child process always
+  // does); there is no upper bound, so a slow host cannot flake it.
+  const pinned = new Date(Date.UTC(2026, 0, 1));
+  const { options } = trialEnv('solve', { now: () => pinned });
+  const { record } = await runTrial(options);
+  assert.ok(record.wallMs > 0, `wallMs ${record.wallMs}`);
+  assert.equal(record.startedAt, '2026-01-01T00:00:00.000Z');
 });
 
 test('a relative workRoot still gives an absolute home and workspace, so nothing the agent resolves against its cwd lands in the graded tree', async () => {

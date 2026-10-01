@@ -116,14 +116,20 @@ function git(args, { cwd, env }) {
  * identity, and the workspace as a git repository whose first commit is the fixture, which is what the
  * Design calls "the repo the agent starts in" for either arm. Git runs under the trial's own sandbox env,
  * so it reads the sandbox `.gitconfig` and none of the real shell's git settings (`GIT_CONFIG_GLOBAL`,
- * `GIT_AUTHOR_*` and `GIT_DIR` are all outside the allowlist). An empty workspace still gets a commit. */
-export function prepareSandbox({ home, workspace }) {
+ * `GIT_AUTHOR_*` and `GIT_DIR` are all outside the allowlist), and not the system one either. `env` adds
+ * variables to those commands (a test points `GIT_CONFIG_SYSTEM` at a hostile file). An empty workspace
+ * still gets a commit. */
+export function prepareSandbox({ home, workspace, env: extra = {} }) {
   if (typeof workspace !== 'string' || !path.isAbsolute(workspace)) {
     throw new Error(`the sandbox needs an absolute workspace, got ${JSON.stringify(workspace)}`);
   }
   ensureSandboxDirs(home);
   fs.writeFileSync(path.join(home, '.gitconfig'), `[user]\n\tname = ${GIT_IDENTITY.name}\n\temail = ${GIT_IDENTITY.email}\n`);
-  const options = { cwd: workspace, env: childEnv(sandboxEnv({ home })) };
+  // GIT_CONFIG_NOSYSTEM goes last, so `extra` cannot lift it. It is set for these commands only and
+  // deliberately not in `sandboxEnv`: the fixture commit must not depend on the host's system gitconfig
+  // (autocrlf, credential helpers, and at worst `commit.gpgsign` or `core.hooksPath`), but whether the
+  // agent's own git should see that file is a separate decision about what the arms are measured under.
+  const options = { cwd: workspace, env: childEnv({ ...sandboxEnv({ home }), ...extra, GIT_CONFIG_NOSYSTEM: '1' }) };
   git(['init', '--quiet'], options);
   git(['add', '--all'], options);
   git(['commit', '--quiet', '--allow-empty', '--message', 'fixture'], options);

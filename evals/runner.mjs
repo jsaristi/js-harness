@@ -369,7 +369,12 @@ function removeDir(dir, label, log) {
  *
  * `readVersion(config, env)` is asked for the CLI version under the env overrides the agent will run
  * with: they now depend on the home, so the probe cannot run before the trial exists. It runs after
- * `prepare` and before the agent, outside `wallMs`. */
+ * `prepare` and before the agent, outside `wallMs`.
+ *
+ * Two injectable clocks, because they answer different questions: `now()` is the wall-clock timestamp of
+ * `startedAt`, and `clock()` is a monotonic stopwatch (milliseconds, default `performance.now()`) for
+ * `wallMs`. A test that pins `now` to make a timestamp deterministic would otherwise also pin the
+ * duration to 0, and a system clock step during an agent run would corrupt it. */
 export async function runTrial({
   task,
   config,
@@ -380,6 +385,7 @@ export async function runTrial({
   runsDir = DEFAULT_RUNS_DIR,
   graderTimeoutMs,
   now = () => new Date(),
+  clock = () => performance.now(),
   log = (message) => console.error(message),
 }) {
   const startedAt = now().toISOString();
@@ -397,7 +403,7 @@ export async function runTrial({
     }
     const agent = resolveAgent(config, { effort, task, home, workspace });
     const cliVersion = await readVersion(config, agent.env);
-    const began = now();
+    const began = clock();
     const run = await runProcess({
       ...agent,
       env: childEnv(agent.env),
@@ -405,7 +411,7 @@ export async function runTrial({
       input: task.prompt,
       timeoutMs: task.timeoutMs,
     });
-    const wallMs = now() - began;
+    const wallMs = Math.round(clock() - began);
 
     const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
     fs.mkdirSync(runsDir, { recursive: true });
