@@ -117,6 +117,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
   loopback fake Messages API (zero spend), then a nonce scan and a before/after hash of the real
   trees (route: delegated writer for the probe, inline run; go-ahead given 2026-10-01)
+- [ ] T2s T2c review findings: path matches on a directory boundary (sweep roots, `keyLeaks`)
+  and sweep-root equality by Windows path semantics (gentle-ai, Codex); leaks attributed to the
+  arm whose window introduced them (gentle-ai); an unreadable real file makes the probe fail as
+  inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
+  scanned (Codex); the sandbox env test asserts the effective child env (Codex); the `hang`
+  fixture really hangs (gentle-ai suggestion) (route: delegated writer, strict TDD)
 - [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
   proven by a reference solution that scores 1 and the untouched fixture that scores below it
   (route: delegated writer)
@@ -294,6 +300,23 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   the current arm's sandbox engram store gets its database. Still open: the 14 real-home paths in
   `settings.json` run real hook scripts (orca, herdr among them) under the sandbox env; their own
   state outside the scanned trees (`~/.orca` is scanned and stayed unchanged) is unchecked.
+- 2026-10-01: T2r + T2c slice reviewed. The whole range `00eb9ec..6cee6c4` (3,646 lines) exceeded
+  gentle-ai's reviewer context (`lens_context_budget_exceeded`, no authority created), so it was
+  reviewed as two candidates. `00eb9ec..c8d96aa` from a detached worktree: gentle-ai (lineage
+  `review-e2a2cbedba069a77`, lens reliability) approved and acknowledged, authority burned, two
+  WARNINGs (sweep roots match as bare substrings; `assertWorkRoot` has no caller in the runner)
+  and one suggestion (the T2r record does not mention T2c's runner changes; they are recorded
+  under T2c); Codex (recorded, second run; the first was not recorded because it never viewed
+  the `AGENTS.md` diff) two P2 (sweep-root equality is case-sensitive on Windows; a configs test
+  checks key presence instead of the effective child env). `c8d96aa..6cee6c4`: gentle-ai (lineage
+  `review-09a0e621d88869fe`) approved and acknowledged, authority burned, two WARNINGs
+  (`keyLeaks` matches the work root as a prefix; a leak is re-reported by every later arm) and
+  one suggestion (the `hang` fixture finishes its work before hanging); Codex four P2 (unreadable
+  files pass silently; keys of a newly created `.claude.json` are skipped; empty directories'
+  names are never scanned; the work-root prefix match), first run not recorded (it viewed 1,157 of
+  2,073 lines), rerun from a worktree at `6cee6c4`. All became T2s. The runner-side work-root
+  check stays with T4: its suite entry must call `assertWorkRoot`, with a test that a bad root is
+  refused.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -401,6 +424,6 @@ the docs):
   runs them.
 
 ## Next step
-Review the T2r + T2c slice over `00eb9ec` (gentle-ai, then Codex over the same range), then T3.
+T2s, then T3. Reviewed boundary: `6cee6c4`.
 Before T4: Sebastián's `claude setup-token` and his choice of permission mode, asked one at a
 time.
