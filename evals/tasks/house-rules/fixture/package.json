@@ -1,0 +1,13 @@
+{
+  "name": "tk",
+  "version": "0.2.0",
+  "description": "A small task tracker for the command line",
+  "type": "module",
+  "bin": {
+    "tk": "bin/tk.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "license": "MIT"
+}

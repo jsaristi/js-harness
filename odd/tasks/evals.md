@@ -154,7 +154,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `INVALID_WEIGHT`, as SPEC §2.2 orders the rules, in the reference and in a new hidden test
   (Codex); the §7.3 tie (equal volume and promo discounts give `source: 'promo'`) gets a hidden
   test (gentle-ai suggestion) (route: delegated writer)
-- [ ] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
+- [x] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
   the prompt never mentions, decide most of the hidden tests (route: delegated writer)
 - [ ] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
   locked versions, peers and deterministic output (route: delegated writer)
@@ -440,7 +440,20 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   (5 parcels, `FLAT5`, base 10000: both discounts 500, `source: 'promo'`). Proof 48/12 → 51/13:
   fixture 13/51, fixture plus reference 51/51, the reference's `src/` alone 50/51 (the own-suite
   test fails on the two drifted visible tests, which is the finding). Each new test fails on the
-  fixture through one deviation only. Grader 1.3–2.4 s.
+  fixture through one deviation only. Grader 1.3–2.4 s. Commit `483dbec`.
+- 2026-10-01: T3c done (same writer), `evals/tasks/house-rules/`: the `tk` task-tracker CLI
+  (23 files, 700 lines) gains `tk export`; the prompt never mentions `CONTRIBUTING.md`, which the
+  README points at and whose eight rules (command shape, `parseFlags` with `choices`, output only
+  through `ctx.io`, time only through `ctx.clock`, atomic writes with `--force`, error format and
+  exit codes, RFC 4180 CSV with CRLF and fixed columns, docs/completions/changelog) decide most
+  of the 44 hidden tests. Proof: fixture 9/44, fixture plus reference 44/44, empty 0/44; grader
+  ~1.7 s, proof ~5.2 s. 18 one-line rule violations of the reference each fail their own tests. A
+  rule-blind export (`console.log`, `Date.now()`, `fs.writeFileSync`, LF CSV, no docs) scores
+  13/44; the reference without docs 41/44. No language-server diagnostic (TypeScript API with
+  suggestion diagnostics, on fixture and fixture plus reference; the fixture's `run` methods became
+  `async` to clear an "await has no effect" hint). `ctx.io.out(text)` writes text as given rather
+  than one call per line, so CSV can reach stdout with CRLF. Risk, named by the writer: an agent
+  that reads `CONTRIBUTING.md` and imitates the existing commands may score near 1; T4 decides.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
