@@ -162,7 +162,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   task with a bad `created` is not silently dropped (gentle-ai suggestion); the registry guard test
   names its command list once (gentle-ai suggestion); the README's Node requirement matches the
   glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
-- [ ] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
+- [x] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
   locked versions, peers and deterministic output (route: delegated writer)
 - [ ] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
   interleaved writers and failing disks, from a symptom report (route: delegated writer)
@@ -498,7 +498,19 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `--since`; the grader names its command list once; README and `engines` say Node 22+. Two new
   hidden guards (id never reused, list order on a store written out of order) and one test of
   export over the new store shape. Proof 44/9 → 47/11, fixture plus reference 47/47; no
-  language-server diagnostic. Fixture 755 lines.
+  language-server diagnostic. Fixture 755 lines. Commit `d54c52e`.
+- 2026-10-01: T3d done (same writer), `evals/tasks/resolver/`: a tiny package manager (fixture 634
+  lines, 14 files) whose `resolve()` is a plausible greedy breadth-first pass; the prompt asks for
+  the full algorithm of `docs/RESOLUTION.md` (143 lines, ten sections: flat model, constraints,
+  candidates, depth-first search in name order, the candidate check, peers, lock, errors, result,
+  examples). Rules the brief left open were settled in the spec: an optional name gets "absent" as
+  a last alternative, every constraint kind restricts, `ENOVERSION` counts a locked yanked
+  version, `ECONFLICT.package` is the last dead end and is asserted only where every dead end is
+  on one name. Proof: fixture 15/45, fixture plus reference 45/45, empty 0/45; grader ~2 s. A
+  second implementation (explicit stack, written from the spec before the reference) scored 45/45
+  first time; 34 mutants of the reference, one per rule, all killed but the deliberately unasserted
+  first-versus-last dead end. No language-server diagnostic. Limit: the second implementation
+  shares its author with the reference.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
