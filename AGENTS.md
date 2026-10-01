@@ -65,10 +65,12 @@ A session holds one task, because the conversation is lost on a new session or a
 only files survive. So every decision made in the conversation is written to the roadmap or the
 feature document and committed in the same session. Tell him when to cut: a new session when a
 feature closes, a PR merges or a phase starts; `/compact` with what to keep when a task is still
-open but the conversation has grown long. End every reply with the next prompt he should send, as
-plain quoted text (a code block may not show in the app): the next step in this chat, and when
-cutting, the opening prompt for the new session or the full `/compact` command. He never writes
-the handoff himself. In every reply, just before that prompt, show the map: each roadmap phase with
+open but the conversation has grown long. End every reply with exactly one prompt, the next thing
+he sends, as plain quoted text (a code block may not show in the app). When it is time to cut,
+that one prompt is the full `/compact` command or the new session's opening prompt, and nothing
+else; after a `/compact` he sends only "seguí", and the reply to it resumes from the summary and
+repeats any question still pending. Two prompts in one reply have already been sent in the wrong
+order and cost a session. He never writes the handoff himself. In every reply, just before that prompt, show the map: each roadmap phase with
 its percentage and the total, from `js-harness progress`; if it fails, say so instead of guessing.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
