@@ -376,7 +376,11 @@ test('the discovery rule agrees with the files this Node runs when given no argu
   // The child prints its name; a name prefixed by the TAP comment marker is still matched.
   const ran = new Set([...run.stdout.matchAll(/RAN (\S+)/g)].map((match) => match[1]));
   assert.ok(ran.has('a.test.mjs'), 'the run did discover tests, so the comparison means something');
-  assert.deepEqual(DISCOVERY_CASES.filter(runnable).filter(isDiscovered).sort(), [...ran].sort());
+  // Whether Node matches file names case-insensitively depends on the platform (Windows does; Linux does
+  // not), and `isDiscovered` flags the CASED names either way, so for them only "what ran is flagged" holds.
+  const exact = (names) => names.filter((name) => !CASED.includes(name));
+  assert.deepEqual(exact(DISCOVERY_CASES.filter(runnable).filter(isDiscovered)).sort(), exact([...ran]).sort());
+  for (const name of CASED.filter((candidate) => ran.has(candidate))) assert.ok(isDiscovered(name), name);
 });
 
 // ---- rule l: the grader has a grader file --------------------------------------------------------------------------

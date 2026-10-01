@@ -478,7 +478,18 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   on-disk case) but did run `A.TEST.MJS`; RED `Test/x.mjs: false !== true`. The `.gitattributes`
   test skips when `git` cannot spawn (proven by mutation with `git` off `PATH`). Evidence:
   `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 36/36; the same with
-  `NODE_OPTIONS=--no-experimental-strip-types` 34/34; `npm run check` exits 0. +66/-11.
+  `NODE_OPTIONS=--no-experimental-strip-types` 34/34; `npm run check` exits 0. +66/-11. Commit
+  `d329c33`, assessed medium, `under_budget`.
+- 2026-10-01: T3rr reviewed on its own over `11b451e..d329c33` (the Stop hook again offered the
+  branch from `5ab2ae6`, of which this was the only unreviewed commit). gentle-ai (lineage
+  `review-465f838939cc25f9`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING. Codex (recorded): one P2, the same defect, checked with Node's bundled matcher: Linux's
+  default discovery is case-sensitive, so the four mixed-case names T3rr added to the live
+  comparison do not run there while `isDiscovered` flags them, and the check gate would go red.
+  Fixed inline (one test, one file): the exact comparison leaves those names out, and for them
+  only "what Node ran is flagged" is asserted. Passes on Windows; the Linux RED could not be
+  observed here (no WSL distribution), so the fix rests on both reviewers' reading of Node's
+  matcher. Reviewed boundary: `d329c33`.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
