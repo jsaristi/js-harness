@@ -114,10 +114,9 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   template containment resolved through links and compared by path component (Codex);
   `GIT_CONFIG_NOSYSTEM` for the fixture commit (gentle-ai); `wallMs` on a monotonic clock
   separate from the timestamp clock (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
+- [x] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
   loopback fake Messages API (zero spend), then a nonce scan and a before/after hash of the real
-  trees (route: delegated writer for the probe, inline run; needs Sebastián's go-ahead, see Ask
-  me before)
+  trees (route: delegated writer for the probe, inline run; go-ahead given 2026-10-01)
 - [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
   proven by a reference solution that scores 1 and the untouched fixture that scores below it
   (route: delegated writer)
@@ -255,6 +254,46 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `oauthAccount`, `userID` and the context7 MCP header, so the template and each trial home hold
   a copy until removed — T4's entry script owns the template's lifetime and must call
   `removeTemplate` on every path.
+- 2026-10-01: T2c done (delegated writer in three rounds, real runs inline with Sebastián's
+  go-ahead). `evals/isolation-probe.mjs` runs one trial per arm under the eval sandbox against a
+  loopback fake Messages API (Bash tool call, Write tool call, final text; dummy API key, zero
+  spend), hashes the real trees before, after a 60 s control window and after each arm, scans them
+  for the nonce and the sandbox name, and checks positive controls inside the sandbox. Four real
+  runs, each finding fed back with RED tests:
+  1. The current arm could not start: `os.tmpdir()` is inside the real home on Windows, and every
+     workspace under it has the real home as an ancestor, so Claude's upward `CLAUDE.md` walk could
+     load the real global `CLAUDE.md` even into the minimal arm. Fix: `defaultWorkRoot` (sibling
+     `D:\js-harness-evals-work`) and `assertWorkRoot` (outside the real home, no `CLAUDE.md`,
+     `CLAUDE.local.md`, `AGENTS.md` or `.claude` in it or any ancestor) in `configs.mjs`, and a
+     contamination check: markers of the real global `CLAUDE.md` must reach none of the minimal
+     arm's requests and the current arm's main request.
+  2. Isolation held, but the current arm left an orphaned codegraph MCP server (`serve --mcp
+     --path <workspace>`, parent already exited, so `killSurvivors` could not reach it) holding the
+     sandbox: cleanup failed with EPERM. Fix: `killByPath` in the runner kills every process whose
+     command line names the trial's home or workspace (literal, case-insensitive, both separators,
+     confined to the work root), called in `runTrial`'s `finally` before removal, with a second
+     sweep and a short retry (Windows releases a killed holder's directory up to ~200 ms late).
+     Cost: about 1 s per trial.
+  3. The sweep reported a process killed by an earlier tree kill as a failure; it now judges by
+     whether every matched pid is gone. The real `~/.claude.json` changed during the current arm
+     (and a `backups/` file rotated) with no nonce or sandbox-name hit; the probe now diffs JSON
+     files key by key (names only, never values) and fails on a `projects[...]` key that names the
+     sandbox or the work root.
+  4. PASS (exit 0): both arms, no leak hit, no real-tree change outside the control window (the
+     `.claude.json` change of run 3 did not recur, consistent with the live session's own
+     periodic write), no process or directory left behind.
+  Evidence: `node --test "evals/**/*.test.mjs"` 259 pass, 1 skipped (file symlink, EPERM);
+  `npm run check` exits 0; probe report in `evals/runs/isolation-probe.json` (gitignored).
+  Mutations over the writer's four rounds: 39, 33, 28 and 38, all killed but two, each
+  documented (a `removeTemplate` call made redundant by removing its parent; the sweep's final
+  still-running check, which no test can provoke).
+  Answered from the real runs: Claude's tools see every path variable inside the sandbox
+  (`HOMEDRIVE`/`HOMEPATH` included) and no `CLAUDE_CODE_OAUTH_TOKEN`; `-p` writes no
+  `history.jsonl`; `LOCALAPPDATA/claude-cli-nodejs` appears in the sandbox (current arm only, MCP
+  logs), so the override works; `plugins/marketplaces` is read but not changed at startup (kept);
+  the current arm's sandbox engram store gets its database. Still open: the 14 real-home paths in
+  `settings.json` run real hook scripts (orca, herdr among them) under the sandbox env; their own
+  state outside the scanned trees (`~/.orca` is scanned and stayed unchanged) is unchecked.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -316,9 +355,14 @@ the docs):
 - **The gentle-ai Stop hook stays in the current arm**, because the run measures what is
   installed. Open: it may spawn reviewer `claude` runs whose tokens the trial's own JSON result
   does not count; T5 must account for them or say so.
-- Unverified until T2c runs the real binary: that Claude's own home resolution honours
-  `USERPROFILE`, that the `LOCALAPPDATA` override breaks no tool, what `plugins/marketplaces` does
-  at startup, and whether `-p` writes `history.jsonl`.
+- **The work root is outside the real home and below no project memory** (T2c):
+  `defaultWorkRoot` is `D:\js-harness-evals-work`, checked by `assertWorkRoot`. T4's suite entry
+  must pass both to the runner, whose own default (`os.tmpdir()`) is unsafe for real runs.
+- **A trial's processes are swept by path** (T2c): an MCP server orphaned by the current arm
+  otherwise outlives the trial and holds its sandbox.
+- Verified by T2c on the real binary: Claude's home resolution honours the sandbox variables,
+  the `LOCALAPPDATA` override breaks no tool, `plugins/marketplaces` is not changed at startup,
+  and `-p` writes no `history.jsonl`.
 
 ## Follow-ups
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
@@ -357,7 +401,6 @@ the docs):
   runs them.
 
 ## Next step
-T2c once Sebastián allows the real-binary probe (a run of `claude` under the sandbox against a
-loopback fake API, zero spend; asked 2026-09-30), then T3. Before T4: his `claude setup-token`
-and his choice of permission mode. Review base for the next slice review: `00eb9ec` (every
-commit up to it is reviewed by gentle-ai and Codex; `caf7a7c` is pending, under budget).
+Review the T2r + T2c slice over `00eb9ec` (gentle-ai, then Codex over the same range), then T3.
+Before T4: Sebastián's `claude setup-token` and his choice of permission mode, asked one at a
+time.
