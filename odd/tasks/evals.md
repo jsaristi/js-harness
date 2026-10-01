@@ -620,6 +620,17 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   when ~120 are spawned at once while the whole suite runs in parallel. The markers fixed nothing
   (the reporter was never the problem); the nested `node --test` now runs with
   `--test-concurrency=2` (5.4 s alone). The same limit may bite T4: a trial spawns many processes.
+  Commits `103afc5` (the cap) and `d0bc904` (T3fr).
+- 2026-10-01: `465a06a..d0bc904` reviewed so T3 closes clean. gentle-ai (lineage
+  `review-28fd41e980f1cdee`, lens reliability): approved and acknowledged, authority burned; two
+  WARNINGs and one suggestion. Codex (recorded): one P2. All four are about the `format-v2`
+  reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
+  `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
+  forbids looping until clean, and none changes a measurement (the reference still scores 47/47
+  and every hidden test stays fair), so they are Follow-ups. Reviewed boundary: `d0bc904`.
+  **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
+  (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
+  13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -733,6 +744,15 @@ Decided 2026-10-01, before the first candidate was written:
   written before the tasks were designed and is too low by about a factor of ten.
 
 ## Follow-ups
+- The `format-v2` reference's price parsing on inputs no hidden test uses (review of
+  `465a06a..d0bc904`): `1e308` and other huge exponents give `Infinity` or an unsafe integer; a
+  v1 CSV row shorter than three fields throws a `TypeError` instead of an import error; `.5`, `1.`
+  and `+1` in a v1 CSV, which `Number()` accepted, are now refused; the reference's visible spec
+  pins `toMinor(1.5e21, 'JPY')`, an amount the proposal leaves open. None changes a score.
+- Process starts fail on Windows under heavy parallel spawning (`0xC0000142`,
+  `STATUS_DLL_INIT_FAILED`): seen in the discovery test with ~120 nested processes on top of the
+  full suite. T4's suite runs trials one at a time, but a current-arm trial starts MCP servers,
+  hooks and graders; watch for agent or grader exits with that code.
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
   re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
   workspace (gentle-ai suggestion, left as is).
@@ -777,7 +797,15 @@ Decided 2026-10-01, before the first candidate was written:
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). Next: T3a, then T3b–T3f one
-at a time, on `feat/evals`; slice 2 (T3–T4) starts from `5ab2ae6`.
-Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
-Reviewed boundary: `db0253b`.
+Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
+`feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
+Next: T4, the headroom screen. Before it, two of Sebastián's decisions, asked one at a time:
+1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
+   of its own, `JS_HARNESS_EVAL_OAUTH_TOKEN`, never in chat or a file in the repo; T4's suite entry
+   maps it to `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
+   `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
+   claude.ai connectors.
+2. The permission mode both arms pass (`permissionMode` has no default).
+Then T4: the suite entry (`defaultWorkRoot` + `assertWorkRoot`, `removeTemplate` on every path,
+the sweep-boundary follow-up, the token mapping), then minimal at `medium`, 3 trials per candidate.
+Reviewed boundary: `d0bc904`.
