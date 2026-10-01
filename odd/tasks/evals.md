@@ -198,6 +198,16 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `USERNAME`) into every child, so `sandboxEnv` sets `HOMEDRIVE`/`HOMEPATH` itself; T2c must check
   them in the real run. ~1,060 authored lines, 60% tests: the sandbox, the runner seam and their
   tests are one unit. Assessed medium, `slice_budget_reached`: review due on `0c15a8f..4574619`.
+- 2026-09-30: T2a slice reviewed over `0c15a8f..b862f02`. gentle-ai (lineage
+  `review-07960c62c2ed4a3e`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING, one suggestion. Codex (recorded): one P2, the same defect as the WARNING, found
+  independently: a relative `workRoot` gives a relative home, so `prepare` seeds it relative to
+  the runner's cwd while the agent resolves `HOME` and `CLAUDE_CONFIG_DIR` relative to the
+  workspace and writes into the graded tree. The suggestion: the `wallMs` test asserts a
+  wall-clock bound and can flake on a slow host. Both go to T2b's writer. Reviewed boundary:
+  `b862f02`. The Stop hook then offered the whole branch (`8434947..b862f02`) as a new candidate;
+  declined, because every commit in it is covered by a slice review and the ODD candidate is a
+  work unit, never the accumulated branch (see Follow-ups).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -267,6 +277,9 @@ the docs):
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
   re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
   workspace (gentle-ai suggestion, left as is).
+- gentle-ai's Stop hook always proposes the branch point as the review base, so after every
+  commit it offers the accumulated branch as a fresh candidate even when slice reviews cover every
+  commit in it. Worth raising with gentle-ai if it keeps costing a decline per stretch.
 - `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
   place when either changes.
 
@@ -299,5 +312,5 @@ the docs):
 ## Next step
 T2b (seeding the current home through `currentConfig`'s `seed`), then T2c once Sebastián allows
 the real-binary probe. Before T4: his `claude setup-token`
-and his choice of permission mode. Review base for the next slice review: `0c15a8f` (every commit
+and his choice of permission mode. Review base for the next slice review: `b862f02` (every commit
 up to it is reviewed by gentle-ai and Codex).
