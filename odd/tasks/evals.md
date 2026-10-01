@@ -117,7 +117,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
   loopback fake Messages API (zero spend), then a nonce scan and a before/after hash of the real
   trees (route: delegated writer for the probe, inline run; go-ahead given 2026-10-01)
-- [ ] T2s T2c review findings: path matches on a directory boundary (sweep roots, `keyLeaks`)
+- [x] T2s T2c review findings: path matches on a directory boundary (sweep roots, `keyLeaks`)
   and sweep-root equality by Windows path semantics (gentle-ai, Codex); leaks attributed to the
   arm whose window introduced them (gentle-ai); an unreadable real file makes the probe fail as
   inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
@@ -316,7 +316,26 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   names are never scanned; the work-root prefix match), first run not recorded (it viewed 1,157 of
   2,073 lines), rerun from a worktree at `6cee6c4`. All became T2s. The runner-side work-root
   check stays with T4: its suite entry must call `assertWorkRoot`, with a test that a bad root is
-  refused.
+  refused. The Codex rerun repeated two findings and added a tenth (the final snapshot was taken
+  before the arm's orphans were swept) but again viewed only 1,436 of 2,073 lines, so the range is
+  recorded as `--unavailable` with that reason: the 1,275-line probe test file is more than a
+  Codex turn reads.
+- 2026-10-01: T2s done (delegated writer), all ten findings with RED observed: sweep roots match
+  only on a boundary (end, separator, quote, whitespace) and equality with the work root is
+  `path.relative(...) === ''`; `keyLeaks` extracts the project path and matches by segment and
+  directory boundary; a hit already present before an arm, in an unchanged file, is not charged to
+  it; an unreadable real file is retried three times and then fails its arm as inconclusive; a
+  newly created JSON file has every key counted as added; empty directories are name-scanned;
+  each arm is swept before its final snapshot (a detached `late-writer` fixture writes the nonce
+  2 s after the agent exits); the configs test asserts the effective child env; the `hang` fixture
+  hangs before any request. 38 mutations, all killed (two equivalents removed, four closed with new
+  tests). Unproven: the `finally` sweep of an arm that throws before its early sweep. Evidence:
+  `node --test "evals/**/*.test.mjs"` 273 pass, 1 skipped (file symlink, EPERM); `npm run check`
+  exits 0; the real probe rerun passed (exit 0), no process or directory left. Its key diff
+  settled the run-3 question: the only key of the real `.claude.json` changed during the current
+  arm was `pluginUsage`, whose changed entries (`typescript-lsp`, `codex`) are plugins of the live
+  session, and `numStartups`, which any `claude` start increments in the file it uses, did not
+  move: the parent's own session, not the trial.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -424,6 +443,7 @@ the docs):
   runs them.
 
 ## Next step
-T2s, then T3. Reviewed boundary: `6cee6c4`.
+Review T2s over `a844c3f` if `gentle-ai review assess` says it is due, then T3. Reviewed
+boundary: `6cee6c4` (`a844c3f` is docs only, passive).
 Before T4: Sebastián's `claude setup-token` and his choice of permission mode, asked one at a
 time.

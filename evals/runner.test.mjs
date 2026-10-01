@@ -1260,6 +1260,34 @@ test('killByPath matches the root literally: regex metacharacters in it are ordi
   assert.ok(isAlive(wildcardDecoy), 'the path a wildcard would also have matched survives');
 });
 
+test('killByPath requires a boundary after the root: a sibling whose name extends it is spared, a path below it or the root in quotes or between spaces is not', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('bound'), 'eval-trial-1');
+  const siblings = [sleeper(`${root}0`), sleeper(`${root}-retry`), sleeper(`${root}.bak`), sleeper(`${root}é`)];
+  const targets = [
+    sleeper(root), // the end of the command line
+    sleeper(path.join(root, 'workspace', 'f.txt')), // a path separator
+    sleeper(root.split(path.sep).join('/') + '/x'), // the other separator
+    sleeper(`'${root}'`), // a quote
+    sleeper(`--path=${root}`, 'next-argument'), // whitespace
+    sleeper(`${root}0`, root), // a sibling first, the root itself later in the same line
+  ];
+  const { killed } = killByPath([root]);
+  assert.deepEqual([...killed].sort((a, b) => a - b), [...targets].sort((a, b) => a - b));
+  assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))), 'the root\'s own processes are gone');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(siblings.every(isAlive), 'trial-10 is not trial-1');
+});
+
+test('killByPath given a root with a trailing separator still matches the processes that name it without one', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('trailing'), 'eval-trail-1');
+  const target = sleeper(root);
+  const sibling = sleeper(`${root}0`);
+  const { killed } = killByPath([root + path.sep]);
+  assert.deepEqual(killed, [target]);
+  assert.ok(await waitUntil(() => !isAlive(target)));
+  assert.ok(isAlive(sibling));
+});
+
 test('killByPath kills each match with its tree: a child whose own command line names nothing goes with it', { skip: WINDOWS_ONLY }, async () => {
   const root = path.join(tmp('tree'), 'eval-TrEe01');
   const pidFile = path.join(tmp('tree-pid'), 'child.txt');
@@ -1363,9 +1391,20 @@ test('killByPath refuses a root that is not strictly inside `within`: only direc
   assert.throws(() => killByPath([within], { platform: 'win32', spawnSync: never, within }), /inside/);
   assert.throws(() => killByPath([path.dirname(within)], { platform: 'win32', spawnSync: never, within }), /inside/);
   assert.throws(() => killByPath([`${within}-sibling`], { platform: 'win32', spawnSync: never, within }), /inside/);
+  assert.throws(() => killByPath([within + path.sep], { platform: 'win32', spawnSync: never, within }), /inside/, 'the same directory with a trailing separator');
   assert.throws(() => killByPath([path.join(within, 'ok'), tmp('somewhere-else')], { platform: 'win32', spawnSync: never, within }), /inside/);
   const sync = () => ({ status: 0, stdout: '', stderr: '' });
   assert.deepEqual(killByPath([path.join(within, 'eval-ok')], { platform: 'win32', spawnSync: sync, within }), { killed: [] });
+});
+
+test('killByPath refuses the work root itself however its case is spelled, which Windows treats as the same directory', { skip: WINDOWS_ONLY }, () => {
+  const never = () => assert.fail('PowerShell must not be started');
+  const within = tmp('Trial-Work-Case');
+  for (const spelling of [within.toUpperCase(), within.toLowerCase(), within.split(path.sep).join('/')]) {
+    assert.throws(() => killByPath([spelling], { platform: 'win32', spawnSync: never, within }), /inside/, spelling);
+  }
+  const sync = () => ({ status: 0, stdout: '', stderr: '' });
+  assert.deepEqual(killByPath([path.join(within.toUpperCase(), 'eval-ok')], { platform: 'win32', spawnSync: sync, within }), { killed: [] }, 'a directory below it is fine in any case');
 });
 
 test('on POSIX killByPath does nothing, and says so: process groups already cover a trial there', () => {

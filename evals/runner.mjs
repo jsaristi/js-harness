@@ -201,7 +201,9 @@ export function killSurvivors(child, { platform = process.platform, spawnSync: s
 // change what it does. Every match is literal: `String.IndexOf` with `OrdinalIgnoreCase`, not `-match`
 // (a regex) and not `-like` (wildcards, where `[` is special): a trial directory may well hold `+`, `(`
 // or `[`. Each root is searched in both separator spellings, because a tool may print the same path with
-// either. The process the script runs in and every ancestor of it are spared, whatever their command lines
+// either. A match must end on a boundary: the end of the command line, a path separator, a quote or
+// whitespace; otherwise a sibling whose name extends the root (`trial-10` against `trial-1`) would be killed
+// with its tree. Every occurrence in a line is tried, since a sibling may come before the root itself. The process the script runs in and every ancestor of it are spared, whatever their command lines
 // hold: a runner started with the workspace in its arguments must not sweep itself.
 //
 // All matches are taken from ONE snapshot of the process list, so killing one match with its tree (`/T`) can
@@ -217,10 +219,26 @@ $ErrorActionPreference = 'Stop'
 function Test-Running($id) {
   try { return -not [System.Diagnostics.Process]::GetProcessById([int]$id).HasExited } catch { return $false }
 }
+$boundary = [char[]]@([char]92, [char]47, [char]34, [char]39)
+function Test-Mentions($line, $needle) {
+  $from = 0
+  while ($from -le $line.Length - $needle.Length) {
+    $at = $line.IndexOf($needle, $from, [StringComparison]::OrdinalIgnoreCase)
+    if ($at -lt 0) { return $false }
+    $end = $at + $needle.Length
+    if ($end -ge $line.Length) { return $true }
+    $next = $line[$end]
+    if ($boundary -contains $next -or [char]::IsWhiteSpace($next)) { return $true }
+    $from = $at + 1
+  }
+  return $false
+}
 try {
   $roots = @($env:JS_HARNESS_KILL_ROOTS -split '\n' | Where-Object { $_ -ne '' })
   $needles = @()
   foreach ($root in $roots) {
+    $root = $root.TrimEnd([char]92, [char]47)
+    if ($root -eq '') { continue }
     $needles += $root
     $needles += $root.Replace('\', '/')
     $needles += $root.Replace('/', '\')
@@ -240,7 +258,7 @@ try {
     $line = $process.CommandLine
     if (-not $line) { continue }
     foreach ($needle in $needles) {
-      if ($line.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      if (Test-Mentions $line $needle) {
         $matched += [uint32]$process.ProcessId
         break
       }
@@ -285,7 +303,9 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
     if (typeof root !== 'string' || !path.isAbsolute(root) || path.parse(root).root === root || /[\r\n]/.test(root)) {
       throw new Error(`killByPath root ${JSON.stringify(root)} must be an absolute path below the filesystem root: anything shorter could match processes that are not the trial's`);
     }
-    if (within !== undefined && (path.resolve(root) === path.resolve(within) || !isWithin(path.resolve(within), path.resolve(root)))) {
+    // Equal is decided by `path.relative`, which is case-insensitive on Windows: `C:\Work` and `c:\work` are one
+    // directory there, and a `===` on the resolved strings would let the whole work root through.
+    if (within !== undefined && (path.relative(path.resolve(within), path.resolve(root)) === '' || !isWithin(path.resolve(within), path.resolve(root)))) {
       throw new Error(`killByPath root ${root} is not inside ${within}: only directories the runner made are ever swept`);
     }
   }

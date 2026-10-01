@@ -14,10 +14,12 @@
 // CLAUDE.md is in what it sends), blind (ok, but it sends no CLAUDE.md at all, not even the sandbox copy),
 // side-call-only (blind, except that a small-model side call carries the sandbox copy), orphan (ok, and a
 // detached process that names the workspace is left running), touch-json / leak-key / leak-key-workroot (ok,
-// and the fake real `.claude.json` is rewritten: see below).
+// and the fake real `.claude.json` is rewritten: see below), late-leak (ok, and an orphan writes the nonce
+// into the fake real `.claude` shortly after the agent exits).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const [mode = 'ok', realHome, pidFile] = process.argv.slice(2);
 
@@ -30,7 +32,9 @@ const write = (file, content) => {
   fs.writeFileSync(file, content);
 };
 
-if (mode === 'hang') setInterval(() => {}, 1000); // never answers: the probe's timeout has to end it
+// `hang` reads the prompt and then does nothing, ever, before any request or write: the probe's timeout has to
+// end it. (A stand-in that did its whole job and only then lingered would not test that.)
+if (mode === 'hang') await new Promise(() => setInterval(() => {}, 1000));
 
 if (mode === 'noisy') {
   console.error(`boom ${process.env.ANTHROPIC_API_KEY} ${nonce} ${process.env.CLAUDE_CODE_OAUTH_TOKEN ?? ''}`);
@@ -127,6 +131,21 @@ if (mode === 'touch-json' || mode === 'leak-key' || mode === 'leak-key-workroot'
   const project = mode === 'touch-json' ? 'C:/unrelated/project' : mode === 'leak-key' ? process.cwd() : path.join(path.dirname(path.dirname(process.cwd())), 'another-project');
   json.projects = { ...json.projects, [project]: { history: ['KEYVALUE-SENTINEL-NEVER-PRINTED'] } };
   fs.writeFileSync(file, JSON.stringify(json));
+}
+// `late-leak`: ok, and a detached process (left by an intermediate that exits first, so nobody owns it) that
+// names the workspace writes the nonce into the fake real `.claude` 2 s from now, after this agent has
+// exited. Its pid goes to the file named by the third argument.
+if (mode === 'late-leak') {
+  const intermediate = [
+    "const { spawn } = require('node:child_process');",
+    'const [writer, ...rest] = process.argv.slice(1);',
+    "const child = spawn(process.execPath, [writer, ...rest], { cwd: process.cwd(), detached: true, stdio: 'ignore', windowsHide: true });",
+    'child.unref();',
+    'console.log(child.pid);',
+  ].join('\n');
+  const writer = path.join(path.dirname(fileURLToPath(import.meta.url)), 'late-writer.mjs');
+  const started = spawnSync(process.execPath, ['-e', intermediate, '--', writer, path.join(realHome, '.claude', 'late-leak.txt'), nonce, '2000', process.cwd()], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true });
+  if (pidFile) fs.writeFileSync(pidFile, started.stdout.trim());
 }
 if (mode === 'leak-path') write(path.join(realHome, '.claude', 'projects', process.cwd().replace(/[^A-Za-z0-9]/g, '-'), 'session.json'), '{}\n');
 

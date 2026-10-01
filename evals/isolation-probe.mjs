@@ -278,6 +278,9 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
 
 const DEFAULT_CHUNK = 1 << 20;
 const DEFAULT_CONCURRENCY = 8;
+/** Tries after the first for a file that fails to open or read, and the pause between them. */
+const DEFAULT_RETRIES = 3;
+const DEFAULT_RETRY_DELAY_MS = 100;
 const defaultOpenRead = (file, { chunkSize }) => fs.createReadStream(file, { highWaterMark: chunkSize });
 const relOf = (root, full) => path.relative(root, full).split(path.sep).join('/');
 
@@ -367,8 +370,10 @@ async function mapPool(items, limit, fn) {
 }
 
 /** One tree of `snapshotTrees`; see there. */
-async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = false }, { needles, open, chunkSize, concurrency }) {
-  const tree = { root, mode, status: 'present', files: new Map(), keys: new Map(), unreadable: [], hits: [], bytes: 0 };
+async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = false }, { needles, open, chunkSize, concurrency, retries, retryDelayMs }) {
+  // `dirs` holds the empty directories only (see `snapshotTrees`): they are not files, so they are not in
+  // `files` and not in a diff, but their names are scanned like every other name.
+  const tree = { root, mode, status: 'present', files: new Map(), keys: new Map(), dirs: new Set(), unreadable: [], hits: [], bytes: 0 };
   let rootStat;
   try {
     rootStat = fs.lstatSync(root);
@@ -404,6 +409,9 @@ async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = 
         fail(relOf(root, dir) || '.', err);
         return;
       }
+      // A directory with nothing in it has no file whose path names it, so it is recorded by itself: one
+      // named after the sandbox is still a trace of the trial. (A link to a directory is a link, above.)
+      if (entries.length === 0 && dir !== root) tree.dirs.add(relOf(root, dir));
       for (const entry of entries) {
         const full = path.join(dir, entry.name);
         const rel = relOf(root, full);
@@ -435,7 +443,19 @@ async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = 
 
   await mapPool(toHash, concurrency, async ({ rel, full }) => {
     try {
-      const read = await readFileOnce(full, { needles, open, chunkSize, collect: jsonKeys && /\.json$/i.test(full) });
+      let read;
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          read = await readFileOnce(full, { needles, open, chunkSize, collect: jsonKeys && /\.json$/i.test(full) });
+          break;
+        } catch (err) {
+          // A file another process holds for a moment (EBUSY, a sharing violation) usually reads a moment later;
+          // one that is gone is not worth another try. What still fails after the retries is reported by the
+          // caller as a file that was not scanned.
+          if (err.code === 'ENOENT' || attempt >= retries) throw err;
+          if (retryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+      }
       tree.files.set(rel, `sha256:${read.sha256}:${read.size}`);
       if (read.body !== undefined) tree.keys.set(rel, keyHashes(read.body));
       tree.bytes += read.size;
@@ -449,7 +469,7 @@ async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = 
   });
 
   // The names of every entry, whatever its mode: an unreadable file can still be named after the sandbox.
-  for (const rel of tree.files.keys()) {
+  for (const rel of [...tree.files.keys(), ...tree.dirs]) {
     const found = needles.filter((needle) => needle.names.some((value) => fold(rel).includes(fold(value)))).map((needle) => needle.label);
     if (found.length > 0) tree.hits.push({ path: rel, found, via: 'name' });
   }
@@ -473,32 +493,56 @@ async function snapshotTree({ root, mode = 'content', statOnly = [], jsonKeys = 
  *    the question is only whether a new top-level entry appeared.
  * A root that does not exist has `status: 'missing'`; a root that is a single file is keyed `.`. Links are
  * recorded (`link:<target>`) and never followed. A file that cannot be read is `unreadable:<code>` and listed
- * in `unreadable`, so a hit that could have been is not silently missed. `needles` are `{ label, values }`;
- * `openRead` and `chunkSize` are for tests; files are read `concurrency` at a time. */
-export async function snapshotTrees(specs, { needles = [], openRead = defaultOpenRead, chunkSize = DEFAULT_CHUNK, concurrency = DEFAULT_CONCURRENCY } = {}) {
+ * in `unreadable`, so a hit that could have been is not silently missed, after `retries` more tries
+ * `retryDelayMs` apart (a file busy for a moment is usually readable a moment later; a missing one is not
+ * retried). A directory with nothing in it is kept in `dirs` (not in `files`, so not in a diff), because no
+ * file path names it, and its name is scanned like the others. `needles` are `{ label, values }`;
+ * `openRead`, `chunkSize` and the retry settings are for tests; files are read `concurrency` at a time. */
+export async function snapshotTrees(specs, {
+  needles = [], openRead = defaultOpenRead, chunkSize = DEFAULT_CHUNK, concurrency = DEFAULT_CONCURRENCY, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+} = {}) {
   const began = performance.now();
   const compiled = compileNeedles(needles).map((needle, index) => ({ ...needle, names: needles[index].values }));
   const trees = {};
-  for (const spec of specs) trees[spec.name] = await snapshotTree(spec, { needles: compiled, open: openRead, chunkSize, concurrency });
+  for (const spec of specs) trees[spec.name] = await snapshotTree(spec, { needles: compiled, open: openRead, chunkSize, concurrency, retries, retryDelayMs });
   return { ms: Math.round(performance.now() - began), trees };
 }
 
 /** The hits of a snapshot: `{ tree, path, found, via }` for each file whose content (`via: 'content'`) or
- * name (`via: 'name'`) holds a needle. Paths, never the values searched for. */
-export function leakHits(snapshot) {
-  return Object.entries(snapshot.trees).flatMap(([tree, { hits }]) => hits.map((hit) => ({ tree, ...hit })));
+ * name (`via: 'name'`) holds a needle. Paths, never the values searched for.
+ *
+ * With `previous`, the snapshot taken before this window, only the hits this window introduced: a hit the
+ * previous snapshot already had, at the same path, in a file that is unchanged since, belongs to whatever
+ * wrote it earlier (the previous arm), and is not reported again. A file that changed in
+ * this window and still holds the needle is this window's. (A file rewritten with identical bytes is
+ * indistinguishable from an untouched one, which is the one thing this cannot see.) */
+export function leakHits(snapshot, previous) {
+  return Object.entries(snapshot.trees).flatMap(([tree, { hits, files }]) => {
+    const was = previous?.trees[tree];
+    const inherited = (hit) => {
+      const old = was?.status === 'present' ? was.hits.find((candidate) => candidate.path === hit.path && candidate.via === hit.via) : undefined;
+      return old !== undefined && was.files.get(hit.path) === files.get(hit.path);
+    };
+    return hits.filter((hit) => !inherited(hit)).map((hit) => ({ tree, ...hit }));
+  });
 }
 
 /** The key-level difference of the JSON files that changed between two snapshots of one tree: `{ [rel]: { added,
  * removed, changed } }` with the key names sorted, or `{ [rel]: { unparsed: true } }` when either side did not
- * parse as a JSON object (a write caught half way); `null` when no file differs by key. Only files present
- * in both and different in content are compared; a file that appeared is already reported as added. */
+ * parse as a JSON object (a write caught half way); `null` when no file differs by key. A file that was not
+ * there before (the tree was missing, or the file is new) has every key `added`: a newly created account
+ * file is the case where a project entry of the trial is most likely and least visible. A file that was
+ * there but whose keys were not read (it was unreadable) cannot be compared and is skipped; it is already
+ * listed as unreadable. */
 function diffKeys(was, now) {
-  if (was?.status !== 'present' || now.status !== 'present') return null;
+  if (now.status !== 'present') return null;
+  const wasFiles = was?.status === 'present' ? was.files : new Map();
+  const wasKeys = was?.status === 'present' ? was.keys : new Map();
   const out = {};
   for (const [rel, hashes] of now.keys ?? []) {
-    if (!was.keys?.has(rel) || was.files.get(rel) === now.files.get(rel)) continue;
-    const old = was.keys.get(rel);
+    if (wasFiles.has(rel) && !wasKeys.has(rel)) continue;
+    if (wasKeys.has(rel) && wasFiles.get(rel) === now.files.get(rel)) continue;
+    const old = wasKeys.has(rel) ? wasKeys.get(rel) : new Map();
     if (hashes === null || old === null) {
       out[rel] = { unparsed: true };
       continue;
@@ -591,8 +635,10 @@ export function splitByControl(trial, control) {
  * `projects["<path>"]` key that names one of `tokens` (the unique names of the trial's sandbox) or `workRoot`
  * (a string, or a list) is a project entry that Claude Code recorded for a folder of the trial, in the real
  * account file: the sandbox's cwd reached the real configuration. Hits are `{ tree, path, found, via: 'key' }`
- * with `found` naming which it matched (`sandbox`, `workRoot`). The comparison is case-insensitive and treats
- * both separators alike, since the file records whatever spelling the process had. A removed key is not a leak;
+ * with `found` naming which it matched (`sandbox`, `workRoot`). The path is taken out of the key and matched
+ * by directory: a token must be one of its segments, and the work root must be the path or a parent of it,
+ * so a sibling whose name only begins like the root is not a hit. The comparison is case-insensitive and
+ * treats both separators alike, since the file records whatever spelling the process had. A removed key is not a leak;
  * a key that is not a project entry is reported in the diff and nowhere else. */
 export function keyLeaks(diff, { tokens = [], workRoot = [] } = {}) {
   const normalize = (text) => text.replaceAll('\\', '/').toLowerCase();
@@ -602,9 +648,13 @@ export function keyLeaks(diff, { tokens = [], workRoot = [] } = {}) {
   for (const [tree, entry] of Object.entries(diff)) {
     for (const keys of Object.values(entry.keys ?? {})) {
       for (const name of [...(keys.added ?? []), ...(keys.changed ?? [])]) {
-        if (!name.startsWith('projects["')) continue;
-        const text = normalize(name);
-        const found = [...(sandbox.some((token) => text.includes(token)) ? ['sandbox'] : []), ...(roots.some((root) => text.includes(root)) ? ['workRoot'] : [])];
+        const project = /^projects\["([\s\S]*)"\]$/.exec(name)?.[1];
+        if (project === undefined) continue;
+        // The path the key names, compared by directory: the sandbox is one segment of it, and the work root
+        // is it or a prefix of it that ends at a separator. `work-other` is not `work`, `trial-10` is not `trial-1`.
+        const text = normalize(project);
+        const segments = text.split('/');
+        const found = [...(sandbox.some((token) => segments.includes(token)) ? ['sandbox'] : []), ...(roots.some((root) => text === root || text.startsWith(`${root}/`)) ? ['workRoot'] : [])];
         if (found.length > 0) hits.push({ tree, path: name, found, via: 'key' });
       }
     }
@@ -800,6 +850,19 @@ async function runArm(p, arm, before) {
   let templateParent = null;
   let api = null;
   let after = before;
+  // The processes the agent left behind: a seeded home starts MCP servers (codegraph, with the workspace in
+  // its command line) and hooks that can outlive their parent, hold the sandbox and fail its removal with
+  // EPERM, and write to the real trees on their own schedule. They are found by the path in their command
+  // line, not by parentage, and only what is under the work root is touched. A failed sweep is a failure of
+  // the arm, but the removals still run.
+  const sweepSandbox = () => {
+    try {
+      (o.sweep ?? killByPath)([root, ...(templateParent ? [templateParent] : [])], { within: o.workRoot });
+    } catch (err) {
+      cleanupFailures.push(`could not sweep the processes of the sandbox: ${errorMessage(err)}`);
+    }
+  };
+  let swept = false;
   try {
     fs.mkdirSync(home);
     fs.mkdirSync(workspace);
@@ -836,6 +899,11 @@ async function runArm(p, arm, before) {
       result.error = errorMessage(err);
     }
 
+    // The sweep comes BEFORE the snapshot that is scanned and diffed, whatever happened above: a process the
+    // agent left behind can write to a real tree after the agent exits, and a snapshot taken first would
+    // miss what it wrote between the snapshot and its death. After the sweep nothing of the arm is running.
+    swept = true;
+    sweepSandbox();
     // The real trees are checked even when the arm failed: a trial that died half way may already have leaked.
     p.log(`${arm}: checking the real trees`);
     after = await p.snapshot(`after:${arm}`, p.needles());
@@ -884,18 +952,8 @@ async function runArm(p, arm, before) {
     return { result, after };
   } finally {
     await api?.close();
-    // First the processes the agent left behind: a seeded home starts MCP servers (codegraph, with the
-    // workspace in its command line) that can outlive their parent, hold the sandbox and fail its removal
-    // with EPERM, and they are found by that path, not by parentage. Only what is under the work root.
-    // A failed sweep is a failure of the arm, but the removals still run.
-    const sweepSandbox = () => {
-      try {
-        (o.sweep ?? killByPath)([root, ...(templateParent ? [templateParent] : [])], { within: o.workRoot });
-      } catch (err) {
-        cleanupFailures.push(`could not sweep the processes of the sandbox: ${errorMessage(err)}`);
-      }
-    };
-    sweepSandbox();
+    // Swept already, unless something threw before the sweep above was reached.
+    if (!swept) sweepSandbox();
     const note = (message) => cleanupFailures.push(message);
     // Removed in a finally and before anything else can throw: the template holds copies of the real
     // configuration's account data, and the sandbox home a copy of that.
@@ -928,6 +986,11 @@ function armFailures(result) {
       ? `${label}: minimal arm loaded the real global CLAUDE.md: ${contamination.withGlobalClaudeMd} of ${contamination.requests} requests carried it, so the arm meant to load nothing is not measuring that (is the work root under the real home?)`
       : `${label}: current arm never carried the global CLAUDE.md on its main-model request: the seeded copy was not loaded, so the arm does not measure the setup it is named after`);
   }
+  // A real file that could not be read, after the retries, was not scanned: the verdict on it is unknown, and
+  // an unknown is not a pass.
+  const unreadable = result.leak?.unreadable;
+  for (const entry of (unreadable?.paths ?? []).slice(0, 10)) failures.push(`${label}: inconclusive: could not read ${entry}, so it was not scanned for the nonce or the sandbox name`);
+  if ((unreadable?.count ?? 0) > 10) failures.push(`${label}: inconclusive: ${unreadable.count - 10} more real files could not be read (see the JSON report)`);
   for (const hit of result.leak?.hits ?? []) {
     failures.push(hit.via === 'key'
       ? `${label}: LEAK: the real ${hit.tree} has a new or changed key ${hit.path} (it names the ${hit.found.join(' and the ')})`
@@ -946,7 +1009,10 @@ function armFailures(result) {
  * created), `realHome`, `localAppData` and `tempDir` (default: the real ones; the real temp folder is only
  * where the `claude` scratch folder to watch is), `trees` (default `defaultTrees`), `nonce`, `runInit` (passed to the seed), `adaptConfig(config, { arm })` (changes the
  * command and arguments, never the sandbox), `sweep(roots, { within })` (default `killByPath`: kills what the
- * agent left running under the sandbox before it is removed), `wait(ms)`, `log(message)`, `concurrency` and `chunkSize`.
+ * agent left running under the sandbox, before the final scan of the real trees and again before the
+ * removal if that sweep was not reached), `wait(ms)`, `log(message)`, `concurrency`, `chunkSize`, `openRead(file,
+ * { chunkSize })` (how a real file is read) and `retryDelayMs` (the pause between the tries of a file that fails
+ * to read; a file still unreadable after them makes its arm fail as inconclusive).
  *
  * The report is scrubbed of the nonce, the dummy key and any login token before it is returned, so no
  * caller can print one by accident. `ok` is true only when every arm's positive controls hold and the
@@ -1014,7 +1080,7 @@ async function probeUnder(o, workRootCreated) {
   const hashing = [];
   const tokens = [];
   const snapshot = async (label, needles = []) => {
-    const taken = await snapshotTrees(trees, { needles, concurrency: o.concurrency, chunkSize: o.chunkSize });
+    const taken = await snapshotTrees(trees, { needles, concurrency: o.concurrency, chunkSize: o.chunkSize, openRead: o.openRead, retryDelayMs: o.retryDelayMs });
     const all = Object.values(taken.trees);
     hashing.push({
       label, ms: taken.ms, files: all.reduce((total, tree) => total + tree.files.size, 0), bytes: all.reduce((total, tree) => total + tree.bytes, 0),
@@ -1053,7 +1119,7 @@ async function probeUnder(o, workRootCreated) {
     // A project key naming this arm's sandbox or the work root, in the real account file: Claude Code recorded
     // a folder of the trial there. Only what is new since the control window can be the trial's.
     const keyHits = keyLeaks(split?.fresh ?? diff, { tokens: [result.sandboxToken], workRoot: o.workRoot });
-    result.leak = { hits: [...leakHits(after), ...keyHits], unreadable: cap(unreadable.map((entry) => `${entry.tree}/${entry.path} (${entry.code})`), 50), diff: reportDiff(diff) };
+    result.leak = { hits: [...leakHits(after, before), ...keyHits], unreadable: cap(unreadable.map((entry) => `${entry.tree}/${entry.path} (${entry.code})`), 50), diff: reportDiff(diff) };
     if (split) {
       result.leak.fresh = reportDiff(split.fresh);
       result.leak.baseline = reportDiff(split.baseline);
@@ -1151,7 +1217,7 @@ export function formatSummary(report) {
       lines.push(`    top level: ${arm.sandbox.top.filter((row) => !row.path.includes('/')).map((row) => `${row.path} (${row.files})`).join(', ')}`);
     }
     if (arm.leak) {
-      lines.push(`  leak scan of the real trees: ${arm.leak.hits.length === 0 ? 'nothing found' : `${arm.leak.hits.length} HIT(S)`}${arm.leak.unreadable.count > 0 ? `; ${arm.leak.unreadable.count} files could not be read, so were not scanned` : ''}`);
+      lines.push(`  leak scan of the real trees: ${arm.leak.hits.length === 0 ? 'nothing found' : `${arm.leak.hits.length} HIT(S)`}${arm.leak.unreadable.count > 0 ? `; ${arm.leak.unreadable.count} files could not be read, so were not scanned: INCONCLUSIVE` : ''}`);
       for (const hit of arm.leak.hits) lines.push(`    HIT ${hit.tree}/${hit.path}: ${hit.found.join(', ')} (${hit.via})`);
       const split = arm.leak.fresh;
       lines.push(`  real trees changed during this arm${split ? ' (new, not seen in the control window)' : ''}:`);

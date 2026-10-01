@@ -745,6 +745,11 @@ test('an agent that outlives the timeout is killed and reported as timed out', a
   const report = await probe(machine, 'hang', { arms: ['minimal'], timeoutMs: 1500 });
   assert.equal(report.arms[0].timedOut, true);
   assert.equal(report.ok, false);
+  // It hangs before doing anything, so the timeout is what ends a run that did nothing, not one that
+  // finished its work and then lingered.
+  assert.equal(report.arms[0].fakeApi.requestCount, 0, 'no request was made');
+  assert.equal(report.arms[0].positiveControls.transcript.ok, false, 'and nothing was written: there is no transcript');
+  assert.equal(report.arms[0].positiveControls.workspaceWrite.ok, false);
   assert.deepEqual(leftovers(machine), []);
 });
 
@@ -1123,15 +1128,19 @@ test('the diff of a jsonKeys tree names the keys that were added, removed and ch
   assert.equal(diffSnapshots(before, before).cj.keys, undefined, 'nothing changed, nothing named');
 });
 
-test('only a change in a file is compared by key: a file that appears is added whole, and a tree without jsonKeys never has keys', async () => {
+test('a created JSON file is compared by key as all added, and a changed one key by key; a tree without jsonKeys never has keys', async () => {
   const dir = tmp('keyplain');
   const file = path.join(dir, '.claude.json');
   const before = await snapshotTrees([jsonTree(file), { name: 'plain', root: dir, mode: 'content' }]);
   write(file, claudeJsonText());
   const after = await snapshotTrees([jsonTree(file), { name: 'plain', root: dir, mode: 'content' }]);
   const diff = diffSnapshots(before, after);
-  assert.equal(diff.cj.keys, undefined);
+  assert.deepEqual(diff.cj.keys, { '.': { added: ['cachedGrowthBookFeatures', 'numStartups', 'projects["C:/other"]', 'projects["D:/js-harness"]'], removed: [], changed: [] } }, 'every key of a file that was created is added');
   assert.equal(diff.cj.appeared, true);
+  assert.equal(diff.plain.keys, undefined, 'a tree that did not ask for keys has none, created file or not');
+  write(file, '{"half"');
+  const torn = diffSnapshots(before, await snapshotTrees([jsonTree(file)]));
+  assert.deepEqual(torn.cj.keys, { '.': { unparsed: true } }, 'a created file that does not parse is not comparable');
   write(file, claudeJsonText({ numStartups: 5 }));
   const changed = diffSnapshots(after, await snapshotTrees([jsonTree(file), { name: 'plain', root: dir, mode: 'content' }]));
   assert.deepEqual(changed.cj.keys['.'].changed, ['numStartups']);
@@ -1272,4 +1281,231 @@ test('keyLeaks given an empty work root or no tokens matches nothing, rather tha
   const diff = { cj: { ...noChange, changed: ['.'], keys: { '.': { added: ['projects["C:/anything"]'], removed: [], changed: [] } } } };
   assert.deepEqual(keyLeaks(diff, { tokens: [''], workRoot: '' }), []);
   assert.deepEqual(keyLeaks(diff), []);
+});
+
+// ---- the T2s findings ---------------------------------------------------------------------------------------
+
+const keyDiff = (keys) => ({ cj: { ...noChange, changed: ['.'], keys: { '.': { added: [], removed: [], changed: [], ...keys } } } });
+
+test('keyLeaks matches a project path on a directory boundary: a sibling whose name extends the work root or the sandbox is not a leak', () => {
+  const sandbox = 'js-harness-iso-probe-AbC123';
+  const workRoot = path.join(scratch, 'Work Root');
+  const slash = workRoot.split(path.sep).join('/');
+  const found = (name) => keyLeaks(keyDiff({ added: [name] }), { tokens: [sandbox], workRoot }).map((hit) => hit.found);
+  assert.deepEqual(found(`projects["${slash}-other/project"]`), [], 'a sibling of the work root');
+  assert.deepEqual(found(`projects["${slash}2"]`), []);
+  assert.deepEqual(found(`projects["${slash}.bak/x"]`), []);
+  assert.deepEqual(found(`projects["C:/w/${sandbox}2/workspace"]`), [], 'a sibling of the sandbox');
+  assert.deepEqual(found(`projects["C:/w/x${sandbox}/workspace"]`), []);
+  assert.deepEqual(found(`projects["${slash}"]`), [['workRoot']], 'the work root itself');
+  assert.deepEqual(found(`projects["${slash}/"]`), [['workRoot']], 'with a trailing separator');
+  assert.deepEqual(found(`projects["${workRoot}${path.sep}js-harness-iso-template-x${path.sep}template"]`), [['workRoot']], 'beneath it, either separator');
+  assert.deepEqual(found(`projects["${slash.toUpperCase()}/Sub"]`), [['workRoot']], 'in any case');
+  assert.deepEqual(found(`projects["C:/w/${sandbox}"]`), [['sandbox']], 'the sandbox itself');
+  assert.deepEqual(found(`projects["C:\\w\\${sandbox}\\workspace"]`), [['sandbox']]);
+});
+
+test('a real .claude.json that did not exist and was created by the run, with a project of the trial in it, is a leak', async () => {
+  const machine = fakeMachine();
+  fs.rmSync(path.join(machine.realHome, '.claude.json'));
+  const report = await probe(machine, 'leak-key', { arms: ['minimal'] });
+  assert.equal(report.ok, false);
+  const keyHit = report.arms[0].leak.hits.find((hit) => hit.via === 'key');
+  assert.deepEqual(keyHit?.found, ['sandbox', 'workRoot']);
+  assert.deepEqual(report.arms[0].leak.diff['.claude.json'].keys['.'].added.paths.sort(), ['numStartups', keyHit.path].sort());
+});
+
+test('a directory named after the sandbox with nothing in it is found by the name scan, and does not enter the diff', async () => {
+  const dir = tmp('emptydirs');
+  const token = 'js-harness-iso-probe-EmPty1';
+  fs.mkdirSync(path.join(dir, token));
+  fs.mkdirSync(path.join(dir, 'a', 'b', token.toLowerCase()), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'plain-empty'));
+  write(path.join(dir, 'file.txt'), 'x');
+  write(path.join(dir, 'in', token, 'f.txt'), 'x'); // a directory with a file in it is named by that file's path already
+  const { trees } = await snapshotTrees([{ name: 't', root: dir, mode: 'content' }], { needles: [{ label: 'sandbox', values: [token, token.toLowerCase()] }] });
+  assert.deepEqual(trees.t.hits, [
+    { path: `a/b/${token.toLowerCase()}`, found: ['sandbox'], via: 'name' },
+    { path: `in/${token}/f.txt`, found: ['sandbox'], via: 'name' },
+    { path: token, found: ['sandbox'], via: 'name' },
+  ]);
+  assert.deepEqual([...trees.t.files.keys()].sort(), ['file.txt', `in/${token}/f.txt`], 'empty directories are not files: the diff does not list them');
+  const none = await snapshotTrees([{ name: 't', root: dir, mode: 'content' }], { needles: [{ label: 'sandbox', values: ['no-such-name'] }] });
+  assert.deepEqual(none.trees.t.hits, []);
+});
+
+test('a read that fails is tried again, so a file that is busy for a moment is hashed and not listed as unreadable', async () => {
+  const file = path.join(tmp('busy'), 'a.txt');
+  write(file, 'content');
+  const failure = (code) => Object.assign(new Error(code), { code });
+  let calls = 0;
+  const flaky = (target, { chunkSize }) => {
+    calls += 1;
+    if (calls <= 2) throw failure('EBUSY');
+    return fs.createReadStream(target, { highWaterMark: chunkSize });
+  };
+  const { trees } = await snapshotTrees([{ name: 't', root: file, mode: 'content' }], { openRead: flaky, retryDelayMs: 0 });
+  assert.equal(calls, 3);
+  assert.match(trees.t.files.get('.'), /^sha256:/);
+  assert.deepEqual(trees.t.unreadable, []);
+
+  calls = 0;
+  const locked = () => {
+    calls += 1;
+    throw failure('EACCES');
+  };
+  const stuck = await snapshotTrees([{ name: 't', root: file, mode: 'content' }], { openRead: locked, retryDelayMs: 0 });
+  assert.equal(calls, 4, 'the first try and three more');
+  assert.deepEqual(stuck.trees.t.unreadable, [{ path: '.', code: 'EACCES' }]);
+  assert.equal(stuck.trees.t.files.get('.'), 'unreadable:EACCES');
+
+  calls = 0;
+  const gone = () => {
+    calls += 1;
+    throw failure('ENOENT');
+  };
+  const vanished = await snapshotTrees([{ name: 't', root: file, mode: 'content' }], { openRead: gone, retryDelayMs: 0 });
+  assert.equal(calls, 1, 'a file that is gone is not worth a retry');
+  assert.deepEqual(vanished.trees.t.unreadable, []);
+});
+
+test('a real file the probe could not read makes the arm inconclusive and names the file, because a clean scan that skipped it proves nothing', async () => {
+  const machine = fakeMachine();
+  const stuck = (file, { chunkSize }) => {
+    if (path.basename(file) === 'index.db') throw Object.assign(new Error('locked'), { code: 'EACCES' });
+    return fs.createReadStream(file, { highWaterMark: chunkSize });
+  };
+  const report = await probe(machine, 'ok', { arms: ['minimal'], openRead: stuck, retryDelayMs: 0 });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.arms[0].leak.hits, [], 'nothing leaked that it could see');
+  assert.ok(report.failures.some((failure) => /inconclusive/.test(failure) && failure.includes('.codegraph/index.db') && failure.includes('EACCES')), report.failures.join('\n'));
+  assert.match(formatSummary(report), /inconclusive/);
+
+  let first = true;
+  const once = (file, { chunkSize }) => {
+    if (path.basename(file) === 'index.db' && first) {
+      first = false;
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+    }
+    return fs.createReadStream(file, { highWaterMark: chunkSize });
+  };
+  const fine = await probe(fakeMachine(), 'ok', { arms: ['minimal'], openRead: once, retryDelayMs: 0 });
+  assert.equal(fine.ok, true, fine.failures.join('\n'));
+});
+
+test('a leak written by the first arm is the first arm\'s failure, once: the second arm, which did not write it, is not failed for it', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', { adaptConfig: (config, { arm }) => fakeClaude(arm === 'current' ? 'leak' : 'ok', machine)(config) });
+  const [current, minimal] = report.arms;
+  assert.equal(current.ok, false);
+  assert.deepEqual(current.leak.hits, [{ tree: '.claude', path: 'leaked.txt', found: ['nonce'], via: 'content' }]);
+  assert.equal(minimal.ok, true, minimal.failures.join('\n'));
+  assert.deepEqual(minimal.leak.hits, []);
+  assert.equal(report.ok, false, 'the probe still fails, on the arm that leaked');
+  assert.equal(report.failures.filter((failure) => /LEAK/.test(failure)).length, 1);
+  assert.ok(report.failures.find((failure) => /LEAK/.test(failure)).startsWith('current:'));
+});
+
+test('an arm that touches a file that already held a leak is failed for it again: attribution is by what changed in its window', async () => {
+  const machine = fakeMachine();
+  const touching = (config) => ({
+    ...fakeClaude('ok', machine)(config),
+    prepare: async (context) => {
+      await config.prepare(context);
+      fs.appendFileSync(path.join(machine.realHome, '.claude', 'leaked.txt'), `touched by the second arm ${FAKE_NONCE}\n`);
+    },
+  });
+  const report = await probe(machine, 'ok', { adaptConfig: (config, { arm }) => (arm === 'current' ? fakeClaude('leak', machine)(config) : touching(config)) });
+  assert.equal(report.arms[0].ok, false);
+  assert.equal(report.arms[1].ok, false, 'the file changed in the minimal arm\'s window and still holds the nonce');
+  assert.deepEqual(report.arms[1].leak.hits.map((hit) => hit.path), ['leaked.txt']);
+});
+
+const waitSync = (predicate, ms) => {
+  const until = Date.now() + ms;
+  while (!predicate() && Date.now() < until) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+};
+
+test('what an orphan writes after the agent exits is found: the arm\'s processes are swept before the final leak scan, not after', { skip: WINDOWS_ONLY }, async () => {
+  const machine = fakeMachine();
+  const target = path.join(machine.realHome, '.claude', 'late-leak.txt');
+  const pidFile = path.join(tmp('late-pid'), 'pid.txt');
+  // The orphan writes 2 s after the agent exits, long after any snapshot taken right away. The sweep is wrapped to wait for that write and then
+  // kill the orphan for real, which is what a slow sweep does with a fast writer: the write happens during
+  // the sweep, so a scan taken before the sweep misses it.
+  const sweep = (roots, options) => {
+    waitSync(() => fs.existsSync(target), 10_000);
+    return killByPath(roots, options);
+  };
+  try {
+    const report = await probe(machine, 'ok', { arms: ['minimal'], sweep, adaptConfig: fakeClaude('late-leak', machine, { pidFile }) });
+    assert.equal(report.ok, false);
+    assert.deepEqual(report.arms[0].leak.hits, [{ tree: '.claude', path: 'late-leak.txt', found: ['nonce'], via: 'content' }]);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(await waitUntil(() => !isAlive(pid)), 'and the orphan is dead');
+  } finally {
+    if (fs.existsSync(pidFile)) {
+      try {
+        process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL');
+      } catch {
+        // already gone
+      }
+    }
+  }
+});
+
+test('the sweep comes before the leak snapshot on a failed arm too, and runs once when it succeeded', async () => {
+  const events = [];
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', {
+    arms: ['minimal'],
+    adaptConfig: () => {
+      throw new Error('config exploded');
+    },
+    sweep: () => {
+      events.push('sweep');
+      return { killed: [] };
+    },
+    openRead: (file, { chunkSize }) => {
+      events.push('read');
+      return fs.createReadStream(file, { highWaterMark: chunkSize });
+    },
+  });
+  assert.match(report.arms[0].error, /config exploded/);
+  const first = events.indexOf('sweep');
+  assert.ok(first > 0, 'the real trees were read before the arm');
+  assert.ok(events.slice(first).includes('read'), 'and read again after the sweep');
+  assert.equal(events.filter((event) => event === 'sweep').length, 1, 'one sweep is enough when it succeeded');
+});
+
+test('more than ten unreadable real files are named ten at a time and then counted, so the verdict stays short and still says how many', async () => {
+  const machine = fakeMachine();
+  for (let i = 0; i < 12; i += 1) write(path.join(machine.realHome, '.orca', `bad-${String(i).padStart(2, '0')}.txt`), 'x');
+  const stuck = (file, { chunkSize }) => {
+    if (path.basename(file).startsWith('bad-')) throw Object.assign(new Error('locked'), { code: 'EBUSY' });
+    return fs.createReadStream(file, { highWaterMark: chunkSize });
+  };
+  const report = await probe(machine, 'ok', { arms: ['minimal'], openRead: stuck, retryDelayMs: 0 });
+  const inconclusive = report.failures.filter((failure) => /inconclusive/.test(failure));
+  assert.equal(inconclusive.length, 11);
+  assert.match(inconclusive[10], /2 more real files could not be read/);
+  assert.equal(report.arms[0].leak.unreadable.count, 12);
+});
+
+test('keys are not compared for a file that could not be read before, nor for one whose bytes did not change, even if it is not JSON', async () => {
+  const dir = tmp('keysskip');
+  const file = path.join(dir, 'a.json');
+  write(file, claudeJsonText());
+  const unreadable = () => {
+    throw Object.assign(new Error('locked'), { code: 'EBUSY' });
+  };
+  const before = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }], { openRead: unreadable, retryDelayMs: 0, retries: 0 });
+  assert.equal(before.trees.t.files.get('a.json'), 'unreadable:EBUSY');
+  const after = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }]);
+  assert.equal(diffSnapshots(before, after).t.keys, undefined, 'a file whose earlier state is unknown has no key diff');
+
+  write(file, 'this is not JSON');
+  const garbage = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }]);
+  const again = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }]);
+  assert.equal(diffSnapshots(garbage, again).t.keys, undefined, 'identical bytes are not a change, parsed or not');
 });

@@ -424,8 +424,18 @@ test('prepare ignores the system git config: one a commit would honour does not 
 });
 
 test('the agent keeps the system git config: GIT_CONFIG_NOSYSTEM is set for the fixture commit only, never in the sandbox env', () => {
-  assert.ok(!('GIT_CONFIG_NOSYSTEM' in sandboxEnv({ home: HOME })));
   assert.ok(!SANDBOX_ALLOWLIST.includes('GIT_CONFIG_NOSYSTEM'));
+  // What the agent gets is the effective child env, so that is what is asserted: `sandboxEnv` lists an
+  // inherited name it removes as a `null` key, so a key check would fail whenever the shell exports the
+  // variable, and say nothing about the child either way.
+  for (const inherited of [{ PATH: '/bin' }, { PATH: '/bin', GIT_CONFIG_NOSYSTEM: '1' }, { PATH: '/bin', git_config_nosystem: '1' }]) {
+    for (const platform of ['win32', 'linux']) {
+      const child = childEnv(sandboxEnv({ home: HOME, inherited, platform }), inherited, platform);
+      assert.deepEqual(Object.keys(child).filter((name) => name.toLowerCase() === 'git_config_nosystem'), [], `${platform} with ${JSON.stringify(inherited)}`);
+    }
+  }
+  const exported = { PATH: '/bin', GIT_CONFIG_NOSYSTEM: '1' };
+  assert.equal(sandboxEnv({ home: HOME, inherited: exported, platform: 'linux' }).GIT_CONFIG_NOSYSTEM, null, 'an inherited one is a removal, which a key check mistakes for a setting');
 });
 
 test('both arms get a byte-identical .gitconfig', async () => {
