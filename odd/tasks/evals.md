@@ -156,7 +156,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   test (gentle-ai suggestion) (route: delegated writer)
 - [x] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
   the prompt never mentions, decide most of the hidden tests (route: delegated writer)
-- [ ] T3cr T3c review findings: the fixture's own code follows its `CONTRIBUTING.md`, because the
+- [x] T3cr T3c review findings: the fixture's own code follows its `CONTRIBUTING.md`, because the
   task rewards imitating it: ids never reused after a deletion (a high-water mark) and `list`
   sorted by id (Codex); the reference's export filters by age only when `--since` is given, so a
   task with a bad `created` is not silently dropped (gentle-ai suggestion); the registry guard test
@@ -489,7 +489,16 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   Fixed inline (one test, one file): the exact comparison leaves those names out, and for them
   only "what Node ran is flagged" is asserted. Passes on Windows; the Linux RED could not be
   observed here (no WSL distribution), so the fix rests on both reviewers' reading of Node's
-  matcher. Reviewed boundary: `d329c33`.
+  matcher. Reviewed boundary: `d329c33`. Commit `ebe848a`; its first pre-commit run failed once
+  on a test that did not fail again (the log was not kept), and the rerun and a direct `check`
+  passed: a flaky test somewhere in the suite, unidentified, now logged on every commit.
+- 2026-10-01: T3cr done (delegated writer). The `house-rules` store file is `{ nextId, tasks }`
+  (an older bare array is read and its `nextId` derived once), so ids are never reused; `list`
+  sorts by id; `CONTRIBUTING.md` documents both; the reference's export filters by age only with
+  `--since`; the grader names its command list once; README and `engines` say Node 22+. Two new
+  hidden guards (id never reused, list order on a store written out of order) and one test of
+  export over the new store shape. Proof 44/9 → 47/11, fixture plus reference 47/47; no
+  language-server diagnostic. Fixture 755 lines.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

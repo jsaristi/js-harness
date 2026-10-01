@@ -9,5 +9,8 @@
   "scripts": {
     "test": "node --test \"tests/**/*.spec.mjs\""
   },
+  "engines": {
+    "node": ">=22"
+  },
   "license": "MIT"
 }

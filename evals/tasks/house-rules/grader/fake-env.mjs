@@ -21,18 +21,23 @@ const T = {
 export const TASKS = [T[3], T[1], T[6], T[2], T[5], T[4]];
 export const BY_ID = [1, 2, 3, 4, 5, 6].map((id) => T[id]);
 
+// CONTRIBUTING.md "Data formats": the store is `{ nextId, tasks }`, and a bare array of tasks is read too.
+const storedTasks = (parsed) => (Array.isArray(parsed) ? parsed : parsed.tasks);
+
 export const HEADER = 'id,title,status,created,completed';
 
 /**
- * A temporary directory holding a store (seeded with `tasks`, unless `tasks` is null) and an empty `out/`
+ * A temporary directory holding a store (seeded with `store` as given, else with `tasks` as a bare array,
+ * unless `tasks` is null) and an empty `out/`
  * directory for files a command writes, plus a context whose clock is `now` and whose output is captured.
  */
-export function makeEnv({ tasks = TASKS, now = NOW } = {}) {
+export function makeEnv({ tasks = TASKS, store = null, now = NOW } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tk-grade-'));
   const storePath = path.join(dir, 'tasks.json');
   const outDir = path.join(dir, 'out');
   fs.mkdirSync(outDir);
-  if (tasks) fs.writeFileSync(storePath, JSON.stringify(tasks));
+  if (store) fs.writeFileSync(storePath, JSON.stringify(store));
+  else if (tasks) fs.writeFileSync(storePath, JSON.stringify(tasks));
   const printed = { out: [], err: [] };
   return {
     ctx: {
@@ -45,7 +50,8 @@ export function makeEnv({ tasks = TASKS, now = NOW } = {}) {
     outFile: (name) => path.join(outDir, name),
     out: () => printed.out.join(''),
     err: () => printed.err.join(''),
-    stored: () => JSON.parse(fs.readFileSync(storePath, 'utf8')),
+    stored: () => storedTasks(JSON.parse(fs.readFileSync(storePath, 'utf8'))),
+    storedFile: () => JSON.parse(fs.readFileSync(storePath, 'utf8')),
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   };
 }

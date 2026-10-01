@@ -1,6 +1,6 @@
 import { ConflictError, NotFoundError } from '../errors.mjs';
 import { parseFlags } from '../flags.mjs';
-import { loadTasks, parseTaskId, saveTasks } from '../store.mjs';
+import { loadStore, parseTaskId, saveStore } from '../store.mjs';
 
 const flags = {};
 
@@ -11,13 +11,13 @@ export default {
   flags,
   async run(args, ctx) {
     const id = parseTaskId(parseFlags(flags, args).positionals);
-    const tasks = loadTasks(ctx.storePath);
-    const task = tasks.find((candidate) => candidate.id === id);
+    const store = loadStore(ctx.storePath);
+    const task = store.tasks.find((candidate) => candidate.id === id);
     if (!task) throw new NotFoundError(`no task ${id}`);
     if (task.status === 'done') throw new ConflictError(`task ${id} is already done`);
     task.status = 'done';
     task.completed = ctx.clock().toISOString();
-    saveTasks(ctx.storePath, tasks);
+    saveStore(ctx.storePath, store);
     ctx.io.out(`Finished task ${id}\n`);
   },
 };

@@ -9,7 +9,7 @@ up, diff and carry between machines.
 npm install --global .
 ```
 
-tk needs Node 20 or newer and has no other dependencies.
+tk needs Node 22 or newer and has no other dependencies.
 
 ## Usage
 

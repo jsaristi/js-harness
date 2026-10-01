@@ -28,9 +28,10 @@ export default {
   flags,
   async run(args, ctx) {
     const { flags: given } = parseFlags(flags, args);
-    const earliest = given.since === undefined ? -Infinity : ctx.clock().getTime() - parseDuration(given.since);
+    const earliest = given.since === undefined ? null : ctx.clock().getTime() - parseDuration(given.since);
     const tasks = loadTasks(ctx.storePath)
-      .filter((task) => (given.status === undefined || task.status === given.status) && Date.parse(task.created) >= earliest)
+      .filter((task) => given.status === undefined || task.status === given.status)
+      .filter((task) => earliest === null || Date.parse(task.created) >= earliest)
       .sort((a, b) => a.id - b.id);
     const lines = render(tasks, given.format);
     if (given.output === undefined) {

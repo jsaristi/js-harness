@@ -64,8 +64,10 @@ it was. Check with `exists` from the same module.
 - Timestamps are ISO 8601 in UTC with milliseconds, as `Date#toISOString` writes them:
   `2025-03-02T09:30:00.000Z`.
 - A task is `{ id, title, status, created, completed }`. `status` is `open` or `done`, and
-  `completed` is `null` until the task is done. Ids are integers that only increase. The store is a
-  JSON array of tasks.
+  `completed` is `null` until the task is done. Ids are integers that only increase: the id of a task
+  that was removed is never used again. The store is a JSON object `{ nextId, tasks }`, where `tasks`
+  is the array of tasks and `nextId` the id the next task gets; a store that is a bare array of tasks,
+  as older versions wrote it, is still read.
 - JSON output is pretty-printed with two spaces and ends with a newline. Records are sorted by id,
   ascending, in every output.
 - CSV follows RFC 4180. The first row is a header. Rows end with CRLF, the last row included. A

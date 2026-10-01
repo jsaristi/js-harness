@@ -13,7 +13,9 @@ export default {
   flags,
   async run(args, ctx) {
     const { flags: given } = parseFlags(flags, args);
-    const tasks = loadTasks(ctx.storePath).filter((task) => given.all || task.status === 'open');
+    const tasks = loadTasks(ctx.storePath)
+      .filter((task) => given.all || task.status === 'open')
+      .sort((a, b) => a.id - b.id);
     if (tasks.length === 0) {
       ctx.io.out('No tasks\n');
       return;

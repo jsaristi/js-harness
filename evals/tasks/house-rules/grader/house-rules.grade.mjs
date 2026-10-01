@@ -9,9 +9,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { BY_ID, HEADER, NOW, csvTasks, parseCsv, spyOnStdio, withEnv } from './fake-env.mjs';
 
+const [seedTask] = BY_ID;
+
 const load = () => import('../src/cli.mjs');
 const loadRegistry = () => import('../src/commands/index.mjs');
 const T = { timeout: 5000 };
+// The commands the tool had before `export`, in registry order.
+const EXISTING = ['add', 'done', 'list', 'remove'];
 const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 const run = async (env, args) => {
@@ -291,6 +295,13 @@ test('export keeps timestamps in ISO 8601 UTC and leaves completed empty for an 
     assert.equal(csv.find((task) => task.id === 4).completed, '2031-04-20T10:00:00.000Z');
   }));
 
+// CONTRIBUTING.md "Data formats": the store is `{ nextId, tasks }`
+test('export reads a store in the current format', T, () =>
+  withEnv({ store: { nextId: 9, tasks: [seedTask] } }, async (env) => {
+    assert.equal(await run(env, ['export']), 0);
+    assert.deepEqual(JSON.parse(env.out()), [seedTask]);
+  }));
+
 // "Data formats": JSON output is pretty-printed with two spaces and ends with a newline
 test('export JSON is indented with two spaces and ends with a newline', T, () =>
   withEnv({}, async (env) => {
@@ -428,6 +439,28 @@ test('guard: add stores an open task stamped with the clock and the next id', T,
     assert.match(env.err(), /^tk add: /);
   }));
 
+// CONTRIBUTING.md "Data formats": "Ids are integers that only increase": the id of a removed task is never
+// used again, even when the highest task, or every task, was removed
+test('guard: add never reuses the id of a removed task', T, () =>
+  withEnv({}, async (env) => {
+    assert.equal(await run(env, ['remove', '6']), 0);
+    assert.equal(await run(env, ['add', 'Sweep']), 0);
+    assert.deepEqual(ids(env.stored()), [1, 2, 3, 4, 5, 7]);
+    for (const id of ids(env.stored())) assert.equal(await run(env, ['remove', String(id)]), 0);
+    assert.equal(await run(env, ['add', 'Fresh']), 0);
+    assert.deepEqual(ids(env.stored()), [8]);
+  }));
+
+// CONTRIBUTING.md "Data formats": "Records are sorted by id, ascending, in every output" (the store holds
+// them out of order)
+test('guard: list shows the tasks by ascending id', T, () =>
+  withEnv({}, async (env) => {
+    assert.equal(await run(env, ['list', '--all']), 0);
+    const rows = env.out().trimEnd().split('\n').slice(1);
+    const shown = rows.map((line) => Number(line.split(/\s+/)[0]));
+    assert.deepEqual(shown, [1, 2, 3, 4, 5, 6]);
+  }));
+
 // docs/COMMANDS.md "tk list": the open tasks, and `--all` adds the finished ones
 test('guard: list shows the open tasks and --all the done ones', T, () =>
   withEnv({}, async (env) => {
@@ -466,7 +499,7 @@ test('guard: remove deletes a task and fails with 4 for an unknown one', T, () =
 test('guard: help lists the commands and an unknown command is a usage error', T, () =>
   withEnv({}, async (env) => {
     assert.equal(await run(env, ['help']), 0);
-    for (const name of ['add', 'done', 'list', 'remove']) assert.match(env.out(), new RegExp(`^\\s*${name}\\b`, 'm'));
+    for (const name of EXISTING) assert.match(env.out(), new RegExp(`^\\s*${name}\\b`, 'm'));
     assert.equal(await run(env, ['frobnicate']), 2);
     assert.match(env.err(), /^tk frobnicate: /);
     assert.equal(await run(env, ['list', '--nope']), 2);
@@ -486,10 +519,9 @@ test('guard: a store that is not JSON is a store error for the existing commands
 // CONTRIBUTING.md "Adding a command" 1 and 2: the registry is an alphabetical array of command modules
 test('guard: the registry holds the existing commands in the documented shape', T, async () => {
   const { commands } = await loadRegistry();
-  const existing = ['add', 'done', 'list', 'remove'];
-  const names = commands.map((command) => command.name).filter((name) => existing.includes(name));
-  assert.deepEqual(names, existing);
-  for (const command of commands.filter((candidate) => ['add', 'done', 'list', 'remove'].includes(candidate.name))) {
+  const names = commands.map((command) => command.name).filter((name) => EXISTING.includes(name));
+  assert.deepEqual(names, EXISTING);
+  for (const command of commands.filter((candidate) => EXISTING.includes(candidate.name))) {
     assert.deepEqual(Object.keys(command).sort(), ['flags', 'name', 'run', 'summary', 'usage']);
   }
 });
@@ -497,9 +529,9 @@ test('guard: the registry holds the existing commands in the documented shape', 
 // CONTRIBUTING.md "Docs": every existing command keeps its three entries
 test('guard: the existing commands keep their docs, completion and changelog heading', T, () => {
   const docs = read('../docs/COMMANDS.md');
-  for (const name of ['add', 'done', 'list', 'remove']) assert.match(docs, new RegExp(`^## tk ${name}\\s*$`, 'm'));
+  for (const name of EXISTING) assert.match(docs, new RegExp(`^## tk ${name}\\s*$`, 'm'));
   const line = read('../completions/tk.bash').split('\n').find((text) => /^\s*(local\s+)?commands=/.test(text));
-  for (const name of ['add', 'done', 'list', 'remove']) assert.ok((line.match(/[\w-]+/g) ?? []).includes(name), name);
+  for (const name of EXISTING) assert.ok((line.match(/[\w-]+/g) ?? []).includes(name), name);
   assert.match(read('../CHANGELOG.md'), /^## Unreleased\s*$/m);
 });
 

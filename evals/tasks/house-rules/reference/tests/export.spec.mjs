@@ -63,3 +63,10 @@ test('export rejects bad flags as usage errors', async (t) => {
   }
   assert.match(env.err(), /^tk export: /);
 });
+
+test('a plain export keeps a task whose creation time is missing', async (t) => {
+  const env = fakeContext({ tasks: [{ ...task(1, 'Old'), created: undefined }, task(2, 'New')] });
+  t.after(env.cleanup);
+  assert.equal(await main(['export'], env.ctx), 0);
+  assert.deepEqual(JSON.parse(env.out()).map((entry) => entry.id), [1, 2]);
+});

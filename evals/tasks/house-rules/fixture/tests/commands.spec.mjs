@@ -17,6 +17,18 @@ test('add stores an open task stamped with the clock', async (t) => {
   });
 });
 
+test('add never reuses the id of a removed task', async (t) => {
+  const env = fakeContext({ tasks: [task(1, 'Buy milk'), task(2, 'Pay rent')] });
+  t.after(env.cleanup);
+  await main(['remove', '2'], env.ctx);
+  await main(['add', 'Water'], env.ctx);
+  await main(['remove', '1'], env.ctx);
+  await main(['remove', '3'], env.ctx);
+  await main(['add', 'Sweep'], env.ctx);
+  assert.equal(env.storedFile().nextId, 5);
+  assert.deepEqual(env.stored().map((entry) => entry.id), [4]);
+});
+
 test('add without a title is a usage error', async (t) => {
   const env = fakeContext();
   t.after(env.cleanup);
@@ -34,6 +46,13 @@ test('list shows the open tasks and --all adds the done ones', async (t) => {
   t.after(all.cleanup);
   await main(['list', '--all'], all.ctx);
   assert.match(all.out(), /Buy milk/);
+});
+
+test('list shows the tasks by ascending id', async (t) => {
+  const env = fakeContext({ tasks: [task(3, 'Third'), task(1, 'First'), task(2, 'Second')] });
+  t.after(env.cleanup);
+  assert.equal(await main(['list'], env.ctx), 0);
+  assert.deepEqual(env.out().match(/First|Second|Third/g), ['First', 'Second', 'Third']);
 });
 
 test('done marks the task and records the time', async (t) => {

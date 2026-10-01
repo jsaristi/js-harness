@@ -4,7 +4,8 @@ import path from 'node:path';
 
 /**
  * A context for `main` that keeps everything in memory: `out()` and `err()` return what was printed,
- * `stored()` the tasks in the store, which lives in a temporary directory that `cleanup()` removes.
+ * `stored()` the tasks in the store and `storedFile()` the whole file, which live in a temporary directory
+ * that `cleanup()` removes.
  * @param {{ now?: string, tasks?: object[] }} [options]
  */
 export function fakeContext({ now = '2025-03-02T09:30:00.000Z', tasks } = {}) {
@@ -20,7 +21,8 @@ export function fakeContext({ now = '2025-03-02T09:30:00.000Z', tasks } = {}) {
     },
     out: () => printed.out.join(''),
     err: () => printed.err.join(''),
-    stored: () => JSON.parse(fs.readFileSync(storePath, 'utf8')),
+    stored: () => JSON.parse(fs.readFileSync(storePath, 'utf8')).tasks,
+    storedFile: () => JSON.parse(fs.readFileSync(storePath, 'utf8')),
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   };
 }
