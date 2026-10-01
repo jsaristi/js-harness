@@ -28,14 +28,15 @@ export function createStore({ path, fs = nodeAdapter }) {
     }
   }
 
-  // A copy of the durable state, which an operation may change freely.
+  // A copy of the durable state as a Map, which an operation may change freely. A key is any string,
+  // so the keys are never properties of a plain object.
   async function snapshot() {
     await load();
-    return JSON.parse(durable);
+    return new Map(Object.entries(JSON.parse(durable)));
   }
 
   async function commit(next) {
-    const text = JSON.stringify(next);
+    const text = JSON.stringify(Object.fromEntries(next));
     const temp = `${path}.tmp-${++writes}`;
     try {
       await fs.writeFile(temp, text);
@@ -47,23 +48,25 @@ export function createStore({ path, fs = nodeAdapter }) {
     durable = text;
   }
 
-  const get = (key) => serialize(async () => (await snapshot())[key]);
+  const get = (key) => serialize(async () => (await snapshot()).get(key));
 
-  const set = (key, value) => serialize(async () => commit({ ...(await snapshot()), [key]: value }));
+  const set = (key, value) =>
+    serialize(async () => {
+      const data = await snapshot();
+      await commit(data.set(key, value));
+    });
 
   const update = (key, fn) =>
     serialize(async () => {
       const data = await snapshot();
-      data[key] = await fn(data[key]);
-      await commit(data);
-      return JSON.parse(durable)[key];
+      await commit(data.set(key, await fn(data.get(key))));
+      return (await snapshot()).get(key);
     });
 
   const remove = (key) =>
     serialize(async () => {
       const data = await snapshot();
-      const existed = Object.hasOwn(data, key);
-      delete data[key];
+      const existed = data.delete(key);
       await commit(data);
       return existed;
     });

@@ -102,11 +102,11 @@ export function resolve(rootManifest, registry, options = {}) {
     const missing = Object.keys(peerDependencies).sort().find((peer) => !chosen.has(peer) && peerDependenciesMeta[peer]?.optional !== true);
     if (missing !== undefined) throw new ResolveError('EPEER', `${name} needs ${missing}, which is not in the result`, { package: name, peer: missing });
   }
-  const packages = {};
-  for (const name of names) {
+  const entryOf = (name) => {
     const { dependencies, optionalDependencies } = registry.manifest(name, chosen.get(name));
     const listed = Object.keys({ ...dependencies, ...optionalDependencies }).filter((dependency) => chosen.has(dependency)).sort();
-    packages[name] = { version: chosen.get(name), dependencies: Object.fromEntries(listed.map((dependency) => [dependency, chosen.get(dependency)])) };
-  }
+    return [name, { version: chosen.get(name), dependencies: Object.fromEntries(listed.map((dependency) => [dependency, chosen.get(dependency)])) }];
+  };
+  const packages = Object.fromEntries(names.map(entryOf));
   return { packages };
 }

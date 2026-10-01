@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createFakeAdapter } from './fake-adapter.mjs';
+import { parse } from './json.mjs';
 
 const T = { timeout: 5000 };
 const CHILD = { timeout: 20000 };
@@ -34,13 +35,6 @@ async function openQueue() {
 }
 
 const fileData = (fake) => JSON.parse(fake.files.get(PATH));
-const parse = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
-  }
-};
 /** A failure rule for the `writeFile` calls whose new state satisfies `holds`. */
 const writes = (holds) => ({ method, data }) => method === 'writeFile' && holds(parse(data));
 /** The same for the `rename` calls that move a file whose state satisfies `holds`. */

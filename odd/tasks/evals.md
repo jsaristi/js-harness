@@ -164,7 +164,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
 - [x] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
   locked versions, peers and deterministic output (route: delegated writer)
-- [ ] T3dr T3cr and T3d review findings: `docs/RESOLUTION.md` §1 defines the package-name domain
+- [x] T3dr T3cr and T3d review findings: `docs/RESOLUTION.md` §1 defines the package-name domain
   (npm-style lowercase names, so `__proto__` is not a package) and the reference builds its result
   without prototype-sensitive assignment; no hidden test for `__proto__`, because it would measure
   JavaScript trivia rather than the spec (Codex, adapted); the `house-rules` visible test helper
@@ -172,6 +172,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   writer)
 - [x] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
   interleaved writers and failing disks, from a symptom report (route: delegated writer)
+- [x] T3er T3e review findings: the `lost-updates` reference keeps keys as own properties
+  (`__proto__`, `constructor` and the like store and read like any key) and `DESIGN.md` says a
+  key is any string, with no hidden test of the quirk (Codex, adapted); the G7 child scenario
+  parses adapter data through the guarded helper the grader already has (gentle-ai suggestion)
+  (route: delegated writer)
 - [ ] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
@@ -542,7 +547,29 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   again, with `a_test.ts` missing from the names read back out of `node --test`'s TAP output while
   the full suite ran (1,173 tests, 5.8 min); alone it passed. Each discovered file now writes a
   marker into a directory of its own and the comparison reads the markers; a mismatch prints the
-  run's output. Six concurrent runs passed. Commit `21b69c7`.
+  run's output. Six concurrent runs passed. Commit `21b69c7`. T3e committed as `08da909`,
+  assessed medium, `slice_budget_reached`: review due on `94626b8..08da909`.
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-5f2864a38403d9b7`, lens
+  reliability): approved and acknowledged, authority burned; one WARNING and one suggestion.
+  Codex (recorded): two P2. Both reviewers: the markers used `process.getBuiltinModule`, which
+  Node 22.0–22.2 lacks while `engines` allows them; fixed inline with a dynamic
+  `import('node:fs')`, which works in CommonJS and ESM files alike (the comparison passes).
+  Codex, reproduced with the fake adapter: the `lost-updates` reference stores `__proto__` as a
+  prototype change and `get('constructor')` returns an inherited function. gentle-ai: the G7 child
+  scenario parses adapter data unguarded, so a candidate renaming an unwritten path would crash it
+  for a reason unrelated to G7. Both became T3er; as with `resolver`, the reference is fixed and
+  `DESIGN.md` says keys are any string, without a hidden test of the JavaScript quirk. Reviewed
+  boundary: `08da909`.
+- 2026-10-01: T3dr and T3er done (delegated writer), committed with the marker fix as one
+  review-fix commit. `resolver`: `RESOLUTION.md` §1 item 7 defines the name domain (npm-style,
+  lowercase, at most 214 characters, not starting with `.` or `_`), the reference builds
+  `packages` with `Object.fromEntries`, the grader's spec hash updated; proof unchanged 15/45.
+  `house-rules`: `stored()` reads both store shapes; proof unchanged 11/47. `lost-updates`: the
+  reference keeps its state in a `Map` (`__proto__` persists as a key, `get('constructor')` is
+  `undefined`, checked by script), `DESIGN.md` says a key is any string, the guarded parse is a
+  shared `grader/json.mjs` used by the G7 scenarios; proof unchanged 13/43, five identical runs.
+  No language-server diagnostic anywhere. Rule added to the writer brief: a reference never
+  indexes a plain object with a user-supplied string.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

@@ -539,7 +539,7 @@ test('the command exits 2 when its arguments are missing', CLI, () => {
 
 // The contract is not part of the work.
 test('guard: docs/RESOLUTION.md is unchanged', T, () => {
-  assert.equal(sha256('../docs/RESOLUTION.md'), '0dfec4366b86cf313f645ecde35ac961c1103635c02bb38589291408d2cdb8b7');
+  assert.equal(sha256('../docs/RESOLUTION.md'), '04fa4642628aaa8d93aed6b4b2d325371831fd5a300b484273e39e2058d709e9');
 });
 
 // Definition of done: the project's own tests are green when the work ends.

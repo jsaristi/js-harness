@@ -7,7 +7,7 @@ the contract: what a caller can rely on however calls overlap and however the di
 ## The store
 
 - The store file is one JSON object: its keys are the store's keys and its values are their values.
-  Values are anything `JSON.stringify` keeps.
+  A key is any string, and values are anything `JSON.stringify` keeps.
 - The file is read once, by the first operation. A missing file (`ENOENT`) is an empty store. Any other
   read error rejects that operation with the adapter's error, and the next operation reads again.
 - Every call returns a promise, and a caller does not have to await one before making the next call.

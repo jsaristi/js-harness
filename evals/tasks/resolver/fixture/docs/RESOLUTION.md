@@ -14,6 +14,8 @@ requirement.
 5. A manifest lists a name in at most one of `dependencies`, `optionalDependencies` and
    `peerDependencies`. The root manifest only has the first two. Missing fields are empty.
 6. A package version is *yanked* when its manifest says `yanked: true`.
+7. A package name is an npm-style name: at most 214 characters, lowercase letters, digits, `-`, `.` and
+   `_`, and not starting with `.` or `_`. A name outside this set is not an input of the algorithm.
 
 ## 2. Constraints
 

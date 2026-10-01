@@ -367,7 +367,9 @@ test('the discovery rule agrees with the files this Node runs when given no argu
     const file = path.join(dir, name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const mark = JSON.stringify(path.join(marks, encodeURIComponent(name)));
-    fs.writeFileSync(file, `process.getBuiltinModule('node:fs').writeFileSync(${mark}, '');\n`);
+    // A dynamic import of node:fs works in CommonJS and ESM files on every Node 22 (`process.getBuiltinModule`
+    // only exists since 22.3).
+    fs.writeFileSync(file, `import('node:fs').then((fs) => fs.writeFileSync(${mark}, ''));\n`);
   }
   // Whether the child runs .ts/.mts/.cts depends on its Node (type stripping is on by default only since
   // 22.18 / 23.6) and on the NODE_OPTIONS it inherits, so ask a child with the same environment.

@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+// A store is `{ nextId, tasks }`, or a bare array of tasks when it was written by an older version.
+const storedTasks = (parsed) => (Array.isArray(parsed) ? parsed : parsed.tasks);
+
 /**
  * A context for `main` that keeps everything in memory: `out()` and `err()` return what was printed,
  * `stored()` the tasks in the store and `storedFile()` the whole file, which live in a temporary directory
@@ -21,7 +24,7 @@ export function fakeContext({ now = '2025-03-02T09:30:00.000Z', tasks } = {}) {
     },
     out: () => printed.out.join(''),
     err: () => printed.err.join(''),
-    stored: () => JSON.parse(fs.readFileSync(storePath, 'utf8')).tasks,
+    stored: () => storedTasks(JSON.parse(fs.readFileSync(storePath, 'utf8'))),
     storedFile: () => JSON.parse(fs.readFileSync(storePath, 'utf8')),
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   };
