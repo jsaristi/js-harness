@@ -7,8 +7,8 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  checkFixtureLinks, childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, runProcess, runSuite,
-  runTrial, summarizeUsage, trialKey,
+  checkFixtureLinks, childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
+  runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -174,9 +174,13 @@ test('loadTask rejects a task directory missing its prompt, fixture or grader', 
 const entriesOf = (dir) => fs.readdirSync(dir);
 
 /** A config whose agent is the fake agent in `mode`. Reports and counts go to files outside the
- * workspace, because the workspace is gone by the time a test reads anything. */
+ * workspace, because the workspace is gone by the time a test reads anything. `extra.envFor(context)`
+ * adds variables that depend on the trial (its home, say) to the fixed ones; the rest of `extra` is
+ * spread over the config as it is. */
 function fakeConfig(mode, env = {}, extra = {}) {
-  return { name: 'fake', command: process.execPath, args: [FAKE_AGENT], versionArgs: [FAKE_AGENT, '--version'], env: { FAKE_AGENT_MODE: mode, ...env }, ...extra };
+  const { envFor, ...rest } = extra;
+  const base = { FAKE_AGENT_MODE: mode, ...env };
+  return { name: 'fake', command: process.execPath, args: [FAKE_AGENT], versionArgs: [FAKE_AGENT, '--version'], env: envFor ? (context) => ({ ...base, ...envFor(context) }) : base, ...rest };
 }
 
 /** Everything one trial needs except the config; returns the options and the paths to inspect. */
@@ -188,7 +192,7 @@ function trialEnv(mode, { env = {}, config, configExtra = {}, task = loadTask(SA
   const cfg = config ?? fakeConfig(mode, { FAKE_AGENT_REPORT: report, FAKE_AGENT_COUNT_FILE: countFile, ...env }, configExtra);
   return {
     workRoot, runsDir, report, countFile,
-    options: { task, config: cfg, effort: 'medium', repeat: 1, cliVersion: '9.9.9 (Fake Agent)', workRoot, runsDir, ...options },
+    options: { task, config: cfg, effort: 'medium', repeat: 1, readVersion: () => '9.9.9 (Fake Agent)', workRoot, runsDir, ...options },
     readReport: () => JSON.parse(fs.readFileSync(report, 'utf8')),
   };
 }
@@ -439,10 +443,12 @@ test('readResults skips blank and corrupt lines, so a torn last line only costs 
 
 const recordOf = (trial) => ({ task: trial.task.id, config: trial.config.name, effort: trial.effort, repeat: trial.repeat, score: 1 });
 
-/** A `runTrial` stand-in that records the trials it was asked for. */
-function stubTrial(log, outcomeFor = () => null) {
+/** A `runTrial` stand-in that records the trials it was asked for, and calls `beforeOutcome(trial)` (a
+ * test that cares about the version probe passes `versionOf`) first. */
+function stubTrial(log, outcomeFor = () => null, beforeOutcome = () => {}) {
   return async (trial) => {
     log.push(trialKey(recordOf(trial)));
+    await beforeOutcome(trial);
     return outcomeFor(trial) ?? { status: 'recorded', record: recordOf(trial) };
   };
 }
@@ -475,7 +481,11 @@ test('runSuite skips every trial already in the results file', async () => {
   assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 2 });
 });
 
-test('runSuite hands each trial the CLI version, probed once per agent command', async () => {
+/** What the real `runTrial` does with the `readVersion` it is handed: ask for the CLI version under the
+ * env its config resolves to for this trial. A test stub that needs a version calls this. */
+const versionOf = (trial) => trial.readVersion(trial.config, resolveAgent(trial.config, { effort: trial.effort, task: trial.task }).env);
+
+test('runSuite hands each trial a cached version probe: one probe per agent command', async () => {
   const seen = [];
   const probed = [];
   const options = suiteOptions({
@@ -485,7 +495,7 @@ test('runSuite hands each trial the CLI version, probed once per agent command',
       return '2.0.0';
     },
     runTrial: async (trial) => {
-      seen.push(trial.cliVersion);
+      seen.push(await versionOf(trial));
       return { status: 'recorded', record: recordOf(trial) };
     },
   });
@@ -858,7 +868,7 @@ test('runSuite probes the version under each trial env, once per distinct comman
       return `v-${env.HOME_DIR}`;
     },
     runTrial: async (trial) => {
-      seen.push(`${trial.config.name}=${trial.cliVersion}`);
+      seen.push(`${trial.config.name}=${await versionOf(trial)}`);
       return { status: 'recorded', record: recordOf(trial) };
     },
   });
@@ -877,7 +887,7 @@ test('runSuite probes again when the same command resolves to a different env pe
       probes.push(env.STATE_DIR);
       return '1.0.0';
     },
-    runTrial: stubTrial([]),
+    runTrial: stubTrial([], undefined, versionOf),
   });
   await runSuite(options);
   assert.deepEqual(probes, ['/state/medium', '/state/high']);
@@ -892,8 +902,229 @@ test('runSuite shares one probe between envs that differ only in key order', asy
     ],
     repeats: 1,
     readVersion: (config, env) => probes.push(env),
-    runTrial: stubTrial([]),
+    runTrial: stubTrial([], undefined, versionOf),
   });
   await runSuite(options);
   assert.equal(probes.length, 1);
+});
+
+// ---- per-trial home ---------------------------------------------------------------------------------
+
+// A config with `prepare` gets a home directory of its own for every trial. The fake agent reads
+// `FAKE_AGENT_READ_FILE` into its report, which is how a test sees from inside the agent what prepare did.
+const homeEnv = ({ home }) => ({ FAKE_AGENT_READ_FILE: path.join(home, 'marker.txt'), HOME_DIR: home });
+const writeMarker = ({ home }) => fs.writeFileSync(path.join(home, 'marker.txt'), 'prepared');
+
+test('prepare gets a fresh home next to the workspace, with the fixture already copied, and the agent sees what it wrote', async () => {
+  const calls = [];
+  const prepare = async (context) => {
+    calls.push({ ...context, workspaceEntries: fs.readdirSync(context.workspace), homeIsDir: fs.statSync(context.home).isDirectory() });
+    writeMarker(context);
+  };
+  const { options, readReport, workRoot } = trialEnv('noop', { configExtra: { prepare, envFor: homeEnv } });
+  await runTrial({ ...options, effort: 'high' });
+  assert.equal(calls.length, 1);
+  const [{ home, workspace, effort, task, workspaceEntries, homeIsDir }] = calls;
+  assert.equal(effort, 'high');
+  assert.equal(task.id, 'sample');
+  assert.equal(path.dirname(home), workRoot);
+  assert.ok(path.basename(home).startsWith('eval-home-'), home);
+  assert.equal(path.dirname(workspace), workRoot);
+  assert.notEqual(home, workspace);
+  assert.ok(homeIsDir);
+  assert.deepEqual(workspaceEntries, ['calc.mjs'], 'prepare runs after the fixture copy');
+  assert.equal(readReport().fileRead, 'prepared', 'prepare finished before the agent started');
+});
+
+test('args and env resolve with the trial home and workspace; home is undefined for a config without prepare', async () => {
+  const contexts = { args: [], env: [] };
+  const hooks = {
+    args: (context) => {
+      contexts.args.push(context);
+      return [FAKE_AGENT];
+    },
+    envFor: (context) => {
+      contexts.env.push(context);
+      return {};
+    },
+  };
+  let prepared;
+  await runTrial(trialEnv('noop', { configExtra: { ...hooks, prepare: ({ home }) => (prepared = home) } }).options);
+  await runTrial(trialEnv('noop', { configExtra: hooks }).options);
+
+  assert.equal(contexts.args.length, 2);
+  for (const context of [...contexts.args, ...contexts.env]) {
+    assert.deepEqual(Object.keys(context).sort(), ['effort', 'home', 'task', 'workspace']);
+    assert.equal(context.effort, 'medium');
+    assert.equal(context.task.id, 'sample');
+    assert.equal(typeof context.workspace, 'string');
+  }
+  assert.equal(contexts.args[0].home, prepared);
+  assert.equal(contexts.env[0].home, prepared, 'env sees the same home as args');
+  assert.equal(contexts.env[0].workspace, contexts.args[0].workspace);
+  assert.equal(contexts.args[1].home, undefined);
+  assert.equal(contexts.env[1].home, undefined);
+});
+
+test('two trials of one config get two different homes', async () => {
+  const homes = [];
+  const { options } = trialEnv('noop', { configExtra: { prepare: ({ home }) => homes.push(home) } });
+  await runTrial(options);
+  await runTrial(options);
+  assert.equal(homes.length, 2);
+  assert.notEqual(homes[0], homes[1]);
+});
+
+test('a config without prepare gets no home directory', async () => {
+  const seen = [];
+  const { options, workRoot } = trialEnv('noop', { configExtra: { envFor: () => (seen.push(fs.readdirSync(workRoot)), {}) } });
+  await runTrial(options);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].length, 1, 'only the workspace exists while the agent is about to run');
+  assert.ok(!seen[0][0].startsWith('eval-home-'));
+});
+
+for (const [label, mode, status] of [['a recorded', 'solve', 'recorded'], ['a stopped', 'cap', 'stopped']]) {
+  test(`the home is removed after ${label} trial, with the workspace`, async () => {
+    let home;
+    const { options, workRoot } = trialEnv(mode, { configExtra: { prepare: (context) => ((home = context.home), writeMarker(context)) } });
+    const outcome = await runTrial(options);
+    assert.equal(outcome.status, status);
+    assert.ok(home);
+    assert.ok(!fs.existsSync(home));
+    assert.deepEqual(entriesOf(workRoot), []);
+  });
+}
+
+test('a prepare that throws rejects the trial, records nothing and removes both directories', async () => {
+  const { options, workRoot, runsDir, countFile } = trialEnv('solve', {
+    configExtra: {
+      prepare: ({ home }) => {
+        fs.writeFileSync(path.join(home, 'half-made'), 'x');
+        throw new Error('seed failed');
+      },
+    },
+  });
+  await assert.rejects(runTrial(options), /seed failed/);
+  assert.deepEqual(entriesOf(workRoot), []);
+  assert.ok(!fs.existsSync(runsDir), 'the agent never ran, so no raw output was written');
+  assert.ok(!fs.existsSync(countFile));
+});
+
+test('a failure to remove the home is logged, not thrown, and does not lose the record', async () => {
+  const { options } = trialEnv('solve', { configExtra: { prepare: writeMarker } });
+  const logged = [];
+  const realRmSync = fs.rmSync;
+  fs.rmSync = (target, opts) => {
+    if (String(target).includes(`${path.sep}eval-home-`)) throw new Error('EBUSY: simulated');
+    return realRmSync(target, opts);
+  };
+  let outcome;
+  try {
+    outcome = await runTrial({ ...options, log: (message) => logged.push(message) });
+  } finally {
+    fs.rmSync = realRmSync;
+  }
+  assert.equal(outcome.record.score, 1);
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /could not remove home .*EBUSY: simulated/);
+});
+
+test('the version is probed under the trial env, after prepare and before the agent runs', async () => {
+  const probes = [];
+  let preparedHome;
+  const { options, countFile } = trialEnv('noop', {
+    configExtra: { prepare: (context) => ((preparedHome = context.home), writeMarker(context)), envFor: homeEnv },
+    readVersion: (config, env) => {
+      probes.push({ config: config.name, env, prepared: fs.existsSync(path.join(env.HOME_DIR, 'marker.txt')), agentRan: fs.existsSync(countFile) });
+      return '4.5.6';
+    },
+  });
+  const { record } = await runTrial(options);
+  assert.equal(probes.length, 1);
+  assert.equal(probes[0].config, 'fake');
+  assert.equal(probes[0].env.HOME_DIR, preparedHome, 'the probe got the overrides the agent runs under, home included');
+  assert.equal(probes[0].env.FAKE_AGENT_MODE, 'noop');
+  assert.equal(probes[0].prepared, true);
+  assert.equal(probes[0].agentRan, false);
+  assert.equal(record.cliVersion, '4.5.6');
+});
+
+test('wallMs measures the agent run only, not prepare or the version probe', async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const { options } = trialEnv('solve', {
+    configExtra: { prepare: () => sleep(1500) },
+    readVersion: async () => {
+      await sleep(1500);
+      return '1.0.0';
+    },
+  });
+  const { record } = await runTrial(options);
+  assert.ok(record.wallMs < 2500, `wallMs ${record.wallMs} counted the 3000 ms spent before the agent started`);
+});
+
+test('a suite probes a config with a per-trial home once per trial, since its env is never the same twice', async () => {
+  const probed = [];
+  const options = {
+    tasks: [loadTask(SAMPLE)],
+    configs: [fakeConfig('solve', {}, { prepare: writeMarker, envFor: homeEnv })],
+    efforts: ['medium'],
+    repeats: 2,
+    resultsPath: path.join(tmp('results'), 'results.jsonl'),
+    runsDir: tmp('runs'),
+    workRoot: tmp('work'),
+    readVersion: (config, env) => {
+      probed.push(env.HOME_DIR);
+      return '1.0.0';
+    },
+  };
+  assert.deepEqual(await runSuite(options), { status: 'complete', completed: 2, skipped: 0 });
+  assert.equal(probed.length, 2);
+  assert.notEqual(probed[0], probed[1]);
+  assert.deepEqual(readResults(options.resultsPath).map((record) => record.cliVersion), ['1.0.0', '1.0.0']);
+  assert.deepEqual(entriesOf(options.workRoot), []);
+});
+
+// ---- agent resolved once per trial ------------------------------------------------------------------
+
+test('a trial resolves its agent config once, so the version probe and the agent run under the same env', async () => {
+  let resolved = 0;
+  const probed = [];
+  // An env function that selects something fresh on every call, such as a newly made home: if the probe
+  // and the agent each resolved the config, they would see different values, and the probe would name the
+  // version of an install the agent never ran.
+  const envFor = () => ({ TRIAL_NONCE: `nonce-${(resolved += 1)}` });
+  const { options, readReport } = trialEnv('noop', {
+    configExtra: { envFor },
+    readVersion: (config, env) => {
+      probed.push(env.TRIAL_NONCE);
+      return '1.0.0';
+    },
+  });
+  await runTrial(options);
+  assert.equal(resolved, 1, 'the env function ran once for the trial');
+  assert.deepEqual(probed, ['nonce-1']);
+  assert.equal(readReport().env.TRIAL_NONCE, 'nonce-1', 'the agent received the env the probe saw');
+});
+
+test('runSuite does not share a version probe between an env without a variable and one that removes it', async () => {
+  // `childEnv` treats an `undefined` override as "remove the inherited variable", so `{}` and
+  // `{ HOME: undefined }` give different child envs; JSON.stringify drops `undefined`, which would give
+  // them one cache key and hand the second config the first one's version without a probe.
+  const probes = [];
+  const options = suiteOptions({
+    configs: [
+      { name: 'x', command: 'claude', env: {} },
+      { name: 'y', command: 'claude', env: { HOME: undefined } },
+      { name: 'z', command: 'claude', env: { HOME: null } },
+    ],
+    repeats: 1,
+    readVersion: (config, env) => {
+      probes.push(config.name);
+      return '1.0.0';
+    },
+    runTrial: stubTrial([], undefined, versionOf),
+  });
+  await runSuite(options);
+  assert.deepEqual(probes, ['x', 'y'], 'y removes HOME, so it is probed; null and undefined both remove, so z shares y');
 });

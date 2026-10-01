@@ -3,8 +3,15 @@
 // real model. The mode comes from the environment, because the runner owns the real agent's argv.
 //
 //   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | garbage  (default noop)
-//   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts
+//   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
+//                      prompt, cwd, argv, the workspace entries and the whole environment it received
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
+//   FAKE_AGENT_READ_FILE   path; its contents (or null) go into the report as `fileRead`, so a test can see
+//                      from inside the agent what was prepared before it started
+//
+// The reported environment holds the value of every variable except those whose name looks like a
+// credential (TOKEN, KEY, SECRET, PASSWORD), which are replaced by a fixed marker: a real token in the
+// developer's environment must never reach a report or a log file, whatever a test inspects.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -18,10 +25,13 @@ const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const prompt = Buffer.concat(chunks).toString('utf8');
 
-const { FAKE_AGENT_MODE: mode = 'noop', FAKE_AGENT_REPORT: reportPath, FAKE_AGENT_COUNT_FILE: countFile } = process.env;
+const { FAKE_AGENT_MODE: mode = 'noop', FAKE_AGENT_REPORT: reportPath, FAKE_AGENT_COUNT_FILE: countFile, FAKE_AGENT_READ_FILE: readFile } = process.env;
 const cwd = process.cwd();
 
 if (countFile) fs.appendFileSync(countFile, `${mode}\n`);
+
+const SECRET_NAME = /TOKEN|KEY|SECRET|PASSWORD/i;
+const redactedEnv = () => Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, SECRET_NAME.test(name) ? '<set>' : value]));
 
 const report = {
   prompt,
@@ -34,6 +44,8 @@ const report = {
   inherited: process.env.EVALS_TEST_INHERITED ?? null,
   kept: process.env.EVALS_TEST_KEPT ?? null,
   set: process.env.EVALS_TEST_SET ?? null,
+  env: redactedEnv(),
+  fileRead: readFile && fs.existsSync(readFile) ? fs.readFileSync(readFile, 'utf8') : null,
 };
 
 const success = (result) => JSON.stringify({

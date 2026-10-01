@@ -286,8 +286,9 @@ export function runProcess({
 }
 
 /** The `{ command, args, env }` to spawn for `config`. `args` and `env` may be plain values or
- * functions of `{ effort, task }`, so one configuration can vary by effort without being rebuilt by
- * hand for every cell of the suite. */
+ * functions of `{ effort, task, home, workspace }`, so one configuration can vary by effort, and point
+ * every writer at the trial's own home, without being rebuilt by hand for every cell of the suite.
+ * `home` is `undefined` for a config without `prepare`. */
 export function resolveAgent(config, context) {
   const pick = (value) => (typeof value === 'function' ? value(context) : value);
   return { command: config.command, args: pick(config.args) ?? [], env: pick(config.env) ?? {} };
@@ -342,21 +343,39 @@ const rawStem = ({ task, config, effort, repeat }) => [task, config, effort, rep
 
 const DEFAULT_RUNS_DIR = fileURLToPath(new URL('./runs/', import.meta.url));
 
+/** Removes a directory the trial made. A leak is logged, never thrown: the record is worth more than a
+ * tidy disk, but a leak must not go unnoticed. */
+function removeDir(dir, label, log) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch (err) {
+    log(`could not remove ${label} ${dir}: ${err.message}`);
+  }
+}
+
 /** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
  * message }` when the agent died of the usage cap or of authentication (`reason` `cap` or `auth`), or
  * the agent (`spawn`) or the hidden grader (`grader-spawn`) never started. A stopped trial records
  * nothing: a zero there would measure the machine, not the configuration.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
- * after it exits. The workspace is removed on every path, in a `finally`. An agent that fails for any
- * other reason (timeout, non-zero exit, unreadable output) is still graded and recorded with its
- * error, because its workspace may hold work worth scoring and a failure rate is itself a result. */
+ * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
+ * the workspace and fresh for every trial, because anything an earlier trial left in a shared one (a
+ * transcript, a memory) would leak its answer into the next. `prepare({ home, workspace, effort, task })`
+ * runs after the fixture copy; one that throws rejects the trial. Both directories are removed on every
+ * path, in a `finally`. An agent that fails for any other reason (timeout, non-zero exit, unreadable
+ * output) is still graded and recorded with its error, because its workspace may hold work worth
+ * scoring and a failure rate is itself a result.
+ *
+ * `readVersion(config, env)` is asked for the CLI version under the env overrides the agent will run
+ * with: they now depend on the home, so the probe cannot run before the trial exists. It runs after
+ * `prepare` and before the agent, outside `wallMs`. */
 export async function runTrial({
   task,
   config,
   effort,
   repeat,
-  cliVersion = null,
+  readVersion = probeVersion,
   workRoot = os.tmpdir(),
   runsDir = DEFAULT_RUNS_DIR,
   graderTimeoutMs,
@@ -366,9 +385,15 @@ export async function runTrial({
   const startedAt = now().toISOString();
   fs.mkdirSync(workRoot, { recursive: true });
   const workspace = fs.mkdtempSync(path.join(workRoot, 'eval-'));
+  let home;
   try {
     copyFixture(task, workspace);
-    const agent = resolveAgent(config, { effort, task });
+    if (config.prepare) {
+      home = fs.mkdtempSync(path.join(workRoot, 'eval-home-'));
+      await config.prepare({ home, workspace, effort, task });
+    }
+    const agent = resolveAgent(config, { effort, task, home, workspace });
+    const cliVersion = await readVersion(config, agent.env);
     const began = Date.now();
     const run = await runProcess({
       ...agent,
@@ -411,12 +436,8 @@ export async function runTrial({
       },
     };
   } finally {
-    try {
-      fs.rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    } catch (err) {
-      // A record is worth more than a tidy disk, but a leak must not go unnoticed.
-      log(`could not remove workspace ${workspace}: ${err.message}`);
-    }
+    removeDir(workspace, 'workspace', log);
+    if (home) removeDir(home, 'home', log);
   }
 }
 
@@ -525,7 +546,8 @@ export function probeVersion(config, env = {}) {
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
  * running the same call again. `readVersion(config, env)` and `runTrial` are injectable for tests;
- * `env` is the env overrides the trial's agent runs under. */
+ * `env` is the env overrides the trial's agent runs under. Each trial is handed a cached `readVersion`
+ * and calls it itself once its env is known (see `runTrial`); this function only owns the cache. */
 export async function runSuite({
   tasks,
   configs,
@@ -541,12 +563,17 @@ export async function runSuite({
 }) {
   const done = new Set(readResults(resultsPath).map(trialKey));
   const versions = new Map();
-  const versionOf = (config, context) => {
+  const cachedVersion = (config, env) => {
     // One probe per distinct agent command, version arguments and env, and none when every trial is
-    // already recorded. The env is the trial's own, so two configs that redirect the same CLI to
-    // different installs or homes are probed separately; its keys are sorted so order cannot split a key.
-    const { env } = resolveAgent(config, context);
-    const sorted = Object.fromEntries(Object.entries(env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+    // already recorded (a trial asks only once it runs). The env is the trial's own, so two configs that
+    // redirect the same CLI to different installs or homes are probed separately; its keys are sorted
+    // so order cannot split a key. A removal (`null` or `undefined`, which `childEnv` treats alike) is
+    // written as `null`, because JSON drops an `undefined` property and `{}` would then share a key with
+    // `{ HOME: undefined }`, which runs under a different env. A config with a per-trial home never
+    // repeats an env, so it is probed once per trial, which is intended: each probe runs under the home
+    // the agent will get.
+    const normalized = Object.entries(env).map(([name, value]) => [name, value == null ? null : String(value)]);
+    const sorted = Object.fromEntries(normalized.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
     const key = JSON.stringify([config.command, config.versionArgs ?? null, sorted]);
     if (!versions.has(key)) versions.set(key, readVersion(config, env));
     return versions.get(key);
@@ -559,7 +586,7 @@ export async function runSuite({
       skipped += 1;
       continue;
     }
-    const outcome = await run({ task, config, effort, repeat, cliVersion: versionOf(config, { effort, task }), workRoot, runsDir, graderTimeoutMs, log });
+    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, log });
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }
