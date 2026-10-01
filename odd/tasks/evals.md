@@ -106,7 +106,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   the allowlisted env that points every writer at it, `minimal` and `current` as runner inputs,
   proven against the fake agent (route: delegated writer, strict TDD; trigger: runner, configs
   and their tests are 4 non-trivial files)
-- [ ] T2b Current home seeding: the per-trial home built from the real config (copy list,
+- [x] T2b Current home seeding: the per-trial home built from the real config (copy list,
   patched `.claude.json`, rewritten plugin paths, gentle-ai `state.json`) and the workspace's
   project layer (`git init`, `js-harness init`), proven against a fake real-home fixture whose
   hash tree stays unchanged (route: delegated writer, strict TDD)
@@ -208,6 +208,31 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `b862f02`. The Stop hook then offered the whole branch (`8434947..b862f02`) as a new candidate;
   declined, because every commit in it is covered by a slice review and the ODD candidate is a
   work unit, never the accumulated branch (see Follow-ups).
+- 2026-09-30: T2b done (delegated writer), commit `9a42ab4`. `evals/home.mjs`: `buildTemplate`
+  (reads the real home once per suite into `template.json` + `home/`, a copy list; plugin paths
+  inside the real home stored as `@@TRIAL_HOME@@/…`; links in the real home followed, never
+  created), `seedHome`, `seedFromTemplate` (the `seed` for `currentConfig`), `initWorkspace`
+  (`js-harness init` under the sandbox env; a `failed:` line on stderr fails it, because init
+  prints `codegraph init failed:` and still exits 0), `removeTemplate` (refuses a directory
+  without the marker). `configs.mjs` `prepareSandbox`: both arms get a sandbox `.gitconfig`
+  (`eval <eval@localhost>`) and a git repo with the fixture as its first commit, hermetic against
+  `GIT_*` variables in the real env. The two T2a review findings closed with RED observed
+  (relative `workRoot`; `wallMs` now on the injected clock). Proof: the fake real home's
+  path→sha256 tree is unchanged after a build and two seeds; template and homes hold exactly the
+  copy list; nothing is a link; a real `js-harness init` runs hermetically with a stub
+  `codegraph`. 25 mutations, all killed. Evidence: `node --test "evals/**/*.test.mjs"` 146 pass,
+  1 skipped (a file symlink: EPERM here; junctions run), rerun by the parent; `npm run check`
+  exits 0. Measured on a fake home with the real sizes: template 1,042 files / 26.8 MB built in
+  2.5 s; seed 2.4–2.7 s per trial, 22 MB of it `plugins/marketplaces`. ~1,000 authored lines,
+  one unit with its proof. Assessed medium, `slice_budget_reached`: review due on
+  `b862f02..9a42ab4`.
+- Left open by T2b, to settle in T2c: whether `plugins/marketplaces` is needed (included: a
+  missing marketplace may trigger a re-clone); `settings.json` is copied verbatim, so a hook that
+  names an absolute path in the real home runs that real script (its writes still follow the
+  sandbox `HOME`; `buildTemplate` warns with a count, never a path); `.claude.json` keeps
+  `oauthAccount`, `userID` and the context7 MCP header, so the template and each trial home hold
+  a copy until removed — T4's entry script owns the template's lifetime and must call
+  `removeTemplate` on every path.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -310,7 +335,7 @@ the docs):
   runs them.
 
 ## Next step
-T2b (seeding the current home through `currentConfig`'s `seed`), then T2c once Sebastián allows
-the real-binary probe. Before T4: his `claude setup-token`
-and his choice of permission mode. Review base for the next slice review: `b862f02` (every commit
-up to it is reviewed by gentle-ai and Codex).
+T2c once Sebastián allows the real-binary probe (a run of `claude` under the sandbox against a
+loopback fake API, zero spend), then T3. Before T4: his `claude setup-token`
+and his choice of permission mode. Review base for the next slice review: `b862f02` until the
+`9a42ab4` slice review is recorded here.
