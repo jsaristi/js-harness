@@ -164,7 +164,13 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
 - [x] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
   locked versions, peers and deterministic output (route: delegated writer)
-- [ ] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
+- [ ] T3dr T3cr and T3d review findings: `docs/RESOLUTION.md` §1 defines the package-name domain
+  (npm-style lowercase names, so `__proto__` is not a package) and the reference builds its result
+  without prototype-sensitive assignment; no hidden test for `__proto__`, because it would measure
+  JavaScript trivia rather than the spec (Codex, adapted); the `house-rules` visible test helper
+  `stored()` reads both store shapes like the grader does (gentle-ai suggestion) (route: delegated
+  writer)
+- [x] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
   interleaved writers and failing disks, from a symptom report (route: delegated writer)
 - [ ] T3f Candidate `format-v2`: a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
@@ -510,7 +516,33 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   second implementation (explicit stack, written from the spec before the reference) scored 45/45
   first time; 34 mutants of the reference, one per rule, all killed but the deliberately unasserted
   first-versus-last dead end. No language-server diagnostic. Limit: the second implementation
-  shares its author with the reference.
+  shares its author with the reference. Commit `94626b8`, assessed medium,
+  `slice_budget_reached`: review due on `d329c33..94626b8` (`ebe848a`, T3cr and T3d).
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-bab25395b701a969`, lens
+  reliability): approved and acknowledged, authority burned; one suggestion (the `house-rules`
+  visible helper `stored()` returns `undefined` on a legacy bare-array store, while the grader
+  reads both). Codex (recorded): one P2, verified against the reference: a package named
+  `__proto__` sets the prototype of the result's `packages` instead of adding an entry, so it
+  vanishes from the result and the lockfile. Both became T3dr, the second adapted: the spec will
+  define the name domain rather than the grader test a JavaScript quirk. Reviewed boundary:
+  `94626b8`.
+- 2026-10-01: T3e done (delegated writer), `evals/tasks/lost-updates/`: `cellar`, a file-backed
+  key-value store with a job queue (fixture 613 lines, 14 files) that is correct one call at a time
+  and breaks its own `docs/DESIGN.md` (G1–G7 store guarantees, Q1–Q3 queue guarantees) under
+  interleaved calls and a failing disk; the prompt is a symptom report. The grader drives the store
+  through a deterministic fake adapter that holds, reorders or fails each operation, and checks
+  unhandled rejections in a child process. Proof: fixture 13/43, fixture plus reference 43/43,
+  empty 0/43; grader 1.3–1.7 s; five runs identical on every workspace graded. A plausible partial
+  fix (one mutex around the store, nothing else) scores 20/43; the reference store with the
+  fixture's queue 36/43; an independent correct implementation in another style 43/43. DESIGN was
+  made explicit where the tests needed it: copies out of `get`/`update`, one write per mutation,
+  `clock() - t > visibilityMs` as expiry, the four `ESTALE` cases. No language-server diagnostic.
+  1,697 lines.
+- 2026-10-01: the flaky test found: its first commit attempt failed the discovery comparison
+  again, with `a_test.ts` missing from the names read back out of `node --test`'s TAP output while
+  the full suite ran (1,173 tests, 5.8 min); alone it passed. Each discovered file now writes a
+  marker into a directory of its own and the comparison reads the markers; a mismatch prints the
+  run's output. Six concurrent runs passed. Commit `21b69c7`.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
