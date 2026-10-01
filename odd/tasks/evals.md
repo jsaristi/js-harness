@@ -58,7 +58,8 @@ high
 ## Ask me before
 Lowering the discrimination bar (`--min-discriminating 3`) or changing its definition; running
 on Codex (that is F6); anything that would write into the real `~/.claude`, engram or gentle-ai
-state.
+state — which includes the first run of the real `claude` under the sandbox (T2c), since a leak
+is exactly what that run exists to find.
 
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`.
@@ -95,15 +96,24 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
   hidden grader copied in after exit, score, record, cleanup, resume, stop on cap (route:
   delegated writer — runner and its tests are two non-trivial files)
-- [ ] T1r Runner hardening from review round 3 (gentle-ai `review-1cb41e850ccaa89c`, Codex over
+- [x] T1r Runner hardening from review round 3 (gentle-ai `review-1cb41e850ccaa89c`, Codex over
   `8434947..6755054`), done first in T2's slice: a grader that cannot spawn stops the suite
   unrecorded, like an agent (both); duplicate task ids or config names are rejected
   (gentle-ai); fixture symlinks stay inside the workspace or are rejected, so an agent never
   writes through to the shared fixture (Codex); the CLI version is probed under the trial's own
   env and cached per env (Codex) (route: delegated writer, strict TDD)
-- [ ] T2 Configs: minimal and current as runner inputs, with the current config's isolation
-  proven (engram, projects, gentle-ai state untouched) (route: delegated writer after one
-  mapping of where each of those writes lands)
+- [ ] T2a Sandbox env and the two configs: a per-trial home in the runner (`config.prepare`),
+  the allowlisted env that points every writer at it, `minimal` and `current` as runner inputs,
+  proven against the fake agent (route: delegated writer, strict TDD; trigger: runner, configs
+  and their tests are 4 non-trivial files)
+- [ ] T2b Current home seeding: the per-trial home built from the real config (copy list,
+  patched `.claude.json`, rewritten plugin paths, gentle-ai `state.json`) and the workspace's
+  project layer (`git init`, `js-harness init`), proven against a fake real-home fixture whose
+  hash tree stays unchanged (route: delegated writer, strict TDD)
+- [ ] T2c Isolation proven on the real binary: one run of `claude` under the sandbox against a
+  loopback fake Messages API (zero spend), then a nonce scan and a before/after hash of the real
+  trees (route: delegated writer for the probe, inline run; needs Sebastián's go-ahead, see Ask
+  me before)
 - [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
   proven by a reference solution that scores 1 and the untouched fixture that scores below it
   (route: delegated writer)
@@ -157,6 +167,80 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   first in T2's slice. Every code commit so far is covered by a Codex record.
 - `claude` on this machine is a native binary (`~/.local/bin/claude.exe`), so T2 spawns it
   directly, with no `.cmd` shim.
+- 2026-09-30: T1r done (delegated writer, then one inline simplification), commit `44ede8f`.
+  RED observed per fix: `'recorded' !== 'stopped'` (grader spawn), `Missing expected exception`
+  (duplicates, fixture link), version `9.9.9` instead of `1.2.3` (probe env). The writer's
+  fixture fix accepted a relative link that stays inside the fixture and copied it verbatim; that
+  path and its two tests could not run here (`fs.symlinkSync` is EPERM on this machine), so the
+  parent replaced it with "every link is rejected": less code, and nothing unproven. Evidence:
+  `node --test "evals/**/*.test.mjs"` 74/74, 0 skipped; `npm run check` exits 0 (pre-commit).
+  Assessed medium, `under_budget` (276 lines over `6755054`): reviewed with T2's commits.
+- 2026-09-30: T2 mapping done (read-only explorer; no real `claude` run). Result in "T2 map and
+  decisions" below. T2 became T2a–T2c.
+
+## T2 map and decisions
+Where the current config writes on this machine, and what moves each write (evidence gathered
+2026-09-30 from the live session's own writes, `--help` output, the 2.1.284 binary's strings and
+the docs):
+
+| Writer | Real location | Moved by |
+|--------|---------------|----------|
+| Claude Code state: transcripts, `subagents/`, `tool-results/`, `shell-snapshots/`, `session-env/`, `sessions/`, `file-history/`, `telemetry/`, `plugins/`, `.credentials.json`, retention sweep | `~/.claude/` | `CLAUDE_CONFIG_DIR` |
+| `.claude.json` (user-scope MCP servers, trust, caches) | `~/.claude.json` | `CLAUDE_CONFIG_DIR` (then `<dir>/.claude.json`) |
+| Auto-memory | `~/.claude/projects/<slug>/memory/` | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` |
+| Updater | `~/.local/bin/claude.exe`, `~/.local/share/claude`, `~/.local/state/claude` | `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1` (`autoUpdates:false` in `.claude.json` is ignored for a native install) |
+| MCP logs | `%LOCALAPPDATA%\claude-cli-nodejs\Cache\` | `LOCALAPPDATA` only, not `CLAUDE_CONFIG_DIR` |
+| Scratch | `%TEMP%\claude\` | `TEMP`/`TMP` |
+| engram (MCP server only; no hook writes it) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| gentle-ai | `~/.gentle-ai/` (`state.json`, `telemetry.json`, `review-stop-hook/`); per repo `.git/gentle-ai/` | `USERPROFILE`/`HOME` (no dedicated variable; `USERPROFILE=Z:\nope` made it fail on `mkdir Z:\nope`) |
+| codegraph | `~/.codegraph/` (telemetry, queue, update check, daemons); workspace `.codegraph/` | `USERPROFILE` (proven the same way) |
+| js-harness doctor cache | `~/.js-harness/doctor.json` | `JS_HARNESS_HOME` |
+| codex plugin | `${CLAUDE_PLUGIN_DATA}/state/` | config dir; drop the inherited `CLAUDE_PLUGIN_DATA` |
+
+`CLAUDE_CONFIG_DIR` alone is therefore not enough: three tools resolve their home from
+`USERPROFILE`, and the MCP logs follow `LOCALAPPDATA`. Decisions:
+
+- **One sandbox home per trial**, for both configs, so the arms differ only in the layers under
+  test: `USERPROFILE`, `HOME`, `HOMEDRIVE`/`HOMEPATH`, `CLAUDE_CONFIG_DIR`, `APPDATA`,
+  `LOCALAPPDATA`, `TEMP`/`TMP`, `XDG_*`, `ENGRAM_DATA_DIR`, `JS_HARNESS_HOME` and
+  `npm_config_cache` all point inside it. Per trial, not per suite, because a transcript or an
+  engram memory of an earlier trial of the same task would leak the answer into a later one.
+- **The env is an allowlist**, not the inherited env with overrides: a run launched from inside a
+  Claude session inherits `CLAUDE_CODE_CHILD_SESSION`, which silently turns transcript saving off
+  (so an isolation proof would pass vacuously), plus `CLAUDE_PLUGIN_DATA`, `CODEX_COMPANION_*`,
+  `ANTHROPIC_*`, `ORCA_*` and `HERDR_*`. The config returns `null` for every inherited variable
+  outside the allowlist, which the runner's `childEnv` already removes.
+- **Switches on both arms**: `DISABLE_AUTOUPDATER=1`, `DISABLE_UPDATES=1`,
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `DISABLE_TELEMETRY=1`, `DISABLE_ERROR_REPORTING=1`,
+  `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1`, `DO_NOT_TRACK=1`, `GENTLE_AI_TELEMETRY=0`,
+  `CODEGRAPH_TELEMETRY=0`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`. Not
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`: it also stops feature-flag fetching, which changes
+  behaviour.
+- **The current home is a copy, never a link**: `settings.json`, `CLAUDE.md`, `skills/`,
+  `agents/`, `commands/`, `output-styles/`, the plugin cache with `installPath` and
+  `installLocation` rewritten to the sandbox, `.claude.json` with
+  `mcpServers.engram.env.ENGRAM_DATA_DIR` patched in (the MCP child's env does not carry it by
+  default), and gentle-ai's `state.json` (its Stop hook depends on `rdd_mode`). Never copied:
+  `projects/`, history, `file-history/`, `telemetry/`, `backups/`, `.credentials.json`,
+  `engram.db`, `~/.codegraph`. The engram store starts empty: memories of other projects are
+  noise for a fresh fixture, and copying a live WAL database risks a torn copy.
+- **No `--bare`** on either arm: it skips OAuth and gave the predecessor "Not logged in".
+- **Auth is `CLAUDE_CODE_OAUTH_TOKEN`**, from `claude setup-token`, passed through the allowlist
+  and never logged; the credentials file is not copied, because a refresh inside the sandbox could
+  rotate the token and invalidate the real login (rotation is unverified; the file was rewritten
+  today, so refreshes do happen). Consequence: the claude.ai connector (Magnific) and synced
+  skills are not in the current arm, since a setup token cannot fetch them. Sebastián creates the
+  token; pending.
+- **Permission mode is explicit and equal on both arms**, a required argument of the config
+  builders with no default: the minimal arm reads no settings, and a headless agent with no
+  permission mode cannot edit or run tests. The real settings use `bypassPermissions`; which mode
+  the eval passes is Sebastián's decision, pending.
+- **The gentle-ai Stop hook stays in the current arm**, because the run measures what is
+  installed. Open: it may spawn reviewer `claude` runs whose tokens the trial's own JSON result
+  does not count; T5 must account for them or say so.
+- Unverified until T2c runs the real binary: that Claude's own home resolution honours
+  `USERPROFILE`, that the `LOCALAPPDATA` override breaks no tool, what `plugins/marketplaces` does
+  at startup, and whether `-p` writes `history.jsonl`.
 
 ## Follow-ups
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
@@ -169,7 +253,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
   of `{ effort, task }`, so `--effort` lives in the argv. `env` merges over `process.env`, `null`
   removes a variable, and `NODE_TEST_CONTEXT` is always dropped (a nested `node --test` grader
-  otherwise prints no TAP). The version probe runs once per distinct command, only if a trial runs.
+  otherwise prints no TAP). The version probe runs under the trial's own env, once per distinct
+  command, version arguments and env, only if a trial runs (`readVersion(config, env)`).
+- Stop reasons: `cap`, `auth`, `spawn` (agent) and `grader-spawn`; none records a trial.
+- A fixture holds no symlink or junction; `loadTask` and the copy both refuse one.
+- Task ids, config names and efforts are unique within a suite.
 - Agents spawn without a shell, so T2 must point at the real `claude` binary or its node entry,
   not a Windows `.cmd` shim (EINVAL).
 - The grader asks for TAP in `task.json` args (`--test-reporter=tap`), so any TAP-emitting grader
@@ -188,6 +276,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   runs them.
 
 ## Next step
-T1r (the round-3 review findings), then T2: the minimal and current configs, starting with one
-mapping of where the current config writes (engram, `~/.claude/projects`, gentle-ai state).
-Review base for the next slice review: `6755054` (every commit up to it is reviewed).
+T2a (the sandbox env and the two configs against the fake agent), then T2b (seeding the current
+home), then T2c once Sebastián allows the real-binary probe. Before T4: his `claude setup-token`
+and his choice of permission mode. Review base for the next slice review: `6755054` (every commit
+up to it is reviewed; `44ede8f` is pending, under budget).
