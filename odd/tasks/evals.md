@@ -69,6 +69,12 @@ Forecast: ~900–1,300 authored lines (runner and report with tests ~500, task f
 graders ~400–700, docs), above the ~400 slice budget. Strategy: `ask-on-risk`; chain strategy
 `stacked-to-main`, reusing Sebastián's choice for the earlier features: each slice its own PR
 against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
+- Slice 1: PR jsaristi/js-harness#20, `86cbf1e..0694183` plus the commit that records it,
+  +7,719/-10 (59% tests and fixtures). It is far over the forecast and the budget; one slicing pass
+  found no cut under 400 (single work-unit commits are 1,124 and 2,725 lines), and Sebastián
+  accepted one PR with a size exception (2026-10-01). No `size:exception` label exists in the
+  repo, so the exception and the three reading ranges are in the PR body. The repo has no CI
+  checks; the gate is the pre-push `check --push`, which passed.
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -455,6 +461,7 @@ the docs):
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is done and reviewed: its PR against `main` is Sebastián's call. Then T3.
+Slice 1 (T1–T2) is open as PR jsaristi/js-harness#20; merging it is Sebastián's call. Then T3, in
+a new session.
 Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
 Reviewed boundary: `db0253b`.
