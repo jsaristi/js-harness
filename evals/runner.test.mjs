@@ -1051,16 +1051,47 @@ test('the version is probed under the trial env, after prepare and before the ag
 });
 
 test('wallMs measures the agent run only, not prepare or the version probe', async () => {
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // A fake clock that only the setup steps advance: if wallMs were measured from the start of the trial,
+  // it would hold their 3000 ms; measured around the agent run alone it holds none. No real time is
+  // compared, so a slow host cannot flake it.
+  let ticks = 0;
+  const now = () => new Date(Date.UTC(2026, 0, 1) + ticks);
   const { options } = trialEnv('solve', {
-    configExtra: { prepare: () => sleep(1500) },
-    readVersion: async () => {
-      await sleep(1500);
+    configExtra: { prepare: () => { ticks += 1500; } },
+    readVersion: () => {
+      ticks += 1500;
       return '1.0.0';
     },
+    now,
   });
   const { record } = await runTrial(options);
-  assert.ok(record.wallMs < 2500, `wallMs ${record.wallMs} counted the 3000 ms spent before the agent started`);
+  assert.equal(record.wallMs, 0, 'the 3000 ms of setup are outside wallMs');
+  assert.equal(record.startedAt, '2026-01-01T00:00:00.000Z', 'startedAt is still the start of the trial');
+});
+
+test('a relative workRoot still gives an absolute home and workspace, so nothing the agent resolves against its cwd lands in the graded tree', async () => {
+  // The agent runs with the workspace as cwd: a relative home would be resolved against the workspace
+  // there, but against the runner's cwd by `prepare`, so the two would name different places. The root
+  // is made under the cwd (a relative path to a temp dir on another drive is absolute on Windows).
+  const relativeRoot = `eval-relroot-${process.pid}-${counter++}`;
+  const seen = [];
+  try {
+    const { options, readReport } = trialEnv('noop', {
+      configExtra: { prepare: (context) => (seen.push(context), writeMarker(context)), envFor: homeEnv },
+      workRoot: relativeRoot,
+    });
+    const { record } = await runTrial(options);
+    assert.equal(record.error, null);
+    assert.ok(path.isAbsolute(seen[0].home), `home ${seen[0].home}`);
+    assert.ok(path.isAbsolute(seen[0].workspace), `workspace ${seen[0].workspace}`);
+    const report = readReport();
+    assert.ok(path.isAbsolute(report.env.HOME_DIR), 'the env the agent received names an absolute home');
+    assert.equal(report.fileRead, 'prepared', 'the agent, run from the workspace, finds the home prepare filled');
+    assert.deepEqual(report.entries, ['calc.mjs'], 'nothing of the home is in the graded tree');
+    assert.deepEqual(fs.readdirSync(relativeRoot), [], 'both directories are removed');
+  } finally {
+    fs.rmSync(relativeRoot, { recursive: true, force: true });
+  }
 });
 
 test('a suite probes a config with a per-trial home once per trial, since its env is never the same twice', async () => {

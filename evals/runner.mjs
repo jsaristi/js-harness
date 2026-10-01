@@ -383,18 +383,21 @@ export async function runTrial({
   log = (message) => console.error(message),
 }) {
   const startedAt = now().toISOString();
-  fs.mkdirSync(workRoot, { recursive: true });
-  const workspace = fs.mkdtempSync(path.join(workRoot, 'eval-'));
+  // Absolute, whatever the caller passed: the agent runs with the workspace as its cwd, so a relative home
+  // would mean one place to `prepare` (the runner's cwd) and another to the agent (inside the graded tree).
+  const root = path.resolve(workRoot);
+  fs.mkdirSync(root, { recursive: true });
+  const workspace = fs.mkdtempSync(path.join(root, 'eval-'));
   let home;
   try {
     copyFixture(task, workspace);
     if (config.prepare) {
-      home = fs.mkdtempSync(path.join(workRoot, 'eval-home-'));
+      home = fs.mkdtempSync(path.join(root, 'eval-home-'));
       await config.prepare({ home, workspace, effort, task });
     }
     const agent = resolveAgent(config, { effort, task, home, workspace });
     const cliVersion = await readVersion(config, agent.env);
-    const began = Date.now();
+    const began = now();
     const run = await runProcess({
       ...agent,
       env: childEnv(agent.env),
@@ -402,7 +405,7 @@ export async function runTrial({
       input: task.prompt,
       timeoutMs: task.timeoutMs,
     });
-    const wallMs = Date.now() - began;
+    const wallMs = now() - began;
 
     const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
     fs.mkdirSync(runsDir, { recursive: true });

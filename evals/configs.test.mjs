@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, currentConfig, ensureSandboxDirs, minimalConfig, sandboxEnv, sandboxPaths } from './configs.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
@@ -147,6 +148,13 @@ for (const platform of PLATFORMS) {
     assert.equal(env.HOME, HOME);
   });
 }
+
+test('sandboxEnv refuses a home that is not an absolute path, which a child would resolve against its own cwd', () => {
+  for (const home of ['rel', path.join('rel', 'home'), '.', './home']) {
+    assert.throws(() => sandboxEnv({ home }), /absolute/, home);
+  }
+  assert.throws(() => sandboxEnv({ home: '' }), /home directory/);
+});
 
 test('ensureSandboxDirs creates every directory a path variable points at, and can run twice', () => {
   const home = path.join(tmp('dirs'), 'home');
@@ -336,4 +344,71 @@ test('an OAuth token in the environment reaches the child but never a report or 
   const logs = fs.readdirSync(runsDir);
   assert.ok(logs.length > 0);
   for (const file of logs) assert.ok(!fs.readFileSync(path.join(runsDir, file), 'utf8').includes(TOKEN), file);
+});
+
+// ---- the shared preparation: a git identity and the fixture as the first commit ---------------------
+
+/** Runs git in `cwd` under the env a trial's agent would get, so what it prints is what the agent would see. */
+function gitUnderSandbox(home, cwd, ...args) {
+  const result = spawnSync('git', args, { cwd, env: childEnv(sandboxEnv({ home })), encoding: 'utf8', windowsHide: true });
+  assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+function writeFixtureFiles(workspace) {
+  fs.mkdirSync(path.join(workspace, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'a.txt'), 'alpha\n');
+  fs.writeFileSync(path.join(workspace, 'sub', 'b.txt'), 'beta\n');
+  fs.writeFileSync(path.join(workspace, '.hidden'), 'dot\n');
+}
+
+for (const [name, build] of BUILDERS) {
+  test(`${name}'s prepare makes the workspace a git repository with the fixture as its one commit, authored by the dummy identity`, async () => {
+    const home = path.join(tmp('git'), 'home');
+    const workspace = tmp('ws');
+    writeFixtureFiles(workspace);
+    await build(OPTIONS).prepare({ home, workspace, effort: 'medium', task: { id: 't' } });
+    assert.equal(gitUnderSandbox(home, workspace, 'log', '--format=%an|%ae|%cn|%ce|%s'), 'eval|eval@localhost|eval|eval@localhost|fixture', 'exactly one commit');
+    assert.deepEqual(gitUnderSandbox(home, workspace, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n').sort(), ['.hidden', 'a.txt', 'sub/b.txt']);
+    assert.equal(gitUnderSandbox(home, workspace, 'status', '--porcelain'), '', 'nothing is left uncommitted');
+  });
+
+  test(`${name}'s prepare writes the same .gitconfig, with the dummy identity, at the root of the home`, async () => {
+    const home = path.join(tmp('gitconfig'), 'home');
+    await build(OPTIONS).prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+    const config = fs.readFileSync(path.join(home, '.gitconfig'), 'utf8');
+    assert.match(config, /name = eval\b/);
+    assert.match(config, /email = eval@localhost\b/);
+    assert.equal(gitUnderSandbox(home, home, 'config', '--global', '--get', 'user.email'), 'eval@localhost');
+  });
+
+  test(`${name}'s prepare commits under the dummy identity whatever git settings the real shell holds`, async () => {
+    const realConfig = path.join(tmp('realgit'), 'gitconfig');
+    fs.writeFileSync(realConfig, '[user]\n\tname = Real Person\n\temail = real@example.com\n');
+    const home = path.join(tmp('hermetic'), 'home');
+    const workspace = tmp('ws');
+    writeFixtureFiles(workspace);
+    await withEnv(
+      { GIT_CONFIG_GLOBAL: realConfig, GIT_AUTHOR_NAME: 'Real Author', GIT_AUTHOR_EMAIL: 'author@example.com', GIT_COMMITTER_NAME: 'Real Committer', GIT_COMMITTER_EMAIL: 'committer@example.com', GIT_DIR: path.join(scratch, 'not-a-git-dir') },
+      () => build(OPTIONS).prepare({ home, workspace, effort: 'medium', task: { id: 't' } }),
+    );
+    assert.equal(gitUnderSandbox(home, workspace, 'log', '--format=%an|%ae|%cn|%ce'), 'eval|eval@localhost|eval|eval@localhost');
+  });
+
+  test(`${name}'s prepare works on an empty workspace and refuses a missing or relative one`, async () => {
+    const home = path.join(tmp('edge'), 'home');
+    await build(OPTIONS).prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+    await assert.rejects(build(OPTIONS).prepare({ home: path.join(tmp('edge'), 'home'), effort: 'medium', task: { id: 't' } }), /workspace/);
+    await assert.rejects(build(OPTIONS).prepare({ home: path.join(tmp('edge'), 'home'), workspace: 'rel', effort: 'medium', task: { id: 't' } }), /absolute workspace/);
+  });
+}
+
+test('both arms get a byte-identical .gitconfig', async () => {
+  const configs = [];
+  for (const [, build] of BUILDERS) {
+    const home = path.join(tmp('same'), 'home');
+    await build(OPTIONS).prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+    configs.push(fs.readFileSync(path.join(home, '.gitconfig'), 'utf8'));
+  }
+  assert.equal(configs[0], configs[1]);
 });

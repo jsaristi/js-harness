@@ -8,13 +8,14 @@
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
 //   FAKE_AGENT_READ_FILE   path; its contents (or null) go into the report as `fileRead`, so a test can see
 //                      from inside the agent what was prepared before it started
+//   FAKE_AGENT_GIT_LOG     any value; the workspace's `git log` goes into the report as `gitLog`
 //
 // The reported environment holds the value of every variable except those whose name looks like a
 // credential (TOKEN, KEY, SECRET, PASSWORD), which are replaced by a fixed marker: a real token in the
 // developer's environment must never reach a report or a log file, whatever a test inspects.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 if (process.argv.includes('--version')) {
   console.log(process.env.FAKE_AGENT_VERSION ?? '9.9.9 (Fake Agent)');
@@ -30,7 +31,15 @@ const cwd = process.cwd();
 
 if (countFile) fs.appendFileSync(countFile, `${mode}\n`);
 
-const SECRET_NAME = /TOKEN|KEY|SECRET|PASSWORD/i;
+// With FAKE_AGENT_GIT_LOG set, the report holds the workspace's commits ("author <email> subject", one per
+// line, newest first) as git prints them under the env this agent received, or null outside a repository.
+const gitLogRequested = Boolean(process.env.FAKE_AGENT_GIT_LOG);
+const gitLog = () => {
+  const result = spawnSync('git', ['log', '--format=%an <%ae> %s'], { cwd, encoding: 'utf8', windowsHide: true });
+  return result.status === 0 ? result.stdout.trim().split('\n') : null;
+};
+
+const SECRET_NAME =/TOKEN|KEY|SECRET|PASSWORD/i;
 const redactedEnv = () => Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, SECRET_NAME.test(name) ? '<set>' : value]));
 
 const report = {
@@ -46,6 +55,7 @@ const report = {
   set: process.env.EVALS_TEST_SET ?? null,
   env: redactedEnv(),
   fileRead: readFile && fs.existsSync(readFile) ? fs.readFileSync(readFile, 'utf8') : null,
+  gitLog: gitLogRequested ? gitLog() : null,
 };
 
 const success = (result) => JSON.stringify({

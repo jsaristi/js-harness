@@ -8,6 +8,8 @@
 // decisions").
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { childEnv } from './runner.mjs';
 
 /** The only variables a trial inherits from the real environment: what a process needs to start on
  * Windows and on POSIX, and the one credential that passes through. Everything else is removed, because
@@ -81,6 +83,7 @@ function homeDriveAndPath(home) {
  * switch name that the real environment also holds is overridden, not removed. */
 export function sandboxEnv({ home, inherited = process.env, platform = process.platform }) {
   if (typeof home !== 'string' || home === '') throw new Error('sandboxEnv needs the trial home directory');
+  if (!path.isAbsolute(home)) throw new Error(`sandboxEnv needs an absolute home, got ${JSON.stringify(home)}: a child resolves a relative path against its own cwd, the graded workspace`);
   const fold = (name) => (platform === 'win32' ? name.toLowerCase() : name);
   const allowed = new Set(SANDBOX_ALLOWLIST.map(fold));
   const set = { ...sandboxPaths(home), ...(platform === 'win32' ? homeDriveAndPath(home) : {}), ...SANDBOX_SWITCHES };
@@ -97,6 +100,35 @@ export function ensureSandboxDirs(home) {
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
+/** The identity every trial commits under. A sandbox home holds no real git configuration, and a commit
+ * without an identity fails, so an agent that commits its work (the current arm's own habit) would get an
+ * error that belongs to the sandbox, not to the configuration under test. */
+export const GIT_IDENTITY = { name: 'eval', email: 'eval@localhost' };
+
+function git(args, { cwd, env }) {
+  const result = spawnSync('git', args, { cwd, env, encoding: 'utf8', windowsHide: true, timeout: 60000 });
+  if (result.error || result.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed in the sandbox workspace: ${result.error?.message ?? result.stderr.trim()}`);
+  }
+}
+
+/** What both arms share before an agent starts: the sandbox directories, a `.gitconfig` with the dummy
+ * identity, and the workspace as a git repository whose first commit is the fixture, which is what the
+ * Design calls "the repo the agent starts in" for either arm. Git runs under the trial's own sandbox env,
+ * so it reads the sandbox `.gitconfig` and none of the real shell's git settings (`GIT_CONFIG_GLOBAL`,
+ * `GIT_AUTHOR_*` and `GIT_DIR` are all outside the allowlist). An empty workspace still gets a commit. */
+export function prepareSandbox({ home, workspace }) {
+  if (typeof workspace !== 'string' || !path.isAbsolute(workspace)) {
+    throw new Error(`the sandbox needs an absolute workspace, got ${JSON.stringify(workspace)}`);
+  }
+  ensureSandboxDirs(home);
+  fs.writeFileSync(path.join(home, '.gitconfig'), `[user]\n\tname = ${GIT_IDENTITY.name}\n\temail = ${GIT_IDENTITY.email}\n`);
+  const options = { cwd: workspace, env: childEnv(sandboxEnv({ home })) };
+  git(['init', '--quiet'], options);
+  git(['add', '--all'], options);
+  git(['commit', '--quiet', '--allow-empty', '--message', 'fixture'], options);
+}
+
 /** The runner config both arms share: the same binary, flags and sandbox, with `extraArgs` after the
  * shared flags and `prepare` as the arm needs. `model` and `permissionMode` are required with no default:
  * the model is part of what the eval measures, and the permission mode decides whether a headless agent
@@ -105,7 +137,7 @@ const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !=
  * resolve to another install, or to a `.cmd` shim that cannot be spawned without a shell. `--effort` is
  * the only flag that varies with the trial. Neither arm uses `--bare`: it skips OAuth, so a trial would
  * come back "Not logged in". */
-function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, prepare) {
+function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, seed) {
   if (!isNonEmptyString(command)) throw new Error(`${name} config: "command" is required, the absolute path of the claude binary`);
   if (!path.isAbsolute(command)) throw new Error(`${name} config: "command" must be an absolute path, got ${JSON.stringify(command)}: no PATH lookup is made`);
   if (!isNonEmptyString(model)) throw new Error(`${name} config: "model" is required and has no default`);
@@ -118,7 +150,11 @@ function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, p
       return ['--print', '--output-format', 'json', '--model', model, '--effort', effort, '--permission-mode', permissionMode, ...extraArgs];
     },
     env: ({ home }) => sandboxEnv({ home }),
-    prepare,
+    // The shared preparation first, then whatever this arm adds to its home and workspace.
+    prepare: async ({ home, workspace }) => {
+      prepareSandbox({ home, workspace });
+      if (seed) await seed({ home, workspace });
+    },
   };
 }
 
@@ -126,16 +162,14 @@ function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, p
  * `CLAUDE.md`, no MCP servers, no hooks, no skills or slash commands. `--setting-sources ""` is the empty
  * string as its own argv element: the flag takes a list and an empty list loads no settings source. */
 export function minimalConfig(options) {
-  return buildConfig('minimal', options, ['--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands'], ({ home }) => ensureSandboxDirs(home));
+  return buildConfig('minimal', options, ['--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands']);
 }
 
 /** The current arm: the machine's Claude Code setup as it is used daily, so no flag restricts it. The
- * setup itself lives in the trial's home, which `seed({ home, workspace })`, an optional (async) function,
- * fills after the sandbox directories exist; without one the home is as bare as the minimal arm's. The
- * seam is separate because building the home from the real configuration is its own piece of work. */
+ * setup itself lives in the trial's home and workspace, which `seed({ home, workspace })`, an optional
+ * (async) function, fills after the shared preparation (`prepareSandbox`); without one the home is as bare
+ * as the minimal arm's. The seam is separate because building the home from the real configuration is its
+ * own piece of work (`home.mjs`). */
 export function currentConfig({ seed, ...options } = {}) {
-  return buildConfig('current', options, [], async ({ home, workspace }) => {
-    ensureSandboxDirs(home);
-    if (seed) await seed({ home, workspace });
-  });
+  return buildConfig('current', options, [], seed);
 }
