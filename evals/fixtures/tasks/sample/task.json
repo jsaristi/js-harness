@@ -1,0 +1,7 @@
+{
+  "grader": {
+    "command": "node",
+    "args": ["--test", "--test-reporter=tap", ".eval-grader/sample.grade.mjs"]
+  },
+  "timeoutMs": 30000
+}
