@@ -102,7 +102,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   (gentle-ai); fixture symlinks stay inside the workspace or are rejected, so an agent never
   writes through to the shared fixture (Codex); the CLI version is probed under the trial's own
   env and cached per env (Codex) (route: delegated writer, strict TDD)
-- [ ] T2a Sandbox env and the two configs: a per-trial home in the runner (`config.prepare`),
+- [x] T2a Sandbox env and the two configs: a per-trial home in the runner (`config.prepare`),
   the allowlisted env that points every writer at it, `minimal` and `current` as runner inputs,
   proven against the fake agent (route: delegated writer, strict TDD; trigger: runner, configs
   and their tests are 4 non-trivial files)
@@ -175,8 +175,29 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   parent replaced it with "every link is rejected": less code, and nothing unproven. Evidence:
   `node --test "evals/**/*.test.mjs"` 74/74, 0 skipped; `npm run check` exits 0 (pre-commit).
   Assessed medium, `under_budget` (276 lines over `6755054`): reviewed with T2's commits.
+- 2026-09-30: fourth round, prompted by the Stop hook, over `8434947..0c15a8f`. gentle-ai (lineage
+  `review-3c3fcf0765b64820`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING, the untested signal re-raise already under Follow-ups. Codex over `6755054..0c15a8f`
+  (recorded; run from a detached worktree because T2a's writer had the tree dirty): two P2 on the
+  version probe — a config resolved twice per trial could probe a different env than the agent
+  runs under, and `JSON.stringify` dropped `undefined` removals from the cache key. Both are in
+  the code T2a moves into `runTrial`, so they were handed to T2a's writer with a RED test each.
+  Reviewed boundary: `0c15a8f`.
 - 2026-09-30: T2 mapping done (read-only explorer; no real `claude` run). Result in "T2 map and
   decisions" below. T2 became T2a–T2c.
+- 2026-09-30: T2a done (delegated writer), commit `4574619`. `evals/configs.mjs`
+  (`SANDBOX_ALLOWLIST`, `SANDBOX_SWITCHES`, `sandboxPaths`, `sandboxEnv`, `ensureSandboxDirs`,
+  `minimalConfig`, `currentConfig` with a `seed` seam for T2b); the runner gives a config with
+  `prepare` a per-trial home, resolves the agent once per trial and probes the version inside the
+  trial (`runTrial({ readVersion })` replaces `cliVersion`); the fake agent reports its env with
+  secret-named values redacted. Both Codex P2 of round 4 closed (RED observed for the cache key;
+  the resolve-once test passed first run and was proven by mutation). TDD: RED per behaviour, the
+  new module's tests against a stub, then ten mutations, all killed. Evidence: `node --test
+  "evals/**/*.test.mjs"` 109/109, 0 skipped (rerun by the parent); `npm run check` exits 0. Found
+  on the way: Windows injects the real `HOMEDRIVE`/`HOMEPATH` (and `LOGONSERVER`, `USERDOMAIN`,
+  `USERNAME`) into every child, so `sandboxEnv` sets `HOMEDRIVE`/`HOMEPATH` itself; T2c must check
+  them in the real run. ~1,060 authored lines, 60% tests: the sandbox, the runner seam and their
+  tests are one unit. Assessed medium, `slice_budget_reached`: review due on `0c15a8f..4574619`.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -276,7 +297,7 @@ the docs):
   runs them.
 
 ## Next step
-T2a (the sandbox env and the two configs against the fake agent), then T2b (seeding the current
-home), then T2c once Sebastián allows the real-binary probe. Before T4: his `claude setup-token`
-and his choice of permission mode. Review base for the next slice review: `6755054` (every commit
-up to it is reviewed; `44ede8f` is pending, under budget).
+T2b (seeding the current home through `currentConfig`'s `seed`), then T2c once Sebastián allows
+the real-binary probe. Before T4: his `claude setup-token`
+and his choice of permission mode. Review base for the next slice review: `0c15a8f` (every commit
+up to it is reviewed by gentle-ai and Codex).
