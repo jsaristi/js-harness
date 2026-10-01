@@ -101,7 +101,8 @@ const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !=
 /** Loads a task directory (`evals/tasks/<id>/`): `task.md` (the prompt, verbatim), `task.json` (the
  * grader command and the agent's timeout), `fixture/` (the repo the agent starts in) and `grader/`
  * (hidden tests). Throws an error naming the file and field when any part is missing or malformed: a
- * task that loaded half-wrong would score every config the same and look like a result. */
+ * task that loaded half-wrong would score every config the same and look like a result. The same goes
+ * for a fixture that holds a link (see `checkFixtureLinks`). */
 export function loadTask(dir) {
   const id = path.basename(path.resolve(dir));
   const fixtureDir = path.join(dir, 'fixture');
@@ -126,7 +127,36 @@ export function loadTask(dir) {
   const args = spec.grader.args ?? [];
   if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string')) throw bad('grader.args', 'must be an array of strings');
   if (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs <= 0) throw bad('timeoutMs', 'must be a positive integer (milliseconds)');
+  checkFixtureLinks(id, fixtureDir); // fail before any spend; `copyFixture` repeats the check for tasks built by hand
   return { id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir };
+}
+
+/** Throws when `fixtureDir` holds a symlink or a junction, anywhere below it. A copy of the fixture
+ * shares a link's target with every other trial (Node even rewrites a relative target to an absolute
+ * one when it copies), so an agent writing through the link would change the fixture for all later
+ * trials. Every link is refused, not only one that leaves the fixture: a link that stays inside could
+ * be copied safely, but that path cannot be proven on a machine that may not create symlinks, and no
+ * task needs one. The walk never follows a link, so a link loop cannot hang it. The error names the
+ * task and the link's path inside the fixture. */
+export function checkFixtureLinks(taskId, fixtureDir) {
+  const root = path.resolve(fixtureDir);
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`task ${taskId}: fixture link ${path.relative(root, entryPath)} is not allowed: a trial would write through it into the shared fixture; put a real file or directory there`);
+      }
+      if (entry.isDirectory()) walk(entryPath);
+    }
+  };
+  walk(root);
+}
+
+/** Copies the task's fixture into `workspace` for one trial, after checking it for links, so a task
+ * built without `loadTask` still gets the guard. */
+export function copyFixture(task, workspace) {
+  checkFixtureLinks(task.id, task.fixtureDir);
+  fs.cpSync(task.fixtureDir, workspace, { recursive: true });
 }
 
 // Once the child has exited its pipes should close at once; a descendant that kept them open must not
@@ -268,10 +298,13 @@ export function resolveAgent(config, context) {
 const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** Copies the hidden grader into the workspace and runs it there; resolves to `{ score, passed, total,
- * error }`. The copy replaces `.eval-grader/` outright, so nothing the agent left under that name can
- * stand in for the real grader. The score is `pass / tests` of the grader's TAP summary. Output that
- * does not parse, or reports no tests, scores 0 with `grader-unparsable`: a silent 1 or a NaN would
- * both read as a result. `node` runs as this process's own `node`, so the grader does not depend on
+ * error }`, or to `{ spawnError }` when the grader command could not be started at all. The copy
+ * replaces `.eval-grader/` outright, so nothing the agent left under that name can stand in for the
+ * real grader. The score is `pass / tests` of the grader's TAP summary. Output that does not parse, or
+ * reports no tests, scores 0 with `grader-unparsable`: a silent 1 or a NaN would both read as a result.
+ * A grader that cannot be spawned is not a score either: it is the grader's configuration that is
+ * broken, so every trial would score 0 and, once recorded, be skipped on resume for good; the caller
+ * stops the suite instead. `node` runs as this process's own `node`, so the grader does not depend on
  * PATH and runs on the same version as the runner.
  *
  * TAP is asked for by the task's own `args` (`--test-reporter=tap`), not added here: the runner then
@@ -289,7 +322,7 @@ export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEO
     timeoutMs,
   });
   const fail = (error) => ({ score: 0, passed: null, total: null, error });
-  if (run.spawnError) return fail('grader-spawn-failed');
+  if (run.spawnError) return { spawnError: run.spawnError };
   if (run.timedOut) return fail('grader-timeout');
   const tap = parseTap(run.stdout);
   if (!tap) return fail('grader-unparsable');
@@ -311,7 +344,7 @@ const DEFAULT_RUNS_DIR = fileURLToPath(new URL('./runs/', import.meta.url));
 
 /** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
  * message }` when the agent died of the usage cap or of authentication (`reason` `cap` or `auth`), or
- * never started (`spawn`). A stopped trial records
+ * the agent (`spawn`) or the hidden grader (`grader-spawn`) never started. A stopped trial records
  * nothing: a zero there would measure the machine, not the configuration.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
@@ -334,7 +367,7 @@ export async function runTrial({
   fs.mkdirSync(workRoot, { recursive: true });
   const workspace = fs.mkdtempSync(path.join(workRoot, 'eval-'));
   try {
-    fs.cpSync(task.fixtureDir, workspace, { recursive: true });
+    copyFixture(task, workspace);
     const agent = resolveAgent(config, { effort, task });
     const began = Date.now();
     const run = await runProcess({
@@ -359,7 +392,9 @@ export async function runTrial({
     if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
 
     const output = parseAgentOutput(run.stdout);
-    const { error: graderError, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs });
+    const { error: graderError, spawnError: graderSpawnError, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs });
+    // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
+    if (graderSpawnError) return { status: 'stopped', reason: 'grader-spawn', message: graderSpawnError.message };
     return {
       status: 'recorded',
       record: {
@@ -396,15 +431,28 @@ function assertName(kind, value) {
   }
 }
 
+/** Throws when `values` holds the same value twice: two trials would then share a trial key and a log
+ * stem, so one would be skipped on resume and the other's raw output overwritten. */
+function assertUnique(kind, values) {
+  const seen = new Set();
+  for (const value of values) {
+    if (seen.has(value)) throw new Error(`duplicate ${kind} ${JSON.stringify(value)}: two trials would share a trial key`);
+    seen.add(value);
+  }
+}
+
 /** Every trial of a suite, in the order they run. Repeats are the outermost loop: a suite cut short
  * by the usage cap then holds one full pass over every task, configuration and effort before a second
  * repeat of any, which keeps a partial A/B comparison balanced instead of complete for one arm only.
  * Repeats count from 1. Throws before any trial when a task id, configuration name or effort is not
- * safe in a trial key. */
+ * safe in a trial key, or when one of them appears twice. */
 export function planTrials({ tasks, configs, efforts, repeats }) {
   for (const task of tasks) assertName('task id', task.id);
   for (const config of configs) assertName('config name', config.name);
   for (const effort of efforts) assertName('effort', effort);
+  assertUnique('task id', tasks.map((task) => task.id));
+  assertUnique('config name', configs.map((config) => config.name));
+  assertUnique('effort', efforts);
   const plan = [];
   for (let repeat = 1; repeat <= repeats; repeat += 1) {
     for (const task of tasks) {
@@ -454,11 +502,14 @@ function appendRecord(resultsPath, record) {
 }
 
 /** The first line of `<agent command> --version` (or `config.versionArgs`), else `null`. Recorded per
- * trial because a CLI update changes what a score means. */
-export function probeVersion(config) {
+ * trial because a CLI update changes what a score means. `env` is the trial's own env overrides (what
+ * `resolveAgent` yields): the probe must see what the agent will see, or it would run the real CLI
+ * against the real home directory a configuration redirects, and name the wrong install when the env
+ * selects another one. */
+export function probeVersion(config, env = {}) {
   const result = spawnSync(config.command, config.versionArgs ?? ['--version'], {
     encoding: 'utf8',
-    env: childEnv(),
+    env: childEnv(env),
     timeout: 30000,
     windowsHide: true,
   });
@@ -469,10 +520,12 @@ export function probeVersion(config) {
 /** Runs every trial of the suite that the results file does not already hold, appending each record
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
- * at the first usage-cap, authentication or agent-spawn stop, with nothing recorded for that trial.
+ * at the first usage-cap, authentication, agent-spawn or grader-spawn stop, with nothing recorded for
+ * that trial.
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
- * running the same call again. `readVersion` and `runTrial` are injectable for tests. */
+ * running the same call again. `readVersion(config, env)` and `runTrial` are injectable for tests;
+ * `env` is the env overrides the trial's agent runs under. */
 export async function runSuite({
   tasks,
   configs,
@@ -488,10 +541,14 @@ export async function runSuite({
 }) {
   const done = new Set(readResults(resultsPath).map(trialKey));
   const versions = new Map();
-  const versionOf = (config) => {
-    // One probe per distinct agent command, and none when every trial is already recorded.
-    const key = JSON.stringify([config.command, config.versionArgs ?? null]);
-    if (!versions.has(key)) versions.set(key, readVersion(config));
+  const versionOf = (config, context) => {
+    // One probe per distinct agent command, version arguments and env, and none when every trial is
+    // already recorded. The env is the trial's own, so two configs that redirect the same CLI to
+    // different installs or homes are probed separately; its keys are sorted so order cannot split a key.
+    const { env } = resolveAgent(config, context);
+    const sorted = Object.fromEntries(Object.entries(env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+    const key = JSON.stringify([config.command, config.versionArgs ?? null, sorted]);
+    if (!versions.has(key)) versions.set(key, readVersion(config, env));
     return versions.get(key);
   };
 
@@ -502,7 +559,7 @@ export async function runSuite({
       skipped += 1;
       continue;
     }
-    const outcome = await run({ task, config, effort, repeat, cliVersion: versionOf(config), workRoot, runsDir, graderTimeoutMs, log });
+    const outcome = await run({ task, config, effort, repeat, cliVersion: versionOf(config, { effort, task }), workRoot, runsDir, graderTimeoutMs, log });
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }

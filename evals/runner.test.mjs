@@ -7,7 +7,8 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, readResults, runProcess, runSuite, runTrial, summarizeUsage, trialKey,
+  checkFixtureLinks, childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, runProcess, runSuite,
+  runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -736,4 +737,163 @@ test('every close path sweeps the survivors exactly once, also when the pipes cl
   const run = await pending;
   assert.equal(run.exitCode, 0);
   assert.deepEqual(kills, ['survivors']);
+});
+
+// ---- third review round -----------------------------------------------------------------------------
+
+test('a grader command that cannot be spawned stops the trial without a record and cleans up', async () => {
+  const task = loadTask(makeTask({ grader: { command: path.join(scratch, 'no-such-grader'), args: [] }, timeoutMs: 30000 }));
+  const { options, workRoot } = trialEnv('solve', { task });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'stopped');
+  assert.equal(outcome.reason, 'grader-spawn');
+  assert.match(outcome.message, /ENOENT/);
+  assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('a suite whose grader cannot be spawned stops with reason grader-spawn and appends nothing', async () => {
+  const task = loadTask(makeTask({ grader: { command: path.join(scratch, 'no-such-grader'), args: [] }, timeoutMs: 30000 }));
+  const options = {
+    tasks: [task],
+    configs: [fakeConfig('solve')],
+    efforts: ['medium'],
+    repeats: 2,
+    resultsPath: path.join(tmp('results'), 'results.jsonl'),
+    runsDir: tmp('runs'),
+    workRoot: tmp('work'),
+  };
+  const result = await runSuite(options);
+  assert.equal(result.status, 'stopped');
+  assert.equal(result.reason, 'grader-spawn');
+  assert.equal(result.completed, 0);
+  assert.deepEqual(readResults(options.resultsPath), []);
+  assert.ok(!fs.existsSync(options.resultsPath), 'not even an empty results file: a resume must run the trial again');
+});
+
+test('planTrials rejects a repeated task id, config name or effort, which would share a trial key and a log stem', () => {
+  const axes = { tasks: [{ id: 'a' }, { id: 'b' }], configs: [{ name: 'x' }, { name: 'y' }], efforts: ['medium', 'high'], repeats: 1 };
+  assert.doesNotThrow(() => planTrials(axes));
+  assert.throws(() => planTrials({ ...axes, tasks: [{ id: 'a' }, { id: 'b' }, { id: 'a' }] }), /duplicate task id "a"/);
+  assert.throws(() => planTrials({ ...axes, configs: [{ name: 'x' }, { name: 'x' }] }), /duplicate config name "x"/);
+  assert.throws(() => planTrials({ ...axes, efforts: ['high', 'medium', 'high'] }), /duplicate effort "high"/);
+});
+
+test('runSuite rejects a duplicated config name before running or recording anything', async () => {
+  const asked = [];
+  const options = suiteOptions({ configs: [{ name: 'x', command: 'one' }, { name: 'x', command: 'two' }], runTrial: stubTrial(asked) });
+  await assert.rejects(runSuite(options), /duplicate config name "x"/);
+  assert.deepEqual(asked, []);
+  assert.deepEqual(readResults(options.resultsPath), []);
+});
+
+// ---- fixture links ----------------------------------------------------------------------------------
+
+/** A task directory whose fixture holds a directory junction to `target`: the one link a Windows
+ * account can always create, and always absolute. `makeTask` copies the sample first, so the junction
+ * is added to a fixture that otherwise loads. */
+function taskWithJunction(target) {
+  const dir = makeTask();
+  fs.symlinkSync(target, path.join(dir, 'fixture', 'shared'), 'junction');
+  return dir;
+}
+
+test('loadTask rejects a fixture that holds a link, naming the task and the link', () => {
+  const dir = taskWithJunction(tmp('outside'));
+  assert.throws(() => loadTask(dir), (err) => /task task-\d+: fixture link shared is not allowed/.test(err.message));
+});
+
+test('a link whose target is inside the fixture is rejected too', () => {
+  const dir = makeTask();
+  const fixture = path.join(dir, 'fixture');
+  fs.mkdirSync(path.join(fixture, 'src'));
+  fs.symlinkSync(path.join(fixture, 'src'), path.join(fixture, 'alias'), 'junction');
+  assert.throws(() => checkFixtureLinks('t', fixture), /fixture link alias is not allowed/);
+});
+
+test('checkFixtureLinks finds a link below the fixture root, not only at it', () => {
+  const dir = makeTask();
+  fs.mkdirSync(path.join(dir, 'fixture', 'src', 'deep'), { recursive: true });
+  fs.symlinkSync(tmp('outside'), path.join(dir, 'fixture', 'src', 'deep', 'shared'), 'junction');
+  assert.throws(() => checkFixtureLinks('t', path.join(dir, 'fixture')), (err) => err.message.includes(path.join('src', 'deep', 'shared')));
+});
+
+test('a fixture without links passes the check', () => {
+  assert.doesNotThrow(() => checkFixtureLinks('sample', path.join(SAMPLE, 'fixture')));
+  assert.doesNotThrow(() => loadTask(SAMPLE));
+});
+
+test('a trial refuses a fixture link even when the task was not built by loadTask, and leaves the shared directory alone', async () => {
+  const shared = tmp('shared');
+  fs.writeFileSync(path.join(shared, 'data.txt'), 'original');
+  const dir = taskWithJunction(shared);
+  const task = { ...loadTask(SAMPLE), fixtureDir: path.join(dir, 'fixture') };
+  const { options, workRoot } = trialEnv('noop', { task });
+  await assert.rejects(runTrial(options), /fixture link shared/);
+  assert.deepEqual(entriesOf(workRoot), [], 'the half-made workspace is removed');
+  assert.ok(!fs.existsSync(options.runsDir), 'no agent ran, so no raw output was written');
+  assert.equal(fs.readFileSync(path.join(shared, 'data.txt'), 'utf8'), 'original');
+});
+
+// ---- version probe ----------------------------------------------------------------------------------
+
+test('probeVersion runs the CLI under the env it is given, not the bare inherited one', () => {
+  const config = fakeConfig('noop');
+  assert.equal(probeVersion(config), '9.9.9 (Fake Agent)');
+  assert.equal(probeVersion(config, { FAKE_AGENT_VERSION: '1.2.3 (Elsewhere)' }), '1.2.3 (Elsewhere)');
+});
+
+test('runSuite probes the version under each trial env, once per distinct command and env', async () => {
+  const probes = [];
+  const seen = [];
+  const options = suiteOptions({
+    configs: [
+      { name: 'x', command: 'claude', env: { HOME_DIR: '/home/a' } },
+      { name: 'y', command: 'claude', env: { HOME_DIR: '/home/a' } },
+      { name: 'z', command: 'claude', env: () => ({ HOME_DIR: '/home/b' }) },
+    ],
+    efforts: ['medium', 'high'],
+    repeats: 1,
+    readVersion: (config, env) => {
+      probes.push(`${config.name}:${env.HOME_DIR}`);
+      return `v-${env.HOME_DIR}`;
+    },
+    runTrial: async (trial) => {
+      seen.push(`${trial.config.name}=${trial.cliVersion}`);
+      return { status: 'recorded', record: recordOf(trial) };
+    },
+  });
+  await runSuite(options);
+  assert.deepEqual(probes, ['x:/home/a', 'z:/home/b'], 'x and y share command and env, so one probe; z has another env, so its own');
+  assert.deepEqual(seen, ['x=v-/home/a', 'x=v-/home/a', 'y=v-/home/a', 'y=v-/home/a', 'z=v-/home/b', 'z=v-/home/b']);
+});
+
+test('runSuite probes again when the same command resolves to a different env per effort', async () => {
+  const probes = [];
+  const options = suiteOptions({
+    configs: [{ name: 'x', command: 'claude', env: ({ effort }) => ({ STATE_DIR: `/state/${effort}` }) }],
+    efforts: ['medium', 'high'],
+    repeats: 2,
+    readVersion: (config, env) => {
+      probes.push(env.STATE_DIR);
+      return '1.0.0';
+    },
+    runTrial: stubTrial([]),
+  });
+  await runSuite(options);
+  assert.deepEqual(probes, ['/state/medium', '/state/high']);
+});
+
+test('runSuite shares one probe between envs that differ only in key order', async () => {
+  const probes = [];
+  const options = suiteOptions({
+    configs: [
+      { name: 'x', command: 'claude', env: { A: '1', B: '2' } },
+      { name: 'y', command: 'claude', env: { B: '2', A: '1' } },
+    ],
+    repeats: 1,
+    readVersion: (config, env) => probes.push(env),
+    runTrial: stubTrial([]),
+  });
+  await runSuite(options);
+  assert.equal(probes.length, 1);
 });
