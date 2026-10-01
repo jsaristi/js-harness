@@ -1,2 +1,4 @@
 # Hooks run under sh, so they keep LF endings even where core.autocrlf checks out CRLF.
 .githooks/* text eol=lf
+# Eval task fixtures must be the same bytes on every machine, and this one checks out CRLF (core.autocrlf=true).
+evals/tasks/** text eol=lf
