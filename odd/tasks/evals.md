@@ -336,6 +336,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   arm was `pluginUsage`, whose changed entries (`typescript-lsp`, `codex`) are plugins of the live
   session, and `numStartups`, which any `claude` start increments in the file it uses, did not
   move: the parent's own session, not the trial.
+- 2026-10-01: T2s reviewed over `6cee6c4..db0253b`. gentle-ai (lineage
+  `review-0808ae7f1fdc8d62`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING and two suggestions, all under Follow-ups. Codex (recorded): no actionable regressions.
+  Reviewed boundary: `db0253b`. T1–T2 (slice 1 of the delivery plan) is complete.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -413,6 +417,14 @@ the docs):
 - gentle-ai's Stop hook always proposes the branch point as the review base, so after every
   commit it offers the accumulated branch as a fresh candidate even when slice reviews cover every
   commit in it. Worth raising with gentle-ai if it keeps costing a decline per stretch.
+- The sweep's boundary (end, separator, quote, whitespace after the root) misses a process that
+  names the root inside a list or key/value argument (`;`, `,`, `=`, `)` after it) (gentle-ai
+  WARNING on T2s). Trial directory names end in a random `[A-Za-z0-9]` suffix, so the sharper
+  rule is "the next character is not a name character `[A-Za-z0-9._-]`": it spares `trial-10`
+  and still matches `trial-1;`. Fix with T4's suite entry.
+- Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
+  before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
+  snapshot and an inherited directory-name hit.
 - `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
   place when either changes.
 
@@ -443,7 +455,6 @@ the docs):
   runs them.
 
 ## Next step
-Review T2s over `a844c3f` if `gentle-ai review assess` says it is due, then T3. Reviewed
-boundary: `6cee6c4` (`a844c3f` is docs only, passive).
-Before T4: Sebastián's `claude setup-token` and his choice of permission mode, asked one at a
-time.
+Slice 1 (T1–T2) is done and reviewed: its PR against `main` is Sebastián's call. Then T3.
+Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
+Reviewed boundary: `db0253b`.
