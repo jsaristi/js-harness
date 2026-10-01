@@ -16,6 +16,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sandboxEnv } from './configs.mjs';
+import { exists, isWithin, resolveReal } from './paths.mjs';
 import { childEnv } from './runner.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -84,7 +85,6 @@ const writeJson = (file, json) => {
   fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
 };
 
-const exists = (target) => fs.lstatSync(target, { throwIfNoEntry: false }) !== undefined;
 const isDirectory = (target) => fs.statSync(target, { throwIfNoEntry: false })?.isDirectory() === true;
 
 /** Copies `source` to `target`, file by file, never creating a link. A link in `source` is followed when
@@ -117,37 +117,6 @@ function copyEntry(source, target, ctx, label) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     (ctx.copyFile ?? fs.copyFileSync)(from, target);
   }
-}
-
-/** `target` as the file system resolves it: its deepest existing ancestor through `realpathSync` (so a
- * junction or symlink anywhere on the way is followed), with the part that does not exist yet put back
- * on. A path may be spelled many ways, a link among them, and only the resolved one says where a write
- * would land. A link that exists but cannot be resolved (dangling) is an error: nothing about where it
- * leads can be said. */
-function resolveReal(target) {
-  let existing = path.resolve(target);
-  const missing = [];
-  while (!exists(existing)) {
-    const parent = path.dirname(existing);
-    if (parent === existing) break;
-    missing.unshift(path.basename(existing));
-    existing = parent;
-  }
-  let real;
-  try {
-    real = fs.realpathSync(existing);
-  } catch (err) {
-    throw new Error(`cannot resolve ${existing}: ${err.message}`);
-  }
-  return path.join(real, ...missing);
-}
-
-/** Whether `child` is `parent` or below it, by path components: `..templates` is a name, and only a
- * first component of exactly `..` leaves the parent. Case-insensitive on Windows, because `path.relative` is there. Both are resolved
- * absolute paths (`resolveReal`). */
-function isWithin(parent, child) {
-  const relative = path.relative(parent, child);
-  return !(relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
 }
 
 /** The files below `root` as `{ path, size }`, `/`-separated and sorted. */

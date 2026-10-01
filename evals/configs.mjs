@@ -9,7 +9,50 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { exists, isWithin, resolveReal } from './paths.mjs';
 import { childEnv } from './runner.mjs';
+
+/** The names Claude Code loads as project memory from every ancestor directory of its cwd (`CLAUDE.md`,
+ * `CLAUDE.local.md`, `.claude/`), plus `AGENTS.md`, which the harness's own instructions use. A trial
+ * workspace that has one of them above it loads it, whatever the arm: the minimal arm would no longer be
+ * "the model and the built-in tools, nothing else". */
+export const PROJECT_MEMORY_NAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', '.claude'];
+
+/** Where trial homes and workspaces go by default: `js-harness-evals-work` next to the repository, not
+ * under it and not under the temp folder. The temp folder is no option: on Windows it is inside the
+ * user's real home (`C:\Users\<name>\AppData\Local\Temp`), so every workspace there has the real
+ * `~/.claude/CLAUDE.md` in an ancestor directory, and the template builder refuses it as being inside the
+ * real home. A sibling of the repository has neither problem on this machine (`D:\js-harness-evals-work`);
+ * `assertWorkRoot` proves it for any root, rather than trusting the location. */
+export function defaultWorkRoot({ repoRoot } = {}) {
+  if (typeof repoRoot !== 'string' || !path.isAbsolute(repoRoot)) throw new Error(`defaultWorkRoot needs an absolute repoRoot, got ${JSON.stringify(repoRoot)}`);
+  return path.join(path.dirname(path.resolve(repoRoot)), 'js-harness-evals-work');
+}
+
+/** Throws unless `root` is a place trials can run without the machine's own setup leaking in:
+ *  - absolute, and not the real home or anywhere inside it (resolved through links and compared by path
+ *    component, as `buildTemplate` does), because a trial's workspace would then sit in the real home;
+ *  - none of `root` and its ancestors up to the filesystem root holds one of `PROJECT_MEMORY_NAMES`, which
+ *    Claude Code would load into every trial. The error names the first one found, nearest first.
+ * `root` need not exist yet. `exists(path)` is injectable, for a test whose scratch directory has such a
+ * file far above it. */
+export function assertWorkRoot(root, { realHome, exists: present = exists } = {}) {
+  if (typeof root !== 'string' || !path.isAbsolute(root)) throw new Error(`the work root must be an absolute path, got ${JSON.stringify(root)}`);
+  if (typeof realHome !== 'string' || !path.isAbsolute(realHome)) throw new Error(`assertWorkRoot needs the realHome, an absolute path, got ${JSON.stringify(realHome)}`);
+  const resolved = resolveReal(root);
+  if (isWithin(resolveReal(realHome), resolved)) {
+    throw new Error(`the work root ${root} is inside the real home ${realHome}: every trial workspace would have the real home above it, and Claude Code loads project memory from every ancestor directory`);
+  }
+  for (const start of new Set([path.resolve(root), resolved])) {
+    for (let dir = start; ; dir = path.dirname(dir)) {
+      for (const name of PROJECT_MEMORY_NAMES) {
+        const found = path.join(dir, name);
+        if (present(found)) throw new Error(`the work root ${root} has ${found} above it (or in it): Claude Code would load it as project memory in every trial, whatever the arm`);
+      }
+      if (path.dirname(dir) === dir) break;
+    }
+  }
+}
 
 /** The only variables a trial inherits from the real environment: what a process needs to start on
  * Windows and on POSIX, and the one credential that passes through. Everything else is removed, because

@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  checkFixtureLinks, childEnv, classifyAgentFailure, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
+  checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 
@@ -17,7 +18,27 @@ const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-evals-test-'));
-after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+// The processes a test started (`strays`, below) are killed first: one that is still running, in a test that
+// failed, holds a directory under the scratch root and would make its removal fail too. Windows lets go of a
+// directory a moment after its holder dies, hence the retries.
+after(() => {
+  for (const pid of strays) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+  }
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.rmSync(scratch, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (attempt >= 10) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+    }
+  }
+});
 let counter = 0;
 const tmp = (name) => {
   const dir = path.join(scratch, `${name}-${counter++}`);
@@ -192,7 +213,9 @@ function trialEnv(mode, { env = {}, config, configExtra = {}, task = loadTask(SA
   const cfg = config ?? fakeConfig(mode, { FAKE_AGENT_REPORT: report, FAKE_AGENT_COUNT_FILE: countFile, ...env }, configExtra);
   return {
     workRoot, runsDir, report, countFile,
-    options: { task, config: cfg, effort: 'medium', repeat: 1, readVersion: () => '9.9.9 (Fake Agent)', workRoot, runsDir, ...options },
+    // The sweep by path costs about a second (a PowerShell start), so trials that are not about it skip it;
+    // the tests that are pass `sweep: undefined` to get the real one.
+    options: { task, config: cfg, effort: 'medium', repeat: 1, readVersion: () => '9.9.9 (Fake Agent)', workRoot, runsDir, sweep: () => ({ killed: [] }), ...options },
     readReport: () => JSON.parse(fs.readFileSync(report, 'utf8')),
   };
 }
@@ -1172,4 +1195,303 @@ test('runSuite does not share a version probe between an env without a variable 
   });
   await runSuite(options);
   assert.deepEqual(probes, ['x', 'y'], 'y removes HOME, so it is probed; null and undefined both remove, so z shares y');
+});
+
+// ---- sweeping a trial's processes by path -----------------------------------------------------------------
+
+const WINDOWS_ONLY = process.platform === 'win32' ? false : 'killByPath sweeps on Windows only; on POSIX it is a documented no-op';
+const SWEEPER = path.join(here, 'fixtures', 'sweep-by-path.mjs');
+
+// Every process a test starts is recorded and killed when the file ends, pass or fail, so a failing test
+// cannot leave a sleeper behind.
+const strays = new Set(); // killed by the hook at the top of this file
+const killStray = (pid) => {
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // already gone
+  }
+};
+
+/** A detached sleeper whose command line ends with `args`; returns its pid. */
+function sleeper(...args) {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...args], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+  strays.add(child.pid);
+  return child.pid;
+}
+
+test('killByPath kills a process whose command line holds the root, whichever way the separators are written or the case', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('Has Spaces'), 'eval-AbCd12');
+  const forward = root.split(path.sep).join('/');
+  const targets = [sleeper(root), sleeper(`${forward}/sub/file.txt`), sleeper(root.toUpperCase())];
+  const bystander = sleeper(path.join(tmp('elsewhere'), 'eval-ZzZz99'));
+  const { killed } = killByPath([root]);
+  assert.deepEqual([...killed].sort(), [...targets].sort());
+  assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))), 'the targets are dead');
+  assert.ok(isAlive(bystander), 'a process of another path is left alone');
+
+  const other = path.join(tmp('Other Spaces'), 'eval-QqQq11');
+  const backslashed = sleeper(other);
+  killByPath([other.split(path.sep).join('/')]);
+  assert.ok(await waitUntil(() => !isAlive(backslashed)), 'a root written with forward slashes matches a backslashed command line');
+});
+
+test('killByPath with a root nothing runs under kills nothing', { skip: WINDOWS_ONLY }, async () => {
+  const bystanders = [sleeper(path.join(tmp('a'), 'eval-one')), sleeper(path.join(tmp('b'), 'eval-two'))];
+  const { killed } = killByPath([path.join(tmp('unrelated'), 'eval-nobody')]);
+  assert.deepEqual(killed, []);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(bystanders.every(isAlive));
+});
+
+test('killByPath matches the root literally: regex metacharacters in it are ordinary characters', { skip: WINDOWS_ONLY }, async () => {
+  const dir = tmp('meta');
+  const root = path.join(dir, "w+(a).z'q[1]*");
+  // As a regular expression `w+(a).z'q[1]*` would match the first of these (`w+` is two w, `.` is any
+  // character, `[1]*` is nothing), and as a wildcard `...q[1]*` would match the second (`[1]` is the digit 1).
+  const regexDecoy = sleeper(path.join(dir, "wwa-z'q"));
+  const wildcardDecoy = sleeper(path.join(dir, "w+(a).z'q1-and-more"));
+  const target = sleeper(root);
+  const { killed } = killByPath([root]);
+  assert.deepEqual(killed, [target]);
+  assert.ok(await waitUntil(() => !isAlive(target)));
+  assert.ok(isAlive(regexDecoy), 'the path a regex would also have matched survives');
+  assert.ok(isAlive(wildcardDecoy), 'the path a wildcard would also have matched survives');
+});
+
+test('killByPath kills each match with its tree: a child whose own command line names nothing goes with it', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('tree'), 'eval-TrEe01');
+  const pidFile = path.join(tmp('tree-pid'), 'child.txt');
+  const parentCode = [
+    "const { spawn } = require('node:child_process');",
+    "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore', windowsHide: true });",
+    "require('node:fs').writeFileSync(process.argv[1], String(child.pid));",
+    'setInterval(() => {}, 1000);',
+  ].join('\n');
+  const parent = spawn(process.execPath, ['-e', parentCode, '--', pidFile, root], { detached: true, stdio: 'ignore', windowsHide: true });
+  parent.unref();
+  strays.add(parent.pid);
+  assert.ok(await waitUntil(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== ''), 'the parent started its child');
+  const child = Number(fs.readFileSync(pidFile, 'utf8'));
+  strays.add(child);
+  assert.ok(isAlive(child));
+  const { killed } = killByPath([root]);
+  assert.deepEqual(killed, [parent.pid], 'only the parent names the root');
+  assert.ok(await waitUntil(() => !isAlive(parent.pid) && !isAlive(child)), 'the child died with it');
+});
+
+test('killByPath succeeds when a match is already gone because an earlier match\'s tree kill took it', { skip: WINDOWS_ONLY }, async () => {
+  // Parents that start a detached child whose command line names the root too: the sweep matches both, and
+  // killing the parent with its tree kills the child before the sweep gets to it. Four pairs, because the
+  // order the process list comes in decides whether the parent or the child is reached first.
+  const root = path.join(tmp('gone'), 'eval-GoNe01');
+  const parentCode = [
+    "const { spawn } = require('node:child_process');",
+    "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', process.argv[1]], { detached: true, stdio: 'ignore', windowsHide: true });",
+    "require('node:fs').writeFileSync(process.argv[2], String(child.pid));",
+    'setInterval(() => {}, 1000);',
+  ].join('\n');
+  const pairs = [0, 1, 2, 3].map((index) => {
+    const pidFile = path.join(tmp('gone-pid'), `child-${index}.txt`);
+    const parent = spawn(process.execPath, ['-e', parentCode, '--', root, pidFile], { detached: true, stdio: 'ignore', windowsHide: true });
+    parent.unref();
+    strays.add(parent.pid);
+    return { parent: parent.pid, pidFile };
+  });
+  assert.ok(await waitUntil(() => pairs.every(({ pidFile }) => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== '')), 'every parent started its child');
+  const children = pairs.map(({ pidFile }) => Number(fs.readFileSync(pidFile, 'utf8')));
+  children.forEach((pid) => strays.add(pid));
+  const everyone = [...pairs.map(({ parent }) => parent), ...children];
+  const { killed } = killByPath([root]);
+  assert.deepEqual([...killed].sort((a, b) => a - b), [...everyone].sort((a, b) => a - b), 'every process that named the root is reported');
+  assert.ok(await waitUntil(() => everyone.every((pid) => !isAlive(pid))), 'all of them are gone');
+});
+
+test('the sweep script is quiet: no progress stream, and a failure reaches the caller as plain text', () => {
+  let script;
+  const sync = (command, args) => {
+    script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    return { status: 1, stdout: '', stderr: 'still running after the kill: 12' };
+  };
+  assert.throws(() => killByPath([path.join(tmp('quiet'), 'eval-q')], { platform: 'win32', spawnSync: sync }), /still running after the kill: 12/);
+  assert.match(script, /\$ProgressPreference = 'SilentlyContinue'/);
+  assert.match(script, /\[Console\]::Error\.WriteLine/);
+  assert.ok(!/\*> \$null|2>&1 \| Out-Null/.test(script), 'no native-command redirection that turns a stderr line into a terminating error');
+});
+
+test('killByPath spares the process it runs in and that process\'s ancestors, even when their command lines hold the root', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('self'), 'eval-SeLf01');
+  const target = sleeper(root);
+  const run = spawnSync(process.execPath, [SWEEPER, root], { encoding: 'utf8', windowsHide: true, timeout: 60000 });
+  assert.equal(run.status, 0, run.stderr);
+  const { killed } = JSON.parse(run.stdout);
+  assert.deepEqual(killed, [target], 'only the sleeper; not the sweeper process that holds the root in its own arguments');
+  assert.ok(await waitUntil(() => !isAlive(target)));
+});
+
+test('killByPath hands the roots to PowerShell through the environment, not the command line, and reports the pids it printed', () => {
+  const calls = [];
+  const sync = (command, args, options) => {
+    calls.push({ command, args, options });
+    return { status: 0, stdout: '4242\r\n77\r\n', stderr: '' };
+  };
+  const roots = [path.join(tmp('stub'), 'eval-St0b01'), path.join(tmp('stub'), 'eval Space')];
+  const { killed } = killByPath(roots, { platform: 'win32', spawnSync: sync });
+  assert.deepEqual(killed, [4242, 77]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'powershell');
+  assert.ok(calls[0].args.includes('-NoProfile'));
+  assert.ok(roots.every((root) => !calls[0].args.join(' ').includes(root)), 'no root is spliced into the script');
+  assert.deepEqual(calls[0].options.env.JS_HARNESS_KILL_ROOTS.split('\n'), roots);
+  assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ status: 1, stdout: '', stderr: 'boom' }) }), /sweep.*failed.*boom/);
+  assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ error: new Error('no powershell') }) }), /no powershell/);
+});
+
+test('killByPath refuses a root that could match more than one trial: empty, relative or a filesystem root', () => {
+  const never = () => assert.fail('PowerShell must not be started');
+  for (const bad of ['', '   ', 'relative/dir', path.parse(scratch).root, 42, null]) {
+    assert.throws(() => killByPath([bad], { platform: 'win32', spawnSync: never }), /root/, String(bad));
+  }
+  assert.throws(() => killByPath('not-an-array', { platform: 'win32', spawnSync: never }), /array/);
+  assert.deepEqual(killByPath([], { platform: 'win32', spawnSync: never }), { killed: [] });
+});
+
+test('killByPath refuses a root that is not strictly inside `within`: only directories a runner made are ever swept', () => {
+  const never = () => assert.fail('PowerShell must not be started');
+  const within = tmp('trial-work');
+  assert.throws(() => killByPath([within], { platform: 'win32', spawnSync: never, within }), /inside/);
+  assert.throws(() => killByPath([path.dirname(within)], { platform: 'win32', spawnSync: never, within }), /inside/);
+  assert.throws(() => killByPath([`${within}-sibling`], { platform: 'win32', spawnSync: never, within }), /inside/);
+  assert.throws(() => killByPath([path.join(within, 'ok'), tmp('somewhere-else')], { platform: 'win32', spawnSync: never, within }), /inside/);
+  const sync = () => ({ status: 0, stdout: '', stderr: '' });
+  assert.deepEqual(killByPath([path.join(within, 'eval-ok')], { platform: 'win32', spawnSync: sync, within }), { killed: [] });
+});
+
+test('on POSIX killByPath does nothing, and says so: process groups already cover a trial there', () => {
+  const never = () => assert.fail('nothing is spawned on POSIX');
+  const result = killByPath([path.join(tmp('posix'), 'eval-x')], { platform: 'linux', spawnSync: never });
+  assert.deepEqual(result.killed, []);
+  assert.match(result.skipped, /POSIX/);
+});
+
+/** Reports from a trial that left a holder, and kills the holder afterwards if the test failed to. */
+async function orphanTrial(env, configExtra = {}) {
+  const logs = [];
+  const trial = trialEnv('orphan-by-path', { env, configExtra, sweep: undefined, log: (message) => logs.push(message) });
+  const holder = () => {
+    try {
+      return trial.readReport().grandchildPid;
+    } catch {
+      return undefined;
+    }
+  };
+  return { ...trial, logs, holder, reap: () => holder() !== undefined && killStray(holder()) };
+}
+
+test('a descendant whose parent already exited, and whose command line names the workspace, is killed so the workspace can be removed', { skip: WINDOWS_ONLY }, async () => {
+  const trial = await orphanTrial({});
+  try {
+    const outcome = await runTrial(trial.options);
+    assert.equal(outcome.status, 'recorded');
+    assert.ok(trial.holder() > 0, 'the agent left a holder');
+    assert.ok(await waitUntil(() => !isAlive(trial.holder())), `the holder ${trial.holder()} is still running`);
+    assert.deepEqual(trial.logs, [], 'nothing could not be removed');
+    assert.deepEqual(entriesOf(trial.workRoot), []);
+  } finally {
+    trial.reap();
+  }
+});
+
+test('a descendant that names only the trial home is killed too, and both directories are removed', { skip: WINDOWS_ONLY }, async () => {
+  const trial = await orphanTrial({ FAKE_AGENT_ORPHAN_ARG: 'home' }, { prepare: async () => {}, envFor: ({ home }) => ({ FAKE_AGENT_HOME_ARG: home }) });
+  try {
+    await runTrial(trial.options);
+    assert.ok(await waitUntil(() => !isAlive(trial.holder())), `the holder ${trial.holder()} is still running`);
+    assert.deepEqual(trial.logs, []);
+    assert.deepEqual(entriesOf(trial.workRoot), []);
+  } finally {
+    trial.reap();
+  }
+});
+
+test('runTrial sweeps the trial home and workspace, and only those, before it removes them, even when the trial throws', async () => {
+  const calls = [];
+  const sweep = (roots, options) => {
+    calls.push({ roots, options, existed: roots.map((root) => fs.existsSync(root)) });
+    return { killed: [] };
+  };
+  const { options, workRoot } = trialEnv('noop', { sweep, configExtra: { prepare: async () => { throw new Error('prepare failed'); } } });
+  await assert.rejects(runTrial(options), /prepare failed/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].roots.length, 2, 'the home and the workspace');
+  assert.ok(calls[0].roots.every((root) => path.dirname(root) === path.resolve(workRoot)), 'direct children of the work root');
+  assert.deepEqual(calls[0].existed, [true, true], 'swept before removal');
+  assert.equal(calls[0].options.within, path.resolve(workRoot), 'and confined to the work root');
+  assert.deepEqual(entriesOf(workRoot), []);
+
+  const plain = trialEnv('noop', { sweep });
+  calls.length = 0;
+  await runTrial(plain.options);
+  assert.equal(calls[0].roots.length, 1, 'a config without prepare has no home to sweep');
+});
+
+test('a sweep that fails is logged and does not stop the directories being removed', async () => {
+  const logs = [];
+  const { options, workRoot } = trialEnv('noop', { sweep: () => { throw new Error('powershell is not here'); }, log: (message) => logs.push(message) });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.ok(logs.some((message) => /sweep/.test(message) && /powershell is not here/.test(message)), logs.join('\n'));
+  assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('a workspace that still will not delete after the sweep is logged, not thrown, and the trial is still recorded', { skip: WINDOWS_ONLY }, async () => {
+  const logs = [];
+  const { options, workRoot } = trialEnv('noop', {
+    configExtra: {
+      prepare: async ({ workspace }) => {
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        child.unref();
+        strays.add(child.pid);
+      },
+    },
+    sweep: () => ({ killed: [] }), // finds nothing, so the holder stays
+    log: (message) => logs.push(message),
+  });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.ok(logs.some((message) => /could not remove workspace/.test(message)), logs.join('\n'));
+  assert.ok(entriesOf(workRoot).some((name) => !name.startsWith('eval-home-')), 'the workspace is what is left');
+});
+
+test('a workspace that will not delete is swept again and its removal retried', { skip: WINDOWS_ONLY }, async () => {
+  const holders = [];
+  const calls = [];
+  const { options, workRoot } = trialEnv('noop', {
+    configExtra: {
+      prepare: async ({ workspace }) => {
+        // A process whose cwd is the workspace: on Windows the directory cannot be removed while it runs.
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        child.unref();
+        strays.add(child.pid);
+        holders.push(child.pid);
+      },
+    },
+    sweep: () => {
+      calls.push(calls.length);
+      // The first sweep finds nothing (the holder's command line names no trial directory); the second is the retry.
+      if (calls.length === 2) {
+        killStray(holders[0]);
+        // A real sweep returns once `taskkill` has: wait for the holder to be gone, as that does.
+        for (const until = Date.now() + 3000; isAlive(holders[0]) && Date.now() < until;);
+      }
+      return { killed: [] };
+    },
+  });
+  const logs = [];
+  await runTrial({ ...options, log: (message) => logs.push(message) });
+  assert.deepEqual(calls, [0, 1], 'one sweep before the removal, one before the retry');
+  // A directory removed while a dying process still has its handle is listed for a moment longer.
+  assert.ok(await waitUntil(() => entriesOf(workRoot).length === 0), `the retry removed it, but  is still there`);
+  assert.deepEqual(logs, []);
 });

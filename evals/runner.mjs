@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { killTree } from '../bin/codex-review.mjs';
+import { isWithin } from './paths.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -179,7 +180,7 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
   return env;
 }
 
-/** Kills what a root that has already exited left behind. POSIX: the group outlives its leader, so the
+/** Kills what a root that has already exited left behind (by `ParentProcessId`; `killByPath` is the sweep for a survivor whose own parent is gone too). POSIX: the group outlives its leader, so the
  * group kill still reaches it. Windows: `taskkill /T` needs a live root, so the root's direct children
  * are looked up by parent pid (which outlives the parent) and each is killed with its tree. A survivor
  * whose own parent exited first is unreachable that way. Mirrors `killSurvivors` in `bin/check.mjs`,
@@ -193,6 +194,113 @@ export function killSurvivors(child, { platform = process.platform, spawnSync: s
   }
   const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
   sync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
+}
+
+// The PowerShell of `killByPath`. It reads the roots from the environment (newline-separated, a name no path
+// can hold) and never has one spliced into its text, so a path with a quote, a `$` or a backtick cannot
+// change what it does. Every match is literal: `String.IndexOf` with `OrdinalIgnoreCase`, not `-match`
+// (a regex) and not `-like` (wildcards, where `[` is special): a trial directory may well hold `+`, `(`
+// or `[`. Each root is searched in both separator spellings, because a tool may print the same path with
+// either. The process the script runs in and every ancestor of it are spared, whatever their command lines
+// hold: a runner started with the workspace in its arguments must not sweep itself.
+//
+// All matches are taken from ONE snapshot of the process list, so killing one match with its tree (`/T`) can
+// take another match with it, and `taskkill` then reports that process as not found. That is success, not
+// an error: a process that is not there is what was wanted. So `taskkill`'s exit code is never consulted
+// (and it runs under `cmd`, where a stderr line is not turned into a PowerShell error); what decides is a
+// check, after the kills, that every matched process has exited. The pids of the matches are printed, one
+// per line, only then. A failure is one line of plain text on stderr and exit 1; progress output is off,
+// because under `-EncodedCommand` it would arrive as CLIXML.
+const SWEEP_SCRIPT = String.raw`
+$ProgressPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
+function Test-Running($id) {
+  try { return -not [System.Diagnostics.Process]::GetProcessById([int]$id).HasExited } catch { return $false }
+}
+try {
+  $roots = @($env:JS_HARNESS_KILL_ROOTS -split '\n' | Where-Object { $_ -ne '' })
+  $needles = @()
+  foreach ($root in $roots) {
+    $needles += $root
+    $needles += $root.Replace('\', '/')
+    $needles += $root.Replace('/', '\')
+  }
+  $needles = @($needles | Select-Object -Unique)
+  $all = @(Get-CimInstance Win32_Process)
+  $spared = @{}
+  $id = [uint32]$PID
+  while ($id -and -not $spared.ContainsKey($id)) {
+    $spared[$id] = $true
+    $parent = $all | Where-Object { $_.ProcessId -eq $id } | Select-Object -First 1
+    $id = if ($parent) { [uint32]$parent.ParentProcessId } else { [uint32]0 }
+  }
+  $matched = @()
+  foreach ($process in $all) {
+    if ($spared.ContainsKey([uint32]$process.ProcessId)) { continue }
+    $line = $process.CommandLine
+    if (-not $line) { continue }
+    foreach ($needle in $needles) {
+      if ($line.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        $matched += [uint32]$process.ProcessId
+        break
+      }
+    }
+  }
+  foreach ($id in $matched) {
+    if (Test-Running $id) { cmd.exe /c "taskkill /pid $id /T /F >nul 2>&1" | Out-Null }
+  }
+  $deadline = (Get-Date).AddSeconds(5)
+  do {
+    $running = @($matched | Where-Object { Test-Running $_ })
+    if ($running.Count -eq 0) { break }
+    Start-Sleep -Milliseconds 100
+  } while ((Get-Date) -lt $deadline)
+  if ($running.Count -gt 0) { throw ('still running after the kill: ' + ($running -join ', ')) }
+  $matched
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
+`;
+
+/** Kills every process whose command line contains any of `roots`, each with its tree, and returns `{ killed }`,
+ * the pids it matched. `roots` are absolute trial directories, unique per trial (a home, a workspace), which
+ * is what makes a plain substring a safe test.
+ *
+ * It exists because `killSurvivors` walks DOWN from the agent by parent pid, and a descendant whose parent
+ * exited first has a parent pid that belongs to nobody: unreachable that way. An MCP server a seeded home
+ * starts (codegraph, `serve --mcp --path <workspace>`) is such a process, and while it runs it holds the
+ * directory, so the trial's cleanup fails with EPERM. The process knows its trial by the path in its own
+ * command line, so that is what is searched.
+ *
+ * Because a wrong root would kill unrelated processes, a root must be a non-empty absolute path below the
+ * filesystem root, and when `within` is given strictly inside it (the runner passes its work root: only
+ * directories it made are ever swept). Windows only, through PowerShell and CIM (see `SWEEP_SCRIPT`). On
+ * POSIX it is a no-op, returning `skipped` and its reason: a trial's process group is killed on close, which
+ * covers its descendants there, and an unproven `ps` parser that kills by substring is worse than none.
+ * `platform` and `spawnSync` are injectable. Throws when the sweep itself could not run or failed. */
+export function killByPath(roots, { platform = process.platform, spawnSync: sync = spawnSync, within } = {}) {
+  if (!Array.isArray(roots)) throw new Error('killByPath needs an array of roots');
+  for (const root of roots) {
+    if (typeof root !== 'string' || !path.isAbsolute(root) || path.parse(root).root === root || /[\r\n]/.test(root)) {
+      throw new Error(`killByPath root ${JSON.stringify(root)} must be an absolute path below the filesystem root: anything shorter could match processes that are not the trial's`);
+    }
+    if (within !== undefined && (path.resolve(root) === path.resolve(within) || !isWithin(path.resolve(within), path.resolve(root)))) {
+      throw new Error(`killByPath root ${root} is not inside ${within}: only directories the runner made are ever swept`);
+    }
+  }
+  if (roots.length === 0) return { killed: [] };
+  if (platform !== 'win32') return { killed: [], skipped: 'POSIX: a trial\'s process group is killed on close, and the sweep by path is only implemented for Windows' };
+  const encoded = Buffer.from(SWEEP_SCRIPT, 'utf16le').toString('base64');
+  const result = sync('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+    env: { ...process.env, JS_HARNESS_KILL_ROOTS: roots.join('\n') },
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 60000,
+  });
+  if (result.error) throw new Error(`the sweep by path could not run: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`the sweep by path failed (exit ${result.status}): ${String(result.stderr).trim()}`);
+  return { killed: String(result.stdout).split(/\r?\n/).map((line) => line.trim()).filter((line) => /^\d+$/.test(line)).map(Number) };
 }
 
 /** Runs one child to its end and resolves to `{ stdout, stderr, exitCode, signal, timedOut,
@@ -344,12 +452,29 @@ const rawStem = ({ task, config, effort, repeat }) => [task, config, effort, rep
 const DEFAULT_RUNS_DIR = fileURLToPath(new URL('./runs/', import.meta.url));
 
 /** Removes a directory the trial made. A leak is logged, never thrown: the record is worth more than a
- * tidy disk, but a leak must not go unnoticed. */
-function removeDir(dir, label, log) {
+ * tidy disk, but a leak must not go unnoticed. When the removal fails, `sweepAgain()` runs (a process that
+ * holds the directory may only have started since the first sweep, or have been slow to die) and the
+ * removal is tried once more. */
+export function removeDir(dir, label, log, sweepAgain) {
+  const remove = () => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   try {
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch (err) {
-    log(`could not remove ${label} ${dir}: ${err.message}`);
+    remove();
+  } catch {
+    sweepAgain?.();
+    // Windows lets go of a directory a moment after the process that held it is gone (measured: an EPERM
+    // within a millisecond of the kill, success 200 ms later), so the retry is spread over about a second.
+    let failure;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        remove();
+        failure = undefined;
+        break;
+      } catch (err) {
+        failure = err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+      }
+    }
+    if (failure) log(`could not remove ${label} ${dir}: ${failure.message}`);
   }
 }
 
@@ -386,6 +511,7 @@ export async function runTrial({
   graderTimeoutMs,
   now = () => new Date(),
   clock = () => performance.now(),
+  sweep = killByPath,
   log = (message) => console.error(message),
 }) {
   const startedAt = now().toISOString();
@@ -445,8 +571,20 @@ export async function runTrial({
       },
     };
   } finally {
-    removeDir(workspace, 'workspace', log);
-    if (home) removeDir(home, 'home', log);
+    // Before anything is removed: a process the agent left behind, whose parent is gone, holds these
+    // directories (the codegraph MCP server of a seeded home does) and `killSurvivors` cannot reach it. Only
+    // the directories this call made are swept, confined to the work root. A failed sweep is logged, and the
+    // removal is still tried.
+    const sweepTrial = () => {
+      try {
+        sweep([workspace, ...(home ? [home] : [])], { within: root });
+      } catch (err) {
+        log(`could not sweep the processes of the trial directories: ${err.message}`);
+      }
+    };
+    sweepTrial();
+    removeDir(workspace, 'workspace', log, sweepTrial);
+    if (home) removeDir(home, 'home', log, sweepTrial);
   }
 }
 

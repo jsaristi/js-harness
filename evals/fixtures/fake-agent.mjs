@@ -2,7 +2,7 @@
 // A stand-in for `claude --print --output-format json`, so the runner is proven end to end without a
 // real model. The mode comes from the environment, because the runner owns the real agent's argv.
 //
-//   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | garbage  (default noop)
+//   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | orphan-by-path | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | garbage  (default noop)
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
 //                      prompt, cwd, argv, the workspace entries and the whole environment it received
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
@@ -102,6 +102,25 @@ switch (mode) {
     report.grandchildPid = grandchild.pid;
     writeReport();
     console.log(success('orphaned'));
+    break;
+  }
+  case 'orphan-by-path': {
+    // A detached grandchild started by an intermediate process that exits first, so by the time the runner
+    // looks its parent pid belongs to nobody and no walk down from the agent's pid can find it. Its command
+    // line names a trial directory (the workspace, or the home with FAKE_AGENT_ORPHAN_ARG=home, which the
+    // test supplies as FAKE_AGENT_HOME_ARG) and its cwd is the workspace, which on Windows keeps that
+    // directory from being removed: the shape of the codegraph MCP server a seeded home leaves behind.
+    const named = process.env.FAKE_AGENT_ORPHAN_ARG === 'home' ? process.env.FAKE_AGENT_HOME_ARG : cwd;
+    const intermediate = [
+      "const { spawn } = require('node:child_process');",
+      "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', process.argv[1]], { cwd: process.cwd(), detached: true, stdio: 'ignore', windowsHide: true });",
+      'child.unref();',
+      'console.log(child.pid);',
+    ].join('\n');
+    const started = spawnSync(process.execPath, ['-e', intermediate, '--', named], { cwd, encoding: 'utf8', windowsHide: true });
+    report.grandchildPid = Number(started.stdout.trim());
+    writeReport();
+    console.log(success('left a holder behind'));
     break;
   }
   case 'hang-noisy':

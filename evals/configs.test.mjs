@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, currentConfig, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths } from './configs.mjs';
+import {
+  SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths,
+} from './configs.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -434,4 +436,82 @@ test('both arms get a byte-identical .gitconfig', async () => {
     configs.push(fs.readFileSync(path.join(home, '.gitconfig'), 'utf8'));
   }
   assert.equal(configs[0], configs[1]);
+});
+
+// ---- the work root -------------------------------------------------------------------------------------------
+
+/** A fake real home inside the scratch directory, for `assertWorkRoot`'s `realHome`. */
+const fakeRealHome = () => {
+  const home = path.join(tmp('wr-home'), 'person');
+  fs.mkdirSync(home, { recursive: true });
+  return home;
+};
+/** An `exists` that only sees what is inside the scratch directory. The scratch directory itself lives
+ * under this machine's temp folder, which on Windows is inside the real home, whose `.claude` the real
+ * check would (rightly) find above it; so a test that needs a root with clean ancestors cannot use one. */
+const existsInScratchOnly = (target) => {
+  const relative = path.relative(scratch, target);
+  return !relative.startsWith('..') && !path.isAbsolute(relative) && fs.lstatSync(target, { throwIfNoEntry: false }) !== undefined;
+};
+const cleanRoot = () => path.join(tmp('wr-parent'), 'work');
+
+test('defaultWorkRoot is a sibling of the repository, so no trial workspace has the home or the repo above it', () => {
+  const repo = path.join(tmp('wr-repo'), 'js-harness');
+  assert.equal(defaultWorkRoot({ repoRoot: repo }), path.join(path.dirname(repo), 'js-harness-evals-work'));
+  assert.equal(defaultWorkRoot({ repoRoot: repo + path.sep }), path.join(path.dirname(repo), 'js-harness-evals-work'), 'a trailing separator changes nothing');
+  assert.throws(() => defaultWorkRoot({ repoRoot: 'js-harness' }), /absolute/);
+  assert.throws(() => defaultWorkRoot({}), /repoRoot/);
+});
+
+test('assertWorkRoot accepts an absolute root outside the home whose ancestors hold no project memory, existing or not', () => {
+  const realHome = fakeRealHome();
+  const root = cleanRoot();
+  assert.doesNotThrow(() => assertWorkRoot(root, { realHome, exists: existsInScratchOnly }), 'not created yet');
+  fs.mkdirSync(root);
+  assert.doesNotThrow(() => assertWorkRoot(root, { realHome, exists: existsInScratchOnly }));
+  const sibling = path.join(path.dirname(realHome), `${path.basename(realHome)}2`, 'work');
+  assert.doesNotThrow(() => assertWorkRoot(sibling, { realHome, exists: existsInScratchOnly }), 'a name that only starts with the home name is not inside it');
+});
+
+test('assertWorkRoot rejects a relative root and a missing real home', () => {
+  const realHome = fakeRealHome();
+  assert.throws(() => assertWorkRoot('work', { realHome }), /absolute/);
+  assert.throws(() => assertWorkRoot(cleanRoot(), { realHome: 'home' }), /absolute/);
+  assert.throws(() => assertWorkRoot(cleanRoot(), {}), /realHome/);
+});
+
+test('assertWorkRoot rejects the real home itself, anything inside it, and a root that reaches it through a link', () => {
+  const realHome = fakeRealHome();
+  for (const root of [realHome, path.join(realHome, 'AppData', 'Local', 'Temp'), path.join(realHome, 'new', 'deep')]) {
+    assert.throws(() => assertWorkRoot(root, { realHome, exists: existsInScratchOnly }), /inside the real home/, root);
+  }
+  // A work root that is a junction into the home is inside it for every write that goes through it.
+  const junction = path.join(tmp('wr-link'), 'work');
+  fs.symlinkSync(realHome, junction, 'junction');
+  assert.throws(() => assertWorkRoot(junction, { realHome, exists: existsInScratchOnly }), /inside the real home/);
+  assert.throws(() => assertWorkRoot(path.join(junction, 'sub'), { realHome, exists: existsInScratchOnly }), /inside the real home/);
+});
+
+for (const name of ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', '.claude']) {
+  test(`assertWorkRoot rejects a root whose ancestor holds ${name}, naming it, because every trial would load it as project memory`, () => {
+    const realHome = fakeRealHome();
+    const parent = tmp('wr-memory');
+    const root = path.join(parent, 'a', 'work');
+    fs.mkdirSync(root, { recursive: true });
+    const planted = path.join(parent, name);
+    if (name === '.claude') fs.mkdirSync(planted);
+    else fs.writeFileSync(planted, 'instructions\n');
+    assert.throws(() => assertWorkRoot(root, { realHome, exists: existsInScratchOnly }), (error) => error.message.includes(planted) && error.message.includes(name));
+    // The root itself counts too, and the nearest one is the one named.
+    const inRoot = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(inRoot, 'x\n');
+    assert.throws(() => assertWorkRoot(root, { realHome, exists: existsInScratchOnly }), (error) => error.message.includes(inRoot) && !error.message.includes(planted));
+  });
+}
+
+test('assertWorkRoot reads the real file system by default: a planted CLAUDE.md above a root is found without any seam', () => {
+  const realHome = fakeRealHome();
+  const parent = tmp('wr-real');
+  fs.writeFileSync(path.join(parent, 'CLAUDE.md'), 'x\n');
+  assert.throws(() => assertWorkRoot(path.join(parent, 'work'), { realHome }), (error) => error.message.includes(path.join(parent, 'CLAUDE.md')));
 });
