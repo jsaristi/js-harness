@@ -232,8 +232,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T4kg A reused pid held by a process this user cannot read is "gone", not "running": the
   kill settles that case through CIM instead of failing the caller (found by the gate, a real
   reuse) (route: inline, two small understood edits)
-- [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
-  (route: inline run, results committed)
+- [x] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
+  (route: inline run, results committed). Outcome: **no task kept**, all five at 0.98–1.00
+- [ ] T4h Headroom found: at least three candidates the minimal config at `medium` scores under
+  0.8 on. The T3 rule says more candidates are written when fewer than three survive; what
+  kind, after five that were hard in five different ways all hit the ceiling, is open and
+  Sebastián's to steer (route: to be set with the direction)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
   inline run, results committed)
 - [ ] T6 Report and roadmap: `evals/report.mjs` with `--require-complete` and
@@ -919,6 +923,29 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
   `feat/stack-v4` do not have T4k at all. Commit `09d7a90`; gentle-ai assessed it medium,
   under budget; Codex reviewed `e54ff9f..09d7a90` (recorded): no actionable finding.
+- 2026-10-02: Sebastián stored the token (checked without reading it) and chose
+  `bypassPermissions` (`4b1ab30`). **T4 ran**, the first real trials: `node evals/suite.mjs
+  --claude C:\Users\Oficina\.local\bin\claude.exe --configs minimal --efforts medium --repeats 3
+  --tasks all --permission-mode bypassPermissions --name headroom`, with the token passed to
+  that one process from the user variable. 15 of 15 trials recorded, no error, no cap, exit 0;
+  35.8 minutes of agent time; 6.75M input tokens (almost all cache reads) and 232.5k output;
+  `claude-opus-5-5`, Claude Code 2.1.284, gentle-ai 4.0.0, engram 3.0.0, plugin 0.1.5.
+  Results: `evals/results/headroom.json`; raw logs in `evals/runs/headroom/` (not committed; no
+  token in either, searched for `sk-ant-`). The work root was removed by the suite.
+
+  | task | mean | per trial (passed/total) | turns | wall |
+  |---|---|---|---|---|
+  | format-v2 | 0.99 | 47/47, 47/47, 46/47 | 37, 29, 32 | 4m55s |
+  | house-rules | 0.98 | 46/47 ×3 | 8, 20, 8 | 1m17s |
+  | lost-updates | 1.00 | 43/43 ×3 | 9, 12, 13 | 2m19s |
+  | resolver | 1.00 | 45/45 ×3 | 6, 6, 6 | 1m40s |
+  | spec-drift | 0.99 | 50/51, 50/51, 51/51 | 10, 13, 15 | 1m44s |
+
+  **Every candidate is dropped** (keep is a mean under 0.8): 709 of 713 hidden checks passed
+  over the 15 trials. The bare configuration at `medium` is at the ceiling on all five, the
+  predecessor's failure again, so a score cannot separate the configs on these tasks and
+  `--min-discriminating 3` cannot be met with them. Not yet read: which checks the four misses
+  were (`house-rules` misses the same count in every trial).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1060,6 +1087,18 @@ Decided 2026-10-01, before the first candidate was written:
   ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
   visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
   parallel run. It passed on the gate runs before and after. Not diagnosed.
+- A second flake in the gate, seen once the same day: `evals/suite.test.mjs:698` (the interrupt
+  during a real trial) found one of the trial's two processes "alive" after the cleanup, after
+  21 s. Not diagnosed. A hypothesis worth checking first: the test asks whether a pid is alive
+  by its number, and this machine reused a pid within one gate run that day (T4kg), so the
+  answer may have been about another process. Three red gate runs out of nine that day, each
+  green on the retry: the gate's own reliability is now a cost.
+- The same day one gate run ended as `npm run test timed out after 600 s` (the run usually takes
+  about five minutes; the probe's tests alone take two and a half). The whole suite is close to
+  the gate's limit. During that run a `Microsoft/Windows/PowerShell/ModuleAnalysisCache` file
+  appeared in the repository root: some PowerShell child ran with no `LOCALAPPDATA` and the
+  repository as its working directory. Which spawn does that is not found yet (a first search
+  for `LOCALAPPDATA` in `bin/` and `evals/` did not show it); the directory was removed.
 - Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
   accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
   fails then, on `engramSession`), and `engramServer`'s second log location,
@@ -1111,8 +1150,7 @@ programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not writt
 `~/.claude/commands/gentle-sdd-*.md` files were moved to
 `~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
 `main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
-Next: T4, the headroom screen. Before
-T4, two of Sebastián's decisions, asked one at a time:
+Before T4, two of Sebastián's decisions were taken:
 1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
    `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
    prefix, no whitespace), never in chat or a file in the repo; the suite entry maps it to
@@ -1124,9 +1162,11 @@ T4, two of Sebastián's decisions, asked one at a time:
 2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
    (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
    isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
-Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s): `node
-evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
---permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
-`evals/runs/headroom/`.
+T4 ran on 2026-10-02 and kept no task (see Progress): all five candidates score 0.98–1.00 with
+the minimal config at `medium`. T5 has nothing to run over until T4h finds headroom. The
+direction is Sebastián's (asked 2026-10-02): harder candidates of another kind, a look at what
+the current config costs on the same five tasks first, or another definition of what separates
+the configs (which "Ask me before" reserves for him). `node evals/suite.mjs --summary --name
+headroom` prints the table again.
 Reviewed boundary: gentle-ai `e54ff9f` (`09d7a90`, T4kg, 62 lines, is under budget and pending
 in the slice); Codex `09d7a90`.
