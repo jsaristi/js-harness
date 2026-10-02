@@ -568,6 +568,37 @@ test('checkPayload reports each host with its sources, a missing one and its hoo
   }
 });
 
+test('checkPayload prefixes a plugin hook with its plugin id and leaves a settings hook as it was', () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram');
+    fs.mkdirSync(path.join(installPath, 'hooks'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({
+        enabledPlugins: { 'engram@engram': true },
+        hooks: { UserPromptSubmit: [{ hooks: [{ command: 'probe-hook' }] }] },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({ plugins: { 'engram@engram': [{ installPath }] } }),
+    );
+    fs.writeFileSync(
+      path.join(installPath, 'hooks', 'hooks.json'),
+      JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ command: 'session-start.sh' }] }] } }),
+    );
+    const [claude] = checkPayload(dir, home);
+    assert.ok(claude.lines.includes('hook UserPromptSubmit probe-hook'));
+    assert.ok(claude.lines.includes('hook SessionStart     engram@engram: session-start.sh'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('main passes with a large machine payload when AGENTS.md is within budget', async () => {
   const dir = makeTmpDir();
   const home = makeTmpDir();

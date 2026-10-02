@@ -102,7 +102,7 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
 - [x] T4 `doctor`'s gentle-ai upgrade fix crosses a major: when the latest release's major is
   above the installed one, the fix is the `go install` line for the new module path followed by
   `gentle-ai sync`, since `gentle-ai upgrade` cannot get there (route: delegated writer)
-- [ ] T5 The payload rows list the context hooks of enabled Claude plugins, read from each
+- [x] T5 The payload rows list the context hooks of enabled Claude plugins, read from each
   plugin's `hooks/hooks.json` under its install path (route: delegated writer)
 - [ ] T6 Roadmap and F2: the v4 step checked with the measured numbers, the stack row and the
   risks brought up to date (route: inline)
@@ -155,6 +155,14 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   an `upToDateFix(installed, latest)` and `buildReport` lays it over `fix.upToDate`. The existing
   "3.7.0 to 4.0.0" doctor test asserted the fix that could never work; it now expects the
   `go install` line.
+- 2026-10-01: T5 done (delegated writer; RED on three assertions, GREEN:
+  `node --test bin/lib/payload.test.mjs bin/check.test.mjs` 93/93; `npm run test` 1148 pass,
+  0 fail, 8 skipped). A plugin is enabled when its `enabledPlugins` entry is `true` after the
+  user, project and project-local settings are merged, later layers winning; its hooks come from
+  `hooks/hooks.json` under the `installPath` in `installed_plugins.json`. Parent spot check on
+  the real home: `check` now lists four rows it did not, `codex@openai-codex` SessionStart and
+  `engram@engram` UserPromptSubmit, SessionStart and SessionStart (post-compaction). The rows
+  name the hooks; what they inject is still not counted (the payload row says so).
 
 ## Next step
-T5 with the writer, then the review findings (T3r) and T6.
+The review findings (T3r), then T6.
