@@ -966,12 +966,16 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 
   Totals: minimal 693/699 checks, 6.75M input, 233k output, 35.8 min; current 695/699, 18.14M
   input, 276k output, 55.5 min. **Same score, 2.7× the input tokens, 1.2× the output and 1.55×
-  the time.** Input is almost all cache reads, so the price gap is smaller than the token gap;
-  the turns roughly double on the short tasks. Not counted: tokens of any reviewer runs the
+  the time.** Input is almost all cache reads, so the price gap is smaller than the token gap.
+  Turns grow on every task, by 1.2× (`house-rules`) to 2.4× (`resolver`). Not counted: tokens of any reviewer runs the
   current arm's gentle-ai Stop hook may spawn (the open question under "T1 decisions"). Three
   trials per arm cannot tell a 0.987 from a 1.000 apart. The run's `--summary` prints the
   minimal screen as "incomplete" for every task, because the screen reads minimal trials only:
   right, but noisy for a current-only run (a Follow-up).
+- 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
+  medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
+  the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
+  No code in the slice, so no Codex review is owed.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1212,5 +1216,11 @@ the screen). It measures cost and whether the score moves; it decides nothing ab
 itself, and the bar and its definition stay as they are. It ran (see Progress): the same
 score at 2.7× the input tokens and 1.55× the time. The direction for T4h is Sebastián's again,
 with that data in hand.
-Reviewed boundary: gentle-ai `d8ad2ae`; Codex `09d7a90` (the commits after it hold no code:
-docs and the results file).
+Reviewed boundary: gentle-ai `d470eaa`; Codex `09d7a90` (the commits after it hold no code:
+docs and the results files).
+Also asked on 2026-10-02 and unanswered: whether to fix three points an audit of `AGENTS.md`
+found (it is otherwise coherent, accurate, not duplicated, and no `CLAUDE.md` in the repo
+conflicts with it): the rule that every decision is committed in the session contradicts the
+global "never commit unless asked" without naming the exception; "the handoff is the roadmap
+and the feature document, nothing else" against resuming from the `/compact` summary; and line
+73, 141 characters, never re-wrapped.
