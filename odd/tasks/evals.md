@@ -665,10 +665,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
   `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
-  and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is done: the screen is `node evals/suite.mjs --claude <binary> --configs
-minimal --efforts medium --repeats 3 --tasks all --permission-mode <mode> --name headroom`, then
-`--summary --name headroom`. Raw logs land in `evals/runs/headroom/`.
-Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
+  and every hidden test stays fair), so they are Follow-ups. Reviewed boundary: `d0bc904`.
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
@@ -1032,9 +1029,19 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
+Since then, all on `feat/evals` and not pushed: T4a (code done, its real-binary proof pending),
+T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr and T4srr.
 Next: T4a's last step, the isolation probe with the real binary (see Progress, 2026-10-02),
-on Sebastián's go-ahead. The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`,
-not pushed). Then T4, the headroom screen. Before
+on Sebastián's go-ahead: `node evals/isolation-probe.mjs --claude
+C:\Users\Oficina\.local\bin\claude.exe --arm both --control-ms 60000` (no spend: a loopback
+fake API). The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
+**Do not commit on `main` or `feat/stack-v4` from this machine until T4k is there**: their
+pre-commit gate still kills by parent pid (see Progress, 2026-10-02) and can close unrelated
+programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not written yet: the 11
+`~/.claude/commands/gentle-sdd-*.md` files were moved to
+`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
+`main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
+Then T4, the headroom screen. Before
 T4, two of Sebastián's decisions, asked one at a time (the first was asked on 2026-10-01 and is
 unanswered):
 1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
@@ -1043,6 +1050,9 @@ unanswered):
    `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
    claude.ai connectors.
 2. The permission mode both arms pass (`permissionMode` has no default).
-Then T4: the suite entry (`defaultWorkRoot` + `assertWorkRoot`, `removeTemplate` on every path,
-the sweep-boundary follow-up, the token mapping), then minimal at `medium`, 3 trials per candidate.
-Reviewed boundary: `d0bc904`.
+Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s): `node
+evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
+--permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
+`evals/runs/headroom/`.
+Reviewed boundary: gentle-ai `24774db` (`f99f859`, 31 lines, is under budget and pending in the
+slice); Codex `f99f859`.
