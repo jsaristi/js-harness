@@ -641,6 +641,39 @@ test('a longer name that ends in gentle-ai is not a gentle-ai call, but the bina
   }
 });
 
+test('a gentle-ai call is detected only where a command can start', () => {
+  const stale = [
+    'gentle-ai sdd-preflight-hook --agent claude-code',
+    '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" sdd-preflight-hook',
+    '/home/x/go/bin/gentle-ai sdd-preflight-hook',
+    "powershell -NoProfile -Command 'if ($x) { $d = 1 }; gentle-ai sdd-preflight-hook --quiet; exit 0'",
+    'bash -c "gentle-ai sdd-preflight-hook"',
+    'cd repo && gentle-ai sdd-preflight-hook',
+    'true || gentle-ai sdd-preflight-hook',
+    'echo hi | gentle-ai sdd-preflight-hook',
+    'echo hi\ngentle-ai sdd-preflight-hook',
+  ];
+  const unclassified = [
+    'echo "gentle-ai sdd-preflight-hook was retired"',
+    'echo gentle-ai sdd-preflight-hook',
+    'my-gentle-ai sdd-preflight-hook',
+    "powershell -NoProfile -Command 'if (Test-Path env:CLAUDE_PROJECT_DIR) { $dir = $env:CLAUDE_PROJECT_DIR } else { $dir = $PWD }; gentle-ai skill-registry refresh --quiet --no-gitignore --cwd \"$dir\"; exit 0'",
+  ];
+  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [] }) });
+  try {
+    const tool = findTool('gentle-ai');
+    for (const [commands, expected] of [[stale, 'stale'], [unclassified, 'ok']]) {
+      for (const command of commands) {
+        writeJson(path.join(home, '.claude', 'settings.json'), hooksConfig({ SessionStart: [command] }));
+        const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+        assert.equal(configured.claude, expected, command);
+      }
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a host that is not configured stays missing even when its hooks file has a dead hook', () => {
   const home = makeTmpHome();
   try {

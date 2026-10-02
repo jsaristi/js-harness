@@ -109,6 +109,11 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
   (gentle-ai WARNING); a call is not matched inside a longer name such as `my-gentle-ai`
   (gentle-ai suggestion); the `go install` tag comes from the parsed version, so a latest of
   `v5.0.0` does not print `@vv5.0.0` (parent read) (route: delegated writer)
+- [x] T5r Findings both reviewers raised: a plugin's install record is chosen for the current
+  project (its own `projectPath` record, else the user-level one; another project's never), and
+  a gentle-ai call is detected only where a command can start, so a hook that merely mentions
+  one in an `echo` is left unclassified instead of reported dead (Codex P2 twice, gentle-ai
+  suggestions) (route: delegated writer)
 - [x] T6 Roadmap and F2: the v4 step checked with the measured numbers, the stack row and the
   risks brought up to date (route: inline)
 
@@ -186,13 +191,26 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   F2 step is checked with the measured payload, the Review row says where the Codex model now
   lives, and the risks name what a stack release did to a running feature.
   `odd/tasks/f2-context-diet.md` T4 is closed with the same numbers.
+- 2026-10-01: `3737284..39f4dd4` (T3r) reviewed by gentle-ai: lineage `review-97bf7f2c3bdda2e3`,
+  lens reliability, approved with no finding, acknowledged, authority burned. Its first STATUS
+  after START returned `operation_timeout` ("context deadline exceeded") while the pre-commit
+  gate of the docs commit was running the whole suite; the provider-issued STATUS, re-run once on
+  an idle machine, collected the reviewer and closed. A review and a commit's gate should not
+  run at the same time on this host.
+- 2026-10-01: Codex reviewed the branch, `5ab2ae6..3bc8d7d` (recorded), on `gpt-6.1-sol` at
+  `high`, which also shows the restored model answers. Two P2, the same two points gentle-ai had
+  left as suggestions, each reproduced by Codex with a fixture: another project's install record
+  listed first makes the payload rows show its hooks, and an `echo` that mentions a removed
+  command makes `doctor` advise removing a healthy hook. Two reviewers agreeing, and the second
+  being wrong advice to delete something, made them T5r rather than follow-ups: one bounded
+  correction, not a loop.
+- 2026-10-01: T5r done (delegated writer; RED: three payload tests and the command-position test
+  failing; GREEN: the four test files 232/232). Parent spot check on the real home and binary:
+  the pre-cleanup settings copy is still `stale`, the real home `ok ok`, and `check` still lists
+  the four plugin rows. Left unclassified on purpose: a binary path with spaces, and a separator
+  inside a quoted message (`echo "a; gentle-ai x"`).
 
 ## Follow-ups
-- `pluginHooks` takes a plugin's first install record with an `installPath` and ignores the
-  record's scope, so with several records (one per project) the rows could show another
-  project's install (gentle-ai suggestion). Every plugin on this machine has one user-scope
-  record; fix it with a test when a second record exists to copy the shape from.
-- A hook whose text only mentions `gentle-ai <word>` (an `echo`) would be reported `stale`.
 - gentle-ai upstream: the v4 sync leaves the `sdd-preflight-hook` hook and the `sdd-*` assets
   behind while `gentle-ai doctor` reports healthy, and it gives Codex a global `AGENTS.md` three
   times the size of 3.7's. Filing either is Sebastián's call (Ask me before).
@@ -200,4 +218,4 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   tests carry it.
 
 ## Next step
-The reviews of `fb35bf9..HEAD` (gentle-ai, then Codex over the branch), then T6.
+The reviews of T5r, then Sebastián's call on the PR. After it, `feat/evals` T4a.

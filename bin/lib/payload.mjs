@@ -181,13 +181,30 @@ function enabledPluginIds(settingsPaths) {
 /** The context hooks of every enabled plugin, each tagged with its plugin id: the plugin's
  * `hooks/hooks.json` under the `installPath` recorded in `installed_plugins.json` (the same shape
  * as a settings file). A plugin with no install record, no hooks file or malformed JSON adds nothing. */
-function pluginHooks(home, settingsPaths) {
+function pluginHooks(home, cwd, settingsPaths) {
   const installed = readJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins;
   return enabledPluginIds(settingsPaths).flatMap((id) => {
-    const entries = installed && typeof installed === 'object' ? installed[id] : null;
-    const record = Array.isArray(entries) ? entries.find((e) => typeof e?.installPath === 'string') : null;
+    const record = applicableInstallRecord(installed && typeof installed === 'object' ? installed[id] : null, cwd);
     return record ? readHooks(path.join(record.installPath, 'hooks', 'hooks.json'), id) : [];
   });
+}
+
+/** Whether two paths are the same directory once resolved; Windows paths compare case-insensitively. */
+function samePath(a, b) {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+/** The one install record of a plugin that applies to the project at `cwd`: a record bound to that
+ * project (`projectPath`, as a `project` or `local` install writes it) wins over a user-level one
+ * (`scope: "user"`, or no scope and no `projectPath`). A record bound to another project, or a
+ * `project`/`local` one that names none, never applies. */
+function applicableInstallRecord(records, cwd) {
+  const usable = (Array.isArray(records) ? records : []).filter((r) => typeof r?.installPath === 'string');
+  const bound = usable.find((r) => typeof r.projectPath === 'string' && samePath(r.projectPath, cwd));
+  if (bound) return bound;
+  const userLevel = (r) => typeof r.projectPath !== 'string' && r.scope !== 'project' && r.scope !== 'local';
+  return usable.find(userLevel) ?? null;
 }
 
 /** Claude's context-injecting hook commands, concatenated the same way Claude Code itself merges
@@ -200,7 +217,8 @@ function claudeHooks(home, cwd) {
     path.join(cwd, '.claude', 'settings.json'),
     path.join(cwd, '.claude', 'settings.local.json'),
   ];
-  return [...settingsPaths.flatMap((settingsPath) => readHooks(settingsPath)), ...pluginHooks(home, settingsPaths)];
+  const settingsHooks = settingsPaths.flatMap((settingsPath) => readHooks(settingsPath));
+  return [...settingsHooks, ...pluginHooks(home, cwd, settingsPaths)];
 }
 
 /** Claude's per-turn sources, in load order: global `CLAUDE.md`, the active output style, the

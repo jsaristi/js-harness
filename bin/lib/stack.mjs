@@ -115,10 +115,14 @@ const HOST_HOOKS_FILES = {
   claude: ['.claude', 'settings.json'],
   codex: ['.codex', 'hooks.json'],
 };
-// `gentle-ai <command>` inside a hook command string: a bare or `.exe` binary (optionally quoted),
-// then the first word. A path such as `~/.gentle-ai/state.json` has no whitespace after the name,
-// and a longer name such as `my-gentle-ai` is not the binary: no word character or hyphen before it.
-const GENTLE_AI_CALL_RE = /(?<![\w-])gentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
+// `gentle-ai <command>` where a command can start, and nowhere else: at the start of the hook
+// command, after a separator (`;`, `&`, `|`, `(`, `{`, a newline), or right after the opening quote
+// of a shell's command-string flag (`-Command '`, `-c "`). Then an optional quote, an optional path
+// ending in `/` or `\`, the bare or `.exe` binary, an optional closing quote and the command word.
+// Anything else (`echo gentle-ai x`, `my-gentle-ai x`, text inside a quoted message) is left
+// unclassified on purpose: doctor makes no claim about a hook it cannot read as a call.
+const GENTLE_AI_CALL_RE =
+  /(?:^|[;&|({\n]|-[Cc](?:ommand)?\s+["'])\s*["']?(?:[^\s"']*[\\/])?gentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
 
 /** Every hook command in a hooks config (`hooks.<Event>[].hooks[].command`, the shape both hosts
  * use), as `{ event, command }`. A missing or malformed file, or a shape that does not match,
