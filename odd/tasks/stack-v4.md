@@ -207,10 +207,24 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
 - 2026-10-01: T5r done (delegated writer; RED: three payload tests and the command-position test
   failing; GREEN: the four test files 232/232). Parent spot check on the real home and binary:
   the pre-cleanup settings copy is still `stale`, the real home `ok ok`, and `check` still lists
-  the four plugin rows. Left unclassified on purpose: a binary path with spaces, and a separator
-  inside a quoted message (`echo "a; gentle-ai x"`).
+  the four plugin rows. Left unclassified on purpose: a binary path with spaces. Still a false
+  positive, not handled: a separator inside a quoted message (`echo "a; gentle-ai x"`), which
+  the regex reads as a call because it does not track quoting (see Follow-ups).
+- 2026-10-01: `3bc8d7d..b58b5c2` (T5r) reviewed. gentle-ai: lineage `review-d063ff57837f5b03`,
+  lens reliability, approved and acknowledged, authority burned; one WARNING, that this log
+  claimed the quoted-separator case was left unclassified when the code still matches it
+  (corrected above: the log was wrong, not the code's tests), and one suggestion about a nested
+  `cwd`. Codex (recorded): no actionable finding. Both go to Follow-ups; the correction budget
+  for this slice is spent. Every commit of `5ab2ae6..b58b5c2` is reviewed by both.
 
 ## Follow-ups
+- A separator inside a quoted message (`echo "done; gentle-ai sdd-x"`) is still read as a call
+  and reported `stale`: `GENTLE_AI_CALL_RE` does not track quoting. Narrower than the plain
+  `echo` T5r fixed, and no such hook exists here; a fix needs a small shell-aware scanner, not a
+  longer regex.
+- A project-bound install record applies only when its `projectPath` is exactly `cwd`; measured
+  from a subdirectory, the project's own record is skipped. It matches how settings are read
+  (only from `cwd`'s `.claude`), but no test pins it (gentle-ai suggestion).
 - gentle-ai upstream: the v4 sync leaves the `sdd-preflight-hook` hook and the `sdd-*` assets
   behind while `gentle-ai doctor` reports healthy, and it gives Codex a global `AGENTS.md` three
   times the size of 3.7's. Filing either is Sebastián's call (Ask me before).
@@ -218,4 +232,6 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   tests carry it.
 
 ## Next step
-The reviews of T5r, then Sebastián's call on the PR. After it, `feat/evals` T4a.
+The feature is complete on `feat/stack-v4` (`5ab2ae6..b58b5c2` plus this log), not pushed: the
+push and the PR against `main` are Sebastián's call. Work continues on `feat/evals` with T4a.
+Reviewed boundary: `b58b5c2`.
