@@ -185,6 +185,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
   suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
+- [ ] T4a Sandbox isolation holds with the engram plugin: the current arm's engram hooks and the
+  server they spawn stay inside the trial. A per-trial `ENGRAM_PORT` (and no inherited
+  `ENGRAM_URL`) in `sandboxEnv`, the listener on that port swept with the trial's other
+  processes, and the isolation probe's fake agent extended with a memory write and a subagent
+  stop, so the proof exercises the paths the plugin added (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -631,6 +636,19 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
+- 2026-10-01: the stack moved under the feature. `gentle-ai upgrade` (00:25Z) took engram to
+  3.0.0 and `gentle-ai sync` (00:33Z) ran `engram setup claude-code`, which installed the Claude
+  plugin `engram@engram` 0.1.5: hooks and one skill, no MCP server
+  (`~/.claude/plugins/cache/engram/engram/0.1.5/` has `hooks/`, `scripts/`, `skills/` and no
+  `.mcp.json`). Its hooks talk HTTP to `ENGRAM_URL` or `127.0.0.1:${ENGRAM_PORT:-7437}`:
+  SessionStart posts `/sessions` and starts a detached `engram serve` when nothing answers,
+  PreToolUse runs on every `mem_*` write, SubagentStop posts `/observations/passive`. None of
+  that honours `ENGRAM_DATA_DIR`, and the allowlist drops `ENGRAM_PORT`, so a current-arm trial
+  would reach the real server on 7437 (it answers today: version 3.0.0) and could write the real
+  store. The T2c/T2s proof never exercised this: its fake agent runs only Bash and Write. T4 is
+  blocked on T4a. gentle-ai itself is now 4.0.0 (`odd/tasks/stack-v4.md`), so the current arm is
+  gentle-ai 4.0.0 + engram 3.0.0 + plugin 0.1.5; the versions are fixed before T4 and must not
+  change between T4 and T5, and the report names them.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -645,7 +663,8 @@ the docs):
 | Updater | `~/.local/bin/claude.exe`, `~/.local/share/claude`, `~/.local/state/claude` | `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1` (`autoUpdates:false` in `.claude.json` is ignored for a native install) |
 | MCP logs | `%LOCALAPPDATA%\claude-cli-nodejs\Cache\` | `LOCALAPPDATA` only, not `CLAUDE_CONFIG_DIR` |
 | Scratch | `%TEMP%\claude\` | `TEMP`/`TMP` |
-| engram (MCP server only; no hook writes it) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram MCP server (stdio) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram plugin hooks (since 2026-10-01: SessionStart, PreToolUse on `mem_*` writes, SubagentStop, SessionEnd) and the `engram serve` they start | the HTTP server on `127.0.0.1:7437`, which writes its own store | `ENGRAM_PORT` (or `ENGRAM_URL`); not `ENGRAM_DATA_DIR` (T4a) |
 | gentle-ai | `~/.gentle-ai/` (`state.json`, `telemetry.json`, `review-stop-hook/`); per repo `.git/gentle-ai/` | `USERPROFILE`/`HOME` (no dedicated variable; `USERPROFILE=Z:\nope` made it fail on `mkdir Z:\nope`) |
 | codegraph | `~/.codegraph/` (telemetry, queue, update check, daemons); workspace `.codegraph/` | `USERPROFILE` (proven the same way) |
 | js-harness doctor cache | `~/.js-harness/doctor.json` | `JS_HARNESS_HOME` |
@@ -799,7 +818,10 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
-Next: T4, the headroom screen. Before it, two of Sebastián's decisions, asked one at a time:
+Next: T4a, the sandbox re-proof with the engram plugin (see Progress, 2026-10-01), after the
+stack work in `odd/tasks/stack-v4.md` on `feat/stack-v4`. Then T4, the headroom screen. Before
+T4, two of Sebastián's decisions, asked one at a time (the first was asked on 2026-10-01 and is
+unanswered):
 1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
    of its own, `JS_HARNESS_EVAL_OAUTH_TOKEN`, never in chat or a file in the repo; T4's suite entry
    maps it to `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
