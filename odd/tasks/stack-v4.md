@@ -104,6 +104,11 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
   `gentle-ai sync`, since `gentle-ai upgrade` cannot get there (route: delegated writer)
 - [x] T5 The payload rows list the context hooks of enabled Claude plugins, read from each
   plugin's `hooks/hooks.json` under its install path (route: delegated writer)
+- [x] T3r T3 review findings: `gentle-ai help` is read only inside its `COMMANDS` sections, so a
+  format the parser does not understand yields no claim instead of every hook reported dead
+  (gentle-ai WARNING); a call is not matched inside a longer name such as `my-gentle-ai`
+  (gentle-ai suggestion); the `go install` tag comes from the parsed version, so a latest of
+  `v5.0.0` does not print `@vv5.0.0` (parent read) (route: delegated writer)
 - [ ] T6 Roadmap and F2: the v4 step checked with the measured numbers, the stack row and the
   risks brought up to date (route: inline)
 
@@ -163,6 +168,16 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   the real home: `check` now lists four rows it did not, `codex@openai-codex` SessionStart and
   `engram@engram` UserPromptSubmit, SessionStart and SessionStart (post-compaction). The rows
   name the hooks; what they inject is still not counted (the payload row says so).
+- 2026-10-01: `5ab2ae6..fb35bf9` (the plan, the cleanup record, T3) reviewed by gentle-ai:
+  medium risk, 524 lines, review due (`slice_budget_reached`); lineage
+  `review-9e152ded2290f6ad`, lens reliability, approved and acknowledged, authority burned; one
+  WARNING and one suggestion, both taken as T3r. Codex could not run on that range while the
+  writer's next task sat uncommitted in the tree (`codex-review` refuses a dirty tree, since its
+  record claims the committed range); it runs once over the whole branch at the end.
+- 2026-10-01: T3r done (delegated writer; RED: four tests failing, 130 passing; GREEN:
+  `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs` 134/134). Parent spot check with the
+  real `gentle-ai help`: the copy of the pre-cleanup settings is still `stale` with its fix
+  line, the real home `ok ok`.
 
 ## Next step
-The review findings (T3r), then T6.
+The reviews of `fb35bf9..HEAD` (gentle-ai, then Codex over the branch), then T6.

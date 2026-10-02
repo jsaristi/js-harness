@@ -113,6 +113,14 @@ test('gentle-ai upgrade fix goes through go install for the new module path when
   assert.deepEqual(upToDateFix('3.7.0', '5.2.1')[0], 'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.2.1');
 });
 
+test('gentle-ai upgrade fix builds the tag from the parsed semver, so a v-prefixed latest never prints @vv', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  assert.equal(
+    upToDateFix('4.0.0', 'v5.0.0')[0],
+    'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.0.0',
+  );
+});
+
 test('gentle-ai upgrade fix is unchanged within a major and when a version is unknown or unparseable', () => {
   const { upToDateFix } = findTool('gentle-ai');
   const unchanged = ['gentle-ai upgrade', 'gentle-ai sync'];
@@ -571,6 +579,65 @@ test('a malformed or missing hooks file never makes a gentle-ai cell stale', () 
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('help that is only partly understood makes no claim: no command found in a COMMANDS section, no stale host', () => {
+  const usageOnly = ['USAGE', '  gentle-ai <command> [flags]', ''].join('\n');
+  // The COMMANDS section is indented differently, so none of its lines parse as command lines.
+  const reindented = ['USAGE', '  gentle-ai <command> [flags]', '', 'COMMANDS', '    sync     Sync', '    review stop-hook', ''].join('\n');
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ SessionStart: ['gentle-ai review stop-hook', 'gentle-ai telemetry runtime claude --json'] }),
+    codex: hooksConfig({ Stop: [DEAD_HOOK] }),
+  });
+  try {
+    for (const stdout of [usageOnly, reindented]) {
+      const spawn = helpSpawn({ status: 0, stdout, stderr: '' });
+      const configured = findTool('gentle-ai').configured({ home, spawn, platform: 'linux' });
+      assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('commands are read from every section whose header names COMMANDS, and from no other', () => {
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ SessionStart: ['gentle-ai review-start --cwd .', 'gentle-ai flags-only'] }),
+  });
+  const help = ['USAGE', '  gentle-ai <command> [flags]', '', 'FLAGS', '  flags-only  not a command', ''].join('\n');
+  try {
+    // review-start sits under COMPATIBILITY COMMANDS in the shared help; `flags-only` under FLAGS.
+    const spawn = helpSpawn({ status: 0, stdout: `${GENTLE_AI_HELP}\n${help}`, stderr: '' });
+    const tool = findTool('gentle-ai');
+    const configured = tool.configured({ home, spawn, platform: 'linux' });
+    assert.equal(configured.claude, 'stale');
+    const fix = tool.fix({}, configured);
+    assert.equal(fix.claude.length, 1);
+    assert.match(fix.claude[0], /lists no "flags-only" command/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a longer name that ends in gentle-ai is not a gentle-ai call, but the binary by full path is', () => {
+  const longer = ['my-gentle-ai sdd-preflight-hook', 'not-gentle-ai sdd-preflight-hook', 'x_gentle-ai sdd-preflight-hook'];
+  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: longer }) });
+  try {
+    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  const byPath = ['C:\\Users\\x\\go\\bin\\gentle-ai.exe sdd-preflight-hook', '/home/x/go/bin/gentle-ai sdd-preflight-hook'];
+  for (const command of byPath) {
+    const pathHome = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [command] }) });
+    try {
+      const configured = findTool('gentle-ai').configured({ home: pathHome, spawn: helpSpawn(helpOk), platform: 'linux' });
+      assert.equal(configured.claude, 'stale', command);
+    } finally {
+      fs.rmSync(pathHome, { recursive: true, force: true });
+    }
   }
 });
 

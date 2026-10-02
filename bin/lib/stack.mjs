@@ -116,8 +116,9 @@ const HOST_HOOKS_FILES = {
   codex: ['.codex', 'hooks.json'],
 };
 // `gentle-ai <command>` inside a hook command string: a bare or `.exe` binary (optionally quoted),
-// then the first word. A path such as `~/.gentle-ai/state.json` has no whitespace after the name.
-const GENTLE_AI_CALL_RE = /\bgentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
+// then the first word. A path such as `~/.gentle-ai/state.json` has no whitespace after the name,
+// and a longer name such as `my-gentle-ai` is not the binary: no word character or hyphen before it.
+const GENTLE_AI_CALL_RE = /(?<![\w-])gentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
 
 /** Every hook command in a hooks config (`hooks.<Event>[].hooks[].command`, the shape both hosts
  * use), as `{ event, command }`. A missing or malformed file, or a shape that does not match,
@@ -136,16 +137,20 @@ function hookCommands(filePath) {
   return found;
 }
 
-/** The commands `gentle-ai help` lists: a line indented by exactly two spaces is a command line and
- * its first word is the command; deeper lines continue the one above. This is the only thing ever
- * run to learn them: probing a hook's own command could execute it. `null` when help cannot be run
- * or yields no command lines, so the caller makes no claim without evidence. */
+/** The commands `gentle-ai help` lists: inside a section whose header line names `COMMANDS` (it ends
+ * at the next unindented line), a line indented by exactly two spaces is a command line and its
+ * first word is the command; deeper lines continue the one above. Other sections, such as `USAGE`,
+ * are never read, so help that is only partly understood yields nothing. This is the only thing
+ * ever run to learn them: probing a hook's own command could execute it. `null` when help cannot be
+ * run or yields no command lines, so the caller makes no claim without evidence. */
 function gentleAiListedCommands(deps) {
   const result = spawnProbe('gentle-ai', ['help'], deps);
   if (!result || result.error || probeTimedOut(result) || result.status !== 0) return null;
   const listed = new Set();
+  let inCommands = false;
   for (const line of String(result.stdout ?? '').split(/\r?\n/)) {
-    const match = /^ {2}([A-Za-z][\w-]*)(?:\s|$)/.exec(line);
+    if (/^\S/.test(line)) inCommands = line.includes('COMMANDS');
+    const match = inCommands ? /^ {2}([A-Za-z][\w-]*)(?:\s|$)/.exec(line) : null;
     if (match) listed.add(match[1]);
   }
   return listed.size > 0 ? listed : null;
@@ -274,10 +279,11 @@ export const tools = [
     // needs the latest version, which is only known once `doctor` has resolved it, so `doctor`
     // applies it on top of `fix.upToDate`. Unknown or unparseable versions keep `fix.upToDate`.
     upToDateFix: (installed, latest) => {
-      const [from, to] = [installed, latest].map((v) => SEMVER_RE.exec(v ?? '')?.[1].split('.')[0]);
-      if (!from || !to || Number(to) <= Number(from)) return GENTLE_AI_UPGRADE_FIX;
-      const module = `github.com/gentleman-programming/gentle-ai/v${to}/cmd/gentle-ai`;
-      return [`go install ${module}@v${latest}`, 'gentle-ai sync'];
+      const [from, to] = [installed, latest].map((v) => SEMVER_RE.exec(v ?? '')?.[1]);
+      const [fromMajor, toMajor] = [from, to].map((v) => v?.split('.')[0]);
+      if (!from || !to || Number(toMajor) <= Number(fromMajor)) return GENTLE_AI_UPGRADE_FIX;
+      const module = `github.com/gentleman-programming/gentle-ai/v${toMajor}/cmd/gentle-ai`;
+      return [`go install ${module}@v${to}`, 'gentle-ai sync'];
     },
     fix: (_deps, configured) => ({
       installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
