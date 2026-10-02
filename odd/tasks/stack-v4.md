@@ -92,7 +92,7 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
 
 ## Tasks
 - [x] T1 Adopt: install gentle-ai 4.0.0 and sync (route: inline; evidence above)
-- [ ] T2 Machine cleanup, each step recorded with its undo: remove the dead `sdd-preflight-hook`
+- [x] T2 Machine cleanup, each step recorded with its undo: remove the dead `sdd-preflight-hook`
   hook; move the orphaned `sdd-*` skills and agents out of the Claude and Codex homes; let sync
   refresh the eight preserved review agents after comparing them; set gentle-ai's Codex
   orchestrator assignment to `gpt-6.1-sol`/`high` and prove a sync keeps it (route: inline)
@@ -114,11 +114,29 @@ Everything written outside this repo for this feature, and how to undo it.
 |------------|--------|------|
 | 2026-10-02 01:05 | `~/go/bin/gentle-ai.exe` 3.7.0 → 4.0.0 | `go install github.com/gentleman-programming/gentle-ai/v3/cmd/gentle-ai@v3.7.0` |
 | 2026-10-02 01:06 | `gentle-ai sync`, 47 files in `~/.claude`, `~/.codex`, `~/.agents`, `~/.gemini` | `gentle-ai restore` with backup `20261002010604.667221800` |
+| 2026-10-02 01:36 | `~/.claude/settings.json`: the `PreToolUse[Agent]` entry running `gentle-ai sdd-preflight-hook` removed (ten lines; the parsed JSON otherwise identical) | copy `claude-settings.json` from the backup folder back |
+| 2026-10-02 01:45 | 44 `sdd-*` assets moved out of `~/.claude/skills`, `~/.codex/skills`, `~/.agents/skills` and `~/.claude/agents` (v4 ships none: `internal/assets/skills` and `internal/assets/claude/agents` of the v4.0.0 module have no `sdd-*`) | move them back from `home/` in the backup folder |
+| 2026-10-02 01:45 | The eight preserved review agents (`jd-*`, `review-*` in `~/.claude/agents`) moved out so the sync could write v4's (every one differed from v4's template by 53–117 lines; they were 3.7's renderings, not hand edits) | move them back from `home/` in the backup folder |
+| 2026-10-02 01:46 | `~/.gentle-ai/state.json`: `codexOrchestratorAssignment` `gpt-6-astra`/`medium` → `gpt-6.1-sol`/`high` | copy `gentle-ai-state.json` from the backup folder back, then `gentle-ai sync` |
+| 2026-10-02 01:46 | `gentle-ai sync`, 11 files: the eight review agents re-created, `~/.codex/config.toml` back to `gpt-6.1-sol`/`high` | `gentle-ai restore` with that sync's backup |
+
+The backup folder is `~/.js-harness/backups/stack-v4-20261001/` (its `README.md` repeats these
+undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
+`~/.gemini/antigravity-cli/skills` (not a harness host) and the `components: ["sdd", …]` and
+`sdd-*` phase assignments still listed in gentle-ai's `state.json` (its own bookkeeping).
 
 ## Progress
 - 2026-10-01: T1 done; the plan above written from the measurements. Route for T3–T5: one
   delegated writer, one task at a time (each touches a `bin/lib` module and its test; trigger:
   two non-trivial files per task).
+- 2026-10-01: T2 done. After the cleanup sync: no `sdd-*` asset came back, the hook stayed
+  out, `~/.codex/config.toml` reads `model = "gpt-6.1-sol"`, `model_reasoning_effort = "high"`
+  (the done-when line, observed), and `js-harness doctor` shows gentle-ai 4.0.0 `ok` in every
+  column. The fix for the Codex model is at its source, gentle-ai's state, so no drift check is
+  added to `doctor`: a sync now writes the roadmap's decision. gentle-ai has no flag for that
+  assignment (`install --help`, `sync --help`); its TUI or the state file are the only ways.
+  The file sizes did not move with the cleanup (`CLAUDE.md` 72,397 bytes, Codex `AGENTS.md`
+  87,562), but each Claude session now lists 11 skills and 11 agent types fewer.
 
 ## Next step
-T2, then T3–T5 with the writer, then T6.
+T3–T5 with the writer, then T6.
