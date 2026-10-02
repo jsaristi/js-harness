@@ -203,6 +203,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   its creation time is re-checked, and no `taskkill /T` or bare `ParentProcessId` query remains
   in `bin/` or `evals/`. One shared module, `bin/lib/process-tree.mjs`, used by `bin/check.mjs`,
   `bin/codex-review.mjs`, `evals/runner.mjs` and `evals/ports.mjs` (route: delegated writer)
+- [x] T4kr T4k review findings: a process still running after its kill makes `killTree` and
+  `killSurvivors` throw (Codex P2), and `runSensor` takes injectable kills so the path from a
+  throwing kill to `sweepError` is tested (gentle-ai suggestion) (route: inline, two small
+  understood edits)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -647,7 +651,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
   and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is written and stashed (`stash@{0}`, green on its focused tests); it is
 popped and reconciled with T4k's `evals/runner.mjs` next.
-Reviewed boundary: `58492e4` (gentle-ai and Codex); `7ddc047` (T4as) and T4k are reviewed together.
+Reviewed boundary: gentle-ai `298d739`, Codex `58492e4` (its run over `58492e4..298d739` recorded
+nothing; it is re-run through T4kr's commit).
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
@@ -757,7 +762,19 @@ Reviewed boundary: `58492e4` (gentle-ai and Codex); `7ddc047` (T4as) and T4k are
   and 1 skip, `bin/codex-review.test.mjs` with the module 107/107; `rg -n taskkill bin evals`
   finds only comments and assertions. Not verified: a real pid collision (the tests use a
   synthetic snapshot), the POSIX paths (unchanged, not run on this host), other Windows
-  versions. Closes the follow-up that `killSurvivors` lived twice.
+  versions. Closes the follow-up that `killSurvivors` lived twice. Commit `298d739`.
+- 2026-10-02: `58492e4..298d739` (T4as and T4k) reviewed by gentle-ai: lineage
+  `review-f4236dab534e95b7`, medium risk, one lens (reliability), approved and acknowledged,
+  one suggestion (nothing tested that a kill throwing inside `runSensor`'s timers lands on
+  `sweepError`). Codex on the same range: one P2 (`killProcesses` returns the processes still
+  running, and `killTree` and `killSurvivors` dropped that list, so a survivor reached neither
+  `sweepError` nor `killFailure`), and no record, because its commands showed 993 of the 1,062
+  changed lines. Both findings became T4kr.
+- 2026-10-02: T4kr done inline. RED: `killTree` and `killSurvivors` returned on an `R` outcome
+  ("Missing expected exception"), and `runSensor` had no way to take a kill, so `sweepError` was
+  `undefined`. GREEN: `node --test bin/lib/process-tree.test.mjs bin/check.test.mjs
+  evals/runner.test.mjs evals/ports.test.mjs bin/codex-review.test.mjs` 329/329. `killByPort`
+  still ignores the kill's report on purpose: the port lookup after it decides.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

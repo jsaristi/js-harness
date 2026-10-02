@@ -128,8 +128,9 @@ const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
  * `spawnSync`'s own timeout would kill only the shell, and the real command (`node` behind `cmd.exe`, `npm`
  * behind `sh`) would keep running after every commit. What is killed is found by `bin/lib/process-tree.mjs`,
  * which on Windows needs to know when the shell started and exited (a pid alone does not name its children).
- * A kill that could not be done is reported as `sweepError` on the result, never thrown out of a timer. */
-export function runSensor(command, { cwd, env, timeout }) {
+ * A kill that could not be done is reported as `sweepError` on the result, never thrown out of a timer.
+ * `killTree` and `killSurvivors` are injectable. */
+export function runSensor(command, { cwd, env, timeout, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
@@ -153,7 +154,7 @@ export function runSensor(command, { cwd, env, timeout }) {
     // it: pass the signal on by killing the group, then let it end check as it would have.
     const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
     const forward = (signal) => {
-      stop(killTree);
+      stop(tree);
       for (const name of signals) process.removeListener(name, forward);
       process.kill(process.pid, signal);
     };
@@ -189,7 +190,7 @@ export function runSensor(command, { cwd, env, timeout }) {
       // Pipes still open this long after the shell exited: a descendant holds them. Kill it, or a test
       // server the script started would run on after every commit.
       grace = setTimeout(() => {
-        stop(killSurvivors);
+        stop(survivors);
         finish();
       }, PIPE_GRACE_MS);
     });
@@ -197,7 +198,7 @@ export function runSensor(command, { cwd, env, timeout }) {
     if (timeout > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        stop(killTree);
+        stop(tree);
         // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
         grace = setTimeout(() => finish(), PIPE_GRACE_MS);
       }, timeout);

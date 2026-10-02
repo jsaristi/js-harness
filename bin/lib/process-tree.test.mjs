@@ -214,6 +214,14 @@ test('when the selection is empty the kill is never started', () => {
   assert.equal(sync.calls.length, 1, 'only the snapshot');
 });
 
+// The callers report a kill that failed only when it throws, so a survivor must not come back as a plain result.
+test('a process still running after the kill makes killTree and killSurvivors throw, naming it', () => {
+  const live = scripted([{ stdout: rows(proc(100, 1, 5000), proc(200, 100, 5100)) }, { stdout: 'K\t100\r\nR\t200\r\n' }]);
+  assert.throws(() => killTree({ pid: 100 }, { startedAt: 4990 }, { platform: 'win32', spawnSync: live }), /still running after the kill: pid 200$/);
+  const exited = scripted([{ stdout: rows(proc(200, 100, 5500), proc(300, 200, 5600)) }, { stdout: 'R\t200\r\nR\t300\r\n' }]);
+  assert.throws(() => killSurvivors({ pid: 100 }, { startedAt: 5000, exitedAt: 6000 }, { platform: 'win32', spawnSync: exited }), /still running after the kill: pid 200, 300$/);
+});
+
 test('a snapshot that failed makes killTree and killSurvivors throw: "nothing to kill" is never read from "could not look"', () => {
   const failing = () => scripted([{ status: 1, stderr: 'CIM is down' }]);
   assert.throws(() => killTree({ pid: 100 }, { startedAt: 4990 }, { platform: 'win32', spawnSync: failing() }), /CIM is down/);

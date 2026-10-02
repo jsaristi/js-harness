@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
+import { killTree } from './lib/process-tree.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -383,6 +384,22 @@ test('checkSensor says when what a command left running could not be stopped, wi
   const failing = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn: () => ({ status: 2, stdout: '', stderr: '', sweepError: 'boom' }) });
   assert.equal(failing.pass, false);
   assert.equal(failing.detail, 'x exited 2; could not stop what it left running: boom');
+});
+
+test('runSensor reports a kill that throws inside its timer as sweepError, and still resolves', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'hang.js'), 'setTimeout(() => {}, 120000);');
+    const failingKill = (child, lifetime) => {
+      killTree(child, lifetime); // the real kill first, so the test leaves nothing running
+      throw new Error('still running after the kill: pid 4242');
+    };
+    const result = await runSensor('node hang.js', { cwd: dir, timeout: 3000, killTree: failingKill });
+    assert.equal(result.error.code, 'ETIMEDOUT');
+    assert.equal(result.sweepError, 'still running after the kill: pid 4242');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('checkSensor keeps what the command printed before it timed out', async () => {

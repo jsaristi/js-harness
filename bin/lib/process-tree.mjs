@@ -233,13 +233,14 @@ function killWindowsTree(child, lifetime, sync, now) {
   const root = resolveRoot(snapshot, { pid: child.pid, startedAt: lifetime?.startedAt, exitedAt: lifetime?.exitedAt }, { now: now() });
   const createdAt = new Map(snapshot.map((entry) => [entry.pid, entry.createdAt]));
   const targets = selectDescendants(snapshot, root).map((pid) => ({ pid, createdAt: createdAt.get(pid) }));
-  return killProcesses(targets, { spawnSync: sync });
+  const { running } = killProcesses(targets, { spawnSync: sync });
+  if (running.length > 0) throw new Error(`still running after the kill: pid ${running.join(', ')}`);
 }
 
 /** Kills `child` and everything it started. `lifetime` is what the caller measured of it: `{ startedAt }`, the
  * `Date.now()` taken just before the spawn, and `exitedAt` once it has exited. Windows: only processes the
  * snapshot proves descend from it are killed, each one on its own (see the top of this file); a lookup that
- * failed throws. POSIX: the child leads its own process group, which is killed. `spawnSync`, `kill` and
+ * failed throws, and so does a process still running after its kill. POSIX: the child leads its own process group, which is killed. `spawnSync`, `kill` and
  * `now` are injectable. */
 export function killTree(child, lifetime, { platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill, now = Date.now } = {}) {
   if (!child?.pid) {
