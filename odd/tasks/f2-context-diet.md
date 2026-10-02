@@ -70,7 +70,10 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
 - [x] T3 codegraph prompt hook measured with and without, recorded in the roadmap — route: inline
   (measurement)
 - [x] T6 Review follow-ups from gentle-ai and Codex — route: delegated writer (4 files)
-- [ ] T4 gentle-ai v4 adopted when released — blocked: latest is v3.7.0 (2026-09-23)
+- [x] T4 gentle-ai v4 adopted when released — done 2026-10-01 in `odd/tasks/stack-v4.md`: v4.0.0
+  installed and synced; payload Claude 20,651 → 21,104, Codex 10,510 → 25,515 estimated tokens
+  per turn (`js-harness check`). v4 retires SDD and adds no way to exclude a block, so the diet
+  itself still waits on T5
 - [ ] T5 Block exclusion via gentle-ai #4036 — blocked: issue open, last update 2026-09-12
 
 ## Progress
@@ -126,7 +129,6 @@ Strategy: ask-on-risk. Forecast: ~300 authored lines (module, tests, check wirin
 - Merged to `main` 2026-09-28 via `jsaristi/js-harness#7` with a merge commit (`52a95cd`).
 
 ## Next step
-F2 stays open only for T4 and T5, both waiting on gentle-ai (checked 2026-09-28: latest release
-v3.7.0, #4036 open). Re-check them when gentle-ai ships; until then the roadmap moves on to
-Project init. Follow-ups from review: test output-style precedence, a memory-slug test that does
+F2 stays open only for T5, waiting on gentle-ai (#4036 open, checked 2026-10-01). T4 closed on
+2026-10-01 with the v4 adoption, which grew the payload instead of shrinking it. Follow-ups from review: test output-style precedence, a memory-slug test that does
 not mirror the implementation, and a `tildePath` test.

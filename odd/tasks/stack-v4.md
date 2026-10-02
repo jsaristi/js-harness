@@ -109,7 +109,7 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
   (gentle-ai WARNING); a call is not matched inside a longer name such as `my-gentle-ai`
   (gentle-ai suggestion); the `go install` tag comes from the parsed version, so a latest of
   `v5.0.0` does not print `@vv5.0.0` (parent read) (route: delegated writer)
-- [ ] T6 Roadmap and F2: the v4 step checked with the measured numbers, the stack row and the
+- [x] T6 Roadmap and F2: the v4 step checked with the measured numbers, the stack row and the
   risks brought up to date (route: inline)
 
 ## Machine changes
@@ -178,6 +178,26 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs` 134/134). Parent spot check with the
   real `gentle-ai help`: the copy of the pre-cleanup settings is still `stale` with its fix
   line, the real home `ok ok`.
+- 2026-10-01: `fb35bf9..3737284` (T4, T5) reviewed by gentle-ai: lineage
+  `review-a3200a2ea2bf86e0`, lens reliability, approved and acknowledged, authority burned; two
+  suggestions. The `go install` target built from an unparsed latest string was already fixed
+  by T3r; the other is a follow-up.
+- 2026-10-01: T6 done. Roadmap: the stack row names gentle-ai 4 and engram 3 with its plugin, the
+  F2 step is checked with the measured payload, the Review row says where the Codex model now
+  lives, and the risks name what a stack release did to a running feature.
+  `odd/tasks/f2-context-diet.md` T4 is closed with the same numbers.
+
+## Follow-ups
+- `pluginHooks` takes a plugin's first install record with an `installPath` and ignores the
+  record's scope, so with several records (one per project) the rows could show another
+  project's install (gentle-ai suggestion). Every plugin on this machine has one user-scope
+  record; fix it with a test when a second record exists to copy the shape from.
+- A hook whose text only mentions `gentle-ai <word>` (an `echo`) would be reported `stale`.
+- gentle-ai upstream: the v4 sync leaves the `sdd-preflight-hook` hook and the `sdd-*` assets
+  behind while `gentle-ai doctor` reports healthy, and it gives Codex a global `AGENTS.md` three
+  times the size of 3.7's. Filing either is Sebastián's call (Ask me before).
+- The pre-commit gate takes about four and a half minutes on this branch; worth a look at which
+  tests carry it.
 
 ## Next step
 The reviews of `fb35bf9..HEAD` (gentle-ai, then Codex over the branch), then T6.
