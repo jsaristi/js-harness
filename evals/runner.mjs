@@ -187,11 +187,13 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
 // a `$` or a backtick cannot change what it does. Every match is literal: `String.IndexOf` with
 // `OrdinalIgnoreCase`, not `-match` (a regex) and not `-like` (wildcards, where `[` is special): a trial
 // directory may well hold `+`, `(` or `[`. Each root is searched in both separator spellings, because a tool
-// may print the same path with either. A match must end on a boundary: the end of the command line, a path
-// separator, a quote or whitespace; otherwise a sibling whose name extends the root (`trial-10` against
-// `trial-1`) would be killed with its tree. Every occurrence in a line is tried, since a sibling may come before
-// the root itself. The process the script runs in and every ancestor of it are spared, whatever their command
-// lines hold: a runner started with the workspace in its arguments must not sweep itself.
+// may print the same path with either. A match must end on a boundary: the end of the command line, or a
+// character that cannot continue a name (anything but a letter, a digit, `.`, `_` and `-`: a separator, a quote,
+// whitespace, and the `;`, `,`, `=` or `)` of a list or key/value argument); otherwise a sibling whose name
+// extends the root (`trial-10` against `trial-1`) would be killed with its tree. Every occurrence in a line is
+// tried, since a sibling may come before the root itself. The process the script runs in and every ancestor of
+// it are spared, whatever their command lines hold: a runner started with the workspace in its arguments must
+// not sweep itself.
 //
 // What it prints comes from ONE snapshot of the process list: a row per process (see `Format-ProcessRow` in
 // `bin/lib/process-tree.mjs`: pid, parent pid, creation time, name), then `S<TAB>pid` for each spared process
@@ -203,7 +205,7 @@ const SWEEP_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 ${POWERSHELL_ROW_FUNCTION}
-$boundary = [char[]]@([char]92, [char]47, [char]34, [char]39)
+$nameExtras = [char[]]@([char]46, [char]95, [char]45)
 function Test-Mentions($line, $needle) {
   $from = 0
   while ($from -le $line.Length - $needle.Length) {
@@ -212,7 +214,7 @@ function Test-Mentions($line, $needle) {
     $end = $at + $needle.Length
     if ($end -ge $line.Length) { return $true }
     $next = $line[$end]
-    if ($boundary -contains $next -or [char]::IsWhiteSpace($next)) { return $true }
+    if (-not ([char]::IsLetterOrDigit($next) -or $nameExtras -contains $next)) { return $true }
     $from = $at + 1
   }
   return $false
@@ -725,6 +727,10 @@ export function probeVersion(config, env = {}) {
   return line || null;
 }
 
+/** The JSON Lines file at `resultsPath` as a store: what a suite reads to know what is recorded, and appends
+ * to as each trial is graded. */
+const fileStore = (resultsPath) => ({ read: () => readResults(resultsPath), append: (record) => appendRecord(resultsPath, record) });
+
 /** Runs every trial of the suite that the results file does not already hold, appending each record
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
@@ -732,7 +738,9 @@ export function probeVersion(config, env = {}) {
  * that trial.
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
- * running the same call again. `readVersion(config, env)` and `runTrial` are injectable for tests;
+ * running the same call again. Where the records live is the `store`, `{ read() -> records, append(record) }`:
+ * by default the JSON Lines file at `resultsPath`, and a caller that keeps its results in another shape (a
+ * suite entry that also records what the run was) passes its own. `readVersion(config, env)` and `runTrial` are injectable for tests;
  * `env` is the env overrides the trial's agent runs under. Each trial is handed a cached `readVersion`
  * and calls it itself once its env is known (see `runTrial`); this function only owns the cache. */
 export async function runSuite({
@@ -741,6 +749,7 @@ export async function runSuite({
   efforts,
   repeats,
   resultsPath,
+  store = fileStore(resultsPath),
   runsDir,
   workRoot,
   graderTimeoutMs,
@@ -748,7 +757,7 @@ export async function runSuite({
   runTrial: run = runTrial,
   log,
 }) {
-  const done = new Set(readResults(resultsPath).map(trialKey));
+  const done = new Set(store.read().map(trialKey));
   const versions = new Map();
   const cachedVersion = (config, env) => {
     // One probe per distinct agent command, version arguments and env, and none when every trial is
@@ -777,7 +786,7 @@ export async function runSuite({
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }
-    appendRecord(resultsPath, outcome.record);
+    store.append(outcome.record);
     completed += 1;
   }
   return { status: 'complete', completed, skipped };

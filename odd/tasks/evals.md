@@ -211,6 +211,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   through its handle, a pid learned as a number gets its `{ pid, createdAt }` identity when it
   is learned and is killed with `killProcesses`, and a guard test fails any test or fixture
   that does otherwise (Codex P1) (route: delegated writer)
+- [x] T4s The suite entry, `node evals/suite.mjs`: explicit arguments with no default permission
+  mode, the token read from `JS_HARNESS_EVAL_OAUTH_TOKEN` and passed only as
+  `CLAUDE_CODE_OAUTH_TOKEN` in a trial's env, the template removed on every path, one results
+  file per run that names the stack and refuses a resume on a changed one, `--summary` with the
+  screen's keep/drop/incomplete, and the sweep-boundary follow-up (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -653,8 +658,9 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
   `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
-  and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is written and stashed (`stash@{0}`, green on its focused tests); it is
-popped and reconciled with T4k's `evals/runner.mjs` next.
+  and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is done: the screen is `node evals/suite.mjs --claude <binary> --configs
+minimal --efforts medium --repeats 3 --tasks all --permission-mode <mode> --name headroom`, then
+`--summary --name headroom`.
 Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
@@ -806,6 +812,17 @@ Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   reviewed as three, the older two from a detached worktree at that commit (records live in the
   shared git directory): `58492e4..7ddc047` no findings; `7ddc047..298d739` the P1 and P2
   already fixed by T4kt and T4kr; `298d739..0f96ffd` no findings. All three recorded.
+- 2026-10-02: T4s done (delegated writer, cut by a session restart with the work on disk and
+  stashed while T4k went first; reconciled by the parent: one conflict in `evals/runner.mjs`,
+  between the new boundary comment and T4k's sweep script). `evals/suite.mjs` exports
+  `suiteMain(argv, env, deps)`. Results: `evals/results/<name>.json`, `{ format: 1, name,
+  createdAt, permissionMode, model, stack, args, trials }`, written through a `.tmp` file;
+  `runSuite` takes a `store` (`{ read, append }`) so the suite keeps its own file shape and
+  resume still skips recorded trials. The sweep by path now ends a match on any character that
+  cannot continue a name, so `trial-1;` matches and `trial-10` does not. GREEN after the
+  reconcile: `node --test evals/runner.test.mjs evals/suite.test.mjs
+  bin/lib/process-tree.test.mjs` 207/207 (38 of them the suite's). Not verified: a run with the
+  real binary, which is T4 itself.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -935,11 +952,6 @@ Decided 2026-10-01, before the first candidate was written:
 - gentle-ai's Stop hook always proposes the branch point as the review base, so after every
   commit it offers the accumulated branch as a fresh candidate even when slice reviews cover every
   commit in it. Worth raising with gentle-ai if it keeps costing a decline per stretch.
-- The sweep's boundary (end, separator, quote, whitespace after the root) misses a process that
-  names the root inside a list or key/value argument (`;`, `,`, `=`, `)` after it) (gentle-ai
-  WARNING on T2s). Trial directory names end in a random `[A-Za-z0-9]` suffix, so the sharper
-  rule is "the next character is not a name character `[A-Za-z0-9._-]`": it spares `trial-10`
-  and still matches `trial-1;`. Fix with T4's suite entry.
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.

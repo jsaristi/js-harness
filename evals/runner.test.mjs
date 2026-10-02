@@ -501,6 +501,18 @@ test('runSuite skips every trial already in the results file', async () => {
   assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 2 });
 });
 
+test('runSuite reads what is recorded from a store and hands it each record as it is graded, so a results file of another shape can be resumed', async () => {
+  const kept = [{ task: 'a', config: 'x', effort: 'medium', repeat: 1, score: 0.5 }];
+  const store = { read: () => kept.map((record) => ({ ...record })), append: (record) => kept.push(record) };
+  const asked = [];
+  const { resultsPath, ...options } = suiteOptions({ store, runTrial: stubTrial(asked) });
+  const result = await runSuite(options);
+  assert.deepEqual(asked, ['a|x|medium|2'], 'the recorded trial is skipped');
+  assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 1 });
+  assert.deepEqual(kept.map(trialKey), ['a|x|medium|1', 'a|x|medium|2']);
+  assert.equal(fs.existsSync(resultsPath), false, 'with a store there is no results file of the runner\'s own');
+});
+
 /** What the real `runTrial` does with the `readVersion` it is handed: ask for the CLI version under the
  * env its config resolves to for this trial. A test stub that needs a version calls this. */
 const versionOf = (trial) => trial.readVersion(trial.config, resolveAgent(trial.config, { effort: trial.effort, task: trial.task }).env);
@@ -1313,6 +1325,17 @@ test('killByPath requires a boundary after the root: a sibling whose name extend
   assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))), 'the root\'s own processes are gone');
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok(siblings.every(isAlive), 'trial-10 is not trial-1');
+});
+
+test('killByPath ends a match on anything that is not a name character: a root inside a list or a key/value argument is matched, trial-10 is not', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('punct'), 'eval-trial-1');
+  const siblings = [sleeper(`${root}0`), sleeper(`${root}_x`), sleeper(`${root}Z`), sleeper(`${root}.log`)];
+  const targets = [`${root};next`, `${root},next`, `${root}=value`, `(${root})`, `[${root}]`, `${root}:80`, `${root}|x`, `${root}>out`].map((argument) => sleeper(argument));
+  const { killed } = killByPath([root]);
+  assert.deepEqual([...killed].sort((a, b) => a - b), [...targets].sort((a, b) => a - b));
+  assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(siblings.every(isAlive), 'a letter, a digit, "." "_" and "-" continue a name');
 });
 
 test('killByPath given a root with a trailing separator still matches the processes that name it without one', { skip: WINDOWS_ONLY }, async () => {
