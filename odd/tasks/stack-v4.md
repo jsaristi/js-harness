@@ -96,7 +96,7 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
   hook; move the orphaned `sdd-*` skills and agents out of the Claude and Codex homes; let sync
   refresh the eight preserved review agents after comparing them; set gentle-ai's Codex
   orchestrator assignment to `gpt-6.1-sol`/`high` and prove a sync keeps it (route: inline)
-- [ ] T3 `doctor` reports a dead hook: a host hook that runs `gentle-ai <command>` where
+- [x] T3 `doctor` reports a dead hook: a host hook that runs `gentle-ai <command>` where
   `gentle-ai help` lists no such command makes that host's gentle-ai cell `stale`, with the hook
   and its file in the fix (route: delegated writer)
 - [ ] T4 `doctor`'s gentle-ai upgrade fix crosses a major: when the latest release's major is
@@ -137,6 +137,17 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   assignment (`install --help`, `sync --help`); its TUI or the state file are the only ways.
   The file sizes did not move with the cleanup (`CLAUDE.md` 72,397 bytes, Codex `AGENTS.md`
   87,562), but each Claude session now lists 11 skills and 11 agent types fewer.
+- 2026-10-01: T3 done (delegated writer; RED observed on eight assertions, then
+  `node --test bin/lib/stack.test.mjs` 84/84 and the doctor, digest and TUI tests 114/114).
+  `stale` is a new cell state, so it is a gap in `doctor`'s Fix section, in the session digest
+  and in the TUI's severity table (three one-word changes outside `stack.mjs`, each with a test;
+  without them the row would read `ok` in the TUI and never notify). Only a host whose cell is
+  `ok` can turn `stale`, and `gentle-ai help` is spawned at most once and only when some hook
+  mentions gentle-ai. Parent spot check with the real binary: `doctor --home <copy of the
+  pre-cleanup settings> --offline` prints `gentle-ai 4.0.0 stale ok` and the fix line naming the
+  `sdd-preflight-hook` hook, `PreToolUse` and `~/.claude/settings.json`; against the real home,
+  now clean, `ok ok`. Known limit: a hook whose text merely mentions `gentle-ai <word>` (an
+  `echo`) would be reported; none exists here.
 
 ## Next step
-T3–T5 with the writer, then T6.
+T4–T5 with the writer, then T6.

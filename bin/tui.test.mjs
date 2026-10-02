@@ -304,6 +304,10 @@ test('worstState names the dimension for a per-host/per-project gap', () => {
   assert.equal(worstState(makeDoctorRow({ project: 'missing' })), 'missing project');
 });
 
+test('worstState reports a stale host cell instead of passing it as ok', () => {
+  assert.equal(worstState(makeDoctorRow({ claude: 'stale' })), 'stale claude');
+});
+
 test('worstState is bare (no dimension suffix) for an installed or up-to-date gap', () => {
   assert.equal(worstState(makeDoctorRow({ installed: 'missing' })), 'missing');
   assert.equal(worstState(makeDoctorRow({ upToDate: 'outdated' })), 'outdated');

@@ -13,7 +13,7 @@ import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { gapList, gapDigest } from './lib/digest.mjs';
 
-const GAP_STATES = new Set(['missing', 'outdated']);
+const GAP_STATES = new Set(['missing', 'outdated', 'stale']);
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
@@ -58,9 +58,10 @@ function headerRow() {
   return HEADER_LABELS.map((label, i) => label.padEnd(COLUMN_WIDTHS[i])).join('') + 'up to date';
 }
 
-/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing` or `outdated`
- * (`unknown` and `n/a` are not actionable the same way). A gap with no fix command defined is still
- * a gap — `fix` is `null` — so `gaps` always agrees with the row states and the hook's digest. */
+/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing`, `outdated` or
+ * `stale` (a host whose hook calls a removed command); `unknown` and `n/a` are not actionable the
+ * same way. A gap with no fix command defined is still a gap — `fix` is `null` — so `gaps` always
+ * agrees with the row states and the hook's digest. */
 function rowGaps(row) {
   const gaps = [];
   for (const dimension of DIMENSIONS) {

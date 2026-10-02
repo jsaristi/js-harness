@@ -180,6 +180,38 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
   }
 });
 
+test('doctorMain shows a stale gentle-ai cell and prints one fix line per dead hook', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    // The hook is declared in the Claude settings next to the plugins the healthy seed enables.
+    const settingsPath = path.join(home, '.claude', 'settings.json');
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    settings.hooks = {
+      PreToolUse: [{ hooks: [{ type: 'command', command: 'gentle-ai sdd-preflight-hook --agent claude-code' }] }],
+    };
+    writeJson(settingsPath, settings);
+    const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.0.0' } });
+    const spawn = (cmd, args, opts) =>
+      [cmd, ...args].join(' ') === 'gentle-ai help'
+        ? { status: 0, stdout: 'COMMANDS\n  sync         Sync agent configs\n', stderr: '' }
+        : base(cmd, args, opts);
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /gentle-ai\s+4\.0\.0\s+stale\s+ok/);
+    assert.match(
+      output,
+      /  gentle-ai \(claude\):\n    remove the hook "gentle-ai sdd-preflight-hook --agent claude-code" \(PreToolUse\) from ~\/\.claude\/settings\.json: /,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain prints a header row above the tool table, aligned with the column widths', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

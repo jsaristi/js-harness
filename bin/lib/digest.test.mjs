@@ -23,6 +23,12 @@ test('gapList collects one entry per (id, dimension) that is missing or outdated
   ]);
 });
 
+test('gapList counts a stale cell as a gap, so the session hook notifies about a dead hook', () => {
+  assert.deepEqual(gapList([row({ id: 'gentle-ai', claude: 'stale' })]), [
+    { id: 'gentle-ai', dimension: 'claude', state: 'stale' },
+  ]);
+});
+
 test('gapList ignores unknown and n/a states', () => {
   const rows = [row({ id: 'context7', upToDate: 'n/a', project: 'unknown' })];
   assert.deepEqual(gapList(rows), []);
