@@ -187,13 +187,15 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
 // a `$` or a backtick cannot change what it does. Every match is literal: `String.IndexOf` with
 // `OrdinalIgnoreCase`, not `-match` (a regex) and not `-like` (wildcards, where `[` is special): a trial
 // directory may well hold `+`, `(` or `[`. Each root is searched in both separator spellings, because a tool
-// may print the same path with either. A match must end on a boundary: the end of the command line, or a
-// character that cannot continue a name (anything but a letter, a digit, `.`, `_` and `-`: a separator, a quote,
-// whitespace, and the `;`, `,`, `=` or `)` of a list or key/value argument); otherwise a sibling whose name
-// extends the root (`trial-10` against `trial-1`) would be killed with its tree. Every occurrence in a line is
-// tried, since a sibling may come before the root itself. The process the script runs in and every ancestor of
-// it are spared, whatever their command lines hold: a runner started with the workspace in its arguments must
-// not sweep itself.
+// may print the same path with either. A match must end on a delimiter: the end of the command line, a path
+// separator (`\` or `/`), a quote (`"` or `'`), whitespace, or one of the `;`, `,`, `=` and `)` of a list or
+// key/value argument. Anything else continues the name and does not match: on Windows `+`, `(`, `[`, `{`, `@`,
+// `~`, `!`, `#`, `%` and `&` all can, so `trial-1+backup` is not `trial-1`, any more than `trial-10` is. A wrong
+// kill (an unrelated process and its tree) is worse than a missed survivor, which the removal of the directory
+// reports, so the set is closed and short; the last four are the ones an earlier review asked for. Every
+// occurrence in a line is tried, since a sibling may come before the root itself. The process the script runs in
+// and every ancestor of it are spared, whatever their command lines hold: a runner started with the workspace in
+// its arguments must not sweep itself.
 //
 // What it prints comes from ONE snapshot of the process list: a row per process (see `Format-ProcessRow` in
 // `bin/lib/process-tree.mjs`: pid, parent pid, creation time, name), then `S<TAB>pid` for each spared process
@@ -205,7 +207,7 @@ const SWEEP_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 ${POWERSHELL_ROW_FUNCTION}
-$nameExtras = [char[]]@([char]46, [char]95, [char]45)
+$delimiters = [char[]]@([char]92, [char]47, [char]34, [char]39, [char]59, [char]44, [char]61, [char]41)
 function Test-Mentions($line, $needle) {
   $from = 0
   while ($from -le $line.Length - $needle.Length) {
@@ -214,7 +216,7 @@ function Test-Mentions($line, $needle) {
     $end = $at + $needle.Length
     if ($end -ge $line.Length) { return $true }
     $next = $line[$end]
-    if (-not ([char]::IsLetterOrDigit($next) -or $nameExtras -contains $next)) { return $true }
+    if ([char]::IsWhiteSpace($next) -or $delimiters -contains $next) { return $true }
     $from = $at + 1
   }
   return $false
@@ -326,12 +328,21 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
  * Once the root exits the timeout no longer applies: it ran in time, and a descendant that still holds
  * the pipes is not a timeout. If the pipes stay open for `graceMs` after the exit, the run ends with the
  * root's own status. Every way of ending calls `sweep` (default `killSurvivors`) once first, to kill
- * what the root left behind, holding the pipes or not. */
+ * what the root left behind, holding the pipes or not.
+ *
+ * `signal`, an `AbortSignal`, is for a caller that owns the interrupt: when it aborts the tree is killed as for a
+ * timeout and the run ends with `aborted: true` (a signal that is already aborted starts nothing). Such a caller
+ * gets no signal forwarding below, because that kills the tree and then re-raises the signal on this process, which
+ * ends it before the caller's own cleanup; the caller aborts, waits for the result and cleans up, then exits. */
 export function runProcess({
-  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors,
+  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal,
 }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
+    if (signal?.aborted) {
+      resolve({ ...out, exitCode: null, signal: null, timedOut: false, aborted: true });
+      return;
+    }
     let child;
     const startedAt = Date.now(); // before the spawn: the child cannot have been created earlier
     try {
@@ -349,7 +360,7 @@ export function runProcess({
     }
     // A detached child no longer gets the terminal's Ctrl-C, so pass it on, or an interrupted suite
     // would leave agents running (and spending) in the background.
-    const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    const signals = process.platform === 'win32' || signal ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
     let exitedAt;
     let sweepError;
     // What is killed is proven by `bin/lib/process-tree.mjs` from when the child started and exited. A kill that
@@ -370,14 +381,23 @@ export function runProcess({
 
     let exit = { exitCode: null, signal: null };
     let timedOut = false;
+    let aborted = false;
     let spawnError;
     let done = false;
     let timer;
     let grace;
+    const abort = () => {
+      aborted = true;
+      clearTimeout(timer);
+      stop(kill);
+      clearTimeout(grace);
+      grace = setTimeout(finish, graceMs);
+    };
     const finish = () => {
       if (done) return;
       done = true;
       for (const name of signals) process.removeListener(name, forward);
+      signal?.removeEventListener('abort', abort);
       clearTimeout(timer);
       clearTimeout(grace);
       // Whatever the root left running (stdio ignored or redirected, so no pipe kept the run open) must
@@ -385,8 +405,9 @@ export function runProcess({
       stop(sweep);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
+      resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
     };
+    signal?.addEventListener('abort', abort, { once: true });
     for (const stream of ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
@@ -435,7 +456,8 @@ export function resolveAgent(config, context) {
 const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** Copies the hidden grader into the workspace and runs it there; resolves to `{ score, passed, total,
- * error }`, or to `{ spawnError }` when the grader command could not be started at all. The copy
+ * error }`, to `{ spawnError }` when the grader command could not be started at all, or to `{ aborted: true }` when
+ * `signal` aborted while it ran (the grader's tree is killed, and nothing is scored). The copy
  * replaces `.eval-grader/` outright, so nothing the agent left under that name can stand in for the
  * real grader. The score is `pass / tests` of the grader's TAP summary. Output that does not parse, or
  * reports no tests, scores 0 with `grader-unparsable`: a silent 1 or a NaN would both read as a result.
@@ -446,7 +468,7 @@ const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
  *
  * TAP is asked for by the task's own `args` (`--test-reporter=tap`), not added here: the runner then
  * knows nothing about the grader beyond "prints a TAP summary", so a task may use any command. */
-export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS } = {}) {
+export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS, signal } = {}) {
   const graderDir = path.join(workspace, '.eval-grader');
   fs.rmSync(graderDir, { recursive: true, force: true });
   fs.cpSync(task.graderDir, graderDir, { recursive: true });
@@ -457,8 +479,10 @@ export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEO
     env: childEnv(),
     cwd: workspace,
     timeoutMs,
+    signal,
   });
   const fail = (error) => ({ score: 0, passed: null, total: null, error });
+  if (run.aborted) return { aborted: true };
   if (run.spawnError) return { spawnError: run.spawnError };
   if (run.timedOut) return fail('grader-timeout');
   const tap = parseTap(run.stdout);
@@ -509,7 +533,10 @@ export function removeDir(dir, label, log, sweepAgain) {
 /** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
  * message }` when the agent died of the usage cap or of authentication (`reason` `cap` or `auth`), or
  * the agent (`spawn`) or the hidden grader (`grader-spawn`) never started. A stopped trial records
- * nothing: a zero there would measure the machine, not the configuration.
+ * nothing: a zero there would measure the machine, not the configuration. `{ status: 'interrupted' }` is what a
+ * trial returns when `signal`, an `AbortSignal` the caller raises on an interrupt, aborted before it ended: the
+ * agent's tree (or the grader's) is killed, nothing is logged or recorded, and every cleanup below has run by the
+ * time it resolves, so the caller may remove what it owns and end the process.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
@@ -543,8 +570,11 @@ export async function runTrial({
   now = () => new Date(),
   clock = () => performance.now(),
   sweep = killByPath,
+  signal,
   log = (message) => console.error(message),
 }) {
+  // Nothing is made for a suite that is already being interrupted.
+  if (signal?.aborted) return { status: 'interrupted' };
   const startedAt = now().toISOString();
   // Absolute, whatever the caller passed: the agent runs with the workspace as its cwd, so a relative home
   // would mean one place to `prepare` (the runner's cwd) and another to the agent (inside the graded tree).
@@ -561,8 +591,12 @@ export async function runTrial({
       prepared = await config.prepare({ home, workspace, effort, task });
       isPrepared = true;
     }
+    // An interrupt that came during `prepare` or the probe: those cannot be stopped half way, so the agent is
+    // simply not started, and the `finally` below removes what was made.
+    if (signal?.aborted) return { status: 'interrupted' };
     const agent = resolveAgent(config, { effort, task, home, workspace, prepared });
     const cliVersion = await readVersion(config, agent.env);
+    if (signal?.aborted) return { status: 'interrupted' };
     const began = clock();
     const run = await runProcess({
       ...agent,
@@ -570,9 +604,12 @@ export async function runTrial({
       cwd: workspace,
       input: task.prompt,
       timeoutMs: task.timeoutMs,
+      signal,
     });
     const wallMs = Math.round(clock() - began);
     if (run.sweepError) log(`could not stop what the agent left running: ${run.sweepError}`);
+    // Interrupted: not a result, so no log and no record. The `finally` still sweeps and removes everything.
+    if (run.aborted || signal?.aborted) return { status: 'interrupted' };
 
     const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
     fs.mkdirSync(runsDir, { recursive: true });
@@ -587,7 +624,8 @@ export async function runTrial({
     if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
 
     const output = parseAgentOutput(run.stdout);
-    const { error: graderError, spawnError: graderSpawnError, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs });
+    const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal });
+    if (graderAborted) return { status: 'interrupted' };
     // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
     if (graderSpawnError) return { status: 'stopped', reason: 'grader-spawn', message: graderSpawnError.message };
     return {
@@ -735,7 +773,9 @@ const fileStore = (resultsPath) => ({ read: () => readResults(resultsPath), appe
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
  * at the first usage-cap, authentication, agent-spawn or grader-spawn stop, with nothing recorded for
- * that trial.
+ * that trial. `signal` (an `AbortSignal`) is the interrupt: it is handed to every trial, and once it aborts no
+ * trial starts and the suite resolves to `{ status: 'interrupted', completed }`, after the running trial has
+ * stopped and cleaned up; that trial records nothing.
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
  * running the same call again. Where the records live is the `store`, `{ read() -> records, append(record) }`:
@@ -755,6 +795,7 @@ export async function runSuite({
   graderTimeoutMs,
   readVersion = probeVersion,
   runTrial: run = runTrial,
+  signal,
   log,
 }) {
   const done = new Set(store.read().map(trialKey));
@@ -782,7 +823,9 @@ export async function runSuite({
       skipped += 1;
       continue;
     }
-    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, log });
+    if (signal?.aborted) return { status: 'interrupted', completed };
+    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, signal, log });
+    if (outcome.status === 'interrupted') return { status: 'interrupted', completed };
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }

@@ -6,17 +6,22 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
-import { planTrials, resolveAgent, trialKey } from './runner.mjs';
+import { killByPath, planTrials, resolveAgent, runTrial, trialKey } from './runner.mjs';
 import {
   EVAL_MODEL, TOKEN_VARIABLE, USAGE, UsageError, diffRun, formatSummary, parseArgs, readStack, suiteMain, summarizeResults,
 } from './suite.mjs';
+import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
+const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
 
-// Every directory a test makes lives under one root that is removed at the end.
+// Every directory a test makes lives under one root that is removed at the end. The processes a test started are
+// stopped first, through the shared teardown (`process-tree.testkit.mjs`): never by a bare pid.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-suite-test-'));
+const reaper = createReaper();
 after(() => {
+  reaper.sweep();
   for (let attempt = 0; ; attempt += 1) {
     try {
       fs.rmSync(scratch, { recursive: true, force: true });
@@ -324,6 +329,29 @@ test('a missing or unknown argument prints the usage and exits 2 before anything
   nothingCreated(m);
 });
 
+test('--tasks all with no task to run is a usage error naming the tasks directory, exits 2 and creates nothing', async () => {
+  const m = machine();
+  const empty = path.join(m.base, 'empty-tasks');
+  fs.mkdirSync(empty);
+  fs.writeFileSync(path.join(empty, 'README.md'), 'a file is not a task\n');
+  for (const tasksDir of [path.join(m.base, 'no-such-tasks'), empty]) {
+    const { io, deps } = depsFor(m, { tasksDir });
+    assert.equal(await suiteMain(runArgv(m), ENV, deps), 2, tasksDir);
+    assert.ok(io.err.includes(tasksDir), 'names the tasks directory');
+    assert.ok(io.err.includes(USAGE), 'the usage is printed');
+    assert.equal(io.out, '');
+    assert.deepEqual(deps.runTrial.asked, []);
+  }
+  nothingCreated(m);
+  assert.throws(() => parseArgs(argv(), { taskIds: [], tasksDir: 'somewhere' }), (error) => error instanceof UsageError && error.message.includes('somewhere'));
+
+  // A recorded run is still summarized when the tasks directory is gone: --summary reads results, not tasks.
+  const run = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m), ENV, run.deps), 0);
+  const summary = depsFor(m, { tasksDir: empty });
+  assert.equal(await suiteMain(['--summary', '--name', 'screen'], {}, summary.deps), 0);
+});
+
 test('a --claude that is not there is a usage error, before anything is created', async () => {
   const m = machine();
   const { io, deps } = depsFor(m, { fileExists: () => false });
@@ -405,12 +433,28 @@ test('the work root defaults to the one next to the repository and is always che
   assert.equal(await suiteMain(runArgv(m, { '--work-root': undefined, '--configs': 'minimal' }), ENV, first.deps), 0);
   assert.deepEqual(checked, [[defaultWorkRoot({ repoRoot: m.repoRoot }), m.realHome]]);
   assert.equal(first.deps.runTrial.trials[0].workRoot, defaultWorkRoot({ repoRoot: m.repoRoot }));
-  assert.equal(first.deps.runTrial.trials[0].runsDir, m.runsDir);
+  assert.equal(first.deps.runTrial.trials[0].runsDir, path.join(m.runsDir, 'screen'), 'the raw logs of a run are under its name');
 
   const second = depsFor(m, { checkWorkRoot: spy });
   assert.equal(await suiteMain(runArgv(m, { '--name': 'explicit', '--configs': 'minimal' }), ENV, second.deps), 0);
   assert.deepEqual(checked.at(-1), [m.workRoot, m.realHome]);
   assert.equal(second.deps.runTrial.trials[0].workRoot, m.workRoot);
+});
+
+test('two runs that share trials keep their raw logs apart: a run named <name> writes under runs/<name>/ and never over another\'s', async () => {
+  const m = machine();
+  const logging = (label) => fakeRun((trial) => {
+    fs.mkdirSync(trial.runsDir, { recursive: true });
+    fs.writeFileSync(path.join(trial.runsDir, 'alpha__minimal__medium__1.stdout.log'), label);
+  });
+  for (const name of ['screen', 'ab-run']) {
+    const { deps } = depsFor(m, { runTrial: logging(name) });
+    assert.equal(await suiteMain(runArgv(m, { '--name': name, '--configs': 'minimal', '--efforts': 'medium' }), ENV, deps), 0);
+  }
+  for (const name of ['screen', 'ab-run']) {
+    assert.equal(fs.readFileSync(path.join(m.runsDir, name, 'alpha__minimal__medium__1.stdout.log'), 'utf8'), name, `${name} kept its own log`);
+  }
+  assert.deepEqual(fs.readdirSync(m.runsDir).sort(), ['ab-run', 'screen'], 'nothing is written to the shared runs directory itself');
 });
 
 test('a work root the check refuses stops the suite before anything is created: the real check runs by default', async () => {
@@ -562,24 +606,123 @@ test('a minimal-only run builds no template at all, and a template that cannot b
   assert.equal(fs.existsSync(resultsFile(broken)), false, 'a run that never started records nothing');
 });
 
-test('an interrupt removes the template at once and ends the process with the signal\'s status; the listeners are gone after the run', async () => {
+// An interrupt does not end the process at once: the running trial is stopped, and has cleaned up what it made, before
+// the template is removed and the process ends with the signal's status. `proc.exit` is a stand-in here that records
+// what the machine looked like at that moment.
+
+/** Makes `proc.exit` record `{ code, ...look() }` at the moment it is called, and returns the list of those. */
+function recordExits(proc, look) {
+  const exits = [];
+  proc.exit = (code) => {
+    exits.push({ code, ...look() });
+    proc.exited.push(code);
+  };
+  return exits;
+}
+
+test('an interrupt aborts the running trial, waits for it, then removes the template and ends the process with the signal\'s status', async () => {
   const m = machine();
-  let afterSignal;
+  const events = [];
   const { deps, proc } = depsFor(m, {
-    runTrial: fakeRun((trial, number) => {
-      if (number === 1) {
-        assert.ok(proc.listenerCount('SIGINT') > 0 && proc.listenerCount('SIGTERM') > 0, 'listening while trials run');
-        proc.emit('SIGINT', 'SIGINT');
-        afterSignal = { templates: templatesIn(m.workRoot), exited: [...proc.exited] };
-      }
-      return undefined;
+    runTrial: fakeRun(async (trial, number) => {
+      if (number !== 1) return undefined;
+      assert.ok(proc.listenerCount('SIGINT') > 0 && proc.listenerCount('SIGTERM') > 0, 'listening while trials run');
+      const aborted = new Promise((resolve) => trial.signal.addEventListener('abort', resolve, { once: true }));
+      proc.emit('SIGINT', 'SIGINT');
+      assert.deepEqual(proc.exited, [], 'the process is not ended by the signal itself');
+      await aborted;
+      events.push('trial told to stop');
+      await new Promise((resolve) => setTimeout(resolve, 50)); // the trial's own cleanup takes time
+      events.push(`trial cleaned up, template ${templatesIn(m.workRoot).length === 1 ? 'still' : 'no longer'} there`);
+      return { status: 'interrupted' };
     }),
   });
-  await suiteMain(runArgv(m), ENV, deps);
-  assert.deepEqual(afterSignal, { templates: [], exited: [130] });
-  assert.equal(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 0);
+  const exits = recordExits(proc, () => ({ events: [...events], templates: templatesIn(m.workRoot) }));
+  assert.equal(await suiteMain(runArgv(m), ENV, deps), 130);
+  assert.deepEqual(exits, [{ code: 130, events: ['trial told to stop', 'trial cleaned up, template still there'], templates: [] }]);
+  assert.deepEqual(deps.runTrial.asked, [PLAN[0]], 'no trial starts after the interrupt');
+  assert.equal(fs.existsSync(resultsFile(m)), false, 'the interrupted trial is not a result');
+  assert.equal(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 0, 'the listeners are gone after the run');
 
-  const term = depsFor(m, { runTrial: fakeRun((trial, number) => { if (number === 1) term.proc.emit('SIGTERM', 'SIGTERM'); }) });
+  const term = depsFor(m, { runTrial: fakeRun(async (trial, number) => { if (number === 1) { term.proc.emit('SIGTERM', 'SIGTERM'); return { status: 'interrupted' }; } return undefined; }) });
   await suiteMain(runArgv(m, { '--name': 'second' }), ENV, term.deps);
   assert.deepEqual(term.proc.exited, [143]);
+});
+
+test('an interrupt between trials keeps what was recorded and ends the process with the signal\'s status', async () => {
+  const m = machine();
+  const { deps, proc } = depsFor(m, { runTrial: fakeRun((trial, number) => { if (number === 2) proc.emit('SIGINT', 'SIGINT'); }) });
+  const exits = recordExits(proc, () => ({ templates: templatesIn(m.workRoot) }));
+  assert.equal(await suiteMain(runArgv(m), ENV, deps), 130);
+  assert.deepEqual(exits, [{ code: 130, templates: [] }]);
+  assert.deepEqual(deps.runTrial.asked, PLAN.slice(0, 2), 'the trial that finished after the signal is a result; the next one never starts');
+  assert.deepEqual(keysOf(readDoc(m).trials), PLAN.slice(0, 2));
+  assert.equal(fs.existsSync(resultsFile(m)), true);
+});
+
+test('a second interrupt while the first is still being served removes the template and ends the process at once', async () => {
+  const m = machine();
+  const { deps, proc } = depsFor(m, {
+    runTrial: fakeRun(async () => {
+      proc.emit('SIGINT', 'SIGINT');
+      proc.emit('SIGINT', 'SIGINT'); // the trial never answers the abort
+      await new Promise(() => {});
+    }),
+  });
+  const exits = recordExits(proc, () => ({ templates: templatesIn(m.workRoot) }));
+  void suiteMain(runArgv(m), ENV, deps);
+  for (let waited = 0; exits.length === 0 && waited < 3000; waited += 20) await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(exits, [{ code: 130, templates: [] }]);
+});
+
+const isAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const waitUntil = async (predicate, ms = 15000) => {
+  const deadline = Date.now() + ms;
+  while (!predicate() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  return predicate();
+};
+
+test('an interrupt during a real trial against a hanging fake agent leaves nothing of it: no process, no directory, no template, no record, and the exit comes last', async () => {
+  const m = machine();
+  const events = [];
+  const report = path.join(tmp('hang-report'), 'report.json');
+  const startedAt = Date.now();
+  // The suite's own `runTrial`, with the agent swapped for the fake one (the suite builds the real `claude` argv).
+  const hanging = (trial) => runTrial({
+    ...trial,
+    config: {
+      name: trial.config.name,
+      command: process.execPath,
+      args: [FAKE_AGENT],
+      env: { FAKE_AGENT_MODE: 'hang', FAKE_AGENT_REPORT: report },
+      prepare: () => ({}),
+      cleanup: () => { events.push('cleanup'); },
+    },
+    readVersion: () => '9.9.9 (Fake Agent)',
+    sweep: (roots, options) => { events.push('sweep'); return killByPath(roots, options); },
+  });
+  const { deps, proc, io } = depsFor(m, { runTrial: hanging });
+  let pids = [];
+  const exits = recordExits(proc, () => ({
+    events: [...events], templates: templatesIn(m.workRoot), entries: fs.readdirSync(m.workRoot), alive: pids.map(isAlive),
+  }));
+  const pending = suiteMain(runArgv(m), ENV, deps);
+  const reported = () => { try { return JSON.parse(fs.readFileSync(report, 'utf8')); } catch { return null; } };
+  assert.ok(await waitUntil(() => reported() !== null), `the agent started: ${io.err}`);
+  pids = [reported().pid, reported().grandchildPid];
+  reaper.pids(pids, { since: startedAt });
+  assert.ok(pids.every(isAlive), 'the agent and its grandchild run');
+  proc.emit('SIGINT', 'SIGINT');
+  assert.equal(await pending, 130);
+  assert.deepEqual(exits, [{ code: 130, events: ['sweep', 'cleanup'], templates: [], entries: [], alive: [false, false] }], io.err);
+  assert.equal(fs.existsSync(resultsFile(m)), false, 'no record of the trial');
+  assert.equal(fs.existsSync(path.join(m.runsDir, 'screen')), false, 'no log of it either');
+  assert.ok(await waitUntil(() => pids.every((pid) => !isAlive(pid)), 5000), 'and they stay dead');
 });

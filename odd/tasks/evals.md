@@ -216,6 +216,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `CLAUDE_CODE_OAUTH_TOKEN` in a trial's env, the template removed on every path, one results
   file per run that names the stack and refuses a resume on a changed one, `--summary` with the
   screen's keep/drop/incomplete, and the sweep-boundary follow-up (route: delegated writer)
+- [x] T4sr T4s review findings: an interrupt stops the active trial and waits for its cleanup
+  before the process ends (Codex P1), the sweep's boundary is a set of delimiters instead of
+  "anything that is not a name character" (Codex P1), raw logs go under `evals/runs/<name>/`
+  (Codex P2), and an empty task set is a usage error (gentle-ai suggestion) (route: delegated
+  writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -660,7 +665,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
   and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is done: the screen is `node evals/suite.mjs --claude <binary> --configs
 minimal --efforts medium --repeats 3 --tasks all --permission-mode <mode> --name headroom`, then
-`--summary --name headroom`.
+`--summary --name headroom`. Raw logs land in `evals/runs/headroom/`.
 Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
@@ -822,7 +827,27 @@ Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   cannot continue a name, so `trial-1;` matches and `trial-10` does not. GREEN after the
   reconcile: `node --test evals/runner.test.mjs evals/suite.test.mjs
   bin/lib/process-tree.test.mjs` 207/207 (38 of them the suite's). Not verified: a run with the
-  real binary, which is T4 itself.
+  real binary, which is T4 itself. Commit `267dc13`.
+- 2026-10-02: `0f96ffd..267dc13` reviewed by gentle-ai: lineage `review-c31fc7a3d66fd048`, medium
+  risk, one lens (reliability), approved and acknowledged, one suggestion (`--tasks all` over
+  an empty tasks directory exits 0 with nothing run). Codex on the same range, recorded: two P1
+  and a P2. The suite's interrupt handler exited before `runTrial`'s cleanup, leaving a
+  detached agent running and spending; the new sweep boundary matched `trial-1+backup` when
+  sweeping `trial-1` (on Windows `+`, `(`, `[` continue a name), so it could kill an unrelated
+  process; and two runs with different names shared one raw-log directory, so T5 would have
+  overwritten T4's logs. All four became T4sr.
+- 2026-10-02: T4sr done (delegated writer; trigger: 2+ non-trivial files). The suite owns an
+  `AbortController` passed through `runSuite` and `runTrial` to `runProcess` and the grader: the
+  first signal aborts, the trial ends as `{ status: 'interrupted' }` through its own `finally`
+  and records nothing, then the template is removed and the process exits `128 + n`; a second
+  signal exits at once. A caller that passes a signal to `runProcess` gets no POSIX forwarding
+  (it would end the process before the cleanup). The sweep ends a match at the end of the line,
+  a separator, a quote, whitespace or one of `;`, `,`, `=`, `)`: a wrong kill is worse than a
+  missed survivor. RED observed per change. GREEN: `evals/suite.test.mjs` 43/43 (re-run by the
+  parent), `evals/runner.test.mjs` 132 pass and 1 skip (POSIX-only), `bin/lib/process-tree.test.mjs`
+  44/44, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip. Not verified: POSIX, and a real SIGINT to a real `suite.mjs` process (the signal
+  is injected through the `process` seam).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

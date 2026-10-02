@@ -43,6 +43,7 @@ const SECRET_NAME =/TOKEN|KEY|SECRET|PASSWORD/i;
 const redactedEnv = () => Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, SECRET_NAME.test(name) ? '<set>' : value]));
 
 const report = {
+  pid: process.pid,
   prompt,
   cwd,
   argv: process.argv.slice(2),

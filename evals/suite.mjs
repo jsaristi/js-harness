@@ -44,7 +44,7 @@ export const USAGE = [
   '  --repeats <n>             trials per task, config and effort',
   '  --tasks <ids|all>         task ids from evals/tasks, comma separated, or all',
   `  --permission-mode <mode>  ${PERMISSION_MODES.join(', ')}; no default, the same for both arms`,
-  '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/',
+  '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/<name>/',
   '  --work-root <dir>         where trials run (default: js-harness-evals-work next to the repository)',
   '  --summary                 print the summary of a recorded run and run nothing',
   '',
@@ -73,8 +73,8 @@ function listOf(flag, value, allowed, what) {
  * or `{ mode: 'summary', name }`. Every argument but `--work-root` is required and nothing has a default: a
  * missing or unknown one is a `UsageError` raised before anything is created, because a run that guessed its
  * permission mode or its arms would record results that mean something else. `taskIds` are the ids a `--tasks`
- * value may name. */
-export function parseArgs(argv, { taskIds = [] } = {}) {
+ * value may name, found in `tasksDir`, which an empty `--tasks all` names in its error. */
+export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory' } = {}) {
   const given = new Map();
   let summary = false;
   for (let i = 0; i < argv.length; i += 1) {
@@ -116,6 +116,7 @@ export function parseArgs(argv, { taskIds = [] } = {}) {
   const tasksValue = given.get('--tasks');
   let tasks;
   if (tasksValue === 'all') {
+    if (taskIds.length === 0) throw new UsageError(`--tasks all found no task in ${tasksDir}: a run of no trials would read as a finished one`);
     tasks = [...taskIds];
   } else {
     if (tasksValue.split(',').includes('all')) throw new UsageError('--tasks all cannot be combined with task ids');
@@ -316,7 +317,9 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * read the login token from `JS_HARNESS_EVAL_OAUTH_TOKEN` (and no other variable); check the work root;
  * load the tasks; read the results file and the stack, and refuse to continue a run whose stack changed;
  * build the home template (current arm only); run the trials, each recorded as it ends; and, whatever
- * happened, remove the template. An interrupt removes it too, before the process ends. */
+ * happened, remove the template. An interrupt (SIGINT or SIGTERM) aborts the running trial, which stops its agent
+ * and cleans up before it returns; then the template is removed and the process ends with the signal's status
+ * (`proc.exit`, so a test's stand-in sees it after all of that). The trial in flight records nothing. */
 export async function suiteMain(argv, env = process.env, deps = {}) {
   const {
     stdout = process.stdout, stderr = process.stderr,
@@ -341,7 +344,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
 
   let args;
   try {
-    args = parseArgs(argv, { taskIds: taskIdsIn(tasksDir) });
+    args = parseArgs(argv, { taskIds: taskIdsIn(tasksDir), tasksDir });
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     warn(`${error.message}\n\n${USAGE}\n`);
@@ -393,10 +396,24 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     }
     removeDir(parent, 'template directory', note);
   };
+  // An interrupt must not end the process by itself: the active agent runs detached, so it would go on, spending the
+  // subscription, with its workspace, its home and whatever it started left behind. The first signal aborts the
+  // running trial instead; the trial stops its agent's tree and cleans up as on every other way out, `runSuite`
+  // returns, and only then are the template removed and the process ended, with the signal's status. A second
+  // signal, for a cleanup that hangs, removes the template and ends the process at once.
+  const interrupted = new AbortController();
+  let interruptedBy = null;
+  const statusOf = (signal) => 128 + (os.constants.signals[signal] ?? 0);
   const onSignal = (signal) => {
+    if (interruptedBy === null) {
+      interruptedBy = signal;
+      warn(`${signal}: stopping the active trial and cleaning up (send it again to end the process at once)\n`);
+      interrupted.abort();
+      return;
+    }
     release();
     for (const message of cleanupFailures) warn(`${message}\n`);
-    proc.exit(128 + (os.constants.signals[signal] ?? 0));
+    proc.exit(statusOf(signal));
   };
 
   try {
@@ -447,15 +464,25 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       const outcome = await runTrial(trial);
       const label = `${trial.task.id} ${trial.config.name} ${trial.effort} #${trial.repeat}`;
       if (outcome.status === 'recorded') warn(`${label}: score ${scoreText(outcome.record.score)}${outcome.record.error ? ` (${outcome.record.error})` : ''}, ${duration(outcome.record.wallMs ?? null)}\n`);
+      else if (outcome.status === 'interrupted') warn(`${label}: interrupted, not recorded\n`);
       else warn(`${label}: stopped (${outcome.reason})\n`);
       return outcome;
     };
-    const result = await runSuite({ tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir, workRoot, runTrial: reporting, log: (message) => warn(`${message}\n`) });
-    if (result.status === 'stopped') {
-      warn(`the suite stopped: ${result.reason} (${result.message}). ${doc.trials.length} trials are recorded in ${file}; fix the cause and run the same command again to continue.\n`);
-      code = 1;
+    // Raw logs are named by task, config, effort and repeat, so runs that share trials (the headroom screen and the
+    // A/B run) would overwrite each other's in one directory: each run keeps its own, named like its results file.
+    const result = await runSuite({
+      tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir: path.join(runsDir, args.name), workRoot,
+      runTrial: reporting, signal: interrupted.signal, log: (message) => warn(`${message}\n`),
+    });
+    if (result.status === 'interrupted') {
+      warn(`interrupted: ${doc.trials.length} trials are recorded in ${file}; run the same command again to continue.\n`);
+    } else {
+      if (result.status === 'stopped') {
+        warn(`the suite stopped: ${result.reason} (${result.message}). ${doc.trials.length} trials are recorded in ${file}; fix the cause and run the same command again to continue.\n`);
+        code = 1;
+      }
+      say(`results: ${file}\n\n${formatSummary(summarizeResults(doc))}`);
     }
-    say(`results: ${file}\n\n${formatSummary(summarizeResults(doc))}`);
   } catch (err) {
     warn(`the suite failed: ${err.message}\n`);
     code = 1;
@@ -464,6 +491,12 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     release();
     for (const message of cleanupFailures) warn(`${message}\n`);
     if (cleanupFailures.length > 0) code = 1;
+  }
+  if (interruptedBy !== null) {
+    // Everything is cleaned up by now: the trial, the template. The process ends with the signal's status, as a
+    // process killed by that signal would, not with the 0 or 1 of a run that finished.
+    code = statusOf(interruptedBy);
+    proc.exit(code);
   }
   return code;
 }

@@ -442,6 +442,46 @@ for (const [mode, reason, message] of [
   });
 }
 
+// ---- an interrupted trial --------------------------------------------------------------------------
+
+test('an interrupt of a running trial stops the agent and its tree, cleans up as on every other way out, and records nothing', async () => {
+  const events = [];
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const { options, readReport, workRoot, runsDir } = trialEnv('hang', {
+    configExtra: { prepare: () => ({}), cleanup: () => { events.push('cleanup'); } },
+    sweep: () => { events.push('sweep'); return { killed: [] }; },
+    signal: controller.signal,
+  });
+  const pending = runTrial(options);
+  const reported = () => { try { return readReport(); } catch { return null; } };
+  assert.ok(await waitUntil(() => reported() !== null, 15000), 'the agent started');
+  const { pid, grandchildPid } = reported();
+  reaper.pids([pid, grandchildPid], { since: startedAt });
+  controller.abort();
+  assert.deepEqual(await pending, { status: 'interrupted' });
+  assert.ok(await waitUntil(() => !isAlive(pid) && !isAlive(grandchildPid), 10000), 'neither the agent nor its grandchild runs');
+  assert.deepEqual(events, ['sweep', 'cleanup'], 'the sweep by path and the config cleanup ran, in the order of every other way out');
+  assert.deepEqual(entriesOf(workRoot), [], 'the workspace and the home are gone');
+  assert.equal(fs.existsSync(runsDir), false, 'an interrupted trial is not a result, and keeps no log of one');
+});
+
+test('a trial interrupted before the agent starts starts none: nothing is made when the signal is already aborted, and what prepare made is cleaned up when it came during it', async () => {
+  const events = [];
+  const configExtra = { prepare: () => { events.push('prepare'); return {}; }, cleanup: () => { events.push('cleanup'); } };
+  const before = trialEnv('hang', { configExtra, signal: AbortSignal.abort() });
+  assert.deepEqual(await runTrial(before.options), { status: 'interrupted' });
+  assert.deepEqual(events, [], 'not even prepared');
+  assert.deepEqual(entriesOf(before.workRoot), []);
+
+  const controller = new AbortController();
+  const during = trialEnv('hang', { configExtra: { ...configExtra, prepare: () => { events.push('prepare'); controller.abort(); return {}; } }, signal: controller.signal });
+  assert.deepEqual(await runTrial(during.options), { status: 'interrupted' });
+  assert.deepEqual(events, ['prepare', 'cleanup']);
+  assert.equal(fs.existsSync(during.countFile), false, 'no agent ran');
+  assert.deepEqual(entriesOf(during.workRoot), []);
+});
+
 // ---- suites: order, results file, resume, stop ------------------------------------------------------
 
 test('planTrials orders by repeat first, so a suite stopped early still covers every cell once', () => {
@@ -557,6 +597,40 @@ test('runSuite stops at the first cap or auth stop: nothing more is run and noth
     assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2', 'a|x|medium|3']);
     assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
   }
+});
+
+test('runSuite stops at an interrupt: the trial that comes back interrupted is not recorded, and no trial starts after it', async () => {
+  const asked = [];
+  const controller = new AbortController();
+  const seen = [];
+  const options = suiteOptions({
+    repeats: 4,
+    signal: controller.signal,
+    runTrial: stubTrial(asked, (trial) => (trial.repeat === 3 ? { status: 'interrupted' } : null), (trial) => { seen.push(trial.signal === controller.signal); }),
+  });
+  const result = await runSuite(options);
+  assert.deepEqual(result, { status: 'interrupted', completed: 2 });
+  assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2', 'a|x|medium|3']);
+  assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
+  assert.ok(seen.every(Boolean), 'each trial is handed the signal, so it can be stopped');
+});
+
+test('runSuite checks the signal between trials: a trial that finished is recorded, and none starts once the signal is aborted', async () => {
+  const asked = [];
+  const controller = new AbortController();
+  const options = suiteOptions({
+    repeats: 4,
+    signal: controller.signal,
+    runTrial: stubTrial(asked, () => null, (trial) => { if (trial.repeat === 2) controller.abort(); }),
+  });
+  assert.deepEqual(await runSuite(options), { status: 'interrupted', completed: 2 });
+  assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2'], 'the trial that completed is a result; the next one never starts');
+  assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
+
+  const never = [];
+  const refused = suiteOptions({ signal: AbortSignal.abort(), runTrial: stubTrial(never) });
+  assert.deepEqual(await runSuite(refused), { status: 'interrupted', completed: 0 });
+  assert.deepEqual(never, []);
 });
 
 test('running a suite twice against the fake agent spawns no agent for a recorded trial', async () => {
@@ -828,6 +902,63 @@ test('a kill that could not be done is reported on the result and never thrown o
   const run = await pending;
   assert.equal(run.exitCode, 0);
   assert.equal(run.sweepError, 'the process snapshot failed (exit 1): CIM is down');
+});
+
+// ---- an interrupt: the owner of the signal aborts, and the run is stopped before the process ends ----------------------------
+
+const stubChild = (pid = 4242) => Object.assign(new EventEmitter(), { pid, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+
+test('an abort kills the child\'s tree once, sweeps what it left, and resolves as aborted, not as a timeout', async () => {
+  const child = stubChild();
+  const calls = [];
+  const controller = new AbortController();
+  const pending = runProcess({
+    command: 'agent', input: 'prompt', timeoutMs: 60000, graceMs: 30, spawn: () => child, signal: controller.signal,
+    kill: () => calls.push('tree'), killSurvivors: () => calls.push('survivors'),
+  });
+  controller.abort();
+  const run = await pending;
+  assert.deepEqual(calls, ['tree', 'survivors']);
+  assert.equal(run.aborted, true);
+  assert.equal(run.timedOut, false);
+  controller.abort(new Error('again'));
+  assert.deepEqual(calls, ['tree', 'survivors'], 'nothing happens after the run ended');
+});
+
+test('an abort that comes after the child exited kills no tree, and a signal that is already aborted spawns nothing', async () => {
+  const child = stubChild();
+  const calls = [];
+  const controller = new AbortController();
+  const pending = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 60000, spawn: () => child, signal: controller.signal, kill: () => calls.push('tree'), killSurvivors: () => calls.push('survivors') });
+  child.emit('exit', 0, null);
+  child.emit('close', 0, null);
+  controller.abort();
+  const run = await pending;
+  assert.deepEqual(calls, ['survivors']);
+  assert.equal(run.aborted ?? false, false, 'it finished before the abort');
+
+  const refused = await runProcess({ command: 'agent', timeoutMs: 1000, signal: AbortSignal.abort(), spawn: () => assert.fail('nothing is started for an interrupted suite') });
+  assert.equal(refused.aborted, true);
+  assert.equal(refused.spawnError, undefined);
+});
+
+test('a caller that passes a signal owns the interrupt: no forwarding is installed, and one that does not keeps the POSIX forwarding', { skip: process.platform === 'win32' ? 'the forwarding is POSIX only' : false }, async () => {
+  const count = () => process.listenerCount('SIGINT') + process.listenerCount('SIGTERM') + process.listenerCount('SIGHUP');
+  const baseline = count();
+  const owned = stubChild();
+  const controller = new AbortController();
+  const pendingOwned = runProcess({ command: 'agent', timeoutMs: 1000, graceMs: 10, spawn: () => owned, signal: controller.signal, kill: () => {}, killSurvivors: () => {} });
+  assert.equal(count(), baseline, 'a re-raised signal would end the process before the trial\'s cleanup');
+  controller.abort();
+  await pendingOwned;
+
+  const forwarded = stubChild();
+  const pendingForwarded = runProcess({ command: 'agent', timeoutMs: 1000, graceMs: 10, spawn: () => forwarded, kill: () => {}, killSurvivors: () => {} });
+  assert.equal(count(), baseline + 3, 'the forwarding other callers rely on is unchanged');
+  forwarded.emit('exit', 0, null);
+  forwarded.emit('close', 0, null);
+  await pendingForwarded;
+  assert.equal(count(), baseline);
 });
 
 // ---- third review round -----------------------------------------------------------------------------
@@ -1327,15 +1458,28 @@ test('killByPath requires a boundary after the root: a sibling whose name extend
   assert.ok(siblings.every(isAlive), 'trial-10 is not trial-1');
 });
 
-test('killByPath ends a match on anything that is not a name character: a root inside a list or a key/value argument is matched, trial-10 is not', { skip: WINDOWS_ONLY }, async () => {
+test('killByPath ends a match on a delimiter only: a root inside a list or a key/value argument is matched, and anything that can continue a Windows directory name is not', { skip: WINDOWS_ONLY }, async () => {
   const root = path.join(tmp('punct'), 'eval-trial-1');
-  const siblings = [sleeper(`${root}0`), sleeper(`${root}_x`), sleeper(`${root}Z`), sleeper(`${root}.log`)];
-  const targets = [`${root};next`, `${root},next`, `${root}=value`, `(${root})`, `[${root}]`, `${root}:80`, `${root}|x`, `${root}>out`].map((argument) => sleeper(argument));
+  const targets = [`${root};x`, `${root},x`, `${root}=x`, `${root})`, `(${root})`].map((argument) => sleeper(argument));
+  // Each of these is a legal name on Windows that merely starts with the root: killing it would be killing a bystander.
+  const siblings = ['0', '+backup', '(copy)', '[2]', '.bak', '_old', '-old', 'Z', '@x', '~1', '!', '#', '%', '&', '{x}'].map((suffix) => sleeper(`${root}${suffix}`));
   const { killed } = killByPath([root]);
   assert.deepEqual([...killed].sort((a, b) => a - b), [...targets].sort((a, b) => a - b));
   assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))));
   await new Promise((resolve) => setTimeout(resolve, 300));
-  assert.ok(siblings.every(isAlive), 'a letter, a digit, "." "_" and "-" continue a name');
+  assert.ok(siblings.every(isAlive), 'a character that can continue a name does not end the root');
+});
+
+test('the sweep script ends a root on the end of the line, a separator, a quote, whitespace or one of ; , = ) and nothing else', () => {
+  let script;
+  const sync = (command, args) => {
+    script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  killByPath([path.join(tmp('delimiters'), 'eval-d')], { platform: 'win32', spawnSync: sync });
+  assert.match(script, /\$delimiters = \[char\[\]\]@\(\[char\]92, \[char\]47, \[char\]34, \[char\]39, \[char\]59, \[char\]44, \[char\]61, \[char\]41\)/, '\\ / " \' ; , = )');
+  assert.match(script, /IsWhiteSpace\(\$next\)/);
+  assert.doesNotMatch(script, /IsLetterOrDigit/, 'a name is not defined by its own characters, a boundary by its delimiters');
 });
 
 test('killByPath given a root with a trailing separator still matches the processes that name it without one', { skip: WINDOWS_ONLY }, async () => {
