@@ -647,6 +647,12 @@ test('an interrupt aborts the running trial, waits for it, then removes the temp
   const term = depsFor(m, { runTrial: fakeRun(async (trial, number) => { if (number === 1) { term.proc.emit('SIGTERM', 'SIGTERM'); return { status: 'interrupted' }; } return undefined; }) });
   await suiteMain(runArgv(m, { '--name': 'second' }), ENV, term.deps);
   assert.deepEqual(term.proc.exited, [143]);
+
+  // A terminal that closes sends SIGHUP: the suite owns the trial's signals, so it must stop the agent on this one too.
+  const hup = depsFor(m, { runTrial: fakeRun(async (trial, number) => { if (number === 1) { hup.proc.emit('SIGHUP', 'SIGHUP'); return { status: 'interrupted' }; } return undefined; }) });
+  await suiteMain(runArgv(m, { '--name': 'third' }), ENV, hup.deps);
+  assert.deepEqual(hup.proc.exited, [129]);
+  assert.equal(hup.proc.listenerCount('SIGHUP'), 0, 'the listener is gone after the run');
 });
 
 test('an interrupt between trials keeps what was recorded and ends the process with the signal\'s status', async () => {

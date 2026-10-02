@@ -302,7 +302,9 @@ function writeResultsDocument(file, doc) {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PREFIX = 'js-harness-suite-template-';
-const SIGNALS = ['SIGINT', 'SIGTERM'];
+// Every signal `runProcess` would forward for a caller that passes no abort signal: the suite passes one, so it
+// owns them all. SIGHUP is a terminal that closed; unhandled, it would end the suite and leave the agent running.
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 const unknownVersion = (value) => (value === null ? 'unknown' : value);
 
 const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort() : []);
@@ -317,7 +319,7 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * read the login token from `JS_HARNESS_EVAL_OAUTH_TOKEN` (and no other variable); check the work root;
  * load the tasks; read the results file and the stack, and refuse to continue a run whose stack changed;
  * build the home template (current arm only); run the trials, each recorded as it ends; and, whatever
- * happened, remove the template. An interrupt (SIGINT or SIGTERM) aborts the running trial, which stops its agent
+ * happened, remove the template. An interrupt (SIGINT, SIGTERM or SIGHUP) aborts the running trial, which stops its agent
  * and cleans up before it returns; then the template is removed and the process ends with the signal's status
  * (`proc.exit`, so a test's stand-in sees it after all of that). The trial in flight records nothing. */
 export async function suiteMain(argv, env = process.env, deps = {}) {

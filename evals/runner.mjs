@@ -535,7 +535,8 @@ export function removeDir(dir, label, log, sweepAgain) {
  * the agent (`spawn`) or the hidden grader (`grader-spawn`) never started. A stopped trial records
  * nothing: a zero there would measure the machine, not the configuration. `{ status: 'interrupted' }` is what a
  * trial returns when `signal`, an `AbortSignal` the caller raises on an interrupt, aborted before it ended: the
- * agent's tree (or the grader's) is killed, nothing is logged or recorded, and every cleanup below has run by the
+ * agent's tree (or the grader's) is killed, nothing is recorded (the raw logs of an agent that had already ended
+ * when the grader was interrupted stay, as evidence), and every cleanup below has run by the
  * time it resolves, so the caller may remove what it owns and end the process.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only

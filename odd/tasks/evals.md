@@ -221,6 +221,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   "anything that is not a name character" (Codex P1), raw logs go under `evals/runs/<name>/`
   (Codex P2), and an empty task set is a usage error (gentle-ai suggestion) (route: delegated
   writer)
+- [x] T4srr The suite also owns SIGHUP: a terminal that closes stops the trial like an interrupt
+  (gentle-ai WARNING and Codex P1 on T4sr, the same finding) (route: inline, one file)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -847,7 +849,17 @@ Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   parent), `evals/runner.test.mjs` 132 pass and 1 skip (POSIX-only), `bin/lib/process-tree.test.mjs`
   44/44, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
   and 1 skip. Not verified: POSIX, and a real SIGINT to a real `suite.mjs` process (the signal
-  is injected through the `process` seam).
+  is injected through the `process` seam). Commit `24774db`.
+- 2026-10-02: `267dc13..24774db` (T4sr) reviewed by gentle-ai (lineage `review-061383905cd4dbe2`,
+  medium, reliability lens, approved and acknowledged) and Codex (recorded). Both found the
+  same defect: with the suite's abort signal `runProcess` forwards nothing, and the suite
+  listened to SIGINT and SIGTERM only, so a SIGHUP (the terminal closing) ended the suite and
+  left the detached agent running. gentle-ai also noted that an interrupt during grading
+  leaves the agent's raw logs, against `runTrial`'s comment, with no test on that path.
+- 2026-10-02: T4srr done inline. RED: the SIGHUP case exited with nothing (`[]` instead of
+  `[129]`). GREEN: `node --test evals/suite.test.mjs` 43/43. `runTrial`'s comment now says the
+  logs of an agent that had ended stay when its grader is interrupted, as they do for a cap or
+  an auth stop; the missing test of that path is a follow-up.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -980,6 +992,8 @@ Decided 2026-10-01, before the first candidate was written:
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.
+- No test interrupts a trial while its grader runs (`gradeWorkspace` returning `aborted`), so the
+  cleanup and the no-record rule on that path are unproven (gentle-ai suggestion on T4sr).
 - `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
   pid file appears; the `since` filter bounds the risk to a process started during that test
   (gentle-ai suggestion on T4kt).
