@@ -13,6 +13,7 @@ import { childEnv, loadTask, runTrial } from './runner.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
 const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
+const PORT = 41234;
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-test-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -118,7 +119,7 @@ function setup() {
   const summary = buildTemplate({ realHome, templateDir });
   const seed = () => {
     const home = path.join(tmp('trial'), 'home');
-    seedHome(templateDir, home);
+    seedHome(templateDir, home, { engramPort: PORT });
     return home;
   };
   return { realHome, templateDir, summary, seed };
@@ -390,19 +391,19 @@ test('seedHome points the plugin paths into the trial home it seeds, each one it
   }
 });
 
-test('seedHome sets the engram data directory of the trial in .claude.json, drops projects, and touches no other server', () => {
+test('seedHome sets the engram data directory and port of the trial in .claude.json, drops projects, and touches no other server', () => {
   const { seed } = setup();
   const home = seed();
   const claudeJson = readJson(path.join(home, '.claude', '.claude.json'));
-  assert.deepEqual(claudeJson.mcpServers.engram, { command: 'engram', args: ['mcp'], env: { ENGRAM_DATA_DIR: path.join(home, '.engram') } }, 'env is created when the server had none');
+  assert.deepEqual(claudeJson.mcpServers.engram, { command: 'engram', args: ['mcp'], env: { ENGRAM_DATA_DIR: path.join(home, '.engram'), ENGRAM_PORT: String(PORT) } }, 'env is created when the server had none');
   assert.deepEqual(claudeJson.mcpServers.other, { command: 'other', args: [], env: { KEEP: '1' } });
   assert.ok(!('projects' in claudeJson));
   assert.equal(claudeJson.numStartups, 3);
 });
 
-test('seedHome keeps the other variables of an engram server that already has an env, and ignores a file with no engram', () => {
+test('seedHome keeps the other variables of an engram server that already has an env, replaces its port and drops its URL and socket, and ignores a file with no engram', () => {
   for (const [mcpServers, expected] of [
-    [{ engram: { command: 'engram', env: { OTHER: 'x', ENGRAM_DATA_DIR: 'C:\\real\\.engram' } } }, { command: 'engram', env: { OTHER: 'x', ENGRAM_DATA_DIR: null } }],
+    [{ engram: { command: 'engram', env: { OTHER: 'x', ENGRAM_DATA_DIR: 'C:\\real\\.engram', ENGRAM_PORT: '7437', ENGRAM_URL: 'http://127.0.0.1:7437', ENGRAM_SOCKET: '/run/engram.sock' } } }, { command: 'engram', env: { OTHER: 'x', ENGRAM_DATA_DIR: null, ENGRAM_PORT: String(PORT) } }],
     [{ context7: { command: 'c' } }, undefined],
     [undefined, undefined],
   ]) {
@@ -412,7 +413,7 @@ test('seedHome keeps the other variables of an engram server that already has an
     const templateDir = path.join(tmp('template'), 'tpl');
     buildTemplate({ realHome, templateDir });
     const home = path.join(tmp('trial'), 'home');
-    seedHome(templateDir, home);
+    seedHome(templateDir, home, { engramPort: PORT });
     const seeded = readJson(path.join(home, '.claude', '.claude.json'));
     if (expected) {
       expected.env.ENGRAM_DATA_DIR = path.join(home, '.engram');
@@ -456,12 +457,21 @@ test('the template is frozen: a change to the real home after the build reaches 
 
 test('seedHome refuses a directory that is not a template, a template with a link in it, and a relative home', () => {
   const { templateDir } = setup();
-  assert.throws(() => seedHome(tmp('not-a-template'), path.join(tmp('trial'), 'home')), /template/);
-  assert.throws(() => seedHome(templateDir, 'relative-home'), /absolute/);
+  assert.throws(() => seedHome(tmp('not-a-template'), path.join(tmp('trial'), 'home'), { engramPort: PORT }), /template/);
+  assert.throws(() => seedHome(templateDir, 'relative-home', { engramPort: PORT }), /absolute/);
   const target = tmp('outside');
   linkDir(target, path.join(templateDir, 'home', '.claude', 'skills', 'sneaked'));
   const home = path.join(tmp('trial'), 'home');
-  assert.throws(() => seedHome(templateDir, home), /holds a link at/);
+  assert.throws(() => seedHome(templateDir, home, { engramPort: PORT }), /holds a link at/);
+});
+
+test('seedHome needs the engram port of the trial: without one, or with the real one, it refuses before it copies anything', () => {
+  const { templateDir } = setup();
+  for (const options of [undefined, {}, { engramPort: 7437 }, { engramPort: '41234' }]) {
+    const home = path.join(tmp('trial'), 'home');
+    assert.throws(() => seedHome(templateDir, home, options), /engram port/, JSON.stringify(options));
+    assert.ok(!fs.existsSync(home), 'nothing was copied');
+  }
 });
 
 test('removeTemplate removes a template, and refuses to remove a directory that is not one', () => {
@@ -482,36 +492,49 @@ function preparedTrial() {
   const home = path.join(tmp('init'), 'home');
   const workspace = tmp('ws');
   write(path.join(workspace, 'a.txt'), 'alpha\n');
-  prepareSandbox({ home, workspace });
+  prepareSandbox({ home, workspace, engramPort: PORT });
   return { home, workspace };
 }
 
 test('initWorkspace runs the init command in the workspace, under the sandbox env of the trial and no other', async () => {
   const { home, workspace } = preparedTrial();
   const calls = [];
-  await withEnv({ CLAUDE_CODE_CHILD_SESSION: '1', GIT_DIR: path.join(scratch, 'x') }, () => initWorkspace({ home, workspace, runInit: (call) => (calls.push(call), { status: 0, stdout: '', stderr: '' }) }));
+  await withEnv({ CLAUDE_CODE_CHILD_SESSION: '1', GIT_DIR: path.join(scratch, 'x') }, () => initWorkspace({ home, workspace, engramPort: PORT, runInit: (call) => (calls.push(call), { status: 0, stdout: '', stderr: '' }) }));
   assert.equal(calls.length, 1);
   assert.equal(calls[0].workspace, workspace);
-  const expected = childEnv(sandboxEnv({ home }));
+  const expected = childEnv(sandboxEnv({ home, engramPort: PORT }));
   assert.deepEqual(calls[0].env, expected);
   assert.equal(calls[0].env.HOME, home);
   assert.ok(!('CLAUDE_CODE_CHILD_SESSION' in calls[0].env) && !('GIT_DIR' in calls[0].env));
 });
 
+test('initWorkspace needs the engram port of the trial, and its init runs with it', async () => {
+  const { home, workspace } = preparedTrial();
+  let ran = 0;
+  const runInit = (call) => ((ran += 1), (seen = call.env), { status: 0, stdout: '', stderr: '' });
+  let seen;
+  await assert.rejects(initWorkspace({ home, workspace, engramPort: undefined, runInit }), /engram port/);
+  await assert.rejects(initWorkspace({ home, workspace, engramPort: 7437, runInit }), /7437/);
+  assert.equal(ran, 0, 'init never ran');
+  await initWorkspace({ home, workspace, engramPort: PORT, runInit });
+  assert.equal(seen.ENGRAM_PORT, String(PORT));
+  assert.ok(!('ENGRAM_URL' in seen) && !('ENGRAM_SOCKET' in seen));
+});
+
 test('initWorkspace adds the extra env it is given on top of the sandbox env', async () => {
   const { home, workspace } = preparedTrial();
   let seen;
-  await initWorkspace({ home, workspace, env: { EXTRA_FOR_INIT: 'yes' }, runInit: (call) => ((seen = call.env), { status: 0, stdout: '', stderr: '' }) });
+  await initWorkspace({ home, workspace, engramPort: PORT, env: { EXTRA_FOR_INIT: 'yes' }, runInit: (call) => ((seen = call.env), { status: 0, stdout: '', stderr: '' }) });
   assert.equal(seen.EXTRA_FOR_INIT, 'yes');
   assert.equal(seen.HOME, home);
 });
 
 test('initWorkspace rejects when init exits non-zero, or reports a failed step, so a trial never runs without its project layer', async () => {
   const { home, workspace } = preparedTrial();
-  await assert.rejects(initWorkspace({ home, workspace, runInit: () => ({ status: 1, stdout: '', stderr: 'not a git repository: run git init first\n' }) }), /not a git repository/);
-  await assert.rejects(initWorkspace({ home, workspace, runInit: () => ({ status: 0, stdout: 'wrote harness.json\n', stderr: 'codegraph init failed: codegraph: command not found\n' }) }), /codegraph init failed/);
-  await assert.rejects(initWorkspace({ home, workspace, runInit: () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' }) }), /spawn ENOENT/);
-  await assert.doesNotReject(initWorkspace({ home, workspace, runInit: () => ({ status: 0, stdout: 'wrote harness.json\n', stderr: 'kept AGENTS.md (already there)\n' }) }));
+  await assert.rejects(initWorkspace({ home, workspace, engramPort: PORT, runInit: () => ({ status: 1, stdout: '', stderr: 'not a git repository: run git init first\n' }) }), /not a git repository/);
+  await assert.rejects(initWorkspace({ home, workspace, engramPort: PORT, runInit: () => ({ status: 0, stdout: 'wrote harness.json\n', stderr: 'codegraph init failed: codegraph: command not found\n' }) }), /codegraph init failed/);
+  await assert.rejects(initWorkspace({ home, workspace, engramPort: PORT, runInit: () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' }) }), /spawn ENOENT/);
+  await assert.doesNotReject(initWorkspace({ home, workspace, engramPort: PORT, runInit: () => ({ status: 0, stdout: 'wrote harness.json\n', stderr: 'kept AGENTS.md (already there)\n' }) }));
 });
 
 /** A stand-in `codegraph` on PATH that makes the directory the real one would and exits 0, so the real
@@ -526,9 +549,9 @@ function stubCodegraphDir() {
 test('the real js-harness init, run by initWorkspace under the sandbox, writes the project layer into the workspace', async () => {
   const { home, workspace } = preparedTrial();
   const stub = stubCodegraphDir();
-  await initWorkspace({ home, workspace, env: { PATH: `${stub}${path.delimiter}${process.env.PATH ?? process.env.Path}` } });
+  await initWorkspace({ home, workspace, engramPort: PORT, env: { PATH: `${stub}${path.delimiter}${process.env.PATH ?? process.env.Path}` } });
   for (const rel of ['harness.json', 'AGENTS.md', '.codegraph']) assert.ok(fs.existsSync(path.join(workspace, rel)), rel);
-  const hook = spawnSync('git', ['rev-parse', '--git-path', 'hooks/pre-commit'], { cwd: workspace, env: childEnv(sandboxEnv({ home })), encoding: 'utf8' }).stdout.trim();
+  const hook = spawnSync('git', ['rev-parse', '--git-path', 'hooks/pre-commit'], { cwd: workspace, env: childEnv(sandboxEnv({ home, engramPort: PORT })), encoding: 'utf8' }).stdout.trim();
   assert.ok(fs.existsSync(path.resolve(workspace, hook)), 'the pre-commit hook');
 });
 

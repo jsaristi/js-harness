@@ -414,9 +414,10 @@ export function runProcess({
 }
 
 /** The `{ command, args, env }` to spawn for `config`. `args` and `env` may be plain values or
- * functions of `{ effort, task, home, workspace }`, so one configuration can vary by effort, and point
- * every writer at the trial's own home, without being rebuilt by hand for every cell of the suite.
- * `home` is `undefined` for a config without `prepare`. */
+ * functions of `{ effort, task, home, workspace, prepared }`, so one configuration can vary by effort, and
+ * point every writer at the trial's own home, without being rebuilt by hand for every cell of the suite.
+ * `home` and `prepared` (what `prepare` returned: a trial's port, say) are `undefined` for a config without
+ * `prepare`. */
 export function resolveAgent(config, context) {
   const pick = (value) => (typeof value === 'function' ? value(context) : value);
   return { command: config.command, args: pick(config.args) ?? [], env: pick(config.env) ?? {} };
@@ -507,8 +508,11 @@ export function removeDir(dir, label, log, sweepAgain) {
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
  * the workspace and fresh for every trial, because anything an earlier trial left in a shared one (a
  * transcript, a memory) would leak its answer into the next. `prepare({ home, workspace, effort, task })`
- * runs after the fixture copy; one that throws rejects the trial. Both directories are removed on every
- * path, in a `finally`. An agent that fails for any other reason (timeout, non-zero exit, unreadable
+ * runs after the fixture copy; one that throws rejects the trial. What it returns is the trial's `prepared`
+ * state, handed to `args` and `env` and to the config's optional `cleanup({ home, workspace, prepared })`,
+ * which runs on every path once `prepare` has finished (after the sweep by path, before the directories go)
+ * for whatever the sweep cannot reach: a server the agent started on a port of the trial's own. A cleanup
+ * that throws is logged, never thrown. Both directories are removed on every path, in a `finally`. An agent that fails for any other reason (timeout, non-zero exit, unreadable
  * output) is still graded and recorded with its error, because its workspace may hold work worth
  * scoring and a failure rate is itself a result.
  *
@@ -541,13 +545,16 @@ export async function runTrial({
   fs.mkdirSync(root, { recursive: true });
   const workspace = fs.mkdtempSync(path.join(root, 'eval-'));
   let home;
+  let prepared;
+  let isPrepared = false;
   try {
     copyFixture(task, workspace);
     if (config.prepare) {
       home = fs.mkdtempSync(path.join(root, 'eval-home-'));
-      await config.prepare({ home, workspace, effort, task });
+      prepared = await config.prepare({ home, workspace, effort, task });
+      isPrepared = true;
     }
-    const agent = resolveAgent(config, { effort, task, home, workspace });
+    const agent = resolveAgent(config, { effort, task, home, workspace, prepared });
     const cliVersion = await readVersion(config, agent.env);
     const began = clock();
     const run = await runProcess({
@@ -603,6 +610,13 @@ export async function runTrial({
       }
     };
     sweepTrial();
+    if (isPrepared && config.cleanup) {
+      try {
+        await config.cleanup({ home, workspace, prepared });
+      } catch (err) {
+        log(`the cleanup of config ${config.name} failed: ${err.message}`);
+      }
+    }
     removeDir(workspace, 'workspace', log, sweepTrial);
     if (home) removeDir(home, 'home', log, sweepTrial);
   }

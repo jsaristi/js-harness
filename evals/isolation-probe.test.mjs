@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
+import { findListeners, killByPort } from './ports.mjs';
 import { killByPath } from './runner.mjs';
 import {
   DUMMY_API_KEY, PROBE_ENV_VARS, claudeMdMarkers, defaultTrees, diffSnapshots, formatSummary, leakHits, main, parseEnvLines, probeCommand, runIsolationProbe, scanFile,
@@ -153,6 +154,89 @@ test('without a Bash tool the script goes straight to Write; a small model or no
   });
 });
 
+// ---- the plugin's paths: a memory write through the engram MCP tool, and a subagent --------------------------------
+
+const MEM_SAVE = 'mcp__engram__mem_save';
+const ENGRAM_TOOLS = [...TOOLS, { name: MEM_SAVE }, { name: 'Agent' }];
+
+/** Walks the scripted conversation with every tool offered, answering each tool call as the agent would. */
+async function walkScript(api, tools) {
+  const messages = [{ role: 'user', content: 'hi' }];
+  const steps = [];
+  for (let turn = 0; turn < 8; turn += 1) {
+    const reply = await (await post(api, '/v1/messages', ask({ tools, messages: [...messages] }))).json();
+    const calls = reply.content.filter((block) => block.type === 'tool_use');
+    if (calls.length === 0) {
+      steps.push('text');
+      return { steps, reply };
+    }
+    steps.push({ name: calls[0].name, input: calls[0].input });
+    messages.push({ role: 'assistant', content: reply.content });
+    messages.push({ role: 'user', content: calls.map((call) => ({ type: 'tool_result', tool_use_id: call.id, content: [{ type: 'text', text: 'ok' }] })) });
+  }
+  throw new Error('the script did not end');
+}
+
+test('with the engram tool and a subagent tool offered, the script goes Bash, Write, mem_save, Agent, then text', async () => {
+  await withApi(async (api) => {
+    const { steps } = await walkScript(api, ENGRAM_TOOLS);
+    assert.deepEqual(steps.map((step) => step.name ?? step), ['Bash', 'Write', MEM_SAVE, 'Agent', 'text']);
+    const save = steps[2].input;
+    assert.equal(save.content, `memsave:${NONCE}`, 'the memory carries its own marker, so a write by the MCP server is told from the prompt hook');
+    assert.ok(typeof save.title === 'string' && save.title.length > 0);
+    const agent = steps[3].input;
+    assert.match(agent.prompt, /Isolation probe subagent/);
+    assert.ok(!agent.prompt.includes(NONCE), 'the subagent prompt is not the nonce: its text is what the stop hook stores');
+  });
+});
+
+test('the script takes the engram tool whatever the server is called, and the older name of the subagent tool', async () => {
+  await withApi(async (api) => {
+    const { steps } = await walkScript(api, [...TOOLS, { name: 'mcp__plugin_engram_engram__mem_save' }, { name: 'Task' }]);
+    assert.deepEqual(steps.map((step) => step.name ?? step), ['Bash', 'Write', 'mcp__plugin_engram_engram__mem_save', 'Task', 'text']);
+  });
+});
+
+test('a tool whose name only ends like the engram one, or a subagent tool that is not one, is not scripted', async () => {
+  await withApi(async (api) => {
+    const { steps } = await walkScript(api, [...TOOLS, { name: 'mcp__other__mem_save' }, { name: 'mcp__engram__mem_search' }, { name: 'TaskList' }]);
+    assert.deepEqual(steps.map((step) => step.name ?? step), ['Bash', 'Write', 'text']);
+  });
+});
+
+test('without the engram tool the script skips the memory write, and without a subagent tool the subagent', async () => {
+  await withApi(async (api) => {
+    assert.deepEqual((await walkScript(api, [...TOOLS, { name: 'Agent' }])).steps.map((step) => step.name ?? step), ['Bash', 'Write', 'Agent', 'text']);
+    assert.deepEqual((await walkScript(api, [...TOOLS, { name: MEM_SAVE }])).steps.map((step) => step.name ?? step), ['Bash', 'Write', MEM_SAVE, 'text']);
+  });
+});
+
+test('a subagent request is answered in text with its own marker and no tool call, whatever it is offered, and is logged as such', async () => {
+  await withApi(async (api) => {
+    const body = ask({ tools: ENGRAM_TOOLS, messages: [{ role: 'user', content: [{ type: 'text', text: '<system-reminder>x</system-reminder>' }, { type: 'text', text: 'Isolation probe subagent: reply in one line.' }] }] });
+    const reply = await (await post(api, '/v1/messages', body)).json();
+    assert.equal(reply.stop_reason, 'end_turn');
+    assert.deepEqual(reply.content.map((block) => block.type), ['text']);
+    assert.ok(reply.content[0].text.includes(`subagent:${NONCE}`));
+    assert.equal(api.requests.at(-1).reply, 'subagent');
+  });
+});
+
+test('the request log says whether an engram tool was offered, as a boolean, and still keeps nothing else', async () => {
+  await withApi(async (api) => {
+    await post(api, '/v1/messages', ask({ tools: TOOLS }));
+    await post(api, '/v1/messages', ask({ tools: ENGRAM_TOOLS }));
+    assert.deepEqual(api.requests.map((request) => request.engramToolOffered), [false, true]);
+  });
+});
+
+test('the Bash command prints the engram variables too, so the report shows what the hooks would resolve', () => {
+  for (const name of ['ENGRAM_PORT', 'ENGRAM_URL', 'ENGRAM_SOCKET']) {
+    assert.ok(PROBE_ENV_VARS.includes(name), name);
+    assert.ok(probeCommand(NONCE).includes(`printf '${name}=%s`), name);
+  }
+});
+
 test('the fake API counts tokens, answers the preflight, and returns a JSON 404 for anything else', async () => {
   await withApi(async (api) => {
     const counted = await post(api, '/v1/messages/count_tokens', ask());
@@ -186,9 +270,9 @@ test('the request log keeps method, path, model and whether tools were offered, 
     await post(api, '/v1/messages/count_tokens', ask(), { 'x-api-key': DUMMY_API_KEY });
     await fetch(`${api.url}/v1/models`, { headers: { 'x-api-key': DUMMY_API_KEY } });
     assert.deepEqual(api.requests, [
-      { method: 'POST', path: '/v1/messages', model: 'claude-opus-5-5', stream: true, toolsOffered: true, globalClaudeMd: false, reply: 'tool_use:Bash' },
-      { method: 'POST', path: '/v1/messages/count_tokens', model: 'claude-opus-5-5', stream: false, toolsOffered: false, globalClaudeMd: false, reply: 'count_tokens' },
-      { method: 'GET', path: '/v1/models', model: null, stream: false, toolsOffered: false, globalClaudeMd: false, reply: '404' },
+      { method: 'POST', path: '/v1/messages', model: 'claude-opus-5-5', stream: true, toolsOffered: true, engramToolOffered: false, globalClaudeMd: false, reply: 'tool_use:Bash' },
+      { method: 'POST', path: '/v1/messages/count_tokens', model: 'claude-opus-5-5', stream: false, toolsOffered: false, engramToolOffered: false, globalClaudeMd: false, reply: 'count_tokens' },
+      { method: 'GET', path: '/v1/models', model: null, stream: false, toolsOffered: false, engramToolOffered: false, globalClaudeMd: false, reply: '404' },
     ]);
     const log = JSON.stringify(api.requests);
     assert.ok(!log.includes(NONCE) && !log.includes(DUMMY_API_KEY) && !/secret system prompt/.test(log));
@@ -541,7 +625,7 @@ const fakeClaude = (mode, machine, { prepare, pidFile } = {}) => (config) => ({
   ...config,
   command: process.execPath,
   args: () => [FAKE_CLAUDE, mode, machine.realHome, ...(pidFile ? [pidFile] : [])],
-  ...(prepare && { prepare: async (context) => { await config.prepare(context); await prepare(context); } }),
+  ...(prepare && { prepare: async (context) => { const prepared = await config.prepare(context); await prepare(context); return prepared; } }),
 });
 const probe = (machine, mode, extra = {}) => runIsolationProbe({
   claude: process.execPath,
@@ -554,6 +638,8 @@ const probe = (machine, mode, extra = {}) => runIsolationProbe({
   runInit: noInit,
   adaptConfig: fakeClaude(mode, machine),
   sweep: () => ({ killed: [] }), // the real sweep costs about a second; the tests that are about it pass `sweep: undefined`
+  killPort: () => ({ killed: [] }), // likewise the kill by port and the listing of engram processes: the tests about them pass their own
+  listEngram: () => [],
   log: () => {},
   timeoutMs: 60_000,
   ...extra,
@@ -588,7 +674,7 @@ test('a well-behaved agent passes on both arms: positive controls hold, no leak,
     assert.equal(arm.positiveControls.workspaceNonce.ok, true);
     assert.equal(arm.positiveControls.workspaceWrite.ok, true);
     assert.deepEqual(arm.leak.hits, []);
-    assert.deepEqual(arm.fakeApi.requests.map((r) => r.reply), ['tool_use:Bash', 'tool_use:Write', 'text']);
+    assert.deepEqual(arm.fakeApi.requests.map((r) => r.reply), arm.arm === 'current' ? ENGRAM_REPLIES : ['tool_use:Bash', 'tool_use:Write', 'text']);
     assert.ok(arm.fakeApi.requests.every((r) => r.method === 'POST' && r.path === '/v1/messages' && r.model === 'claude-opus-5-5'));
     assert.match(arm.fakeApi.envLines.ANTHROPIC_BASE_URL, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.equal(arm.fakeApi.envLines.OAUTH_TOKEN_SET, '', 'the real login token was removed from the agent env');
@@ -810,7 +896,7 @@ function capture() {
   return { out, stdout: { write: (text) => { out.stdout += text; } }, stderr: { write: (text) => { out.stderr += text; } } };
 }
 const overridesFor = (machine, mode) => ({
-  nonce: FAKE_NONCE, realHome: machine.realHome, localAppData: machine.localAppData, tempDir: machine.tempDir, workRoot: machine.workRoot, checkWorkRoot: checkInScratch, runInit: noInit, adaptConfig: fakeClaude(mode, machine),
+  nonce: FAKE_NONCE, realHome: machine.realHome, localAppData: machine.localAppData, tempDir: machine.tempDir, workRoot: machine.workRoot, checkWorkRoot: checkInScratch, runInit: noInit, adaptConfig: fakeClaude(mode, machine), killPort: () => ({ killed: [] }), listEngram: () => [],
 });
 
 test('the command writes the JSON report, prints the summary, and exits 0 on a pass and 1 on a failure', async () => {
@@ -923,12 +1009,12 @@ test('the minimal arm carries no CLAUDE.md and the current arm carries the seede
   const machine = fakeMachine();
   const report = await probe(machine, 'ok');
   const [current, minimal] = report.arms;
-  assert.deepEqual(current.contamination, { expected: 'present', markers: 3, requests: 3, withGlobalClaudeMd: 3, mainRequestHit: true, ok: true });
+  assert.deepEqual(current.contamination, { expected: 'present', markers: 3, requests: 5, withGlobalClaudeMd: 5, mainRequestHit: true, ok: true });
   assert.deepEqual(minimal.contamination, { expected: 'absent', markers: 3, requests: 3, withGlobalClaudeMd: 0, mainRequestHit: false, ok: true });
   assert.deepEqual(report.failures, []);
   const summary = formatSummary(report);
   assert.match(summary, /work root: .*work/);
-  assert.match(summary, /contamination: the real global CLAUDE\.md reached 3 of 3 requests, as it should/);
+  assert.match(summary, /contamination: the real global CLAUDE\.md reached 5 of 5 requests, as it should/);
   assert.match(summary, /contamination: the real global CLAUDE\.md reached none of 3 requests, as it should/);
 });
 
@@ -1411,8 +1497,9 @@ test('an arm that touches a file that already held a leak is failed for it again
   const touching = (config) => ({
     ...fakeClaude('ok', machine)(config),
     prepare: async (context) => {
-      await config.prepare(context);
+      const prepared = await config.prepare(context);
       fs.appendFileSync(path.join(machine.realHome, '.claude', 'leaked.txt'), `touched by the second arm ${FAKE_NONCE}\n`);
+      return prepared;
     },
   });
   const report = await probe(machine, 'ok', { adaptConfig: (config, { arm }) => (arm === 'current' ? fakeClaude('leak', machine)(config) : touching(config)) });
@@ -1478,6 +1565,22 @@ test('the sweep comes before the leak snapshot on a failed arm too, and runs onc
   assert.equal(events.filter((event) => event === 'sweep').length, 1, 'one sweep is enough when it succeeded');
 });
 
+test('the cleanup of the trial engram port comes after the sweep by path and before the final scan of the real trees, once per arm', async () => {
+  const events = [];
+  const report = await probe(fakeMachine(), 'ok', {
+    arms: ['current'],
+    sweep: () => (events.push('sweep'), { killed: [] }),
+    killPort: () => (events.push('kill'), { killed: [] }),
+    openRead: (file, { chunkSize }) => (events.push('read'), fs.createReadStream(file, { highWaterMark: chunkSize })),
+  });
+  assert.deepEqual(report.failures, []);
+  const kill = events.indexOf('kill');
+  assert.equal(events.filter((event) => event === 'kill').length, 1, 'once, not again in the final cleanup');
+  assert.ok(events.indexOf('sweep') < kill, 'after the sweep by path');
+  assert.ok(events.slice(0, kill).includes('read'), 'the real trees were read before the arm');
+  assert.ok(events.slice(kill).includes('read'), 'and read again after the server was stopped: what it wrote late is in that scan');
+});
+
 test('more than ten unreadable real files are named ten at a time and then counted, so the verdict stays short and still says how many', async () => {
   const machine = fakeMachine();
   for (let i = 0; i < 12; i += 1) write(path.join(machine.realHome, '.orca', `bad-${String(i).padStart(2, '0')}.txt`), 'x');
@@ -1508,4 +1611,183 @@ test('keys are not compared for a file that could not be read before, nor for on
   const garbage = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }]);
   const again = await snapshotTrees([{ name: 't', root: dir, mode: 'content', jsonKeys: true }]);
   assert.equal(diffSnapshots(garbage, again).t.keys, undefined, 'identical bytes are not a change, parsed or not');
+});
+
+// ---- the engram plugin: a port of its own, its paths exercised, and nothing left behind ----------------------------
+
+const REAL_PORT = 7437;
+const ENGRAM_REPLIES = ['tool_use:Bash', 'tool_use:Write', `tool_use:${MEM_SAVE}`, 'tool_use:Agent', 'subagent', 'text'];
+const CAN_LOOK_UP_LISTENERS = process.platform === 'win32' || !spawnSync('lsof', ['-v'], { stdio: 'ignore' }).error;
+const LISTENER_LOOKUP = CAN_LOOK_UP_LISTENERS ? false : 'neither Windows nor lsof: the real listener lookup cannot run here';
+const killNode = (port) => killByPort(port, { name: /^node(\.exe)?$/i });
+
+test('the current arm drives the plugin: the engram tool and a subagent are called, the prompt, the memory and the subagent land in the sandbox store', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', { arms: ['current'] });
+  const [current] = report.arms;
+  assert.deepEqual(report.failures, []);
+  assert.deepEqual(current.fakeApi.requests.map((request) => request.reply), ENGRAM_REPLIES);
+  assert.equal(current.fakeApi.requests.filter((request) => request.engramToolOffered).length, 5, 'offered on every request that is not the subagent');
+  for (const name of ['engramDb', 'engramPrompt', 'engramMemSave']) {
+    assert.deepEqual({ applies: current.positiveControls[name].applies, ok: current.positiveControls[name].ok }, { applies: true, ok: true }, name);
+  }
+  assert.match(current.positiveControls.engramPrompt.path, /^\.engram\//);
+  assert.equal(current.sandbox.answers.engramSubagentStop, true, 'the subagent stop hook stored the last message, as far as the stand-in goes');
+});
+
+test('the minimal arm is offered neither the engram tool nor the plugin, so its engram controls do not apply', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', { arms: ['minimal'] });
+  const [minimal] = report.arms;
+  assert.deepEqual(report.failures, []);
+  assert.deepEqual(minimal.fakeApi.requests.map((request) => request.reply), ['tool_use:Bash', 'tool_use:Write', 'text']);
+  for (const name of ['engramDb', 'engramPrompt', 'engramMemSave']) assert.equal(minimal.positiveControls[name].applies, false, name);
+});
+
+test('every arm runs on a port of its own, which its tools see, which is not the real one, and on which nothing listens afterwards', async () => {
+  const machine = fakeMachine();
+  const asked = [];
+  const report = await probe(machine, 'ok', { isListening: async (port) => (asked.push(port), false) });
+  assert.deepEqual(report.failures, []);
+  const ports = report.arms.map((arm) => arm.engram.port);
+  assert.equal(new Set(ports).size, 2, 'two arms, two ports');
+  for (const arm of report.arms) {
+    assert.ok(Number.isInteger(arm.engram.port) && arm.engram.port >= 1024 && arm.engram.port !== REAL_PORT, arm.arm);
+    assert.equal(arm.fakeApi.envLines.ENGRAM_PORT, String(arm.engram.port), 'what the agent tools saw');
+    assert.equal(arm.fakeApi.envLines.ENGRAM_URL, '');
+    assert.equal(arm.fakeApi.envLines.ENGRAM_SOCKET, '');
+    assert.equal(arm.engram.listening, false);
+    assert.deepEqual(arm.engram.survivors, []);
+  }
+  assert.deepEqual([...new Set(asked)].sort(), [...ports].sort(), 'the probe asks about the trial ports and no other, 7437 above all');
+});
+
+test('the probe stops what the trial left listening on its engram port, by number, and leaves nothing behind', { skip: LISTENER_LOOKUP }, async () => {
+  const machine = fakeMachine();
+  const killed = [];
+  const report = await probe(machine, 'engram-server', {
+    arms: ['current'],
+    killPort: (port) => (killed.push([port, findListeners(port).length]), killNode(port)),
+  });
+  const [current] = report.arms;
+  assert.deepEqual(report.failures, []);
+  assert.deepEqual(killed, [[current.engram.port, 1]], 'one listener was there to be found, so the pass is not an empty one');
+  assert.equal(current.engram.listening, false);
+  assert.deepEqual(leftovers(machine), []);
+});
+
+test('a listener that is still there after the trial fails the arm and names the port', async () => {
+  const machine = fakeMachine();
+  let report;
+  try {
+    report = await probe(machine, 'engram-server', { arms: ['current'] }); // the default killPort of the helper kills nothing
+    const [current] = report.arms;
+    assert.equal(report.ok, false);
+    assert.equal(current.engram.listening, true);
+    assert.ok(report.failures.some((failure) => /still listens/.test(failure) && failure.includes(String(current.engram.port))), report.failures.join('\n'));
+    assert.match(formatSummary(report), /still listens/);
+  } finally {
+    if (report) {
+      try {
+        killNode(report.arms[0].engram.port);
+      } catch {
+        // it ends by itself after 30 s
+      }
+    }
+  }
+});
+
+test('a cleanup that cannot stop the listener is a failure of the arm, with its reason, and the other arm still runs', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', {
+    killPort: (port) => {
+      throw new Error('port ' + port + ' is held by pid 99 (chrome), which is not engram: left alone');
+    },
+  });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.arms.map((arm) => arm.arm), ['current', 'minimal'], 'both arms ran');
+  for (const arm of report.arms) assert.ok(arm.failures.some((failure) => /not engram/.test(failure)), `${arm.arm}: ${arm.failures.join(' | ')}`);
+  assert.deepEqual(leftovers(machine), []);
+});
+
+test('an engram process that was not there before the trial and is after it fails the arm; one that was there before is the live session', async () => {
+  const machine = fakeMachine();
+  const live = { pid: 100, command: 'engram.exe mcp' };
+  let calls = 0;
+  const report = await probe(machine, 'ok', {
+    arms: ['current'],
+    listEngram: () => (calls++ % 2 === 0 ? [live] : [live, { pid: 4242, command: 'engram.exe serve' }]),
+  });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.arms[0].engram.survivors, [{ pid: 4242, command: 'engram.exe serve' }]);
+  assert.ok(report.failures.some((failure) => /engram process/.test(failure) && failure.includes('4242')), report.failures.join('\n'));
+
+  const quiet = await probe(fakeMachine(), 'ok', { arms: ['current'], listEngram: () => [live] });
+  assert.deepEqual(quiet.failures, []);
+});
+
+test('a listing of engram processes that cannot run is inconclusive, never a pass', async () => {
+  const report = await probe(fakeMachine(), 'ok', {
+    arms: ['current'],
+    listEngram: () => {
+      throw new Error('the process listing failed (ps exit 1)');
+    },
+  });
+  assert.equal(report.ok, false);
+  assert.ok(report.failures.some((failure) => /inconclusive/.test(failure) && /process listing/.test(failure)), report.failures.join('\n'));
+});
+
+test('tools that see the real port, or an ENGRAM_URL, fail the arm: the hooks would reach another server', async () => {
+  const report = await probe(fakeMachine(), 'wrong-engram-env', { arms: ['current'] });
+  assert.equal(report.ok, false);
+  assert.ok(report.failures.some((failure) => /ENGRAM_PORT/.test(failure)), report.failures.join('\n'));
+  assert.ok(report.failures.some((failure) => /ENGRAM_URL/.test(failure)), report.failures.join('\n'));
+  assert.ok(!report.failures.join('\n').includes('127.0.0.1:7437'), 'names, not values');
+});
+
+test('a prompt or a memory that reaches the real engram store fails the probe, by file, whichever hook wrote it', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'leak-engram', { arms: ['current'] });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.arms[0].leak.hits, [{ tree: '.engram', path: 'leak.db', found: ['nonce'], via: 'content' }]);
+  assert.ok(report.failures.some((failure) => /LEAK/.test(failure) && /\.engram/.test(failure) && failure.includes('leak.db')), report.failures.join('\n'));
+  assert.ok(!JSON.stringify(report).includes(FAKE_NONCE));
+});
+
+test('the report says what was scanned of the real engram store, so a missing store is not mistaken for a clean one', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'ok', { arms: ['current'] });
+  const store = report.arms[0].realEngram;
+  assert.equal(store.status, 'present');
+  assert.ok(store.files >= 1 && store.bytes > 0);
+  assert.equal(store.hits, 0);
+  fs.rmSync(path.join(machine.realHome, '.engram'), { recursive: true });
+  const missing = await probe(machine, 'ok', { arms: ['current'] });
+  assert.equal(missing.arms[0].realEngram.status, 'missing');
+  assert.match(formatSummary(missing), /real engram store.*missing/);
+});
+
+test('a current arm that writes no prompt, no memory and no subagent note fails its engram controls: nothing proves the plugin ran', async () => {
+  const report = await probe(fakeMachine(), 'silent', { arms: ['current'] });
+  const { positiveControls } = report.arms[0];
+  for (const name of ['engramPrompt', 'engramMemSave']) assert.equal(positiveControls[name].ok, false, name);
+  assert.ok(report.failures.some((failure) => /engramPrompt/.test(failure)), report.failures.join('\n'));
+});
+
+test('the prompt hook and the MCP tool are told apart: a memory that was never saved fails only its own control, and says so', async () => {
+  const report = await probe(fakeMachine(), 'prompt-only', { arms: ['current'] });
+  const { positiveControls } = report.arms[0];
+  assert.equal(positiveControls.engramPrompt.ok, true);
+  assert.equal(positiveControls.engramMemSave.ok, false);
+  const failure = report.failures.find((text) => /engramMemSave/.test(text));
+  assert.ok(failure, report.failures.join('\n'));
+  assert.match(failure, /engram tool/i, 'it says what the control is about, and that the tool was offered');
+});
+
+test('the summary shows the port of each arm, what was found on it, and the real store scan', async () => {
+  const report = await probe(fakeMachine(), 'ok');
+  const summary = formatSummary(report);
+  for (const arm of report.arms) assert.match(summary, new RegExp(`engram: port ${arm.engram.port}, nothing listens on it afterwards`));
+  assert.match(summary, /real engram store: \d+ files/);
+  assert.ok(!summary.includes(FAKE_NONCE));
 });

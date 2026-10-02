@@ -649,6 +649,42 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   blocked on T4a. gentle-ai itself is now 4.0.0 (`odd/tasks/stack-v4.md`), so the current arm is
   gentle-ai 4.0.0 + engram 3.0.0 + plugin 0.1.5; the versions are fixed before T4 and must not
   change between T4 and T5, and the report names them.
+- 2026-10-02: T4a implemented (delegated writer, resumed after a session restart with its work
+  intact; RED observed per module, GREEN: the five evals test files 349 pass, 0 fail, 1 skipped,
+  the EPERM file-symlink test that was skipped before; `npm run test` 1242 pass, 0 fail, 8
+  skipped; parent spot check re-ran the five files with the same result). What it does:
+  - **A port per trial.** `evals/ports.mjs` `allocatePort()` binds port 0 and releases it, never
+    returns 7437 or a port under 1024, and keeps overlapping trials apart with a reserved set.
+    Each config allocates it in `prepare` and returns `{ engramPort }`; `sandboxEnv`,
+    `prepareSandbox`, `seedHome` and `initWorkspace` throw without one, so nothing can fall back
+    to 7437. Both arms carry `ENGRAM_PORT`; `ENGRAM_URL` and `ENGRAM_SOCKET` are outside the
+    allowlist. `seedHome` writes `ENGRAM_PORT` next to `ENGRAM_DATA_DIR` in the sandbox
+    `.claude.json` engram entry and drops a URL or socket it carried.
+  - **The listener dies with the trial.** A config may have a `cleanup`, which `runTrial` calls
+    once on every path after `prepare` (success, failure, timeout, cap), after the sweep by path
+    and before the directories go. It runs `killByPort`: on Windows `Get-NetTCPConnection` plus
+    `Get-Process` (`netstat` prints its state column in the OS language), then `taskkill /T /F`;
+    on POSIX `lsof`, `ps`, `ss` as a fallback, `SIGKILL`. `assertTrialPort` refuses 7437 before
+    anything runs, and a listener not named `engram` is left alone and reported.
+  - **The probe drives the plugin's paths.** The fake API now scripts a `mem_save` and a
+    subagent besides Bash and Write, and the prompt carries a nonce. For the current arm two
+    positive controls must hold (the sandbox store has the prompt and the memory), the agent's
+    tools must see the trial's `ENGRAM_PORT` and no URL or socket, and after cleanup nothing may
+    accept a connection on the trial port and no engram process may exist that was not there
+    before (a failed listing is inconclusive, never a pass). The real `~/.engram` is
+    content-hashed and scanned for the nonce, as the real home already was.
+  **Not yet proven:** the probe with the real `claude` binary has not run, so T4a stays open.
+  Unknown until it does: whether the engram MCP tool is offered to the model without a
+  ToolSearch step, whether SessionStart starts a server on the trial port and the prompt hook
+  reaches it, and whether the trial's `engram mcp` exits with Claude. Observed on this machine:
+  the only `engram.exe` processes are two `mcp --tools=agent`, no `serve`, so what answers on
+  7437 may be an MCP process. The run is zero spend (a loopback fake API), but if the fix were
+  wrong it would be the trial that writes the real store, which is an Ask-me-before: it waits
+  for Sebastián. Command:
+  `node evals/isolation-probe.mjs --claude <path to claude.exe> --arm both --control-ms 60000`.
+  The change is about 1,370 lines against the ~400 heuristic (half of it tests): one behavior
+  across four modules that each had to refuse a missing port, not split because a half-wired
+  port is the unsafe state.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -818,8 +854,9 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
-Next: T4a, the sandbox re-proof with the engram plugin (see Progress, 2026-10-01), after the
-stack work in `odd/tasks/stack-v4.md` on `feat/stack-v4`. Then T4, the headroom screen. Before
+Next: T4a's last step, the isolation probe with the real binary (see Progress, 2026-10-02),
+on Sebastián's go-ahead. The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`,
+not pushed). Then T4, the headroom screen. Before
 T4, two of Sebastián's decisions, asked one at a time (the first was asked on 2026-10-01 and is
 unanswered):
 1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable

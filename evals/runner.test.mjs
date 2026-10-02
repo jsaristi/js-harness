@@ -977,7 +977,7 @@ test('args and env resolve with the trial home and workspace; home is undefined 
 
   assert.equal(contexts.args.length, 2);
   for (const context of [...contexts.args, ...contexts.env]) {
-    assert.deepEqual(Object.keys(context).sort(), ['effort', 'home', 'task', 'workspace']);
+    assert.deepEqual(Object.keys(context).sort(), ['effort', 'home', 'prepared', 'task', 'workspace']);
     assert.equal(context.effort, 'medium');
     assert.equal(context.task.id, 'sample');
     assert.equal(typeof context.workspace, 'string');
@@ -1452,6 +1452,87 @@ test('a descendant that names only the trial home is killed too, and both direct
   } finally {
     trial.reap();
   }
+});
+
+// ---- what prepare returns, and cleanup ---------------------------------------------------------------------------
+
+test('what prepare returns reaches args and env as `prepared`, and is undefined for a config without prepare', async () => {
+  const seen = { args: [], env: [] };
+  const hooks = {
+    args: (context) => (seen.args.push(context.prepared), [FAKE_AGENT]),
+    envFor: (context) => (seen.env.push(context.prepared), {}),
+  };
+  await runTrial(trialEnv('noop', { configExtra: { ...hooks, prepare: () => ({ engramPort: 42001 }) } }).options);
+  await runTrial(trialEnv('noop', { configExtra: hooks }).options);
+  assert.deepEqual(seen.args, [{ engramPort: 42001 }, undefined]);
+  assert.deepEqual(seen.env, [{ engramPort: 42001 }, undefined]);
+});
+
+for (const [label, mode, status] of [['a solved', 'solve', 'recorded'], ['a capped', 'cap', 'stopped'], ['a failed', 'exit', 'recorded'], ['a hung', 'hang', 'recorded']]) {
+  test(`cleanup runs once after ${label} trial with the prepared state, and before the directories are removed`, async () => {
+    const calls = [];
+    const task = mode === 'hang' ? { ...loadTask(SAMPLE), timeoutMs: 1500 } : loadTask(SAMPLE);
+    const { options, workRoot } = trialEnv(mode, {
+      task,
+      configExtra: {
+        prepare: (context) => (writeMarker(context), { engramPort: 42002 }),
+        cleanup: (context) => calls.push({ ...context, homeThere: fs.existsSync(context.home), workspaceThere: fs.existsSync(context.workspace) }),
+      },
+    });
+    const outcome = await runTrial(options);
+    assert.equal(outcome.status, status);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(Object.keys(calls[0]).sort(), ['home', 'homeThere', 'prepared', 'workspace', 'workspaceThere']);
+    assert.deepEqual(calls[0].prepared, { engramPort: 42002 });
+    assert.deepEqual([calls[0].homeThere, calls[0].workspaceThere], [true, true], 'the directories are still there');
+    assert.deepEqual(entriesOf(workRoot), [], 'and removed afterwards');
+  });
+}
+
+test('cleanup runs after the sweep by path, so a listener the sweep could not reach is still killed last', async () => {
+  const order = [];
+  const { options } = trialEnv('noop', {
+    sweep: () => (order.push('sweep'), { killed: [] }),
+    configExtra: { prepare: () => ({}), cleanup: () => order.push('cleanup') },
+  });
+  await runTrial(options);
+  assert.deepEqual(order, ['sweep', 'cleanup']);
+});
+
+test('cleanup does not run when prepare threw, nor for a config that has none', async () => {
+  const calls = [];
+  const cleanup = () => calls.push('cleanup');
+  await assert.rejects(runTrial(trialEnv('noop', { configExtra: { prepare: () => { throw new Error('prepare failed'); }, cleanup } }).options), /prepare failed/);
+  await runTrial(trialEnv('noop', { configExtra: { cleanup } }).options);
+  await runTrial(trialEnv('noop').options);
+  assert.deepEqual(calls, [], 'with no prepare there is nothing to clean up');
+});
+
+test('a cleanup that throws is logged, does not lose the record and does not stop the directories being removed', async () => {
+  const logs = [];
+  const { options, workRoot } = trialEnv('solve', {
+    log: (message) => logs.push(message),
+    configExtra: { prepare: writeMarker, cleanup: () => { throw new Error('port 42003 still listens'); } },
+  });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.record.score, 1);
+  assert.ok(logs.some((message) => /cleanup/.test(message) && /port 42003 still listens/.test(message)), logs.join('\n'));
+  assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('a cleanup that returns a promise is waited for before the directories go', async () => {
+  let finished = false;
+  const { options } = trialEnv('noop', {
+    configExtra: {
+      prepare: writeMarker,
+      cleanup: async ({ home }) => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        finished = fs.existsSync(home);
+      },
+    },
+  });
+  await runTrial(options);
+  assert.equal(finished, true);
 });
 
 test('runTrial sweeps the trial home and workspace, and only those, before it removes them, even when the trial throws', async () => {
