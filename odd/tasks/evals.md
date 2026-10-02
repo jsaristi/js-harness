@@ -190,6 +190,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `ENGRAM_URL`) in `sandboxEnv`, the listener on that port swept with the trial's other
   processes, and the isolation probe's fake agent extended with a memory write and a subagent
   stop, so the proof exercises the paths the plugin added (route: delegated writer)
+- [x] T4ar T4a review findings: on POSIX a listener lookup that failed is never read as a free
+  port. `lsof` means "no listener" only on its documented no-match (exit 1, nothing on stdout
+  or stderr), and an `ss` row for the port with no owner is an inconclusive lookup (gentle-ai
+  WARNING, Codex P2 twice) (route: delegated writer, finished inline)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -685,6 +689,21 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   The change is about 1,370 lines against the ~400 heuristic (half of it tests): one behavior
   across four modules that each had to refuse a missing port, not split because a half-wired
   port is the unsafe state.
+- 2026-10-02: `d0bc904..514dd43` (T4a) reviewed. gentle-ai: medium, lineage
+  `review-5b4f5f6e02658d8d`, lens reliability, approved and acknowledged, authority burned; one
+  WARNING and one suggestion. Codex: two P2, but **no record**: its successful commands showed
+  497 of the 1,314 changed lines, and `codex-review` records only on evidence that the whole diff
+  was read. It said its coverage was limited because "delegation tools were unavailable"; to
+  re-run after T4ar. All findings are one defect: on POSIX, `findListeners` returned an empty
+  list when `lsof` failed with only stderr output, or when `ss` listed the socket without its
+  owner, so `killByPort` reported a clean port without checking. Not reachable on this Windows
+  host, but it broke the module's own rule that an empty list means free, never "could not ask".
+- 2026-10-02: T4ar done. The writer was cut off by a second session restart with the fix on disk
+  and uncommitted; the parent verified it rather than redo it. RED, observed by stashing the
+  code change and running the new tests against the old code: `node --test evals/ports.test.mjs`
+  21 pass, 3 fail (the three new tests). GREEN with the change:
+  `node --test evals/ports.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 207/207. The
+  POSIX paths are tested against fixtures only; nothing here ran on Linux or macOS.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

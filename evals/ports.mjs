@@ -150,8 +150,11 @@ export function findListeners(port, { platform = process.platform, spawnSync: sy
   const lsof = sync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'], { encoding: 'utf8', timeout: 30000 });
   if (!isMissing(lsof)) {
     if (lsof.error) throw new Error(`the lookup of the listener could not run: ${lsof.error.message}`);
-    // lsof exits 1 when nothing matches: that, with nothing printed, is a free port.
-    if (lsof.status !== 0 && String(lsof.stdout).trim() !== '') throw new Error(`the lookup of the listener failed (lsof exit ${lsof.status}): ${String(lsof.stderr).trim()}`);
+    // lsof exits 1 both when nothing matches and on a real error (a permission problem, a bad option), and an
+    // error usually prints to stderr only. The one result that means "no listener" is the documented no-match:
+    // exit 1 with nothing on stdout and nothing on stderr. Any other non-zero exit is a lookup that failed.
+    const noMatch = lsof.status === 1 && String(lsof.stdout).trim() === '' && String(lsof.stderr).trim() === '';
+    if (lsof.status !== 0 && !noMatch) throw new Error(`the lookup of the listener failed (lsof exit ${lsof.status}): ${String(lsof.stderr).trim()}`);
     const pids = [...new Set(lines(lsof.stdout).map((line) => /^p(\d+)$/.exec(line.trim())?.[1]).filter(Boolean).map(Number))];
     return pids.map((pid) => {
       const ps = sync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8', timeout: 30000 });
@@ -161,8 +164,14 @@ export function findListeners(port, { platform = process.platform, spawnSync: sy
   const ss = sync('ss', ['-H', '-ltnp', 'sport', '=', `:${port}`], { encoding: 'utf8', timeout: 30000 });
   if (isMissing(ss)) throw new Error('cannot find what listens on the port: neither lsof nor ss is installed');
   if (ss.error || ss.status !== 0) throw new Error(`the lookup of the listener failed (ss): ${ss.error?.message ?? String(ss.stderr).trim()}`);
+  // The filter leaves only rows of this port, so every row is a listener. One whose owner is hidden (ss shows no
+  // `users:(...)` for a process it may not inspect) is a listener that cannot be named: that is not a free port.
   const found = new Map();
-  for (const match of String(ss.stdout).matchAll(/\("([^"]*)",pid=(\d+)/g)) found.set(Number(match[2]), match[1]);
+  for (const row of lines(ss.stdout).filter((line) => line.trim() !== '')) {
+    const owners = [...row.matchAll(/\("([^"]*)",pid=(\d+)/g)];
+    if (owners.length === 0) throw new Error(`ss shows a listener on port ${port} without an owner (${JSON.stringify(row.trim().slice(0, 120))}): cannot tell which process it is, so the lookup is inconclusive`);
+    for (const match of owners) found.set(Number(match[2]), match[1]);
+  }
   return [...found].map(([pid, name]) => ({ pid, name }));
 }
 

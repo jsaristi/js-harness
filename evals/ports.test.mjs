@@ -121,6 +121,32 @@ test('without lsof, ss is used; without either, the lookup fails loudly instead 
   assert.throws(() => findListeners(41000, { platform: 'linux', spawnSync: neither }), /lsof/);
 });
 
+test('an lsof that fails is a failed lookup, never a free port: only exit 1 with nothing on stdout and stderr means no listener', () => {
+  const find = (result) => findListeners(41000, { platform: 'linux', spawnSync: scripted([['lsof', result]]) });
+  assert.deepEqual(find({ status: 1, stdout: '', stderr: '' }), [], 'the documented no-match result');
+  assert.throws(() => find({ status: 1, stdout: '', stderr: 'lsof: WARNING: can\'t stat() fuse file system' }), /lsof exit 1.*can't stat/s, 'exit 1 with a message is an error');
+  assert.throws(() => find({ status: 1, stdout: '', stderr: '\n' + 'permission denied' }), /permission denied/);
+  assert.throws(() => find({ status: 2, stdout: '', stderr: '' }), /lsof exit 2/);
+  assert.throws(() => find({ status: 1, stdout: 'p321\n', stderr: '' }), /lsof exit 1/, 'output next to a failure is not trusted either');
+  assert.throws(() => find({ status: null, stdout: '', stderr: '' }), /lsof/, 'a process killed by a signal has no exit code');
+});
+
+test('a killByPort whose lsof lookup failed throws instead of reporting nothing killed', () => {
+  const sync = scripted([['lsof', { status: 1, stdout: '', stderr: 'permission denied' }]]);
+  assert.throws(() => killByPort(41000, { platform: 'linux', spawnSync: sync, kill: () => assert.fail('killed'), sleep: noSleep }), /permission denied/);
+});
+
+test('an ss row for the port without ownership is an inconclusive lookup, a row with it is the listener, and no row is a free port', () => {
+  const enoent = Object.assign(new Error('spawn lsof ENOENT'), { code: 'ENOENT' });
+  const withSs = (stdout) => findListeners(41000, { platform: 'linux', spawnSync: scripted([['lsof', { error: enoent }], ['ss', { stdout }]]) });
+  assert.throws(() => withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:*\n'), /ss.*without (an owner|ownership)|cannot tell/s);
+  assert.throws(() => withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:* users:(("engram",pid=555,fd=7))\nLISTEN 0 4096 [::1]:41000 [::]:*\n'), /ss/, 'one row without an owner among rows with one');
+  assert.deepEqual(withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:* users:(("engram",pid=123,fd=7))\n'), [{ pid: 123, name: 'engram' }]);
+  assert.deepEqual(withSs('LISTEN 0 4096 127.0.0.1:41000 0.0.0.0:* users:(("engram",pid=7,fd=7),("engram",pid=8,fd=9))\n'), [{ pid: 7, name: 'engram' }, { pid: 8, name: 'engram' }]);
+  assert.deepEqual(withSs(''), []);
+  assert.deepEqual(withSs('\n  \n'), [], 'blank lines are not rows');
+});
+
 test('a port that is not a trial port is refused before anything runs', () => {
   const sync = scripted([]);
   assert.throws(() => findListeners(7437, { platform: 'win32', spawnSync: sync }), /7437/);
