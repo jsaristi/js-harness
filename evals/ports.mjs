@@ -92,13 +92,20 @@ export async function isListening(port, { connect = defaultConnect } = {}) {
 const psCommand = (script) => ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
 
 // Get-NetTCPConnection and Get-Process give numbers and names with no text to localize (`netstat` prints
-// LISTENING in the language of the OS), one `pid<TAB>name` line per listener.
+// LISTENING in the language of the OS), one `pid<TAB>name` line per listener. When nothing listens,
+// Get-NetTCPConnection raises a non-terminating error of category ObjectNotFound: that one is the free port.
+// Its errors are collected rather than silenced, because `-ErrorAction SilentlyContinue` would also swallow a
+// CIM failure or a permission problem and the script would end 0 with no rows, which reads as "free".
 const LISTENERS_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 try {
   $port = [int]$env:JS_HARNESS_PORT
-  $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
+  $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue -ErrorVariable lookupErrors | Select-Object -ExpandProperty OwningProcess -Unique)
+  $failed = @($lookupErrors | Where-Object { $_.CategoryInfo.Category -ne 'ObjectNotFound' })
+  if ($failed.Count -gt 0) {
+    throw (($failed | ForEach-Object { $_.Exception.Message }) -join '; ')
+  }
   foreach ($id in $owners) {
     $name = (Get-Process -Id $id -ErrorAction SilentlyContinue).ProcessName
     "$id" + [char]9 + "$name"

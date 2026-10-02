@@ -194,6 +194,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   port. `lsof` means "no listener" only on its documented no-match (exit 1, nothing on stdout
   or stderr), and an `ss` row for the port with no owner is an inconclusive lookup (gentle-ai
   WARNING, Codex P2 twice) (route: delegated writer, finished inline)
+- [x] T4as Findings of Codex's first full read of T4a: the Windows lookup no longer swallows a
+  real error as "no listener" (only `ObjectNotFound` is the empty case), and the probe's
+  contamination check examines the subagent's requests too (Codex P2 twice) (route: delegated
+  writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -704,6 +708,20 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   21 pass, 3 fail (the three new tests). GREEN with the change:
   `node --test evals/ports.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 207/207. The
   POSIX paths are tested against fixtures only; nothing here ran on Linux or macOS.
+- 2026-10-02: `514dd43..58492e4` (T4ar) reviewed by gentle-ai: lineage `review-9aa775fe0120483f`,
+  lens reliability, approved and acknowledged, authority burned; one suggestion (a host whose
+  `lsof` warns on every run can never confirm a free port; it fails closed, so a follow-up).
+  Codex re-ran over `d0bc904..58492e4`, read the whole diff this time and is recorded. Two new
+  P2, both on T4a's code and both about the property the task exists for, so they became T4as
+  instead of follow-ups: on Windows, the host these evals run on,
+  `Get-NetTCPConnection -ErrorAction SilentlyContinue` hid real errors and the lookup answered
+  "free"; and the probe dropped a subagent's requests from the contamination check, so a
+  minimal-arm run with a contaminated subagent would have passed.
+- 2026-10-02: T4as done (delegated writer; RED: the CIM-failure case did not throw, and the
+  subagent request was not examined; GREEN: `node --test evals/ports.test.mjs
+  evals/isolation-probe.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 321/321). On this
+  host, with real PowerShell: a free port from `allocatePort()` gives `[]` and a real listener
+  is found.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

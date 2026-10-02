@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   ENGRAM_PROCESS_NAME, REAL_ENGRAM_PORT, allocatePort, assertTrialPort, findListeners, findProcesses, isListening, killByPort, releasePort,
 } from './ports.mjs';
@@ -98,6 +98,30 @@ test('on Windows an empty answer is no listener, a malformed line is skipped and
   assert.deepEqual(findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { stdout: 'noise\n12\tnode\n\n12\tnode\n' }]]) }), [{ pid: 12, name: 'node' }], 'a pid listed twice (IPv4 and IPv6) is one listener');
   assert.throws(() => findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { status: 1, stderr: 'boom' }]]) }), /boom/);
   assert.throws(() => findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { error: new Error('spawn powershell ENOENT') }]]) }), /ENOENT/);
+});
+
+test('on Windows a lookup that exits non-zero with a message throws it, an exit 0 with no rows is a free port and with rows the listeners', () => {
+  assert.throws(() => findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { status: 1, stdout: '', stderr: 'Access denied' }]]) }), /Access denied/);
+  assert.deepEqual(findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { status: 0, stdout: '' }]]) }), []);
+  assert.deepEqual(findListeners(41000, { platform: 'win32', spawnSync: scripted([['powershell', { status: 0, stdout: '7\tengram\n8\tnode\n' }]]) }), [{ pid: 7, name: 'engram' }, { pid: 8, name: 'node' }]);
+});
+
+// The script is the only place that tells "nothing listens" from "could not ask", and the injected `spawnSync`
+// above never runs it. So these run it for real in PowerShell, with `Get-NetTCPConnection` shadowed by a
+// function (a function wins over a cmdlet of the same name) that raises the error under test.
+const shadowing = (error) => (command, args, options) => {
+  const at = args.indexOf('-EncodedCommand');
+  const script = Buffer.from(args[at + 1], 'base64').toString('utf16le');
+  const shadow = `function Get-NetTCPConnection { [CmdletBinding()] param($State, $LocalPort) Write-Error -Message '${error.message}' -Category ${error.category} }\n`;
+  const patched = [...args.slice(0, at + 1), Buffer.from(shadow + script, 'utf16le').toString('base64'), ...args.slice(at + 2)];
+  return spawnSync(command, patched, options);
+};
+
+test('on Windows, the one error that means "nothing listens" is a free port and any other error from the lookup fails it', { skip: process.platform !== 'win32' && 'the lookup of the listener runs PowerShell on Windows only' }, () => {
+  const port = 41000;
+  assert.deepEqual(findListeners(port, { spawnSync: shadowing({ message: 'No matching connections were found', category: 'ObjectNotFound' }) }), [], 'the no-match error of Get-NetTCPConnection');
+  assert.throws(() => findListeners(port, { spawnSync: shadowing({ message: 'CIM provider failed', category: 'NotSpecified' }) }), /CIM provider failed/);
+  assert.throws(() => findListeners(port, { spawnSync: shadowing({ message: 'Access is denied', category: 'PermissionDenied' }) }), /Access is denied/);
 });
 
 test('on POSIX the listener comes from lsof and ps, and lsof exiting 1 with nothing printed is no listener', () => {
@@ -241,6 +265,17 @@ test('a listing that cannot run throws, so "no engram process survived" is never
 });
 
 // ---- the real thing, against a process of this test's own ---------------------------------------------------------
+
+test('a real free trial port has no listener: the lookup answers an empty list, not an error', async () => {
+  const port = await allocatePort();
+  try {
+    assert.equal(await isListening(port), false);
+    assert.deepEqual(findListeners(port), []);
+    assert.deepEqual(killByPort(port), { killed: [] });
+  } finally {
+    releasePort(port);
+  }
+});
 
 test('a real listener of a trial port is found by number and killed, and a connection is then refused', async () => {
   const port = await allocatePort();

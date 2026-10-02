@@ -1009,12 +1009,12 @@ test('the minimal arm carries no CLAUDE.md and the current arm carries the seede
   const machine = fakeMachine();
   const report = await probe(machine, 'ok');
   const [current, minimal] = report.arms;
-  assert.deepEqual(current.contamination, { expected: 'present', markers: 3, requests: 5, withGlobalClaudeMd: 5, mainRequestHit: true, ok: true });
+  assert.deepEqual(current.contamination, { expected: 'present', markers: 3, requests: 6, withGlobalClaudeMd: 6, mainRequestHit: true, ok: true }, 'the subagent request is one of the six');
   assert.deepEqual(minimal.contamination, { expected: 'absent', markers: 3, requests: 3, withGlobalClaudeMd: 0, mainRequestHit: false, ok: true });
   assert.deepEqual(report.failures, []);
   const summary = formatSummary(report);
   assert.match(summary, /work root: .*work/);
-  assert.match(summary, /contamination: the real global CLAUDE\.md reached 5 of 5 requests, as it should/);
+  assert.match(summary, /contamination: the real global CLAUDE\.md reached 6 of 6 requests, as it should/);
   assert.match(summary, /contamination: the real global CLAUDE\.md reached none of 3 requests, as it should/);
 });
 
@@ -1079,6 +1079,36 @@ test('a small-model side call that carries the global CLAUDE.md does not stand i
   const [current] = report.arms;
   assert.equal(current.contamination.withGlobalClaudeMd, 1, 'the side call carried it');
   assert.equal(current.contamination.mainRequestHit, false, 'the main requests did not');
+  assert.equal(current.contamination.ok, false);
+  assert.equal(report.ok, false);
+});
+
+// A subagent's requests are scripted and logged as `subagent`, apart from the main agent's `text` and `tool_use`
+// replies. They go to the model like any other, so a real global CLAUDE.md in one of them is contamination too.
+test('a minimal arm whose subagent request carries the real global CLAUDE.md fails the probe, though every main request is clean', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'subagent-loads-real', { arms: ['minimal'] });
+  const [minimal] = report.arms;
+  assert.deepEqual(minimal.fakeApi.requests.map((request) => request.reply), ['tool_use:Bash', 'tool_use:Write', 'text', 'subagent']);
+  assert.deepEqual(minimal.contamination, { expected: 'absent', markers: 3, requests: 4, withGlobalClaudeMd: 1, mainRequestHit: false, ok: false });
+  assert.equal(report.ok, false);
+  assert.ok(report.failures.some((failure) => /minimal arm loaded the real global CLAUDE\.md/.test(failure)), report.failures.join('\n'));
+});
+
+test('a minimal arm whose subagent request is clean passes the contamination check, and the request is counted', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'subagent', { arms: ['minimal'] });
+  const [minimal] = report.arms;
+  assert.deepEqual(minimal.contamination, { expected: 'absent', markers: 3, requests: 4, withGlobalClaudeMd: 0, mainRequestHit: false, ok: true });
+  assert.deepEqual(report.failures, []);
+});
+
+test('a current arm whose only request with the global CLAUDE.md is the subagent\'s still fails: the main model never carried it', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'subagent-only', { arms: ['current'] });
+  const [current] = report.arms;
+  assert.equal(current.contamination.withGlobalClaudeMd, 1, 'the subagent request carried it');
+  assert.equal(current.contamination.mainRequestHit, false);
   assert.equal(current.contamination.ok, false);
   assert.equal(report.ok, false);
 });

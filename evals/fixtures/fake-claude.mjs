@@ -12,7 +12,9 @@
 // stderr and exits 2, to prove the probe scrubs what it quotes), hang (reads the prompt and never ends),
 // wrong-env (ok, but its tools report a HOME outside the sandbox), loads-real (ok, and the real global
 // CLAUDE.md is in what it sends), blind (ok, but it sends no CLAUDE.md at all, not even the sandbox copy),
-// side-call-only (blind, except that a small-model side call carries the sandbox copy), orphan (ok, and a
+// side-call-only (blind, except that a small-model side call carries the sandbox copy), subagent-only (blind,
+// except that the subagent request carries it), subagent / subagent-loads-real (ok, and one subagent request
+// is made on any arm, clean or carrying the real global CLAUDE.md), orphan (ok, and a
 // detached process that names the workspace is left running), touch-json / leak-key / leak-key-workroot (ok,
 // and the fake real `.claude.json` is rewritten: see below), late-leak (ok, and an orphan writes the nonce
 // into the fake real `.claude` shortly after the agent exits).
@@ -73,7 +75,7 @@ const envLines = () => [...PRINTED.map((name) => `${name}=${seen(name)}`), `OAUT
 // workspace that has the real home above it would.
 const readIfThere = (file) => (file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
 const memory = [
-  mode === 'blind' || mode === 'side-call-only' ? '' : readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md')),
+  mode === 'blind' || mode === 'side-call-only' || mode === 'subagent-only' ? '' : readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md')),
   mode === 'loads-real' ? readIfThere(path.join(realHome ?? '', '.claude', 'CLAUDE.md')) : '',
 ].filter(Boolean).join('\n\n');
 const system = `a system prompt that mentions ${nonce}${memory ? `\n\n# claudeMd\n${memory}` : ''}`;
@@ -149,13 +151,20 @@ for (; turns < 6; turns += 1) {
       engramStore(`saved: ${call.input.content}`); // the MCP server writes to its own store
     } else if (call.name === 'Agent') {
       // The subagent is one more request to the API; the SubagentStop hook then stores what it said last.
-      const sub = await post([{ role: 'user', content: call.input.prompt }], { tools: [{ name: 'Bash' }] });
+      const sub = await post([{ role: 'user', content: call.input.prompt }], { tools: [{ name: 'Bash' }], ...(mode === 'subagent-only' && { system: `${system}\n\n# claudeMd\n${sandboxMemory}` }) });
       output = sub.content.filter((block) => block.type === 'text').map((block) => block.text).join('');
       if (writes) engramStore(`subagent stop: ${output}`);
     }
     results.push({ type: 'tool_result', tool_use_id: call.id, content: [{ type: 'text', text: output }] });
   }
   messages.push({ role: 'user', content: results });
+}
+
+// `subagent` and `subagent-loads-real`: a subagent request on any arm (the real one is only started where the
+// plugin offers the Agent tool), clean in the first, carrying the real global CLAUDE.md in the second.
+if (mode === 'subagent' || mode === 'subagent-loads-real') {
+  const real = mode === 'subagent-loads-real' ? readIfThere(path.join(realHome ?? '', '.claude', 'CLAUDE.md')) : '';
+  await post([{ role: 'user', content: 'Isolation probe subagent: reply in one line.' }], { tools: [{ name: 'Bash' }], system: `${system}${real ? `\n\n# claudeMd\n${real}` : ''}` });
 }
 
 if (writes) {

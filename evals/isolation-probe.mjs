@@ -904,13 +904,16 @@ const errorMessage = (err) => (err instanceof Error ? err.message : String(err))
  * arms must differ: the minimal arm is "the model and the built-in tools, nothing else", so it must carry
  * none of it on any request, and the current arm's seeded copy is the point of that arm, so its main-model
  * request (the one that offers tools, not a small-model side call) must carry it. A workspace with the real
- * home above it breaks the first: Claude Code loads `CLAUDE.md` from every ancestor directory. */
+ * home above it breaks the first: Claude Code loads `CLAUDE.md` from every ancestor directory. A subagent's
+ * requests (reply `subagent`) are in the count, so the absent arm cannot hide a contaminated subagent behind
+ * clean main requests, but they never stand in for the main model's: the current arm's `mainRequestHit` is
+ * read from the main agent's requests alone. */
 function checkContamination(arm, log, markers) {
   if (markers === 0) return { skipped: 'the real ~/.claude/CLAUDE.md is missing or has no line long enough to recognize it by' };
-  const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply.startsWith('tool_use')));
+  const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply === 'subagent' || request.reply.startsWith('tool_use')));
   if (messages.length === 0) return { skipped: 'the agent sent no /v1/messages request' };
   const withGlobalClaudeMd = messages.filter((request) => request.globalClaudeMd).length;
-  const mainRequestHit = messages.some((request) => request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.globalClaudeMd);
+  const mainRequestHit = messages.some((request) => request.reply !== 'subagent' && request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.globalClaudeMd);
   const expected = arm === 'current' ? 'present' : 'absent';
   return { expected, markers, requests: messages.length, withGlobalClaudeMd, mainRequestHit, ok: expected === 'present' ? mainRequestHit : withGlobalClaudeMd === 0 };
 }
