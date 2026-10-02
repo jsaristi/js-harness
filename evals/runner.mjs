@@ -6,7 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { killTree } from '../bin/codex-review.mjs';
+import {
+  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees,
+} from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -180,45 +182,27 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
   return env;
 }
 
-/** Kills what a root that has already exited left behind (by `ParentProcessId`; `killByPath` is the sweep for a survivor whose own parent is gone too). POSIX: the group outlives its leader, so the
- * group kill still reaches it. Windows: `taskkill /T` needs a live root, so the root's direct children
- * are looked up by parent pid (which outlives the parent) and each is killed with its tree. A survivor
- * whose own parent exited first is unreachable that way. Mirrors `killSurvivors` in `bin/check.mjs`,
- * which is not exported; without it a descendant holding the pipes would run on into grading and
- * workspace deletion. */
-export function killSurvivors(child, { platform = process.platform, spawnSync: sync = spawnSync } = {}) {
-  if (child.pid === undefined) return;
-  if (platform !== 'win32') {
-    killTree(child);
-    return;
-  }
-  const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
-  sync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
-}
-
-// The PowerShell of `killByPath`. It reads the roots from the environment (newline-separated, a name no path
-// can hold) and never has one spliced into its text, so a path with a quote, a `$` or a backtick cannot
-// change what it does. Every match is literal: `String.IndexOf` with `OrdinalIgnoreCase`, not `-match`
-// (a regex) and not `-like` (wildcards, where `[` is special): a trial directory may well hold `+`, `(`
-// or `[`. Each root is searched in both separator spellings, because a tool may print the same path with
-// either. A match must end on a boundary: the end of the command line, a path separator, a quote or
-// whitespace; otherwise a sibling whose name extends the root (`trial-10` against `trial-1`) would be killed
-// with its tree. Every occurrence in a line is tried, since a sibling may come before the root itself. The process the script runs in and every ancestor of it are spared, whatever their command lines
-// hold: a runner started with the workspace in its arguments must not sweep itself.
+// The PowerShell of `killByPath`: it finds the matches and kills nothing. It reads the roots from the environment
+// (newline-separated, a name no path can hold) and never has one spliced into its text, so a path with a quote,
+// a `$` or a backtick cannot change what it does. Every match is literal: `String.IndexOf` with
+// `OrdinalIgnoreCase`, not `-match` (a regex) and not `-like` (wildcards, where `[` is special): a trial
+// directory may well hold `+`, `(` or `[`. Each root is searched in both separator spellings, because a tool
+// may print the same path with either. A match must end on a boundary: the end of the command line, a path
+// separator, a quote or whitespace; otherwise a sibling whose name extends the root (`trial-10` against
+// `trial-1`) would be killed with its tree. Every occurrence in a line is tried, since a sibling may come before
+// the root itself. The process the script runs in and every ancestor of it are spared, whatever their command
+// lines hold: a runner started with the workspace in its arguments must not sweep itself.
 //
-// All matches are taken from ONE snapshot of the process list, so killing one match with its tree (`/T`) can
-// take another match with it, and `taskkill` then reports that process as not found. That is success, not
-// an error: a process that is not there is what was wanted. So `taskkill`'s exit code is never consulted
-// (and it runs under `cmd`, where a stderr line is not turned into a PowerShell error); what decides is a
-// check, after the kills, that every matched process has exited. The pids of the matches are printed, one
-// per line, only then. A failure is one line of plain text on stderr and exit 1; progress output is off,
-// because under `-EncodedCommand` it would arrive as CLIXML.
+// What it prints comes from ONE snapshot of the process list: a row per process (see `Format-ProcessRow` in
+// `bin/lib/process-tree.mjs`: pid, parent pid, creation time, name), then `S<TAB>pid` for each spared process
+// and `M<TAB>pid` for each match. `killByPath` then selects each match's tree from those rows by pid AND
+// creation time (a parent pid alone names the wrong process once Windows reuses it) and kills it. A failure
+// is one line of plain text on stderr and exit 1; progress output is off, because under `-EncodedCommand` it
+// would arrive as CLIXML.
 const SWEEP_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
-function Test-Running($id) {
-  try { return -not [System.Diagnostics.Process]::GetProcessById([int]$id).HasExited } catch { return $false }
-}
+${POWERSHELL_ROW_FUNCTION}
 $boundary = [char[]]@([char]92, [char]47, [char]34, [char]39)
 function Test-Mentions($line, $needle) {
   $from = 0
@@ -252,29 +236,19 @@ try {
     $parent = $all | Where-Object { $_.ProcessId -eq $id } | Select-Object -First 1
     $id = if ($parent) { [uint32]$parent.ParentProcessId } else { [uint32]0 }
   }
-  $matched = @()
+  foreach ($process in $all) { Format-ProcessRow $process }
+  foreach ($id in $spared.Keys) { 'S' + [char]9 + $id }
   foreach ($process in $all) {
     if ($spared.ContainsKey([uint32]$process.ProcessId)) { continue }
     $line = $process.CommandLine
     if (-not $line) { continue }
     foreach ($needle in $needles) {
       if (Test-Mentions $line $needle) {
-        $matched += [uint32]$process.ProcessId
+        'M' + [char]9 + $process.ProcessId
         break
       }
     }
   }
-  foreach ($id in $matched) {
-    if (Test-Running $id) { cmd.exe /c "taskkill /pid $id /T /F >nul 2>&1" | Out-Null }
-  }
-  $deadline = (Get-Date).AddSeconds(5)
-  do {
-    $running = @($matched | Where-Object { Test-Running $_ })
-    if ($running.Count -eq 0) { break }
-    Start-Sleep -Milliseconds 100
-  } while ((Get-Date) -lt $deadline)
-  if ($running.Count -gt 0) { throw ('still running after the kill: ' + ($running -join ', ')) }
-  $matched
 } catch {
   [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
@@ -283,10 +257,13 @@ try {
 
 /** Kills every process whose command line contains any of `roots`, each with its tree, and returns `{ killed }`,
  * the pids it matched. `roots` are absolute trial directories, unique per trial (a home, a workspace), which
- * is what makes a plain substring a safe test.
+ * is what makes a plain substring a safe test. The tree of a match is what `bin/lib/process-tree.mjs` proves
+ * descends from it (by pid and creation time), each process killed on its own: never `taskkill /T`, which walks
+ * parent pids that Windows reuses. Throws when a match is still running after the kill, or could not be killed
+ * because its creation time is unknown.
  *
- * It exists because `killSurvivors` walks DOWN from the agent by parent pid, and a descendant whose parent
- * exited first has a parent pid that belongs to nobody: unreachable that way. An MCP server a seeded home
+ * It exists because `killSurvivors` walks DOWN from the agent through its descendants, and a descendant whose
+ * parent exited first is not one of them: unreachable that way. An MCP server a seeded home
  * starts (codegraph, `serve --mcp --path <workspace>`) is such a process, and while it runs it holds the
  * directory, so the trial's cleanup fails with EPERM. The process knows its trial by the path in its own
  * command line, so that is what is searched.
@@ -320,7 +297,22 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
   });
   if (result.error) throw new Error(`the sweep by path could not run: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`the sweep by path failed (exit ${result.status}): ${String(result.stderr).trim()}`);
-  return { killed: String(result.stdout).split(/\r?\n/).map((line) => line.trim()).filter((line) => /^\d+$/.test(line)).map(Number) };
+  const stdout = String(result.stdout);
+  const marked = (mark) => [...stdout.matchAll(new RegExp(String.raw`^${mark}\t(\d+)\s*$`, 'gm'))].map((match) => Number(match[1]));
+  const matched = marked('M');
+  if (matched.length === 0) return { killed: [] };
+  // The rows are the one snapshot the matches were taken from; an empty one is a failed lookup, not an empty machine.
+  const snapshot = parseSnapshot(stdout);
+  if (snapshot.length === 0) throw new Error('the sweep by path matched processes but listed none: it cannot select what to kill');
+  const createdAt = new Map(snapshot.map((entry) => [entry.pid, entry.createdAt]));
+  const targets = selectTrees(snapshot, matched, { spared: marked('S') }).map((pid) => ({ pid, createdAt: createdAt.get(pid) }));
+  const { running } = killProcesses(targets, { spawnSync: sync });
+  // A match whose creation time Windows did not give is never killed (no evidence, no kill), and that is said.
+  const selected = new Set(targets.map((target) => target.pid));
+  const unproven = matched.filter((pid) => !selected.has(pid));
+  if (running.length > 0) throw new Error(`still running after the kill: ${running.join(', ')}`);
+  if (unproven.length > 0) throw new Error(`matched but not killed, because their creation time is unknown: ${unproven.join(', ')}`);
+  return { killed: matched };
 }
 
 /** Runs one child to its end and resolves to `{ stdout, stderr, exitCode, signal, timedOut,
@@ -339,6 +331,7 @@ export function runProcess({
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
+    const startedAt = Date.now(); // before the spawn: the child cannot have been created earlier
     try {
       child = spawn(command, args, {
         cwd,
@@ -355,8 +348,19 @@ export function runProcess({
     // A detached child no longer gets the terminal's Ctrl-C, so pass it on, or an interrupted suite
     // would leave agents running (and spending) in the background.
     const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    let exitedAt;
+    let sweepError;
+    // What is killed is proven by `bin/lib/process-tree.mjs` from when the child started and exited. A kill that
+    // could not be done is reported on the result, never thrown out of a timer or an event handler.
+    const stop = (action) => {
+      try {
+        action(child, { startedAt, ...(exitedAt !== undefined && { exitedAt }) });
+      } catch (error) {
+        sweepError ??= error;
+      }
+    };
     const forward = (signal) => {
-      kill(child);
+      stop(kill);
       for (const name of signals) process.removeListener(name, forward);
       process.kill(process.pid, signal);
     };
@@ -376,10 +380,10 @@ export function runProcess({
       clearTimeout(grace);
       // Whatever the root left running (stdio ignored or redirected, so no pipe kept the run open) must
       // not outlive the run into grading and workspace deletion.
-      sweep(child);
+      stop(sweep);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }) });
+      resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
     };
     for (const stream of ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
@@ -393,6 +397,7 @@ export function runProcess({
     });
     child.on('exit', (exitCode, signal) => {
       exit = { exitCode, signal };
+      exitedAt = Date.now();
       clearTimeout(timer);
       clearTimeout(grace);
       grace = setTimeout(finish, graceMs);
@@ -406,7 +411,7 @@ export function runProcess({
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        kill(child);
+        stop(kill);
         grace = setTimeout(finish, graceMs);
       }, timeoutMs);
     }
@@ -565,6 +570,7 @@ export async function runTrial({
       timeoutMs: task.timeoutMs,
     });
     const wallMs = Math.round(clock() - began);
+    if (run.sweepError) log(`could not stop what the agent left running: ${run.sweepError}`);
 
     const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
     fs.mkdirSync(runsDir, { recursive: true });

@@ -180,15 +180,41 @@ test('a port that is not a trial port is refused before anything runs', () => {
 
 // ---- killByPort -------------------------------------------------------------------------------------------------
 
-test('the listener on a trial port is killed with its tree on Windows and the lookup then comes back empty', () => {
+/** What the snapshot prints for `[pid, ppid, createdAt, name]` rows. */
+const snapshotOf = (...rows) => rows.map(([pid, ppid, created, name]) => `${pid}\t${ppid}\t${created ?? ''}\t${name}`).join('\r\n') + '\r\n';
+const killTargets = (call) => call.options.env.JS_HARNESS_KILL_TARGETS;
+
+test('the listener on a trial port is killed with the tree a snapshot proves, one process at a time, and the lookup then comes back empty', () => {
   const sync = scripted([
     ['powershell', { stdout: '4242\tengram\n' }],
-    ['taskkill', {}],
+    ['powershell', { stdout: snapshotOf([4242, 1, 5000, 'engram.exe'], [4243, 4242, 5100, 'node.exe'], [7, 4242, 10, 'explorer.exe'], [8, 1, 5200, 'chrome.exe']) }],
+    ['powershell', { stdout: 'K\t4242\r\nK\t4243\r\n' }],
     ['powershell', { stdout: '' }],
   ]);
   const result = killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep });
   assert.deepEqual(result, { killed: [4242] });
-  assert.deepEqual(sync.calls[1].args, ['/pid', '4242', '/T', '/F']);
+  assert.equal(killTargets(sync.calls[2]), '4242@5000\n4243@5100', 'pid 7 records the listener\'s pid but predates it; pid 8 is nobody\'s business');
+  assert.ok(sync.calls.every((call) => call.command === 'powershell'), 'no taskkill');
+});
+
+test('a pid that is no longer the listener when the snapshot is read is left alone, and so is a listener whose creation time is unknown', () => {
+  const reused = scripted([['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: snapshotOf([4242, 1, 5000, 'chrome.exe']) }]]);
+  assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: reused, sleep: noSleep }), /pid 4242 \(chrome\.exe\).*not engram/s);
+  assert.equal(reused.calls.length, 2, 'nothing was killed');
+  const unknown = scripted([['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: snapshotOf([4242, 1, null, 'engram.exe']) }]]);
+  assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: unknown, sleep: noSleep }), /creation time/);
+  assert.equal(unknown.calls.length, 2, 'nothing was killed');
+});
+
+test('a listener that vanished between the lookup and the snapshot needs no kill', () => {
+  const sync = scripted([['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: snapshotOf([1, 0, 100, 'init.exe']) }], ['powershell', { stdout: '' }]]);
+  assert.deepEqual(killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep }), { killed: [4242] });
+  assert.equal(sync.calls.length, 3, 'lookup, snapshot, lookup');
+});
+
+test('a snapshot that failed fails the call: a listener is never reported killed from a lookup that could not run', () => {
+  const sync = scripted([['powershell', { stdout: '4242\tengram\n' }], ['powershell', { status: 1, stderr: 'CIM is down' }]]);
+  assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep }), /snapshot.*CIM is down/s);
 });
 
 test('on POSIX the listener gets SIGKILL through the injected kill', () => {
@@ -220,28 +246,29 @@ test('the real engram port is never searched or killed, whatever listens there',
 test('a listener that is not engram is left alone and reported, because the port was not the trial\'s to free', () => {
   const sync = scripted([['powershell', { stdout: '99\tchrome\n' }]]);
   assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep }), /pid 99 \(chrome\).*not engram/s);
-  assert.equal(sync.calls.length, 1, 'no taskkill');
+  assert.equal(sync.calls.length, 1, 'no snapshot, no kill');
 });
 
 test('the name to kill is a parameter, and the default matches engram with or without .exe', () => {
   assert.ok(ENGRAM_PROCESS_NAME.test('engram') && ENGRAM_PROCESS_NAME.test('Engram.EXE'));
   assert.ok(!ENGRAM_PROCESS_NAME.test('engram-helper') && !ENGRAM_PROCESS_NAME.test('node'));
-  const sync = scripted([['powershell', { stdout: '7\tnode\n' }], ['taskkill', {}], ['powershell', { stdout: '' }]]);
+  const sync = scripted([['powershell', { stdout: '7\tnode\n' }], ['powershell', { stdout: snapshotOf([7, 1, 100, 'node.exe']) }], ['powershell', { stdout: 'K\t7\r\n' }], ['powershell', { stdout: '' }]]);
   assert.deepEqual(killByPort(41000, { platform: 'win32', spawnSync: sync, name: /^node$/, sleep: noSleep }), { killed: [7] });
 });
 
 test('a listener that survives the kill makes the call fail after retries, and a later lookup that is empty ends them early', () => {
-  const stubborn = [['powershell', { stdout: '4242\tengram\n' }], ['taskkill', {}], ...Array.from({ length: 12 }, () => ['powershell', { stdout: '4242\tengram\n' }])];
+  const seen = ['powershell', { stdout: snapshotOf([4242, 1, 5000, 'engram.exe']) }];
+  const stubborn = [['powershell', { stdout: '4242\tengram\n' }], seen, ['powershell', { stdout: 'R\t4242\r\n' }], ...Array.from({ length: 12 }, () => ['powershell', { stdout: '4242\tengram\n' }])];
   assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: scripted(stubborn), sleep: noSleep }), /still listens/);
   let waited = 0;
-  const late = scripted([['powershell', { stdout: '4242\tengram\n' }], ['taskkill', {}], ['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: '' }]]);
+  const late = scripted([['powershell', { stdout: '4242\tengram\n' }], seen, ['powershell', { stdout: 'K\t4242\r\n' }], ['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: '' }]]);
   assert.deepEqual(killByPort(41000, { platform: 'win32', spawnSync: late, sleep: () => { waited += 1; } }), { killed: [4242] });
   assert.equal(waited, 1, 'one wait, then the port was free');
 });
 
-test('a taskkill that cannot run fails the call', () => {
-  const sync = scripted([['powershell', { stdout: '4242\tengram\n' }], ['taskkill', { error: new Error('spawn taskkill ENOENT') }]]);
-  assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep }), /taskkill/);
+test('a kill that cannot run fails the call', () => {
+  const sync = scripted([['powershell', { stdout: '4242\tengram\n' }], ['powershell', { stdout: snapshotOf([4242, 1, 5000, 'engram.exe']) }], ['powershell', { error: new Error('spawn powershell ENOENT') }]]);
+  assert.throws(() => killByPort(41000, { platform: 'win32', spawnSync: sync, sleep: noSleep }), /kill could not run.*ENOENT/);
 });
 
 // ---- findProcesses ----------------------------------------------------------------------------------------------

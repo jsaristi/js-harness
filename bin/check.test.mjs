@@ -373,6 +373,18 @@ test('checkSensor does not throw when the throwaway home cannot be removed', asy
   }
 });
 
+// A kill that could not be done (no PowerShell, a CIM failure) must not turn a passing command red, and must not
+// be invisible either.
+test('checkSensor says when what a command left running could not be stopped, without changing its verdict', async () => {
+  const spawn = () => ({ status: 0, stdout: '', stderr: '', sweepError: 'the process snapshot failed (exit 1): CIM is down' });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  assert.equal(row.pass, true);
+  assert.equal(row.detail, 'x passed; could not stop what it left running: the process snapshot failed (exit 1): CIM is down');
+  const failing = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn: () => ({ status: 2, stdout: '', stderr: '', sweepError: 'boom' }) });
+  assert.equal(failing.pass, false);
+  assert.equal(failing.detail, 'x exited 2; could not stop what it left running: boom');
+});
+
 test('checkSensor keeps what the command printed before it timed out', async () => {
   const dir = makeTmpDir();
   try {

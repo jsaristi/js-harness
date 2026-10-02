@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, killTree, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
@@ -128,7 +128,12 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
     calls.push({ command, args, opts });
     return fakeChild({ stdout, ...answer });
   };
-  return { spawn, spawnAsync, killTree: (child) => killed.push(child.pid), calls, probes, killed };
+  const lifetimes = [];
+  const killTree = (child, lifetime) => {
+    killed.push(child.pid);
+    lifetimes.push(lifetime);
+  };
+  return { spawn, spawnAsync, killTree, calls, probes, killed, lifetimes };
 }
 
 /** Runs the command with output captured; `now` is fixed so the record is comparable, and the
@@ -614,21 +619,25 @@ test('a normal run kills nothing', async () => {
   assert.deepEqual(fake.killed, []);
 });
 
-test('killTree on Windows runs taskkill over the whole tree and ignores its result', () => {
-  const calls = [];
-  killTree({ pid: 4242 }, { platform: 'win32', spawnSync: (command, args, opts) => { calls.push({ command, args, opts }); return { status: 128 }; } });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, 'taskkill');
-  assert.deepEqual(calls[0].args, ['/PID', '4242', '/T', '/F']);
+// The kill itself (a snapshot, a selection by pid and creation time, one process at a time) is proven in
+// `lib/process-tree.test.mjs`. Here: the review hands it what it needs, and says so when it could not kill.
+test('the tree kill is told when the review was spawned, so that a parent pid alone never names what to kill', async () => {
+  const { root } = makeRepo();
+  const fake = fakeCodex('', { hang: true });
+  const before = Date.now();
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30 });
+  assert.equal(fake.lifetimes.length, 1);
+  assert.ok(fake.lifetimes[0].startedAt >= before && fake.lifetimes[0].startedAt <= Date.now());
+  assert.equal('exitedAt' in fake.lifetimes[0], false, 'it was running when it was killed');
 });
 
-test('killTree elsewhere kills the process group, and falls back to the child itself', () => {
-  const groups = [];
-  killTree({ pid: 77 }, { platform: 'linux', kill: (pid, signal) => groups.push([pid, signal]) });
-  assert.deepEqual(groups, [[-77, 'SIGKILL']]);
-  const killed = [];
-  killTree({ pid: 77, kill: (signal) => killed.push(signal) }, { platform: 'linux', kill: () => { throw new Error('ESRCH'); } });
-  assert.deepEqual(killed, ['SIGKILL']);
+test('a tree kill that fails is said in the report of the stopped run, not swallowed', async () => {
+  const { root } = makeRepo();
+  const fake = fakeCodex('', { hang: true });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30, killTree: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); } });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /ran past 30 minutes/);
+  assert.match(result.err, /process tree could not be killed \(the process snapshot failed.*CIM is down\).*may still be running/);
 });
 
 // --- what the run refuses or skips ---

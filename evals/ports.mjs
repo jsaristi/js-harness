@@ -10,6 +10,7 @@
 // of its own.
 import net from 'node:net';
 import { spawnSync as spawnChildSync } from 'node:child_process';
+import { killProcesses, selectDescendants, takeSnapshot } from '../bin/lib/process-tree.mjs';
 
 /** Where this machine's real engram server listens: no trial may be given it, and nothing here may look
  * for, or kill, whatever listens on it. */
@@ -193,8 +194,13 @@ const waitMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0,
  * port is refused before anything is looked up), and a listener whose name does not match `name` (an engram
  * process by default) is left alone and reported, since a port that something unrelated now holds was not the
  * trial's to free. After the kill the port is looked up again, up to `retries` times `delayMs` apart (Windows
- * lets go of a killed holder a moment late), and a port that still has a listener throws. Windows: `taskkill /T
- * /F`; POSIX: `kill(pid, 'SIGKILL')`. `spawnSync`, `kill` and `sleep` are injectable. */
+ * lets go of a killed holder a moment late), and a port that still has a listener throws.
+ *
+ * Windows: the listener and what a snapshot proves descends from it (by pid and creation time, see
+ * `bin/lib/process-tree.mjs`) are killed one process at a time: never `taskkill /T`, which follows parent pids
+ * that Windows reuses. The snapshot is read after the lookup, so a pid that has meanwhile become another
+ * process (its name no longer matches) is left alone and reported, and one whose creation time is unknown is
+ * not killed. POSIX: `kill(pid, 'SIGKILL')`. `spawnSync`, `kill` and `sleep` are injectable. */
 export function killByPort(port, {
   platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill, name = ENGRAM_PROCESS_NAME, label = 'engram', protectedPorts, retries = 10, delayMs = 100, sleep = waitMs,
 } = {}) {
@@ -205,12 +211,22 @@ export function killByPort(port, {
   if (strangers.length > 0) {
     throw new Error(`port ${port} is held by ${strangers.map((listener) => `pid ${listener.pid} (${listener.name || 'unknown'})`).join(', ')}, which is not ${label}: left alone`);
   }
-  for (const { pid } of listeners) {
-    if (platform === 'win32') {
-      // taskkill's exit code is not consulted: a process that is already gone is what was wanted. What decides is the lookup below.
-      const result = sync('taskkill', ['/pid', String(pid), '/T', '/F'], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
-      if (result.error) throw new Error(`taskkill could not run: ${result.error.message}`);
-    } else {
+  if (platform === 'win32') {
+    // A process that is already gone is what was wanted: what decides is the lookup below, not the kill's report.
+    const snapshot = takeSnapshot({ spawnSync: sync });
+    const targets = new Map();
+    for (const { pid } of listeners) {
+      const entry = snapshot.find((candidate) => candidate.pid === pid);
+      if (!entry) continue; // gone since the lookup
+      if (!name.test(entry.name.replace(/\.exe$/i, ''))) {
+        throw new Error(`port ${port} is held by pid ${pid} (${entry.name}), which is not ${label}: left alone`);
+      }
+      if (entry.createdAt === null) throw new Error(`pid ${pid} listens on port ${port}, but Windows gives no creation time for it: its tree cannot be proven, so nothing was killed`);
+      for (const found of selectDescendants(snapshot, { pid, createdAt: entry.createdAt })) targets.set(found, snapshot.find((candidate) => candidate.pid === found).createdAt);
+    }
+    killProcesses([...targets].map(([pid, createdAt]) => ({ pid, createdAt })), { spawnSync: sync });
+  } else {
+    for (const { pid } of listeners) {
       try {
         kill(pid, 'SIGKILL');
       } catch (err) {

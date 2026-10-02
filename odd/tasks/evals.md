@@ -198,6 +198,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   real error as "no listener" (only `ObjectNotFound` is the empty case), and the probe's
   contamination check examines the subagent's requests too (Codex P2 twice) (route: delegated
   writer)
+- [x] T4k Tree kills cannot hit an unrelated process: on Windows a process is another's descendant
+  only by parent pid **and** creation time, each selected process is killed on its own after
+  its creation time is re-checked, and no `taskkill /T` or bare `ParentProcessId` query remains
+  in `bin/` or `evals/`. One shared module, `bin/lib/process-tree.mjs`, used by `bin/check.mjs`,
+  `bin/codex-review.mjs`, `evals/runner.mjs` and `evals/ports.mjs` (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -640,7 +645,9 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
   `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
-  and every hidden test stays fair), so they are Follow-ups. Reviewed boundary: `d0bc904`.
+  and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is written and stashed (`stash@{0}`, green on its focused tests); it is
+popped and reconciled with T4k's `evals/runner.mjs` next.
+Reviewed boundary: `58492e4` (gentle-ai and Codex); `7ddc047` (T4as) and T4k are reviewed together.
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
@@ -722,6 +729,35 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   evals/isolation-probe.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 321/321). On this
   host, with real PowerShell: a free port from `allocatePort()` gives `[]` and a real listener
   is found.
+- 2026-10-02: **the harness was killing unrelated processes on this machine** (T4k). The Claude
+  desktop app closed three times in one evening (2026-10-01 23:31, 2026-10-02 00:36 and 01:14,
+  local time) while these tests and the pre-commit gate ran. Its `main.log` at 01:13:59 says
+  `Network Service process gone (reason=killed, exitCode=1) outside app quit` and its shell PTY
+  exited with code 1, the code `taskkill /F` leaves; Windows logged no application error for
+  it. Cause: `killSurvivors` (`evals/runner.mjs` and its twin in `bin/check.mjs`) ran
+  `Get-CimInstance Win32_Process -Filter 'ParentProcessId=<pid>'` and killed each match with
+  `taskkill /T /F`, and `killTree`, the sweep by path, `killByPort` and `bin/codex-review.mjs`
+  used `taskkill /T`. Windows keeps a dead parent's pid in its children and reuses pids quickly,
+  so when a short-lived test child receives the pid some long-lived process records as its
+  long-dead parent, that process and its tree die (`explorer.exe` always has a dead parent).
+  The defect is on `main` too: slice 1 of this feature and F4's `bin/check.mjs`, which is the
+  pre-commit gate of every project that installs the harness.
+- 2026-10-02: T4k done (delegated writer; trigger: 2+ non-trivial files). Design: a pid is not an
+  identity on Windows, a pid with its creation time is. `selectDescendants` is pure: under a
+  live root a child needs `createdAt >= root.createdAt`; under an exited root it needs
+  `startedAt - 100 ms <= createdAt <= exitedAt + 100 ms` (Node's clock against the kernel's);
+  below the first generation, `createdAt >= parent.createdAt`; unknown creation time or a pid
+  of 4 or less is never selected. The selection runs in Node from one `Get-CimInstance`
+  snapshot; the kill script receives `pid@createdMs` pairs, opens each process, compares its
+  start time and kills that handle only. A failed snapshot throws where the caller relies on
+  the kill. RED: the regression cases (an old process whose parent pid equals the root's) were
+  selected by a bare parent-pid match. GREEN: `node --test bin/lib/process-tree.test.mjs` 33/33
+  (re-run by the parent), `bin/check.test.mjs evals/runner.test.mjs evals/ports.test.mjs`
+  220/220, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip, `bin/codex-review.test.mjs` with the module 107/107; `rg -n taskkill bin evals`
+  finds only comments and assertions. Not verified: a real pid collision (the tests use a
+  synthetic snapshot), the POSIX paths (unchanged, not run on this host), other Windows
+  versions. Closes the follow-up that `killSurvivors` lived twice.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -859,8 +895,8 @@ Decided 2026-10-01, before the first candidate was written:
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.
-- `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
-  place when either changes.
+- The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
+  on `feat/stack-v4` until this branch merges; how to deliver it sooner is Sebastián's call.
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions

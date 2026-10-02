@@ -84,7 +84,7 @@ switch (mode) {
   case 'hang': {
     // A grandchild that also never ends: killing only this process would leave it running. On Windows
     // libuv puts an undetached child in a job that dies with its parent, which would hide a missing
-    // tree kill, so there it is detached (and still reachable through its parent link by taskkill /T).
+    // tree kill, so there it is detached (and still reachable through its parent link and creation time).
     // On POSIX it stays in this process's group, which is what the runner kills.
     const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', detached: process.platform === 'win32' });
     grandchild.unref();

@@ -772,6 +772,55 @@ test('every close path sweeps the survivors exactly once, also when the pipes cl
   assert.deepEqual(kills, ['survivors']);
 });
 
+// A parent pid does not name a process on Windows: what a kill may take is proven from when the child started and
+// exited, so runProcess has to measure both and hand them over.
+test('the kill gets when the child was spawned, and the sweep also when it exited', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const seen = [];
+  const before = Date.now();
+  const pending = runProcess({
+    command: 'agent',
+    input: 'prompt',
+    timeoutMs: 40,
+    graceMs: 20,
+    spawn: () => child,
+    kill: (target, lifetime) => seen.push(['tree', target === child, lifetime]),
+    killSurvivors: (target, lifetime) => seen.push(['survivors', target === child, lifetime]),
+  });
+  await pending;
+  const after = Date.now();
+  assert.deepEqual(seen.map(([kind]) => kind), ['tree', 'survivors'], 'a timeout kills the tree, and the end sweeps once');
+  const [tree, survivors] = seen;
+  assert.ok(tree[1] && survivors[1]);
+  assert.ok(tree[2].startedAt >= before && tree[2].startedAt <= after);
+  assert.equal('exitedAt' in tree[2], false, 'it was still running when it was killed');
+  assert.equal(survivors[2].startedAt, tree[2].startedAt);
+  assert.equal('exitedAt' in survivors[2], false, 'it never exited here');
+
+  const exiting = Object.assign(new EventEmitter(), { pid: 4243, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const lifetimes = [];
+  const run = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 1000, spawn: () => exiting, kill: () => assert.fail('no tree kill'), killSurvivors: (target, lifetime) => lifetimes.push(lifetime) });
+  const exitedBefore = Date.now();
+  exiting.emit('exit', 0, null);
+  exiting.emit('close', 0, null);
+  await run;
+  assert.equal(lifetimes.length, 1);
+  assert.ok(lifetimes[0].exitedAt >= exitedBefore && lifetimes[0].exitedAt >= lifetimes[0].startedAt);
+});
+
+test('a kill that could not be done is reported on the result and never thrown out of the run', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const pending = runProcess({
+    command: 'agent', input: 'prompt', timeoutMs: 1000, spawn: () => child,
+    kill: () => assert.fail('no tree kill'),
+    killSurvivors: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); },
+  });
+  setTimeout(() => { child.emit('exit', 0, null); child.emit('close', 0, null); }, 10);
+  const run = await pending;
+  assert.equal(run.exitCode, 0);
+  assert.equal(run.sweepError, 'the process snapshot failed (exit 1): CIM is down');
+});
+
 // ---- third review round -----------------------------------------------------------------------------
 
 test('a grader command that cannot be spawned stops the trial without a record and cleans up', async () => {
@@ -1340,12 +1389,23 @@ test('the sweep script is quiet: no progress stream, and a failure reaches the c
   let script;
   const sync = (command, args) => {
     script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
-    return { status: 1, stdout: '', stderr: 'still running after the kill: 12' };
+    return { status: 1, stdout: '', stderr: 'The CIM provider failed' };
   };
-  assert.throws(() => killByPath([path.join(tmp('quiet'), 'eval-q')], { platform: 'win32', spawnSync: sync }), /still running after the kill: 12/);
+  assert.throws(() => killByPath([path.join(tmp('quiet'), 'eval-q')], { platform: 'win32', spawnSync: sync }), /The CIM provider failed/);
   assert.match(script, /\$ProgressPreference = 'SilentlyContinue'/);
   assert.match(script, /\[Console\]::Error\.WriteLine/);
   assert.ok(!/\*> \$null|2>&1 \| Out-Null/.test(script), 'no native-command redirection that turns a stderr line into a terminating error');
+});
+
+test('the sweep script only finds: it kills nothing, and no tree', () => {
+  let script;
+  const sync = (command, args) => {
+    script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  killByPath([path.join(tmp('finds'), 'eval-f')], { platform: 'win32', spawnSync: sync });
+  assert.ok(!/taskkill|Stop-Process|\.Kill\(/.test(script), 'the kill is process-tree.mjs\'s, after a selection by pid and creation time');
+  assert.match(script, /Format-ProcessRow/);
 });
 
 test('killByPath spares the process it runs in and that process\'s ancestors, even when their command lines hold the root', { skip: WINDOWS_ONLY }, async () => {
@@ -1358,22 +1418,65 @@ test('killByPath spares the process it runs in and that process\'s ancestors, ev
   assert.ok(await waitUntil(() => !isAlive(target)));
 });
 
-test('killByPath hands the roots to PowerShell through the environment, not the command line, and reports the pids it printed', () => {
+/** What the sweep script prints for a snapshot of `rows` (`[pid, ppid, createdAt]`), `spared` pids and `matched` pids. */
+const sweepOutput = (rows, matched, spared = []) => [
+  ...rows.map(([pid, ppid, created]) => `${pid}\t${ppid}\t${created ?? ''}\tx.exe`),
+  ...spared.map((pid) => `S\t${pid}`),
+  ...matched.map((pid) => `M\t${pid}`),
+].join('\r\n') + '\r\n';
+
+/** A `spawnSync` that answers the sweep with `first`, every kill with `kill` (a string, or a function of the targets), and keeps the calls. */
+function sweepSync(first, kill = '') {
   const calls = [];
   const sync = (command, args, options) => {
     calls.push({ command, args, options });
-    return { status: 0, stdout: '4242\r\n77\r\n', stderr: '' };
+    if (calls.length === 1) return { status: 0, stdout: first, stderr: '' };
+    const targets = options.env.JS_HARNESS_KILL_TARGETS.split('\n');
+    return { status: 0, stdout: typeof kill === 'function' ? kill(targets) : kill, stderr: '' };
   };
+  sync.calls = calls;
+  return sync;
+}
+const killedAll = (targets) => targets.map((target) => `K\t${target.split('@')[0]}`).join('\r\n');
+
+test('killByPath hands the roots to PowerShell through the environment, not the command line, and kills the matches\' trees as the snapshot proves them', () => {
+  const rows = [[4242, 1, 5000], [4243, 4242, 5100], [77, 1, 6000], [88, 4242, 10], [99, 1, 5200]];
+  const sync = sweepSync(sweepOutput(rows, [4242, 77]), killedAll);
   const roots = [path.join(tmp('stub'), 'eval-St0b01'), path.join(tmp('stub'), 'eval Space')];
   const { killed } = killByPath(roots, { platform: 'win32', spawnSync: sync });
   assert.deepEqual(killed, [4242, 77]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, 'powershell');
-  assert.ok(calls[0].args.includes('-NoProfile'));
-  assert.ok(roots.every((root) => !calls[0].args.join(' ').includes(root)), 'no root is spliced into the script');
-  assert.deepEqual(calls[0].options.env.JS_HARNESS_KILL_ROOTS.split('\n'), roots);
+  assert.equal(sync.calls.length, 2, 'the sweep, then one kill');
+  const [sweep, kill] = sync.calls;
+  assert.equal(sweep.command, 'powershell');
+  assert.ok(sweep.args.includes('-NoProfile'));
+  assert.ok(roots.every((root) => !sweep.args.join(' ').includes(root)), 'no root is spliced into the script');
+  assert.deepEqual(sweep.options.env.JS_HARNESS_KILL_ROOTS.split('\n'), roots);
+  assert.deepEqual(kill.options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['4242@5000', '4243@5100', '77@6000'], 'pid 88 records pid 4242 but predates it; pid 99 matched nothing');
   assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ status: 1, stdout: '', stderr: 'boom' }) }), /sweep.*failed.*boom/);
   assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ error: new Error('no powershell') }) }), /no powershell/);
+});
+
+test('killByPath with no match starts no kill, and spares what the script spared together with everything below it', () => {
+  const root = [path.join(tmp('spare'), 'eval-Sp4re1')];
+  const none = sweepSync(sweepOutput([[10, 1, 100]], []));
+  assert.deepEqual(killByPath(root, { platform: 'win32', spawnSync: none }), { killed: [] });
+  assert.equal(none.calls.length, 1);
+
+  // 11 is the sweeper itself (or an ancestor of it), below a match: it and what hangs below it must stay.
+  const rows = [[10, 1, 100], [11, 10, 110], [12, 11, 120], [13, 10, 130]];
+  const some = sweepSync(sweepOutput(rows, [10], [11]), killedAll);
+  killByPath(root, { platform: 'win32', spawnSync: some });
+  assert.deepEqual(some.calls[1].options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['10@100', '13@130']);
+});
+
+test('killByPath names a match it could not kill for want of a creation time, and one still running after the kill', () => {
+  const root = [path.join(tmp('unproven'), 'eval-Un9r00')];
+  const rows = [[10, 1, 100], [30, 1, null]];
+  const sync = sweepSync(sweepOutput(rows, [10, 30]), killedAll);
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sync }), /not killed.*unknown.*30/);
+  assert.deepEqual(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '10@100', 'the one that was proven is still killed');
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sweepSync(sweepOutput([[10, 1, 100]], [10]), 'R\t10\r\n') }), /still running after the kill: 10/);
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sweepSync('M\t10\r\n') }), /listed none/, 'matches without a snapshot are a failed lookup');
 });
 
 test('killByPath refuses a root that could match more than one trial: empty, relative or a filesystem root', () => {
@@ -1602,7 +1705,7 @@ test('a workspace that will not delete is swept again and its removal retried', 
       // The first sweep finds nothing (the holder's command line names no trial directory); the second is the retry.
       if (calls.length === 2) {
         killStray(holders[0]);
-        // A real sweep returns once `taskkill` has: wait for the holder to be gone, as that does.
+        // A real sweep returns once its kill has: wait for the holder to be gone, as that does.
         for (const until = Date.now() + 3000; isAlive(holders[0]) && Date.now() < until;);
       }
       return { killed: [] };

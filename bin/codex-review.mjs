@@ -9,6 +9,7 @@
 // probes: odd/tasks/codex-exec-review.md).
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
+import { killTree } from './lib/process-tree.mjs';
 
 // `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
 const USAGE = 'Usage: js-harness codex-review --base <rev> [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
@@ -235,26 +236,14 @@ function codexRuns(spawn, platform, env) {
   }
 }
 
-/** Kills `child` and everything it started. On Windows the child is the `cmd.exe` shim, and killing
- * only it leaves Codex running with the stdout pipe open, so `taskkill /T` takes the whole tree.
- * Elsewhere the child leads its own process group (`detached`), which is killed. */
-export function killTree(child, { platform = process.platform, spawnSync: sync = spawnSync, kill = process.kill } = {}) {
-  if (platform === 'win32') {
-    if (child?.pid) sync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    else child?.kill?.();
-    return;
-  }
-  try {
-    kill(-child.pid, 'SIGKILL');
-  } catch {
-    child?.kill?.('SIGKILL');
-  }
-}
-
 /** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
  * error }`. Unlike `spawnSync` it cannot be held by a grandchild that keeps the pipe open: on the
  * timer or an overflow past `maxBuffer` it kills the tree and resolves at once, without waiting for
- * the child to close. `onLine` gets each complete stdout line as it arrives. */
+ * the child to close. `onLine` gets each complete stdout line as it arrives.
+ *
+ * On Windows the child is the `cmd.exe` shim, and killing only it leaves Codex running with the stdout pipe
+ * open, so the whole tree goes: found by `bin/lib/process-tree.mjs` from when the child was spawned, never by
+ * parent pid alone (`kill(child, { startedAt })`). Elsewhere the child leads its own process group. */
 function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBuffer, onLine, signals }) {
   return new Promise((resolve) => {
     let settled = false;
@@ -263,6 +252,7 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
     let bytes = 0;
     let timer;
     let child;
+    const startedAt = Date.now(); // before the spawn: the child cannot have been created earlier
     // Off Windows the child is detached, so Ctrl-C no longer reaches it: kill the tree ourselves
     // before exiting, or Codex keeps running with nobody reading its output.
     const interrupted = () => stop(Object.assign(new Error('codex interrupted'), { code: 'EINTR' }));
@@ -276,16 +266,18 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
       resolve({ status: null, signal: null, ...result, stdout });
     };
     const stop = (error) => {
+      let killFailure;
       try {
-        kill(child);
-      } catch {
-        // Nothing more to do: the run is reported as stopped either way.
+        kill(child, { startedAt });
+      } catch (killError) {
+        // The run is reported as stopped either way, and says that the tree may still be running.
+        killFailure = killError.message;
       }
       // A descendant the kill missed could still hold the pipe; releasing it and the child lets this
       // process exit anyway.
       child?.stdout?.destroy?.();
       child?.unref?.();
-      finish({ signal: 'SIGKILL', error });
+      finish({ signal: 'SIGKILL', error, ...(killFailure && { killFailure }) });
     };
     try {
       child = launchCodex(spawnAsync, platform, argv, { ...options, detached: platform !== 'win32' });
@@ -344,7 +336,7 @@ function progressLine(line, log) {
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process } = deps;
-  const kill = deps.killTree ?? ((child) => killTree(child, { platform }));
+  const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
   try {
@@ -427,7 +419,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           : result.status !== 0 ? `it exited ${result.status ?? `on ${result.signal ?? 'a signal'}`}`
             : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
       const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
-      error(`The Codex review did not complete (${reason}); no record was written.${said}\n${WAYS_ON}`);
+      const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
+      error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
       return typeof result.status === 'number' && result.status !== 0 ? result.status : 1;
     }
     if (!evidence.inspected) {
