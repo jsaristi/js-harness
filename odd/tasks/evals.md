@@ -207,6 +207,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `killSurvivors` throw (Codex P2), and `runSensor` takes injectable kills so the path from a
   throwing kill to `sweepError` is tested (gentle-ai suggestion) (route: inline, two small
   understood edits)
+- [x] T4kt Test teardowns never signal a process by a bare number: a spawned child is stopped
+  through its handle, a pid learned as a number gets its `{ pid, createdAt }` identity when it
+  is learned and is killed with `killProcesses`, and a guard test fails any test or fixture
+  that does otherwise (Codex P1) (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -774,7 +778,22 @@ nothing; it is re-run through T4kr's commit).
   ("Missing expected exception"), and `runSensor` had no way to take a kill, so `sweepError` was
   `undefined`. GREEN: `node --test bin/lib/process-tree.test.mjs bin/check.test.mjs
   evals/runner.test.mjs evals/ports.test.mjs bin/codex-review.test.mjs` 329/329. `killByPort`
-  still ignores the kill's report on purpose: the port lookup after it decides.
+  still ignores the kill's report on purpose: the port lookup after it decides. Commit
+  `ca08a0c`; gentle-ai assessed `298d739..ca08a0c` as medium, not due (`under_budget`).
+- 2026-10-02: Codex on `58492e4..ca08a0c`: one P1 and again no record (1,029 of 1,106 changed
+  lines shown). The P1 is T4k's own defect in the tests: `bin/lib/process-tree.test.mjs` kept a
+  set of pids, some already killed by the tests, and its `after` hook signalled each by number;
+  `evals/runner.test.mjs` (since slice 1) and `evals/isolation-probe.test.mjs` did the same.
+- 2026-10-02: T4kt done (delegated writer; trigger: 2+ non-trivial files). New
+  `identifyProcesses` in the module and `bin/lib/process-tree.testkit.mjs` (`createReaper`:
+  `child`, `pids`, `reap`, `sweep`); a pid learned as a number is identified when learned, and
+  only if it started after the test began (`since`). RED: the helper's and the reaper's unit
+  tests against a stub, and the guard against the unfixed sites. GREEN:
+  `bin/lib/process-tree.test.mjs` 44/44 (re-run by the parent), `evals/runner.test.mjs
+  evals/ports.test.mjs` 153/153, `evals/isolation-probe.test.mjs` 111/111, `bin/check.test.mjs
+  bin/codex-review.test.mjs` 142/142; `rg -n "process\.kill\(" -g "*.test.mjs" bin evals` shows
+  only `process.kill(pid, 0)` probes. POSIX still signals a learned pid by number (the module
+  reads no creation time there); not exercised on this host.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import { findListeners, killByPort } from './ports.mjs';
 import { killByPath } from './runner.mjs';
+import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 import {
   DUMMY_API_KEY, PROBE_ENV_VARS, claudeMdMarkers, defaultTrees, diffSnapshots, formatSummary, leakHits, main, parseEnvLines, probeCommand, runIsolationProbe, scanFile,
   keyLeaks, snapshotTrees, splitByControl, startFakeApi,
@@ -1130,9 +1131,19 @@ const waitUntil = async (predicate, ms = 3000) => {
 };
 const WINDOWS_ONLY = process.platform === 'win32' ? false : 'a held directory only blocks its removal on Windows';
 
+// What a test that failed may have left running: the pid in `pidFile`, a number the agent wrote, is killed only
+// if it still runs and started after `since`, and then by its creation time (see `process-tree.testkit.mjs`).
+const reaper = createReaper();
+const reapHolder = (pidFile, since) => {
+  if (!fs.existsSync(pidFile)) return;
+  const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+  if (pid > 0 && isAlive(pid)) reaper.reap([pid], { since });
+};
+
 test('a process left behind by the agent, whose parent is gone and whose command line names the workspace, is killed before the sandbox is removed', { skip: WINDOWS_ONLY }, async () => {
   const machine = fakeMachine();
   const pidFile = path.join(tmp('pids'), 'holder.txt');
+  const startedAt = Date.now();
   let holder;
   try {
     const report = await probe(machine, 'orphan', { arms: ['minimal'], sweep: undefined, adaptConfig: fakeClaude('orphan', machine, { pidFile }) });
@@ -1143,14 +1154,14 @@ test('a process left behind by the agent, whose parent is gone and whose command
     assert.ok(await waitUntil(() => !isAlive(holder)), `the holder ${holder} is still running`);
     assert.deepEqual(leftovers(machine), [], 'the sandbox was removed');
   } finally {
-    if (holder) try { process.kill(holder, 'SIGKILL'); } catch { /* gone */ }
+    reapHolder(pidFile, startedAt);
   }
 });
 
 test('a sandbox that will not delete is swept again and its removal retried', { skip: WINDOWS_ONLY }, async () => {
   const machine = fakeMachine();
   const pidFile = path.join(tmp('pids'), 'holder.txt');
-  let holder;
+  const startedAt = Date.now();
   let calls = 0;
   try {
     const report = await probe(machine, 'orphan', {
@@ -1162,12 +1173,11 @@ test('a sandbox that will not delete is swept again and its removal retried', { 
         return calls === 1 ? { killed: [] } : killByPath(roots, options);
       },
     });
-    holder = Number(fs.readFileSync(pidFile, 'utf8'));
     assert.deepEqual(report.failures, []);
     assert.equal(calls, 2);
     assert.deepEqual(leftovers(machine), []);
   } finally {
-    if (holder) try { process.kill(holder, 'SIGKILL'); } catch { /* gone */ }
+    reapHolder(pidFile, startedAt);
   }
 });
 
@@ -1547,6 +1557,7 @@ test('what an orphan writes after the agent exits is found: the arm\'s processes
   const machine = fakeMachine();
   const target = path.join(machine.realHome, '.claude', 'late-leak.txt');
   const pidFile = path.join(tmp('late-pid'), 'pid.txt');
+  const startedAt = Date.now();
   // The orphan writes 2 s after the agent exits, long after any snapshot taken right away. The sweep is wrapped to wait for that write and then
   // kill the orphan for real, which is what a slow sweep does with a fast writer: the write happens during
   // the sweep, so a scan taken before the sweep misses it.
@@ -1561,13 +1572,7 @@ test('what an orphan writes after the agent exits is found: the arm\'s processes
     const pid = Number(fs.readFileSync(pidFile, 'utf8'));
     assert.ok(await waitUntil(() => !isAlive(pid)), 'and the orphan is dead');
   } finally {
-    if (fs.existsSync(pidFile)) {
-      try {
-        process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL');
-      } catch {
-        // already gone
-      }
-    }
+    reapHolder(pidFile, startedAt);
   }
 });
 

@@ -213,6 +213,20 @@ export function killProcesses(targets, { spawnSync: sync = spawnChildSync } = {}
   return outcome;
 }
 
+/** `[{ pid, createdAt }]` for those of `pids` that one snapshot lists with a known creation time, each once, in
+ * the order of `pids`: the identity `killProcesses` needs, for a caller that learned a pid as a number only (a
+ * grandchild, a pid in a file). A pid that is not running, has no creation time or is 0 to 4 gets none: no
+ * evidence, no kill. Windows only, where a snapshot has creation times; elsewhere it throws. Throws when the
+ * snapshot could not be taken. Take the identity when the pid is learned: the later it is taken, the likelier
+ * the pid belongs to another process by then. */
+export function identifyProcesses(pids, { platform = process.platform, spawnSync: sync = spawnChildSync } = {}) {
+  if (platform !== 'win32') throw new Error('process creation times are only read on Windows');
+  const wanted = [...new Set(pids)].filter((pid) => !isProtected(pid));
+  if (wanted.length === 0) return [];
+  const created = new Map(takeSnapshot({ spawnSync: sync }).filter((entry) => known(entry.createdAt)).map((entry) => [entry.pid, entry.createdAt]));
+  return wanted.filter((pid) => created.has(pid)).map((pid) => ({ pid, createdAt: created.get(pid) }));
+}
+
 function killPosixGroup(child, kill) {
   try {
     kill(-child.pid, 'SIGKILL'); // the child leads its own group (`detached`)

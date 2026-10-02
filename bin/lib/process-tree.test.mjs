@@ -5,8 +5,9 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  CLOCK_TOLERANCE_MS, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, takeSnapshot,
+  CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, killSurvivors, killTree, parseSnapshot, resolveRoot, selectDescendants, selectTrees, takeSnapshot,
 } from './process-tree.mjs';
+import { createReaper } from './process-tree.testkit.mjs';
 
 const proc = (pid, ppid, createdAt) => ({ pid, ppid, createdAt });
 const sorted = (pids) => [...pids].sort((a, b) => a - b);
@@ -187,6 +188,97 @@ test('a pid or creation time that is not a plain number never reaches the comman
   }
 });
 
+// ---- identifyProcesses: a pid a test learned, with the creation time that makes it killable ------------------------------
+
+test('identifyProcesses gives a pid its creation time from one snapshot, and no identity to a pid it cannot prove', () => {
+  const sync = scripted([{ stdout: rows(proc(200, 1, 5100), proc(300, 1, null), proc(400, 1, 5300)) }]);
+  const found = identifyProcesses([200, 300, 404, 400, 200], { platform: 'win32', spawnSync: sync });
+  assert.deepEqual(found, [{ pid: 200, createdAt: 5100 }, { pid: 400, createdAt: 5300 }], '300 has no creation time, 404 is not running, 200 once');
+  assert.equal(sync.calls.length, 1, 'one snapshot for all of them');
+  assert.equal(sync.calls[0].command, 'powershell');
+});
+
+test('identifyProcesses never names pids 0 to 4, and asks for no snapshot when there is nothing to identify', () => {
+  const never = () => assert.fail('PowerShell must not be started');
+  assert.deepEqual(identifyProcesses([], { platform: 'win32', spawnSync: never }), []);
+  const sync = scripted([{ stdout: rows(proc(0, 0, 5000), proc(4, 0, 5000), proc(200, 1, 5100)) }]);
+  assert.deepEqual(identifyProcesses([0, 4, 200], { platform: 'win32', spawnSync: sync }), [{ pid: 200, createdAt: 5100 }]);
+});
+
+test('identifyProcesses throws when the snapshot failed, and off Windows, where no creation time is read', () => {
+  assert.throws(() => identifyProcesses([200], { platform: 'win32', spawnSync: scripted([{ status: 1, stderr: 'CIM is down' }]) }), /CIM is down/);
+  const never = () => assert.fail('nothing may run');
+  assert.throws(() => identifyProcesses([200], { platform: 'linux', spawnSync: never }), /Windows/);
+});
+
+// ---- the shared teardown of the tests: nothing is killed by a bare number on Windows -----------------------------------
+
+/** A stand-in for a ChildProcess: it records the signals sent through its handle. */
+const fakeChild = (pid) => {
+  const signals = [];
+  return { pid, signals, kill: (signal) => { signals.push(signal); return true; } };
+};
+/** The host of a Windows reaper: every snapshot is `snapshot`, every kill is answered with K for each target. */
+function windowsHost(snapshot) {
+  const targetsOf = ({ options }) => options.env?.JS_HARNESS_KILL_TARGETS;
+  const answer = (call) => ({ stdout: targetsOf(call) === undefined ? rows(...snapshot) : targetsOf(call).split('\n').map((target) => `K\t${target.split('@')[0]}`).join('\r\n') });
+  const sync = scripted(Array.from({ length: 20 }, () => answer));
+  const kill = () => assert.fail('a pid must not be signalled by its number on Windows');
+  return { platform: 'win32', spawnSync: sync, kill };
+}
+
+test('the reaper stops a child through its own handle, and sends no signal by number and runs no command for it', () => {
+  const host = windowsHost([]);
+  const reaper = createReaper(host);
+  const child = fakeChild(4242);
+  assert.equal(reaper.child(child), child, 'the child is handed back, so a spawn can be wrapped');
+  reaper.sweep();
+  assert.deepEqual(child.signals, ['SIGKILL']);
+  assert.equal(host.spawnSync.calls.length, 0);
+});
+
+test('on Windows a pid known only as a number is killed with the creation time it had when it was learned, and a pid that was not running is not killed', () => {
+  const host = windowsHost([proc(200, 1, 5100), proc(300, 1, 5200)]);
+  const reaper = createReaper(host);
+  assert.deepEqual(reaper.pids([200, 404]), [200, 404], 'the pids come back, so a read can be wrapped');
+  assert.equal(host.spawnSync.calls.length, 1, 'learning takes one snapshot');
+  reaper.sweep();
+  assert.equal(host.spawnSync.calls.length, 2);
+  assert.equal(host.spawnSync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '200@5100', 'pid 404 was not there, pid 300 was never learned');
+  reaper.sweep();
+  assert.equal(host.spawnSync.calls.length, 2, 'what was killed is not killed again');
+});
+
+test('a pid whose process started before `since` is another process and gets no identity', () => {
+  const host = windowsHost([proc(200, 1, 4000), proc(201, 1, 5050), proc(202, 1, 6000)]);
+  const reaper = createReaper(host);
+  reaper.pids([200, 201, 202], { since: 5100 });
+  reaper.sweep();
+  assert.equal(host.spawnSync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '201@5050\n202@6000', 'the clock tolerance applies, 200 predates the window');
+});
+
+test('reap kills the pids it is given now, with their identity, and leaves what else was learned for the sweep', () => {
+  const host = windowsHost([proc(200, 1, 5100), proc(300, 1, 5200)]);
+  const reaper = createReaper(host);
+  reaper.pids([300]);
+  reaper.reap([200]);
+  assert.equal(host.spawnSync.calls[2].options.env.JS_HARNESS_KILL_TARGETS, '200@5100');
+  reaper.sweep();
+  assert.equal(host.spawnSync.calls[3].options.env.JS_HARNESS_KILL_TARGETS, '300@5200');
+});
+
+test('on POSIX there is no creation time to read, so a learned pid is signalled by its number, and no command runs', () => {
+  const never = () => assert.fail('nothing is spawned on POSIX');
+  const sent = [];
+  const reaper = createReaper({ platform: 'linux', spawnSync: never, kill: (pid, signal) => sent.push([pid, signal]) });
+  reaper.pids([321, 322]);
+  reaper.sweep();
+  assert.deepEqual(sent, [[321, 'SIGKILL'], [322, 'SIGKILL']]);
+  const gone = createReaper({ platform: 'linux', spawnSync: never, kill: () => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); } });
+  gone.pids([323]);
+  gone.sweep();
+});
+
 test('killTree of a live child on Windows kills the child and what the snapshot proves is below it, each pair once', () => {
   const snapshot = [proc(100, 1, 5000), proc(7, 100, 10), proc(200, 100, 5100), proc(300, 200, 5200), proc(555, 1, 5300)];
   const sync = scripted([{ stdout: rows(...snapshot) }, { stdout: 'K\t100\r\nK\t200\r\nK\t300\r\n' }]);
@@ -258,12 +350,12 @@ test('on POSIX a group that cannot be killed falls back to the child itself', ()
   killTree({ pid: 77, kill: () => { throw new Error('already gone'); } }, undefined, { platform: 'linux', spawnSync: never, kill: () => { throw new Error('EPERM'); } });
 });
 
-/** Every non-test source file under `dir`, recursively, without the comment lines. */
-function sourcesUnder(dir) {
+/** Every source file under `dir`, recursively, without the comment lines; the tests (`*.test.mjs`) only with `withTests`. */
+function sourcesUnder(dir, { withTests = false } = {}) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === 'node_modules' || entry.name === 'runs' ? [] : sourcesUnder(entryPath);
-    if (!/\.mjs$/.test(entry.name) || /\.test\.mjs$/.test(entry.name)) return [];
+    if (entry.isDirectory()) return entry.name === 'node_modules' || entry.name === 'runs' ? [] : sourcesUnder(entryPath, { withTests });
+    if (!/\.mjs$/.test(entry.name) || (!withTests && /\.test\.mjs$/.test(entry.name))) return [];
     const code = fs.readFileSync(entryPath, 'utf8').split(/\r?\n/).filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
     return [{ file: path.relative(ROOT, entryPath), code }];
   });
@@ -276,6 +368,46 @@ test('no source under bin/ or evals/ kills a tree: no taskkill, no Stop-Process,
   for (const { file, code } of sources) {
     assert.ok(!/taskkill|Stop-Process/i.test(code), `${file} names a command that kills by pid or tree`);
     assert.ok(!/-Filter[^\n]*ParentProcessId/.test(code), `${file} looks processes up by a bare parent pid`);
+  }
+});
+
+/** The `process.kill(...)` calls of `code` that signal a process by a number: neither the liveness probe (`, 0`)
+ * nor a process re-raising a signal on itself (`process.pid`). Each is the call's source text. */
+function killsByNumber(code) {
+  const found = [];
+  for (const match of code.matchAll(/process\.kill\(/g)) {
+    const args = [''];
+    let depth = 1;
+    let end = match.index + match[0].length;
+    for (; end < code.length && depth > 0; end += 1) {
+      const char = code[end];
+      if ('([{'.includes(char)) depth += 1;
+      else if (')]}'.includes(char)) depth -= 1;
+      if (depth === 1 && char === ',') args.push('');
+      else if (depth > 0) args[args.length - 1] += char;
+    }
+    const [target, signal] = args.map((arg) => arg.trim());
+    if (target !== 'process.pid' && signal !== '0') found.push(code.slice(match.index, end));
+  }
+  return found;
+}
+
+test('the guard against a kill by a bare number sees a signal by number, and lets a probe and a signal to itself through', () => {
+  const kill = ['process', 'kill'].join('.'); // spelled apart, so that this file does not hold the pattern it looks for
+  assert.equal(killsByNumber(`try { ${kill}(holder, 'SIGKILL'); } catch {}`).length, 1);
+  assert.equal(killsByNumber(`${kill}(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL');`).length, 1, 'a call inside the argument does not end it early');
+  assert.equal(killsByNumber(`${kill}(\n  pid,\n  signal,\n);`).length, 1);
+  assert.equal(killsByNumber(`${kill}(pid);`).length, 1, 'no signal named is the default one, and still a signal');
+  assert.deepEqual(killsByNumber(`${kill}(pid, 0); ${kill}(process.pid, signal); ${kill}(Number(x), 0);`), []);
+});
+
+test('no test or fixture under bin/ or evals/ signals a process by its number: Windows reuses pids, so a child is stopped through its handle and a pid it only knows through the shared teardown', () => {
+  const sources = [...sourcesUnder(path.join(ROOT, 'bin'), { withTests: true }), ...sourcesUnder(path.join(ROOT, 'evals'), { withTests: true })];
+  assert.ok(sources.some(({ file }) => file.endsWith('process-tree.test.mjs')), 'the scan sees the tests too');
+  for (const { file, code } of sources) {
+    if (file.endsWith('process-tree.testkit.mjs')) continue; // the shared teardown: the one place that holds the rule
+    assert.deepEqual(killsByNumber(code), [], `${file} signals a process by a number that Windows may have given to another process`);
+    if (/\.test\.mjs$|[\\/]fixtures[\\/]/.test(file)) assert.ok(!/process\.kill\b(?!\()/.test(code), `${file} keeps the kill function to call it later`);
   }
 });
 
@@ -298,20 +430,11 @@ const isAlive = (pid) => {
     return err.code === 'EPERM';
   }
 };
-const strays = new Set();
-const track = (child) => {
-  strays.add(child.pid);
-  return child;
-};
-test.after(() => {
-  for (const pid of strays) {
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-  }
-});
+// The teardown stops every child through its handle, and a grandchild by the pid and creation time it had when
+// it was learned (see `process-tree.testkit.mjs`), never by a number a reused pid could have taken over.
+const reaper = createReaper();
+const track = (child) => reaper.child(child);
+test.after(() => reaper.sweep());
 
 /** A parent that starts a detached grandchild and reports its pid on stdout, then sleeps. */
 async function startPair() {
@@ -327,7 +450,7 @@ async function startPair() {
   parent.stdout.on('data', (chunk) => { text += chunk; });
   assert.ok(await waitUntil(() => /\d+\s/.test(text)), 'the parent reported its child');
   const grandchild = Number(text.trim());
-  strays.add(grandchild);
+  reaper.pids([grandchild], { since: startedAt });
   return { parent, grandchild, startedAt };
 }
 
@@ -344,7 +467,7 @@ test('real: killTree takes a live child and its descendant, and spares a bystand
 test('real: killSurvivors takes what an exited child left behind, found through its dead parent', { skip: WINDOWS_ONLY }, async () => {
   const { parent, grandchild, startedAt } = await startPair();
   const exited = new Promise((resolve) => parent.once('exit', resolve));
-  process.kill(parent.pid, 'SIGKILL');
+  parent.kill('SIGKILL');
   await exited;
   const exitedAt = Date.now();
   assert.ok(isAlive(grandchild), 'the grandchild outlived its parent');

@@ -11,6 +11,7 @@ import {
   checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
+import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
@@ -18,17 +19,13 @@ const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-evals-test-'));
-// The processes a test started (`strays`, below) are killed first: one that is still running, in a test that
-// failed, holds a directory under the scratch root and would make its removal fail too. Windows lets go of a
-// directory a moment after its holder dies, hence the retries.
+// The processes a test started are recorded here and killed first: one that is still running, in a test that
+// failed, holds a directory under the scratch root and would make its removal fail too. A child is stopped
+// through its handle and a pid known only as a number by its creation time, never by a number alone (see
+// `process-tree.testkit.mjs`). Windows lets go of a directory a moment after its holder dies, hence the retries.
+const reaper = createReaper();
 after(() => {
-  for (const pid of strays) {
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-  }
+  reaper.sweep();
   for (let attempt = 0; ; attempt += 1) {
     try {
       fs.rmSync(scratch, { recursive: true, force: true });
@@ -1251,22 +1248,13 @@ test('runSuite does not share a version probe between an env without a variable 
 const WINDOWS_ONLY = process.platform === 'win32' ? false : 'killByPath sweeps on Windows only; on POSIX it is a documented no-op';
 const SWEEPER = path.join(here, 'fixtures', 'sweep-by-path.mjs');
 
-// Every process a test starts is recorded and killed when the file ends, pass or fail, so a failing test
-// cannot leave a sleeper behind.
-const strays = new Set(); // killed by the hook at the top of this file
-const killStray = (pid) => {
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    // already gone
-  }
-};
+// Every process a test starts is recorded with `reaper` and killed when the file ends, pass or fail, so a
+// failing test cannot leave a sleeper behind.
 
 /** A detached sleeper whose command line ends with `args`; returns its pid. */
 function sleeper(...args) {
-  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...args], { detached: true, stdio: 'ignore', windowsHide: true });
+  const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...args], { detached: true, stdio: 'ignore', windowsHide: true }));
   child.unref();
-  strays.add(child.pid);
   return child.pid;
 }
 
@@ -1346,12 +1334,12 @@ test('killByPath kills each match with its tree: a child whose own command line 
     "require('node:fs').writeFileSync(process.argv[1], String(child.pid));",
     'setInterval(() => {}, 1000);',
   ].join('\n');
-  const parent = spawn(process.execPath, ['-e', parentCode, '--', pidFile, root], { detached: true, stdio: 'ignore', windowsHide: true });
+  const startedAt = Date.now();
+  const parent = reaper.child(spawn(process.execPath, ['-e', parentCode, '--', pidFile, root], { detached: true, stdio: 'ignore', windowsHide: true }));
   parent.unref();
-  strays.add(parent.pid);
   assert.ok(await waitUntil(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== ''), 'the parent started its child');
   const child = Number(fs.readFileSync(pidFile, 'utf8'));
-  strays.add(child);
+  reaper.pids([child], { since: startedAt });
   assert.ok(isAlive(child));
   const { killed } = killByPath([root]);
   assert.deepEqual(killed, [parent.pid], 'only the parent names the root');
@@ -1369,16 +1357,15 @@ test('killByPath succeeds when a match is already gone because an earlier match\
     "require('node:fs').writeFileSync(process.argv[2], String(child.pid));",
     'setInterval(() => {}, 1000);',
   ].join('\n');
+  const startedAt = Date.now();
   const pairs = [0, 1, 2, 3].map((index) => {
     const pidFile = path.join(tmp('gone-pid'), `child-${index}.txt`);
-    const parent = spawn(process.execPath, ['-e', parentCode, '--', root, pidFile], { detached: true, stdio: 'ignore', windowsHide: true });
+    const parent = reaper.child(spawn(process.execPath, ['-e', parentCode, '--', root, pidFile], { detached: true, stdio: 'ignore', windowsHide: true }));
     parent.unref();
-    strays.add(parent.pid);
     return { parent: parent.pid, pidFile };
   });
   assert.ok(await waitUntil(() => pairs.every(({ pidFile }) => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== '')), 'every parent started its child');
-  const children = pairs.map(({ pidFile }) => Number(fs.readFileSync(pidFile, 'utf8')));
-  children.forEach((pid) => strays.add(pid));
+  const children = reaper.pids(pairs.map(({ pidFile }) => Number(fs.readFileSync(pidFile, 'utf8'))), { since: startedAt });
   const everyone = [...pairs.map(({ parent }) => parent), ...children];
   const { killed } = killByPath([root]);
   assert.deepEqual([...killed].sort((a, b) => a - b), [...everyone].sort((a, b) => a - b), 'every process that named the root is reported');
@@ -1519,6 +1506,7 @@ test('on POSIX killByPath does nothing, and says so: process groups already cove
 
 /** Reports from a trial that left a holder, and kills the holder afterwards if the test failed to. */
 async function orphanTrial(env, configExtra = {}) {
+  const startedAt = Date.now(); // the holder cannot have started before this
   const logs = [];
   const trial = trialEnv('orphan-by-path', { env, configExtra, sweep: undefined, log: (message) => logs.push(message) });
   const holder = () => {
@@ -1528,7 +1516,8 @@ async function orphanTrial(env, configExtra = {}) {
       return undefined;
     }
   };
-  return { ...trial, logs, holder, reap: () => holder() !== undefined && killStray(holder()) };
+  // The holder is a number read from the report, so it is killed only if it still runs and started in this trial.
+  return { ...trial, logs, holder, reap: () => holder() !== undefined && isAlive(holder()) && reaper.reap([holder()], { since: startedAt }) };
 }
 
 test('a descendant whose parent already exited, and whose command line names the workspace, is killed so the workspace can be removed', { skip: WINDOWS_ONLY }, async () => {
@@ -1673,9 +1662,8 @@ test('a workspace that still will not delete after the sweep is logged, not thro
   const { options, workRoot } = trialEnv('noop', {
     configExtra: {
       prepare: async ({ workspace }) => {
-        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true }));
         child.unref();
-        strays.add(child.pid);
       },
     },
     sweep: () => ({ killed: [] }), // finds nothing, so the holder stays
@@ -1694,19 +1682,18 @@ test('a workspace that will not delete is swept again and its removal retried', 
     configExtra: {
       prepare: async ({ workspace }) => {
         // A process whose cwd is the workspace: on Windows the directory cannot be removed while it runs.
-        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true }));
         child.unref();
-        strays.add(child.pid);
-        holders.push(child.pid);
+        holders.push(child);
       },
     },
     sweep: () => {
       calls.push(calls.length);
       // The first sweep finds nothing (the holder's command line names no trial directory); the second is the retry.
       if (calls.length === 2) {
-        killStray(holders[0]);
+        holders[0].kill('SIGKILL'); // through its handle
         // A real sweep returns once its kill has: wait for the holder to be gone, as that does.
-        for (const until = Date.now() + 3000; isAlive(holders[0]) && Date.now() < until;);
+        for (const until = Date.now() + 3000; isAlive(holders[0].pid) && Date.now() < until;);
       }
       return { killed: [] };
     },
