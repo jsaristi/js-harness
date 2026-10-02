@@ -941,11 +941,37 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   | resolver | 1.00 | 45/45 ×3 | 6, 6, 6 | 1m40s |
   | spec-drift | 0.99 | 50/51, 50/51, 51/51 | 10, 13, 15 | 1m44s |
 
-  **Every candidate is dropped** (keep is a mean under 0.8): 709 of 713 hidden checks passed
+  **Every candidate is dropped** (keep is a mean under 0.8): 693 of 699 hidden checks passed
   over the 15 trials. The bare configuration at `medium` is at the ceiling on all five, the
   predecessor's failure again, so a score cannot separate the configs on these tasks and
-  `--min-discriminating 3` cannot be met with them. Not yet read: which checks the four misses
-  were (`house-rules` misses the same count in every trial).
+  `--min-discriminating 3` cannot be met with them. Not yet read: which checks the six misses
+  were (`format-v2` 1, `house-rules` 3, one in every trial, `spec-drift` 2).
+- 2026-10-02: `e54ff9f..d8ad2ae` (T4kg, the two docs commits and the headroom results, 731
+  lines, most of them the results file) reviewed by gentle-ai (lineage
+  `review-baecd73b0ab477be`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right and fixed here: this document said 709 of 713 checks passed with four misses; the
+  results file says 693 of 699 with six (the parent's arithmetic, not the data). One
+  suggestion, now a Follow-up: T4kg's only test depends on the machine.
+- 2026-10-02: Sebastián chose to measure the current config on the same five tasks first. Run
+  `headroom-current` (`--configs current`, otherwise as the screen): 15 of 15 trials, no error,
+  exit 0. Results: `evals/results/headroom-current.json`. Per trial, mean of three:
+
+  | task | score min → cur | input tokens min → cur | output min → cur | wall min → cur | turns min → cur |
+  |---|---|---|---|---|---|
+  | format-v2 | 0.993 → 0.993 | 1,058k → 2,298k | 34.8k → 31.5k | 4.9m → 7.4m | 32.7 → 37.7 |
+  | house-rules | 0.979 → 0.979 | 305k → 858k | 8.0k → 8.4k | 1.3m → 2.3m | 12.0 → 14.7 |
+  | lost-updates | 1.000 → 1.000 | 329k → 952k | 13.0k → 15.9k | 2.3m → 2.9m | 11.3 → 18.0 |
+  | resolver | 1.000 → 1.000 | 185k → 807k | 10.1k → 16.7k | 1.7m → 2.9m | 6.0 → 14.7 |
+  | spec-drift | 0.987 → 1.000 | 373k → 1,132k | 11.6k → 19.5k | 1.7m → 3.0m | 12.7 → 24.7 |
+
+  Totals: minimal 693/699 checks, 6.75M input, 233k output, 35.8 min; current 695/699, 18.14M
+  input, 276k output, 55.5 min. **Same score, 2.7× the input tokens, 1.2× the output and 1.55×
+  the time.** Input is almost all cache reads, so the price gap is smaller than the token gap;
+  the turns roughly double on the short tasks. Not counted: tokens of any reviewer runs the
+  current arm's gentle-ai Stop hook may spawn (the open question under "T1 decisions"). Three
+  trials per arm cannot tell a 0.987 from a 1.000 apart. The run's `--summary` prints the
+  minimal screen as "incomplete" for every task, because the screen reads minimal trials only:
+  right, but noisy for a current-only run (a Follow-up).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1083,6 +1109,14 @@ Decided 2026-10-01, before the first candidate was written:
 - The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
   only for engram 0.1.5; another format fails the control with its hint, it does not pass
   silently. The engram controls are unverified on POSIX (T4ap).
+- `node evals/suite.mjs --summary` prints the headroom screen for every run, so a run with no
+  minimal trials shows every task as "incomplete (0 of 3 trials)". It could print the screen
+  only when the run has minimal trials at `medium`.
+- T4kg's test of the CIM fallback depends on the machine (gentle-ai suggestion): it skips when
+  none of the four services it aims at runs, and when the suite runs elevated the handle reads
+  the start time and the new branch is never reached. Two outcomes have no test: no CIM row is
+  `G`, and the same or a missing creation date stays `R`. A fake that drives the catch branch
+  would prove them.
 - A flake in the gate, seen once (2026-10-02, a docs-only commit): `evals/task-proof.test.mjs:304`
   ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
   visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
@@ -1098,7 +1132,11 @@ Decided 2026-10-01, before the first candidate was written:
   the gate's limit. During that run a `Microsoft/Windows/PowerShell/ModuleAnalysisCache` file
   appeared in the repository root: some PowerShell child ran with no `LOCALAPPDATA` and the
   repository as its working directory. Which spawn does that is not found yet (a first search
-  for `LOCALAPPDATA` in `bin/` and `evals/` did not show it); the directory was removed.
+  for `LOCALAPPDATA` in `bin/` and `evals/` did not show it); the directory was removed. It came
+  back on the next gate run, within its first minute. None of the 34 test files creates it when
+  run alone with `node --test <file>` from the repository (each was tried in turn), so it needs
+  the gate's own conditions: the tests run by `check` with `HOME` and `USERPROFILE` moved to a
+  throwaway home, or the parallel run. It was not seen on any gate run before 16:44 that day.
 - Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
   accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
   fails then, on `engramSession`), and `engramServer`'s second log location,
@@ -1168,5 +1206,11 @@ direction is Sebastián's (asked 2026-10-02): harder candidates of another kind,
 the current config costs on the same five tasks first, or another definition of what separates
 the configs (which "Ask me before" reserves for him). `node evals/suite.mjs --summary --name
 headroom` prints the table again.
-Reviewed boundary: gentle-ai `e54ff9f` (`09d7a90`, T4kg, 62 lines, is under budget and pending
-in the slice); Codex `09d7a90`.
+Sebastián chose the second (2026-10-02): the current config on the same five tasks, `medium`,
+3 repeats, as run `headroom-current` (`--configs current --name headroom-current`, the rest as
+the screen). It measures cost and whether the score moves; it decides nothing about T4h by
+itself, and the bar and its definition stay as they are. It ran (see Progress): the same
+score at 2.7× the input tokens and 1.55× the time. The direction for T4h is Sebastián's again,
+with that data in hand.
+Reviewed boundary: gentle-ai `d8ad2ae`; Codex `09d7a90` (the commits after it hold no code:
+docs and the results file).
