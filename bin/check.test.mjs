@@ -391,7 +391,11 @@ test('runSensor reports a kill that throws inside its timer as sweepError, and s
   try {
     fs.writeFileSync(path.join(dir, 'hang.js'), 'setTimeout(() => {}, 120000);');
     const failingKill = (child, lifetime) => {
-      killTree(child, lifetime); // the real kill first, so the test leaves nothing running
+      try {
+        killTree(child, lifetime); // the real kill first, so the test leaves nothing running
+      } catch {
+        // the scripted failure below is the one under test
+      }
       throw new Error('still running after the kill: pid 4242');
     };
     const result = await runSensor('node hang.js', { cwd: dir, timeout: 3000, killTree: failingKill });

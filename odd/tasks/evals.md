@@ -655,8 +655,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   forbids looping until clean, and none changes a measurement (the reference still scores 47/47
   and every hidden test stays fair), so they are Follow-ups. T4s, that suite entry, is written and stashed (`stash@{0}`, green on its focused tests); it is
 popped and reconciled with T4k's `evals/runner.mjs` next.
-Reviewed boundary: gentle-ai `298d739`, Codex `58492e4` (its run over `58492e4..298d739` recorded
-nothing; it is re-run through T4kr's commit).
+Reviewed boundary: `0f96ffd` (gentle-ai and Codex).
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
@@ -793,7 +792,20 @@ nothing; it is re-run through T4kr's commit).
   evals/ports.test.mjs` 153/153, `evals/isolation-probe.test.mjs` 111/111, `bin/check.test.mjs
   bin/codex-review.test.mjs` 142/142; `rg -n "process\.kill\(" -g "*.test.mjs" bin evals` shows
   only `process.kill(pid, 0)` probes. POSIX still signals a learned pid by number (the module
-  reads no creation time there); not exercised on this host.
+  reads no creation time there); not exercised on this host. Commit `0f96ffd`.
+- 2026-10-02: `298d739..0f96ffd` (T4kr, T4kt) reviewed by gentle-ai: lineage
+  `review-306ad3f6c220ebdb`, medium risk, one lens (reliability), approved and acknowledged,
+  three suggestions. (1) No caller is shown to handle `killTree` now throwing or to have used
+  its old return value: checked, `rg -n "= (await )?(killTree|killSurvivors)\(" bin evals`
+  finds no reader, and `killByPort` calls `killProcesses`, not `killTree`. (2) `reapHolder` in
+  `evals/isolation-probe.test.mjs` takes the holder's identity at teardown instead of when the
+  pid is written: a follow-up. (3) The `runSensor` test's scripted kill could be replaced by
+  the real kill's own throw: fixed, the real kill is wrapped.
+- 2026-10-02: Codex could not read `58492e4..HEAD` whole (four runs showed 993 of 1,062, 1,029
+  of 1,106, 496 of 1,355 and 791 of 1,062 changed lines; none recorded), so the range was
+  reviewed as three, the older two from a detached worktree at that commit (records live in the
+  shared git directory): `58492e4..7ddc047` no findings; `7ddc047..298d739` the P1 and P2
+  already fixed by T4kt and T4kr; `298d739..0f96ffd` no findings. All three recorded.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -931,6 +943,12 @@ Decided 2026-10-01, before the first candidate was written:
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.
+- `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
+  pid file appears; the `since` filter bounds the risk to a process started during that test
+  (gentle-ai suggestion on T4kt).
+- `js-harness codex-review` records nothing when Codex does not show every changed line, and
+  Codex did not get through a range of about 1,000 lines in four runs. Splitting by commit
+  worked; the command could take `--head <rev>` so a split needs no worktree.
 - The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
   on `feat/stack-v4` until this branch merges; how to deliver it sooner is Sebastián's call.
 
