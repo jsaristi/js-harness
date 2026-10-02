@@ -976,8 +976,8 @@ the docs):
   token; pending.
 - **Permission mode is explicit and equal on both arms**, a required argument of the config
   builders with no default: the minimal arm reads no settings, and a headless agent with no
-  permission mode cannot edit or run tests. The real settings use `bypassPermissions`; which mode
-  the eval passes is Sebastián's decision, pending.
+  permission mode cannot edit or run tests. The real settings use `bypassPermissions`, and that
+  is the mode the eval passes (Sebastián, 2026-10-02).
 - **The gentle-ai Stop hook stays in the current arm**, because the run measures what is
   installed. Open: it may spawn reviewer `claude` runs whose tokens the trial's own JSON result
   does not count; T5 must account for them or say so.
@@ -1112,14 +1112,18 @@ programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not writt
 `~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
 `main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
 Next: T4, the headroom screen. Before
-T4, two of Sebastián's decisions, asked one at a time (the first was asked on 2026-10-01 and is
-unanswered):
-1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
-   of its own, `JS_HARNESS_EVAL_OAUTH_TOKEN`, never in chat or a file in the repo; T4's suite entry
-   maps it to `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
+T4, two of Sebastián's decisions, asked one at a time:
+1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
+   `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
+   prefix, no whitespace), never in chat or a file in the repo; the suite entry maps it to
+   `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
    `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
-   claude.ai connectors.
-2. The permission mode both arms pass (`permissionMode` has no default).
+   claude.ai connectors (there is none: checked). A process started before the variable was
+   stored does not have it: the suite must run from a shell that does, or with the variable
+   passed for that one command.
+2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
+   (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
+   isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
 Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s): `node
 evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
 --permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
