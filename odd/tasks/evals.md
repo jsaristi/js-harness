@@ -185,7 +185,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
   suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
-- [ ] T4a Sandbox isolation holds with the engram plugin: the current arm's engram hooks and the
+- [x] T4a Sandbox isolation holds with the engram plugin: the current arm's engram hooks and the
   server they spawn stay inside the trial. A per-trial `ENGRAM_PORT` (and no inherited
   `ENGRAM_URL`) in `sandboxEnv`, the listener on that port swept with the trial's other
   processes, and the isolation probe's fake agent extended with a memory write and a subagent
@@ -223,6 +223,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   writer)
 - [x] T4srr The suite also owns SIGHUP: a terminal that closes stops the trial like an interrupt
   (gentle-ai WARNING and Codex P1 on T4sr, the same finding) (route: inline, one file)
+- [x] T4ap The current arm's engram controls match what the plugin's hooks really write. The first
+  real-binary run (2026-10-02) held the isolation and failed `engramPrompt`: on Windows the
+  plugin's UserPromptSubmit hook runs in its safe mode and never posts the prompt, so that
+  control cannot pass there. Controls that hold on every path of the hooks replace it, and
+  what the hooks do post joins the leak needles (route: delegated writer; the probe, its test
+  and its fixtures)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -857,6 +863,40 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `[129]`). GREEN: `node --test evals/suite.test.mjs` 43/43. `runTrial`'s comment now says the
   logs of an agent that had ended stay when its grader is interrupted, as they do for a cap or
   an auth stop; the missing test of that path is a follow-up.
+- 2026-10-02: Sebastián gave the go-ahead for the real-binary probe. First run, `node
+  evals/isolation-probe.mjs --claude C:\Users\Oficina\.local\bin\claude.exe --arm both
+  --control-ms 60000`: exit 1. The isolation held in both arms (leak scan of the real trees and
+  of the real engram store: nothing; no real tree changed outside the control window; nothing
+  left on the trial's engram port), and one positive control failed, `engramPrompt`. Cause, read
+  from the plugin (`~/.claude/plugins/cache/engram/engram/0.1.5/scripts/user-prompt-submit.sh:464-489`):
+  under Git Bash on Windows the UserPromptSubmit hook takes a builtin-only safe path that writes
+  its state file and exits without `POST /prompts`. The prompt is never stored on this machine,
+  in a trial or in real use, so the control could not pass. A second run with `--keep-sandbox`
+  confirmed it: the state file was in the sandbox's temp directory, the trial's own
+  `serve.err.log` named the trial's port, and the session id was in the trial's store.
+- 2026-10-02: T4ap done by a delegated writer (Sonnet). `engramPrompt` is no longer a control;
+  three replace it for the current arm: `engramHook` (the hook's
+  `engram-claude-<session id>-tools-loaded` state file in the sandbox's temp directory, written
+  on both of the hook's paths), `engramServer` (the server log in the trial's data directory
+  names the trial's port) and `engramSession` (the session id is in the trial's store; only
+  `session-start.sh` posts `/sessions`, though a content scan cannot tell its row from the MCP
+  write that names the same session). Whether the prompt was stored is reported as information,
+  like the subagent stop. The trial's session id (from the agent's result, else its transcript's
+  name) is a new needle for the real engram store and the real trees, added after the agent ran
+  and never printed before the scans. RED: 11 failing tests on the controls, 2 on the needles
+  (a session row planted in the fake real store went unseen). GREEN: `node --test
+  evals/isolation-probe.test.mjs` 122/122, `bin/lib/process-tree.test.mjs` 44/44, runner, suite,
+  home and configs 277 pass, 2 skipped.
+- 2026-10-02: T4a's proof, run by the parent after T4ap: the same command, both arms, 60 s
+  control window: **exit 0, PASS**. Current: `transcript ok, workspaceNonce ok, workspaceWrite
+  ok, engramDb ok, engramHook ok, engramServer ok, engramSession ok, engramMemSave ok`; the real
+  global CLAUDE.md reached 7 of 7 requests; real engram store (8 files, 57 MB) scanned for the
+  nonce, the sandbox name and the session id: nothing; leak scan of the real trees: nothing; no
+  real tree changed outside the control window. Minimal: the three applicable controls ok, the
+  real CLAUDE.md reached none of 6 requests, nothing found, nothing changed. Information only:
+  on this machine the engram hooks store neither the prompt nor the subagent stop. The probe ran
+  as `claude-opus-5-5`, effort medium, permission mode `bypassPermissions`. No spend (loopback
+  fake API). The sandbox kept for the diagnosis and the work root were removed.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -991,6 +1031,9 @@ Decided 2026-10-01, before the first candidate was written:
   snapshot and an inherited directory-name hit.
 - No test interrupts a trial while its grader runs (`gradeWorkspace` returning `aborted`), so the
   cleanup and the no-record rule on that path are unproven (gentle-ai suggestion on T4sr).
+- The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
+  only for engram 0.1.5; another format fails the control with its hint, it does not pass
+  silently. The engram controls are unverified on POSIX (T4ap).
 - `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
   pid file appears; the `since` filter bounds the risk to a process started during that test
   (gentle-ai suggestion on T4kt).
@@ -1029,19 +1072,16 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
-Since then, all on `feat/evals` and not pushed: T4a (code done, its real-binary proof pending),
-T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr and T4srr.
-Next: T4a's last step, the isolation probe with the real binary (see Progress, 2026-10-02),
-on Sebastián's go-ahead: `node evals/isolation-probe.mjs --claude
-C:\Users\Oficina\.local\bin\claude.exe --arm both --control-ms 60000` (no spend: a loopback
-fake API). The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
+Since then, all on `feat/evals` and not pushed: T4a (done: the isolation probe passes with the
+real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
+The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
 **Do not commit on `main` or `feat/stack-v4` from this machine until T4k is there**: their
 pre-commit gate still kills by parent pid (see Progress, 2026-10-02) and can close unrelated
 programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not written yet: the 11
 `~/.claude/commands/gentle-sdd-*.md` files were moved to
 `~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
 `main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
-Then T4, the headroom screen. Before
+Next: T4, the headroom screen. Before
 T4, two of Sebastián's decisions, asked one at a time (the first was asked on 2026-10-01 and is
 unanswered):
 1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable

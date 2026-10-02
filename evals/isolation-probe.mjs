@@ -12,8 +12,10 @@
 //  - A random NONCE is the agent's prompt and the content of the files it is told to write. The nonce is
 //    never printed, logged or written to the report; the report is scrubbed of it as a last step.
 //  - Before and after the trial, every real tree where Claude Code or its tools could write is hashed. The
-//    after-pass also scans every file's content for the nonce and for the unique name of the sandbox's temp
-//    root, which no real file has a reason to contain. Hits are reported by path, never by value.
+//    after-pass also scans every file's content for the nonce, for the unique name of the sandbox's temp
+//    root and for the trial's Claude session id (what the engram hooks post; known once the agent has run, and
+//    never written anywhere before that scan), none of which a real file has a reason to contain. Hits are
+//    reported by path, never by value.
 //  - POSITIVE CONTROLS inside the sandbox (the nonce is in a transcript, the tool-written files exist, the
 //    engram store was created) prove the trial wrote where it was meant to. Without them a sandbox that
 //    wrote nothing at all, or an agent that never ran, would pass the leak check vacuously.
@@ -21,11 +23,13 @@
 //    HTTP to a port that is 7437 unless the env says otherwise, and 7437 is where the real engram server
 //    answers. Each trial gets a port of its own (`ports.mjs`); the fake API has the agent call the engram MCP
 //    tool (`mem_save`) and a subagent, the prompt itself goes through UserPromptSubmit and the session through
-//    SessionStart, and the probe then checks that the prompt and the memory landed in the SANDBOX's engram
-//    store, that nothing of them is in the real one (the real `~/.engram` is hashed and scanned for the nonce
-//    like every other real tree: a SQLite write changes the file and puts the text in it, which is why that
-//    evidence, and not a count taken from the server, is the one that decides), that nothing listens on the
-//    trial's port afterwards, and that no engram process the trial started is still running.
+//    SessionStart, and the probe then checks that what the hooks write on every path they take is in the
+//    SANDBOX (UserPromptSubmit's state file, the log of the server SessionStart started, the session it
+//    posted: see `positiveControls`), that nothing of the run is in the real store (the real `~/.engram` is
+//    hashed and scanned for the nonce, the sandbox name and the session id like every other real tree: a SQLite
+//    write changes the file and puts the text in it, which is why that evidence, and not a count taken from the
+//    server, is the one that decides), that nothing listens on the trial's port afterwards, and that no engram
+//    process the trial started is still running.
 //  - Live writers (this very Claude session, the engram and codegraph daemons) keep changing the real trees,
 //    so a diff alone cannot fail the run. `--control-ms` measures that churn first, with no agent, and the
 //    report splits trial-window changes into those also seen at baseline and new ones.
@@ -35,7 +39,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig } from './configs.mjs';
+import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig, sandboxPaths } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
 import { findProcesses, isListening as portIsListening } from './ports.mjs';
 import { childEnv, killByPath, parseAgentOutput, removeDir, resolveAgent, runProcess } from './runner.mjs';
@@ -796,25 +800,58 @@ async function findInStore(store, needles) {
   return hits;
 }
 
-/** The positive controls: what a trial that really ran under the sandbox must have written inside it. A
- * check that finds nothing in the real trees means something only if these find something in the sandbox.
- * The engram ones apply to the current arm only (the minimal arm has no MCP servers and no plugin hooks):
- * `engramDb` (the store was created), `engramPrompt` (the prompt reached it: UserPromptSubmit ran against a
- * server that is the trial's own) and `engramMemSave` (the MCP tool wrote to the trial's data directory).
- * `storeHits` is `findInStore` of the sandbox's engram store, `log` the fake API's request log, which says
- * whether the tool was even offered, for the hint a failed control carries. */
-async function positiveControls({ arm, home, workspace, nonce, log = [], storeHits = {} }) {
-  const controls = {};
+/** The first transcript below the sandbox home that holds the nonce, as its path under `.claude/projects`
+ * (`null` when none does), and how many transcripts there are. */
+async function findTranscript(home, nonce) {
   const projects = path.join(home, '.claude', 'projects');
   const transcripts = walkFiles(projects).filter((rel) => rel.endsWith('.jsonl'));
-  let transcript = null;
   for (const rel of transcripts) {
-    if ((await scanFile(path.join(projects, ...rel.split('/')), [{ label: 'nonce', values: [nonce] }])).length > 0) {
-      transcript = `.claude/projects/${rel}`;
-      break;
-    }
+    if ((await scanFile(path.join(projects, ...rel.split('/')), [{ label: 'nonce', values: [nonce] }])).length > 0) return { rel, count: transcripts.length };
   }
-  controls.transcript = { ok: transcript !== null, path: transcript, transcripts: transcripts.length };
+  return { rel: null, count: transcripts.length };
+}
+
+const SESSION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** The trial's Claude session id, which the engram hooks post and store and which no real tree has a reason to hold:
+ * from the agent's result (`session_id`), else from the name of its transcript (`<session id>.jsonl`). `source`
+ * says which, and is `null` with `id: null` when neither has one that looks like an id. */
+async function findSession(parsed, home, nonce) {
+  if (typeof parsed?.session_id === 'string' && SESSION_ID.test(parsed.session_id)) return { id: parsed.session_id, source: 'result' };
+  const stem = path.posix.basename((await findTranscript(home, nonce)).rel ?? '', '.jsonl');
+  return SESSION_ID.test(stem) ? { id: stem, source: 'transcript' } : { id: null, source: null };
+}
+
+/** The engram controls, in the order they are shown. They apply to the current arm only. */
+const ENGRAM_CONTROLS = ['engramDb', 'engramHook', 'engramServer', 'engramSession', 'engramMemSave'];
+
+/** The positive controls: what a trial that really ran under the sandbox must have written inside it. A
+ * check that finds nothing in the real trees means something only if these find something in the sandbox.
+ * Each is something the real hooks write on every path they can take, on Windows and on POSIX. The engram ones
+ * apply to the current arm only (the minimal arm has no MCP servers and no plugin hooks):
+ *  - `engramDb`: the store was created.
+ *  - `engramHook`: UserPromptSubmit ran inside the sandbox. Its state file, `engram-claude-<session id>-tools-loaded`
+ *    in TMPDIR, is written by the full path (`user-prompt-submit.sh`, lines 391-401) and by the fast path that bash
+ *    on Windows takes unless `ENGRAM_CLAUDE_WINDOWS_BASH_SAFE_MODE=0` (lines 464-489), so it is there on both.
+ *  - `engramServer`: SessionStart started the trial's own server. `engram serve` logs its listening port to
+ *    `serve.err.log` in the data directory (`session-start.sh`, lines 24-43), and it is started only when nothing
+ *    healthy answers on the port the hook resolved, so a log that names the trial's port is the trial's own.
+ *  - `engramSession`: the session the hook posts (`session-start.sh`, lines 47-55: the Claude session id, the
+ *    project and the cwd) is in the sandbox's store. The scan cannot tell that row from the MCP tool's, which
+ *    also names the session, so this proves the session reached the trial's store and `engramServer` proves
+ *    which server the hook started.
+ *  - `engramMemSave`: the MCP tool wrote to the trial's data directory.
+ * The prompt is NOT one of them: under Git Bash on Windows the UserPromptSubmit hook takes that fast path, which
+ * prints its message and never posts the prompt (lines 481-488, against the `POST /prompts` of lines 377-389 and
+ * 551-562), so on that machine a prompt in the store is never there, in a trial or in real use. Whether it
+ * reached the store is reported (`sandbox.answers.engramPrompt`), and fails nothing.
+ * `storeHits` is `findInStore` of the sandbox's engram store, `session` the trial's session id (or `null`: no control
+ * that needs it can pass), `port` the trial's engram port, `log` the fake API's request log, which says whether
+ * the tool was even offered, for the hint a failed control carries. */
+async function positiveControls({ arm, home, workspace, nonce, log = [], storeHits = {}, session = null, port = null }) {
+  const controls = {};
+  const found = await findTranscript(home, nonce);
+  controls.transcript = { ok: found.rel !== null, path: found.rel === null ? null : `.claude/projects/${found.rel}`, transcripts: found.count };
   const holdsNonce = (file) => {
     try {
       return fs.readFileSync(path.join(workspace, file), 'utf8').includes(nonce);
@@ -829,9 +866,43 @@ async function positiveControls({ arm, home, workspace, nonce, log = [], storeHi
     controls.engramDb = { applies: true, ok: db !== undefined, path: db === undefined ? null : `.engram/${db}` };
     const offered = log.some((request) => request.engramToolOffered);
     const called = log.some((request) => /^tool_use:.*mem_save$/.test(request.reply));
-    controls.engramPrompt = {
-      applies: true, ok: storeHits.prompt != null, path: storeHits.prompt ?? null,
-      ...(storeHits.prompt == null && { hint: "the prompt is not in the trial's engram store: the UserPromptSubmit hook did not run, or the engram server it posted to was not the trial's own" }),
+    const scratch = sandboxPaths(home).TMPDIR;
+    const readDir = (dir) => {
+      try {
+        return fs.readdirSync(dir);
+      } catch {
+        return [];
+      }
+    };
+    // Looked for by the session id when it is known, so another session's file never stands in for the trial's.
+    const state = readDir(scratch).find((name) => /^engram-claude-.+-tools-loaded$/.test(name) && (session === null || name.includes(session)));
+    controls.engramHook = {
+      applies: true, ok: state !== undefined, path: state === undefined ? null : relOf(home, path.join(scratch, state)),
+      ...(state === undefined && { hint: "the UserPromptSubmit hook left no state file (engram-claude-<session id>-tools-loaded) in the sandbox's temp directory: it did not run, or it ran with a TMPDIR that is not the trial's" }),
+    };
+    const listening = [path.join(home, '.engram', 'serve.err.log'), path.join(scratch, 'engram-serve.err.log')].flatMap((file) => {
+      try {
+        return [...fs.readFileSync(file, 'utf8').matchAll(/listening on \S*:(\d+)/g)].map((match) => Number(match[1]));
+      } catch {
+        return [];
+      }
+    });
+    const ownServer = port !== null && listening.includes(Number(port));
+    controls.engramServer = {
+      applies: true, ok: ownServer, ports: [...new Set(listening)],
+      ...(!ownServer && {
+        hint: listening.length === 0
+          ? "no server log in the sandbox says the engram server is listening: the SessionStart hook did not start one (it does only when nothing answers on its port), or the one it reached was not the trial's"
+          : `the engram server log names port ${[...new Set(listening)].join(', ')}, not the trial's port ${port}: the SessionStart hook's server, and what it posts, are not the trial's own`,
+      }),
+    };
+    controls.engramSession = {
+      applies: true, ok: storeHits.session != null, path: storeHits.session ?? null,
+      ...(storeHits.session == null && {
+        hint: session === null
+          ? "the session id of the trial is unknown (neither the agent's result nor its transcript's name has one), so its session cannot be looked for in the engram store"
+          : "the trial's session is not in its engram store: the SessionStart hook did not post it, or the server it posted to was not the trial's own",
+      }),
     };
     controls.engramMemSave = {
       applies: true, ok: storeHits.memory != null, path: storeHits.memory ?? null,
@@ -844,7 +915,7 @@ async function positiveControls({ arm, home, workspace, nonce, log = [], storeHi
       }),
     };
   } else {
-    for (const name of ['engramDb', 'engramPrompt', 'engramMemSave']) controls[name] = { applies: false, ok: true };
+    for (const name of ENGRAM_CONTROLS) controls[name] = { applies: false, ok: true };
   }
   return controls;
 }
@@ -1024,12 +1095,18 @@ async function runArm(p, arm, before) {
     swept = true;
     sweepSandbox();
     await stopEngram();
+    // The session id is only known now, and the scan below looks for it in the real trees (what the hooks post names
+    // it and neither the nonce nor the sandbox). It is never logged or printed before that scan: output that is
+    // redirected into a scanned tree would hold the very needle.
+    const parsed = run ? parseAgentOutput(run.stdout) : null;
+    const session = await findSession(parsed, home, nonce);
+    result.session = { source: session.source };
+    if (session.id) p.sessionIds.push(session.id);
     // The real trees are checked even when the arm failed: a trial that died half way may already have leaked.
     p.log(`${arm}: checking the real trees`);
     after = await p.snapshot(`after:${arm}`, p.needles());
 
     if (run) {
-      const parsed = parseAgentOutput(run.stdout);
       Object.assign(result, {
         exitCode: run.exitCode, signal: run.signal, timedOut: run.timedOut,
         ...(run.spawnError && { spawnError: run.spawnError.message }),
@@ -1047,8 +1124,8 @@ async function runArm(p, arm, before) {
     if (result.contamination.skipped && p.markers.length === 0) result.warnings.push(`the contamination check was skipped: ${result.contamination.skipped}`);
 
     if (!result.error) {
-      const storeHits = arm === 'current' ? await findInStore(path.join(home, '.engram'), engramNeedles(nonce)) : {};
-      result.positiveControls = await positiveControls({ arm, home, workspace, nonce, log, storeHits });
+      const storeHits = arm === 'current' ? await findInStore(path.join(home, '.engram'), { ...engramNeedles(nonce), ...(session.id && { session: session.id }) }) : {};
+      result.positiveControls = await positiveControls({ arm, home, workspace, nonce, log, storeHits, session: session.id, port: prepared?.engramPort ?? null });
       const grown = await snapshotTrees([{ name: 'home', root: home, mode: 'content' }], { concurrency: o.concurrency, chunkSize: o.chunkSize });
       const changes = diffSnapshots(seeded, grown).home;
       const under = (prefix, list) => list.filter((rel) => rel.startsWith(prefix)).length;
@@ -1060,7 +1137,9 @@ async function runArm(p, arm, before) {
         removed: cap(changes.removed),
         answers: {
           historyJsonl: exists(path.join(home, '.claude', 'history.jsonl')),
-          // Informational: whether the SubagentStop hook's capture was kept depends on what the server extracts.
+          // Informational: whether the SubagentStop hook's capture was kept depends on what the server extracts, and
+          // the prompt is never posted by the UserPromptSubmit hook's fast path under Git Bash on Windows.
+          engramPrompt: arm === 'current' ? storeHits.prompt != null : null,
           engramSubagentStop: arm === 'current' ? storeHits.subagent != null : null,
           claudeCliNodejs: exists(path.join(home, 'AppData', 'Local', 'claude-cli-nodejs')),
           pluginsMarketplaces: {
@@ -1125,7 +1204,7 @@ function armFailures(result) {
   // A real file that could not be read, after the retries, was not scanned: the verdict on it is unknown, and
   // an unknown is not a pass.
   const unreadable = result.leak?.unreadable;
-  for (const entry of (unreadable?.paths ?? []).slice(0, 10)) failures.push(`${label}: inconclusive: could not read ${entry}, so it was not scanned for the nonce or the sandbox name`);
+  for (const entry of (unreadable?.paths ?? []).slice(0, 10)) failures.push(`${label}: inconclusive: could not read ${entry}, so it was not scanned for the nonce, the sandbox name or the session id`);
   if ((unreadable?.count ?? 0) > 10) failures.push(`${label}: inconclusive: ${unreadable.count - 10} more real files could not be read (see the JSON report)`);
   for (const hit of result.leak?.hits ?? []) {
     failures.push(hit.via === 'key'
@@ -1227,11 +1306,20 @@ async function probeUnder(o, workRootCreated) {
     });
     return taken;
   };
+  const sessionIds = [];
   const p = {
-    o, nonce, markers, tokens, snapshot, log: o.log,
-    // The nonce, and the unique name of every sandbox so far (also lowercased, which is how a Windows tool
-    // may spell a path), searched for in the real trees' content and names.
-    needles: () => [{ label: 'nonce', values: [nonce] }, { label: 'sandbox', values: [...new Set(tokens.flatMap((token) => [token, token.toLowerCase()]))] }],
+    o, nonce, markers, tokens, sessionIds, snapshot, log: o.log,
+    // The nonce, the unique name of every sandbox so far (also lowercased, which is how a Windows tool may spell a
+    // path) and the Claude session id of every trial so far, searched for in the real trees' content and names. The
+    // session id is what every hook post names: the session row of SessionStart holds the sandbox only as the cwd
+    // (and, on Windows, lowercased), and the rows that point at the session (a memory, a prompt) hold neither the
+    // sandbox nor the nonce, so a post that reached the real server is reliably found by it alone. It is known
+    // after the agent ran, so a scan before that has none.
+    needles: () => [
+      { label: 'nonce', values: [nonce] },
+      { label: 'sandbox', values: [...new Set(tokens.flatMap((token) => [token, token.toLowerCase()]))] },
+      ...(sessionIds.length > 0 ? [{ label: 'session id', values: [...new Set(sessionIds.flatMap((id) => [id, id.toLowerCase(), id.toUpperCase()]))] }] : []),
+    ],
   };
 
   const report = {
@@ -1358,7 +1446,7 @@ export function formatSummary(report) {
     if (arm.realEngram) {
       const s = arm.realEngram;
       lines.push(s.status === 'present'
-        ? `  real engram store: ${s.files} files, ${megabytes(s.bytes)} scanned for the nonce and the sandbox name: ${s.hits === 0 ? 'nothing found' : `${s.hits} HIT(S)`}`
+        ? `  real engram store: ${s.files} files, ${megabytes(s.bytes)} scanned for the nonce, the sandbox name and the session id: ${s.hits === 0 ? 'nothing found' : `${s.hits} HIT(S)`}`
         : `  real engram store: ${s.status}${s.status === 'missing' ? ' (the folder is not there, so nothing was scanned)' : ''}`);
     }
     for (const warning of arm.warnings ?? []) lines.push(`  warning: ${warning}`);
@@ -1369,6 +1457,7 @@ export function formatSummary(report) {
       const { answers } = arm.sandbox;
       lines.push(`  sandbox home: ${arm.sandbox.created.count} files created, ${arm.sandbox.changed.count} seeded files changed${arm.sandbox.kept ? `; kept at ${arm.sandbox.kept}` : ''}`);
       lines.push(`    history.jsonl written: ${answers.historyJsonl}; AppData/Local/claude-cli-nodejs in the sandbox: ${answers.claudeCliNodejs}; plugins/marketplaces present ${answers.pluginsMarketplaces.present}, created ${answers.pluginsMarketplaces.created}, changed ${answers.pluginsMarketplaces.changed}, removed ${answers.pluginsMarketplaces.removed}`);
+      if (answers.engramPrompt !== null) lines.push(`    information only: prompt stored in the engram store: ${answers.engramPrompt} (the hook's safe mode under Git Bash on Windows never posts it); subagent stop stored: ${answers.engramSubagentStop}`);
       lines.push(`    top level: ${arm.sandbox.top.filter((row) => !row.path.includes('/')).map((row) => `${row.path} (${row.files})`).join(', ')}`);
     }
     if (arm.leak) {

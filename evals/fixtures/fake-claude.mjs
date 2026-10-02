@@ -29,6 +29,16 @@
 // text, nothing connects), leak-engram (ok, and the nonce is written into the fake real `.engram`).
 // The stand-in connects to no port but the fake API's and the trial's own ENGRAM_PORT, which it only probes, and the
 // stand-in server refuses port 7437.
+//
+// The current arm also leaves what the hooks leave on every path they take: a session id (the agent's result
+// carries it and the transcript is named after it), the state file UserPromptSubmit writes into TMPDIR, the
+// line `engram serve` logs when SessionStart starts it, and the session row SessionStart posts to the store.
+// Modes that take one of them away: safe-mode (the Windows Git Bash fast path of UserPromptSubmit: the state
+// file but no prompt in the store), no-hook-state, no-server-log, other-port-log (the server it started
+// listens on 7437), no-session-store, result-without-session-id (only the transcript's name has the id) and
+// unknown-session-id (nothing has it). leak-session-engram and leak-session-tree (ok, and the session id is
+// written into the fake real `.engram`, or the fake real `.claude`) are the leaks the session id must find.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
@@ -126,7 +136,19 @@ if (mode === 'engram-server') {
   spawnSync(process.execPath, ['-e', intermediate, '--', serverFile, os.tmpdir()], { env: process.env, windowsHide: true });
   for (let attempt = 0; attempt < 100 && !(await listening(port)); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
 }
-if (writes) engramStore(`prompt: ${prompt}`); // UserPromptSubmit stores the prompt
+// Claude Code names the session and its transcript with one UUID. In `safe-mode` UserPromptSubmit takes the Windows
+// Git Bash fast path: it writes its state file in TMPDIR and never posts the prompt.
+const sessionId = crypto.randomUUID();
+if (writes && hasPlugin) {
+  if (mode !== 'no-server-log') {
+    // What `engram serve` writes to the data directory's log when SessionStart starts it.
+    const port = mode === 'other-port-log' ? 7437 : process.env.ENGRAM_PORT;
+    fs.appendFileSync(path.join(process.env.ENGRAM_DATA_DIR, 'serve.err.log'), `2026/10/02 13:05:18 [engram] HTTP server listening on 127.0.0.1:${port}\n`);
+  }
+  if (mode !== 'no-session-store') engramStore(`session: ${sessionId} directory: ${process.cwd()}`); // SessionStart posts the session
+  if (mode !== 'no-hook-state') write(path.join(process.env.TMPDIR, `engram-claude-${sessionId}-tools-loaded`), '');
+  if (mode !== 'safe-mode') engramStore(`prompt: ${prompt}`); // UserPromptSubmit stores the prompt
+}
 const messages = [{ role: 'user', content: prompt }];
 let turns = 0;
 let text = '';
@@ -168,7 +190,7 @@ if (mode === 'subagent' || mode === 'subagent-loads-real') {
 }
 
 if (writes) {
-  write(path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'x', 's.jsonl'), `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`);
+  write(path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'x', `${mode === 'unknown-session-id' ? 's' : sessionId}.jsonl`), `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`);
   if (process.env.ENGRAM_DATA_DIR && !hasPlugin) write(path.join(process.env.ENGRAM_DATA_DIR, 'engram.db'), 'pretend sqlite');
   write(path.join(process.env.CLAUDE_CONFIG_DIR, 'history.jsonl'), '{"display":"probe"}\n');
 }
@@ -216,6 +238,11 @@ if (mode === 'late-leak') {
   if (pidFile) fs.writeFileSync(pidFile, started.stdout.trim());
 }
 if (mode === 'leak-engram') write(path.join(realHome, '.engram', 'leak.db'), `a prompt with ${nonce} in it\n`);
+// The session row of a SessionStart hook that posted to the real server holds the session id and neither the nonce
+// nor the sandbox's name.
+if (mode === 'leak-session-engram') write(path.join(realHome, '.engram', 'leak-session.db'), `a session row for ${sessionId}\n`);
+if (mode === 'leak-session-tree') write(path.join(realHome, '.claude', 'leaked-session.txt'), `a session ${sessionId} in a real tree\n`);
 if (mode === 'leak-path') write(path.join(realHome, '.claude', 'projects', process.cwd().replace(/[^A-Za-z0-9]/g, '-'), 'session.json'), '{}\n');
 
-console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, num_turns: turns + 1, usage: { input_tokens: 1, output_tokens: 1 } }));
+const withSession = mode === 'result-without-session-id' || mode === 'unknown-session-id' ? {} : { session_id: sessionId };
+console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, num_turns: turns + 1, ...withSession, usage: { input_tokens: 1, output_tokens: 1 } }));

@@ -671,7 +671,7 @@ test('a well-behaved agent passes on both arms: positive controls hold, no leak,
     assert.equal(arm.timedOut, false);
     assert.equal(arm.agent.isError, false);
     assert.equal(arm.positiveControls.transcript.ok, true);
-    assert.match(arm.positiveControls.transcript.path, /^\.claude\/projects\/x\/s\.jsonl$/);
+    assert.match(arm.positiveControls.transcript.path, /^\.claude\/projects\/x\/[0-9a-f-]{36}\.jsonl$/);
     assert.equal(arm.positiveControls.workspaceNonce.ok, true);
     assert.equal(arm.positiveControls.workspaceWrite.ok, true);
     assert.deepEqual(arm.leak.hits, []);
@@ -684,7 +684,7 @@ test('a well-behaved agent passes on both arms: positive controls hold, no leak,
     }
     assert.equal(arm.sandbox.answers.historyJsonl, true);
     assert.equal(arm.sandbox.answers.claudeCliNodejs, false);
-    assert.ok(arm.sandbox.created.paths.includes('.claude/projects/x/s.jsonl'));
+    assert.ok(arm.sandbox.created.paths.includes(arm.positiveControls.transcript.path));
     assert.ok(!arm.sandbox.created.paths.includes('.claude/settings.json'), 'what the seed put there is not what the trial created');
     assert.ok(arm.sandbox.top.some((row) => row.path === '.claude' && row.files > 0));
     assert.equal(arm.sandbox.kept, null);
@@ -1651,6 +1651,8 @@ test('keys are not compared for a file that could not be read before, nor for on
 // ---- the engram plugin: a port of its own, its paths exercised, and nothing left behind ----------------------------
 
 const REAL_PORT = 7437;
+/** The controls of the current arm that come from the engram plugin; the prompt is not one of them. */
+const ENGRAM_CONTROLS = ['engramDb', 'engramHook', 'engramServer', 'engramSession', 'engramMemSave'];
 const ENGRAM_REPLIES = ['tool_use:Bash', 'tool_use:Write', `tool_use:${MEM_SAVE}`, 'tool_use:Agent', 'subagent', 'text'];
 const CAN_LOOK_UP_LISTENERS = process.platform === 'win32' || !spawnSync('lsof', ['-v'], { stdio: 'ignore' }).error;
 const LISTENER_LOOKUP = CAN_LOOK_UP_LISTENERS ? false : 'neither Windows nor lsof: the real listener lookup cannot run here';
@@ -1663,10 +1665,11 @@ test('the current arm drives the plugin: the engram tool and a subagent are call
   assert.deepEqual(report.failures, []);
   assert.deepEqual(current.fakeApi.requests.map((request) => request.reply), ENGRAM_REPLIES);
   assert.equal(current.fakeApi.requests.filter((request) => request.engramToolOffered).length, 5, 'offered on every request that is not the subagent');
-  for (const name of ['engramDb', 'engramPrompt', 'engramMemSave']) {
+  for (const name of ENGRAM_CONTROLS) {
     assert.deepEqual({ applies: current.positiveControls[name].applies, ok: current.positiveControls[name].ok }, { applies: true, ok: true }, name);
   }
-  assert.match(current.positiveControls.engramPrompt.path, /^\.engram\//);
+  assert.equal(current.positiveControls.engramPrompt, undefined, 'the prompt is information, not a control');
+  assert.equal(current.sandbox.answers.engramPrompt, true);
   assert.equal(current.sandbox.answers.engramSubagentStop, true, 'the subagent stop hook stored the last message, as far as the stand-in goes');
 });
 
@@ -1676,7 +1679,8 @@ test('the minimal arm is offered neither the engram tool nor the plugin, so its 
   const [minimal] = report.arms;
   assert.deepEqual(report.failures, []);
   assert.deepEqual(minimal.fakeApi.requests.map((request) => request.reply), ['tool_use:Bash', 'tool_use:Write', 'text']);
-  for (const name of ['engramDb', 'engramPrompt', 'engramMemSave']) assert.equal(minimal.positiveControls[name].applies, false, name);
+  for (const name of ENGRAM_CONTROLS) assert.equal(minimal.positiveControls[name].applies, false, name);
+  assert.equal(minimal.sandbox.answers.engramPrompt, null);
 });
 
 test('every arm runs on a port of its own, which its tools see, which is not the real one, and on which nothing listens afterwards', async () => {
@@ -1802,17 +1806,19 @@ test('the report says what was scanned of the real engram store, so a missing st
   assert.match(formatSummary(missing), /real engram store.*missing/);
 });
 
-test('a current arm that writes no prompt, no memory and no subagent note fails its engram controls: nothing proves the plugin ran', async () => {
+test('a current arm that writes nothing fails every engram control: nothing proves the plugin ran', async () => {
   const report = await probe(fakeMachine(), 'silent', { arms: ['current'] });
   const { positiveControls } = report.arms[0];
-  for (const name of ['engramPrompt', 'engramMemSave']) assert.equal(positiveControls[name].ok, false, name);
-  assert.ok(report.failures.some((failure) => /engramPrompt/.test(failure)), report.failures.join('\n'));
+  for (const name of ENGRAM_CONTROLS) assert.equal(positiveControls[name].ok, false, name);
+  for (const name of ['engramHook', 'engramServer', 'engramSession']) {
+    assert.ok(report.failures.some((failure) => failure.includes(name)), `${name}: ${report.failures.join('\n')}`);
+  }
 });
 
-test('the prompt hook and the MCP tool are told apart: a memory that was never saved fails only its own control, and says so', async () => {
+test('the hooks and the MCP tool are told apart: a memory that was never saved fails only its own control, and says so', async () => {
   const report = await probe(fakeMachine(), 'prompt-only', { arms: ['current'] });
   const { positiveControls } = report.arms[0];
-  assert.equal(positiveControls.engramPrompt.ok, true);
+  for (const name of ['engramDb', 'engramHook', 'engramServer', 'engramSession']) assert.equal(positiveControls[name].ok, true, name);
   assert.equal(positiveControls.engramMemSave.ok, false);
   const failure = report.failures.find((text) => /engramMemSave/.test(text));
   assert.ok(failure, report.failures.join('\n'));
@@ -1825,4 +1831,116 @@ test('the summary shows the port of each arm, what was found on it, and the real
   for (const arm of report.arms) assert.match(summary, new RegExp(`engram: port ${arm.engram.port}, nothing listens on it afterwards`));
   assert.match(summary, /real engram store: \d+ files/);
   assert.ok(!summary.includes(FAKE_NONCE));
+});
+
+// ---- the engram controls match what the plugin's hooks really write --------------------------------------------
+
+/** The failures of `report` that name the control `name`. */
+const failuresOf = (report, name) => report.failures.filter((failure) => failure.includes(`"${name}"`));
+/** The controls of the current arm that failed. */
+const failedControls = (report) => Object.entries(report.arms[0].positiveControls).filter(([, control]) => !control.ok).map(([name]) => name);
+
+test('the prompt hook is proved by its state file in the sandbox temp directory, so the Windows safe mode, which never posts the prompt, still passes', async () => {
+  const report = await probe(fakeMachine(), 'safe-mode', { arms: ['current'] });
+  const [current] = report.arms;
+  assert.deepEqual(report.failures, []);
+  assert.equal(report.ok, true);
+  assert.match(current.positiveControls.engramHook.path, /^tmp\/engram-claude-[0-9a-f-]{36}-tools-loaded$/);
+  assert.equal(current.positiveControls.engramPrompt, undefined, 'the prompt is not a control any more');
+  assert.equal(current.sandbox.answers.engramPrompt, false, 'and its absence is only reported');
+  assert.match(formatSummary(report), /prompt stored in the engram store: false/);
+});
+
+test('a prompt hook that left no state file in the sandbox temp directory fails its control alone, and the hint says what that means', async () => {
+  const report = await probe(fakeMachine(), 'no-hook-state', { arms: ['current'] });
+  assert.deepEqual(failedControls(report), ['engramHook']);
+  const [failure] = failuresOf(report, 'engramHook');
+  assert.ok(failure, report.failures.join('\n'));
+  assert.match(failure, /UserPromptSubmit/);
+  assert.match(failure, /TMPDIR/);
+});
+
+test('the state file of another session does not stand in for the trial\'s: it is looked for by the trial session id', async () => {
+  const machine = fakeMachine();
+  const report = await probe(machine, 'no-hook-state', {
+    arms: ['current'],
+    adaptConfig: fakeClaude('no-hook-state', machine, {
+      prepare: ({ home }) => write(path.join(home, 'tmp', 'engram-claude-00000000-0000-4000-8000-000000000000-tools-loaded'), ''),
+    }),
+  });
+  assert.deepEqual(failedControls(report), ['engramHook']);
+});
+
+test('a server the hook did not start, or one that listens on another port, fails the server control; the hint names both ports', async () => {
+  const missing = await probe(fakeMachine(), 'no-server-log', { arms: ['current'] });
+  assert.deepEqual(failedControls(missing), ['engramServer']);
+  assert.match(failuresOf(missing, 'engramServer')[0], /SessionStart/);
+  const elsewhere = await probe(fakeMachine(), 'other-port-log', { arms: ['current'] });
+  assert.deepEqual(failedControls(elsewhere), ['engramServer']);
+  const [failure] = failuresOf(elsewhere, 'engramServer');
+  assert.ok(failure.includes('7437') && failure.includes(String(elsewhere.arms[0].engram.port)), failure);
+});
+
+test('a session that is not in the trial\'s store fails the session control: the hook posted to a server that is not the trial\'s own', async () => {
+  const report = await probe(fakeMachine(), 'no-session-store', { arms: ['current'] });
+  assert.deepEqual(failedControls(report), ['engramSession']);
+  assert.match(failuresOf(report, 'engramSession')[0], /SessionStart/);
+});
+
+test('a session id that only the transcript name carries is read from it; one that nothing carries fails the controls that need it, saying so', async () => {
+  const named = await probe(fakeMachine(), 'result-without-session-id', { arms: ['current'] });
+  assert.deepEqual(named.failures, []);
+  assert.equal(named.arms[0].session.source, 'transcript');
+  const ok = await probe(fakeMachine(), 'ok', { arms: ['current'] });
+  assert.equal(ok.arms[0].session.source, 'result');
+
+  const unknown = await probe(fakeMachine(), 'unknown-session-id', { arms: ['current'] });
+  assert.equal(unknown.arms[0].session.source, null);
+  assert.deepEqual(failedControls(unknown), ['engramSession']);
+  assert.match(failuresOf(unknown, 'engramSession')[0], /session id .*unknown/i);
+});
+
+const sessionIdOf = (report, arm = 0) => /([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\.jsonl$/.exec(report.arms[arm].positiveControls.transcript.path)[1];
+
+test('a session row posted to the real engram server is a leak: the trial session id is a needle of the real engram store, though it holds neither the nonce nor the sandbox name', async () => {
+  const report = await probe(fakeMachine(), 'leak-session-engram', { arms: ['current'] });
+  const [current] = report.arms;
+  assert.equal(report.ok, false);
+  assert.deepEqual(current.leak.hits, [{ tree: '.engram', path: 'leak-session.db', found: ['session id'], via: 'content' }]);
+  assert.equal(current.realEngram.hits, 1);
+  const failure = report.failures.find((text) => /LEAK/.test(text) && text.includes('leak-session.db'));
+  assert.ok(failure, report.failures.join('\n'));
+  assert.ok(!failure.includes(sessionIdOf(report)), 'the path is named, not the id');
+});
+
+test('the session id is a needle of every real tree, and of the minimal arm too', async () => {
+  const report = await probe(fakeMachine(), 'leak-session-tree', { arms: ['minimal'] });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.arms[0].leak.hits, [{ tree: '.claude', path: 'leaked-session.txt', found: ['session id'], via: 'content' }]);
+  assert.ok(report.failures.some((failure) => /LEAK/.test(failure) && failure.includes('leaked-session.txt')), report.failures.join('\n'));
+});
+
+test('an unknown session id fails the controls that need it and nothing else: the minimal arm has none, so it still passes', async () => {
+  const report = await probe(fakeMachine(), 'unknown-session-id', { arms: ['minimal'] });
+  assert.equal(report.arms[0].session.source, null);
+  assert.deepEqual(report.arms[0].leak.hits, []);
+  assert.equal(report.ok, true, 'the minimal arm has no control that needs the id');
+});
+
+test('the probe never writes the session id before the scans of the real trees: progress output redirected into a scanned tree stays clean', async () => {
+  const machine = fakeMachine();
+  const progress = path.join(machine.tempDir, 'claude', 'progress.log');
+  const report = await probe(machine, 'ok', { log: (message) => fs.appendFileSync(progress, `${message}\n`) });
+  assert.deepEqual(report.failures, []);
+  assert.ok(fs.readFileSync(progress, 'utf8').length > 0, 'progress was written into %TEMP%/claude, which is a scanned tree');
+  for (const arm of [0, 1]) assert.ok(!fs.readFileSync(progress, 'utf8').includes(sessionIdOf(report, arm)));
+  assert.ok(!formatSummary(report).includes(sessionIdOf(report)), 'nor does the printed summary hold it');
+});
+
+test('the summary names the new controls, and the report holds no control for the prompt', async () => {
+  const report = await probe(fakeMachine(), 'ok', { arms: ['current'] });
+  const summary = formatSummary(report);
+  assert.match(summary, /positive controls: .*engramHook ok, engramServer ok, engramSession ok, engramMemSave ok/);
+  assert.match(summary, /prompt stored in the engram store: true/);
+  assert.ok(!/engramPrompt/.test(summary + JSON.stringify(report.arms[0].positiveControls)));
 });
