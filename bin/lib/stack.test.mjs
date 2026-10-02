@@ -104,6 +104,25 @@ test('gentle-ai upToDate fix is a two-step list, not one line joined by a separa
   assert.deepEqual(findTool('gentle-ai').fix({}).upToDate, ['gentle-ai upgrade', 'gentle-ai sync']);
 });
 
+test('gentle-ai upgrade fix goes through go install for the new module path when the latest crosses a major', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  assert.deepEqual(upToDateFix('3.7.0', '4.0.0'), [
+    'go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0',
+    'gentle-ai sync',
+  ]);
+  assert.deepEqual(upToDateFix('3.7.0', '5.2.1')[0], 'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.2.1');
+});
+
+test('gentle-ai upgrade fix is unchanged within a major and when a version is unknown or unparseable', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  const unchanged = ['gentle-ai upgrade', 'gentle-ai sync'];
+  assert.deepEqual(upToDateFix('4.0.0', '4.1.0'), unchanged);
+  assert.deepEqual(upToDateFix('3.7.0', null), unchanged);
+  assert.deepEqual(upToDateFix(null, '4.0.0'), unchanged);
+  assert.deepEqual(upToDateFix('3.7.0', 'not-a-version'), unchanged);
+  assert.deepEqual(upToDateFix('4.0.0', '3.9.0'), unchanged);
+});
+
 test('no fix command string carries a shell separator (`;` or `&&`), and codegraph installed stays one string', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {

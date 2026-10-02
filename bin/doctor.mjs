@@ -7,7 +7,7 @@
 // is the one exception with its own, stricter contract — see `hookMain` below.
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
+import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
@@ -155,7 +155,13 @@ export async function buildReport({ home, cwd, offline }, deps) {
 
   const localRows = probeStack({ home, project, spawn, platform });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
-  return localRows.map((row) => ({ ...row, upToDate: computeUpToDate(row, latestVersions[row.id]) }));
+  return localRows.map((row) => {
+    const latest = latestVersions[row.id];
+    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
+    const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
+    return { ...row, upToDate: computeUpToDate(row, latest), fix };
+  });
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {

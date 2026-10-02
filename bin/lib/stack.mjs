@@ -237,6 +237,8 @@ function codexLoginState({ home, env: userEnv = process.env, homedir = os.homedi
   return { codex: 'missing', codexCli: cli.state === 'missing' ? 'missing' : 'ok' };
 }
 
+const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
+
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
@@ -267,11 +269,21 @@ export const tools = [
       return Object.keys(staleHooks).length > 0 ? { ...cells, staleHooks } : cells;
     },
     project: () => 'n/a',
+    // `gentle-ai upgrade` cannot cross a Go major (v4 lives at a new module path, so from 3.7.0 it
+    // upgraded engram and left gentle-ai behind): then the fix is `go install` for that path. It
+    // needs the latest version, which is only known once `doctor` has resolved it, so `doctor`
+    // applies it on top of `fix.upToDate`. Unknown or unparseable versions keep `fix.upToDate`.
+    upToDateFix: (installed, latest) => {
+      const [from, to] = [installed, latest].map((v) => SEMVER_RE.exec(v ?? '')?.[1].split('.')[0]);
+      if (!from || !to || Number(to) <= Number(from)) return GENTLE_AI_UPGRADE_FIX;
+      const module = `github.com/gentleman-programming/gentle-ai/v${to}/cmd/gentle-ai`;
+      return [`go install ${module}@v${latest}`, 'gentle-ai sync'];
+    },
     fix: (_deps, configured) => ({
       installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
       claude: configured?.staleHooks?.claude ?? 'gentle-ai install',
       codex: configured?.staleHooks?.codex ?? 'gentle-ai install',
-      upToDate: ['gentle-ai upgrade', 'gentle-ai sync'],
+      upToDate: GENTLE_AI_UPGRADE_FIX,
     }),
   },
   {

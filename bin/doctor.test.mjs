@@ -816,13 +816,36 @@ test('doctorMain marks a tool ok when its installed version is at least the fetc
   }
 });
 
-test('doctorMain marks a tool outdated and lists its fix when the fetched latest is newer', async () => {
+test('doctorMain gives gentle-ai a go install fix when the latest release crosses a major', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
     const fetchImpl = async (url) =>
       url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.0.0' }) } : { ok: false };
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
+
+    assert.equal(code, 0);
+    assert.match(output, /gentle-ai\s.*outdated/);
+    assert.match(
+      output,
+      /Fix:\n(.*\n)*  gentle-ai \(upToDate\):\n    go install github\.com\/gentleman-programming\/gentle-ai\/v4\/cmd\/gentle-ai@v4\.0\.0\n    gentle-ai sync\n/,
+    );
+    assert.doesNotMatch(output, /gentle-ai \(upToDate\):\n    gentle-ai upgrade/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain marks a tool outdated and lists its fix when the fetched latest is newer', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.0.0' } });
+    const fetchImpl = async (url) =>
+      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.1.0' }) } : { ok: false };
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
 

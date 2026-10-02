@@ -99,7 +99,7 @@ Forecast: ~250–350 authored lines (three small `bin/lib` changes with tests, d
 - [x] T3 `doctor` reports a dead hook: a host hook that runs `gentle-ai <command>` where
   `gentle-ai help` lists no such command makes that host's gentle-ai cell `stale`, with the hook
   and its file in the fix (route: delegated writer)
-- [ ] T4 `doctor`'s gentle-ai upgrade fix crosses a major: when the latest release's major is
+- [x] T4 `doctor`'s gentle-ai upgrade fix crosses a major: when the latest release's major is
   above the installed one, the fix is the `go install` line for the new module path followed by
   `gentle-ai sync`, since `gentle-ai upgrade` cannot get there (route: delegated writer)
 - [ ] T5 The payload rows list the context hooks of enabled Claude plugins, read from each
@@ -148,6 +148,13 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   `sdd-preflight-hook` hook, `PreToolUse` and `~/.claude/settings.json`; against the real home,
   now clean, `ok ok`. Known limit: a hook whose text merely mentions `gentle-ai <word>` (an
   `echo`) would be reported; none exists here.
+- 2026-10-01: T4 done (delegated writer; RED: `upToDateFix is not a function` twice and the
+  doctor test printing `gentle-ai upgrade` where the `go install` line was expected; GREEN:
+  `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs` 130/130). The fix depends on the
+  latest version, which `doctor` resolves after the local probe builds `fix`, so the tool carries
+  an `upToDateFix(installed, latest)` and `buildReport` lays it over `fix.upToDate`. The existing
+  "3.7.0 to 4.0.0" doctor test asserted the fix that could never work; it now expects the
+  `go install` line.
 
 ## Next step
-T4–T5 with the writer, then T6.
+T5 with the writer, then the review findings (T3r) and T6.
