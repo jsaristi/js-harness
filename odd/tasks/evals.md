@@ -229,6 +229,9 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   control cannot pass there. Controls that hold on every path of the hooks replace it, and
   what the hooks do post joins the leak needles (route: delegated writer; the probe, its test
   and its fixtures)
+- [x] T4kg A reused pid held by a process this user cannot read is "gone", not "running": the
+  kill settles that case through CIM instead of failing the caller (found by the gate, a real
+  reuse) (route: inline, two small understood edits)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -897,6 +900,24 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   on this machine the engram hooks store neither the prompt nor the subagent stop. The probe ran
   as `claude-opus-5-5`, effort medium, permission mode `bypassPermissions`. No spend (loopback
   fake API). The sandbox kept for the diagnosis and the work root were removed.
+- 2026-10-02: T4ap committed as `e54ff9f`. `24774db..e54ff9f` (T4srr, the docs commit and T4ap,
+  437 lines) reviewed by gentle-ai (lineage `review-286adcc0baffe81a`, medium, reliability lens,
+  approved and acknowledged) with two suggestions, both about untested fallbacks, now
+  Follow-ups. `f99f859..e54ff9f` reviewed by Codex (recorded): no actionable finding, a static
+  read.
+- 2026-10-02: the gate of the docs commit that recorded those reviews went red once:
+  `evals/runner.test.mjs`'s teardown threw `still running after the kill: pid 7980`. Pid 7980
+  was by then a `SearchFilterHost.exe` of SYSTEM created at 13:59:19, during the gate: a real
+  pid reuse. The identity check did its job, the unrelated process was not killed. The defect
+  was the report: `KILL_SCRIPT` read the start time through a handle, which PowerShell returns
+  as null for another user's process, the comparison threw, and the outcome stayed `R`
+  (running), so `killTree`, `killSurvivors` and the test reaper threw on a process that was
+  never theirs. T4kg, inline: when the handle cannot be read, CIM (which reads any process's
+  creation date) decides: no row or a different creation time is `G`, the same one or none
+  stays `R`, and no kill is tried either way. RED: `killProcesses` on a `spoolsv.exe`-class
+  process with a creation time an hour off answered `running: [1092]`. GREEN: `node --test
+  bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
+  `feat/stack-v4` do not have T4k at all.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1034,6 +1055,10 @@ Decided 2026-10-01, before the first candidate was written:
 - The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
   only for engram 0.1.5; another format fails the control with its hint, it does not pass
   silently. The engram controls are unverified on POSIX (T4ap).
+- Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
+  accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
+  fails then, on `engramSession`), and `engramServer`'s second log location,
+  `engram-serve.err.log` in the temp directory, is never written by the fake agent.
 - `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
   pid file appears; the `since` filter bounds the risk to a process started during that test
   (gentle-ai suggestion on T4kt).
@@ -1094,5 +1119,5 @@ Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s)
 evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
 --permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
 `evals/runs/headroom/`.
-Reviewed boundary: gentle-ai `24774db` (`f99f859`, 31 lines, is under budget and pending in the
-slice); Codex `f99f859`.
+Reviewed boundary: gentle-ai `e54ff9f` (T4kg's commit is small and stays pending in the slice
+unless its assessment says otherwise); Codex reviews T4kg's commit on its own.

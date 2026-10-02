@@ -129,7 +129,9 @@ try {
 // meantime is never the one that dies. No tree, no `taskkill`: every process to kill was selected by Node.
 // The targets come from the environment (`pid@createdMs` per line), never from the script text. One line per
 // target is printed: K killed (and exited), G gone (already exited, or not the process the snapshot saw),
-// R still running after five seconds.
+// R still running after five seconds. A handle cannot read the start time of another user's process (a reused
+// pid can land on one: it did on 2026-10-02, on a SearchFilterHost.exe of SYSTEM). CIM can, so it settles
+// that case: a different creation time is G, the same one, or none, stays R, and no kill is tried.
 const KILL_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
@@ -151,7 +153,18 @@ try {
         if ($proc.WaitForExit(5000)) { $outcome = 'K' }
       }
     } catch {
-      if ($null -eq $proc) { $outcome = 'G' }
+      if ($null -eq $proc) {
+        $outcome = 'G'
+      } else {
+        try {
+          $row = Get-CimInstance Win32_Process -Filter "ProcessId=$id"
+          if ($null -eq $row) {
+            $outcome = 'G'
+          } elseif ($row.CreationDate -and [Math]::Abs(([DateTimeOffset]$row.CreationDate.ToUniversalTime()).ToUnixTimeMilliseconds() - $created) -gt 2) {
+            $outcome = 'G'
+          }
+        } catch { }
+      }
     } finally {
       if ($proc) { $proc.Dispose() }
     }
@@ -193,7 +206,7 @@ export function takeSnapshot({ spawnSync: sync = spawnChildSync } = {}) {
 /** Kills each of `targets` (`[{ pid, createdAt }]`) on its own, after checking that the process with that pid
  * still started at `createdAt`. Resolves to `{ killed, gone, running }` (pids): `gone` are targets that had
  * already exited or are not the process that was seen, which is what was wanted; `running` are targets still
- * alive five seconds after the kill. Throws when the command could not run, and on a target that is not a pid
+ * alive five seconds after the kill, or that could not be read and that CIM does not show to be another process. Throws when the command could not run, and on a target that is not a pid
  * above 4 with a creation time, before anything is started. */
 export function killProcesses(targets, { spawnSync: sync = spawnChildSync } = {}) {
   for (const target of targets) {

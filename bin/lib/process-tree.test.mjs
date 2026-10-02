@@ -501,3 +501,17 @@ test('real: a kill whose recorded creation time is wrong leaves the process alon
   assert.deepEqual(killProcesses([{ pid: child.pid, createdAt: mine.createdAt }]).killed, [child.pid]);
   assert.ok(await waitUntil(() => !isAlive(child.pid)));
 });
+
+// What a reused pid looked like on 2026-10-02: a test's child had exited and Windows had given its pid to a
+// SearchFilterHost.exe of SYSTEM, whose start time this user cannot read through a handle. The kill left it
+// alone and still called it "running", which failed the teardown. The targets here are processes of another
+// user that are not critical to the session; the recorded creation time is an hour off, so no kill is tried.
+const UNREADABLE = ['spoolsv.exe', 'searchindexer.exe', 'fontdrvhost.exe', 'wudfhost.exe'];
+
+test('real: a pid now held by a process this user cannot read is "gone" when its creation time is not the one seen', { skip: WINDOWS_ONLY }, (t) => {
+  const other = takeSnapshot().find((entry) => UNREADABLE.includes(entry.name.toLowerCase()) && entry.createdAt !== null);
+  if (!other) return t.skip('no process of another user to aim at');
+  const result = killProcesses([{ pid: other.pid, createdAt: other.createdAt - 60 * 60 * 1000 }]);
+  assert.deepEqual(result, { killed: [], gone: [other.pid], running: [] }, 'another process holds the pid: the one seen is gone');
+  assert.ok(takeSnapshot().some((entry) => entry.pid === other.pid && entry.createdAt === other.createdAt), 'it was not touched');
+});
