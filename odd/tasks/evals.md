@@ -917,7 +917,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   stays `R`, and no kill is tried either way. RED: `killProcesses` on a `spoolsv.exe`-class
   process with a creation time an hour off answered `running: [1092]`. GREEN: `node --test
   bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
-  `feat/stack-v4` do not have T4k at all.
+  `feat/stack-v4` do not have T4k at all. Commit `09d7a90`; gentle-ai assessed it medium,
+  under budget; Codex reviewed `e54ff9f..09d7a90` (recorded): no actionable finding.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1055,6 +1056,10 @@ Decided 2026-10-01, before the first candidate was written:
 - The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
   only for engram 0.1.5; another format fails the control with its hint, it does not pass
   silently. The engram controls are unverified on POSIX (T4ap).
+- A flake in the gate, seen once (2026-10-02, a docs-only commit): `evals/task-proof.test.mjs:304`
+  ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
+  visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
+  parallel run. It passed on the gate runs before and after. Not diagnosed.
 - Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
   accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
   fails then, on `engramSession`), and `engramServer`'s second log location,
@@ -1119,5 +1124,5 @@ Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s)
 evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
 --permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
 `evals/runs/headroom/`.
-Reviewed boundary: gentle-ai `e54ff9f` (T4kg's commit is small and stays pending in the slice
-unless its assessment says otherwise); Codex reviews T4kg's commit on its own.
+Reviewed boundary: gentle-ai `e54ff9f` (`09d7a90`, T4kg, 62 lines, is under budget and pending
+in the slice); Codex `09d7a90`.
