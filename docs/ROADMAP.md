@@ -184,7 +184,9 @@ work) these tasks do not measure.
 
 ## Next
 
-1. Deliver F5: `feat/evals` as reviewed PR slices to `main`, Sebastián's call.
+1. Deliver F5: three PR slices to `main`, merged in order (`odd/tasks/evals.md`, Delivery).
+   The first, `jsaristi/js-harness#21`, is open; the fix for the unsafe process-tree kill
+   reaches `main` with the second; `feat/stack-v4` follows as its own PR.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 4 (the codegraph hook)
