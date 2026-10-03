@@ -1,0 +1,14 @@
+{
+  "name": "cellar",
+  "version": "0.3.0",
+  "description": "A file-backed key-value store with a job queue on top",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

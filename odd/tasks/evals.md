@@ -74,7 +74,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   found no cut under 400 (single work-unit commits are 1,124 and 2,725 lines), and Sebastián
   accepted one PR with a size exception (2026-10-01). No `size:exception` label exists in the
   repo, so the exception and the three reading ranges are in the PR body. The repo has no CI
-  checks; the gate is the pre-push `check --push`, which passed.
+  checks; the gate is the pre-push `check --push`, which passed. Merged on Sebastián's go-ahead
+  (2026-10-01) as merge commit `5ab2ae6`; `feat/evals` carries on for slices 2 and 3.
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -129,9 +130,61 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
   scanned (Codex); the sandbox env test asserts the effective child env (Codex); the `hang`
   fixture really hangs (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
-  proven by a reference solution that scores 1 and the untouched fixture that scores below it
+- [x] T3a Task proof: `evals/task-proof.mjs` grades a candidate's untouched fixture, its fixture
+  plus reference overlay and an empty workspace with the runner's own grader, and lists every
+  way the candidate fails the rules of "T3 design"; `evals/tasks.test.mjs` runs it over
+  `evals/tasks/*` (route: delegated writer, strict TDD; trigger: module, its tests and the suite
+  are three non-trivial files)
+- [x] T3r T3a review findings: `.gitattributes` uses `text=auto eol=lf`, so a binary fixture
+  keeps its bytes (gentle-ai, Codex); the visible suite runs in its own copies, so its side
+  effects never reach a graded workspace (Codex); test discovery matches Node 24's real patterns,
+  `.ts`/`.mts`/`.cts` included and non-script files excluded (Codex); the malformed-proof test
+  caps its concurrency (gentle-ai suggestion) (route: delegated writer, strict TDD)
+- [x] T3rr T3r review findings: a workspace preparation that throws settles like a failed run, so
+  cleanup waits for every grader already started (gentle-ai WARNING, Codex); the discovery
+  comparison follows the child Node's type-stripping support (`process.features.typescript` or an
+  inherited `--no-experimental-strip-types`), while `isDiscovered` stays conservative (gentle-ai
+  WARNING, Codex); a `Test` directory counts like its file names do, with a case in the matrix, and
+  the `.gitattributes` test skips with a reason when `git` cannot be spawned (gentle-ai
+  suggestions) (route: delegated writer, strict TDD)
+- [x] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
+  in a dozen places; the prompt names the drift, not the places (route: delegated writer)
+- [x] T3br T3b review findings: the grader runs the workspace's visible suite as one hidden test
+  (Codex); a parcel with valid weight and bad dimensions before a parcel with a bad weight throws
+  `INVALID_WEIGHT`, as SPEC §2.2 orders the rules, in the reference and in a new hidden test
+  (Codex); the §7.3 tie (equal volume and promo discounts give `source: 'promo'`) gets a hidden
+  test (gentle-ai suggestion) (route: delegated writer)
+- [x] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
+  the prompt never mentions, decide most of the hidden tests (route: delegated writer)
+- [x] T3cr T3c review findings: the fixture's own code follows its `CONTRIBUTING.md`, because the
+  task rewards imitating it: ids never reused after a deletion (a high-water mark) and `list`
+  sorted by id (Codex); the reference's export filters by age only when `--since` is given, so a
+  task with a bad `created` is not silently dropped (gentle-ai suggestion); the registry guard test
+  names its command list once (gentle-ai suggestion); the README's Node requirement matches the
+  glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
+- [x] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
+  locked versions, peers and deterministic output (route: delegated writer)
+- [x] T3dr T3cr and T3d review findings: `docs/RESOLUTION.md` §1 defines the package-name domain
+  (npm-style lowercase names, so `__proto__` is not a package) and the reference builds its result
+  without prototype-sensitive assignment; no hidden test for `__proto__`, because it would measure
+  JavaScript trivia rather than the spec (Codex, adapted); the `house-rules` visible test helper
+  `stored()` reads both store shapes like the grader does (gentle-ai suggestion) (route: delegated
+  writer)
+- [x] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
+  interleaved writers and failing disks, from a symptom report (route: delegated writer)
+- [x] T3er T3e review findings: the `lost-updates` reference keeps keys as own properties
+  (`__proto__`, `constructor` and the like store and read like any key) and `DESIGN.md` says a
+  key is any string, with no hidden test of the quirk (Codex, adapted); the G7 child scenario
+  parses adapter data through the guarded helper the grader already has (gentle-ai suggestion)
   (route: delegated writer)
+- [x] T3f Candidate `format-v2`
+- [x] T3fr T3f review findings: v1 prices in exponent form migrate (a hidden test, since v1 files
+  must keep working) (Codex); the proposal defines "the decimal as written" as the shortest
+  round-trip decimal of a JSON number and the field text of a CSV price, and the reference's v1
+  CSV import reads the text (Codex, adapted; gentle-ai); the reference normalizes v2 CSV tags,
+  treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
+  suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
+  report, import/export and CLI, with old files still loading (route: delegated writer)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -346,6 +399,238 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `review-0808ae7f1fdc8d62`, lens reliability): approved and acknowledged, authority burned; one
   WARNING and two suggestions, all under Follow-ups. Codex (recorded): no actionable regressions.
   Reviewed boundary: `db0253b`. T1–T2 (slice 1 of the delivery plan) is complete.
+- 2026-10-01: slice 2 opened; T3 split into T3a–T3f with the rules in "T3 design" (`05692b0`).
+- 2026-10-01: T3a done (delegated writer), commit `bd3f5e4`: `evals/task-proof.mjs`
+  (`applyReference`, `proveTask`), `evals/task-proof.test.mjs` (29 tests), `evals/tasks.test.mjs`,
+  `.gitattributes` `evals/tasks/**` LF. RED observed for 28 of 29 tests against a stub returning
+  no problems; the near-miss names test was proven by mutation; ten mutations, all killed.
+  Evidence: `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 30/30 (rerun by the
+  parent); `node --test "evals/**/*.test.mjs"` 303 pass, 1 skipped; `npm run check` exits 0. A
+  proof costs ~3.3 s (five child processes, each with the Windows survivor sweep). Assessed
+  medium, `slice_budget_reached` over `db0253b..bd3f5e4`. gentle-ai (lineage
+  `review-25c5e88054fe58a2`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING (`text` forces conversion on binary fixtures) and one suggestion (six proofs at once can
+  time out on a slow host). Codex (recorded, from a detached worktree): three P2, the binary one
+  again, visible-suite side effects reaching the graded workspace, and discovery patterns that
+  are not Node 24's. All became T3r. Reviewed boundary: `bd3f5e4`.
+- 2026-10-01: T3b done (delegated writer), commit `ace4044`: `evals/tasks/spec-drift/`, a
+  shipping-quote library (`parcel-quote`) with 16 seeded deviations from its 170-line
+  `docs/SPEC.md`, spread over weight, zones, rates, surcharges, discounts, quote and parse; two
+  visible tests and one README line encode a drift. 48 hidden tests (36 on deviations, 12 guards
+  including hashes of the spec and the data and the export list), each citing its clause. Proof:
+  fixture 12/48, fixture plus reference 48/48, empty 0/48; grader ~0.6 s. Isolation matrix (each
+  fix alone, and each leave-one-out): every fix turns exactly its own 2–3 tests green, no test
+  needs two fixes. The writer's first draft left an unused `INSURANCE_MINIMUM_CENTS` next to a
+  deviation, which the TypeScript language server flagged; since the current arm runs that LSP, it
+  would have handed that arm the answer, so the rule "no unused declaration in a fixture" was added
+  to the writer brief and checked with `tsc --checkJs --noUnusedLocals --noUnusedParameters`.
+  1,535 lines, one unit. Assessed medium, `slice_budget_reached`: review due on
+  `bd3f5e4..ace4044`.
+- 2026-10-01: T3b reviewed over `bd3f5e4..ace4044`. gentle-ai (lineage
+  `review-99acc9fa317393d5`, lens reliability): approved and acknowledged, authority burned; one
+  suggestion (the §7.3 tie is untested). Codex (recorded): two P2, reproduced read-only: the
+  reference's source files alone score 48/48 while two visible tests stay red, so an agent could
+  score full marks with `npm test` failing; and the reference checks one parcel's dimensions
+  before a later parcel's weight, against the order SPEC §2.2 gives. All three became T3br; the
+  first became a rule for every candidate (T3 design). The gentle-ai lifecycle now runs through a
+  scratch driver that executes only the commands and tokens each envelope returns. Reviewed
+  boundary: `ace4044`.
+- 2026-10-01: T3r done (delegated writer). `.gitattributes` `evals/tasks/** text=auto eol=lf`,
+  proven in a temp repo with `core.autocrlf=true` that reads the real line: a file with a NUL and
+  CR LF pairs keeps its bytes, a CRLF text file is stored with LF (RED on the old line). The
+  visible suites run in two copies of their own, so five workspaces per proof (RED: a visible spec
+  that rewrote the module gave "the untouched fixture scores 1"). `isDiscovered` (exported) now
+  matches what Node 24.15.0 ran with no arguments, observed in a temp dir and kept as a test that
+  diffs the two: `*.test.X`, `*-test.X`, `*_test.X`, `test-*.X`, `test.X` and any X under a
+  directory named `test`, X one of cjs/mjs/js/cts/mts/ts, file names case-insensitive; not `.jsx`,
+  `.json`, `.txt`, `a.spec.X` or `tests/`. The malformed-proof test runs its six proofs in turn
+  (no RED possible for a concurrency cap). Evidence: `node --test evals/task-proof.test.mjs
+  evals/tasks.test.mjs` 34/34; `npm run check` exits 0. +124/-32. Commit `9d02179`, assessed
+  medium, `under_budget`.
+- 2026-10-01: T3r reviewed on its own over `ace4044..9d02179`, because the Stop hook offered the
+  whole branch from `5ab2ae6` and this commit was the only part of it not yet covered; reviewing
+  it alone keeps the candidate a work unit. gentle-ai (lineage `review-1178e582ded658a6`, lens
+  reliability): approved and acknowledged, authority burned; two WARNINGs and two suggestions.
+  Codex (recorded): two P2, the same two defects as the WARNINGs, found independently: preparing a
+  workspace now runs synchronously while the `Promise.allSettled` array is built, so a throw
+  there skips the wait and `finally` deletes workspaces under graders still running; and the
+  discovery comparison always expects `.ts` files, which a Node without type stripping (or
+  `NODE_OPTIONS=--no-experimental-strip-types`, which `childEnv()` keeps) does not run, turning
+  the check gate red. All four became T3rr. Reviewed boundary: `9d02179`.
+- 2026-10-01: T3br done (delegated writer): `spec-drift` gains the own-suite hidden test, a
+  validation-order test (SPEC §2.2 "checks the rules below in this order": every weight before any
+  dimensions; the reference's `parse.mjs` now validates in that order) and the §7.3 tie test
+  (5 parcels, `FLAT5`, base 10000: both discounts 500, `source: 'promo'`). Proof 48/12 → 51/13:
+  fixture 13/51, fixture plus reference 51/51, the reference's `src/` alone 50/51 (the own-suite
+  test fails on the two drifted visible tests, which is the finding). Each new test fails on the
+  fixture through one deviation only. Grader 1.3–2.4 s. Commit `483dbec`.
+- 2026-10-01: T3c done (same writer), `evals/tasks/house-rules/`: the `tk` task-tracker CLI
+  (23 files, 700 lines) gains `tk export`; the prompt never mentions `CONTRIBUTING.md`, which the
+  README points at and whose eight rules (command shape, `parseFlags` with `choices`, output only
+  through `ctx.io`, time only through `ctx.clock`, atomic writes with `--force`, error format and
+  exit codes, RFC 4180 CSV with CRLF and fixed columns, docs/completions/changelog) decide most
+  of the 44 hidden tests. Proof: fixture 9/44, fixture plus reference 44/44, empty 0/44; grader
+  ~1.7 s, proof ~5.2 s. 18 one-line rule violations of the reference each fail their own tests. A
+  rule-blind export (`console.log`, `Date.now()`, `fs.writeFileSync`, LF CSV, no docs) scores
+  13/44; the reference without docs 41/44. No language-server diagnostic (TypeScript API with
+  suggestion diagnostics, on fixture and fixture plus reference; the fixture's `run` methods became
+  `async` to clear an "await has no effect" hint). `ctx.io.out(text)` writes text as given rather
+  than one call per line, so CSV can reach stdout with CRLF. Risk, named by the writer: an agent
+  that reads `CONTRIBUTING.md` and imitates the existing commands may score near 1; T4 decides.
+  Commit `11b451e`, assessed high (`high_risk`): review due on `9d02179..11b451e` (T3br and T3c).
+- 2026-10-01: T3br and T3c reviewed over `9d02179..11b451e`. gentle-ai (lineage
+  `review-61f213a662057f45`, four lenses: risk, resilience, readability, reliability): approved and
+  acknowledged, authority burned; three suggestions. Codex (recorded): two P2, reproduced
+  read-only: the fixture's `add` reuses the id of a deleted last task, and `list` keeps the store's
+  order, both against the fixture's own `CONTRIBUTING.md`. All five became T3cr. Reviewed
+  boundary: `11b451e`.
+- 2026-10-01: T3rr done (delegated writer). Each run's preparation is now inside its own async run,
+  so a throw is a rejection `allSettled` waits for; `proveTask` still rejects with it, after every
+  started grader has finished and the workspaces are gone (RED: a reference file named like a
+  fixture directory, a slow grader marking start and finish outside the workspace: "0 !== 1", and
+  the orphaned grader had kept the scratch directory locked). The live discovery comparison asks
+  the child Node for `process.features.typescript` and compares only the extensions it runs; RED
+  under `NODE_OPTIONS=--no-experimental-strip-types`. `isDiscovered` matches the `test` directory
+  case-insensitively, conservatively: Node 24 on Windows did not run `Test/x.mjs` (it compares the
+  on-disk case) but did run `A.TEST.MJS`; RED `Test/x.mjs: false !== true`. The `.gitattributes`
+  test skips when `git` cannot spawn (proven by mutation with `git` off `PATH`). Evidence:
+  `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 36/36; the same with
+  `NODE_OPTIONS=--no-experimental-strip-types` 34/34; `npm run check` exits 0. +66/-11. Commit
+  `d329c33`, assessed medium, `under_budget`.
+- 2026-10-01: T3rr reviewed on its own over `11b451e..d329c33` (the Stop hook again offered the
+  branch from `5ab2ae6`, of which this was the only unreviewed commit). gentle-ai (lineage
+  `review-465f838939cc25f9`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING. Codex (recorded): one P2, the same defect, checked with Node's bundled matcher: Linux's
+  default discovery is case-sensitive, so the four mixed-case names T3rr added to the live
+  comparison do not run there while `isDiscovered` flags them, and the check gate would go red.
+  Fixed inline (one test, one file): the exact comparison leaves those names out, and for them
+  only "what Node ran is flagged" is asserted. Passes on Windows; the Linux RED could not be
+  observed here (no WSL distribution), so the fix rests on both reviewers' reading of Node's
+  matcher. Reviewed boundary: `d329c33`. Commit `ebe848a`; its first pre-commit run failed once
+  on a test that did not fail again (the log was not kept), and the rerun and a direct `check`
+  passed: a flaky test somewhere in the suite, unidentified, now logged on every commit.
+- 2026-10-01: T3cr done (delegated writer). The `house-rules` store file is `{ nextId, tasks }`
+  (an older bare array is read and its `nextId` derived once), so ids are never reused; `list`
+  sorts by id; `CONTRIBUTING.md` documents both; the reference's export filters by age only with
+  `--since`; the grader names its command list once; README and `engines` say Node 22+. Two new
+  hidden guards (id never reused, list order on a store written out of order) and one test of
+  export over the new store shape. Proof 44/9 → 47/11, fixture plus reference 47/47; no
+  language-server diagnostic. Fixture 755 lines. Commit `d54c52e`.
+- 2026-10-01: T3d done (same writer), `evals/tasks/resolver/`: a tiny package manager (fixture 634
+  lines, 14 files) whose `resolve()` is a plausible greedy breadth-first pass; the prompt asks for
+  the full algorithm of `docs/RESOLUTION.md` (143 lines, ten sections: flat model, constraints,
+  candidates, depth-first search in name order, the candidate check, peers, lock, errors, result,
+  examples). Rules the brief left open were settled in the spec: an optional name gets "absent" as
+  a last alternative, every constraint kind restricts, `ENOVERSION` counts a locked yanked
+  version, `ECONFLICT.package` is the last dead end and is asserted only where every dead end is
+  on one name. Proof: fixture 15/45, fixture plus reference 45/45, empty 0/45; grader ~2 s. A
+  second implementation (explicit stack, written from the spec before the reference) scored 45/45
+  first time; 34 mutants of the reference, one per rule, all killed but the deliberately unasserted
+  first-versus-last dead end. No language-server diagnostic. Limit: the second implementation
+  shares its author with the reference. Commit `94626b8`, assessed medium,
+  `slice_budget_reached`: review due on `d329c33..94626b8` (`ebe848a`, T3cr and T3d).
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-bab25395b701a969`, lens
+  reliability): approved and acknowledged, authority burned; one suggestion (the `house-rules`
+  visible helper `stored()` returns `undefined` on a legacy bare-array store, while the grader
+  reads both). Codex (recorded): one P2, verified against the reference: a package named
+  `__proto__` sets the prototype of the result's `packages` instead of adding an entry, so it
+  vanishes from the result and the lockfile. Both became T3dr, the second adapted: the spec will
+  define the name domain rather than the grader test a JavaScript quirk. Reviewed boundary:
+  `94626b8`.
+- 2026-10-01: T3e done (delegated writer), `evals/tasks/lost-updates/`: `cellar`, a file-backed
+  key-value store with a job queue (fixture 613 lines, 14 files) that is correct one call at a time
+  and breaks its own `docs/DESIGN.md` (G1–G7 store guarantees, Q1–Q3 queue guarantees) under
+  interleaved calls and a failing disk; the prompt is a symptom report. The grader drives the store
+  through a deterministic fake adapter that holds, reorders or fails each operation, and checks
+  unhandled rejections in a child process. Proof: fixture 13/43, fixture plus reference 43/43,
+  empty 0/43; grader 1.3–1.7 s; five runs identical on every workspace graded. A plausible partial
+  fix (one mutex around the store, nothing else) scores 20/43; the reference store with the
+  fixture's queue 36/43; an independent correct implementation in another style 43/43. DESIGN was
+  made explicit where the tests needed it: copies out of `get`/`update`, one write per mutation,
+  `clock() - t > visibilityMs` as expiry, the four `ESTALE` cases. No language-server diagnostic.
+  1,697 lines.
+- 2026-10-01: the flaky test found: its first commit attempt failed the discovery comparison
+  again, with `a_test.ts` missing from the names read back out of `node --test`'s TAP output while
+  the full suite ran (1,173 tests, 5.8 min); alone it passed. Each discovered file now writes a
+  marker into a directory of its own and the comparison reads the markers; a mismatch prints the
+  run's output. Six concurrent runs passed. Commit `21b69c7`. T3e committed as `08da909`,
+  assessed medium, `slice_budget_reached`: review due on `94626b8..08da909`.
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-5f2864a38403d9b7`, lens
+  reliability): approved and acknowledged, authority burned; one WARNING and one suggestion.
+  Codex (recorded): two P2. Both reviewers: the markers used `process.getBuiltinModule`, which
+  Node 22.0–22.2 lacks while `engines` allows them; fixed inline with a dynamic
+  `import('node:fs')`, which works in CommonJS and ESM files alike (the comparison passes).
+  Codex, reproduced with the fake adapter: the `lost-updates` reference stores `__proto__` as a
+  prototype change and `get('constructor')` returns an inherited function. gentle-ai: the G7 child
+  scenario parses adapter data unguarded, so a candidate renaming an unwritten path would crash it
+  for a reason unrelated to G7. Both became T3er; as with `resolver`, the reference is fixed and
+  `DESIGN.md` says keys are any string, without a hidden test of the JavaScript quirk. Reviewed
+  boundary: `08da909`.
+- 2026-10-01: T3dr and T3er done (delegated writer), committed with the marker fix as one
+  review-fix commit. `resolver`: `RESOLUTION.md` §1 item 7 defines the name domain (npm-style,
+  lowercase, at most 214 characters, not starting with `.` or `_`), the reference builds
+  `packages` with `Object.fromEntries`, the grader's spec hash updated; proof unchanged 15/45.
+  `house-rules`: `stored()` reads both store shapes; proof unchanged 11/47. `lost-updates`: the
+  reference keeps its state in a `Map` (`__proto__` persists as a key, `get('constructor')` is
+  `undefined`, checked by script), `DESIGN.md` says a key is any string, the guarded parse is a
+  shared `grader/json.mjs` used by the G7 scenarios; proof unchanged 13/43, five identical runs.
+  No language-server diagnostic anywhere. Rule added to the writer brief: a reference never
+  indexes a plain object with a user-supplied string. Commit `25b696c`.
+- 2026-10-01: T3f done (same writer), `evals/tasks/format-v2/`: an inventory tool (fixture 719
+  lines, 16 files) with an accepted proposal `docs/proposals/format-v2.md` (structured prices in
+  minor units per currency, split locations, tag arrays, per-currency valuation, v2 CSV that still
+  imports v1, new CLI flags) and a standing format policy in `docs/DATA.md` (migrate in memory,
+  write the newest, keep unknown fields, back up once before the first rewrite, refuse a newer
+  version with `EVERSION`, read-only commands never write). The prompt says only: implement v2,
+  keep v1 files working, follow the policy. 46 hidden tests across every module and the CLI.
+  Proof: fixture 12/46 (exactly the guards), fixture plus reference 46/46, empty 0/46; grader
+  ~1.1 s. A narrow implementation (three fields and `valuation` only) scores 15/46, because CSV
+  and CLI break on object prices; the full reference without the policy rules scores 36/46 (0.78).
+  The proposal pins what the tests needed: `validateItem` field names, the `byWarehouse` shape,
+  `list` output, a v1 price read as the decimal written (`1.005 EUR` → 101), v1 CSV rows priced in
+  EUR. Not derivable from a document: `importCsv` returning the new state, which the fixture's own
+  docstring says. No language-server diagnostic; the reference uses `Map`/`Object.fromEntries`.
+  Commit `465a06a`, assessed medium, `slice_budget_reached`.
+- 2026-10-01: `08da909..465a06a` reviewed as two candidates to stay inside the reviewers'
+  context. gentle-ai over `08da909..` (lineage `review-d0c89b289dc34f5b`; `--committed-only`
+  reviews up to HEAD, so it covered `format-v2` too) and over `25b696c..465a06a` (lineage
+  `review-c06051121fb4ae64`): both approved and acknowledged, authority burned; four suggestions,
+  all on the `format-v2` reference (v2 CSV tags not normalized, a malformed v2 item crashes with a
+  TypeError, the v1 CSV price goes through `Number()`, a missing `bin` prints `undefined`). Codex:
+  nothing actionable over `08da909..25b696c`; two P2 over `25b696c..465a06a`, reproduced in
+  memory: a valid v1 price like `0.0000001` (`1e-7` as a string) fails migration with `EFORMAT`,
+  and "the decimal as written" cannot hold for JSON digits beyond a double. All became T3fr: the
+  first gets a hidden test (v1 files must keep working), the second a precise definition in the
+  proposal instead of a test. Reviewed boundary: `465a06a`.
+- 2026-10-01: T3fr done (delegated writer, one parent edit). The reference's `toMinor` reads a
+  decimal's digits and shifts the point by its exponent, with no float (exponent capped at three
+  digits); a new hidden test migrates v1 prices written `0.0000001` and `5e-7` to 0 and runs `list`
+  and `move` on such a file (RED: 46/47 on the old reference). The writer's test also expected
+  `1e21` to migrate to `1e23`; the parent removed that case, because the proposal says nothing
+  about amounts beyond the safe-integer range and an implementation rejecting them would be as
+  correct. The proposal now defines a JSON price's decimal as the shortest round-trip form
+  (exponent included) and a CSV price's as the field text; the reference's v1 CSV import reads
+  the text; v2 CSV tags are cleaned like v1 tag lists (one proposal sentence); a missing `bin`
+  reads as `null`; a malformed v2 item is `EFORMAT`. Proof 46/12 → 47/12, fixture plus reference
+  47/47; all five candidates proven (`node --test evals/tasks.test.mjs` 5/5, rerun by the parent);
+  no language-server diagnostic.
+- 2026-10-01: the flaky discovery test's real cause: its first T3fr commit attempt failed again,
+  this time with the markers, and the nested run's TAP showed the missing files' child processes
+  exiting `3221225794` (`0xC0000142`, `STATUS_DLL_INIT_FAILED`): Windows failing to start processes
+  when ~120 are spawned at once while the whole suite runs in parallel. The markers fixed nothing
+  (the reporter was never the problem); the nested `node --test` now runs with
+  `--test-concurrency=2` (5.4 s alone). The same limit may bite T4: a trial spawns many processes.
+  Commits `103afc5` (the cap) and `d0bc904` (T3fr).
+- 2026-10-01: `465a06a..d0bc904` reviewed so T3 closes clean. gentle-ai (lineage
+  `review-28fd41e980f1cdee`, lens reliability): approved and acknowledged, authority burned; two
+  WARNINGs and one suggestion. Codex (recorded): one P2. All four are about the `format-v2`
+  reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
+  `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
+  forbids looping until clean, and none changes a measurement (the reference still scores 47/47
+  and every hidden test stays fair), so they are Follow-ups. Reviewed boundary: `d0bc904`.
+  **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
+  (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
+  13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -416,7 +701,58 @@ the docs):
   the `LOCALAPPDATA` override breaks no tool, `plugins/marketplaces` is not changed at startup,
   and `-p` writes no `history.jsonl`.
 
+## T3 design
+Decided 2026-10-01, before the first candidate was written:
+
+- **A candidate is `evals/tasks/<id>/`**: `task.md`, `task.json`, `fixture/`, `grader/` and
+  `reference/`, an overlay holding only the files a correct solution changes or adds. The runner
+  copies `fixture/` alone, so the agent never sees the grader or the reference. `task.json`
+  `proof` pins `{ total, fixturePassed }`, so a grader that drifts is a failing test.
+- **Proof by three workspaces**, graded with the runner's own `gradeWorkspace`: fixture plus
+  reference scores exactly 1; the untouched fixture scores `fixturePassed / total`, below 1; an
+  empty workspace scores 0 with the same `total` — because a hidden test that fails as a whole
+  file when one module is broken would turn a fractional score into a 0 (T1 decisions).
+- **Visible tests are `tests/**/*.spec.mjs`**, run by the fixture's own `npm test`
+  (`node --test "tests/**/*.spec.mjs"`), green on the fixture and with the reference. No file
+  under `evals/tasks/` matches Node's default test patterns — because this repo's bare
+  `node --test` would otherwise run every fixture's tests, and a reference overlay's tests cannot
+  resolve the modules it does not overlay.
+- **Fair graders**: every hidden test names the prompt sentence or the fixture document clause it
+  checks, and asserts only what that source specifies (error codes, exit codes, documented
+  formats), never wording nobody wrote down — because a test the agent could not have derived
+  measures luck. Deterministic: no wall clock, network or randomness; time comes from an injected
+  clock.
+- **A red `npm test` costs a point**: every grader holds one hidden test that runs the
+  workspace's own visible suite and expects it green — because otherwise an agent that fixes the
+  code and leaves the tests it broke, or the tests that encode a drift, red scores full marks
+  (Codex on T3b).
+- **No unused declaration or dead branch in a fixture**: the current arm runs a TypeScript
+  language server, and a diagnostic next to a seeded defect would point that arm, and only that
+  arm, at the answer. A defect is wrong code that reads as intended.
+- **No `AGENTS.md`, `CLAUDE.md` or `.claude` in a fixture**: the project layer is what
+  `js-harness init` adds to the current arm, and a fixture that brought its own would hand it to
+  both. Repo rules live in `README.md`, `CONTRIBUTING.md` and `docs/`.
+- **`evals/tasks/**` is `eol=lf`** in `.gitattributes`: this machine checks out CRLF
+  (`core.autocrlf=true`), and a fixture's data files must be the same bytes on every machine.
+- **Five candidates, each hard in a different way**, since which kind separates the configs is
+  the question: thoroughness of an audit (`spec-drift`), rules nobody pointed at
+  (`house-rules`), an algorithm with a long spec (`resolver`), interleavings (`lost-updates`),
+  and breadth of a cross-cutting change (`format-v2`). Whether any has headroom is T4's to
+  measure; if fewer than three survive it, more candidates are written then.
+- **Size**: a fixture of 500–700 lines over 10–16 files, so a task commit is ~1,200–1,500 lines,
+  one work unit each. The Delivery forecast (~400–700 lines for all fixtures and graders) was
+  written before the tasks were designed and is too low by about a factor of ten.
+
 ## Follow-ups
+- The `format-v2` reference's price parsing on inputs no hidden test uses (review of
+  `465a06a..d0bc904`): `1e308` and other huge exponents give `Infinity` or an unsafe integer; a
+  v1 CSV row shorter than three fields throws a `TypeError` instead of an import error; `.5`, `1.`
+  and `+1` in a v1 CSV, which `Number()` accepted, are now refused; the reference's visible spec
+  pins `toMinor(1.5e21, 'JPY')`, an amount the proposal leaves open. None changes a score.
+- Process starts fail on Windows under heavy parallel spawning (`0xC0000142`,
+  `STATUS_DLL_INIT_FAILED`): seen in the discovery test with ~120 nested processes on top of the
+  full suite. T4's suite runs trials one at a time, but a current-arm trial starts MCP servers,
+  hooks and graders; watch for agent or grader exits with that code.
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
   re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
   workspace (gentle-ai suggestion, left as is).
@@ -461,7 +797,15 @@ the docs):
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is open as PR jsaristi/js-harness#20; merging it is Sebastián's call. Then T3, in
-a new session.
-Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
-Reviewed boundary: `db0253b`.
+Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
+`feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
+Next: T4, the headroom screen. Before it, two of Sebastián's decisions, asked one at a time:
+1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
+   of its own, `JS_HARNESS_EVAL_OAUTH_TOKEN`, never in chat or a file in the repo; T4's suite entry
+   maps it to `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
+   `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
+   claude.ai connectors.
+2. The permission mode both arms pass (`permissionMode` has no default).
+Then T4: the suite entry (`defaultWorkRoot` + `assertWorkRoot`, `removeTemplate` on every path,
+the sweep-boundary follow-up, the token mapping), then minimal at `medium`, 3 trials per candidate.
+Reviewed boundary: `d0bc904`.
