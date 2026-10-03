@@ -257,7 +257,9 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   finding which child starts PowerShell without `LOCALAPPDATA`.
 
 ## Next step
-The feature is complete on `feat/stack-v4` and carries `main` since `5438dc1`; not pushed. The
-pull request against `main` is proposed to Sebastián; the push waits for his go-ahead, and the
-merge is his. Reviewed boundary: `b58b5c2` for code; everything after it is `main`'s own
-reviewed history and documentation.
+The feature is complete and delivered as `jsaristi/js-harness#25` (`feat/stack-v4` against
+`main`, pushed 2026-10-03 on Sebastián's go-ahead, one PR with a size exception he accepted:
++1,055/−42, of which 174 lines are `bin/` code and 596 tests). The merge is his. Reviewed
+boundary: `b58b5c2` for code; everything after it is `main`'s own reviewed history,
+documentation, and one line of `AGENTS.md` (`7468163`: the closing prompt of a reply comes in a
+fenced code block; gentle-ai assessed it medium, under budget, review not due).

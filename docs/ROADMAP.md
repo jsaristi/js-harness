@@ -184,10 +184,10 @@ work) these tasks do not measure.
 
 ## Next
 
-1. Merge `feat/stack-v4` (`odd/tasks/stack-v4.md`) as its own PR. It took `main` in on
-   2026-10-03 (`5438dc1`), so its pre-commit gate has the safe process-tree kill of
-   `jsaristi/js-harness#22`; the push and the merge wait for Sebastián. It closes F2's
-   gentle-ai v4 step and fixes this file's stale stack line.
+1. Merge `jsaristi/js-harness#25` (`feat/stack-v4`, `odd/tasks/stack-v4.md`), open since
+   2026-10-03 as one PR with a size exception. It took `main` in (`5438dc1`), so its pre-commit
+   gate has the safe process-tree kill of `jsaristi/js-harness#22`; the merge waits for
+   Sebastián. It closes F2's gentle-ai v4 step and fixes this file's stale stack line.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
