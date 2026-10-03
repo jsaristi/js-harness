@@ -184,9 +184,9 @@ work) these tasks do not measure.
 
 ## Next
 
-1. Deliver `feat/stack-v4` (`odd/tasks/stack-v4.md`, nine commits, not pushed) as its own PR.
-   Its first commit takes `main` in: until then its pre-commit gate still has the unsafe
-   process-tree kill that `jsaristi/js-harness#22` removed from `main`. It closes F2's
+1. Merge `feat/stack-v4` (`odd/tasks/stack-v4.md`) as its own PR. It took `main` in on
+   2026-10-03 (`5438dc1`), so its pre-commit gate has the safe process-tree kill of
+   `jsaristi/js-harness#22`; the push and the merge wait for Sebastián. It closes F2's
    gentle-ai v4 step and fixes this file's stale stack line.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.

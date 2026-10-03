@@ -129,6 +129,7 @@ Everything written outside this repo for this feature, and how to undo it.
 | 2026-10-02 01:45 | The eight preserved review agents (`jd-*`, `review-*` in `~/.claude/agents`) moved out so the sync could write v4's (every one differed from v4's template by 53–117 lines; they were 3.7's renderings, not hand edits) | move them back from `home/` in the backup folder |
 | 2026-10-02 01:46 | `~/.gentle-ai/state.json`: `codexOrchestratorAssignment` `gpt-6-astra`/`medium` → `gpt-6.1-sol`/`high` | copy `gentle-ai-state.json` from the backup folder back, then `gentle-ai sync` |
 | 2026-10-02 01:46 | `gentle-ai sync`, 11 files: the eight review agents re-created, `~/.codex/config.toml` back to `gpt-6.1-sol`/`high` | `gentle-ai restore` with that sync's backup |
+| 2026-10-02 | 11 retired SDD slash commands (`~/.claude/commands/gentle-sdd-*.md`) moved out; the 01:45 pass missed them because they are commands, not skills or agents (the v4.0.0 module ships no `gentle-sdd-*` file) | move them back from `home/.claude/commands/` in the backup folder |
 
 The backup folder is `~/.js-harness/backups/stack-v4-20261001/` (its `README.md` repeats these
 undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
@@ -216,6 +217,15 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   (corrected above: the log was wrong, not the code's tests), and one suggestion about a nested
   `cwd`. Codex (recorded): no actionable finding. Both go to Follow-ups; the correction budget
   for this slice is spent. Every commit of `5ab2ae6..b58b5c2` is reviewed by both.
+- 2026-10-03: delivery. `main` (`bd592c0`, F5 closed) merged in as `5438dc1`, the branch's first
+  commit since the feature closed, with no textual conflict: both sides had touched
+  `bin/check.mjs`, `bin/check.test.mjs` and `docs/ROADMAP.md` in different hunks. The gate's
+  kill by parent pid is gone from this branch (`rg "taskkill|ParentProcessId" bin/check.mjs`: no
+  match, where `2314df4` had three), so every later commit runs the tree kill `main` has had
+  since `0f44719`. `npm run check` on the merge: budget 1455/1500, four contracts, tests pass,
+  and the payload rows still list the four plugin hooks. The Machine changes table gained the
+  row it was owed (`odd/tasks/evals.md`, Next step): the eleven `gentle-sdd-*` commands, counted
+  in the backup folder (11) and in `~/.claude/commands` (0).
 
 ## Follow-ups
 - A separator inside a quoted message (`echo "done; gentle-ai sdd-x"`) is still read as a call
@@ -232,6 +242,7 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   tests carry it.
 
 ## Next step
-The feature is complete on `feat/stack-v4` (`5ab2ae6..b58b5c2` plus this log), not pushed: the
-push and the PR against `main` are Sebastián's call. Work continues on `feat/evals` with T4a.
-Reviewed boundary: `b58b5c2`.
+The feature is complete on `feat/stack-v4` and carries `main` since `5438dc1`; not pushed. The
+pull request against `main` is proposed to Sebastián; the push waits for his go-ahead, and the
+merge is his. Reviewed boundary: `b58b5c2` for code; everything after it is `main`'s own
+reviewed history and documentation.
