@@ -48,9 +48,22 @@ by hidden tests, so a score is a command's exit, not a phrasing match.
   a visible grader turns the task into "make these tests pass" and measures nothing else.
 - Zero dependencies in the runner and graders — because every command in this repo runs with no
   install step (AGENTS.md, "How the repo works").
-- "Discriminates" keeps the predecessor's definition — the two configs' mean scores on a task
-  differ by more than the pooled within-config standard deviation — so its "0 of 32" and this
-  phase's result are comparable.
+- "Discriminates" was the predecessor's definition — the two configs' mean scores on a task
+  differ by more than the pooled within-config standard deviation — until the headroom screen
+  put both configs at the ceiling on every candidate (2026-10-02). Since then (Sebastián,
+  2026-10-02: "score as the floor, cost as what discriminates"), for one task at one effort:
+  - **the scores are equal** when the two means differ by at most 0.02 (one hidden check in
+    about fifty) or by no more than their pooled standard deviation, whichever is larger;
+    near-ceiling scores have almost no spread, so the pooled deviation alone would call one
+    missed check in nine trials a difference;
+  - **score discriminates** when the scores are not equal: the better score wins, at any cost;
+  - **cost discriminates** when the scores are equal and the mean cost differs by more than the
+    pooled standard deviation of cost: the cheaper config wins, since it gets the same result;
+  - the cost of a trial is **cost units**, its tokens weighted by their price relative to an
+    input token: input 1, cache write 1.25 (five minutes) or 2 (one hour), cache read 0.1,
+    output 5. Raw tokens and wall time are reported beside it; wall time does not decide,
+    because it moves with the machine's load.
+  The predecessor's score rule is still reported per task, so its "0 of 32" stays comparable.
 
 ## Effort
 high
@@ -94,10 +107,15 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - A trial record holds config, effort, task, repeat, score, input and output tokens, turns, wall
   time, CLI version and error; raw transcripts go to gitignored `evals/runs/`, summaries to
   committed `evals/results/`.
-- Headroom screen before the A/B run: a candidate task is kept only if the minimal config at
-  `medium` scores a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
-  nobody fails cannot separate anyone.
-- The A/B run: 2 configs × 2 efforts × the kept tasks × 3 repeats.
+- Headroom screen before the A/B run: a candidate task was to be kept only if the minimal config
+  at `medium` scored a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
+  nobody fails cannot separate anyone on score. It kept none (2026-10-02); under the cost rule
+  (Constraints) a task at the ceiling still separates the configs, so the screen is now
+  information and every candidate goes to the A/B run.
+- The A/B run: 2 configs × 2 efforts × the five tasks × 3 repeats. The `medium` cells are the
+  runs `headroom` (minimal) and `headroom-current` (current), already recorded on the same
+  stack; the `high` cells are one more run. The report reads several runs and refuses to mix
+  stacks, models or permission modes.
 
 ## Tasks
 - [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
@@ -234,15 +252,16 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   reuse) (route: inline, two small understood edits)
 - [x] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed). Outcome: **no task kept**, all five at 0.98–1.00
-- [ ] T4h Headroom found: at least three candidates the minimal config at `medium` scores under
-  0.8 on. The T3 rule says more candidates are written when fewer than three survive; what
-  kind, after five that were hard in five different ways all hit the ceiling, is open and
-  Sebastián's to steer (route: to be set with the direction)
-- [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
-  inline run, results committed)
-- [ ] T6 Report and roadmap: `evals/report.mjs` with `--require-complete` and
-  `--min-discriminating`, the result written to the roadmap (route: delegated writer for the
-  report, inline for the roadmap)
+- [ ] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
+  `medium` cells are the recorded runs `headroom` and `headroom-current` (route: inline run,
+  results committed)
+- [ ] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
+  ones named), refuses mixed stacks, models or permission modes, and prints per task and
+  effort both configs' mean score, spread, cost units, tokens and wall time with the verdict of
+  the Constraints' rule (score, cost or none) and the predecessor's score rule beside it;
+  `--require-complete` fails on a cell with fewer than 3 trials, `--min-discriminating <n>`
+  fails unless at least n tasks discriminate at every effort in the runs. The result written
+  to the roadmap (route: delegated writer for the report, inline for the roadmap)
 
 ## Progress
 - 2026-09-30: F5 opened. Spend decision taken: no USD ceiling. The predecessor's runner and its
@@ -972,6 +991,14 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   trials per arm cannot tell a 0.987 from a 1.000 apart. The run's `--summary` prints the
   minimal screen as "incomplete" for every task, because the screen reads minimal trials only:
   right, but noisy for a current-only run (a Follow-up).
+- 2026-10-02: Sebastián changed the definition of "discriminates" (Constraints): score as the
+  floor, cost as what separates. T4h (find headroom) is dropped, since the rule needs none;
+  T5 and T6 now cover all five tasks. A first reading of the `medium` cells under the new rule,
+  computed from the recorded usage (the report, T6, will compute it for real): cost units per
+  trial, minimal → current, format-v2 396k → 572k (1.44×), house-rules 114k → 242k (2.13×),
+  lost-updates 144k → 302k (2.10×), resolver 111k → 289k (2.59×), spec-drift 152k → 356k
+  (2.34×); each gap is larger than the pooled deviation of cost, and every score pair is equal
+  under the 0.02 tolerance. So at `medium` all five discriminate on cost, for minimal.
 - 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
@@ -1204,18 +1231,15 @@ Before T4, two of Sebastián's decisions were taken:
 2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
    (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
    isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
-T4 ran on 2026-10-02 and kept no task (see Progress): all five candidates score 0.98–1.00 with
-the minimal config at `medium`. T5 has nothing to run over until T4h finds headroom. The
-direction is Sebastián's (asked 2026-10-02): harder candidates of another kind, a look at what
-the current config costs on the same five tasks first, or another definition of what separates
-the configs (which "Ask me before" reserves for him). `node evals/suite.mjs --summary --name
-headroom` prints the table again.
-Sebastián chose the second (2026-10-02): the current config on the same five tasks, `medium`,
-3 repeats, as run `headroom-current` (`--configs current --name headroom-current`, the rest as
-the screen). It measures cost and whether the score moves; it decides nothing about T4h by
-itself, and the bar and its definition stay as they are. It ran (see Progress): the same
-score at 2.7× the input tokens and 1.55× the time. The direction for T4h is Sebastián's again,
-with that data in hand.
+T4 ran on 2026-10-02 and kept no task: all five candidates score 0.98–1.00 with the minimal
+config at `medium`. The current config on the same tasks (run `headroom-current`) scored the
+same at 2.7× the input tokens. Sebastián then changed what "discriminates" means: score as the
+floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
+and no headroom task is needed. Next: T5, `node evals/suite.mjs --claude
+C:\Users\Oficina\.local\bin\claude.exe --configs minimal,current --efforts high --repeats 3
+--tasks all --permission-mode bypassPermissions --name ab-high` (30 trials, with the token
+passed to that one process from the user variable), and T6, the report, by a delegated writer.
+Do not run a gate or a test suite while trials run: wall time is reported and moves with load.
 Reviewed boundary: gentle-ai `d470eaa`; Codex `09d7a90` (the commits after it hold no code:
 docs and the results files).
 `AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
