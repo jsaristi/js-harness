@@ -252,7 +252,7 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   reuse) (route: inline, two small understood edits)
 - [x] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed). Outcome: **no task kept**, all five at 0.98–1.00
-- [ ] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
+- [x] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
   `medium` cells are the recorded runs `headroom` and `headroom-current` (route: inline run,
   results committed)
 - [ ] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
@@ -999,6 +999,13 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   lost-updates 144k → 302k (2.10×), resolver 111k → 289k (2.59×), spec-drift 152k → 356k
   (2.34×); each gap is larger than the pooled deviation of cost, and every score pair is equal
   under the 0.02 tolerance. So at `medium` all five discriminate on cost, for minimal.
+- 2026-10-02: **T5 ran**, run `ab-high`, in two invocations of the same run so neither outlived
+  a two-hour shell limit: `--configs minimal --efforts high` then `--configs current --efforts
+  high`, `--repeats 3 --tasks all --permission-mode bypassPermissions`, the token passed to each
+  process from the user variable. 30 of 30 trials recorded, no error, no cap, exit 0 both
+  times; nothing else ran on the machine meanwhile. Scores 0.98–1.00 in every trial of both
+  arms. Results: `evals/results/ab-high.json` (no token in it or in `evals/runs/ab-high/`,
+  searched for `sk-ant-`). The verdicts are T6's to compute.
 - 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
