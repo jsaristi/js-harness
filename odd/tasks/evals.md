@@ -102,15 +102,17 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
     (18 commits, +9,779/-7): T3, the task proof and the five tasks. Merged on Sebastián's
     go-ahead (2026-10-03) as merge commit `bb82ea8`.
   - Slice 3: PR jsaristi/js-harness#22, branch `feat/evals-suite`, `57010c7..4b1ab30`
-    (16 commits, +4,821/-367): T4a, T4k with T4kr, T4kt and T4kg, T4s and T4ap. Open, not
-    merged; its diff against `main` is exactly this range.
-  - Slice 4: branch `feat/evals`, from `4b1ab30` to the branch head (+4,874/-51 at `fbfe241`):
-    the recorded runs, the report, the roadmap and `AGENTS.md`. No PR yet.
-- T4k reaches `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
-  `evals/ports.mjs`, which `main` does not have (T4a adds it), and `evals/runner.mjs` as T4a
-  left it, so a hotfix would be a hand-resolved cherry-pick: new code that needs its own
-  reviews and then conflicts with this branch. Until slice 3 merges, the rule under Next step
-  holds: no commit on `main` or `feat/stack-v4` from this machine.
+    (16 commits, +4,821/-367): T4a, T4k with T4kr, T4kt and T4kg, T4s and T4ap. Merged on
+    Sebastián's go-ahead (2026-10-03) as merge commit `0f44719`.
+  - Slice 4: PR jsaristi/js-harness#23, branch `feat/evals`, from `4b1ab30` to the branch
+    head (+4,903/-55 at `c2ddc23`): the recorded runs, the report, the roadmap and
+    `AGENTS.md`. Open, not merged; merging it closes F5 on `main`.
+- T4k reached `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
+  `evals/ports.mjs`, which `main` did not have (T4a adds it), and `evals/runner.mjs` as T4a
+  left it, so a hotfix would have been a hand-resolved cherry-pick: new code that needs its
+  own reviews and then conflicts with this branch. Since `0f44719`, `main` has
+  `bin/lib/process-tree.mjs` and no `taskkill /T` or bare `ParentProcessId` query outside
+  comments and tests (`git grep` on `origin/main`, 2026-10-03).
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -1305,7 +1307,7 @@ Decided 2026-10-01, before the first candidate was written:
   Codex did not get through a range of about 1,000 lines in four runs. Splitting by commit
   worked; the command could take `--head <rev>` so a split needs no worktree.
 - The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
-  on `feat/stack-v4` until slice 3 merges (Delivery); `feat/stack-v4` then takes `main` in.
+  on `feat/stack-v4` until it takes `main` in; `main` has the fix since `0f44719` (Delivery).
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
@@ -1339,12 +1341,12 @@ Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is comple
 Since then, all on `feat/evals` (pushed 2026-10-03): T4a (done: the isolation probe passes with the
 real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
 The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
-**Do not commit on `main` or `feat/stack-v4` from this machine until T4k is there**: their
-pre-commit gate still kills by parent pid (see Progress, 2026-10-02) and can close unrelated
-programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not written yet: the 11
+T4k is on `main` since `0f44719` (slice 3, 2026-10-03), so committing on `main` is safe again.
+**`feat/stack-v4` still has the old gate until it takes `main` in: make that merge its first
+commit**, because its pre-commit gate kills by parent pid (see Progress, 2026-10-02) and can
+close unrelated programs. One line is still owed to `odd/tasks/stack-v4.md`: the 11
 `~/.claude/commands/gentle-sdd-*.md` files were moved to
-`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. T4k reaches
-`main` with slice 3 (Delivery).
+`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers.
 Before T4, two of Sebastián's decisions were taken:
 1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
    `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
@@ -1364,10 +1366,10 @@ floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes
 and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
 run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
 verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
-remains is delivery (see Delivery): slice 2 is merged (`bb82ea8`); slice 3 is open as PR
-jsaristi/js-harness#22 and merges on Sebastián's go-ahead; then slice 4's PR is opened from
-`feat/evals` and merged, and after that `feat/stack-v4` takes `main` in and goes as its own
-PR. A run written by two invocations keeps only the last one's `args`
+remains is delivery (see Delivery): slices 2 and 3 are merged (`bb82ea8`, `0f44719`); slice 4
+is open as PR jsaristi/js-harness#23 and merges on Sebastián's go-ahead. After that, in a new
+session: the roadmap's F5 row is closed with the four PRs, and `feat/stack-v4` takes `main` in
+and goes as its own PR. A run written by two invocations keeps only the last one's `args`
 (`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
 trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
 and moves with load.
