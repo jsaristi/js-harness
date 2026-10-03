@@ -1,0 +1,8 @@
+{
+  "grader": {
+    "command": "node",
+    "args": ["--test", "--test-reporter=tap", ".eval-grader/resolver.grade.mjs"]
+  },
+  "timeoutMs": 1800000,
+  "proof": { "total": 45, "fixturePassed": 15 }
+}

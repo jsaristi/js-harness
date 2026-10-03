@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
 export { estimateTokens };
 
@@ -120,54 +121,41 @@ export function discoverSensors(cwd) {
 const PIPE_GRACE_MS = 2000;
 const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
 
-/** Kills `child` and everything it started. `spawnSync`'s own timeout kills only the shell, and the
- * real command (`node` behind `cmd.exe`, `npm` behind `sh`) would keep running after every commit. */
-function killTree(child) {
-  if (child.pid === undefined) return;
-  if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-    return;
-  }
-  try {
-    process.kill(-child.pid, 'SIGKILL'); // the child leads its own group (see `detached` below)
-  } catch {
-    // ESRCH: the group is already gone.
-  }
-}
-
-/** Kills what a shell that has already exited left behind. POSIX: the group outlives its leader, so
- * the group kill still reaches it. Windows: `taskkill /T` needs a live root, so the shell's direct
- * children are looked up by parent pid and each is killed with its tree. A survivor whose own parent
- * exited first is unreachable that way; only the shell's direct children are. */
-function killSurvivors(child) {
-  if (child.pid === undefined) return;
-  if (process.platform !== 'win32') {
-    killTree(child);
-    return;
-  }
-  const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
-  spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
-}
-
 /** Runs `command` through the shell and resolves to a `spawnSync`-shaped `{ status, signal, stdout,
  * stderr, error? }`. Past `timeout` ms it kills the whole process tree and reports `error.code ===
  * 'ETIMEDOUT'`. Whatever still holds the pipes after the shell exited is killed too; the result keeps the
- * shell's own status. Output beyond 64 MiB per stream is dropped, so a noisy command is never ENOBUFS. */
-export function runSensor(command, { cwd, env, timeout }) {
+ * shell's own status. Output beyond 64 MiB per stream is dropped, so a noisy command is never ENOBUFS.
+ *
+ * `spawnSync`'s own timeout would kill only the shell, and the real command (`node` behind `cmd.exe`, `npm`
+ * behind `sh`) would keep running after every commit. What is killed is found by `bin/lib/process-tree.mjs`,
+ * which on Windows needs to know when the shell started and exited (a pid alone does not name its children).
+ * A kill that could not be done is reported as `sweepError` on the result, never thrown out of a timer.
+ * `killTree` and `killSurvivors` are injectable. */
+export function runSensor(command, { cwd, env, timeout, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
+    const startedAt = Date.now(); // before the spawn: the shell cannot have been created earlier
     try {
       child = spawnChild(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       resolve({ status: null, signal: null, ...out, error });
       return;
     }
+    let exitedAt;
+    let sweepError;
+    const stop = (kill) => {
+      try {
+        kill(child, { startedAt, ...(exitedAt !== undefined && { exitedAt }) });
+      } catch (error) {
+        sweepError ??= error;
+      }
+    };
     // On POSIX the sensor leads its own process group, so a Ctrl-C at the terminal no longer reaches
     // it: pass the signal on by killing the group, then let it end check as it would have.
     const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
     const forward = (signal) => {
-      killTree(child);
+      stop(tree);
       for (const name of signals) process.removeListener(name, forward);
       process.kill(process.pid, signal);
     };
@@ -186,7 +174,7 @@ export function runSensor(command, { cwd, env, timeout }) {
       child.stdout.destroy();
       child.stderr.destroy();
       const error = extra ?? (timedOut ? Object.assign(new Error(`timed out after ${timeout} ms`), { code: 'ETIMEDOUT' }) : undefined);
-      resolve({ ...exit, ...out, ...(error && { error }) });
+      resolve({ ...exit, ...out, ...(error && { error }), ...(sweepError && { sweepError: sweepError.message }) });
     };
     for (const stream of ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
@@ -197,12 +185,13 @@ export function runSensor(command, { cwd, env, timeout }) {
     child.on('error', (error) => finish(error));
     child.on('exit', (status, signal) => {
       exit = { status, signal };
+      exitedAt = Date.now();
       clearTimeout(timer);
       clearTimeout(grace);
       // Pipes still open this long after the shell exited: a descendant holds them. Kill it, or a test
       // server the script started would run on after every commit.
       grace = setTimeout(() => {
-        killSurvivors(child);
+        stop(survivors);
         finish();
       }, PIPE_GRACE_MS);
     });
@@ -210,7 +199,7 @@ export function runSensor(command, { cwd, env, timeout }) {
     if (timeout > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        killTree(child);
+        stop(tree);
         // The shell may already be gone with a survivor holding the pipes; do not wait on them for long.
         grace = setTimeout(() => finish(), PIPE_GRACE_MS);
       }, timeout);
@@ -251,6 +240,8 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
+  // The verdict is the command's own; a leftover that could not be stopped is said, not hidden, and does not fail it.
+  if (result.sweepError) detail += `; could not stop what it left running: ${result.sweepError}`;
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}` };

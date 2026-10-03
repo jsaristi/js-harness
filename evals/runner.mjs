@@ -6,7 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { killTree } from '../bin/codex-review.mjs';
+import {
+  POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees,
+} from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -44,9 +46,11 @@ export function parseAgentOutput(stdout) {
   return isObject(value) && value.type === 'result' ? value : null;
 }
 
-/** Tokens and turns from a parsed agent result. Input counts the cache-creation and cache-read tokens
- * too, because they are all tokens the plan's usage cap charges for. Missing data is `null`, never 0:
- * a zero would read as a measurement. */
+/** Tokens, turns and cost from a parsed agent result. Input counts the cache-creation and cache-read tokens
+ * too, because they are all tokens the plan's usage cap charges for. Those counts and `usage` are the main
+ * thread's only. The whole session, subagents included, is `costUsd` (`total_cost_usd`, Claude Code's list
+ * cost), `modelUsage` (the per-model token counts, as given) and `subagents` (`subagent_stats.spawned`).
+ * Missing data is `null`, never 0: a zero would read as a measurement. */
 export function summarizeUsage(output) {
   const usage = isObject(output?.usage) ? output.usage : null;
   // Per count: a usage object that lacks one of the fields a count is summed from leaves that count
@@ -57,6 +61,10 @@ export function summarizeUsage(output) {
     outputTokens: sum('output_tokens'),
     turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
     usage,
+    // A cost is never negative; one that is says the field is broken, not that the session paid back.
+    costUsd: Number.isFinite(output?.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null,
+    modelUsage: isObject(output?.modelUsage) ? output.modelUsage : null,
+    subagents: Number.isFinite(output?.subagent_stats?.spawned) ? output.subagent_stats.spawned : null,
   };
 }
 
@@ -180,46 +188,32 @@ export function childEnv(overrides = {}, inherited = process.env, platform = pro
   return env;
 }
 
-/** Kills what a root that has already exited left behind (by `ParentProcessId`; `killByPath` is the sweep for a survivor whose own parent is gone too). POSIX: the group outlives its leader, so the
- * group kill still reaches it. Windows: `taskkill /T` needs a live root, so the root's direct children
- * are looked up by parent pid (which outlives the parent) and each is killed with its tree. A survivor
- * whose own parent exited first is unreachable that way. Mirrors `killSurvivors` in `bin/check.mjs`,
- * which is not exported; without it a descendant holding the pipes would run on into grading and
- * workspace deletion. */
-export function killSurvivors(child, { platform = process.platform, spawnSync: sync = spawnSync } = {}) {
-  if (child.pid === undefined) return;
-  if (platform !== 'win32') {
-    killTree(child);
-    return;
-  }
-  const script = `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${child.pid}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F }`;
-  sync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
-}
-
-// The PowerShell of `killByPath`. It reads the roots from the environment (newline-separated, a name no path
-// can hold) and never has one spliced into its text, so a path with a quote, a `$` or a backtick cannot
-// change what it does. Every match is literal: `String.IndexOf` with `OrdinalIgnoreCase`, not `-match`
-// (a regex) and not `-like` (wildcards, where `[` is special): a trial directory may well hold `+`, `(`
-// or `[`. Each root is searched in both separator spellings, because a tool may print the same path with
-// either. A match must end on a boundary: the end of the command line, a path separator, a quote or
-// whitespace; otherwise a sibling whose name extends the root (`trial-10` against `trial-1`) would be killed
-// with its tree. Every occurrence in a line is tried, since a sibling may come before the root itself. The process the script runs in and every ancestor of it are spared, whatever their command lines
-// hold: a runner started with the workspace in its arguments must not sweep itself.
+// The PowerShell of `killByPath`: it finds the matches and kills nothing. It reads the roots from the environment
+// (newline-separated, a name no path can hold) and never has one spliced into its text, so a path with a quote,
+// a `$` or a backtick cannot change what it does. Every match is literal: `String.IndexOf` with
+// `OrdinalIgnoreCase`, not `-match` (a regex) and not `-like` (wildcards, where `[` is special): a trial
+// directory may well hold `+`, `(` or `[`. Each root is searched in both separator spellings, because a tool
+// may print the same path with either. A match must end on a delimiter: the end of the command line, a path
+// separator (`\` or `/`), a quote (`"` or `'`), whitespace, or one of the `;`, `,`, `=` and `)` of a list or
+// key/value argument. Anything else continues the name and does not match: on Windows `+`, `(`, `[`, `{`, `@`,
+// `~`, `!`, `#`, `%` and `&` all can, so `trial-1+backup` is not `trial-1`, any more than `trial-10` is. A wrong
+// kill (an unrelated process and its tree) is worse than a missed survivor, which the removal of the directory
+// reports, so the set is closed and short; the last four are the ones an earlier review asked for. Every
+// occurrence in a line is tried, since a sibling may come before the root itself. The process the script runs in
+// and every ancestor of it are spared, whatever their command lines hold: a runner started with the workspace in
+// its arguments must not sweep itself.
 //
-// All matches are taken from ONE snapshot of the process list, so killing one match with its tree (`/T`) can
-// take another match with it, and `taskkill` then reports that process as not found. That is success, not
-// an error: a process that is not there is what was wanted. So `taskkill`'s exit code is never consulted
-// (and it runs under `cmd`, where a stderr line is not turned into a PowerShell error); what decides is a
-// check, after the kills, that every matched process has exited. The pids of the matches are printed, one
-// per line, only then. A failure is one line of plain text on stderr and exit 1; progress output is off,
-// because under `-EncodedCommand` it would arrive as CLIXML.
+// What it prints comes from ONE snapshot of the process list: a row per process (see `Format-ProcessRow` in
+// `bin/lib/process-tree.mjs`: pid, parent pid, creation time, name), then `S<TAB>pid` for each spared process
+// and `M<TAB>pid` for each match. `killByPath` then selects each match's tree from those rows by pid AND
+// creation time (a parent pid alone names the wrong process once Windows reuses it) and kills it. A failure
+// is one line of plain text on stderr and exit 1; progress output is off, because under `-EncodedCommand` it
+// would arrive as CLIXML.
 const SWEEP_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
-function Test-Running($id) {
-  try { return -not [System.Diagnostics.Process]::GetProcessById([int]$id).HasExited } catch { return $false }
-}
-$boundary = [char[]]@([char]92, [char]47, [char]34, [char]39)
+${POWERSHELL_ROW_FUNCTION}
+$delimiters = [char[]]@([char]92, [char]47, [char]34, [char]39, [char]59, [char]44, [char]61, [char]41)
 function Test-Mentions($line, $needle) {
   $from = 0
   while ($from -le $line.Length - $needle.Length) {
@@ -228,7 +222,7 @@ function Test-Mentions($line, $needle) {
     $end = $at + $needle.Length
     if ($end -ge $line.Length) { return $true }
     $next = $line[$end]
-    if ($boundary -contains $next -or [char]::IsWhiteSpace($next)) { return $true }
+    if ([char]::IsWhiteSpace($next) -or $delimiters -contains $next) { return $true }
     $from = $at + 1
   }
   return $false
@@ -252,29 +246,19 @@ try {
     $parent = $all | Where-Object { $_.ProcessId -eq $id } | Select-Object -First 1
     $id = if ($parent) { [uint32]$parent.ParentProcessId } else { [uint32]0 }
   }
-  $matched = @()
+  foreach ($process in $all) { Format-ProcessRow $process }
+  foreach ($id in $spared.Keys) { 'S' + [char]9 + $id }
   foreach ($process in $all) {
     if ($spared.ContainsKey([uint32]$process.ProcessId)) { continue }
     $line = $process.CommandLine
     if (-not $line) { continue }
     foreach ($needle in $needles) {
       if (Test-Mentions $line $needle) {
-        $matched += [uint32]$process.ProcessId
+        'M' + [char]9 + $process.ProcessId
         break
       }
     }
   }
-  foreach ($id in $matched) {
-    if (Test-Running $id) { cmd.exe /c "taskkill /pid $id /T /F >nul 2>&1" | Out-Null }
-  }
-  $deadline = (Get-Date).AddSeconds(5)
-  do {
-    $running = @($matched | Where-Object { Test-Running $_ })
-    if ($running.Count -eq 0) { break }
-    Start-Sleep -Milliseconds 100
-  } while ((Get-Date) -lt $deadline)
-  if ($running.Count -gt 0) { throw ('still running after the kill: ' + ($running -join ', ')) }
-  $matched
 } catch {
   [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
@@ -283,10 +267,13 @@ try {
 
 /** Kills every process whose command line contains any of `roots`, each with its tree, and returns `{ killed }`,
  * the pids it matched. `roots` are absolute trial directories, unique per trial (a home, a workspace), which
- * is what makes a plain substring a safe test.
+ * is what makes a plain substring a safe test. The tree of a match is what `bin/lib/process-tree.mjs` proves
+ * descends from it (by pid and creation time), each process killed on its own: never `taskkill /T`, which walks
+ * parent pids that Windows reuses. Throws when a match is still running after the kill, or could not be killed
+ * because its creation time is unknown.
  *
- * It exists because `killSurvivors` walks DOWN from the agent by parent pid, and a descendant whose parent
- * exited first has a parent pid that belongs to nobody: unreachable that way. An MCP server a seeded home
+ * It exists because `killSurvivors` walks DOWN from the agent through its descendants, and a descendant whose
+ * parent exited first is not one of them: unreachable that way. An MCP server a seeded home
  * starts (codegraph, `serve --mcp --path <workspace>`) is such a process, and while it runs it holds the
  * directory, so the trial's cleanup fails with EPERM. The process knows its trial by the path in its own
  * command line, so that is what is searched.
@@ -320,7 +307,22 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
   });
   if (result.error) throw new Error(`the sweep by path could not run: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`the sweep by path failed (exit ${result.status}): ${String(result.stderr).trim()}`);
-  return { killed: String(result.stdout).split(/\r?\n/).map((line) => line.trim()).filter((line) => /^\d+$/.test(line)).map(Number) };
+  const stdout = String(result.stdout);
+  const marked = (mark) => [...stdout.matchAll(new RegExp(String.raw`^${mark}\t(\d+)\s*$`, 'gm'))].map((match) => Number(match[1]));
+  const matched = marked('M');
+  if (matched.length === 0) return { killed: [] };
+  // The rows are the one snapshot the matches were taken from; an empty one is a failed lookup, not an empty machine.
+  const snapshot = parseSnapshot(stdout);
+  if (snapshot.length === 0) throw new Error('the sweep by path matched processes but listed none: it cannot select what to kill');
+  const createdAt = new Map(snapshot.map((entry) => [entry.pid, entry.createdAt]));
+  const targets = selectTrees(snapshot, matched, { spared: marked('S') }).map((pid) => ({ pid, createdAt: createdAt.get(pid) }));
+  const { running } = killProcesses(targets, { spawnSync: sync });
+  // A match whose creation time Windows did not give is never killed (no evidence, no kill), and that is said.
+  const selected = new Set(targets.map((target) => target.pid));
+  const unproven = matched.filter((pid) => !selected.has(pid));
+  if (running.length > 0) throw new Error(`still running after the kill: ${running.join(', ')}`);
+  if (unproven.length > 0) throw new Error(`matched but not killed, because their creation time is unknown: ${unproven.join(', ')}`);
+  return { killed: matched };
 }
 
 /** Runs one child to its end and resolves to `{ stdout, stderr, exitCode, signal, timedOut,
@@ -332,13 +334,23 @@ export function killByPath(roots, { platform = process.platform, spawnSync: sync
  * Once the root exits the timeout no longer applies: it ran in time, and a descendant that still holds
  * the pipes is not a timeout. If the pipes stay open for `graceMs` after the exit, the run ends with the
  * root's own status. Every way of ending calls `sweep` (default `killSurvivors`) once first, to kill
- * what the root left behind, holding the pipes or not. */
+ * what the root left behind, holding the pipes or not.
+ *
+ * `signal`, an `AbortSignal`, is for a caller that owns the interrupt: when it aborts the tree is killed as for a
+ * timeout and the run ends with `aborted: true` (a signal that is already aborted starts nothing). Such a caller
+ * gets no signal forwarding below, because that kills the tree and then re-raises the signal on this process, which
+ * ends it before the caller's own cleanup; the caller aborts, waits for the result and cleans up, then exits. */
 export function runProcess({
-  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors,
+  command, args = [], env, cwd, input, timeoutMs, graceMs = PIPE_GRACE_MS, spawn = spawnChild, kill = killTree, killSurvivors: sweep = killSurvivors, signal,
 }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
+    if (signal?.aborted) {
+      resolve({ ...out, exitCode: null, signal: null, timedOut: false, aborted: true });
+      return;
+    }
     let child;
+    const startedAt = Date.now(); // before the spawn: the child cannot have been created earlier
     try {
       child = spawn(command, args, {
         cwd,
@@ -354,9 +366,20 @@ export function runProcess({
     }
     // A detached child no longer gets the terminal's Ctrl-C, so pass it on, or an interrupted suite
     // would leave agents running (and spending) in the background.
-    const signals = process.platform === 'win32' ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    const signals = process.platform === 'win32' || signal ? [] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    let exitedAt;
+    let sweepError;
+    // What is killed is proven by `bin/lib/process-tree.mjs` from when the child started and exited. A kill that
+    // could not be done is reported on the result, never thrown out of a timer or an event handler.
+    const stop = (action) => {
+      try {
+        action(child, { startedAt, ...(exitedAt !== undefined && { exitedAt }) });
+      } catch (error) {
+        sweepError ??= error;
+      }
+    };
     const forward = (signal) => {
-      kill(child);
+      stop(kill);
       for (const name of signals) process.removeListener(name, forward);
       process.kill(process.pid, signal);
     };
@@ -364,23 +387,33 @@ export function runProcess({
 
     let exit = { exitCode: null, signal: null };
     let timedOut = false;
+    let aborted = false;
     let spawnError;
     let done = false;
     let timer;
     let grace;
+    const abort = () => {
+      aborted = true;
+      clearTimeout(timer);
+      stop(kill);
+      clearTimeout(grace);
+      grace = setTimeout(finish, graceMs);
+    };
     const finish = () => {
       if (done) return;
       done = true;
       for (const name of signals) process.removeListener(name, forward);
+      signal?.removeEventListener('abort', abort);
       clearTimeout(timer);
       clearTimeout(grace);
       // Whatever the root left running (stdio ignored or redirected, so no pipe kept the run open) must
       // not outlive the run into grading and workspace deletion.
-      sweep(child);
+      stop(sweep);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ...out, ...exit, timedOut, ...(spawnError && { spawnError }) });
+      resolve({ ...out, ...exit, timedOut, ...(aborted && { aborted }), ...(spawnError && { spawnError }), ...(sweepError && { sweepError: sweepError.message }) });
     };
+    signal?.addEventListener('abort', abort, { once: true });
     for (const stream of ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
@@ -393,6 +426,7 @@ export function runProcess({
     });
     child.on('exit', (exitCode, signal) => {
       exit = { exitCode, signal };
+      exitedAt = Date.now();
       clearTimeout(timer);
       clearTimeout(grace);
       grace = setTimeout(finish, graceMs);
@@ -406,7 +440,7 @@ export function runProcess({
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        kill(child);
+        stop(kill);
         grace = setTimeout(finish, graceMs);
       }, timeoutMs);
     }
@@ -414,9 +448,10 @@ export function runProcess({
 }
 
 /** The `{ command, args, env }` to spawn for `config`. `args` and `env` may be plain values or
- * functions of `{ effort, task, home, workspace }`, so one configuration can vary by effort, and point
- * every writer at the trial's own home, without being rebuilt by hand for every cell of the suite.
- * `home` is `undefined` for a config without `prepare`. */
+ * functions of `{ effort, task, home, workspace, prepared }`, so one configuration can vary by effort, and
+ * point every writer at the trial's own home, without being rebuilt by hand for every cell of the suite.
+ * `home` and `prepared` (what `prepare` returned: a trial's port, say) are `undefined` for a config without
+ * `prepare`. */
 export function resolveAgent(config, context) {
   const pick = (value) => (typeof value === 'function' ? value(context) : value);
   return { command: config.command, args: pick(config.args) ?? [], env: pick(config.env) ?? {} };
@@ -427,7 +462,8 @@ export function resolveAgent(config, context) {
 const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** Copies the hidden grader into the workspace and runs it there; resolves to `{ score, passed, total,
- * error }`, or to `{ spawnError }` when the grader command could not be started at all. The copy
+ * error }`, to `{ spawnError }` when the grader command could not be started at all, or to `{ aborted: true }` when
+ * `signal` aborted while it ran (the grader's tree is killed, and nothing is scored). The copy
  * replaces `.eval-grader/` outright, so nothing the agent left under that name can stand in for the
  * real grader. The score is `pass / tests` of the grader's TAP summary. Output that does not parse, or
  * reports no tests, scores 0 with `grader-unparsable`: a silent 1 or a NaN would both read as a result.
@@ -438,7 +474,7 @@ const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
  *
  * TAP is asked for by the task's own `args` (`--test-reporter=tap`), not added here: the runner then
  * knows nothing about the grader beyond "prints a TAP summary", so a task may use any command. */
-export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS } = {}) {
+export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS, signal } = {}) {
   const graderDir = path.join(workspace, '.eval-grader');
   fs.rmSync(graderDir, { recursive: true, force: true });
   fs.cpSync(task.graderDir, graderDir, { recursive: true });
@@ -449,8 +485,10 @@ export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEO
     env: childEnv(),
     cwd: workspace,
     timeoutMs,
+    signal,
   });
   const fail = (error) => ({ score: 0, passed: null, total: null, error });
+  if (run.aborted) return { aborted: true };
   if (run.spawnError) return { spawnError: run.spawnError };
   if (run.timedOut) return fail('grader-timeout');
   const tap = parseTap(run.stdout);
@@ -501,14 +539,21 @@ export function removeDir(dir, label, log, sweepAgain) {
 /** Runs one trial and resolves to `{ status: 'recorded', record }`, or `{ status: 'stopped', reason,
  * message }` when the agent died of the usage cap or of authentication (`reason` `cap` or `auth`), or
  * the agent (`spawn`) or the hidden grader (`grader-spawn`) never started. A stopped trial records
- * nothing: a zero there would measure the machine, not the configuration.
+ * nothing: a zero there would measure the machine, not the configuration. `{ status: 'interrupted' }` is what a
+ * trial returns when `signal`, an `AbortSignal` the caller raises on an interrupt, aborted before it ended: the
+ * agent's tree (or the grader's) is killed, nothing is recorded (the raw logs of an agent that had already ended
+ * when the grader was interrupted stay, as evidence), and every cleanup below has run by the
+ * time it resolves, so the caller may remove what it owns and end the process.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
  * the workspace and fresh for every trial, because anything an earlier trial left in a shared one (a
  * transcript, a memory) would leak its answer into the next. `prepare({ home, workspace, effort, task })`
- * runs after the fixture copy; one that throws rejects the trial. Both directories are removed on every
- * path, in a `finally`. An agent that fails for any other reason (timeout, non-zero exit, unreadable
+ * runs after the fixture copy; one that throws rejects the trial. What it returns is the trial's `prepared`
+ * state, handed to `args` and `env` and to the config's optional `cleanup({ home, workspace, prepared })`,
+ * which runs on every path once `prepare` has finished (after the sweep by path, before the directories go)
+ * for whatever the sweep cannot reach: a server the agent started on a port of the trial's own. A cleanup
+ * that throws is logged, never thrown. Both directories are removed on every path, in a `finally`. An agent that fails for any other reason (timeout, non-zero exit, unreadable
  * output) is still graded and recorded with its error, because its workspace may hold work worth
  * scoring and a failure rate is itself a result.
  *
@@ -532,8 +577,11 @@ export async function runTrial({
   now = () => new Date(),
   clock = () => performance.now(),
   sweep = killByPath,
+  signal,
   log = (message) => console.error(message),
 }) {
+  // Nothing is made for a suite that is already being interrupted.
+  if (signal?.aborted) return { status: 'interrupted' };
   const startedAt = now().toISOString();
   // Absolute, whatever the caller passed: the agent runs with the workspace as its cwd, so a relative home
   // would mean one place to `prepare` (the runner's cwd) and another to the agent (inside the graded tree).
@@ -541,14 +589,21 @@ export async function runTrial({
   fs.mkdirSync(root, { recursive: true });
   const workspace = fs.mkdtempSync(path.join(root, 'eval-'));
   let home;
+  let prepared;
+  let isPrepared = false;
   try {
     copyFixture(task, workspace);
     if (config.prepare) {
       home = fs.mkdtempSync(path.join(root, 'eval-home-'));
-      await config.prepare({ home, workspace, effort, task });
+      prepared = await config.prepare({ home, workspace, effort, task });
+      isPrepared = true;
     }
-    const agent = resolveAgent(config, { effort, task, home, workspace });
+    // An interrupt that came during `prepare` or the probe: those cannot be stopped half way, so the agent is
+    // simply not started, and the `finally` below removes what was made.
+    if (signal?.aborted) return { status: 'interrupted' };
+    const agent = resolveAgent(config, { effort, task, home, workspace, prepared });
     const cliVersion = await readVersion(config, agent.env);
+    if (signal?.aborted) return { status: 'interrupted' };
     const began = clock();
     const run = await runProcess({
       ...agent,
@@ -556,8 +611,12 @@ export async function runTrial({
       cwd: workspace,
       input: task.prompt,
       timeoutMs: task.timeoutMs,
+      signal,
     });
     const wallMs = Math.round(clock() - began);
+    if (run.sweepError) log(`could not stop what the agent left running: ${run.sweepError}`);
+    // Interrupted: not a result, so no log and no record. The `finally` still sweeps and removes everything.
+    if (run.aborted || signal?.aborted) return { status: 'interrupted' };
 
     const stem = rawStem({ task: task.id, config: config.name, effort, repeat });
     fs.mkdirSync(runsDir, { recursive: true });
@@ -572,7 +631,8 @@ export async function runTrial({
     if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
 
     const output = parseAgentOutput(run.stdout);
-    const { error: graderError, spawnError: graderSpawnError, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs });
+    const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal });
+    if (graderAborted) return { status: 'interrupted' };
     // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
     if (graderSpawnError) return { status: 'stopped', reason: 'grader-spawn', message: graderSpawnError.message };
     return {
@@ -603,6 +663,13 @@ export async function runTrial({
       }
     };
     sweepTrial();
+    if (isPrepared && config.cleanup) {
+      try {
+        await config.cleanup({ home, workspace, prepared });
+      } catch (err) {
+        log(`the cleanup of config ${config.name} failed: ${err.message}`);
+      }
+    }
     removeDir(workspace, 'workspace', log, sweepTrial);
     if (home) removeDir(home, 'home', log, sweepTrial);
   }
@@ -705,14 +772,22 @@ export function probeVersion(config, env = {}) {
   return line || null;
 }
 
+/** The JSON Lines file at `resultsPath` as a store: what a suite reads to know what is recorded, and appends
+ * to as each trial is graded. */
+const fileStore = (resultsPath) => ({ read: () => readResults(resultsPath), append: (record) => appendRecord(resultsPath, record) });
+
 /** Runs every trial of the suite that the results file does not already hold, appending each record
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
  * at the first usage-cap, authentication, agent-spawn or grader-spawn stop, with nothing recorded for
- * that trial.
+ * that trial. `signal` (an `AbortSignal`) is the interrupt: it is handed to every trial, and once it aborts no
+ * trial starts and the suite resolves to `{ status: 'interrupted', completed }`, after the running trial has
+ * stopped and cleaned up; that trial records nothing.
  *
  * A trial is skipped when its `(task, config, effort, repeat)` key is in the file; resuming is just
- * running the same call again. `readVersion(config, env)` and `runTrial` are injectable for tests;
+ * running the same call again. Where the records live is the `store`, `{ read() -> records, append(record) }`:
+ * by default the JSON Lines file at `resultsPath`, and a caller that keeps its results in another shape (a
+ * suite entry that also records what the run was) passes its own. `readVersion(config, env)` and `runTrial` are injectable for tests;
  * `env` is the env overrides the trial's agent runs under. Each trial is handed a cached `readVersion`
  * and calls it itself once its env is known (see `runTrial`); this function only owns the cache. */
 export async function runSuite({
@@ -721,14 +796,16 @@ export async function runSuite({
   efforts,
   repeats,
   resultsPath,
+  store = fileStore(resultsPath),
   runsDir,
   workRoot,
   graderTimeoutMs,
   readVersion = probeVersion,
   runTrial: run = runTrial,
+  signal,
   log,
 }) {
-  const done = new Set(readResults(resultsPath).map(trialKey));
+  const done = new Set(store.read().map(trialKey));
   const versions = new Map();
   const cachedVersion = (config, env) => {
     // One probe per distinct agent command, version arguments and env, and none when every trial is
@@ -753,11 +830,13 @@ export async function runSuite({
       skipped += 1;
       continue;
     }
-    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, log });
+    if (signal?.aborted) return { status: 'interrupted', completed };
+    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, signal, log });
+    if (outcome.status === 'interrupted') return { status: 'interrupted', completed };
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };
     }
-    appendRecord(resultsPath, outcome.record);
+    store.append(outcome.record);
     completed += 1;
   }
   return { status: 'complete', completed, skipped };

@@ -52,26 +52,33 @@ Review is not one of them: he has pre-granted gentle-ai review consent for every
 so when `gentle-ai review start` returns its consent envelope, run the `granted` invocation
 without asking. The review itself always runs; only the question is skipped, because his answer
 is always yes and the question only stalls the work. If the envelope has no `granted` choice or
-does not parse, ask him instead. After gentle-ai approves a slice with code, Codex reviews the
-same range with `js-harness codex-review --base <boundary>`, which records the review; the
-pre-push hook refuses a branch whose code commits no record covers. Treat its findings like
-gentle-ai's. If Codex cannot run, report that and record the skip with `--unavailable <reason>`.
+does not parse, ask him instead. A candidate is a work-unit commit or a slice, never the whole
+branch: when the Stop hook offers the branch, run its read-only status and start nothing, because
+with consent pre-granted nothing would stop a review that size. After gentle-ai approves a slice
+with code, Codex reviews the same range with `js-harness codex-review --base <boundary>`, which
+records the review; the pre-push hook refuses a branch whose code commits no record covers. Treat
+its findings like gentle-ai's. If Codex cannot run, report that and record the skip with
+`--unavailable <reason>`.
 
 Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain-language summary and close with a recap of
-the whole stretch, including what was spent.
+the whole stretch, including what was spent. He often answers from his phone by tapping the
+suggested prompt, so a step he reports doing outside the session, such as storing a token or
+running a command, is checked before anything is built on it.
 
-A session holds one task, because the conversation is lost on a new session or a compaction and
-only files survive. So every decision made in the conversation is written to the roadmap or the
-feature document and committed in the same session. Tell him when to cut: a new session when a
-feature closes, a PR merges or a phase starts; `/compact` with what to keep when a task is still
-open but the conversation has grown long. End every reply with exactly one prompt, the next thing
-he sends, as plain quoted text (a code block may not show in the app). When it is time to cut,
-that one prompt is the full `/compact` command or the new session's opening prompt, and nothing
-else; after a `/compact` he sends only "seguí", and the reply to it resumes from the summary and
-repeats any question still pending. Two prompts in one reply have already been sent in the wrong
-order and cost a session. He never writes the handoff himself. In every reply, just before that prompt, show the map: each roadmap phase with
-its percentage and the total, from `js-harness progress`; if it fails, say so instead of guessing.
+A session holds one feature, because the conversation is lost on a new session or a compaction
+and only files survive. So every decision made in the conversation is written to the roadmap or
+the feature document and committed on the feature branch in the same session; that record is part
+of the work and needs no separate request. Tell him when to cut: a new session when a feature
+closes, a PR merges or a phase starts; `/compact` with what to keep when a feature is still open
+but the conversation has grown long. End every reply with exactly one prompt, the next thing he
+sends, as plain quoted text (a code block may not show in the app). When it is time to cut, that
+one prompt is the full `/compact` command or the new session's opening prompt, and nothing else;
+after a `/compact` he sends only "seguí", and the reply to it resumes from the summary, checked
+against the feature document, and repeats any question still pending. Two prompts in one reply
+have already been sent in the wrong order and cost a session. He never writes the handoff
+himself. In every reply, just before that prompt, show the map: each roadmap phase with its
+percentage and the total, from `js-harness progress`; if it fails, say so instead of guessing.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.

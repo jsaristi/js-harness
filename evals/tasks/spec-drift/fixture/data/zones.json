@@ -1,0 +1,16 @@
+{
+  "entries": [
+    { "country": "DE", "prefix": "", "zone": "1", "remote": false },
+    { "country": "DE", "prefix": "18", "zone": "1", "remote": true },
+    { "country": "DE", "prefix": "185", "zone": "1", "remote": false },
+    { "country": "FR", "prefix": "", "zone": "2", "remote": false },
+    { "country": "FR", "prefix": "20", "zone": "3", "remote": true },
+    { "country": "FR", "prefix": "202", "zone": "2", "remote": false },
+    { "country": "NL", "prefix": "", "zone": "2", "remote": false },
+    { "country": "GB", "prefix": "", "zone": "3", "remote": false },
+    { "country": "GB", "prefix": "BT", "zone": "3", "remote": true },
+    { "country": "GB", "prefix": "BT1", "zone": "3", "remote": false },
+    { "country": "US", "prefix": "", "zone": "4", "remote": false },
+    { "country": "US", "prefix": "99", "zone": "4", "remote": true }
+  ]
+}

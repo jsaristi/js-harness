@@ -48,9 +48,24 @@ by hidden tests, so a score is a command's exit, not a phrasing match.
   a visible grader turns the task into "make these tests pass" and measures nothing else.
 - Zero dependencies in the runner and graders — because every command in this repo runs with no
   install step (AGENTS.md, "How the repo works").
-- "Discriminates" keeps the predecessor's definition — the two configs' mean scores on a task
-  differ by more than the pooled within-config standard deviation — so its "0 of 32" and this
-  phase's result are comparable.
+- "Discriminates" was the predecessor's definition — the two configs' mean scores on a task
+  differ by more than the pooled within-config standard deviation — until the headroom screen
+  put both configs at the ceiling on every candidate (2026-10-02). Since then (Sebastián,
+  2026-10-02: "score as the floor, cost as what discriminates"), for one task at one effort:
+  - **the scores are equal** when the two means differ by at most 0.02 (one hidden check in
+    about fifty) or by no more than their pooled standard deviation, whichever is larger;
+    near-ceiling scores have almost no spread, so the pooled deviation alone would call one
+    missed check in nine trials a difference;
+  - **score discriminates** when the scores are not equal: the better score wins, at any cost;
+  - **cost discriminates** when the scores are equal and the mean cost differs by more than the
+    pooled standard deviation of cost: the cheaper config wins, since it gets the same result;
+  - the cost of a trial is **its list cost in US dollars as Claude Code reports it**
+    (`total_cost_usd` of the result), which covers the whole session, subagents included. The
+    first version weighted the result's `usage` by price ("cost units"), but `usage` counts the
+    main thread only, so a config that delegates looked cheaper than it was (T6c). Tokens
+    summed over the result's `modelUsage` and wall time are reported beside it; wall time does
+    not decide, because it moves with the machine's load.
+  The predecessor's score rule is still reported per task, so its "0 of 32" stays comparable.
 
 ## Effort
 high
@@ -74,7 +89,31 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   found no cut under 400 (single work-unit commits are 1,124 and 2,725 lines), and Sebastián
   accepted one PR with a size exception (2026-10-01). No `size:exception` label exists in the
   repo, so the exception and the three reading ranges are in the PR body. The repo has no CI
-  checks; the gate is the pre-push `check --push`, which passed.
+  checks; the gate is the pre-push `check --push`, which passed. Merged on Sebastián's go-ahead
+  (2026-10-01) as merge commit `5ab2ae6`; `feat/evals` carries on for slices 2 and 3.
+- The rest, decided 2026-10-03 (Sebastián): three more slices instead of two, cut along the
+  branch's own history so no reviewed commit is rewritten. Each is a PR against `main`, merged
+  in order with a merge commit, with a size exception stated in its body: one slicing pass
+  found no cut under 400, because a task is one unit of 1,200–2,300 lines. All three refs were
+  pushed on 2026-10-03, and the pre-push `check --push` passed for each (15, 27 and 36 code
+  commits, all covered by a Codex record). A PR opens only once the one before it has merged,
+  so its diff shows its own commits alone.
+  - Slice 2: PR jsaristi/js-harness#21, branch `feat/evals-tasks`, `5ab2ae6..57010c7`
+    (18 commits, +9,779/-7): T3, the task proof and the five tasks. Merged on Sebastián's
+    go-ahead (2026-10-03) as merge commit `bb82ea8`.
+  - Slice 3: PR jsaristi/js-harness#22, branch `feat/evals-suite`, `57010c7..4b1ab30`
+    (16 commits, +4,821/-367): T4a, T4k with T4kr, T4kt and T4kg, T4s and T4ap. Merged on
+    Sebastián's go-ahead (2026-10-03) as merge commit `0f44719`.
+  - Slice 4: PR jsaristi/js-harness#23, branch `feat/evals`, from `4b1ab30` to the branch
+    head (+4,903/-55 at `c2ddc23`): the recorded runs, the report, the roadmap and
+    `AGENTS.md`. Merged on Sebastián's go-ahead (2026-10-03) as merge commit `7f02627`, at
+    `3babe73` (16 commits, +4,908/-58). F5 is on `main`.
+- T4k reached `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
+  `evals/ports.mjs`, which `main` did not have (T4a adds it), and `evals/runner.mjs` as T4a
+  left it, so a hotfix would have been a hand-resolved cherry-pick: new code that needs its
+  own reviews and then conflicts with this branch. Since `0f44719`, `main` has
+  `bin/lib/process-tree.mjs` and no `taskkill /T` or bare `ParentProcessId` query outside
+  comments and tests (`git grep` on `origin/main`, 2026-10-03).
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -93,10 +132,15 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - A trial record holds config, effort, task, repeat, score, input and output tokens, turns, wall
   time, CLI version and error; raw transcripts go to gitignored `evals/runs/`, summaries to
   committed `evals/results/`.
-- Headroom screen before the A/B run: a candidate task is kept only if the minimal config at
-  `medium` scores a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
-  nobody fails cannot separate anyone.
-- The A/B run: 2 configs × 2 efforts × the kept tasks × 3 repeats.
+- Headroom screen before the A/B run: a candidate task was to be kept only if the minimal config
+  at `medium` scored a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
+  nobody fails cannot separate anyone on score. It kept none (2026-10-02); under the cost rule
+  (Constraints) a task at the ceiling still separates the configs, so the screen is now
+  information and every candidate goes to the A/B run.
+- The A/B run: 2 configs × 2 efforts × the five tasks × 3 repeats. The `medium` cells are the
+  runs `headroom` (minimal) and `headroom-current` (current), already recorded on the same
+  stack; the `high` cells are one more run. The report reads several runs and refuses to mix
+  stacks, models or permission modes.
 
 ## Tasks
 - [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
@@ -129,16 +173,124 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   inconclusive (Codex); keys of a newly created real JSON file and empty directory names are
   scanned (Codex); the sandbox env test asserts the effective child env (Codex); the `hang`
   fixture really hangs (gentle-ai suggestion) (route: delegated writer, strict TDD)
-- [ ] T3 Candidate tasks: long-horizon, multi-file fixtures with hidden graders, each grader
-  proven by a reference solution that scores 1 and the untouched fixture that scores below it
+- [x] T3a Task proof: `evals/task-proof.mjs` grades a candidate's untouched fixture, its fixture
+  plus reference overlay and an empty workspace with the runner's own grader, and lists every
+  way the candidate fails the rules of "T3 design"; `evals/tasks.test.mjs` runs it over
+  `evals/tasks/*` (route: delegated writer, strict TDD; trigger: module, its tests and the suite
+  are three non-trivial files)
+- [x] T3r T3a review findings: `.gitattributes` uses `text=auto eol=lf`, so a binary fixture
+  keeps its bytes (gentle-ai, Codex); the visible suite runs in its own copies, so its side
+  effects never reach a graded workspace (Codex); test discovery matches Node 24's real patterns,
+  `.ts`/`.mts`/`.cts` included and non-script files excluded (Codex); the malformed-proof test
+  caps its concurrency (gentle-ai suggestion) (route: delegated writer, strict TDD)
+- [x] T3rr T3r review findings: a workspace preparation that throws settles like a failed run, so
+  cleanup waits for every grader already started (gentle-ai WARNING, Codex); the discovery
+  comparison follows the child Node's type-stripping support (`process.features.typescript` or an
+  inherited `--no-experimental-strip-types`), while `isDiscovered` stays conservative (gentle-ai
+  WARNING, Codex); a `Test` directory counts like its file names do, with a case in the matrix, and
+  the `.gitattributes` test skips with a reason when `git` cannot be spawned (gentle-ai
+  suggestions) (route: delegated writer, strict TDD)
+- [x] T3b Candidate `spec-drift`: a shipping-quote library that has drifted from its written spec
+  in a dozen places; the prompt names the drift, not the places (route: delegated writer)
+- [x] T3br T3b review findings: the grader runs the workspace's visible suite as one hidden test
+  (Codex); a parcel with valid weight and bad dimensions before a parcel with a bad weight throws
+  `INVALID_WEIGHT`, as SPEC §2.2 orders the rules, in the reference and in a new hidden test
+  (Codex); the §7.3 tie (equal volume and promo discounts give `source: 'promo'`) gets a hidden
+  test (gentle-ai suggestion) (route: delegated writer)
+- [x] T3c Candidate `house-rules`: a CLI gains a command; the repo's contribution rules, which
+  the prompt never mentions, decide most of the hidden tests (route: delegated writer)
+- [x] T3cr T3c review findings: the fixture's own code follows its `CONTRIBUTING.md`, because the
+  task rewards imitating it: ids never reused after a deletion (a high-water mark) and `list`
+  sorted by id (Codex); the reference's export filters by age only when `--since` is given, so a
+  task with a bad `created` is not silently dropped (gentle-ai suggestion); the registry guard test
+  names its command list once (gentle-ai suggestion); the README's Node requirement matches the
+  glob `node --test` needs, 21 or newer (gentle-ai suggestion) (route: delegated writer)
+- [x] T3d Candidate `resolver`: a dependency resolver built from a spec that needs backtracking,
+  locked versions, peers and deterministic output (route: delegated writer)
+- [x] T3dr T3cr and T3d review findings: `docs/RESOLUTION.md` §1 defines the package-name domain
+  (npm-style lowercase names, so `__proto__` is not a package) and the reference builds its result
+  without prototype-sensitive assignment; no hidden test for `__proto__`, because it would measure
+  JavaScript trivia rather than the spec (Codex, adapted); the `house-rules` visible test helper
+  `stored()` reads both store shapes like the grader does (gentle-ai suggestion) (route: delegated
+  writer)
+- [x] T3e Candidate `lost-updates`: a file-backed store and job queue made safe under
+  interleaved writers and failing disks, from a symptom report (route: delegated writer)
+- [x] T3er T3e review findings: the `lost-updates` reference keeps keys as own properties
+  (`__proto__`, `constructor` and the like store and read like any key) and `DESIGN.md` says a
+  key is any string, with no hidden test of the quirk (Codex, adapted); the G7 child scenario
+  parses adapter data through the guarded helper the grader already has (gentle-ai suggestion)
   (route: delegated writer)
-- [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
-  (route: inline run, results committed)
-- [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
-  inline run, results committed)
-- [ ] T6 Report and roadmap: `evals/report.mjs` with `--require-complete` and
-  `--min-discriminating`, the result written to the roadmap (route: delegated writer for the
-  report, inline for the roadmap)
+- [x] T3f Candidate `format-v2`
+- [x] T3fr T3f review findings: v1 prices in exponent form migrate (a hidden test, since v1 files
+  must keep working) (Codex); the proposal defines "the decimal as written" as the shortest
+  round-trip decimal of a JSON number and the field text of a CSV price, and the reference's v1
+  CSV import reads the text (Codex, adapted; gentle-ai); the reference normalizes v2 CSV tags,
+  treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
+  suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
+  report, import/export and CLI, with old files still loading (route: delegated writer)
+- [x] T4a Sandbox isolation holds with the engram plugin: the current arm's engram hooks and the
+  server they spawn stay inside the trial. A per-trial `ENGRAM_PORT` (and no inherited
+  `ENGRAM_URL`) in `sandboxEnv`, the listener on that port swept with the trial's other
+  processes, and the isolation probe's fake agent extended with a memory write and a subagent
+  stop, so the proof exercises the paths the plugin added (route: delegated writer)
+- [x] T4ar T4a review findings: on POSIX a listener lookup that failed is never read as a free
+  port. `lsof` means "no listener" only on its documented no-match (exit 1, nothing on stdout
+  or stderr), and an `ss` row for the port with no owner is an inconclusive lookup (gentle-ai
+  WARNING, Codex P2 twice) (route: delegated writer, finished inline)
+- [x] T4as Findings of Codex's first full read of T4a: the Windows lookup no longer swallows a
+  real error as "no listener" (only `ObjectNotFound` is the empty case), and the probe's
+  contamination check examines the subagent's requests too (Codex P2 twice) (route: delegated
+  writer)
+- [x] T4k Tree kills cannot hit an unrelated process: on Windows a process is another's descendant
+  only by parent pid **and** creation time, each selected process is killed on its own after
+  its creation time is re-checked, and no `taskkill /T` or bare `ParentProcessId` query remains
+  in `bin/` or `evals/`. One shared module, `bin/lib/process-tree.mjs`, used by `bin/check.mjs`,
+  `bin/codex-review.mjs`, `evals/runner.mjs` and `evals/ports.mjs` (route: delegated writer)
+- [x] T4kr T4k review findings: a process still running after its kill makes `killTree` and
+  `killSurvivors` throw (Codex P2), and `runSensor` takes injectable kills so the path from a
+  throwing kill to `sweepError` is tested (gentle-ai suggestion) (route: inline, two small
+  understood edits)
+- [x] T4kt Test teardowns never signal a process by a bare number: a spawned child is stopped
+  through its handle, a pid learned as a number gets its `{ pid, createdAt }` identity when it
+  is learned and is killed with `killProcesses`, and a guard test fails any test or fixture
+  that does otherwise (Codex P1) (route: delegated writer)
+- [x] T4s The suite entry, `node evals/suite.mjs`: explicit arguments with no default permission
+  mode, the token read from `JS_HARNESS_EVAL_OAUTH_TOKEN` and passed only as
+  `CLAUDE_CODE_OAUTH_TOKEN` in a trial's env, the template removed on every path, one results
+  file per run that names the stack and refuses a resume on a changed one, `--summary` with the
+  screen's keep/drop/incomplete, and the sweep-boundary follow-up (route: delegated writer)
+- [x] T4sr T4s review findings: an interrupt stops the active trial and waits for its cleanup
+  before the process ends (Codex P1), the sweep's boundary is a set of delimiters instead of
+  "anything that is not a name character" (Codex P1), raw logs go under `evals/runs/<name>/`
+  (Codex P2), and an empty task set is a usage error (gentle-ai suggestion) (route: delegated
+  writer)
+- [x] T4srr The suite also owns SIGHUP: a terminal that closes stops the trial like an interrupt
+  (gentle-ai WARNING and Codex P1 on T4sr, the same finding) (route: inline, one file)
+- [x] T4ap The current arm's engram controls match what the plugin's hooks really write. The first
+  real-binary run (2026-10-02) held the isolation and failed `engramPrompt`: on Windows the
+  plugin's UserPromptSubmit hook runs in its safe mode and never posts the prompt, so that
+  control cannot pass there. Controls that hold on every path of the hooks replace it, and
+  what the hooks do post joins the leak needles (route: delegated writer; the probe, its test
+  and its fixtures)
+- [x] T4kg A reused pid held by a process this user cannot read is "gone", not "running": the
+  kill settles that case through CIM instead of failing the caller (found by the gate, a real
+  reuse) (route: inline, two small understood edits)
+- [x] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
+  (route: inline run, results committed). Outcome: **no task kept**, all five at 0.98–1.00
+- [x] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
+  `medium` cells are the recorded runs `headroom` and `headroom-current` (route: inline run,
+  results committed)
+- [x] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
+  ones named), refuses mixed stacks, models or permission modes, and prints per task and
+  effort both configs' mean score, spread, cost (dollars since T6c), tokens and wall time with the verdict of
+  the Constraints' rule (score, cost or none) and the predecessor's score rule beside it;
+  `--require-complete` fails on a cell with fewer than 3 trials, `--min-discriminating <n>`
+  fails unless at least n tasks discriminate at every effort in the runs. The result written
+  to the roadmap (route: delegated writer for the report, inline for the roadmap)
+- [x] T6c A trial's cost is the whole session's: the runner records the result's
+  `total_cost_usd`, `modelUsage` and `subagent_stats`, the report decides on `costUsd`, and the
+  committed results are backfilled from the raw logs, which hold all three for all 60 trials
+  (route: delegated writer for the code, inline for the backfill)
 
 ## Progress
 - 2026-09-30: F5 opened. Spend decision taken: no USD ceiling. The predecessor's runner and its
@@ -346,6 +498,637 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `review-0808ae7f1fdc8d62`, lens reliability): approved and acknowledged, authority burned; one
   WARNING and two suggestions, all under Follow-ups. Codex (recorded): no actionable regressions.
   Reviewed boundary: `db0253b`. T1–T2 (slice 1 of the delivery plan) is complete.
+- 2026-10-01: slice 2 opened; T3 split into T3a–T3f with the rules in "T3 design" (`05692b0`).
+- 2026-10-01: T3a done (delegated writer), commit `bd3f5e4`: `evals/task-proof.mjs`
+  (`applyReference`, `proveTask`), `evals/task-proof.test.mjs` (29 tests), `evals/tasks.test.mjs`,
+  `.gitattributes` `evals/tasks/**` LF. RED observed for 28 of 29 tests against a stub returning
+  no problems; the near-miss names test was proven by mutation; ten mutations, all killed.
+  Evidence: `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 30/30 (rerun by the
+  parent); `node --test "evals/**/*.test.mjs"` 303 pass, 1 skipped; `npm run check` exits 0. A
+  proof costs ~3.3 s (five child processes, each with the Windows survivor sweep). Assessed
+  medium, `slice_budget_reached` over `db0253b..bd3f5e4`. gentle-ai (lineage
+  `review-25c5e88054fe58a2`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING (`text` forces conversion on binary fixtures) and one suggestion (six proofs at once can
+  time out on a slow host). Codex (recorded, from a detached worktree): three P2, the binary one
+  again, visible-suite side effects reaching the graded workspace, and discovery patterns that
+  are not Node 24's. All became T3r. Reviewed boundary: `bd3f5e4`.
+- 2026-10-01: T3b done (delegated writer), commit `ace4044`: `evals/tasks/spec-drift/`, a
+  shipping-quote library (`parcel-quote`) with 16 seeded deviations from its 170-line
+  `docs/SPEC.md`, spread over weight, zones, rates, surcharges, discounts, quote and parse; two
+  visible tests and one README line encode a drift. 48 hidden tests (36 on deviations, 12 guards
+  including hashes of the spec and the data and the export list), each citing its clause. Proof:
+  fixture 12/48, fixture plus reference 48/48, empty 0/48; grader ~0.6 s. Isolation matrix (each
+  fix alone, and each leave-one-out): every fix turns exactly its own 2–3 tests green, no test
+  needs two fixes. The writer's first draft left an unused `INSURANCE_MINIMUM_CENTS` next to a
+  deviation, which the TypeScript language server flagged; since the current arm runs that LSP, it
+  would have handed that arm the answer, so the rule "no unused declaration in a fixture" was added
+  to the writer brief and checked with `tsc --checkJs --noUnusedLocals --noUnusedParameters`.
+  1,535 lines, one unit. Assessed medium, `slice_budget_reached`: review due on
+  `bd3f5e4..ace4044`.
+- 2026-10-01: T3b reviewed over `bd3f5e4..ace4044`. gentle-ai (lineage
+  `review-99acc9fa317393d5`, lens reliability): approved and acknowledged, authority burned; one
+  suggestion (the §7.3 tie is untested). Codex (recorded): two P2, reproduced read-only: the
+  reference's source files alone score 48/48 while two visible tests stay red, so an agent could
+  score full marks with `npm test` failing; and the reference checks one parcel's dimensions
+  before a later parcel's weight, against the order SPEC §2.2 gives. All three became T3br; the
+  first became a rule for every candidate (T3 design). The gentle-ai lifecycle now runs through a
+  scratch driver that executes only the commands and tokens each envelope returns. Reviewed
+  boundary: `ace4044`.
+- 2026-10-01: T3r done (delegated writer). `.gitattributes` `evals/tasks/** text=auto eol=lf`,
+  proven in a temp repo with `core.autocrlf=true` that reads the real line: a file with a NUL and
+  CR LF pairs keeps its bytes, a CRLF text file is stored with LF (RED on the old line). The
+  visible suites run in two copies of their own, so five workspaces per proof (RED: a visible spec
+  that rewrote the module gave "the untouched fixture scores 1"). `isDiscovered` (exported) now
+  matches what Node 24.15.0 ran with no arguments, observed in a temp dir and kept as a test that
+  diffs the two: `*.test.X`, `*-test.X`, `*_test.X`, `test-*.X`, `test.X` and any X under a
+  directory named `test`, X one of cjs/mjs/js/cts/mts/ts, file names case-insensitive; not `.jsx`,
+  `.json`, `.txt`, `a.spec.X` or `tests/`. The malformed-proof test runs its six proofs in turn
+  (no RED possible for a concurrency cap). Evidence: `node --test evals/task-proof.test.mjs
+  evals/tasks.test.mjs` 34/34; `npm run check` exits 0. +124/-32. Commit `9d02179`, assessed
+  medium, `under_budget`.
+- 2026-10-01: T3r reviewed on its own over `ace4044..9d02179`, because the Stop hook offered the
+  whole branch from `5ab2ae6` and this commit was the only part of it not yet covered; reviewing
+  it alone keeps the candidate a work unit. gentle-ai (lineage `review-1178e582ded658a6`, lens
+  reliability): approved and acknowledged, authority burned; two WARNINGs and two suggestions.
+  Codex (recorded): two P2, the same two defects as the WARNINGs, found independently: preparing a
+  workspace now runs synchronously while the `Promise.allSettled` array is built, so a throw
+  there skips the wait and `finally` deletes workspaces under graders still running; and the
+  discovery comparison always expects `.ts` files, which a Node without type stripping (or
+  `NODE_OPTIONS=--no-experimental-strip-types`, which `childEnv()` keeps) does not run, turning
+  the check gate red. All four became T3rr. Reviewed boundary: `9d02179`.
+- 2026-10-01: T3br done (delegated writer): `spec-drift` gains the own-suite hidden test, a
+  validation-order test (SPEC §2.2 "checks the rules below in this order": every weight before any
+  dimensions; the reference's `parse.mjs` now validates in that order) and the §7.3 tie test
+  (5 parcels, `FLAT5`, base 10000: both discounts 500, `source: 'promo'`). Proof 48/12 → 51/13:
+  fixture 13/51, fixture plus reference 51/51, the reference's `src/` alone 50/51 (the own-suite
+  test fails on the two drifted visible tests, which is the finding). Each new test fails on the
+  fixture through one deviation only. Grader 1.3–2.4 s. Commit `483dbec`.
+- 2026-10-01: T3c done (same writer), `evals/tasks/house-rules/`: the `tk` task-tracker CLI
+  (23 files, 700 lines) gains `tk export`; the prompt never mentions `CONTRIBUTING.md`, which the
+  README points at and whose eight rules (command shape, `parseFlags` with `choices`, output only
+  through `ctx.io`, time only through `ctx.clock`, atomic writes with `--force`, error format and
+  exit codes, RFC 4180 CSV with CRLF and fixed columns, docs/completions/changelog) decide most
+  of the 44 hidden tests. Proof: fixture 9/44, fixture plus reference 44/44, empty 0/44; grader
+  ~1.7 s, proof ~5.2 s. 18 one-line rule violations of the reference each fail their own tests. A
+  rule-blind export (`console.log`, `Date.now()`, `fs.writeFileSync`, LF CSV, no docs) scores
+  13/44; the reference without docs 41/44. No language-server diagnostic (TypeScript API with
+  suggestion diagnostics, on fixture and fixture plus reference; the fixture's `run` methods became
+  `async` to clear an "await has no effect" hint). `ctx.io.out(text)` writes text as given rather
+  than one call per line, so CSV can reach stdout with CRLF. Risk, named by the writer: an agent
+  that reads `CONTRIBUTING.md` and imitates the existing commands may score near 1; T4 decides.
+  Commit `11b451e`, assessed high (`high_risk`): review due on `9d02179..11b451e` (T3br and T3c).
+- 2026-10-01: T3br and T3c reviewed over `9d02179..11b451e`. gentle-ai (lineage
+  `review-61f213a662057f45`, four lenses: risk, resilience, readability, reliability): approved and
+  acknowledged, authority burned; three suggestions. Codex (recorded): two P2, reproduced
+  read-only: the fixture's `add` reuses the id of a deleted last task, and `list` keeps the store's
+  order, both against the fixture's own `CONTRIBUTING.md`. All five became T3cr. Reviewed
+  boundary: `11b451e`.
+- 2026-10-01: T3rr done (delegated writer). Each run's preparation is now inside its own async run,
+  so a throw is a rejection `allSettled` waits for; `proveTask` still rejects with it, after every
+  started grader has finished and the workspaces are gone (RED: a reference file named like a
+  fixture directory, a slow grader marking start and finish outside the workspace: "0 !== 1", and
+  the orphaned grader had kept the scratch directory locked). The live discovery comparison asks
+  the child Node for `process.features.typescript` and compares only the extensions it runs; RED
+  under `NODE_OPTIONS=--no-experimental-strip-types`. `isDiscovered` matches the `test` directory
+  case-insensitively, conservatively: Node 24 on Windows did not run `Test/x.mjs` (it compares the
+  on-disk case) but did run `A.TEST.MJS`; RED `Test/x.mjs: false !== true`. The `.gitattributes`
+  test skips when `git` cannot spawn (proven by mutation with `git` off `PATH`). Evidence:
+  `node --test evals/task-proof.test.mjs evals/tasks.test.mjs` 36/36; the same with
+  `NODE_OPTIONS=--no-experimental-strip-types` 34/34; `npm run check` exits 0. +66/-11. Commit
+  `d329c33`, assessed medium, `under_budget`.
+- 2026-10-01: T3rr reviewed on its own over `11b451e..d329c33` (the Stop hook again offered the
+  branch from `5ab2ae6`, of which this was the only unreviewed commit). gentle-ai (lineage
+  `review-465f838939cc25f9`, lens reliability): approved and acknowledged, authority burned; one
+  WARNING. Codex (recorded): one P2, the same defect, checked with Node's bundled matcher: Linux's
+  default discovery is case-sensitive, so the four mixed-case names T3rr added to the live
+  comparison do not run there while `isDiscovered` flags them, and the check gate would go red.
+  Fixed inline (one test, one file): the exact comparison leaves those names out, and for them
+  only "what Node ran is flagged" is asserted. Passes on Windows; the Linux RED could not be
+  observed here (no WSL distribution), so the fix rests on both reviewers' reading of Node's
+  matcher. Reviewed boundary: `d329c33`. Commit `ebe848a`; its first pre-commit run failed once
+  on a test that did not fail again (the log was not kept), and the rerun and a direct `check`
+  passed: a flaky test somewhere in the suite, unidentified, now logged on every commit.
+- 2026-10-01: T3cr done (delegated writer). The `house-rules` store file is `{ nextId, tasks }`
+  (an older bare array is read and its `nextId` derived once), so ids are never reused; `list`
+  sorts by id; `CONTRIBUTING.md` documents both; the reference's export filters by age only with
+  `--since`; the grader names its command list once; README and `engines` say Node 22+. Two new
+  hidden guards (id never reused, list order on a store written out of order) and one test of
+  export over the new store shape. Proof 44/9 → 47/11, fixture plus reference 47/47; no
+  language-server diagnostic. Fixture 755 lines. Commit `d54c52e`.
+- 2026-10-01: T3d done (same writer), `evals/tasks/resolver/`: a tiny package manager (fixture 634
+  lines, 14 files) whose `resolve()` is a plausible greedy breadth-first pass; the prompt asks for
+  the full algorithm of `docs/RESOLUTION.md` (143 lines, ten sections: flat model, constraints,
+  candidates, depth-first search in name order, the candidate check, peers, lock, errors, result,
+  examples). Rules the brief left open were settled in the spec: an optional name gets "absent" as
+  a last alternative, every constraint kind restricts, `ENOVERSION` counts a locked yanked
+  version, `ECONFLICT.package` is the last dead end and is asserted only where every dead end is
+  on one name. Proof: fixture 15/45, fixture plus reference 45/45, empty 0/45; grader ~2 s. A
+  second implementation (explicit stack, written from the spec before the reference) scored 45/45
+  first time; 34 mutants of the reference, one per rule, all killed but the deliberately unasserted
+  first-versus-last dead end. No language-server diagnostic. Limit: the second implementation
+  shares its author with the reference. Commit `94626b8`, assessed medium,
+  `slice_budget_reached`: review due on `d329c33..94626b8` (`ebe848a`, T3cr and T3d).
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-bab25395b701a969`, lens
+  reliability): approved and acknowledged, authority burned; one suggestion (the `house-rules`
+  visible helper `stored()` returns `undefined` on a legacy bare-array store, while the grader
+  reads both). Codex (recorded): one P2, verified against the reference: a package named
+  `__proto__` sets the prototype of the result's `packages` instead of adding an entry, so it
+  vanishes from the result and the lockfile. Both became T3dr, the second adapted: the spec will
+  define the name domain rather than the grader test a JavaScript quirk. Reviewed boundary:
+  `94626b8`.
+- 2026-10-01: T3e done (delegated writer), `evals/tasks/lost-updates/`: `cellar`, a file-backed
+  key-value store with a job queue (fixture 613 lines, 14 files) that is correct one call at a time
+  and breaks its own `docs/DESIGN.md` (G1–G7 store guarantees, Q1–Q3 queue guarantees) under
+  interleaved calls and a failing disk; the prompt is a symptom report. The grader drives the store
+  through a deterministic fake adapter that holds, reorders or fails each operation, and checks
+  unhandled rejections in a child process. Proof: fixture 13/43, fixture plus reference 43/43,
+  empty 0/43; grader 1.3–1.7 s; five runs identical on every workspace graded. A plausible partial
+  fix (one mutex around the store, nothing else) scores 20/43; the reference store with the
+  fixture's queue 36/43; an independent correct implementation in another style 43/43. DESIGN was
+  made explicit where the tests needed it: copies out of `get`/`update`, one write per mutation,
+  `clock() - t > visibilityMs` as expiry, the four `ESTALE` cases. No language-server diagnostic.
+  1,697 lines.
+- 2026-10-01: the flaky test found: its first commit attempt failed the discovery comparison
+  again, with `a_test.ts` missing from the names read back out of `node --test`'s TAP output while
+  the full suite ran (1,173 tests, 5.8 min); alone it passed. Each discovered file now writes a
+  marker into a directory of its own and the comparison reads the markers; a mismatch prints the
+  run's output. Six concurrent runs passed. Commit `21b69c7`. T3e committed as `08da909`,
+  assessed medium, `slice_budget_reached`: review due on `94626b8..08da909`.
+- 2026-10-01: that range reviewed. gentle-ai (lineage `review-5f2864a38403d9b7`, lens
+  reliability): approved and acknowledged, authority burned; one WARNING and one suggestion.
+  Codex (recorded): two P2. Both reviewers: the markers used `process.getBuiltinModule`, which
+  Node 22.0–22.2 lacks while `engines` allows them; fixed inline with a dynamic
+  `import('node:fs')`, which works in CommonJS and ESM files alike (the comparison passes).
+  Codex, reproduced with the fake adapter: the `lost-updates` reference stores `__proto__` as a
+  prototype change and `get('constructor')` returns an inherited function. gentle-ai: the G7 child
+  scenario parses adapter data unguarded, so a candidate renaming an unwritten path would crash it
+  for a reason unrelated to G7. Both became T3er; as with `resolver`, the reference is fixed and
+  `DESIGN.md` says keys are any string, without a hidden test of the JavaScript quirk. Reviewed
+  boundary: `08da909`.
+- 2026-10-01: T3dr and T3er done (delegated writer), committed with the marker fix as one
+  review-fix commit. `resolver`: `RESOLUTION.md` §1 item 7 defines the name domain (npm-style,
+  lowercase, at most 214 characters, not starting with `.` or `_`), the reference builds
+  `packages` with `Object.fromEntries`, the grader's spec hash updated; proof unchanged 15/45.
+  `house-rules`: `stored()` reads both store shapes; proof unchanged 11/47. `lost-updates`: the
+  reference keeps its state in a `Map` (`__proto__` persists as a key, `get('constructor')` is
+  `undefined`, checked by script), `DESIGN.md` says a key is any string, the guarded parse is a
+  shared `grader/json.mjs` used by the G7 scenarios; proof unchanged 13/43, five identical runs.
+  No language-server diagnostic anywhere. Rule added to the writer brief: a reference never
+  indexes a plain object with a user-supplied string. Commit `25b696c`.
+- 2026-10-01: T3f done (same writer), `evals/tasks/format-v2/`: an inventory tool (fixture 719
+  lines, 16 files) with an accepted proposal `docs/proposals/format-v2.md` (structured prices in
+  minor units per currency, split locations, tag arrays, per-currency valuation, v2 CSV that still
+  imports v1, new CLI flags) and a standing format policy in `docs/DATA.md` (migrate in memory,
+  write the newest, keep unknown fields, back up once before the first rewrite, refuse a newer
+  version with `EVERSION`, read-only commands never write). The prompt says only: implement v2,
+  keep v1 files working, follow the policy. 46 hidden tests across every module and the CLI.
+  Proof: fixture 12/46 (exactly the guards), fixture plus reference 46/46, empty 0/46; grader
+  ~1.1 s. A narrow implementation (three fields and `valuation` only) scores 15/46, because CSV
+  and CLI break on object prices; the full reference without the policy rules scores 36/46 (0.78).
+  The proposal pins what the tests needed: `validateItem` field names, the `byWarehouse` shape,
+  `list` output, a v1 price read as the decimal written (`1.005 EUR` → 101), v1 CSV rows priced in
+  EUR. Not derivable from a document: `importCsv` returning the new state, which the fixture's own
+  docstring says. No language-server diagnostic; the reference uses `Map`/`Object.fromEntries`.
+  Commit `465a06a`, assessed medium, `slice_budget_reached`.
+- 2026-10-01: `08da909..465a06a` reviewed as two candidates to stay inside the reviewers'
+  context. gentle-ai over `08da909..` (lineage `review-d0c89b289dc34f5b`; `--committed-only`
+  reviews up to HEAD, so it covered `format-v2` too) and over `25b696c..465a06a` (lineage
+  `review-c06051121fb4ae64`): both approved and acknowledged, authority burned; four suggestions,
+  all on the `format-v2` reference (v2 CSV tags not normalized, a malformed v2 item crashes with a
+  TypeError, the v1 CSV price goes through `Number()`, a missing `bin` prints `undefined`). Codex:
+  nothing actionable over `08da909..25b696c`; two P2 over `25b696c..465a06a`, reproduced in
+  memory: a valid v1 price like `0.0000001` (`1e-7` as a string) fails migration with `EFORMAT`,
+  and "the decimal as written" cannot hold for JSON digits beyond a double. All became T3fr: the
+  first gets a hidden test (v1 files must keep working), the second a precise definition in the
+  proposal instead of a test. Reviewed boundary: `465a06a`.
+- 2026-10-01: T3fr done (delegated writer, one parent edit). The reference's `toMinor` reads a
+  decimal's digits and shifts the point by its exponent, with no float (exponent capped at three
+  digits); a new hidden test migrates v1 prices written `0.0000001` and `5e-7` to 0 and runs `list`
+  and `move` on such a file (RED: 46/47 on the old reference). The writer's test also expected
+  `1e21` to migrate to `1e23`; the parent removed that case, because the proposal says nothing
+  about amounts beyond the safe-integer range and an implementation rejecting them would be as
+  correct. The proposal now defines a JSON price's decimal as the shortest round-trip form
+  (exponent included) and a CSV price's as the field text; the reference's v1 CSV import reads
+  the text; v2 CSV tags are cleaned like v1 tag lists (one proposal sentence); a missing `bin`
+  reads as `null`; a malformed v2 item is `EFORMAT`. Proof 46/12 → 47/12, fixture plus reference
+  47/47; all five candidates proven (`node --test evals/tasks.test.mjs` 5/5, rerun by the parent);
+  no language-server diagnostic.
+- 2026-10-01: the flaky discovery test's real cause: its first T3fr commit attempt failed again,
+  this time with the markers, and the nested run's TAP showed the missing files' child processes
+  exiting `3221225794` (`0xC0000142`, `STATUS_DLL_INIT_FAILED`): Windows failing to start processes
+  when ~120 are spawned at once while the whole suite runs in parallel. The markers fixed nothing
+  (the reporter was never the problem); the nested `node --test` now runs with
+  `--test-concurrency=2` (5.4 s alone). The same limit may bite T4: a trial spawns many processes.
+  Commits `103afc5` (the cap) and `d0bc904` (T3fr).
+- 2026-10-01: `465a06a..d0bc904` reviewed so T3 closes clean. gentle-ai (lineage
+  `review-28fd41e980f1cdee`, lens reliability): approved and acknowledged, authority burned; two
+  WARNINGs and one suggestion. Codex (recorded): one P2. All four are about the `format-v2`
+  reference's price parsing on inputs no hidden test uses (`1e308`, a short v1 CSV row, `.5`/`1.`/
+  `+1` in a v1 CSV, a `1.5e21` case in the reference's own visible spec). The review contract
+  forbids looping until clean, and none changes a measurement (the reference still scores 47/47
+  and every hidden test stays fair), so they are Follow-ups. Reviewed boundary: `d0bc904`.
+  **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
+  (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
+  13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
+- 2026-10-01: the stack moved under the feature. `gentle-ai upgrade` (00:25Z) took engram to
+  3.0.0 and `gentle-ai sync` (00:33Z) ran `engram setup claude-code`, which installed the Claude
+  plugin `engram@engram` 0.1.5: hooks and one skill, no MCP server
+  (`~/.claude/plugins/cache/engram/engram/0.1.5/` has `hooks/`, `scripts/`, `skills/` and no
+  `.mcp.json`). Its hooks talk HTTP to `ENGRAM_URL` or `127.0.0.1:${ENGRAM_PORT:-7437}`:
+  SessionStart posts `/sessions` and starts a detached `engram serve` when nothing answers,
+  PreToolUse runs on every `mem_*` write, SubagentStop posts `/observations/passive`. None of
+  that honours `ENGRAM_DATA_DIR`, and the allowlist drops `ENGRAM_PORT`, so a current-arm trial
+  would reach the real server on 7437 (it answers today: version 3.0.0) and could write the real
+  store. The T2c/T2s proof never exercised this: its fake agent runs only Bash and Write. T4 is
+  blocked on T4a. gentle-ai itself is now 4.0.0 (`odd/tasks/stack-v4.md`), so the current arm is
+  gentle-ai 4.0.0 + engram 3.0.0 + plugin 0.1.5; the versions are fixed before T4 and must not
+  change between T4 and T5, and the report names them.
+- 2026-10-02: T4a implemented (delegated writer, resumed after a session restart with its work
+  intact; RED observed per module, GREEN: the five evals test files 349 pass, 0 fail, 1 skipped,
+  the EPERM file-symlink test that was skipped before; `npm run test` 1242 pass, 0 fail, 8
+  skipped; parent spot check re-ran the five files with the same result). What it does:
+  - **A port per trial.** `evals/ports.mjs` `allocatePort()` binds port 0 and releases it, never
+    returns 7437 or a port under 1024, and keeps overlapping trials apart with a reserved set.
+    Each config allocates it in `prepare` and returns `{ engramPort }`; `sandboxEnv`,
+    `prepareSandbox`, `seedHome` and `initWorkspace` throw without one, so nothing can fall back
+    to 7437. Both arms carry `ENGRAM_PORT`; `ENGRAM_URL` and `ENGRAM_SOCKET` are outside the
+    allowlist. `seedHome` writes `ENGRAM_PORT` next to `ENGRAM_DATA_DIR` in the sandbox
+    `.claude.json` engram entry and drops a URL or socket it carried.
+  - **The listener dies with the trial.** A config may have a `cleanup`, which `runTrial` calls
+    once on every path after `prepare` (success, failure, timeout, cap), after the sweep by path
+    and before the directories go. It runs `killByPort`: on Windows `Get-NetTCPConnection` plus
+    `Get-Process` (`netstat` prints its state column in the OS language), then `taskkill /T /F`;
+    on POSIX `lsof`, `ps`, `ss` as a fallback, `SIGKILL`. `assertTrialPort` refuses 7437 before
+    anything runs, and a listener not named `engram` is left alone and reported.
+  - **The probe drives the plugin's paths.** The fake API now scripts a `mem_save` and a
+    subagent besides Bash and Write, and the prompt carries a nonce. For the current arm two
+    positive controls must hold (the sandbox store has the prompt and the memory), the agent's
+    tools must see the trial's `ENGRAM_PORT` and no URL or socket, and after cleanup nothing may
+    accept a connection on the trial port and no engram process may exist that was not there
+    before (a failed listing is inconclusive, never a pass). The real `~/.engram` is
+    content-hashed and scanned for the nonce, as the real home already was.
+  **Not yet proven:** the probe with the real `claude` binary has not run, so T4a stays open.
+  Unknown until it does: whether the engram MCP tool is offered to the model without a
+  ToolSearch step, whether SessionStart starts a server on the trial port and the prompt hook
+  reaches it, and whether the trial's `engram mcp` exits with Claude. Observed on this machine:
+  the only `engram.exe` processes are two `mcp --tools=agent`, no `serve`, so what answers on
+  7437 may be an MCP process. The run is zero spend (a loopback fake API), but if the fix were
+  wrong it would be the trial that writes the real store, which is an Ask-me-before: it waits
+  for Sebastián. Command:
+  `node evals/isolation-probe.mjs --claude <path to claude.exe> --arm both --control-ms 60000`.
+  The change is about 1,370 lines against the ~400 heuristic (half of it tests): one behavior
+  across four modules that each had to refuse a missing port, not split because a half-wired
+  port is the unsafe state.
+- 2026-10-02: `d0bc904..514dd43` (T4a) reviewed. gentle-ai: medium, lineage
+  `review-5b4f5f6e02658d8d`, lens reliability, approved and acknowledged, authority burned; one
+  WARNING and one suggestion. Codex: two P2, but **no record**: its successful commands showed
+  497 of the 1,314 changed lines, and `codex-review` records only on evidence that the whole diff
+  was read. It said its coverage was limited because "delegation tools were unavailable"; to
+  re-run after T4ar. All findings are one defect: on POSIX, `findListeners` returned an empty
+  list when `lsof` failed with only stderr output, or when `ss` listed the socket without its
+  owner, so `killByPort` reported a clean port without checking. Not reachable on this Windows
+  host, but it broke the module's own rule that an empty list means free, never "could not ask".
+- 2026-10-02: T4ar done. The writer was cut off by a second session restart with the fix on disk
+  and uncommitted; the parent verified it rather than redo it. RED, observed by stashing the
+  code change and running the new tests against the old code: `node --test evals/ports.test.mjs`
+  21 pass, 3 fail (the three new tests). GREEN with the change:
+  `node --test evals/ports.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 207/207. The
+  POSIX paths are tested against fixtures only; nothing here ran on Linux or macOS.
+- 2026-10-02: `514dd43..58492e4` (T4ar) reviewed by gentle-ai: lineage `review-9aa775fe0120483f`,
+  lens reliability, approved and acknowledged, authority burned; one suggestion (a host whose
+  `lsof` warns on every run can never confirm a free port; it fails closed, so a follow-up).
+  Codex re-ran over `d0bc904..58492e4`, read the whole diff this time and is recorded. Two new
+  P2, both on T4a's code and both about the property the task exists for, so they became T4as
+  instead of follow-ups: on Windows, the host these evals run on,
+  `Get-NetTCPConnection -ErrorAction SilentlyContinue` hid real errors and the lookup answered
+  "free"; and the probe dropped a subagent's requests from the contamination check, so a
+  minimal-arm run with a contaminated subagent would have passed.
+- 2026-10-02: T4as done (delegated writer; RED: the CIM-failure case did not throw, and the
+  subagent request was not examined; GREEN: `node --test evals/ports.test.mjs
+  evals/isolation-probe.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 321/321). On this
+  host, with real PowerShell: a free port from `allocatePort()` gives `[]` and a real listener
+  is found.
+- 2026-10-02: **the harness was killing unrelated processes on this machine** (T4k). The Claude
+  desktop app closed three times in one evening (2026-10-01 23:31, 2026-10-02 00:36 and 01:14,
+  local time) while these tests and the pre-commit gate ran. Its `main.log` at 01:13:59 says
+  `Network Service process gone (reason=killed, exitCode=1) outside app quit` and its shell PTY
+  exited with code 1, the code `taskkill /F` leaves; Windows logged no application error for
+  it. Cause: `killSurvivors` (`evals/runner.mjs` and its twin in `bin/check.mjs`) ran
+  `Get-CimInstance Win32_Process -Filter 'ParentProcessId=<pid>'` and killed each match with
+  `taskkill /T /F`, and `killTree`, the sweep by path, `killByPort` and `bin/codex-review.mjs`
+  used `taskkill /T`. Windows keeps a dead parent's pid in its children and reuses pids quickly,
+  so when a short-lived test child receives the pid some long-lived process records as its
+  long-dead parent, that process and its tree die (`explorer.exe` always has a dead parent).
+  The defect is on `main` too: slice 1 of this feature and F4's `bin/check.mjs`, which is the
+  pre-commit gate of every project that installs the harness.
+- 2026-10-02: T4k done (delegated writer; trigger: 2+ non-trivial files). Design: a pid is not an
+  identity on Windows, a pid with its creation time is. `selectDescendants` is pure: under a
+  live root a child needs `createdAt >= root.createdAt`; under an exited root it needs
+  `startedAt - 100 ms <= createdAt <= exitedAt + 100 ms` (Node's clock against the kernel's);
+  below the first generation, `createdAt >= parent.createdAt`; unknown creation time or a pid
+  of 4 or less is never selected. The selection runs in Node from one `Get-CimInstance`
+  snapshot; the kill script receives `pid@createdMs` pairs, opens each process, compares its
+  start time and kills that handle only. A failed snapshot throws where the caller relies on
+  the kill. RED: the regression cases (an old process whose parent pid equals the root's) were
+  selected by a bare parent-pid match. GREEN: `node --test bin/lib/process-tree.test.mjs` 33/33
+  (re-run by the parent), `bin/check.test.mjs evals/runner.test.mjs evals/ports.test.mjs`
+  220/220, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip, `bin/codex-review.test.mjs` with the module 107/107; `rg -n taskkill bin evals`
+  finds only comments and assertions. Not verified: a real pid collision (the tests use a
+  synthetic snapshot), the POSIX paths (unchanged, not run on this host), other Windows
+  versions. Closes the follow-up that `killSurvivors` lived twice. Commit `298d739`.
+- 2026-10-02: `58492e4..298d739` (T4as and T4k) reviewed by gentle-ai: lineage
+  `review-f4236dab534e95b7`, medium risk, one lens (reliability), approved and acknowledged,
+  one suggestion (nothing tested that a kill throwing inside `runSensor`'s timers lands on
+  `sweepError`). Codex on the same range: one P2 (`killProcesses` returns the processes still
+  running, and `killTree` and `killSurvivors` dropped that list, so a survivor reached neither
+  `sweepError` nor `killFailure`), and no record, because its commands showed 993 of the 1,062
+  changed lines. Both findings became T4kr.
+- 2026-10-02: T4kr done inline. RED: `killTree` and `killSurvivors` returned on an `R` outcome
+  ("Missing expected exception"), and `runSensor` had no way to take a kill, so `sweepError` was
+  `undefined`. GREEN: `node --test bin/lib/process-tree.test.mjs bin/check.test.mjs
+  evals/runner.test.mjs evals/ports.test.mjs bin/codex-review.test.mjs` 329/329. `killByPort`
+  still ignores the kill's report on purpose: the port lookup after it decides. Commit
+  `ca08a0c`; gentle-ai assessed `298d739..ca08a0c` as medium, not due (`under_budget`).
+- 2026-10-02: Codex on `58492e4..ca08a0c`: one P1 and again no record (1,029 of 1,106 changed
+  lines shown). The P1 is T4k's own defect in the tests: `bin/lib/process-tree.test.mjs` kept a
+  set of pids, some already killed by the tests, and its `after` hook signalled each by number;
+  `evals/runner.test.mjs` (since slice 1) and `evals/isolation-probe.test.mjs` did the same.
+- 2026-10-02: T4kt done (delegated writer; trigger: 2+ non-trivial files). New
+  `identifyProcesses` in the module and `bin/lib/process-tree.testkit.mjs` (`createReaper`:
+  `child`, `pids`, `reap`, `sweep`); a pid learned as a number is identified when learned, and
+  only if it started after the test began (`since`). RED: the helper's and the reaper's unit
+  tests against a stub, and the guard against the unfixed sites. GREEN:
+  `bin/lib/process-tree.test.mjs` 44/44 (re-run by the parent), `evals/runner.test.mjs
+  evals/ports.test.mjs` 153/153, `evals/isolation-probe.test.mjs` 111/111, `bin/check.test.mjs
+  bin/codex-review.test.mjs` 142/142; `rg -n "process\.kill\(" -g "*.test.mjs" bin evals` shows
+  only `process.kill(pid, 0)` probes. POSIX still signals a learned pid by number (the module
+  reads no creation time there); not exercised on this host. Commit `0f96ffd`.
+- 2026-10-02: `298d739..0f96ffd` (T4kr, T4kt) reviewed by gentle-ai: lineage
+  `review-306ad3f6c220ebdb`, medium risk, one lens (reliability), approved and acknowledged,
+  three suggestions. (1) No caller is shown to handle `killTree` now throwing or to have used
+  its old return value: checked, `rg -n "= (await )?(killTree|killSurvivors)\(" bin evals`
+  finds no reader, and `killByPort` calls `killProcesses`, not `killTree`. (2) `reapHolder` in
+  `evals/isolation-probe.test.mjs` takes the holder's identity at teardown instead of when the
+  pid is written: a follow-up. (3) The `runSensor` test's scripted kill could be replaced by
+  the real kill's own throw: fixed, the real kill is wrapped.
+- 2026-10-02: Codex could not read `58492e4..HEAD` whole (four runs showed 993 of 1,062, 1,029
+  of 1,106, 496 of 1,355 and 791 of 1,062 changed lines; none recorded), so the range was
+  reviewed as three, the older two from a detached worktree at that commit (records live in the
+  shared git directory): `58492e4..7ddc047` no findings; `7ddc047..298d739` the P1 and P2
+  already fixed by T4kt and T4kr; `298d739..0f96ffd` no findings. All three recorded.
+- 2026-10-02: T4s done (delegated writer, cut by a session restart with the work on disk and
+  stashed while T4k went first; reconciled by the parent: one conflict in `evals/runner.mjs`,
+  between the new boundary comment and T4k's sweep script). `evals/suite.mjs` exports
+  `suiteMain(argv, env, deps)`. Results: `evals/results/<name>.json`, `{ format: 1, name,
+  createdAt, permissionMode, model, stack, args, trials }`, written through a `.tmp` file;
+  `runSuite` takes a `store` (`{ read, append }`) so the suite keeps its own file shape and
+  resume still skips recorded trials. The sweep by path now ends a match on any character that
+  cannot continue a name, so `trial-1;` matches and `trial-10` does not. GREEN after the
+  reconcile: `node --test evals/runner.test.mjs evals/suite.test.mjs
+  bin/lib/process-tree.test.mjs` 207/207 (38 of them the suite's). Not verified: a run with the
+  real binary, which is T4 itself. Commit `267dc13`.
+- 2026-10-02: `0f96ffd..267dc13` reviewed by gentle-ai: lineage `review-c31fc7a3d66fd048`, medium
+  risk, one lens (reliability), approved and acknowledged, one suggestion (`--tasks all` over
+  an empty tasks directory exits 0 with nothing run). Codex on the same range, recorded: two P1
+  and a P2. The suite's interrupt handler exited before `runTrial`'s cleanup, leaving a
+  detached agent running and spending; the new sweep boundary matched `trial-1+backup` when
+  sweeping `trial-1` (on Windows `+`, `(`, `[` continue a name), so it could kill an unrelated
+  process; and two runs with different names shared one raw-log directory, so T5 would have
+  overwritten T4's logs. All four became T4sr.
+- 2026-10-02: T4sr done (delegated writer; trigger: 2+ non-trivial files). The suite owns an
+  `AbortController` passed through `runSuite` and `runTrial` to `runProcess` and the grader: the
+  first signal aborts, the trial ends as `{ status: 'interrupted' }` through its own `finally`
+  and records nothing, then the template is removed and the process exits `128 + n`; a second
+  signal exits at once. A caller that passes a signal to `runProcess` gets no POSIX forwarding
+  (it would end the process before the cleanup). The sweep ends a match at the end of the line,
+  a separator, a quote, whitespace or one of `;`, `,`, `=`, `)`: a wrong kill is worse than a
+  missed survivor. RED observed per change. GREEN: `evals/suite.test.mjs` 43/43 (re-run by the
+  parent), `evals/runner.test.mjs` 132 pass and 1 skip (POSIX-only), `bin/lib/process-tree.test.mjs`
+  44/44, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip. Not verified: POSIX, and a real SIGINT to a real `suite.mjs` process (the signal
+  is injected through the `process` seam). Commit `24774db`.
+- 2026-10-02: `267dc13..24774db` (T4sr) reviewed by gentle-ai (lineage `review-061383905cd4dbe2`,
+  medium, reliability lens, approved and acknowledged) and Codex (recorded). Both found the
+  same defect: with the suite's abort signal `runProcess` forwards nothing, and the suite
+  listened to SIGINT and SIGTERM only, so a SIGHUP (the terminal closing) ended the suite and
+  left the detached agent running. gentle-ai also noted that an interrupt during grading
+  leaves the agent's raw logs, against `runTrial`'s comment, with no test on that path.
+- 2026-10-02: T4srr done inline. RED: the SIGHUP case exited with nothing (`[]` instead of
+  `[129]`). GREEN: `node --test evals/suite.test.mjs` 43/43. `runTrial`'s comment now says the
+  logs of an agent that had ended stay when its grader is interrupted, as they do for a cap or
+  an auth stop; the missing test of that path is a follow-up.
+- 2026-10-02: Sebastián gave the go-ahead for the real-binary probe. First run, `node
+  evals/isolation-probe.mjs --claude C:\Users\Oficina\.local\bin\claude.exe --arm both
+  --control-ms 60000`: exit 1. The isolation held in both arms (leak scan of the real trees and
+  of the real engram store: nothing; no real tree changed outside the control window; nothing
+  left on the trial's engram port), and one positive control failed, `engramPrompt`. Cause, read
+  from the plugin (`~/.claude/plugins/cache/engram/engram/0.1.5/scripts/user-prompt-submit.sh:464-489`):
+  under Git Bash on Windows the UserPromptSubmit hook takes a builtin-only safe path that writes
+  its state file and exits without `POST /prompts`. The prompt is never stored on this machine,
+  in a trial or in real use, so the control could not pass. A second run with `--keep-sandbox`
+  confirmed it: the state file was in the sandbox's temp directory, the trial's own
+  `serve.err.log` named the trial's port, and the session id was in the trial's store.
+- 2026-10-02: T4ap done by a delegated writer (Sonnet). `engramPrompt` is no longer a control;
+  three replace it for the current arm: `engramHook` (the hook's
+  `engram-claude-<session id>-tools-loaded` state file in the sandbox's temp directory, written
+  on both of the hook's paths), `engramServer` (the server log in the trial's data directory
+  names the trial's port) and `engramSession` (the session id is in the trial's store; only
+  `session-start.sh` posts `/sessions`, though a content scan cannot tell its row from the MCP
+  write that names the same session). Whether the prompt was stored is reported as information,
+  like the subagent stop. The trial's session id (from the agent's result, else its transcript's
+  name) is a new needle for the real engram store and the real trees, added after the agent ran
+  and never printed before the scans. RED: 11 failing tests on the controls, 2 on the needles
+  (a session row planted in the fake real store went unseen). GREEN: `node --test
+  evals/isolation-probe.test.mjs` 122/122, `bin/lib/process-tree.test.mjs` 44/44, runner, suite,
+  home and configs 277 pass, 2 skipped.
+- 2026-10-02: T4a's proof, run by the parent after T4ap: the same command, both arms, 60 s
+  control window: **exit 0, PASS**. Current: `transcript ok, workspaceNonce ok, workspaceWrite
+  ok, engramDb ok, engramHook ok, engramServer ok, engramSession ok, engramMemSave ok`; the real
+  global CLAUDE.md reached 7 of 7 requests; real engram store (8 files, 57 MB) scanned for the
+  nonce, the sandbox name and the session id: nothing; leak scan of the real trees: nothing; no
+  real tree changed outside the control window. Minimal: the three applicable controls ok, the
+  real CLAUDE.md reached none of 6 requests, nothing found, nothing changed. Information only:
+  on this machine the engram hooks store neither the prompt nor the subagent stop. The probe ran
+  as `claude-opus-5-5`, effort medium, permission mode `bypassPermissions`. No spend (loopback
+  fake API). The sandbox kept for the diagnosis and the work root were removed.
+- 2026-10-02: T4ap committed as `e54ff9f`. `24774db..e54ff9f` (T4srr, the docs commit and T4ap,
+  437 lines) reviewed by gentle-ai (lineage `review-286adcc0baffe81a`, medium, reliability lens,
+  approved and acknowledged) with two suggestions, both about untested fallbacks, now
+  Follow-ups. `f99f859..e54ff9f` reviewed by Codex (recorded): no actionable finding, a static
+  read.
+- 2026-10-02: the gate of the docs commit that recorded those reviews went red once:
+  `evals/runner.test.mjs`'s teardown threw `still running after the kill: pid 7980`. Pid 7980
+  was by then a `SearchFilterHost.exe` of SYSTEM created at 13:59:19, during the gate: a real
+  pid reuse. The identity check did its job, the unrelated process was not killed. The defect
+  was the report: `KILL_SCRIPT` read the start time through a handle, which PowerShell returns
+  as null for another user's process, the comparison threw, and the outcome stayed `R`
+  (running), so `killTree`, `killSurvivors` and the test reaper threw on a process that was
+  never theirs. T4kg, inline: when the handle cannot be read, CIM (which reads any process's
+  creation date) decides: no row or a different creation time is `G`, the same one or none
+  stays `R`, and no kill is tried either way. RED: `killProcesses` on a `spoolsv.exe`-class
+  process with a creation time an hour off answered `running: [1092]`. GREEN: `node --test
+  bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
+  `feat/stack-v4` do not have T4k at all. Commit `09d7a90`; gentle-ai assessed it medium,
+  under budget; Codex reviewed `e54ff9f..09d7a90` (recorded): no actionable finding.
+- 2026-10-02: Sebastián stored the token (checked without reading it) and chose
+  `bypassPermissions` (`4b1ab30`). **T4 ran**, the first real trials: `node evals/suite.mjs
+  --claude C:\Users\Oficina\.local\bin\claude.exe --configs minimal --efforts medium --repeats 3
+  --tasks all --permission-mode bypassPermissions --name headroom`, with the token passed to
+  that one process from the user variable. 15 of 15 trials recorded, no error, no cap, exit 0;
+  35.8 minutes of agent time; 6.75M input tokens (almost all cache reads) and 232.5k output;
+  `claude-opus-5-5`, Claude Code 2.1.284, gentle-ai 4.0.0, engram 3.0.0, plugin 0.1.5.
+  Results: `evals/results/headroom.json`; raw logs in `evals/runs/headroom/` (not committed; no
+  token in either, searched for `sk-ant-`). The work root was removed by the suite.
+
+  | task | mean | per trial (passed/total) | turns | wall |
+  |---|---|---|---|---|
+  | format-v2 | 0.99 | 47/47, 47/47, 46/47 | 37, 29, 32 | 4m55s |
+  | house-rules | 0.98 | 46/47 ×3 | 8, 20, 8 | 1m17s |
+  | lost-updates | 1.00 | 43/43 ×3 | 9, 12, 13 | 2m19s |
+  | resolver | 1.00 | 45/45 ×3 | 6, 6, 6 | 1m40s |
+  | spec-drift | 0.99 | 50/51, 50/51, 51/51 | 10, 13, 15 | 1m44s |
+
+  **Every candidate is dropped** (keep is a mean under 0.8): 693 of 699 hidden checks passed
+  over the 15 trials. The bare configuration at `medium` is at the ceiling on all five, the
+  predecessor's failure again, so a score cannot separate the configs on these tasks and
+  `--min-discriminating 3` cannot be met with them. Not yet read: which checks the six misses
+  were (`format-v2` 1, `house-rules` 3, one in every trial, `spec-drift` 2).
+- 2026-10-02: `e54ff9f..d8ad2ae` (T4kg, the two docs commits and the headroom results, 731
+  lines, most of them the results file) reviewed by gentle-ai (lineage
+  `review-baecd73b0ab477be`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right and fixed here: this document said 709 of 713 checks passed with four misses; the
+  results file says 693 of 699 with six (the parent's arithmetic, not the data). One
+  suggestion, now a Follow-up: T4kg's only test depends on the machine.
+- 2026-10-02: Sebastián chose to measure the current config on the same five tasks first. Run
+  `headroom-current` (`--configs current`, otherwise as the screen): 15 of 15 trials, no error,
+  exit 0. Results: `evals/results/headroom-current.json`. Per trial, mean of three:
+
+  | task | score min → cur | input tokens min → cur | output min → cur | wall min → cur | turns min → cur |
+  |---|---|---|---|---|---|
+  | format-v2 | 0.993 → 0.993 | 1,058k → 2,298k | 34.8k → 31.5k | 4.9m → 7.4m | 32.7 → 37.7 |
+  | house-rules | 0.979 → 0.979 | 305k → 858k | 8.0k → 8.4k | 1.3m → 2.3m | 12.0 → 14.7 |
+  | lost-updates | 1.000 → 1.000 | 329k → 952k | 13.0k → 15.9k | 2.3m → 2.9m | 11.3 → 18.0 |
+  | resolver | 1.000 → 1.000 | 185k → 807k | 10.1k → 16.7k | 1.7m → 2.9m | 6.0 → 14.7 |
+  | spec-drift | 0.987 → 1.000 | 373k → 1,132k | 11.6k → 19.5k | 1.7m → 3.0m | 12.7 → 24.7 |
+
+  Totals: minimal 693/699 checks, 6.75M input, 233k output, 35.8 min; current 695/699, 18.14M
+  input, 276k output, 55.5 min. **Same score, 2.7× the input tokens, 1.2× the output and 1.55×
+  the time.** Input is almost all cache reads, so the price gap is smaller than the token gap.
+  Turns grow on every task, by 1.2× (`house-rules`) to 2.4× (`resolver`). Not counted: tokens of any reviewer runs the
+  current arm's gentle-ai Stop hook may spawn (the open question under "T1 decisions"). Three
+  trials per arm cannot tell a 0.987 from a 1.000 apart. The run's `--summary` prints the
+  minimal screen as "incomplete" for every task, because the screen reads minimal trials only:
+  right, but noisy for a current-only run (a Follow-up).
+- 2026-10-02: Sebastián changed the definition of "discriminates" (Constraints): score as the
+  floor, cost as what separates. T4h (find headroom) is dropped, since the rule needs none;
+  T5 and T6 now cover all five tasks. A first reading of the `medium` cells under the new rule,
+  computed from the recorded usage (the report, T6, will compute it for real): cost units per
+  trial, minimal → current, format-v2 396k → 572k (1.44×), house-rules 114k → 242k (2.13×),
+  lost-updates 144k → 302k (2.10×), resolver 111k → 289k (2.59×), spec-drift 152k → 356k
+  (2.34×); each gap is larger than the pooled deviation of cost, and every score pair is equal
+  under the 0.02 tolerance. So at `medium` all five discriminate on cost, for minimal.
+- 2026-10-02: **T5 ran**, run `ab-high`, in two invocations of the same run so neither outlived
+  a two-hour shell limit: `--configs minimal --efforts high` then `--configs current --efforts
+  high`, `--repeats 3 --tasks all --permission-mode bypassPermissions`, the token passed to each
+  process from the user variable. 30 of 30 trials recorded, no error, no cap, exit 0 both
+  times; nothing else ran on the machine meanwhile. Scores 0.98–1.00 in every trial of both
+  arms. Results: `evals/results/ab-high.json` (no token in it or in `evals/runs/ab-high/`,
+  searched for `sk-ant-`). The verdicts are T6's to compute.
+- 2026-10-02: `d470eaa..fe0d423` (the `AGENTS.md` revision, the new definition, T5's results;
+  1,292 lines, most of them data) reviewed by gentle-ai (lineage `review-d6f0096577ad314d`,
+  medium, reliability lens, approved and acknowledged). Two WARNINGs, both right: `ab-high`'s
+  `args` name only the second invocation's config (the report must read the trials; the T6
+  writer was told, and the suite keeping the union of a run's arguments is a Follow-up), and
+  the handoff still said "Next: T5" with a command that no longer matched how T5 ran (fixed).
+- 2026-10-02: T6's report written by a delegated writer (Sonnet): `evals/report.mjs` and
+  `evals/report.test.mjs`. It reads the trials, never `args`; trials with an error count (the
+  runner records one only after the workspace was graded, and dropping them would flatter a
+  config that fails); scores and costs are rounded to 1e-9 before comparing, since 1 − 0.98 is
+  0.020000000000000018. RED per behavior, then GREEN: `node --test evals/report.test.mjs`
+  39/39; four mutations of the rule (tolerance, cost gap, sample deviation, rounding) each
+  caught by the tests. `bin/lib/process-tree.test.mjs` 45/45. Run by the parent on the real
+  results, `node evals/report.mjs --require-complete --min-discriminating 3`: exit 0.
+
+  | task | medium: cost units min → cur | verdict | high: cost units min → cur | verdict |
+  |---|---|---|---|---|
+  | format-v2 | 396k → 572k (1.44×) | cost: minimal | 471k → 352k (0.75×) | none |
+  | house-rules | 114k → 242k (2.13×) | cost: minimal | 132k → 265k (2.01×) | cost: minimal |
+  | lost-updates | 144k → 302k (2.10×) | cost: minimal | 200k → 535k (2.68×) | cost: minimal |
+  | resolver | 112k → 289k (2.59×) | cost: minimal | 162k → 379k (2.34×) | cost: minimal |
+  | spec-drift | 152k → 356k (2.34×) | cost: minimal | 239k → 429k (1.80×) | cost: minimal |
+
+  **5 of 5 discriminate at `medium` and 4 of 5 at `high`, every one for the minimal config**;
+  no score verdict anywhere (every score pair equal under the rule). `format-v2` at `high` is
+  the exception: the current config was cheaper on average there, inside the spread. The
+  predecessor's pure score rule fires once (`spec-drift` at `medium`, 0.99 against 1.00).
+- 2026-10-02: `fe0d423..1c2691c` (the report, 1,105 lines) reviewed by gentle-ai (lineage
+  `review-61b1835f73b24115`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right: runs that recorded no trial (a run a usage cap stopped before its first trial) passed
+  both gates, since there was no effort to check. Fixed inline: `buildReport` refuses them. RED:
+  the new test got no `ReportError`. GREEN: `node --test evals/report.test.mjs` 40/40; the real
+  report still exits 0.
+- 2026-10-02: Codex on `09d7a90..c9337c9`: no actionable finding, but **not recorded**: its
+  commands showed 674 of 1,961 changed lines (most of the range is results data). To be redone
+  on a narrower range.
+- 2026-10-02: **The cost measure was wrong, and it flipped a verdict.** Building the roadmap
+  table showed `format-v2` at `high` with the current config using fewer output tokens (16k
+  against 45k) in more time (10m40s against 6m24s). The raw result of
+  `format-v2__current__high__1` says why: its top-level `usage` counts the main thread only
+  (20,405 output tokens), while `modelUsage` counts the whole session, subagents included
+  (62,325), and `total_cost_usd` is $3.08. Recomputed from the raw logs of all 60 trials with
+  `total_cost_usd`, list price, current against minimal: every cell is 1.68×–2.54×, `format-v2`
+  at `high` included (2.11×, not 0.75×); 30 trials each cost $22.71 (minimal) and $47.07
+  (current). T6c makes that the measure. In that trial `subagent_stats` shows one subagent
+  spawned (`general-purpose`): the gap is the delegated work.
+- 2026-10-02: T6c's backfill, inline, with a one-off script (scratchpad `backfill-cost.mjs`):
+  each recorded trial matched to `evals/runs/<run>/<task>__<config>__<effort>__<repeat>.stdout.log`,
+  whose last line is the agent's result, and checked against the record by its main-thread
+  output tokens; 60 of 60 matched. Each trial gained `costUsd`, `modelUsage` and `subagents`;
+  the diff only adds those three fields (the 60 removed lines are each trial's last line
+  gaining a comma). The raw logs are gitignored, so this backfill cannot be redone from a fresh
+  clone; the added fields are the record.
+- 2026-10-02: T6c's code by a delegated writer (Sonnet), commit `879c3bb`: the runner records
+  `costUsd`, `modelUsage` and `subagents` (`summarizeUsage`); the report decides and prints cost
+  in dollars from `costUsd`, tokens summed over `modelUsage`, the price weights removed. The
+  report's tests keep the main-thread `usage` equal across trials, so any cost read from it
+  fails them, and one test has `usage` and `costUsd` disagree with the verdict following
+  `costUsd`. RED per behavior, then GREEN: report 40/40, runner 135 pass 1 skipped, suite
+  43/43, process-tree 45/45. Run by the parent on the backfilled results, `node
+  evals/report.mjs --require-complete --min-discriminating 3`: exit 0, **10 of 10 task and
+  effort cells `cost: minimal`**, 5 of 5 at each effort, current/minimal 1.81×–2.54× at
+  `medium` and 1.68×–2.42× at `high` (`format-v2` at `high` 2.11×).
+- 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
+  medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
+  the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
+  No code in the slice, so no Codex review is owed.
+- 2026-10-02: `fe0d423..879c3bb` (T6, its fix and T6c) reviewed by gentle-ai (lineage
+  `review-d88d39766c46a469`, from a detached worktree at `879c3bb`, approved and acknowledged)
+  with one warning and one suggestion, both fixed inline, test first. Warning: `trialTokens`
+  fell back to the main-thread counts for a trial without a usable `modelUsage`, so a cell
+  could average whole sessions with part of one; such a trial now has unknown tokens, and a
+  cell's mean is over whole-session counts only. Suggestion: the runner took a negative
+  `total_cost_usd` as a cost; it now records `null`. RED observed for both (the report row
+  still read `1.1k`, and `-1 !== null`), then GREEN: report 40/40. The real report is
+  unchanged, since all 60 trials carry `modelUsage`. Commit `a3495d4`.
+- 2026-10-02: `879c3bb..a3495d4` (the backfill and that fix) reviewed by gentle-ai (lineage
+  `review-c24a41554b4689a5`, medium, reliability lens, approved and acknowledged). One
+  suggestion, taken: `trialTokens` summed a negative `modelUsage` count; a trial holding one now
+  has unknown tokens, as a negative cost already did. RED (`-5`), then GREEN: report 40/40.
+  Commit `9a561a7`.
+- 2026-10-03: T6's roadmap part, inline: `docs/ROADMAP.md` gains the Decided row "Eval verdict",
+  F5's state, its two remaining checklist steps checked (the first renamed to "Tasks that
+  separate the configs under the eval verdict rule", which is what the A/B shows), and an "F5
+  result" table per task and effort built from `node evals/report.mjs --json`: mean score with
+  its range, mean cost, ratio, tokens over every model, wall time and verdict. `js-harness
+  progress` shows F5 3/3. Next on the roadmap: delivering F5.
+- 2026-10-03: Codex reviewed every commit since `09d7a90` that `check --push` counts as code,
+  in seven ranges, each from a detached worktree at its head so no range was too large for the
+  evidence rule (the earlier `fe0d423..879c3bb` attempt showed 674 of 1961 lines and recorded
+  nothing): `4b1ab30..d8ad2ae`, `d8ad2ae..d470eaa`, `d470eaa..fe0d423`, `fe0d423..1c2691c`,
+  `1c2691c..879c3bb`, `879c3bb..5dc3dcc`, `5dc3dcc..9a561a7`. All seven recorded, no
+  findings; on the backfill Codex checked that each added cost matches its `modelUsage` total.
+  It ran no tests (read-only sandbox), which the gate covers.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -360,7 +1143,8 @@ the docs):
 | Updater | `~/.local/bin/claude.exe`, `~/.local/share/claude`, `~/.local/state/claude` | `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1` (`autoUpdates:false` in `.claude.json` is ignored for a native install) |
 | MCP logs | `%LOCALAPPDATA%\claude-cli-nodejs\Cache\` | `LOCALAPPDATA` only, not `CLAUDE_CONFIG_DIR` |
 | Scratch | `%TEMP%\claude\` | `TEMP`/`TMP` |
-| engram (MCP server only; no hook writes it) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram MCP server (stdio) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram plugin hooks (since 2026-10-01: SessionStart, PreToolUse on `mem_*` writes, SubagentStop, SessionEnd) and the `engram serve` they start | the HTTP server on `127.0.0.1:7437`, which writes its own store | `ENGRAM_PORT` (or `ENGRAM_URL`); not `ENGRAM_DATA_DIR` (T4a) |
 | gentle-ai | `~/.gentle-ai/` (`state.json`, `telemetry.json`, `review-stop-hook/`); per repo `.git/gentle-ai/` | `USERPROFILE`/`HOME` (no dedicated variable; `USERPROFILE=Z:\nope` made it fail on `mkdir Z:\nope`) |
 | codegraph | `~/.codegraph/` (telemetry, queue, update check, daemons); workspace `.codegraph/` | `USERPROFILE` (proven the same way) |
 | js-harness doctor cache | `~/.js-harness/doctor.json` | `JS_HARNESS_HOME` |
@@ -402,8 +1186,8 @@ the docs):
   token; pending.
 - **Permission mode is explicit and equal on both arms**, a required argument of the config
   builders with no default: the minimal arm reads no settings, and a headless agent with no
-  permission mode cannot edit or run tests. The real settings use `bypassPermissions`; which mode
-  the eval passes is Sebastián's decision, pending.
+  permission mode cannot edit or run tests. The real settings use `bypassPermissions`, and that
+  is the mode the eval passes (Sebastián, 2026-10-02).
 - **The gentle-ai Stop hook stays in the current arm**, because the run measures what is
   installed. Open: it may spawn reviewer `claude` runs whose tokens the trial's own JSON result
   does not count; T5 must account for them or say so.
@@ -416,23 +1200,115 @@ the docs):
   the `LOCALAPPDATA` override breaks no tool, `plugins/marketplaces` is not changed at startup,
   and `-p` writes no `history.jsonl`.
 
+## T3 design
+Decided 2026-10-01, before the first candidate was written:
+
+- **A candidate is `evals/tasks/<id>/`**: `task.md`, `task.json`, `fixture/`, `grader/` and
+  `reference/`, an overlay holding only the files a correct solution changes or adds. The runner
+  copies `fixture/` alone, so the agent never sees the grader or the reference. `task.json`
+  `proof` pins `{ total, fixturePassed }`, so a grader that drifts is a failing test.
+- **Proof by three workspaces**, graded with the runner's own `gradeWorkspace`: fixture plus
+  reference scores exactly 1; the untouched fixture scores `fixturePassed / total`, below 1; an
+  empty workspace scores 0 with the same `total` — because a hidden test that fails as a whole
+  file when one module is broken would turn a fractional score into a 0 (T1 decisions).
+- **Visible tests are `tests/**/*.spec.mjs`**, run by the fixture's own `npm test`
+  (`node --test "tests/**/*.spec.mjs"`), green on the fixture and with the reference. No file
+  under `evals/tasks/` matches Node's default test patterns — because this repo's bare
+  `node --test` would otherwise run every fixture's tests, and a reference overlay's tests cannot
+  resolve the modules it does not overlay.
+- **Fair graders**: every hidden test names the prompt sentence or the fixture document clause it
+  checks, and asserts only what that source specifies (error codes, exit codes, documented
+  formats), never wording nobody wrote down — because a test the agent could not have derived
+  measures luck. Deterministic: no wall clock, network or randomness; time comes from an injected
+  clock.
+- **A red `npm test` costs a point**: every grader holds one hidden test that runs the
+  workspace's own visible suite and expects it green — because otherwise an agent that fixes the
+  code and leaves the tests it broke, or the tests that encode a drift, red scores full marks
+  (Codex on T3b).
+- **No unused declaration or dead branch in a fixture**: the current arm runs a TypeScript
+  language server, and a diagnostic next to a seeded defect would point that arm, and only that
+  arm, at the answer. A defect is wrong code that reads as intended.
+- **No `AGENTS.md`, `CLAUDE.md` or `.claude` in a fixture**: the project layer is what
+  `js-harness init` adds to the current arm, and a fixture that brought its own would hand it to
+  both. Repo rules live in `README.md`, `CONTRIBUTING.md` and `docs/`.
+- **`evals/tasks/**` is `eol=lf`** in `.gitattributes`: this machine checks out CRLF
+  (`core.autocrlf=true`), and a fixture's data files must be the same bytes on every machine.
+- **Five candidates, each hard in a different way**, since which kind separates the configs is
+  the question: thoroughness of an audit (`spec-drift`), rules nobody pointed at
+  (`house-rules`), an algorithm with a long spec (`resolver`), interleavings (`lost-updates`),
+  and breadth of a cross-cutting change (`format-v2`). Whether any has headroom is T4's to
+  measure; if fewer than three survive it, more candidates are written then.
+- **Size**: a fixture of 500–700 lines over 10–16 files, so a task commit is ~1,200–1,500 lines,
+  one work unit each. The Delivery forecast (~400–700 lines for all fixtures and graders) was
+  written before the tasks were designed and is too low by about a factor of ten.
+
 ## Follow-ups
+- The `format-v2` reference's price parsing on inputs no hidden test uses (review of
+  `465a06a..d0bc904`): `1e308` and other huge exponents give `Infinity` or an unsafe integer; a
+  v1 CSV row shorter than three fields throws a `TypeError` instead of an import error; `.5`, `1.`
+  and `+1` in a v1 CSV, which `Number()` accepted, are now refused; the reference's visible spec
+  pins `toMinor(1.5e21, 'JPY')`, an amount the proposal leaves open. None changes a score.
+- Process starts fail on Windows under heavy parallel spawning (`0xC0000142`,
+  `STATUS_DLL_INIT_FAILED`): seen in the discovery test with ~120 nested processes on top of the
+  full suite. T4's suite runs trials one at a time, but a current-arm trial starts MCP servers,
+  hooks and graders; watch for agent or grader exits with that code.
 - Signal forwarding (kill the tree, then re-raise SIGINT/SIGTERM on POSIX) is untested, and the
   re-raise ends the process before `runTrial`'s `finally`, so an interrupted trial leaks its
   workspace (gentle-ai suggestion, left as is).
 - gentle-ai's Stop hook always proposes the branch point as the review base, so after every
   commit it offers the accumulated branch as a fresh candidate even when slice reviews cover every
   commit in it. Worth raising with gentle-ai if it keeps costing a decline per stretch.
-- The sweep's boundary (end, separator, quote, whitespace after the root) misses a process that
-  names the root inside a list or key/value argument (`;`, `,`, `=`, `)` after it) (gentle-ai
-  WARNING on T2s). Trial directory names end in a random `[A-Za-z0-9]` suffix, so the sharper
-  rule is "the next character is not a name character `[A-Za-z0-9._-]`": it spares `trial-10`
-  and still matches `trial-1;`. Fix with T4's suite entry.
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.
-- `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
-  place when either changes.
+- No test interrupts a trial while its grader runs (`gradeWorkspace` returning `aborted`), so the
+  cleanup and the no-record rule on that path are unproven (gentle-ai suggestion on T4sr).
+- The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
+  only for engram 0.1.5; another format fails the control with its hint, it does not pass
+  silently. The engram controls are unverified on POSIX (T4ap).
+- A run continued with other arguments keeps only the last invocation's `args` in its results
+  document (`evals/suite.mjs:437`), so `ab-high` describes itself as current-only. The suite
+  could keep the union of the arguments a run was given (gentle-ai WARNING on T5).
+- `node evals/suite.mjs --summary` prints the headroom screen for every run, so a run with no
+  minimal trials shows every task as "incomplete (0 of 3 trials)". It could print the screen
+  only when the run has minimal trials at `medium`.
+- T4kg's test of the CIM fallback depends on the machine (gentle-ai suggestion): it skips when
+  none of the four services it aims at runs, and when the suite runs elevated the handle reads
+  the start time and the new branch is never reached. Two outcomes have no test: no CIM row is
+  `G`, and the same or a missing creation date stays `R`. A fake that drives the catch branch
+  would prove them.
+- A flake in the gate, seen once (2026-10-02, a docs-only commit): `evals/task-proof.test.mjs:304`
+  ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
+  visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
+  parallel run. It passed on the gate runs before and after. Not diagnosed.
+- A second flake in the gate, seen once the same day: `evals/suite.test.mjs:698` (the interrupt
+  during a real trial) found one of the trial's two processes "alive" after the cleanup, after
+  21 s. Not diagnosed. A hypothesis worth checking first: the test asks whether a pid is alive
+  by its number, and this machine reused a pid within one gate run that day (T4kg), so the
+  answer may have been about another process. Three red gate runs out of nine that day, each
+  green on the retry: the gate's own reliability is now a cost.
+- The same day one gate run ended as `npm run test timed out after 600 s` (the run usually takes
+  about five minutes; the probe's tests alone take two and a half). The whole suite is close to
+  the gate's limit. During that run a `Microsoft/Windows/PowerShell/ModuleAnalysisCache` file
+  appeared in the repository root: some PowerShell child ran with no `LOCALAPPDATA` and the
+  repository as its working directory. Which spawn does that is not found yet (a first search
+  for `LOCALAPPDATA` in `bin/` and `evals/` did not show it); the directory was removed. It came
+  back on the next gate run, within its first minute. None of the 34 test files creates it when
+  run alone with `node --test <file>` from the repository (each was tried in turn), so it needs
+  the gate's own conditions: the tests run by `check` with `HOME` and `USERPROFILE` moved to a
+  throwaway home, or the parallel run. It was not seen on any gate run before 16:44 that day.
+- Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
+  accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
+  fails then, on `engramSession`), and `engramServer`'s second log location,
+  `engram-serve.err.log` in the temp directory, is never written by the fake agent.
+- `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
+  pid file appears; the `since` filter bounds the risk to a process started during that test
+  (gentle-ai suggestion on T4kt).
+- `js-harness codex-review` records nothing when Codex does not show every changed line, and
+  Codex did not get through a range of about 1,000 lines in four runs. Splitting by commit
+  worked; the command could take `--head <rev>` so a split needs no worktree.
+- The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
+  on `feat/stack-v4` until it takes `main` in; `main` has the fix since `0f44719` (Delivery).
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
@@ -461,7 +1337,55 @@ the docs):
   runs them.
 
 ## Next step
-Slice 1 (T1–T2) is open as PR jsaristi/js-harness#20; merging it is Sebastián's call. Then T3, in
-a new session.
-Before T4: his `claude setup-token` and his choice of permission mode, asked one at a time.
-Reviewed boundary: `db0253b`.
+Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
+`feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
+Since then, all on `feat/evals` (pushed 2026-10-03): T4a (done: the isolation probe passes with the
+real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
+The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
+T4k is on `main` since `0f44719` (slice 3, 2026-10-03), so committing on `main` is safe again.
+**`feat/stack-v4` still has the old gate until it takes `main` in: make that merge its first
+commit**, because its pre-commit gate kills by parent pid (see Progress, 2026-10-02) and can
+close unrelated programs. One line is still owed to `odd/tasks/stack-v4.md`: the 11
+`~/.claude/commands/gentle-sdd-*.md` files were moved to
+`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers.
+Before T4, two of Sebastián's decisions were taken:
+1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
+   `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
+   prefix, no whitespace), never in chat or a file in the repo; the suite entry maps it to
+   `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
+   `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
+   claude.ai connectors (there is none: checked). A process started before the variable was
+   stored does not have it: the suite must run from a shell that does, or with the variable
+   passed for that one command.
+2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
+   (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
+   isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
+T4 ran on 2026-10-02 and kept no task: all five candidates score 0.98–1.00 with the minimal
+config at `medium`. The current config on the same tasks (run `headroom-current`) scored the
+same at 2.7× the input tokens. Sebastián then changed what "discriminates" means: score as the
+floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
+and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
+run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
+verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
+remained was delivery, and it is done (see Delivery): the four slices are merged to `main`
+(`5ab2ae6`, `bb82ea8`, `0f44719`, `7f02627`), and `main`'s tree equals `feat/evals` at
+`3babe73`. **The feature is closed.** What follows is outside it and belongs to a new
+session: `feat/stack-v4` takes `main` in as its first commit and goes as its own PR. The
+Follow-ups below stay open until one earns a slice. A run written by two invocations keeps only the last one's `args`
+(`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
+trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
+and moves with load.
+Reviewed boundary: gentle-ai `9a561a7`; Codex `9a561a7` (seven ranges, 2026-10-03, see
+Progress; `check --push` counts any file that is not Markdown as code, so the results files
+needed a record too).
+`AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
+duplicated, no `CLAUDE.md` in the repo) and, on Sebastián's go-ahead, revised on this branch:
+decision records are committed on the feature branch as part of the work (the global file's
+"never commit unless asked" had been contradicted silently); a `/compact` resume is checked
+against the feature document, which stays the handoff; "a session holds one task" became "one
+feature", which is what the cut rules already meant; a candidate is a commit or a slice, never
+the branch the Stop hook offers (with consent pre-granted nothing would stop a review that
+size); a step he reports doing outside the session is checked first, since he often taps the
+suggested prompt from his phone (twice that day for a token that was not stored); and line 73
+re-wrapped. It now measures about 1,455 of its 1,500 tokens. The roadmap's stale stack line
+(engram v2) is already fixed on `feat/stack-v4`, so it is left alone here.

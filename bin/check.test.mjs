@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
+import { killTree } from './lib/process-tree.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -370,6 +371,38 @@ test('checkSensor does not throw when the throwaway home cannot be removed', asy
     assert.equal(row.pass, true);
   } finally {
     fs.rmSync = realRmSync;
+  }
+});
+
+// A kill that could not be done (no PowerShell, a CIM failure) must not turn a passing command red, and must not
+// be invisible either.
+test('checkSensor says when what a command left running could not be stopped, without changing its verdict', async () => {
+  const spawn = () => ({ status: 0, stdout: '', stderr: '', sweepError: 'the process snapshot failed (exit 1): CIM is down' });
+  const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  assert.equal(row.pass, true);
+  assert.equal(row.detail, 'x passed; could not stop what it left running: the process snapshot failed (exit 1): CIM is down');
+  const failing = await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn: () => ({ status: 2, stdout: '', stderr: '', sweepError: 'boom' }) });
+  assert.equal(failing.pass, false);
+  assert.equal(failing.detail, 'x exited 2; could not stop what it left running: boom');
+});
+
+test('runSensor reports a kill that throws inside its timer as sweepError, and still resolves', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'hang.js'), 'setTimeout(() => {}, 120000);');
+    const failingKill = (child, lifetime) => {
+      try {
+        killTree(child, lifetime); // the real kill first, so the test leaves nothing running
+      } catch {
+        // the scripted failure below is the one under test
+      }
+      throw new Error('still running after the kill: pid 4242');
+    };
+    const result = await runSensor('node hang.js', { cwd: dir, timeout: 3000, killTree: failingKill });
+    assert.equal(result.error.code, 'ETIMEDOUT');
+    assert.equal(result.sweepError, 'still running after the kill: pid 4242');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

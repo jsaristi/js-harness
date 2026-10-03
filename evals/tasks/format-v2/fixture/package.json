@@ -1,0 +1,16 @@
+{
+  "name": "stock",
+  "version": "0.4.0",
+  "description": "A small inventory tool for the command line",
+  "type": "module",
+  "bin": {
+    "stock": "bin/stock.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

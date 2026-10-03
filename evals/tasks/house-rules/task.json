@@ -1,0 +1,8 @@
+{
+  "grader": {
+    "command": "node",
+    "args": ["--test", "--test-reporter=tap", ".eval-grader/house-rules.grade.mjs"]
+  },
+  "timeoutMs": 1800000,
+  "proof": { "total": 47, "fixturePassed": 11 }
+}

@@ -12,11 +12,24 @@
 //  - A random NONCE is the agent's prompt and the content of the files it is told to write. The nonce is
 //    never printed, logged or written to the report; the report is scrubbed of it as a last step.
 //  - Before and after the trial, every real tree where Claude Code or its tools could write is hashed. The
-//    after-pass also scans every file's content for the nonce and for the unique name of the sandbox's temp
-//    root, which no real file has a reason to contain. Hits are reported by path, never by value.
+//    after-pass also scans every file's content for the nonce, for the unique name of the sandbox's temp
+//    root and for the trial's Claude session id (what the engram hooks post; known once the agent has run, and
+//    never written anywhere before that scan), none of which a real file has a reason to contain. Hits are
+//    reported by path, never by value.
 //  - POSITIVE CONTROLS inside the sandbox (the nonce is in a transcript, the tool-written files exist, the
 //    engram store was created) prove the trial wrote where it was meant to. Without them a sandbox that
 //    wrote nothing at all, or an agent that never ran, would pass the leak check vacuously.
+//  - THE ENGRAM PLUGIN'S PATHS are driven too, because the current arm carries the plugin's hooks, which talk
+//    HTTP to a port that is 7437 unless the env says otherwise, and 7437 is where the real engram server
+//    answers. Each trial gets a port of its own (`ports.mjs`); the fake API has the agent call the engram MCP
+//    tool (`mem_save`) and a subagent, the prompt itself goes through UserPromptSubmit and the session through
+//    SessionStart, and the probe then checks that what the hooks write on every path they take is in the
+//    SANDBOX (UserPromptSubmit's state file, the log of the server SessionStart started, the session it
+//    posted: see `positiveControls`), that nothing of the run is in the real store (the real `~/.engram` is
+//    hashed and scanned for the nonce, the sandbox name and the session id like every other real tree: a SQLite
+//    write changes the file and puts the text in it, which is why that evidence, and not a count taken from the
+//    server, is the one that decides), that nothing listens on the trial's port afterwards, and that no engram
+//    process the trial started is still running.
 //  - Live writers (this very Claude session, the engram and codegraph daemons) keep changing the real trees,
 //    so a diff alone cannot fail the run. `--control-ms` measures that churn first, with no agent, and the
 //    report splits trial-window changes into those also seen at baseline and new ones.
@@ -26,8 +39,9 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig } from './configs.mjs';
+import { assertWorkRoot, currentConfig, defaultWorkRoot, minimalConfig, sandboxPaths } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { findProcesses, isListening as portIsListening } from './ports.mjs';
 import { childEnv, killByPath, parseAgentOutput, removeDir, resolveAgent, runProcess } from './runner.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -59,7 +73,8 @@ export const makeNonce = () => crypto.randomBytes(16).toString('hex');
  * (not what the probe believes it set). `ANTHROPIC_BASE_URL` shows whether the tool env keeps it. */
 export const PROBE_ENV_VARS = [
   'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CLAUDE_CONFIG_DIR', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'TMPDIR', 'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ENGRAM_DATA_DIR', 'JS_HARNESS_HOME', 'npm_config_cache', 'ANTHROPIC_BASE_URL',
+  'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ENGRAM_DATA_DIR', 'JS_HARNESS_HOME', 'npm_config_cache', 'ANTHROPIC_BASE_URL', 'ENGRAM_PORT', 'ENGRAM_URL',
+  'ENGRAM_SOCKET',
 ];
 
 /** The shell command the fake API has the agent run (Claude Code's Bash tool runs Git Bash on Windows): the
@@ -144,21 +159,37 @@ function carriesMarkers(body, markers) {
   return markers.filter((marker) => text.includes(marker)).length >= Math.min(2, markers.length);
 }
 
+/** The text the first user message of a subagent the probe starts carries, which is how the fake API tells that
+ * request from the main agent's. */
+export const SUBAGENT_MARKER = 'Isolation probe subagent';
+/** The engram MCP tool that saves a memory, whatever the server is called in the config (`mcp__engram__mem_save` for a
+ * server entry, `mcp__plugin_engram_engram__mem_save` for a plugin's own). */
+const MEM_SAVE_TOOL = /^mcp__[A-Za-z0-9_]*engram[A-Za-z0-9_]*__mem_save$/;
+/** The tool that starts a subagent: `Agent`, or `Task` in the CLIs that still call it that. */
+const SUBAGENT_TOOLS = ['Agent', 'Task'];
+/** What the probe looks for, inside the sandbox's engram store, to know a path of the plugin ran: the prompt (stored
+ * by UserPromptSubmit, which is why the probe's prompt holds the nonce as `nonce:<nonce>`), the memory the MCP tool
+ * saves, and what the subagent said last (stored by SubagentStop, if the server keeps it). */
+export const engramNeedles = (nonce) => ({ prompt: `nonce:${nonce}`, memory: `memsave:${nonce}`, subagent: `subagent:${nonce}` });
+
 /** Starts the fake Messages API on `127.0.0.1` (port 0: the OS picks a free one) and resolves to `{ url,
  * port, requests, toolResults(), close() }`.
  *
  * It scripts the agent so that one trial exercises every writer the probe is about: a request that offers
  * `Bash` and has not used it gets a `Bash` tool_use (`probeCommand`), then one offering `Write` gets a
  * `Write` of `probe-write.txt` in `workspace` (the server cannot know the agent's cwd, so the probe passes
- * it in) holding the nonce, and then a plain-text reply with the nonce. A small/fast model (title
- * generation, hooks) or a request with no tools only ever gets the text, so those calls, and a nested
- * reviewer `claude`, complete without recursing into the script. `stream: true` is honoured with SSE.
+ * it in) holding the nonce, then, when the engram MCP tool is offered, a `mem_save` of `memsave:<nonce>`,
+ * then, when a subagent tool is offered, a subagent (whose own requests, recognized by `SUBAGENT_MARKER`, are
+ * answered in text with `subagent:<nonce>` and never scripted further), and then a plain-text reply with the
+ * nonce. A small/fast model (title generation, hooks) or a request with no tools only ever gets the text, so
+ * those calls, and a nested reviewer `claude`, complete without recursing into the script. `stream: true` is
+ * honoured with SSE.
  *
  * `markers` (see `claudeMdMarkers`) are matched against every `/v1/messages` request: the log says whether the
  * request carried the real global CLAUDE.md, which is how the probe sees that a trial loaded it.
  *
- * `requests` is the log: method, path (no query), model, whether tools were offered, whether the request
- * carried the markers and what was replied, and nothing more. Headers (an API key), system prompts and message bodies, which hold the prompt and the
+ * `requests` is the log: method, path (no query), model, whether tools were offered, whether the engram tool was among
+ * them, whether the request carried the markers and what was replied, and nothing more. Headers (an API key), system prompts and message bodies, which hold the prompt and the
  * user's own memory, never reach it. `toolResults()` is the text of every tool_result the agent sent back,
  * once per tool_use id: the environment as the agent's tools saw it. */
 export async function startFakeApi({ nonce, workspace, markers = [], host = '127.0.0.1' }) {
@@ -167,22 +198,36 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
   let counter = 0;
 
   const toolUse = (name, input) => ({ type: 'tool_use', id: `toolu_probe_${++counter}`, name, input });
+  const needles = engramNeedles(nonce);
   const answer = ({ model, tools, messages }) => {
     const used = new Set(messages.filter((m) => m?.role === 'assistant' && Array.isArray(m.content)).flatMap((m) => m.content).filter((b) => b?.type === 'tool_use').map((b) => b.name));
     let content = [{ type: 'text', text: `The probe is done. ${nonce}` }];
     let reply = 'text';
-    if (tools.length > 0 && !/haiku/i.test(model ?? '')) {
+    const memSave = tools.find((name) => MEM_SAVE_TOOL.test(name));
+    const subagentTool = tools.find((name) => SUBAGENT_TOOLS.includes(name));
+    const firstUser = allText(messages.find((m) => m?.role === 'user')?.content).join('\n');
+    if (firstUser.includes(SUBAGENT_MARKER)) {
+      // The text a passive capture reads: a learnings section, with the marker in it.
+      content = [{ type: 'text', text: `Isolation probe subagent finished.\n\n## Key Learnings:\n\n1. ${needles.subagent}` }];
+      reply = 'subagent';
+    } else if (tools.length > 0 && !/haiku/i.test(model ?? '')) {
+      const next = (name, input) => {
+        content = [toolUse(name, input)];
+        reply = `tool_use:${name}`;
+      };
       if (tools.includes('Bash') && !used.has('Bash')) {
-        content = [toolUse('Bash', { command: probeCommand(nonce), description: 'Record the environment for the isolation probe' })];
-        reply = 'tool_use:Bash';
+        next('Bash', { command: probeCommand(nonce), description: 'Record the environment for the isolation probe' });
       } else if (tools.includes('Write') && !used.has('Write')) {
-        content = [toolUse('Write', { file_path: path.join(workspace, 'probe-write.txt'), content: nonce })];
-        reply = 'tool_use:Write';
+        next('Write', { file_path: path.join(workspace, 'probe-write.txt'), content: nonce });
+      } else if (memSave && !used.has(memSave)) {
+        next(memSave, { title: 'Isolation probe', content: needles.memory, type: 'discovery' });
+      } else if (subagentTool && !used.has(subagentTool)) {
+        next(subagentTool, { description: 'Isolation probe subagent', prompt: `${SUBAGENT_MARKER}: reply with one short line.`, subagent_type: 'general-purpose' });
       }
     }
     const message = {
       id: `msg_probe_${++counter}`, type: 'message', role: 'assistant', model: model ?? PROBE_MODEL, content,
-      stop_reason: reply === 'text' ? 'end_turn' : 'tool_use', stop_sequence: null, usage: { input_tokens: 12, output_tokens: 7 },
+      stop_reason: reply.startsWith('tool_use') ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 12, output_tokens: 7 },
     };
     return { message, reply };
   };
@@ -196,7 +241,7 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const pathname = new URL(req.url, 'http://localhost').pathname.replace(/(?<=.)\/+$/, '');
-    const entry = { method: req.method, path: pathname, model: null, stream: false, toolsOffered: false, globalClaudeMd: false, reply: '404' };
+    const entry = { method: req.method, path: pathname, model: null, stream: false, toolsOffered: false, engramToolOffered: false, globalClaudeMd: false, reply: '404' };
     requests.push(entry);
 
     // The connectivity preflight Claude Code makes before its first request (the predecessor's probe saw
@@ -224,6 +269,7 @@ export async function startFakeApi({ nonce, workspace, markers = [], host = '127
     entry.stream = body.stream === true;
     const tools = (Array.isArray(body.tools) ? body.tools : []).map((tool) => tool?.name).filter((name) => typeof name === 'string');
     entry.toolsOffered = tools.length > 0;
+    entry.engramToolOffered = tools.some((name) => MEM_SAVE_TOOL.test(name));
     entry.globalClaudeMd = pathname === '/v1/messages' && carriesMarkers(body, markers);
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
@@ -736,21 +782,76 @@ function summarizeTop(home) {
   return rows;
 }
 
-/** The positive controls: what a trial that really ran under the sandbox must have written inside it. A
- * check that finds nothing in the real trees means something only if these find something in the sandbox.
- * `engramDb` applies to the current arm only (the minimal arm has no MCP servers). */
-async function positiveControls({ arm, home, workspace, nonce }) {
-  const controls = {};
+/** The first file below `store` (the sandbox's engram data directory) that holds each of `needles` (`{ label: text }`),
+ * as `.engram/<relative path>`, or `null` for a label nothing holds. A file that cannot be read is skipped: the
+ * answer is then "not found", which fails a control, never passes one. */
+async function findInStore(store, needles) {
+  const hits = Object.fromEntries(Object.keys(needles).map((label) => [label, null]));
+  const list = Object.entries(needles).map(([label, value]) => ({ label, values: [value] }));
+  for (const rel of walkFiles(store)) {
+    let found = [];
+    try {
+      found = await scanFile(path.join(store, ...rel.split('/')), list);
+    } catch {
+      // unreadable: not found
+    }
+    for (const label of found) hits[label] ??= `.engram/${rel}`;
+  }
+  return hits;
+}
+
+/** The first transcript below the sandbox home that holds the nonce, as its path under `.claude/projects`
+ * (`null` when none does), and how many transcripts there are. */
+async function findTranscript(home, nonce) {
   const projects = path.join(home, '.claude', 'projects');
   const transcripts = walkFiles(projects).filter((rel) => rel.endsWith('.jsonl'));
-  let transcript = null;
   for (const rel of transcripts) {
-    if ((await scanFile(path.join(projects, ...rel.split('/')), [{ label: 'nonce', values: [nonce] }])).length > 0) {
-      transcript = `.claude/projects/${rel}`;
-      break;
-    }
+    if ((await scanFile(path.join(projects, ...rel.split('/')), [{ label: 'nonce', values: [nonce] }])).length > 0) return { rel, count: transcripts.length };
   }
-  controls.transcript = { ok: transcript !== null, path: transcript, transcripts: transcripts.length };
+  return { rel: null, count: transcripts.length };
+}
+
+const SESSION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** The trial's Claude session id, which the engram hooks post and store and which no real tree has a reason to hold:
+ * from the agent's result (`session_id`), else from the name of its transcript (`<session id>.jsonl`). `source`
+ * says which, and is `null` with `id: null` when neither has one that looks like an id. */
+async function findSession(parsed, home, nonce) {
+  if (typeof parsed?.session_id === 'string' && SESSION_ID.test(parsed.session_id)) return { id: parsed.session_id, source: 'result' };
+  const stem = path.posix.basename((await findTranscript(home, nonce)).rel ?? '', '.jsonl');
+  return SESSION_ID.test(stem) ? { id: stem, source: 'transcript' } : { id: null, source: null };
+}
+
+/** The engram controls, in the order they are shown. They apply to the current arm only. */
+const ENGRAM_CONTROLS = ['engramDb', 'engramHook', 'engramServer', 'engramSession', 'engramMemSave'];
+
+/** The positive controls: what a trial that really ran under the sandbox must have written inside it. A
+ * check that finds nothing in the real trees means something only if these find something in the sandbox.
+ * Each is something the real hooks write on every path they can take, on Windows and on POSIX. The engram ones
+ * apply to the current arm only (the minimal arm has no MCP servers and no plugin hooks):
+ *  - `engramDb`: the store was created.
+ *  - `engramHook`: UserPromptSubmit ran inside the sandbox. Its state file, `engram-claude-<session id>-tools-loaded`
+ *    in TMPDIR, is written by the full path (`user-prompt-submit.sh`, lines 391-401) and by the fast path that bash
+ *    on Windows takes unless `ENGRAM_CLAUDE_WINDOWS_BASH_SAFE_MODE=0` (lines 464-489), so it is there on both.
+ *  - `engramServer`: SessionStart started the trial's own server. `engram serve` logs its listening port to
+ *    `serve.err.log` in the data directory (`session-start.sh`, lines 24-43), and it is started only when nothing
+ *    healthy answers on the port the hook resolved, so a log that names the trial's port is the trial's own.
+ *  - `engramSession`: the session the hook posts (`session-start.sh`, lines 47-55: the Claude session id, the
+ *    project and the cwd) is in the sandbox's store. The scan cannot tell that row from the MCP tool's, which
+ *    also names the session, so this proves the session reached the trial's store and `engramServer` proves
+ *    which server the hook started.
+ *  - `engramMemSave`: the MCP tool wrote to the trial's data directory.
+ * The prompt is NOT one of them: under Git Bash on Windows the UserPromptSubmit hook takes that fast path, which
+ * prints its message and never posts the prompt (lines 481-488, against the `POST /prompts` of lines 377-389 and
+ * 551-562), so on that machine a prompt in the store is never there, in a trial or in real use. Whether it
+ * reached the store is reported (`sandbox.answers.engramPrompt`), and fails nothing.
+ * `storeHits` is `findInStore` of the sandbox's engram store, `session` the trial's session id (or `null`: no control
+ * that needs it can pass), `port` the trial's engram port, `log` the fake API's request log, which says whether
+ * the tool was even offered, for the hint a failed control carries. */
+async function positiveControls({ arm, home, workspace, nonce, log = [], storeHits = {}, session = null, port = null }) {
+  const controls = {};
+  const found = await findTranscript(home, nonce);
+  controls.transcript = { ok: found.rel !== null, path: found.rel === null ? null : `.claude/projects/${found.rel}`, transcripts: found.count };
   const holdsNonce = (file) => {
     try {
       return fs.readFileSync(path.join(workspace, file), 'utf8').includes(nonce);
@@ -763,8 +864,58 @@ async function positiveControls({ arm, home, workspace, nonce }) {
   if (arm === 'current') {
     const db = walkFiles(path.join(home, '.engram')).find((rel) => /\.(db|sqlite3?)$/i.test(rel));
     controls.engramDb = { applies: true, ok: db !== undefined, path: db === undefined ? null : `.engram/${db}` };
+    const offered = log.some((request) => request.engramToolOffered);
+    const called = log.some((request) => /^tool_use:.*mem_save$/.test(request.reply));
+    const scratch = sandboxPaths(home).TMPDIR;
+    const readDir = (dir) => {
+      try {
+        return fs.readdirSync(dir);
+      } catch {
+        return [];
+      }
+    };
+    // Looked for by the session id when it is known, so another session's file never stands in for the trial's.
+    const state = readDir(scratch).find((name) => /^engram-claude-.+-tools-loaded$/.test(name) && (session === null || name.includes(session)));
+    controls.engramHook = {
+      applies: true, ok: state !== undefined, path: state === undefined ? null : relOf(home, path.join(scratch, state)),
+      ...(state === undefined && { hint: "the UserPromptSubmit hook left no state file (engram-claude-<session id>-tools-loaded) in the sandbox's temp directory: it did not run, or it ran with a TMPDIR that is not the trial's" }),
+    };
+    const listening = [path.join(home, '.engram', 'serve.err.log'), path.join(scratch, 'engram-serve.err.log')].flatMap((file) => {
+      try {
+        return [...fs.readFileSync(file, 'utf8').matchAll(/listening on \S*:(\d+)/g)].map((match) => Number(match[1]));
+      } catch {
+        return [];
+      }
+    });
+    const ownServer = port !== null && listening.includes(Number(port));
+    controls.engramServer = {
+      applies: true, ok: ownServer, ports: [...new Set(listening)],
+      ...(!ownServer && {
+        hint: listening.length === 0
+          ? "no server log in the sandbox says the engram server is listening: the SessionStart hook did not start one (it does only when nothing answers on its port), or the one it reached was not the trial's"
+          : `the engram server log names port ${[...new Set(listening)].join(', ')}, not the trial's port ${port}: the SessionStart hook's server, and what it posts, are not the trial's own`,
+      }),
+    };
+    controls.engramSession = {
+      applies: true, ok: storeHits.session != null, path: storeHits.session ?? null,
+      ...(storeHits.session == null && {
+        hint: session === null
+          ? "the session id of the trial is unknown (neither the agent's result nor its transcript's name has one), so its session cannot be looked for in the engram store"
+          : "the trial's session is not in its engram store: the SessionStart hook did not post it, or the server it posted to was not the trial's own",
+      }),
+    };
+    controls.engramMemSave = {
+      applies: true, ok: storeHits.memory != null, path: storeHits.memory ?? null,
+      ...(storeHits.memory == null && {
+        hint: !offered
+          ? 'the engram tool was never offered to the model: is the engram MCP server in the seeded .claude.json, or deferred behind a tool search?'
+          : called
+            ? "the engram tool was offered and called, but the memory is not in the trial's engram store: does the MCP server honour ENGRAM_DATA_DIR?"
+            : 'the engram tool was offered but never called',
+      }),
+    };
   } else {
-    controls.engramDb = { applies: false, ok: true };
+    for (const name of ENGRAM_CONTROLS) controls[name] = { applies: false, ok: true };
   }
   return controls;
 }
@@ -782,13 +933,15 @@ const EXPECTED_INSIDE = [
  * legitimately rewrite a variable of its own (`TMPDIR=/tmp`) and the leak scan is what fails the probe. */
 function inspectEnv(toolResults, token) {
   const parsed = toolResults.map((result) => parseEnvLines(result.text)).find((env) => 'OAUTH_TOKEN_SET' in env);
-  if (!parsed) return { envLines: null, envChecks: {} };
+  if (!parsed) return { envLines: null, envChecks: {}, engramEnv: null };
   const envChecks = {};
   for (const name of EXPECTED_INSIDE) {
     const value = parsed[name];
     envChecks[name] = value === undefined || value === '' ? 'empty' : fold(value).includes(fold(token)) ? 'inside' : 'outside';
   }
-  return { envLines: parsed, envChecks };
+  // The engram variables are not paths: what matters is that the port is the trial's and that no URL or socket is set.
+  const engramEnv = { port: parsed.ENGRAM_PORT ?? '', urlSet: (parsed.ENGRAM_URL ?? '') !== '', socketSet: (parsed.ENGRAM_SOCKET ?? '') !== '' };
+  return { envLines: parsed, envChecks, engramEnv };
 }
 
 // ---- the report -----------------------------------------------------------------------------------------
@@ -822,13 +975,16 @@ const errorMessage = (err) => (err instanceof Error ? err.message : String(err))
  * arms must differ: the minimal arm is "the model and the built-in tools, nothing else", so it must carry
  * none of it on any request, and the current arm's seeded copy is the point of that arm, so its main-model
  * request (the one that offers tools, not a small-model side call) must carry it. A workspace with the real
- * home above it breaks the first: Claude Code loads `CLAUDE.md` from every ancestor directory. */
+ * home above it breaks the first: Claude Code loads `CLAUDE.md` from every ancestor directory. A subagent's
+ * requests (reply `subagent`) are in the count, so the absent arm cannot hide a contaminated subagent behind
+ * clean main requests, but they never stand in for the main model's: the current arm's `mainRequestHit` is
+ * read from the main agent's requests alone. */
 function checkContamination(arm, log, markers) {
   if (markers === 0) return { skipped: 'the real ~/.claude/CLAUDE.md is missing or has no line long enough to recognize it by' };
-  const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply.startsWith('tool_use')));
+  const messages = log.filter((request) => request.method === 'POST' && request.path === '/v1/messages' && (request.reply === 'text' || request.reply === 'subagent' || request.reply.startsWith('tool_use')));
   if (messages.length === 0) return { skipped: 'the agent sent no /v1/messages request' };
   const withGlobalClaudeMd = messages.filter((request) => request.globalClaudeMd).length;
-  const mainRequestHit = messages.some((request) => request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.globalClaudeMd);
+  const mainRequestHit = messages.some((request) => request.reply !== 'subagent' && request.toolsOffered && !/haiku/i.test(request.model ?? '') && request.globalClaudeMd);
   const expected = arm === 'current' ? 'present' : 'absent';
   return { expected, markers, requests: messages.length, withGlobalClaudeMd, mainRequestHit, ok: expected === 'present' ? mainRequestHit : withGlobalClaudeMd === 0 };
 }
@@ -845,11 +1001,14 @@ async function runArm(p, arm, before) {
   p.tokens.push(token);
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'workspace');
-  const result = { arm, sandboxToken: token, failures: [] };
+  const result = { arm, sandboxToken: token, failures: [], engram: { port: null, listening: null, survivors: [] } };
   const cleanupFailures = [];
   let templateParent = null;
   let api = null;
   let after = before;
+  let config = null;
+  let prepared;
+  let baseline = null;
   // The processes the agent left behind: a seeded home starts MCP servers (codegraph, with the workspace in
   // its command line) and hooks that can outlive their parent, hold the sandbox and fail its removal with
   // EPERM, and write to the real trees on their own schedule. They are found by the path in their command
@@ -861,6 +1020,32 @@ async function runArm(p, arm, before) {
     } catch (err) {
       cleanupFailures.push(`could not sweep the processes of the sandbox: ${errorMessage(err)}`);
     }
+  };
+  // The engram processes now, and again after the trial: a process the trial started and that is still running
+  // is the one in the second list and not the first (the live session's own engram is in both).
+  const listEngram = async () => {
+    try {
+      return { list: await (o.listEngram ?? (() => findProcesses('engram')))() };
+    } catch (err) {
+      return { error: errorMessage(err) };
+    }
+  };
+  // After the agent, whatever it did: the config's own cleanup (it kills what listens on the trial's engram port,
+  // which the sweep by path cannot reach), then three facts the arm is judged by: nothing listens on that port,
+  // no engram process the trial started is running, and the cleanup itself did not fail.
+  let engramStopped = false;
+  const stopEngram = async () => {
+    if (engramStopped || !prepared?.engramPort) return;
+    engramStopped = true;
+    try {
+      await config.cleanup?.({ home, workspace, prepared });
+    } catch (err) {
+      cleanupFailures.push(`could not stop what listens on the trial's engram port: ${errorMessage(err)}`);
+    }
+    result.engram.listening = await (o.isListening ?? portIsListening)(prepared.engramPort);
+    const listed = await listEngram();
+    if (listed.error) result.engram.listingError ??= listed.error;
+    else if (baseline) result.engram.survivors = listed.list.filter((entry) => !baseline.has(entry.pid)).map((entry) => ({ pid: entry.pid, command: String(entry.command).slice(0, 200) }));
   };
   let swept = false;
   try {
@@ -882,15 +1067,20 @@ async function runArm(p, arm, before) {
         result.template = { files: built.files, bytes: built.bytes, warnings: built.warnings };
         seed = seedFromTemplate(templateDir, { runInit: o.runInit });
       }
-      const options = { command: o.claude, model: PROBE_MODEL, permissionMode: PROBE_PERMISSION_MODE };
-      let config = arm === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
+      // `allocatePort` and `killPort` are the config builders' own seams, for tests that must not touch real ports.
+      const options = { command: o.claude, model: PROBE_MODEL, permissionMode: PROBE_PERMISSION_MODE, allocatePort: o.allocatePort, killPort: o.killPort };
+      config = arm === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options);
       config = o.adaptConfig(config, { arm });
       const configEnv = config.env;
       // The agent talks to the fake API with a dummy key and no login: the only credential is not one.
       config = { ...config, env: (context) => ({ ...(typeof configEnv === 'function' ? configEnv(context) : configEnv), ANTHROPIC_BASE_URL: api.url, ANTHROPIC_API_KEY: DUMMY_API_KEY, CLAUDE_CODE_OAUTH_TOKEN: null }) };
-      await config.prepare({ home, workspace, effort: PROBE_EFFORT, task: undefined });
+      prepared = await config.prepare({ home, workspace, effort: PROBE_EFFORT, task: undefined });
+      result.engram.port = prepared?.engramPort ?? null;
+      const listedBefore = await listEngram();
+      if (listedBefore.error) result.engram.listingError = listedBefore.error;
+      else baseline = new Set(listedBefore.list.map((entry) => entry.pid));
       seeded = await snapshotTrees([{ name: 'home', root: home, mode: 'content' }], { concurrency: o.concurrency, chunkSize: o.chunkSize });
-      const agent = resolveAgent(config, { effort: PROBE_EFFORT, task: undefined, home, workspace });
+      const agent = resolveAgent(config, { effort: PROBE_EFFORT, task: undefined, home, workspace, prepared });
       p.log(`${arm}: running the agent`);
       const began = performance.now();
       run = await runProcess({ ...agent, env: childEnv(agent.env), cwd: workspace, input: probePrompt(nonce), timeoutMs: o.timeoutMs });
@@ -904,12 +1094,19 @@ async function runArm(p, arm, before) {
     // miss what it wrote between the snapshot and its death. After the sweep nothing of the arm is running.
     swept = true;
     sweepSandbox();
+    await stopEngram();
+    // The session id is only known now, and the scan below looks for it in the real trees (what the hooks post names
+    // it and neither the nonce nor the sandbox). It is never logged or printed before that scan: output that is
+    // redirected into a scanned tree would hold the very needle.
+    const parsed = run ? parseAgentOutput(run.stdout) : null;
+    const session = await findSession(parsed, home, nonce);
+    result.session = { source: session.source };
+    if (session.id) p.sessionIds.push(session.id);
     // The real trees are checked even when the arm failed: a trial that died half way may already have leaked.
     p.log(`${arm}: checking the real trees`);
     after = await p.snapshot(`after:${arm}`, p.needles());
 
     if (run) {
-      const parsed = parseAgentOutput(run.stdout);
       Object.assign(result, {
         exitCode: run.exitCode, signal: run.signal, timedOut: run.timedOut,
         ...(run.spawnError && { spawnError: run.spawnError.message }),
@@ -927,7 +1124,8 @@ async function runArm(p, arm, before) {
     if (result.contamination.skipped && p.markers.length === 0) result.warnings.push(`the contamination check was skipped: ${result.contamination.skipped}`);
 
     if (!result.error) {
-      result.positiveControls = await positiveControls({ arm, home, workspace, nonce });
+      const storeHits = arm === 'current' ? await findInStore(path.join(home, '.engram'), { ...engramNeedles(nonce), ...(session.id && { session: session.id }) }) : {};
+      result.positiveControls = await positiveControls({ arm, home, workspace, nonce, log, storeHits, session: session.id, port: prepared?.engramPort ?? null });
       const grown = await snapshotTrees([{ name: 'home', root: home, mode: 'content' }], { concurrency: o.concurrency, chunkSize: o.chunkSize });
       const changes = diffSnapshots(seeded, grown).home;
       const under = (prefix, list) => list.filter((rel) => rel.startsWith(prefix)).length;
@@ -939,6 +1137,10 @@ async function runArm(p, arm, before) {
         removed: cap(changes.removed),
         answers: {
           historyJsonl: exists(path.join(home, '.claude', 'history.jsonl')),
+          // Informational: whether the SubagentStop hook's capture was kept depends on what the server extracts, and
+          // the prompt is never posted by the UserPromptSubmit hook's fast path under Git Bash on Windows.
+          engramPrompt: arm === 'current' ? storeHits.prompt != null : null,
+          engramSubagentStop: arm === 'current' ? storeHits.subagent != null : null,
           claudeCliNodejs: exists(path.join(home, 'AppData', 'Local', 'claude-cli-nodejs')),
           pluginsMarketplaces: {
             present: exists(path.join(home, '.claude', 'plugins', 'marketplaces')),
@@ -954,6 +1156,7 @@ async function runArm(p, arm, before) {
     await api?.close();
     // Swept already, unless something threw before the sweep above was reached.
     if (!swept) sweepSandbox();
+    await stopEngram();
     const note = (message) => cleanupFailures.push(message);
     // Removed in a finally and before anything else can throw: the template holds copies of the real
     // configuration's account data, and the sandbox home a copy of that.
@@ -978,8 +1181,20 @@ function armFailures(result) {
   if (result.spawnError) failures.push(`${label}: the agent could not be started: ${result.spawnError}`);
   if (result.timedOut) failures.push(`${label}: the agent was killed at the timeout`);
   for (const [name, control] of Object.entries(result.positiveControls ?? {})) {
-    if (!control.ok) failures.push(`${label}: positive control "${name}" failed: the sandbox did not hold what a real run writes there, so a clean leak scan proves nothing`);
+    if (!control.ok) failures.push(`${label}: positive control "${name}" failed: the sandbox did not hold what a real run writes there, so a clean leak scan proves nothing${control.hint ? ` (${control.hint})` : ''}`);
   }
+  // The engram plugin's hooks resolve their server from the environment of the trial, and fall back to the real
+  // server's port: the tools must see the trial's port, and no URL or socket that would point elsewhere.
+  const { engram } = result;
+  const seen = result.fakeApi?.engramEnv;
+  if (seen && engram?.port) {
+    if (seen.port !== String(engram.port)) failures.push(`${label}: the agent's tools see ENGRAM_PORT=${seen.port === '' ? '(unset)' : seen.port}, not the trial's port ${engram.port}: the engram hooks would reach another server`);
+    if (seen.urlSet) failures.push(`${label}: the agent's tools see ENGRAM_URL set (value not shown): the engram hooks would reach that server`);
+    if (seen.socketSet) failures.push(`${label}: the agent's tools see ENGRAM_SOCKET set (value not shown): the engram hooks would reach that server`);
+  }
+  if (engram?.port && engram.listening === true) failures.push(`${label}: something still listens on the trial's engram port ${engram.port} after the trial: an engram server it started was not stopped`);
+  for (const entry of engram?.survivors ?? []) failures.push(`${label}: an engram process that was not running before the trial is still running after it: pid ${entry.pid} (${entry.command})`);
+  if (engram?.listingError) failures.push(`${label}: inconclusive: the engram processes could not be listed (${engram.listingError}), so "no engram process of the trial is left" is unproven`);
   const { contamination } = result;
   if (contamination && contamination.ok === false) {
     failures.push(contamination.expected === 'absent'
@@ -989,7 +1204,7 @@ function armFailures(result) {
   // A real file that could not be read, after the retries, was not scanned: the verdict on it is unknown, and
   // an unknown is not a pass.
   const unreadable = result.leak?.unreadable;
-  for (const entry of (unreadable?.paths ?? []).slice(0, 10)) failures.push(`${label}: inconclusive: could not read ${entry}, so it was not scanned for the nonce or the sandbox name`);
+  for (const entry of (unreadable?.paths ?? []).slice(0, 10)) failures.push(`${label}: inconclusive: could not read ${entry}, so it was not scanned for the nonce, the sandbox name or the session id`);
   if ((unreadable?.count ?? 0) > 10) failures.push(`${label}: inconclusive: ${unreadable.count - 10} more real files could not be read (see the JSON report)`);
   for (const hit of result.leak?.hits ?? []) {
     failures.push(hit.via === 'key'
@@ -1010,7 +1225,10 @@ function armFailures(result) {
  * where the `claude` scratch folder to watch is), `trees` (default `defaultTrees`), `nonce`, `runInit` (passed to the seed), `adaptConfig(config, { arm })` (changes the
  * command and arguments, never the sandbox), `sweep(roots, { within })` (default `killByPath`: kills what the
  * agent left running under the sandbox, before the final scan of the real trees and again before the
- * removal if that sweep was not reached), `wait(ms)`, `log(message)`, `concurrency`, `chunkSize`, `openRead(file,
+ * removal if that sweep was not reached), `allocatePort()` and `killPort(port)` (the config builders' seams for the
+ * trial's engram port: a real free port, and the kill of what listens on it), `isListening(port)` (a connection to
+ * the loopback) and `listEngram()` (the engram processes now running, default `findProcesses('engram')`), `wait(ms)`,
+ * `log(message)`, `concurrency`, `chunkSize`, `openRead(file,
  * { chunkSize })` (how a real file is read) and `retryDelayMs` (the pause between the tries of a file that fails
  * to read; a file still unreadable after them makes its arm fail as inconclusive).
  *
@@ -1088,11 +1306,20 @@ async function probeUnder(o, workRootCreated) {
     });
     return taken;
   };
+  const sessionIds = [];
   const p = {
-    o, nonce, markers, tokens, snapshot, log: o.log,
-    // The nonce, and the unique name of every sandbox so far (also lowercased, which is how a Windows tool
-    // may spell a path), searched for in the real trees' content and names.
-    needles: () => [{ label: 'nonce', values: [nonce] }, { label: 'sandbox', values: [...new Set(tokens.flatMap((token) => [token, token.toLowerCase()]))] }],
+    o, nonce, markers, tokens, sessionIds, snapshot, log: o.log,
+    // The nonce, the unique name of every sandbox so far (also lowercased, which is how a Windows tool may spell a
+    // path) and the Claude session id of every trial so far, searched for in the real trees' content and names. The
+    // session id is what every hook post names: the session row of SessionStart holds the sandbox only as the cwd
+    // (and, on Windows, lowercased), and the rows that point at the session (a memory, a prompt) hold neither the
+    // sandbox nor the nonce, so a post that reached the real server is reliably found by it alone. It is known
+    // after the agent ran, so a scan before that has none.
+    needles: () => [
+      { label: 'nonce', values: [nonce] },
+      { label: 'sandbox', values: [...new Set(tokens.flatMap((token) => [token, token.toLowerCase()]))] },
+      ...(sessionIds.length > 0 ? [{ label: 'session id', values: [...new Set(sessionIds.flatMap((id) => [id, id.toLowerCase(), id.toUpperCase()]))] }] : []),
+    ],
   };
 
   const report = {
@@ -1124,6 +1351,10 @@ async function probeUnder(o, workRootCreated) {
       result.leak.fresh = reportDiff(split.fresh);
       result.leak.baseline = reportDiff(split.baseline);
     }
+    // What was scanned of the real engram store, so that a store that is not there (nothing scanned) is not
+    // read as a store that is clean. The hits are in `leak.hits` and fail the arm like every other real tree.
+    const realStore = after.trees['.engram'];
+    result.realEngram = { status: realStore?.status ?? 'unwatched', files: realStore?.files.size ?? 0, bytes: realStore?.bytes ?? 0, hits: result.leak.hits.filter((hit) => hit.tree === '.engram').length };
     result.failures = armFailures(result);
     result.ok = result.failures.length === 0;
     report.arms.push(result);
@@ -1206,6 +1437,18 @@ export function formatSummary(report) {
         lines.push(`  contamination: the real global CLAUDE.md reached ${reached} requests${c.ok ? ', as it should' : `: FAILED, expected it ${c.expected === 'present' ? 'on the main-model request' : 'on none'}`}`);
       }
     }
+    if (arm.engram?.port) {
+      const e = arm.engram;
+      const port = e.listening === true ? 'STILL LISTENING afterwards: FAILED' : e.listening === false ? 'nothing listens on it afterwards' : 'what listens on it was not checked';
+      const processes = e.survivors.length > 0 ? `; ${e.survivors.length} engram process(es) of the trial left running: FAILED` : e.listingError ? '; engram processes could not be listed: INCONCLUSIVE' : ', and no engram process of the trial is left';
+      lines.push(`  engram: port ${e.port}, ${port}${processes}`);
+    }
+    if (arm.realEngram) {
+      const s = arm.realEngram;
+      lines.push(s.status === 'present'
+        ? `  real engram store: ${s.files} files, ${megabytes(s.bytes)} scanned for the nonce, the sandbox name and the session id: ${s.hits === 0 ? 'nothing found' : `${s.hits} HIT(S)`}`
+        : `  real engram store: ${s.status}${s.status === 'missing' ? ' (the folder is not there, so nothing was scanned)' : ''}`);
+    }
     for (const warning of arm.warnings ?? []) lines.push(`  warning: ${warning}`);
     if (arm.positiveControls) {
       lines.push(`  positive controls: ${Object.entries(arm.positiveControls).map(([name, control]) => `${name} ${control.applies === false ? 'n/a' : control.ok ? 'ok' : 'FAILED'}`).join(', ')}`);
@@ -1214,6 +1457,7 @@ export function formatSummary(report) {
       const { answers } = arm.sandbox;
       lines.push(`  sandbox home: ${arm.sandbox.created.count} files created, ${arm.sandbox.changed.count} seeded files changed${arm.sandbox.kept ? `; kept at ${arm.sandbox.kept}` : ''}`);
       lines.push(`    history.jsonl written: ${answers.historyJsonl}; AppData/Local/claude-cli-nodejs in the sandbox: ${answers.claudeCliNodejs}; plugins/marketplaces present ${answers.pluginsMarketplaces.present}, created ${answers.pluginsMarketplaces.created}, changed ${answers.pluginsMarketplaces.changed}, removed ${answers.pluginsMarketplaces.removed}`);
+      if (answers.engramPrompt !== null) lines.push(`    information only: prompt stored in the engram store: ${answers.engramPrompt} (the hook's safe mode under Git Bash on Windows never posts it); subagent stop stored: ${answers.engramSubagentStop}`);
       lines.push(`    top level: ${arm.sandbox.top.filter((row) => !row.path.includes('/')).map((row) => `${row.path} (${row.files})`).join(', ')}`);
     }
     if (arm.leak) {

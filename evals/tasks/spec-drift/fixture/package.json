@@ -1,0 +1,11 @@
+{
+  "name": "parcel-quote",
+  "version": "3.2.0",
+  "private": true,
+  "description": "Shipping quotes for parcels: zones, weight bands, surcharges, discounts and tax.",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  }
+}
