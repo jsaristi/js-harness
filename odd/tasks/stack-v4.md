@@ -257,9 +257,11 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   finding which child starts PowerShell without `LOCALAPPDATA`.
 
 ## Next step
-The feature is complete and delivered as `jsaristi/js-harness#25` (`feat/stack-v4` against
-`main`, pushed 2026-10-03 on Sebastián's go-ahead, one PR with a size exception he accepted:
-+1,055/−42, of which 174 lines are `bin/` code and 596 tests). The merge is his. Reviewed
+**The feature is closed.** `jsaristi/js-harness#25` (`feat/stack-v4` against `main`, one PR
+with a size exception Sebastián accepted: +1,061/−44, of which 174 added lines are `bin/` code
+and 596 tests) was merged on 2026-10-03 with a merge commit, `d794c0c`, on his go-ahead. Reviewed
 boundary: `b58b5c2` for code; everything after it is `main`'s own reviewed history,
-documentation, and one line of `AGENTS.md` (`7468163`: the closing prompt of a reply comes in a
-fenced code block; gentle-ai assessed it medium, under budget, review not due).
+documentation, and two changes to one rule of `AGENTS.md` (`7468163`, `0ea934b`: the closing
+prompt of a reply comes labeled, in a fenced code block; gentle-ai assessed each medium, under
+budget, review not due). The Follow-ups above stay open until one earns a slice; the roadmap's
+Next names what comes after.
