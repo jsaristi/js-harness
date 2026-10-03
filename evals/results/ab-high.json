@@ -64,7 +64,25 @@
       "wallMs": 384168,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:22:09.382Z"
+      "startedAt": "2026-10-03T01:22:09.382Z",
+      "costUsd": 1.8522995999999998,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 48,
+          "outputTokens": 44789,
+          "cacheReadInputTokens": 1429718,
+          "cacheCreationInputTokens": 83798,
+          "webSearchRequests": 0,
+          "costUSD": 1.8522995999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 16234,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "house-rules",
@@ -101,7 +119,25 @@
       "wallMs": 108908,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:28:38.032Z"
+      "startedAt": "2026-10-03T01:28:38.032Z",
+      "costUsd": 0.4777676,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 20,
+          "outputTokens": 10194,
+          "cacheReadInputTokens": 319838,
+          "cacheCreationInputTokens": 26230,
+          "webSearchRequests": 0,
+          "costUSD": 0.4777676,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1136,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -138,7 +174,25 @@
       "wallMs": 214555,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:30:32.680Z"
+      "startedAt": "2026-10-03T01:30:32.680Z",
+      "costUsd": 0.799432,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 24,
+          "outputTokens": 21606,
+          "cacheReadInputTokens": 450200,
+          "cacheCreationInputTokens": 34647,
+          "webSearchRequests": 0,
+          "costUSD": 0.799432,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 7848,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -175,7 +229,25 @@
       "wallMs": 129506,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:34:11.861Z"
+      "startedAt": "2026-10-03T01:34:11.861Z",
+      "costUsd": 0.536792,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 14,
+          "outputTokens": 13966,
+          "cacheReadInputTokens": 211840,
+          "cacheCreationInputTokens": 26881,
+          "webSearchRequests": 0,
+          "costUSD": 0.536792,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 6371,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -212,7 +284,25 @@
       "wallMs": 196101,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:36:26.086Z"
+      "startedAt": "2026-10-03T01:36:26.086Z",
+      "costUsd": 1.0070928,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 26,
+          "outputTokens": 25029,
+          "cacheReadInputTokens": 594284,
+          "cacheCreationInputTokens": 48444,
+          "webSearchRequests": 0,
+          "costUSD": 1.0070928,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 4221,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "format-v2",
@@ -249,7 +339,25 @@
       "wallMs": 412549,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:39:45.667Z"
+      "startedAt": "2026-10-03T01:39:45.667Z",
+      "costUsd": 1.6311436000000004,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 28,
+          "outputTokens": 47238,
+          "cacheReadInputTokens": 796398,
+          "cacheCreationInputTokens": 65874,
+          "webSearchRequests": 0,
+          "costUSD": 1.6311436000000004,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 16982,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "house-rules",
@@ -286,7 +394,25 @@
       "wallMs": 84766,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:46:42.261Z"
+      "startedAt": "2026-10-03T01:46:42.261Z",
+      "costUsd": 0.4490916000000001,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 18,
+          "outputTokens": 9480,
+          "cacheReadInputTokens": 279618,
+          "cacheCreationInputTokens": 25437,
+          "webSearchRequests": 0,
+          "costUSD": 0.4490916000000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1176,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -323,7 +449,25 @@
       "wallMs": 173999,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:48:10.949Z"
+      "startedAt": "2026-10-03T01:48:10.949Z",
+      "costUsd": 0.7406104,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 24,
+          "outputTokens": 19920,
+          "cacheReadInputTokens": 421332,
+          "cacheCreationInputTokens": 32231,
+          "webSearchRequests": 0,
+          "costUSD": 0.7406104,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 4627,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -360,7 +504,25 @@
       "wallMs": 146260,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:51:09.512Z"
+      "startedAt": "2026-10-03T01:51:09.512Z",
+      "costUsd": 0.5936956,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 14,
+          "outputTokens": 16030,
+          "cacheReadInputTokens": 224278,
+          "cacheCreationInputTokens": 28523,
+          "webSearchRequests": 0,
+          "costUSD": 0.5936956,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 7558,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -397,7 +559,25 @@
       "wallMs": 181113,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:53:40.150Z"
+      "startedAt": "2026-10-03T01:53:40.150Z",
+      "costUsd": 0.8550532,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 22,
+          "outputTokens": 22893,
+          "cacheReadInputTokens": 431206,
+          "cacheCreationInputTokens": 38858,
+          "webSearchRequests": 0,
+          "costUSD": 0.8550532,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 2957,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "format-v2",
@@ -434,7 +614,25 @@
       "wallMs": 356462,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T01:56:44.757Z"
+      "startedAt": "2026-10-03T01:56:44.757Z",
+      "costUsd": 1.5404734,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 34,
+          "outputTokens": 42519,
+          "cacheReadInputTokens": 936027,
+          "cacheCreationInputTokens": 62844,
+          "webSearchRequests": 0,
+          "costUSD": 1.5404734,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 15193,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "house-rules",
@@ -471,7 +669,25 @@
       "wallMs": 91417,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:02:45.053Z"
+      "startedAt": "2026-10-03T02:02:45.053Z",
+      "costUsd": 0.4709292,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 20,
+          "outputTokens": 9854,
+          "cacheReadInputTokens": 324366,
+          "cacheCreationInputTokens": 26112,
+          "webSearchRequests": 0,
+          "costUSD": 0.4709292,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1097,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -508,7 +724,25 @@
       "wallMs": 156237,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:04:20.433Z"
+      "startedAt": "2026-10-03T02:04:20.433Z",
+      "costUsd": 0.6104035999999999,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 22,
+          "outputTokens": 15531,
+          "cacheReadInputTokens": 375838,
+          "cacheCreationInputTokens": 28066,
+          "webSearchRequests": 0,
+          "costUSD": 0.6104035999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 4602,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -545,7 +779,25 @@
       "wallMs": 166198,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:07:05.142Z"
+      "startedAt": "2026-10-03T02:07:05.142Z",
+      "costUsd": 0.6658178,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 18,
+          "outputTokens": 18016,
+          "cacheReadInputTokens": 298889,
+          "cacheCreationInputTokens": 30706,
+          "webSearchRequests": 0,
+          "costUSD": 0.6658178,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 7096,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -582,7 +834,25 @@
       "wallMs": 154315,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:09:55.632Z"
+      "startedAt": "2026-10-03T02:09:55.632Z",
+      "costUsd": 0.7300125999999999,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 20,
+          "outputTokens": 19282,
+          "cacheReadInputTokens": 338063,
+          "cacheCreationInputTokens": 34585,
+          "webSearchRequests": 0,
+          "costUSD": 0.7300125999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 3037,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "format-v2",
@@ -619,7 +889,25 @@
       "wallMs": 573414,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:12:47.642Z"
+      "startedAt": "2026-10-03T02:12:47.642Z",
+      "costUsd": 3.0835006000000007,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 74,
+          "outputTokens": 62325,
+          "cacheReadInputTokens": 2930783,
+          "cacheCreationInputTokens": 196136,
+          "webSearchRequests": 0,
+          "costUSD": 3.0835006000000007,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 20837,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1
     },
     {
       "task": "house-rules",
@@ -656,7 +944,25 @@
       "wallMs": 153763,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:22:32.246Z"
+      "startedAt": "2026-10-03T02:22:32.246Z",
+      "costUsd": 1.0929512000000001,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 38,
+          "outputTokens": 13291,
+          "cacheReadInputTokens": 1290856,
+          "cacheCreationInputTokens": 71101,
+          "webSearchRequests": 0,
+          "costUSD": 1.0929512000000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 2705,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -693,7 +999,25 @@
       "wallMs": 334121,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:25:15.895Z"
+      "startedAt": "2026-10-03T02:25:15.895Z",
+      "costUsd": 1.8241914,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 54,
+          "outputTokens": 30355,
+          "cacheReadInputTokens": 2180977,
+          "cacheCreationInputTokens": 97585,
+          "webSearchRequests": 0,
+          "costUSD": 1.8241914,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 11829,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -730,7 +1054,25 @@
       "wallMs": 224954,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:31:00.805Z"
+      "startedAt": "2026-10-03T02:31:00.805Z",
+      "costUsd": 1.2293882,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 22,
+          "outputTokens": 23910,
+          "cacheReadInputTokens": 735101,
+          "cacheCreationInputTokens": 75510,
+          "webSearchRequests": 0,
+          "costUSD": 1.2293882,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 8326,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -767,7 +1109,25 @@
       "wallMs": 284908,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:34:55.545Z"
+      "startedAt": "2026-10-03T02:34:55.545Z",
+      "costUsd": 1.5623261999999998,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 50,
+          "outputTokens": 24413,
+          "cacheReadInputTokens": 1935371,
+          "cacheCreationInputTokens": 85849,
+          "webSearchRequests": 0,
+          "costUSD": 1.5623261999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 5841,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "format-v2",
@@ -804,7 +1164,25 @@
       "wallMs": 685425,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:39:49.753Z"
+      "startedAt": "2026-10-03T02:39:49.753Z",
+      "costUsd": 3.979075199999999,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 126,
+          "outputTokens": 72863,
+          "cacheReadInputTokens": 5518876,
+          "cacheCreationInputTokens": 220776,
+          "webSearchRequests": 0,
+          "costUSD": 3.979075199999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 22701,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1
     },
     {
       "task": "house-rules",
@@ -841,7 +1219,25 @@
       "wallMs": 108442,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:51:25.383Z"
+      "startedAt": "2026-10-03T02:51:25.383Z",
+      "costUsd": 0.8437311999999998,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 24,
+          "outputTokens": 10162,
+          "cacheReadInputTokens": 730736,
+          "cacheCreationInputTokens": 61781,
+          "webSearchRequests": 0,
+          "costUSD": 0.8437311999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1696,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -878,7 +1274,25 @@
       "wallMs": 340279,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:53:23.574Z"
+      "startedAt": "2026-10-03T02:53:23.574Z",
+      "costUsd": 1.6818495999999998,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 46,
+          "outputTokens": 30889,
+          "cacheReadInputTokens": 1836788,
+          "cacheCreationInputTokens": 87066,
+          "webSearchRequests": 0,
+          "costUSD": 1.6818495999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 14509,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -915,7 +1329,25 @@
       "wallMs": 185779,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T02:59:18.002Z"
+      "startedAt": "2026-10-03T02:59:18.002Z",
+      "costUsd": 1.1023851999999998,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 26,
+          "outputTokens": 18996,
+          "cacheReadInputTokens": 844486,
+          "cacheCreationInputTokens": 69183,
+          "webSearchRequests": 0,
+          "costUSD": 1.1023851999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 6523,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -952,7 +1384,25 @@
       "wallMs": 239132,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:02:34.085Z"
+      "startedAt": "2026-10-03T03:02:34.085Z",
+      "costUsd": 1.5001788000000003,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 28,
+          "outputTokens": 28874,
+          "cacheReadInputTokens": 1048014,
+          "cacheCreationInputTokens": 89123,
+          "webSearchRequests": 0,
+          "costUSD": 1.5001788000000003,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 4579,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "format-v2",
@@ -989,7 +1439,25 @@
       "wallMs": 661410,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:06:42.353Z"
+      "startedAt": "2026-10-03T03:06:42.353Z",
+      "costUsd": 3.5253047999999994,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 90,
+          "outputTokens": 71359,
+          "cacheReadInputTokens": 3823679,
+          "cacheCreationInputTokens": 208413,
+          "webSearchRequests": 0,
+          "costUSD": 3.5253047999999994,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 24818,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1
     },
     {
       "task": "house-rules",
@@ -1026,7 +1494,25 @@
       "wallMs": 98147,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:17:53.603Z"
+      "startedAt": "2026-10-03T03:17:53.603Z",
+      "costUsd": 0.7466459999999999,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 16,
+          "outputTokens": 9154,
+          "cacheReadInputTokens": 458510,
+          "cacheCreationInputTokens": 58975,
+          "webSearchRequests": 0,
+          "costUSD": 0.7466459999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 2050,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "lost-updates",
@@ -1063,7 +1549,25 @@
       "wallMs": 331820,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:19:41.587Z"
+      "startedAt": "2026-10-03T03:19:41.587Z",
+      "costUsd": 1.6978033999999997,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 52,
+          "outputTokens": 28532,
+          "cacheReadInputTokens": 2065737,
+          "cacheCreationInputTokens": 89226,
+          "webSearchRequests": 0,
+          "costUSD": 1.6978033999999997,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 12252,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "resolver",
@@ -1100,7 +1604,25 @@
       "wallMs": 336660,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:25:24.731Z"
+      "startedAt": "2026-10-03T03:25:24.731Z",
+      "costUsd": 1.6140424,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 38,
+          "outputTokens": 31565,
+          "cacheReadInputTokens": 1448192,
+          "cacheCreationInputTokens": 86619,
+          "webSearchRequests": 0,
+          "costUSD": 1.6140424,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 12637,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     },
     {
       "task": "spec-drift",
@@ -1137,7 +1659,25 @@
       "wallMs": 208352,
       "cliVersion": "2.1.284 (Claude Code)",
       "error": null,
-      "startedAt": "2026-10-03T03:31:11.425Z"
+      "startedAt": "2026-10-03T03:31:11.425Z",
+      "costUsd": 1.2946337999999995,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 28,
+          "outputTokens": 23326,
+          "cacheReadInputTokens": 984049,
+          "cacheCreationInputTokens": 78899,
+          "webSearchRequests": 0,
+          "costUSD": 1.2946337999999995,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 5376,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0
     }
   ]
 }

@@ -59,10 +59,12 @@ by hidden tests, so a score is a command's exit, not a phrasing match.
   - **score discriminates** when the scores are not equal: the better score wins, at any cost;
   - **cost discriminates** when the scores are equal and the mean cost differs by more than the
     pooled standard deviation of cost: the cheaper config wins, since it gets the same result;
-  - the cost of a trial is **cost units**, its tokens weighted by their price relative to an
-    input token: input 1, cache write 1.25 (five minutes) or 2 (one hour), cache read 0.1,
-    output 5. Raw tokens and wall time are reported beside it; wall time does not decide,
-    because it moves with the machine's load.
+  - the cost of a trial is **its list cost in US dollars as Claude Code reports it**
+    (`total_cost_usd` of the result), which covers the whole session, subagents included. The
+    first version weighted the result's `usage` by price ("cost units"), but `usage` counts the
+    main thread only, so a config that delegates looked cheaper than it was (T6c). Tokens
+    summed over the result's `modelUsage` and wall time are reported beside it; wall time does
+    not decide, because it moves with the machine's load.
   The predecessor's score rule is still reported per task, so its "0 of 32" stays comparable.
 
 ## Effort
@@ -262,6 +264,10 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `--require-complete` fails on a cell with fewer than 3 trials, `--min-discriminating <n>`
   fails unless at least n tasks discriminate at every effort in the runs. The result written
   to the roadmap (route: delegated writer for the report, inline for the roadmap)
+- [x] T6c A trial's cost is the whole session's: the runner records the result's
+  `total_cost_usd`, `modelUsage` and `subagent_stats`, the report decides on `costUsd`, and the
+  committed results are backfilled from the raw logs, which hold all three for all 60 trials
+  (route: delegated writer for the code, inline for the backfill)
 
 ## Progress
 - 2026-09-30: F5 opened. Spend decision taken: no USD ceiling. The predecessor's runner and its
@@ -1039,6 +1045,36 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   both gates, since there was no effort to check. Fixed inline: `buildReport` refuses them. RED:
   the new test got no `ReportError`. GREEN: `node --test evals/report.test.mjs` 40/40; the real
   report still exits 0.
+- 2026-10-02: Codex on `09d7a90..c9337c9`: no actionable finding, but **not recorded**: its
+  commands showed 674 of 1,961 changed lines (most of the range is results data). To be redone
+  on a narrower range.
+- 2026-10-02: **The cost measure was wrong, and it flipped a verdict.** Building the roadmap
+  table showed `format-v2` at `high` with the current config using fewer output tokens (16k
+  against 45k) in more time (10m40s against 6m24s). The raw result of
+  `format-v2__current__high__1` says why: its top-level `usage` counts the main thread only
+  (20,405 output tokens), while `modelUsage` counts the whole session, subagents included
+  (62,325), and `total_cost_usd` is $3.08. Recomputed from the raw logs of all 60 trials with
+  `total_cost_usd`, list price, current against minimal: every cell is 1.68×–2.54×, `format-v2`
+  at `high` included (2.11×, not 0.75×); 30 trials each cost $22.71 (minimal) and $47.07
+  (current). T6c makes that the measure. In that trial `subagent_stats` shows one subagent
+  spawned (`general-purpose`): the gap is the delegated work.
+- 2026-10-02: T6c's backfill, inline, with a one-off script (scratchpad `backfill-cost.mjs`):
+  each recorded trial matched to `evals/runs/<run>/<task>__<config>__<effort>__<repeat>.stdout.log`,
+  whose last line is the agent's result, and checked against the record by its main-thread
+  output tokens; 60 of 60 matched. Each trial gained `costUsd`, `modelUsage` and `subagents`;
+  the diff only adds those three fields (the 60 removed lines are each trial's last line
+  gaining a comma). The raw logs are gitignored, so this backfill cannot be redone from a fresh
+  clone; the added fields are the record.
+- 2026-10-02: T6c's code by a delegated writer (Sonnet), commit `879c3bb`: the runner records
+  `costUsd`, `modelUsage` and `subagents` (`summarizeUsage`); the report decides and prints cost
+  in dollars from `costUsd`, tokens summed over `modelUsage`, the price weights removed. The
+  report's tests keep the main-thread `usage` equal across trials, so any cost read from it
+  fails them, and one test has `usage` and `costUsd` disagree with the verdict following
+  `costUsd`. RED per behavior, then GREEN: report 40/40, runner 135 pass 1 skipped, suite
+  43/43, process-tree 45/45. Run by the parent on the backfilled results, `node
+  evals/report.mjs --require-complete --min-discriminating 3`: exit 0, **10 of 10 task and
+  effort cells `cost: minimal`**, 5 of 5 at each effort, current/minimal 1.81×–2.54× at
+  `medium` and 1.68×–2.42× at `high` (`format-v2` at `high` 2.11×).
 - 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
