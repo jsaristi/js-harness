@@ -58,6 +58,7 @@ First request of a one-word prompt, estimated tokens:
 | Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6.1-sol` at `high` (`~/.codex/config.toml`; Sebastián, 2026-09-29), replacing `gpt-6-sol` at `xhigh`; `codex exec -m gpt-6.1-sol` answered at `high` on 2026-09-29, after a review earlier that day got a 400 for the same model |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
+| Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
 | Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6.1-sol`): `high` (see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
@@ -78,7 +79,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | Project init | `js-harness init` in a repo writes the per-project files above, all recorded in a project manifest, and `uninstall` there restores the repo exactly; `sync` moves a project to its pinned version; the TUI offers `init`/`sync`/`status` inside a project, above the machine commands (Sebastián, 2026-09-29), and the machine commands outside one; `doctor` reports the Codex plugin, and the Codex review of each approved code slice leaves a record a check verifies (today it depends on the agent remembering, and nothing notices a skip) | Done 2026-09-29 (`odd/tasks/project-init.md`), seven slices stacked to `main`: the git-spec install through the pnpm shim works since `jsaristi/js-harness#8` (the package no longer runs `prepare`); `init` merged via `jsaristi/js-harness#9`; project `uninstall`, with `init`'s review follow-ups, merged via `jsaristi/js-harness#10` (2026-09-29); project `sync` by location merged via `jsaristi/js-harness#11` (2026-09-29); the TUI by location merged via `jsaristi/js-harness#12` (2026-09-29); the Codex plugin in `doctor` merged via `jsaristi/js-harness#13` (2026-09-29); the verifiable Codex review record (`js-harness codex-review` and the pre-push `check --push`) merged via `jsaristi/js-harness#14` (2026-09-29). Its follow-ups are carried in the feature document |
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
-| F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | In progress on `feat/evals` (`odd/tasks/evals.md`); spend approved 2026-09-30, no USD ceiling |
+| F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done 2026-10-03 on `feat/evals`, not yet merged (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result) |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
@@ -143,8 +144,8 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 
 ### F5 Evals that discriminate
 - [x] Spend approved by Sebastián
-- [ ] Tasks hard enough to separate configs
-- [ ] A/B minimal vs current config at medium and high
+- [x] Tasks that separate the configs under the eval verdict rule
+- [x] A/B minimal vs current config at medium and high
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -153,10 +154,37 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 ### F7 Future-model protocol
 - [ ] Written procedure: measure payload, run evals, strip one component at a time
 
+## F5 result
+
+Five tasks, three trials per config and effort, Opus 5.5 under `bypassPermissions`, Claude Code
+2.1.284 with gentle-ai 4.0.0 and engram 3.0.0 (`node evals/report.mjs` over
+`evals/results/headroom.json`, `headroom-current.json` and `ab-high.json`). Score is the
+mean with its range when the trials differ; cost is the mean list cost of one session; tokens
+are input (cache included) plus output over every model of the session; wall time is the mean.
+
+| Task | Effort | Score minimal / current | Cost minimal / current | Ratio | Tokens minimal / current | Wall minimal / current | Verdict |
+|------|--------|------|------|------|------|------|------|
+| format-v2 | medium | 0.99 (0.98–1.00) / 0.99 (0.98–1.00) | $1.38 / $2.50 | 1.81× | 1.09M / 3.43M | 4m55s / 7m24s | cost: minimal |
+| house-rules | medium | 0.98 / 0.98 | $0.40 / $1.01 | 2.54× | 313k / 1.04M | 1m17s / 2m20s | cost: minimal |
+| lost-updates | medium | 1.00 / 1.00 | $0.52 / $1.03 | 2.00× | 342k / 968k | 2m19s / 2m55s | cost: minimal |
+| resolver | medium | 1.00 / 1.00 | $0.41 / $1.01 | 2.44× | 195k / 824k | 1m40s / 2m52s | cost: minimal |
+| spec-drift | medium | 0.99 (0.98–1.00) / 1.00 | $0.54 / $1.21 | 2.25× | 385k / 1.15M | 1m44s / 3m01s | cost: minimal |
+| format-v2 | high | 1.00 / 1.00 | $1.67 / $3.53 | 2.11× | 1.17M / 4.37M | 6m24s / 10m40s | cost: minimal |
+| house-rules | high | 0.98 / 0.98 | $0.47 / $0.89 | 1.92× | 344k / 902k | 1m35s / 2m00s | cost: minimal |
+| lost-updates | high | 1.00 / 0.99 (0.98–1.00) | $0.72 / $1.73 | 2.42× | 466k / 2.15M | 3m02s / 5m35s | cost: minimal |
+| resolver | high | 1.00 / 1.00 | $0.60 / $1.32 | 2.20× | 290k / 1.11M | 2m27s / 4m09s | cost: minimal |
+| spec-drift | high | 1.00 / 1.00 | $0.86 / $1.45 | 1.68× | 518k / 1.43M | 2m57s / 4m04s | cost: minimal |
+
+All ten cells reach the score ceiling with both configs, and the minimal config wins every one
+on cost: the current stack costs 1.68× to 2.54× as much, $47.07 against $22.71 over 30 trials
+each, and takes longer on every task. The predecessor's score-only rule separates one cell,
+spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's context and
+workflow add cost without adding score; what it may buy (recall across sessions, review, larger
+work) these tasks do not measure.
+
 ## Next
 
-1. F5 Evals that discriminate (`odd/tasks/evals.md`): the runner first, then candidate tasks
-   with hidden graders, a headroom screen, and the A/B run.
+1. Deliver F5: `feat/evals` as reviewed PR slices to `main`, Sebastián's call.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete.
 3. F2's last two steps, when gentle-ai ships v4 or #4036; open decision 4 (the codegraph hook)

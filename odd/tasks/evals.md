@@ -257,9 +257,9 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
   `medium` cells are the recorded runs `headroom` and `headroom-current` (route: inline run,
   results committed)
-- [ ] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
+- [x] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
   ones named), refuses mixed stacks, models or permission modes, and prints per task and
-  effort both configs' mean score, spread, cost units, tokens and wall time with the verdict of
+  effort both configs' mean score, spread, cost (dollars since T6c), tokens and wall time with the verdict of
   the Constraints' rule (score, cost or none) and the predecessor's score rule beside it;
   `--require-complete` fails on a cell with fewer than 3 trials, `--min-discriminating <n>`
   fails unless at least n tasks discriminate at every effort in the runs. The result written
@@ -1092,6 +1092,20 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   `review-c24a41554b4689a5`, medium, reliability lens, approved and acknowledged). One
   suggestion, taken: `trialTokens` summed a negative `modelUsage` count; a trial holding one now
   has unknown tokens, as a negative cost already did. RED (`-5`), then GREEN: report 40/40.
+  Commit `9a561a7`.
+- 2026-10-03: T6's roadmap part, inline: `docs/ROADMAP.md` gains the Decided row "Eval verdict",
+  F5's state, its two remaining checklist steps checked (the first renamed to "Tasks that
+  separate the configs under the eval verdict rule", which is what the A/B shows), and an "F5
+  result" table per task and effort built from `node evals/report.mjs --json`: mean score with
+  its range, mean cost, ratio, tokens over every model, wall time and verdict. `js-harness
+  progress` shows F5 3/3. Next on the roadmap: delivering F5.
+- 2026-10-03: Codex reviewed every commit since `09d7a90` that `check --push` counts as code,
+  in seven ranges, each from a detached worktree at its head so no range was too large for the
+  evidence rule (the earlier `fe0d423..879c3bb` attempt showed 674 of 1961 lines and recorded
+  nothing): `4b1ab30..d8ad2ae`, `d8ad2ae..d470eaa`, `d470eaa..fe0d423`, `fe0d423..1c2691c`,
+  `1c2691c..879c3bb`, `879c3bb..5dc3dcc`, `5dc3dcc..9a561a7`. All seven recorded, no
+  findings; on the backfill Codex checked that each added cost matches its `modelUsage` total.
+  It ran no tests (read-only sandbox), which the gate covers.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1328,13 +1342,16 @@ config at `medium`. The current config on the same tasks (run `headroom-current`
 same at 2.7× the input tokens. Sebastián then changed what "discriminates" means: score as the
 floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
 and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
-run. Next: T6, the report (`evals/report.mjs`, a delegated writer, started 2026-10-02), then the
-result in the roadmap. A run written by two invocations keeps only the last one's `args`
+run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
+verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
+remains is delivery, Sebastián's call: `feat/evals` as PR slices to `main`, and how T4k gets
+there. A run written by two invocations keeps only the last one's `args`
 (`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
 trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
 and moves with load.
-Reviewed boundary: gentle-ai `fe0d423`; Codex `09d7a90` (the commits after it hold no code:
-docs and the results files).
+Reviewed boundary: gentle-ai `9a561a7`; Codex `9a561a7` (seven ranges, 2026-10-03, see
+Progress; `check --push` counts any file that is not Markdown as code, so the results files
+needed a record too).
 `AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
 duplicated, no `CLAUDE.md` in the repo) and, on Sebastián's go-ahead, revised on this branch:
 decision records are committed on the feature branch as part of the work (the global file's
