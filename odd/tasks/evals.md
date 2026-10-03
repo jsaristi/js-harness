@@ -106,7 +106,8 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
     Sebastián's go-ahead (2026-10-03) as merge commit `0f44719`.
   - Slice 4: PR jsaristi/js-harness#23, branch `feat/evals`, from `4b1ab30` to the branch
     head (+4,903/-55 at `c2ddc23`): the recorded runs, the report, the roadmap and
-    `AGENTS.md`. Open, not merged; merging it closes F5 on `main`.
+    `AGENTS.md`. Merged on Sebastián's go-ahead (2026-10-03) as merge commit `7f02627`, at
+    `3babe73` (16 commits, +4,908/-58). F5 is on `main`.
 - T4k reached `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
   `evals/ports.mjs`, which `main` did not have (T4a adds it), and `evals/runner.mjs` as T4a
   left it, so a hotfix would have been a hand-resolved cherry-pick: new code that needs its
@@ -1366,10 +1367,11 @@ floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes
 and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
 run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
 verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
-remains is delivery (see Delivery): slices 2 and 3 are merged (`bb82ea8`, `0f44719`); slice 4
-is open as PR jsaristi/js-harness#23 and merges on Sebastián's go-ahead. After that, in a new
-session: the roadmap's F5 row is closed with the four PRs, and `feat/stack-v4` takes `main` in
-and goes as its own PR. A run written by two invocations keeps only the last one's `args`
+remained was delivery, and it is done (see Delivery): the four slices are merged to `main`
+(`5ab2ae6`, `bb82ea8`, `0f44719`, `7f02627`), and `main`'s tree equals `feat/evals` at
+`3babe73`. **The feature is closed.** What follows is outside it and belongs to a new
+session: `feat/stack-v4` takes `main` in as its first commit and goes as its own PR. The
+Follow-ups below stay open until one earns a slice. A run written by two invocations keeps only the last one's `args`
 (`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
 trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
 and moves with load.
