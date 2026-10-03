@@ -99,9 +99,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   commits, all covered by a Codex record). A PR opens only once the one before it has merged,
   so its diff shows its own commits alone.
   - Slice 2: PR jsaristi/js-harness#21, branch `feat/evals-tasks`, `5ab2ae6..57010c7`
-    (18 commits, +9,779/-7): T3, the task proof and the five tasks. Open, not merged.
-  - Slice 3: branch `feat/evals-suite`, `57010c7..4b1ab30` (16 commits, +4,821/-367): T4a, T4k
-    with T4kr, T4kt and T4kg, T4s and T4ap. No PR yet.
+    (18 commits, +9,779/-7): T3, the task proof and the five tasks. Merged on Sebastián's
+    go-ahead (2026-10-03) as merge commit `bb82ea8`.
+  - Slice 3: PR jsaristi/js-harness#22, branch `feat/evals-suite`, `57010c7..4b1ab30`
+    (16 commits, +4,821/-367): T4a, T4k with T4kr, T4kt and T4kg, T4s and T4ap. Open, not
+    merged; its diff against `main` is exactly this range.
   - Slice 4: branch `feat/evals`, from `4b1ab30` to the branch head (+4,874/-51 at `fbfe241`):
     the recorded runs, the report, the roadmap and `AGENTS.md`. No PR yet.
 - T4k reaches `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
@@ -1362,9 +1364,10 @@ floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes
 and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
 run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
 verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
-remains is delivery (see Delivery): slice 2 is open as PR jsaristi/js-harness#21 and merges
-on Sebastián's go-ahead; then slice 3's PR is opened and merged, then slice 4's, and after
-that `feat/stack-v4` takes `main` in and goes as its own PR. A run written by two invocations keeps only the last one's `args`
+remains is delivery (see Delivery): slice 2 is merged (`bb82ea8`); slice 3 is open as PR
+jsaristi/js-harness#22 and merges on Sebastián's go-ahead; then slice 4's PR is opened from
+`feat/evals` and merged, and after that `feat/stack-v4` takes `main` in and goes as its own
+PR. A run written by two invocations keeps only the last one's `args`
 (`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
 trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
 and moves with load.
