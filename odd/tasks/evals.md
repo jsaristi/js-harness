@@ -1006,6 +1006,33 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   times; nothing else ran on the machine meanwhile. Scores 0.98–1.00 in every trial of both
   arms. Results: `evals/results/ab-high.json` (no token in it or in `evals/runs/ab-high/`,
   searched for `sk-ant-`). The verdicts are T6's to compute.
+- 2026-10-02: `d470eaa..fe0d423` (the `AGENTS.md` revision, the new definition, T5's results;
+  1,292 lines, most of them data) reviewed by gentle-ai (lineage `review-d6f0096577ad314d`,
+  medium, reliability lens, approved and acknowledged). Two WARNINGs, both right: `ab-high`'s
+  `args` name only the second invocation's config (the report must read the trials; the T6
+  writer was told, and the suite keeping the union of a run's arguments is a Follow-up), and
+  the handoff still said "Next: T5" with a command that no longer matched how T5 ran (fixed).
+- 2026-10-02: T6's report written by a delegated writer (Sonnet): `evals/report.mjs` and
+  `evals/report.test.mjs`. It reads the trials, never `args`; trials with an error count (the
+  runner records one only after the workspace was graded, and dropping them would flatter a
+  config that fails); scores and costs are rounded to 1e-9 before comparing, since 1 − 0.98 is
+  0.020000000000000018. RED per behavior, then GREEN: `node --test evals/report.test.mjs`
+  39/39; four mutations of the rule (tolerance, cost gap, sample deviation, rounding) each
+  caught by the tests. `bin/lib/process-tree.test.mjs` 45/45. Run by the parent on the real
+  results, `node evals/report.mjs --require-complete --min-discriminating 3`: exit 0.
+
+  | task | medium: cost units min → cur | verdict | high: cost units min → cur | verdict |
+  |---|---|---|---|---|
+  | format-v2 | 396k → 572k (1.44×) | cost: minimal | 471k → 352k (0.75×) | none |
+  | house-rules | 114k → 242k (2.13×) | cost: minimal | 132k → 265k (2.01×) | cost: minimal |
+  | lost-updates | 144k → 302k (2.10×) | cost: minimal | 200k → 535k (2.68×) | cost: minimal |
+  | resolver | 112k → 289k (2.59×) | cost: minimal | 162k → 379k (2.34×) | cost: minimal |
+  | spec-drift | 152k → 356k (2.34×) | cost: minimal | 239k → 429k (1.80×) | cost: minimal |
+
+  **5 of 5 discriminate at `medium` and 4 of 5 at `high`, every one for the minimal config**;
+  no score verdict anywhere (every score pair equal under the rule). `format-v2` at `high` is
+  the exception: the current config was cheaper on average there, inside the spread. The
+  predecessor's pure score rule fires once (`spec-drift` at `medium`, 0.99 against 1.00).
 - 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
@@ -1147,6 +1174,9 @@ Decided 2026-10-01, before the first candidate was written:
 - The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
   only for engram 0.1.5; another format fails the control with its hint, it does not pass
   silently. The engram controls are unverified on POSIX (T4ap).
+- A run continued with other arguments keeps only the last invocation's `args` in its results
+  document (`evals/suite.mjs:437`), so `ab-high` describes itself as current-only. The suite
+  could keep the union of the arguments a run was given (gentle-ai WARNING on T5).
 - `node evals/suite.mjs --summary` prints the headroom screen for every run, so a run with no
   minimal trials shows every task as "incomplete (0 of 3 trials)". It could print the screen
   only when the run has minimal trials at `medium`.
@@ -1242,12 +1272,13 @@ T4 ran on 2026-10-02 and kept no task: all five candidates score 0.98–1.00 wit
 config at `medium`. The current config on the same tasks (run `headroom-current`) scored the
 same at 2.7× the input tokens. Sebastián then changed what "discriminates" means: score as the
 floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
-and no headroom task is needed. Next: T5, `node evals/suite.mjs --claude
-C:\Users\Oficina\.local\bin\claude.exe --configs minimal,current --efforts high --repeats 3
---tasks all --permission-mode bypassPermissions --name ab-high` (30 trials, with the token
-passed to that one process from the user variable), and T6, the report, by a delegated writer.
-Do not run a gate or a test suite while trials run: wall time is reported and moves with load.
-Reviewed boundary: gentle-ai `d470eaa`; Codex `09d7a90` (the commits after it hold no code:
+and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
+run. Next: T6, the report (`evals/report.mjs`, a delegated writer, started 2026-10-02), then the
+result in the roadmap. A run written by two invocations keeps only the last one's `args`
+(`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
+trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
+and moves with load.
+Reviewed boundary: gentle-ai `fe0d423`; Codex `09d7a90` (the commits after it hold no code:
 docs and the results files).
 `AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
 duplicated, no `CLAUDE.md` in the repo) and, on Sebastián's go-ahead, revised on this branch:
