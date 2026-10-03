@@ -48,9 +48,24 @@ by hidden tests, so a score is a command's exit, not a phrasing match.
   a visible grader turns the task into "make these tests pass" and measures nothing else.
 - Zero dependencies in the runner and graders — because every command in this repo runs with no
   install step (AGENTS.md, "How the repo works").
-- "Discriminates" keeps the predecessor's definition — the two configs' mean scores on a task
-  differ by more than the pooled within-config standard deviation — so its "0 of 32" and this
-  phase's result are comparable.
+- "Discriminates" was the predecessor's definition — the two configs' mean scores on a task
+  differ by more than the pooled within-config standard deviation — until the headroom screen
+  put both configs at the ceiling on every candidate (2026-10-02). Since then (Sebastián,
+  2026-10-02: "score as the floor, cost as what discriminates"), for one task at one effort:
+  - **the scores are equal** when the two means differ by at most 0.02 (one hidden check in
+    about fifty) or by no more than their pooled standard deviation, whichever is larger;
+    near-ceiling scores have almost no spread, so the pooled deviation alone would call one
+    missed check in nine trials a difference;
+  - **score discriminates** when the scores are not equal: the better score wins, at any cost;
+  - **cost discriminates** when the scores are equal and the mean cost differs by more than the
+    pooled standard deviation of cost: the cheaper config wins, since it gets the same result;
+  - the cost of a trial is **its list cost in US dollars as Claude Code reports it**
+    (`total_cost_usd` of the result), which covers the whole session, subagents included. The
+    first version weighted the result's `usage` by price ("cost units"), but `usage` counts the
+    main thread only, so a config that delegates looked cheaper than it was (T6c). Tokens
+    summed over the result's `modelUsage` and wall time are reported beside it; wall time does
+    not decide, because it moves with the machine's load.
+  The predecessor's score rule is still reported per task, so its "0 of 32" stays comparable.
 
 ## Effort
 high
@@ -76,6 +91,28 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   repo, so the exception and the three reading ranges are in the PR body. The repo has no CI
   checks; the gate is the pre-push `check --push`, which passed. Merged on Sebastián's go-ahead
   (2026-10-01) as merge commit `5ab2ae6`; `feat/evals` carries on for slices 2 and 3.
+- The rest, decided 2026-10-03 (Sebastián): three more slices instead of two, cut along the
+  branch's own history so no reviewed commit is rewritten. Each is a PR against `main`, merged
+  in order with a merge commit, with a size exception stated in its body: one slicing pass
+  found no cut under 400, because a task is one unit of 1,200–2,300 lines. All three refs were
+  pushed on 2026-10-03, and the pre-push `check --push` passed for each (15, 27 and 36 code
+  commits, all covered by a Codex record). A PR opens only once the one before it has merged,
+  so its diff shows its own commits alone.
+  - Slice 2: PR jsaristi/js-harness#21, branch `feat/evals-tasks`, `5ab2ae6..57010c7`
+    (18 commits, +9,779/-7): T3, the task proof and the five tasks. Merged on Sebastián's
+    go-ahead (2026-10-03) as merge commit `bb82ea8`.
+  - Slice 3: PR jsaristi/js-harness#22, branch `feat/evals-suite`, `57010c7..4b1ab30`
+    (16 commits, +4,821/-367): T4a, T4k with T4kr, T4kt and T4kg, T4s and T4ap. Merged on
+    Sebastián's go-ahead (2026-10-03) as merge commit `0f44719`.
+  - Slice 4: PR jsaristi/js-harness#23, branch `feat/evals`, from `4b1ab30` to the branch
+    head (+4,903/-55 at `c2ddc23`): the recorded runs, the report, the roadmap and
+    `AGENTS.md`. Open, not merged; merging it closes F5 on `main`.
+- T4k reached `main` with slice 3, not as a hotfix (Sebastián, 2026-10-03). `298d739` changes
+  `evals/ports.mjs`, which `main` did not have (T4a adds it), and `evals/runner.mjs` as T4a
+  left it, so a hotfix would have been a hand-resolved cherry-pick: new code that needs its
+  own reviews and then conflicts with this branch. Since `0f44719`, `main` has
+  `bin/lib/process-tree.mjs` and no `taskkill /T` or bare `ParentProcessId` query outside
+  comments and tests (`git grep` on `origin/main`, 2026-10-03).
 
 ## Design
 - Configs, both on `claude-opus-5-5` through `claude --print --output-format json`, prompt on
@@ -94,10 +131,15 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - A trial record holds config, effort, task, repeat, score, input and output tokens, turns, wall
   time, CLI version and error; raw transcripts go to gitignored `evals/runs/`, summaries to
   committed `evals/results/`.
-- Headroom screen before the A/B run: a candidate task is kept only if the minimal config at
-  `medium` scores a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
-  nobody fails cannot separate anyone.
-- The A/B run: 2 configs × 2 efforts × the kept tasks × 3 repeats.
+- Headroom screen before the A/B run: a candidate task was to be kept only if the minimal config
+  at `medium` scored a mean below 0.8 over 3 trials — the predecessor's lesson is that a task
+  nobody fails cannot separate anyone on score. It kept none (2026-10-02); under the cost rule
+  (Constraints) a task at the ceiling still separates the configs, so the screen is now
+  information and every candidate goes to the A/B run.
+- The A/B run: 2 configs × 2 efforts × the five tasks × 3 repeats. The `medium` cells are the
+  runs `headroom` (minimal) and `headroom-current` (current), already recorded on the same
+  stack; the `high` cells are one more run. The report reads several runs and refuses to mix
+  stacks, models or permission modes.
 
 ## Tasks
 - [x] T1 Runner: one trial end to end against a fake agent command — workspace, prompt on stdin,
@@ -232,13 +274,22 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
 - [x] T4kg A reused pid held by a process this user cannot read is "gone", not "running": the
   kill settles that case through CIM instead of failing the caller (found by the gate, a real
   reuse) (route: inline, two small understood edits)
-- [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
-  (route: inline run, results committed)
-- [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
-  inline run, results committed)
-- [ ] T6 Report and roadmap: `evals/report.mjs` with `--require-complete` and
-  `--min-discriminating`, the result written to the roadmap (route: delegated writer for the
-  report, inline for the roadmap)
+- [x] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
+  (route: inline run, results committed). Outcome: **no task kept**, all five at 0.98–1.00
+- [x] T5 A/B run: both configs at `high`, 3 repeats, over all five tasks, as run `ab-high`; the
+  `medium` cells are the recorded runs `headroom` and `headroom-current` (route: inline run,
+  results committed)
+- [x] T6 Report and roadmap: `evals/report.mjs` reads every run in `evals/results/` (or the
+  ones named), refuses mixed stacks, models or permission modes, and prints per task and
+  effort both configs' mean score, spread, cost (dollars since T6c), tokens and wall time with the verdict of
+  the Constraints' rule (score, cost or none) and the predecessor's score rule beside it;
+  `--require-complete` fails on a cell with fewer than 3 trials, `--min-discriminating <n>`
+  fails unless at least n tasks discriminate at every effort in the runs. The result written
+  to the roadmap (route: delegated writer for the report, inline for the roadmap)
+- [x] T6c A trial's cost is the whole session's: the runner records the result's
+  `total_cost_usd`, `modelUsage` and `subagent_stats`, the report decides on `costUsd`, and the
+  committed results are backfilled from the raw logs, which hold all three for all 60 trials
+  (route: delegated writer for the code, inline for the backfill)
 
 ## Progress
 - 2026-09-30: F5 opened. Spend decision taken: no USD ceiling. The predecessor's runner and its
@@ -919,6 +970,164 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
   `feat/stack-v4` do not have T4k at all. Commit `09d7a90`; gentle-ai assessed it medium,
   under budget; Codex reviewed `e54ff9f..09d7a90` (recorded): no actionable finding.
+- 2026-10-02: Sebastián stored the token (checked without reading it) and chose
+  `bypassPermissions` (`4b1ab30`). **T4 ran**, the first real trials: `node evals/suite.mjs
+  --claude C:\Users\Oficina\.local\bin\claude.exe --configs minimal --efforts medium --repeats 3
+  --tasks all --permission-mode bypassPermissions --name headroom`, with the token passed to
+  that one process from the user variable. 15 of 15 trials recorded, no error, no cap, exit 0;
+  35.8 minutes of agent time; 6.75M input tokens (almost all cache reads) and 232.5k output;
+  `claude-opus-5-5`, Claude Code 2.1.284, gentle-ai 4.0.0, engram 3.0.0, plugin 0.1.5.
+  Results: `evals/results/headroom.json`; raw logs in `evals/runs/headroom/` (not committed; no
+  token in either, searched for `sk-ant-`). The work root was removed by the suite.
+
+  | task | mean | per trial (passed/total) | turns | wall |
+  |---|---|---|---|---|
+  | format-v2 | 0.99 | 47/47, 47/47, 46/47 | 37, 29, 32 | 4m55s |
+  | house-rules | 0.98 | 46/47 ×3 | 8, 20, 8 | 1m17s |
+  | lost-updates | 1.00 | 43/43 ×3 | 9, 12, 13 | 2m19s |
+  | resolver | 1.00 | 45/45 ×3 | 6, 6, 6 | 1m40s |
+  | spec-drift | 0.99 | 50/51, 50/51, 51/51 | 10, 13, 15 | 1m44s |
+
+  **Every candidate is dropped** (keep is a mean under 0.8): 693 of 699 hidden checks passed
+  over the 15 trials. The bare configuration at `medium` is at the ceiling on all five, the
+  predecessor's failure again, so a score cannot separate the configs on these tasks and
+  `--min-discriminating 3` cannot be met with them. Not yet read: which checks the six misses
+  were (`format-v2` 1, `house-rules` 3, one in every trial, `spec-drift` 2).
+- 2026-10-02: `e54ff9f..d8ad2ae` (T4kg, the two docs commits and the headroom results, 731
+  lines, most of them the results file) reviewed by gentle-ai (lineage
+  `review-baecd73b0ab477be`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right and fixed here: this document said 709 of 713 checks passed with four misses; the
+  results file says 693 of 699 with six (the parent's arithmetic, not the data). One
+  suggestion, now a Follow-up: T4kg's only test depends on the machine.
+- 2026-10-02: Sebastián chose to measure the current config on the same five tasks first. Run
+  `headroom-current` (`--configs current`, otherwise as the screen): 15 of 15 trials, no error,
+  exit 0. Results: `evals/results/headroom-current.json`. Per trial, mean of three:
+
+  | task | score min → cur | input tokens min → cur | output min → cur | wall min → cur | turns min → cur |
+  |---|---|---|---|---|---|
+  | format-v2 | 0.993 → 0.993 | 1,058k → 2,298k | 34.8k → 31.5k | 4.9m → 7.4m | 32.7 → 37.7 |
+  | house-rules | 0.979 → 0.979 | 305k → 858k | 8.0k → 8.4k | 1.3m → 2.3m | 12.0 → 14.7 |
+  | lost-updates | 1.000 → 1.000 | 329k → 952k | 13.0k → 15.9k | 2.3m → 2.9m | 11.3 → 18.0 |
+  | resolver | 1.000 → 1.000 | 185k → 807k | 10.1k → 16.7k | 1.7m → 2.9m | 6.0 → 14.7 |
+  | spec-drift | 0.987 → 1.000 | 373k → 1,132k | 11.6k → 19.5k | 1.7m → 3.0m | 12.7 → 24.7 |
+
+  Totals: minimal 693/699 checks, 6.75M input, 233k output, 35.8 min; current 695/699, 18.14M
+  input, 276k output, 55.5 min. **Same score, 2.7× the input tokens, 1.2× the output and 1.55×
+  the time.** Input is almost all cache reads, so the price gap is smaller than the token gap.
+  Turns grow on every task, by 1.2× (`house-rules`) to 2.4× (`resolver`). Not counted: tokens of any reviewer runs the
+  current arm's gentle-ai Stop hook may spawn (the open question under "T1 decisions"). Three
+  trials per arm cannot tell a 0.987 from a 1.000 apart. The run's `--summary` prints the
+  minimal screen as "incomplete" for every task, because the screen reads minimal trials only:
+  right, but noisy for a current-only run (a Follow-up).
+- 2026-10-02: Sebastián changed the definition of "discriminates" (Constraints): score as the
+  floor, cost as what separates. T4h (find headroom) is dropped, since the rule needs none;
+  T5 and T6 now cover all five tasks. A first reading of the `medium` cells under the new rule,
+  computed from the recorded usage (the report, T6, will compute it for real): cost units per
+  trial, minimal → current, format-v2 396k → 572k (1.44×), house-rules 114k → 242k (2.13×),
+  lost-updates 144k → 302k (2.10×), resolver 111k → 289k (2.59×), spec-drift 152k → 356k
+  (2.34×); each gap is larger than the pooled deviation of cost, and every score pair is equal
+  under the 0.02 tolerance. So at `medium` all five discriminate on cost, for minimal.
+- 2026-10-02: **T5 ran**, run `ab-high`, in two invocations of the same run so neither outlived
+  a two-hour shell limit: `--configs minimal --efforts high` then `--configs current --efforts
+  high`, `--repeats 3 --tasks all --permission-mode bypassPermissions`, the token passed to each
+  process from the user variable. 30 of 30 trials recorded, no error, no cap, exit 0 both
+  times; nothing else ran on the machine meanwhile. Scores 0.98–1.00 in every trial of both
+  arms. Results: `evals/results/ab-high.json` (no token in it or in `evals/runs/ab-high/`,
+  searched for `sk-ant-`). The verdicts are T6's to compute.
+- 2026-10-02: `d470eaa..fe0d423` (the `AGENTS.md` revision, the new definition, T5's results;
+  1,292 lines, most of them data) reviewed by gentle-ai (lineage `review-d6f0096577ad314d`,
+  medium, reliability lens, approved and acknowledged). Two WARNINGs, both right: `ab-high`'s
+  `args` name only the second invocation's config (the report must read the trials; the T6
+  writer was told, and the suite keeping the union of a run's arguments is a Follow-up), and
+  the handoff still said "Next: T5" with a command that no longer matched how T5 ran (fixed).
+- 2026-10-02: T6's report written by a delegated writer (Sonnet): `evals/report.mjs` and
+  `evals/report.test.mjs`. It reads the trials, never `args`; trials with an error count (the
+  runner records one only after the workspace was graded, and dropping them would flatter a
+  config that fails); scores and costs are rounded to 1e-9 before comparing, since 1 − 0.98 is
+  0.020000000000000018. RED per behavior, then GREEN: `node --test evals/report.test.mjs`
+  39/39; four mutations of the rule (tolerance, cost gap, sample deviation, rounding) each
+  caught by the tests. `bin/lib/process-tree.test.mjs` 45/45. Run by the parent on the real
+  results, `node evals/report.mjs --require-complete --min-discriminating 3`: exit 0.
+
+  | task | medium: cost units min → cur | verdict | high: cost units min → cur | verdict |
+  |---|---|---|---|---|
+  | format-v2 | 396k → 572k (1.44×) | cost: minimal | 471k → 352k (0.75×) | none |
+  | house-rules | 114k → 242k (2.13×) | cost: minimal | 132k → 265k (2.01×) | cost: minimal |
+  | lost-updates | 144k → 302k (2.10×) | cost: minimal | 200k → 535k (2.68×) | cost: minimal |
+  | resolver | 112k → 289k (2.59×) | cost: minimal | 162k → 379k (2.34×) | cost: minimal |
+  | spec-drift | 152k → 356k (2.34×) | cost: minimal | 239k → 429k (1.80×) | cost: minimal |
+
+  **5 of 5 discriminate at `medium` and 4 of 5 at `high`, every one for the minimal config**;
+  no score verdict anywhere (every score pair equal under the rule). `format-v2` at `high` is
+  the exception: the current config was cheaper on average there, inside the spread. The
+  predecessor's pure score rule fires once (`spec-drift` at `medium`, 0.99 against 1.00).
+- 2026-10-02: `fe0d423..1c2691c` (the report, 1,105 lines) reviewed by gentle-ai (lineage
+  `review-61b1835f73b24115`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right: runs that recorded no trial (a run a usage cap stopped before its first trial) passed
+  both gates, since there was no effort to check. Fixed inline: `buildReport` refuses them. RED:
+  the new test got no `ReportError`. GREEN: `node --test evals/report.test.mjs` 40/40; the real
+  report still exits 0.
+- 2026-10-02: Codex on `09d7a90..c9337c9`: no actionable finding, but **not recorded**: its
+  commands showed 674 of 1,961 changed lines (most of the range is results data). To be redone
+  on a narrower range.
+- 2026-10-02: **The cost measure was wrong, and it flipped a verdict.** Building the roadmap
+  table showed `format-v2` at `high` with the current config using fewer output tokens (16k
+  against 45k) in more time (10m40s against 6m24s). The raw result of
+  `format-v2__current__high__1` says why: its top-level `usage` counts the main thread only
+  (20,405 output tokens), while `modelUsage` counts the whole session, subagents included
+  (62,325), and `total_cost_usd` is $3.08. Recomputed from the raw logs of all 60 trials with
+  `total_cost_usd`, list price, current against minimal: every cell is 1.68×–2.54×, `format-v2`
+  at `high` included (2.11×, not 0.75×); 30 trials each cost $22.71 (minimal) and $47.07
+  (current). T6c makes that the measure. In that trial `subagent_stats` shows one subagent
+  spawned (`general-purpose`): the gap is the delegated work.
+- 2026-10-02: T6c's backfill, inline, with a one-off script (scratchpad `backfill-cost.mjs`):
+  each recorded trial matched to `evals/runs/<run>/<task>__<config>__<effort>__<repeat>.stdout.log`,
+  whose last line is the agent's result, and checked against the record by its main-thread
+  output tokens; 60 of 60 matched. Each trial gained `costUsd`, `modelUsage` and `subagents`;
+  the diff only adds those three fields (the 60 removed lines are each trial's last line
+  gaining a comma). The raw logs are gitignored, so this backfill cannot be redone from a fresh
+  clone; the added fields are the record.
+- 2026-10-02: T6c's code by a delegated writer (Sonnet), commit `879c3bb`: the runner records
+  `costUsd`, `modelUsage` and `subagents` (`summarizeUsage`); the report decides and prints cost
+  in dollars from `costUsd`, tokens summed over `modelUsage`, the price weights removed. The
+  report's tests keep the main-thread `usage` equal across trials, so any cost read from it
+  fails them, and one test has `usage` and `costUsd` disagree with the verdict following
+  `costUsd`. RED per behavior, then GREEN: report 40/40, runner 135 pass 1 skipped, suite
+  43/43, process-tree 45/45. Run by the parent on the backfilled results, `node
+  evals/report.mjs --require-complete --min-discriminating 3`: exit 0, **10 of 10 task and
+  effort cells `cost: minimal`**, 5 of 5 at each effort, current/minimal 1.81×–2.54× at
+  `medium` and 1.68×–2.42× at `high` (`format-v2` at `high` 2.11×).
+- 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
+  medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
+  the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
+  No code in the slice, so no Codex review is owed.
+- 2026-10-02: `fe0d423..879c3bb` (T6, its fix and T6c) reviewed by gentle-ai (lineage
+  `review-d88d39766c46a469`, from a detached worktree at `879c3bb`, approved and acknowledged)
+  with one warning and one suggestion, both fixed inline, test first. Warning: `trialTokens`
+  fell back to the main-thread counts for a trial without a usable `modelUsage`, so a cell
+  could average whole sessions with part of one; such a trial now has unknown tokens, and a
+  cell's mean is over whole-session counts only. Suggestion: the runner took a negative
+  `total_cost_usd` as a cost; it now records `null`. RED observed for both (the report row
+  still read `1.1k`, and `-1 !== null`), then GREEN: report 40/40. The real report is
+  unchanged, since all 60 trials carry `modelUsage`. Commit `a3495d4`.
+- 2026-10-02: `879c3bb..a3495d4` (the backfill and that fix) reviewed by gentle-ai (lineage
+  `review-c24a41554b4689a5`, medium, reliability lens, approved and acknowledged). One
+  suggestion, taken: `trialTokens` summed a negative `modelUsage` count; a trial holding one now
+  has unknown tokens, as a negative cost already did. RED (`-5`), then GREEN: report 40/40.
+  Commit `9a561a7`.
+- 2026-10-03: T6's roadmap part, inline: `docs/ROADMAP.md` gains the Decided row "Eval verdict",
+  F5's state, its two remaining checklist steps checked (the first renamed to "Tasks that
+  separate the configs under the eval verdict rule", which is what the A/B shows), and an "F5
+  result" table per task and effort built from `node evals/report.mjs --json`: mean score with
+  its range, mean cost, ratio, tokens over every model, wall time and verdict. `js-harness
+  progress` shows F5 3/3. Next on the roadmap: delivering F5.
+- 2026-10-03: Codex reviewed every commit since `09d7a90` that `check --push` counts as code,
+  in seven ranges, each from a detached worktree at its head so no range was too large for the
+  evidence rule (the earlier `fe0d423..879c3bb` attempt showed 674 of 1961 lines and recorded
+  nothing): `4b1ab30..d8ad2ae`, `d8ad2ae..d470eaa`, `d470eaa..fe0d423`, `fe0d423..1c2691c`,
+  `1c2691c..879c3bb`, `879c3bb..5dc3dcc`, `5dc3dcc..9a561a7`. All seven recorded, no
+  findings; on the backfill Codex checked that each added cost matches its `modelUsage` total.
+  It ran no tests (read-only sandbox), which the gate covers.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -1056,10 +1265,37 @@ Decided 2026-10-01, before the first candidate was written:
 - The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
   only for engram 0.1.5; another format fails the control with its hint, it does not pass
   silently. The engram controls are unverified on POSIX (T4ap).
+- A run continued with other arguments keeps only the last invocation's `args` in its results
+  document (`evals/suite.mjs:437`), so `ab-high` describes itself as current-only. The suite
+  could keep the union of the arguments a run was given (gentle-ai WARNING on T5).
+- `node evals/suite.mjs --summary` prints the headroom screen for every run, so a run with no
+  minimal trials shows every task as "incomplete (0 of 3 trials)". It could print the screen
+  only when the run has minimal trials at `medium`.
+- T4kg's test of the CIM fallback depends on the machine (gentle-ai suggestion): it skips when
+  none of the four services it aims at runs, and when the suite runs elevated the handle reads
+  the start time and the new branch is never reached. Two outcomes have no test: no CIM row is
+  `G`, and the same or a missing creation date stays `R`. A fake that drives the catch branch
+  would prove them.
 - A flake in the gate, seen once (2026-10-02, a docs-only commit): `evals/task-proof.test.mjs:304`
   ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
   visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
   parallel run. It passed on the gate runs before and after. Not diagnosed.
+- A second flake in the gate, seen once the same day: `evals/suite.test.mjs:698` (the interrupt
+  during a real trial) found one of the trial's two processes "alive" after the cleanup, after
+  21 s. Not diagnosed. A hypothesis worth checking first: the test asks whether a pid is alive
+  by its number, and this machine reused a pid within one gate run that day (T4kg), so the
+  answer may have been about another process. Three red gate runs out of nine that day, each
+  green on the retry: the gate's own reliability is now a cost.
+- The same day one gate run ended as `npm run test timed out after 600 s` (the run usually takes
+  about five minutes; the probe's tests alone take two and a half). The whole suite is close to
+  the gate's limit. During that run a `Microsoft/Windows/PowerShell/ModuleAnalysisCache` file
+  appeared in the repository root: some PowerShell child ran with no `LOCALAPPDATA` and the
+  repository as its working directory. Which spawn does that is not found yet (a first search
+  for `LOCALAPPDATA` in `bin/` and `evals/` did not show it); the directory was removed. It came
+  back on the next gate run, within its first minute. None of the 34 test files creates it when
+  run alone with `node --test <file>` from the repository (each was tried in turn), so it needs
+  the gate's own conditions: the tests run by `check` with `HOME` and `USERPROFILE` moved to a
+  throwaway home, or the parallel run. It was not seen on any gate run before 16:44 that day.
 - Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
   accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
   fails then, on `engramSession`), and `engramServer`'s second log location,
@@ -1071,7 +1307,7 @@ Decided 2026-10-01, before the first candidate was written:
   Codex did not get through a range of about 1,000 lines in four runs. Splitting by commit
   worked; the command could take `--head <rev>` so a split needs no worktree.
 - The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
-  on `feat/stack-v4` until this branch merges; how to deliver it sooner is Sebastián's call.
+  on `feat/stack-v4` until it takes `main` in; `main` has the fix since `0f44719` (Delivery).
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
@@ -1102,17 +1338,16 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
-Since then, all on `feat/evals` and not pushed: T4a (done: the isolation probe passes with the
+Since then, all on `feat/evals` (pushed 2026-10-03): T4a (done: the isolation probe passes with the
 real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
 The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
-**Do not commit on `main` or `feat/stack-v4` from this machine until T4k is there**: their
-pre-commit gate still kills by parent pid (see Progress, 2026-10-02) and can close unrelated
-programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not written yet: the 11
+T4k is on `main` since `0f44719` (slice 3, 2026-10-03), so committing on `main` is safe again.
+**`feat/stack-v4` still has the old gate until it takes `main` in: make that merge its first
+commit**, because its pre-commit gate kills by parent pid (see Progress, 2026-10-02) and can
+close unrelated programs. One line is still owed to `odd/tasks/stack-v4.md`: the 11
 `~/.claude/commands/gentle-sdd-*.md` files were moved to
-`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
-`main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
-Next: T4, the headroom screen. Before
-T4, two of Sebastián's decisions, asked one at a time:
+`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers.
+Before T4, two of Sebastián's decisions were taken:
 1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
    `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
    prefix, no whitespace), never in chat or a file in the repo; the suite entry maps it to
@@ -1124,9 +1359,31 @@ T4, two of Sebastián's decisions, asked one at a time:
 2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
    (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
    isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
-Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s): `node
-evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
---permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
-`evals/runs/headroom/`.
-Reviewed boundary: gentle-ai `e54ff9f` (`09d7a90`, T4kg, 62 lines, is under budget and pending
-in the slice); Codex `09d7a90`.
+T4 ran on 2026-10-02 and kept no task: all five candidates score 0.98–1.00 with the minimal
+config at `medium`. The current config on the same tasks (run `headroom-current`) scored the
+same at 2.7× the input tokens. Sebastián then changed what "discriminates" means: score as the
+floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
+and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
+run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
+verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
+remains is delivery (see Delivery): slices 2 and 3 are merged (`bb82ea8`, `0f44719`); slice 4
+is open as PR jsaristi/js-harness#23 and merges on Sebastián's go-ahead. After that, in a new
+session: the roadmap's F5 row is closed with the four PRs, and `feat/stack-v4` takes `main` in
+and goes as its own PR. A run written by two invocations keeps only the last one's `args`
+(`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
+trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
+and moves with load.
+Reviewed boundary: gentle-ai `9a561a7`; Codex `9a561a7` (seven ranges, 2026-10-03, see
+Progress; `check --push` counts any file that is not Markdown as code, so the results files
+needed a record too).
+`AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
+duplicated, no `CLAUDE.md` in the repo) and, on Sebastián's go-ahead, revised on this branch:
+decision records are committed on the feature branch as part of the work (the global file's
+"never commit unless asked" had been contradicted silently); a `/compact` resume is checked
+against the feature document, which stays the handoff; "a session holds one task" became "one
+feature", which is what the cut rules already meant; a candidate is a commit or a slice, never
+the branch the Stop hook offers (with consent pre-granted nothing would stop a review that
+size); a step he reports doing outside the session is checked first, since he often taps the
+suggested prompt from his phone (twice that day for a token that was not stored); and line 73
+re-wrapped. It now measures about 1,455 of its 1,500 tokens. The roadmap's stale stack line
+(engram v2) is already fixed on `feat/stack-v4`, so it is left alone here.

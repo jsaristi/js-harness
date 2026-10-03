@@ -2,7 +2,7 @@
 // A stand-in for `claude --print --output-format json`, so the runner is proven end to end without a
 // real model. The mode comes from the environment, because the runner owns the real agent's argv.
 //
-//   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | orphan-by-path | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | garbage  (default noop)
+//   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | orphan-by-path | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | no-cost | garbage  (default noop)
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
 //                      prompt, cwd, argv, the workspace entries and the whole environment it received
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
@@ -59,7 +59,9 @@ const report = {
   gitLog: gitLogRequested ? gitLog() : null,
 };
 
-const success = (result) => JSON.stringify({
+// Like the real result, `usage` is the main thread's; the cost, `modelUsage` and `subagent_stats` cover the session,
+// a helper model's subagents included. `no-cost` leaves those three out.
+const success = (result, { withCost = true } = {}) => JSON.stringify({
   type: 'result',
   subtype: 'success',
   is_error: false,
@@ -67,6 +69,14 @@ const success = (result) => JSON.stringify({
   num_turns: 3,
   duration_ms: 1234,
   usage: { input_tokens: 10, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 5 },
+  ...(withCost ? {
+    total_cost_usd: 0.75,
+    modelUsage: {
+      'fake-model': { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 30, cacheCreationInputTokens: 20, costUSD: 0.5 },
+      'fake-helper-model': { inputTokens: 4, outputTokens: 6, cacheReadInputTokens: 8, cacheCreationInputTokens: 2, costUSD: 0.25 },
+    },
+    subagent_stats: { spawned: 2 },
+  } : {}),
 });
 const failure = (result) => JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, result, num_turns: 1 });
 const errorsResult = (errors) => JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, num_turns: 0, errors });
@@ -175,6 +185,10 @@ switch (mode) {
     writeReport();
     console.error('boom');
     process.exitCode = 3;
+    break;
+  case 'no-cost':
+    writeReport();
+    console.log(success('did nothing', { withCost: false }));
     break;
   case 'garbage':
     writeReport();
