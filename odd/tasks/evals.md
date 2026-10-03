@@ -1087,7 +1087,11 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   cell's mean is over whole-session counts only. Suggestion: the runner took a negative
   `total_cost_usd` as a cost; it now records `null`. RED observed for both (the report row
   still read `1.1k`, and `-1 !== null`), then GREEN: report 40/40. The real report is
-  unchanged, since all 60 trials carry `modelUsage`.
+  unchanged, since all 60 trials carry `modelUsage`. Commit `a3495d4`.
+- 2026-10-02: `879c3bb..a3495d4` (the backfill and that fix) reviewed by gentle-ai (lineage
+  `review-c24a41554b4689a5`, medium, reliability lens, approved and acknowledged). One
+  suggestion, taken: `trialTokens` summed a negative `modelUsage` count; a trial holding one now
+  has unknown tokens, as a negative cost already did. RED (`-5`), then GREEN: report 40/40.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered

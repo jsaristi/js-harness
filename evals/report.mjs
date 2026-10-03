@@ -45,12 +45,12 @@ const MODEL_COUNTS = ['inputTokens', 'cacheReadInputTokens', 'cacheCreationInput
 
 /** The tokens of one trial, `{ input, output }` (each `null` when unknown), input being the input, cache reads and
  * cache writes. They are summed over every model of its `modelUsage`, because the session's subagents ran on models
- * of their own. A trial without a usable `modelUsage` (an older record, one that lacks a count, an empty object) has
+ * of their own. A trial without a usable `modelUsage` (an older record, one that lacks a count or holds a negative one, an empty object) has
  * unknown tokens: its `inputTokens` and `outputTokens` count the main thread only, and a mean over both measures
  * would compare a whole session with part of one. */
 export function trialTokens(entry) {
   const models = isObject(entry.modelUsage) ? Object.values(entry.modelUsage) : [];
-  if (models.length === 0 || !models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field])))) {
+  if (models.length === 0 || !models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field]) && model[field] >= 0))) {
     return { input: null, output: null };
   }
   const total = (...fields) => models.reduce((sum, model) => sum + fields.reduce((inner, field) => inner + model[field], 0), 0);

@@ -139,11 +139,12 @@ test('a trial without a usable modelUsage has unknown tokens: its main-thread co
     trial({ repeat: 2, inputTokens: 300, outputTokens: 30, modelUsage: null }),
     trial({ repeat: 3, inputTokens: 200, outputTokens: 20, modelUsage: {} }),
     trial({ repeat: 4, inputTokens: 400, outputTokens: 40, modelUsage: { a: { inputTokens: 5 } } }),
+    trial({ repeat: 5, inputTokens: 500, outputTokens: 50, modelUsage: oneModel(-5, 50) }),
   ];
   const [none] = buildCells(unusable);
-  assert.equal(none.inputTokens, null, 'the main thread alone is not the session, and an empty modelUsage is not 0');
+  assert.equal(none.inputTokens, null, 'the main thread alone is not the session, an empty modelUsage is not 0, and a negative count is broken');
   assert.equal(none.outputTokens, null);
-  const [mixed] = buildCells([...unusable, trial({ repeat: 5, modelUsage: oneModel(7000, 700) })]);
+  const [mixed] = buildCells([...unusable, trial({ repeat: 6, modelUsage: oneModel(7000, 700) })]);
   assert.equal(mixed.inputTokens, 7000, 'the mean is over the whole-session counts only');
   assert.equal(mixed.outputTokens, 700);
 });
