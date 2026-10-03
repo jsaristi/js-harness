@@ -72,7 +72,7 @@ the feature document and committed on the feature branch in the same session; th
 of the work and needs no separate request. Tell him when to cut: a new session when a feature
 closes, a PR merges or a phase starts; `/compact` with what to keep when a feature is still open
 but the conversation has grown long. End every reply with exactly one prompt, the next thing he
-sends, as plain quoted text (a code block may not show in the app). When it is time to cut, that
+sends, in a fenced code block, so the app shows a copy button. When it is time to cut, that
 one prompt is the full `/compact` command or the new session's opening prompt, and nothing else;
 after a `/compact` he sends only "seguí", and the reply to it resumes from the summary, checked
 against the feature document, and repeats any question still pending. Two prompts in one reply
