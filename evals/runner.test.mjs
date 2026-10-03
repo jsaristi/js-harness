@@ -79,12 +79,42 @@ test('parseAgentOutput returns null for anything that is not a result object', (
 
 test('summarizeUsage adds the cache tokens to the input and reads the turns', () => {
   const output = { num_turns: 4, usage: { input_tokens: 10, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 5 } };
-  assert.deepEqual(summarizeUsage(output), { inputTokens: 60, outputTokens: 5, turns: 4, usage: output.usage });
+  assert.deepEqual(summarizeUsage(output), { inputTokens: 60, outputTokens: 5, turns: 4, usage: output.usage, costUsd: null, modelUsage: null, subagents: null });
 });
 
 test('summarizeUsage reports unknown, never zero, when the output has no usage', () => {
-  assert.deepEqual(summarizeUsage(null), { inputTokens: null, outputTokens: null, turns: null, usage: null });
-  assert.deepEqual(summarizeUsage({ type: 'result' }), { inputTokens: null, outputTokens: null, turns: null, usage: null });
+  const unknown = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null };
+  assert.deepEqual(summarizeUsage(null), unknown);
+  assert.deepEqual(summarizeUsage({ type: 'result' }), unknown);
+});
+
+test('summarizeUsage records the whole session: the list cost, the usage of every model and the subagents spawned', () => {
+  // `usage` counts the main thread only; `modelUsage` and `total_cost_usd` cover the session, subagents included.
+  const modelUsage = {
+    'model-a': { inputTokens: 5, outputTokens: 700, cacheReadInputTokens: 900, cacheCreationInputTokens: 40, costUSD: 1.5 },
+    'model-b': { inputTokens: 1, outputTokens: 2, cacheReadInputTokens: 3, cacheCreationInputTokens: 4, costUSD: 0.25 },
+  };
+  const summary = summarizeUsage({ num_turns: 2, usage: { input_tokens: 1, cache_creation_input_tokens: 1, cache_read_input_tokens: 1, output_tokens: 1 }, total_cost_usd: 1.75, modelUsage, subagent_stats: { spawned: 3 } });
+  assert.equal(summary.costUsd, 1.75);
+  assert.deepEqual(summary.modelUsage, modelUsage);
+  assert.equal(summary.subagents, 3);
+  assert.equal(summary.outputTokens, 1, 'the main-thread counts are recorded as they were');
+});
+
+test('summarizeUsage gives null for a cost, model usage or subagent count that is missing or not of its type', () => {
+  for (const output of [
+    {},
+    { total_cost_usd: '1.5', modelUsage: [], subagent_stats: { spawned: 'two' } },
+    { total_cost_usd: Number.NaN, modelUsage: 'none', subagent_stats: 3 },
+    { total_cost_usd: null, modelUsage: null, subagent_stats: null },
+  ]) {
+    const summary = summarizeUsage(output);
+    assert.equal(summary.costUsd, null, JSON.stringify(output));
+    assert.equal(summary.modelUsage, null, JSON.stringify(output));
+    assert.equal(summary.subagents, null, JSON.stringify(output));
+  }
+  assert.equal(summarizeUsage({ total_cost_usd: 0 }).costUsd, 0, 'a recorded zero is a measurement');
+  assert.equal(summarizeUsage({ subagent_stats: { spawned: 0 } }).subagents, 0);
 });
 
 test('summarizeUsage gives null, not 0, for a count whose field is missing', () => {
@@ -229,11 +259,27 @@ test('a solved trial scores 1 and records tokens, turns, version and identity', 
       score: 1, passed: 3, total: 3,
       inputTokens: 60, outputTokens: 5,
       usage: { input_tokens: 10, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 5 },
+      costUsd: 0.75,
+      modelUsage: {
+        'fake-model': { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 30, cacheCreationInputTokens: 20, costUSD: 0.5 },
+        'fake-helper-model': { inputTokens: 4, outputTokens: 6, cacheReadInputTokens: 8, cacheCreationInputTokens: 2, costUSD: 0.25 },
+      },
+      subagents: 2,
       turns: 3, wallMs: 'number', cliVersion: '9.9.9 (Fake Agent)', error: null, startedAt: 'string',
     },
   );
   assert.ok(record.wallMs >= 0);
   assert.equal(new Date(record.startedAt).toISOString(), record.startedAt);
+});
+
+test('a result without a cost, model usage or subagent stats is recorded with those fields null', async () => {
+  const { options } = trialEnv('no-cost');
+  const { record } = await runTrial(options);
+  assert.equal(record.error, null);
+  assert.equal(record.inputTokens, 60, 'the main-thread usage is still there');
+  assert.equal(record.costUsd, null);
+  assert.equal(record.modelUsage, null);
+  assert.equal(record.subagents, null);
 });
 
 test('an untouched fixture scores strictly between 0 and 1', async () => {
@@ -369,6 +415,9 @@ test('output that is not a result object is recorded as unparsable, with unknown
   assert.equal(record.inputTokens, null);
   assert.equal(record.turns, null);
   assert.equal(record.usage, null);
+  assert.equal(record.costUsd, null);
+  assert.equal(record.modelUsage, null);
+  assert.equal(record.subagents, null);
   assert.equal(record.score, 2 / 3);
 });
 

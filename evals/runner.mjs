@@ -46,9 +46,11 @@ export function parseAgentOutput(stdout) {
   return isObject(value) && value.type === 'result' ? value : null;
 }
 
-/** Tokens and turns from a parsed agent result. Input counts the cache-creation and cache-read tokens
- * too, because they are all tokens the plan's usage cap charges for. Missing data is `null`, never 0:
- * a zero would read as a measurement. */
+/** Tokens, turns and cost from a parsed agent result. Input counts the cache-creation and cache-read tokens
+ * too, because they are all tokens the plan's usage cap charges for. Those counts and `usage` are the main
+ * thread's only. The whole session, subagents included, is `costUsd` (`total_cost_usd`, Claude Code's list
+ * cost), `modelUsage` (the per-model token counts, as given) and `subagents` (`subagent_stats.spawned`).
+ * Missing data is `null`, never 0: a zero would read as a measurement. */
 export function summarizeUsage(output) {
   const usage = isObject(output?.usage) ? output.usage : null;
   // Per count: a usage object that lacks one of the fields a count is summed from leaves that count
@@ -59,6 +61,9 @@ export function summarizeUsage(output) {
     outputTokens: sum('output_tokens'),
     turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
     usage,
+    costUsd: Number.isFinite(output?.total_cost_usd) ? output.total_cost_usd : null,
+    modelUsage: isObject(output?.modelUsage) ? output.modelUsage : null,
+    subagents: Number.isFinite(output?.subagent_stats?.spawned) ? output.subagent_stats.spawned : null,
   };
 }
 

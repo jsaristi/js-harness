@@ -25,6 +25,7 @@ const EFFORT_ORDER = ['low', 'medium', 'high', 'xhigh', 'max'];
 // ---- statistics --------------------------------------------------------------------------------------------------
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const known = (values) => values.filter(finite);
 const mean = (values) => (values.length === 0 ? null : values.reduce((total, value) => total + value, 0) / values.length);
 /** The sample standard deviation (n - 1); unknown below two values, because one value has no spread to speak of. */
@@ -38,46 +39,36 @@ const pooledSd = (a, b) => Math.sqrt((a ** 2 + b ** 2) / 2);
 // 0.020000000000000018 and read as larger than the tolerance.
 const round = (value) => Math.round(value * 1e9) / 1e9;
 
-// ---- cost units --------------------------------------------------------------------------------------------------
+// ---- tokens ------------------------------------------------------------------------------------------------------
 
-const INPUT_WEIGHT = 1;
-const CACHE_WRITE_5M_WEIGHT = 1.25;
-const CACHE_WRITE_1H_WEIGHT = 2;
-const CACHE_READ_WEIGHT = 0.1;
-const OUTPUT_WEIGHT = 5;
+const MODEL_COUNTS = ['inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens', 'outputTokens'];
 
-/** The cost of one trial in units of an input token, from its `usage`: the tokens weighted by their price relative to
- * an input token (the Constraints' rule). Cache writes are priced by the split in `usage.cache_creation` (5 minutes
- * 1.25, one hour 2); whatever part of `cache_creation_input_tokens` the split does not cover counts at 1.25, as
- * does the whole total when there is no split. `null` when there is no `usage`, or it lacks the input or the output
- * count: a cost computed from the rest would read as a cheap trial. Cache counts a usage does not report are 0. */
-export function costUnits(usage) {
-  if (usage === null || typeof usage !== 'object' || Array.isArray(usage)) return null;
-  if (!finite(usage.input_tokens) || !finite(usage.output_tokens)) return null;
-  const count = (value) => (finite(value) ? value : 0);
-  const split = usage.cache_creation !== null && typeof usage.cache_creation === 'object' ? usage.cache_creation : {};
-  const fiveMinutes = count(split.ephemeral_5m_input_tokens);
-  const oneHour = count(split.ephemeral_1h_input_tokens);
-  const uncovered = Math.max(0, count(usage.cache_creation_input_tokens) - fiveMinutes - oneHour);
-  return usage.input_tokens * INPUT_WEIGHT
-    + (fiveMinutes + uncovered) * CACHE_WRITE_5M_WEIGHT
-    + oneHour * CACHE_WRITE_1H_WEIGHT
-    + count(usage.cache_read_input_tokens) * CACHE_READ_WEIGHT
-    + usage.output_tokens * OUTPUT_WEIGHT;
+/** The tokens of one trial, `{ input, output }` (each `null` when unknown), input being the input, cache reads and
+ * cache writes. They are summed over every model of its `modelUsage`, because the session's subagents ran on models
+ * of their own; a trial without a usable `modelUsage` (an older record, one that lacks a count, an empty object)
+ * keeps the main thread's `inputTokens` and `outputTokens` as the runner recorded them. */
+export function trialTokens(entry) {
+  const models = isObject(entry.modelUsage) ? Object.values(entry.modelUsage) : [];
+  if (models.length > 0 && models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field])))) {
+    const total = (...fields) => models.reduce((sum, model) => sum + fields.reduce((inner, field) => inner + model[field], 0), 0);
+    return { input: total('inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens'), output: total('outputTokens') };
+  }
+  return { input: finite(entry.inputTokens) ? entry.inputTokens : null, output: finite(entry.outputTokens) ? entry.outputTokens : null };
 }
 
 // ---- cells -------------------------------------------------------------------------------------------------------
 
 /** One cell per task, effort and config that has a trial, in the order they first appear. A cell holds `n` (every
  * trial recorded), `errors` (those that recorded an `error`), the score's `{ known, mean, min, max, sd }`, the
- * cost units' `{ known, mean, sd }`, and the mean input tokens (cache included, as the runner sums them), output
- * tokens, wall time and turns, each over the trials that know it.
+ * cost's `{ known, mean, sd }` in US dollars (each trial's `costUsd`, Claude Code's list cost of the whole session),
+ * and the mean input tokens (cache included) and output tokens (both `trialTokens`), wall time and turns, each over
+ * the trials that know it.
  *
  * A trial with an `error` counts, with the score it was graded at: the runner records an agent that timed out or
  * exited badly because its workspace may hold work worth scoring and "a failure rate is itself a result"
  * (`evals/runner.mjs`, `runTrial`), so leaving those out would flatter a config that fails. A trial the runner
  * never recorded (a usage cap, an authentication failure) is not in the results at all. The cell counts the errors
- * so the table can show them. A value a trial does not know (no `usage`, a `null` score) is left out of its mean and
+ * so the table can show them. A value a trial does not know (no `costUsd`, a `null` score) is left out of its mean and
  * counted out in `known`, never read as 0. */
 export function buildCells(trials) {
   const groups = new Map();
@@ -88,7 +79,8 @@ export function buildCells(trials) {
   }
   return [...groups.values()].map((group) => {
     const scores = known(group.map((entry) => entry.score));
-    const costs = known(group.map((entry) => costUnits(entry.usage)));
+    const costs = known(group.map((entry) => entry.costUsd));
+    const tokens = group.map(trialTokens);
     return {
       task: group[0].task,
       effort: group[0].effort,
@@ -97,8 +89,8 @@ export function buildCells(trials) {
       errors: group.filter((entry) => entry.error !== null && entry.error !== undefined).length,
       score: { known: scores.length, mean: mean(scores), min: scores.length === 0 ? null : Math.min(...scores), max: scores.length === 0 ? null : Math.max(...scores), sd: sampleSd(scores) },
       cost: { known: costs.length, mean: mean(costs), sd: sampleSd(costs) },
-      inputTokens: mean(known(group.map((entry) => entry.inputTokens))),
-      outputTokens: mean(known(group.map((entry) => entry.outputTokens))),
+      inputTokens: mean(known(tokens.map((count) => count.input))),
+      outputTokens: mean(known(tokens.map((count) => count.output))),
       wallMs: mean(known(group.map((entry) => entry.wallMs))),
       turns: mean(known(group.map((entry) => entry.turns))),
     };
@@ -119,7 +111,7 @@ const comparable = (cell) => cell !== null && cell.n >= MIN_TRIALS_TO_COMPARE
 
 /** The verdict of one task at one effort from its two cells (`null` for a config that has none), minimal against
  * current. `verdict` is:
- *   - `incomplete` when either cell has fewer than 2 trials, or fewer than 2 known scores or cost units;
+ *   - `incomplete` when either cell has fewer than 2 trials, or fewer than 2 known scores or costs;
  *   - `score` when the scores are not equal (`SCORE_TOLERANCE`): the higher mean score wins, at any cost;
  *   - `cost` when they are equal and the mean costs differ by more than their pooled standard deviation: the
  *     cheaper config wins, since it gets the same result, and `costRatio` is current / minimal;
@@ -168,7 +160,6 @@ export function compareCells(minimal, current) {
 
 // ---- runs --------------------------------------------------------------------------------------------------------
 
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const effortRank = (effort) => (EFFORT_ORDER.includes(effort) ? EFFORT_ORDER.indexOf(effort) : EFFORT_ORDER.length);
 const byEffort = (a, b) => effortRank(a) - effortRank(b) || (a < b ? -1 : a > b ? 1 : 0);
 const trialLabel = (entry) => `${entry.task} ${entry.config} ${entry.effort} #${entry.repeat}`;
@@ -371,7 +362,8 @@ export function parseArgs(argv) {
 // ---- the text report ---------------------------------------------------------------------------------------------
 
 const scoreText = (value) => (finite(value) ? value.toFixed(2) : '?');
-const unitsText = (value) => (!finite(value) ? '?' : value >= 1e6 ? `${(value / 1e6).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value)));
+const costText = (value) => (finite(value) ? `$${value.toFixed(2)}` : '?');
+const countText = (value) => (!finite(value) ? '?' : value >= 1e6 ? `${(value / 1e6).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value)));
 const durationText = (ms) => {
   if (!finite(ms)) return '?';
   const seconds = Math.round(ms / 1000);
@@ -393,9 +385,9 @@ function effortLines({ effort, rows }) {
     row.task,
     `${row.minimal?.n ?? 0}/${row.current?.n ?? 0}`,
     spreadText(row.minimal), spreadText(row.current),
-    per(row.minimal, (cell) => unitsText(cell.cost.mean)), per(row.current, (cell) => unitsText(cell.cost.mean)),
+    per(row.minimal, (cell) => costText(cell.cost.mean)), per(row.current, (cell) => costText(cell.cost.mean)),
     finite(row.costRatio) ? `${row.costRatio.toFixed(2)}x` : '-',
-    per(row.minimal, (cell) => unitsText(tokensOf(cell))), per(row.current, (cell) => unitsText(tokensOf(cell))),
+    per(row.minimal, (cell) => countText(tokensOf(cell))), per(row.current, (cell) => countText(tokensOf(cell))),
     per(row.minimal, (cell) => durationText(cell.wallMs)), per(row.current, (cell) => durationText(cell.wallMs)),
     verdictText(row),
     row.predecessor === null ? '-' : row.predecessor ? 'yes' : 'no',
@@ -414,7 +406,7 @@ function effortLines({ effort, rows }) {
 }
 
 /** The report as text: a table per effort (task, trials per config, mean score and its [min-max] per config, cost
- * units, the ratio current / minimal, input + output tokens, wall time, the verdict and whether the predecessor's rule
+ * in US dollars, the ratio current / minimal, input + output tokens, wall time, the verdict and whether the predecessor's rule
  * would call it a difference), then the count of discriminating tasks per effort. */
 export function formatReport(report, { minDiscriminating } = {}) {
   const stack = Object.entries(report.stack ?? {}).map(([key, value]) => `${key} ${value ?? 'unknown'}`).join(', ');
@@ -422,7 +414,7 @@ export function formatReport(report, { minDiscriminating } = {}) {
     `runs: ${report.runs.join(', ')}`,
     `model ${report.model}, permission mode ${report.permissionMode}`,
     `stack: ${stack}`,
-    'cost units: input 1, cache write 1.25 (5 min) or 2 (1 h), cache read 0.1, output 5; cost verdicts need the scores equal (0.02 or the pooled deviation) and a gap above the pooled cost deviation',
+    "cost: Claude Code's list cost of the whole session, subagents included, in US dollars; cost verdicts need the scores equal (0.02 or the pooled deviation) and a gap above the pooled cost deviation",
   ];
   for (const entry of report.efforts) lines.push('', ...effortLines(entry));
   lines.push('', 'Discriminating tasks per effort (verdict score or cost):');

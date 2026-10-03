@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ReportError, USAGE, buildCells, buildReport, compareCells, costUnits, incompleteCells, loadRuns, reportMain } from './report.mjs';
+import { ReportError, USAGE, buildCells, buildReport, compareCells, incompleteCells, loadRuns, reportMain } from './report.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-report-test-'));
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -20,23 +20,24 @@ const resultsDir = (docs = {}) => {
 
 // ---- builders ----------------------------------------------------------------------------------------------------
 
-/** A usage object whose cost units are exactly `units`: they all sit in `input_tokens`, which weighs 1. */
-const usageOf = (units) => ({ input_tokens: units, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 });
+/** The main thread's `usage` of a trial. It is the same in every trial a test builds, whatever the trial cost: the
+ * report decides cost from `costUsd`, so a report that read cost from here would see every trial cost the same. */
+const usageOf = (input) => ({ input_tokens: input, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 });
 
 /** One trial record as `runner.mjs` writes it, with the fields a test cares about overridden. */
 const trial = (over = {}) => ({
   task: 'alpha', config: 'minimal', effort: 'medium', repeat: 1, score: 1, passed: 50, total: 50,
-  inputTokens: 1000, outputTokens: 100, turns: 10, usage: usageOf(1000), wallMs: 60000, cliVersion: '1', error: null,
+  inputTokens: 1000, outputTokens: 100, turns: 10, usage: usageOf(1000), costUsd: 1000, wallMs: 60000, cliVersion: '1', error: null,
   startedAt: '2026-10-02T00:00:00.000Z',
   ...over,
 });
 
-/** `n` trials of one cell, the i-th with `scores[i]` and `costs[i]` cost units (a scalar repeats). */
+/** `n` trials of one cell, the i-th with `scores[i]` and `costs[i]` US dollars (a scalar repeats). */
 const cellTrials = ({ config, scores = 1, costs = 1000, task = 'alpha', effort = 'medium', n = 3, ...rest }) => (
   Array.from({ length: n }, (_, i) => trial({
     task, config, effort, repeat: i + 1,
     score: Array.isArray(scores) ? scores[i] : scores,
-    usage: usageOf(Array.isArray(costs) ? costs[i] : costs),
+    costUsd: Array.isArray(costs) ? costs[i] : costs,
     ...rest,
   }))
 );
@@ -49,61 +50,13 @@ const verdictOf = (minimal, current) => {
 
 const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} is not ${expected}`);
 
-// ---- cost units --------------------------------------------------------------------------------------------------
-
-test('costUnits weighs input 1, 5-minute cache writes 1.25, 1-hour writes 2, cache reads 0.1 and output 5', () => {
-  const usage = {
-    input_tokens: 100,
-    cache_creation_input_tokens: 1000,
-    cache_creation: { ephemeral_5m_input_tokens: 400, ephemeral_1h_input_tokens: 600 },
-    cache_read_input_tokens: 10000,
-    output_tokens: 20,
-  };
-  // 100 + 400 * 1.25 + 600 * 2 + 10000 * 0.1 + 20 * 5
-  near(costUnits(usage), 100 + 500 + 1200 + 1000 + 100, 'split usage');
-});
-
-test('costUnits prices cache writes at 1.25 when the usage has no 5m/1h split', () => {
-  const usage = { input_tokens: 0, cache_creation_input_tokens: 800, cache_read_input_tokens: 0, output_tokens: 0 };
-  near(costUnits(usage), 1000, 'unsplit cache writes');
-  near(costUnits({ ...usage, cache_creation: {} }), 1000, 'an empty split');
-});
-
-test('costUnits prices whatever part of the cache writes the split does not cover at 1.25', () => {
-  const usage = {
-    input_tokens: 0,
-    cache_creation_input_tokens: 1000,
-    cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 },
-    cache_read_input_tokens: 0,
-    output_tokens: 0,
-  };
-  // 100 * 1.25 + 200 * 2 + (1000 - 300) * 1.25
-  near(costUnits(usage), 125 + 400 + 875, 'uncovered remainder');
-});
-
-test('costUnits reads a split without a total, and counts a split larger than the total as the split', () => {
-  const split = { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 };
-  near(costUnits({ input_tokens: 0, output_tokens: 0, cache_creation: split }), 125 + 400, 'no total');
-  near(costUnits({ input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 10, cache_creation: split }), 125 + 400, 'total below split');
-});
-
-test('costUnits is null for a usage that is missing, not an object or lacks input or output tokens', () => {
-  assert.equal(costUnits(undefined), null);
-  assert.equal(costUnits(null), null);
-  assert.equal(costUnits('usage'), null);
-  assert.equal(costUnits({ output_tokens: 5 }), null);
-  assert.equal(costUnits({ input_tokens: 5 }), null);
-  assert.equal(costUnits({ input_tokens: 5, output_tokens: Number.NaN }), null);
-  near(costUnits({ input_tokens: 5, output_tokens: 1 }), 10, 'cache fields default to nothing');
-});
-
 // ---- cells -------------------------------------------------------------------------------------------------------
 
 test('buildCells makes one cell per task, effort and config, with the statistics of its trials', () => {
   const trials = [
-    trial({ repeat: 1, score: 0.9, usage: usageOf(1000), inputTokens: 100, outputTokens: 10, wallMs: 1000, turns: 4 }),
-    trial({ repeat: 2, score: 1, usage: usageOf(2000), inputTokens: 300, outputTokens: 30, wallMs: 3000, turns: 8 }),
-    trial({ repeat: 3, score: 0.8, usage: usageOf(3000), inputTokens: 200, outputTokens: 20, wallMs: 2000, turns: 6 }),
+    trial({ repeat: 1, score: 0.9, costUsd: 1000, inputTokens: 100, outputTokens: 10, wallMs: 1000, turns: 4 }),
+    trial({ repeat: 2, score: 1, costUsd: 2000, inputTokens: 300, outputTokens: 30, wallMs: 3000, turns: 8 }),
+    trial({ repeat: 3, score: 0.8, costUsd: 3000, inputTokens: 200, outputTokens: 20, wallMs: 2000, turns: 6 }),
     trial({ task: 'beta' }),
     trial({ effort: 'high' }),
     trial({ config: 'current' }),
@@ -140,14 +93,52 @@ test('a trial that recorded an error still counts, and is counted as an error: a
   near(cells[0].score.mean, 1 / 3, 'the zero scores are in the mean');
 });
 
-test('a trial without usage has no cost units: the cell knows fewer costs than trials, and its mean uses only those', () => {
-  const [cell] = buildCells([trial({ repeat: 1, usage: usageOf(100) }), trial({ repeat: 2, usage: usageOf(300) }), trial({ repeat: 3, usage: null })]);
+test('a trial without costUsd has no cost: the cell knows fewer costs than trials, and its mean uses only those', () => {
+  // A trial recorded before costUsd existed has no such field at all, which is not a cost of 0 either.
+  const [cell] = buildCells([trial({ repeat: 1, costUsd: 100 }), trial({ repeat: 2, costUsd: 300 }), trial({ repeat: 3, costUsd: undefined })]);
   assert.equal(cell.n, 3);
   assert.equal(cell.cost.known, 2);
   assert.equal(cell.cost.mean, 200);
-  const [none] = buildCells([trial({ usage: null })]);
+  const [none] = buildCells([trial({ costUsd: null })]);
   assert.equal(none.cost.known, 0);
   assert.equal(none.cost.mean, null);
+});
+
+test('cost comes from costUsd, not from the main thread\'s usage: a cell whose usage says cheaper but whose session cost more is dearer', () => {
+  // The real case: `usage` counts the main thread only, so a config that hands work to subagents looks cheap in it.
+  const verdict = (costs, usages) => {
+    const make = (config) => cellTrials({ config, costs: costs[config] }).map((entry) => ({ ...entry, usage: usageOf(usages[config][entry.repeat - 1]) }));
+    const [minimal, current] = ['minimal', 'current'].map((config) => buildCells(make(config))[0]);
+    return compareCells(minimal, current);
+  };
+  const result = verdict(
+    { minimal: [1, 1.1, 0.9], current: [2, 2.1, 1.9] },
+    { minimal: [20000, 21000, 19000], current: [10000, 11000, 9000] },
+  );
+  assert.equal(result.verdict, 'cost');
+  assert.equal(result.winner, 'minimal', 'the cheaper session wins, whatever the main thread used');
+  near(result.costRatio, 2, 'current / minimal, from costUsd');
+});
+
+test('the token columns sum modelUsage over every model: input, cache reads and cache writes, and output', () => {
+  const usage = (input, output, read, write) => ({ inputTokens: input, outputTokens: output, cacheReadInputTokens: read, cacheCreationInputTokens: write, costUSD: 1 });
+  const [cell] = buildCells([
+    trial({ repeat: 1, inputTokens: 1, outputTokens: 1, modelUsage: { a: usage(1, 2, 30, 400), b: usage(10, 20, 300, 4000) } }),
+    trial({ repeat: 2, inputTokens: 1, outputTokens: 1, modelUsage: { a: usage(100, 200, 0, 0) } }),
+  ]);
+  assert.equal(cell.inputTokens, (1 + 30 + 400 + 10 + 300 + 4000 + 100) / 2);
+  assert.equal(cell.outputTokens, (2 + 20 + 200) / 2);
+});
+
+test('the token columns fall back to the recorded input and output tokens when a trial has no usable modelUsage', () => {
+  const [cell] = buildCells([
+    trial({ repeat: 1, inputTokens: 100, outputTokens: 10, modelUsage: undefined }),
+    trial({ repeat: 2, inputTokens: 300, outputTokens: 30, modelUsage: null }),
+    trial({ repeat: 3, inputTokens: 200, outputTokens: 20, modelUsage: {} }),
+    trial({ repeat: 4, inputTokens: 400, outputTokens: 40, modelUsage: { a: { inputTokens: 5 } } }),
+  ]);
+  assert.equal(cell.inputTokens, 250, 'an empty modelUsage and one lacking counts are not a measurement of 0');
+  assert.equal(cell.outputTokens, 25);
 });
 
 test('a trial whose score is unknown is left out of the score statistics, not read as 0', () => {
@@ -219,7 +210,7 @@ test('scores are equal when their gap is within the pooled deviation, even above
   assert.equal(apart.verdict, 'score');
 });
 
-test('incomplete verdict: a config with fewer than 2 trials, no cost units, or no second known score', () => {
+test('incomplete verdict: a config with fewer than 2 trials, no cost, or no second known score', () => {
   const oneTrial = verdictOf({ n: 1 }, { n: 3 });
   assert.equal(oneTrial.verdict, 'incomplete');
   assert.equal(oneTrial.winner, null);
@@ -227,13 +218,13 @@ test('incomplete verdict: a config with fewer than 2 trials, no cost units, or n
   const missing = compareCells(buildCells(cellTrials({ config: 'minimal' }))[0], null);
   assert.equal(missing.verdict, 'incomplete', 'a config with no cell at all');
   assert.equal(compareCells(null, null).verdict, 'incomplete');
-  const noCost = verdictOf({ n: 3 }, { n: 3, usage: null });
-  assert.equal(noCost.verdict, 'incomplete', 'no cost units');
+  const noCost = verdictOf({ n: 3 }, { n: 3, costUsd: null });
+  assert.equal(noCost.verdict, 'incomplete', 'no cost');
   const oneCost = compareCells(
     buildCells(cellTrials({ config: 'minimal' }))[0],
-    buildCells([trial({ config: 'current', repeat: 1 }), trial({ config: 'current', repeat: 2, usage: null }), trial({ config: 'current', repeat: 3, usage: null })])[0],
+    buildCells([trial({ config: 'current', repeat: 1 }), trial({ config: 'current', repeat: 2, costUsd: null }), trial({ config: 'current', repeat: 3, costUsd: null })])[0],
   );
-  assert.equal(oneCost.verdict, 'incomplete', 'one cost unit gives no spread to compare against');
+  assert.equal(oneCost.verdict, 'incomplete', 'one known cost gives no spread to compare against');
   const unknownScores = verdictOf({ n: 3 }, { n: 3, scores: null });
   assert.equal(unknownScores.verdict, 'incomplete', 'no score known');
 });
@@ -441,6 +432,22 @@ test('reportMain prints a table per effort with the verdicts, and the count of d
   assert.match(out, /high: 2 of 3/);
   assert.match(out, /claude-opus-5-5/);
   assert.match(out, /bypassPermissions/);
+});
+
+test('reportMain prints cost in US dollars, explains it as the whole session at list price, and sums modelUsage for tokens', async () => {
+  const usage = { inputTokens: 1000, outputTokens: 500, cacheReadInputTokens: 2000, cacheCreationInputTokens: 500, costUSD: 1 };
+  const trials = bothConfigs({ costs: [3.084, 3.084, 3.084] }, { costs: [6.5, 6.5, 6.5], modelUsage: { a: usage, b: usage } });
+  const { out } = await run([], { ab: docOf('ab', trials) });
+  const row = out.split('\n').find((entry) => entry.startsWith('alpha'));
+  assert.match(row, /\$3\.08\s+\$6\.50\s+2\.11x/, 'two decimals, and the ratio');
+  assert.match(row, /1\.1k\s+8\.0k/, 'minimal falls back to input 1000 + output 100, current sums both models: 2 * 4000');
+  assert.match(out, /list cost of the whole session, subagents included/);
+  assert.doesNotMatch(out, /cost units/);
+});
+
+test('reportMain shows a task whose trials have no costUsd as incomplete: without a cost there is no verdict', async () => {
+  const { out } = await run([], { ab: docOf('ab', bothConfigs({ costs: [1, 2, 3] }, { costUsd: null })) });
+  assert.match(out.split('\n').find((entry) => entry.startsWith('alpha')), /incomplete/);
 });
 
 test('reportMain shows an incomplete task as such, and names a trial that recorded an error', async () => {
