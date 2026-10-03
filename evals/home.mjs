@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sandboxEnv } from './configs.mjs';
 import { exists, isWithin, resolveReal } from './paths.mjs';
+import { assertTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -260,11 +261,15 @@ export function removeTemplate(templateDir) {
 /** Seeds the trial home `home`, absolute and fresh, from the template: the copy list goes in as it is,
  * then the three files that name the home are written for this one. Plugin paths (`installPath`,
  * `installLocation`, ...) point into `home`, so a plugin is loaded from the trial's own copy; and in
- * `.claude.json` the engram server gets `ENGRAM_DATA_DIR` set to `<home>/.engram` (its child process does
- * not inherit one), because that file is where the MCP child's env comes from. A file with no engram server
- * is left alone. Nothing here writes outside `home`, and the template is only read. */
-export function seedHome(templateDir, home) {
+ * `.claude.json` the engram server gets `ENGRAM_DATA_DIR` set to `<home>/.engram` and `ENGRAM_PORT` set to
+ * `engramPort` (its child process does not inherit them), because that file is where the MCP child's env comes
+ * from; an `ENGRAM_URL` or `ENGRAM_SOCKET` the real entry carries is dropped, so the server can only be the
+ * trial's own. `engramPort`, the trial's own port (see `ports.mjs`), is required and checked before anything is
+ * copied: the real engram port is refused. A file with no engram server is left alone. Nothing here writes
+ * outside `home`, and the template is only read. */
+export function seedHome(templateDir, home, { engramPort } = {}) {
   requireAbsolute('home', home);
+  assertTrialPort(engramPort);
   readTemplate(templateDir);
   copyEntry(path.join(templateDir, PAYLOAD), home, { followLinks: false, active: new Set(), warnings: [], what: 'the template' }, PAYLOAD);
 
@@ -278,7 +283,8 @@ export function seedHome(templateDir, home) {
     const json = JSON.parse(fs.readFileSync(claudeJson, 'utf8'));
     if (isObject(json.mcpServers?.engram)) {
       const engram = json.mcpServers.engram;
-      engram.env = { ...(isObject(engram.env) ? engram.env : {}), ENGRAM_DATA_DIR: path.join(home, '.engram') };
+      const { ENGRAM_URL, ENGRAM_SOCKET, ...kept } = isObject(engram.env) ? engram.env : {};
+      engram.env = { ...kept, ENGRAM_DATA_DIR: path.join(home, '.engram'), ENGRAM_PORT: String(engramPort) };
     }
     writeJson(claudeJson, json);
   }
@@ -293,14 +299,14 @@ function runJsHarnessInit({ workspace, env }) {
 
 /** The current arm's project layer: `js-harness init` in the workspace (which must already be a git
  * repository, see `prepareSandbox`), writing `harness.json`, `AGENTS.md`, the pre-commit hook and the
- * codegraph index. It runs under the trial's own sandbox env, so its `codegraph init` and every write it
- * makes in a home land in the sandbox; `env` adds variables on top of it (a test puts a stub `codegraph`
- * on `PATH`). `runInit({ workspace, env })` is injectable and returns a `spawnSync`-like result. A
+ * codegraph index. It runs under the trial's own sandbox env (which needs `engramPort`, like every use of it), so
+ * its `codegraph init` and every write it makes in a home land in the sandbox; `env` adds variables on top
+ * of it (a test puts a stub `codegraph` on `PATH`). `runInit({ workspace, env })` is injectable and returns a `spawnSync`-like result. A
  * non-zero exit, or a step `init` reports as failed (it prints `<step> failed: ...` and still exits 0, for
  * a codegraph that is not installed), rejects: a trial that went on without its project layer would score
  * a different configuration than the one it is named after. */
-export async function initWorkspace({ home, workspace, runInit = runJsHarnessInit, env: extra = {} }) {
-  const env = childEnv({ ...sandboxEnv({ home }), ...extra });
+export async function initWorkspace({ home, workspace, engramPort, runInit = runJsHarnessInit, env: extra = {} }) {
+  const env = childEnv({ ...sandboxEnv({ home, engramPort }), ...extra });
   const result = await runInit({ workspace, env });
   if (result.error) throw new Error(`js-harness init could not run in the trial workspace: ${result.error.message}`);
   const output = `${result.stderr ?? ''}`.trim() || `${result.stdout ?? ''}`.trim();
@@ -310,12 +316,13 @@ export async function initWorkspace({ home, workspace, runInit = runJsHarnessIni
 }
 
 /** The `seed` of the current arm (`currentConfig({ seed })`): copies the template into the trial's home,
- * then initializes the workspace. The template is checked now, when the seed is made, so a wrong path
- * fails before any trial. `runInit` and `env` are passed to `initWorkspace`. */
+ * then initializes the workspace; the trial's `engramPort` comes with the context the config's `prepare` hands
+ * to a seed. The template is checked now, when the seed is made, so a wrong path fails before any trial.
+ * `runInit` and `env` are passed to `initWorkspace`. */
 export function seedFromTemplate(templateDir, { runInit, env } = {}) {
   readTemplate(templateDir);
-  return async ({ home, workspace }) => {
-    seedHome(templateDir, home);
-    await initWorkspace({ home, workspace, runInit, env });
+  return async ({ home, workspace, engramPort }) => {
+    seedHome(templateDir, home, { engramPort });
+    await initWorkspace({ home, workspace, engramPort, runInit, env });
   };
 }

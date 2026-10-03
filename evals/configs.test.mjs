@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths,
 } from './configs.mjs';
+import { REAL_ENGRAM_PORT } from './ports.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,7 @@ const SCRUBBED = ['CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PLUGIN_DATA', 'ANTHROPIC_
 
 const REAL_HOME = path.join(path.parse(scratch).root, 'Users', 'real-person-sentinel');
 const HOME = path.join(scratch, 'sandbox-home');
+const PORT = 41234;
 const sortedKeys = (object) => Object.keys(object).sort();
 const nonNull = (overrides) => Object.entries(overrides).filter(([, value]) => value !== null);
 const insideHome = (value, home = HOME) => value === home || value.startsWith(home + path.sep);
@@ -91,7 +93,7 @@ test('the allowlist is exactly what a process needs to run, plus the one credent
 for (const platform of PLATFORMS) {
   test(`sandboxEnv (${platform}) removes every inherited variable outside the allowlist and leaves allowlisted ones alone`, () => {
     const inherited = fakeInherited(platform);
-    const overrides = sandboxEnv({ home: HOME, inherited, platform });
+    const overrides = sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform });
     for (const name of SCRUBBED) assert.equal(overrides[name], null, `${name} is removed`);
     const allowed = new Set(EXPECTED_ALLOWLIST.map((name) => (platform === 'win32' ? name.toLowerCase() : name)));
     const untouched = Object.keys(inherited).filter((name) => allowed.has(platform === 'win32' ? name.toLowerCase() : name));
@@ -106,7 +108,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`sandboxEnv (${platform}) points every path variable inside the home and sets each switch to its exact value`, () => {
-    const overrides = sandboxEnv({ home: HOME, inherited: {}, platform });
+    const overrides = sandboxEnv({ home: HOME, engramPort: PORT, inherited: {}, platform });
     const pathNames = platform === 'win32' ? [...PATH_NAMES, ...WINDOWS_PATH_NAMES] : PATH_NAMES;
     for (const name of PATH_NAMES) assert.ok(insideHome(overrides[name]), `${name} = ${overrides[name]}`);
     assert.equal(overrides.USERPROFILE, HOME);
@@ -126,12 +128,13 @@ for (const platform of PLATFORMS) {
     }
     for (const [name, value] of Object.entries(EXPECTED_SWITCHES)) assert.equal(overrides[name], value, name);
     assert.deepEqual(SANDBOX_SWITCHES, EXPECTED_SWITCHES);
-    assert.deepEqual(sortedKeys(overrides), [...pathNames, ...Object.keys(EXPECTED_SWITCHES)].sort(), 'nothing else is set');
+    assert.equal(overrides.ENGRAM_PORT, String(PORT));
+    assert.deepEqual(sortedKeys(overrides), [...pathNames, 'ENGRAM_PORT', ...Object.keys(EXPECTED_SWITCHES)].sort(), 'nothing else is set');
   });
 
   test(`sandboxEnv (${platform}) through childEnv leaves exactly the allowlist, the paths and the switches, none of the real home`, () => {
     const inherited = fakeInherited(platform);
-    const overrides = sandboxEnv({ home: HOME, inherited, platform });
+    const overrides = sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform });
     const env = childEnv(overrides, inherited, platform);
     const fold = (name) => (platform === 'win32' ? name.toLowerCase() : name);
     const allowed = new Set(EXPECTED_ALLOWLIST.map(fold));
@@ -213,9 +216,9 @@ test('current passes only the shared flags, and --effort is the one flag that va
 });
 
 test('both configs run under the same sandbox env for the same home', () => {
-  const context = { effort: 'medium', home: HOME, workspace: path.join(scratch, 'ws') };
+  const context = { effort: 'medium', home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: PORT } };
   assert.deepEqual(minimalConfig(OPTIONS).env(context), currentConfig(OPTIONS).env(context));
-  assert.deepEqual(minimalConfig(OPTIONS).env(context), sandboxEnv({ home: HOME }));
+  assert.deepEqual(minimalConfig(OPTIONS).env(context), sandboxEnv({ home: HOME, engramPort: PORT }));
 });
 
 for (const [name, build] of BUILDERS) {
@@ -232,10 +235,11 @@ test('current calls an optional seed with the home and workspace once the direct
   const calls = [];
   const config = currentConfig({
     ...OPTIONS,
+    allocatePort: async () => 41500,
     seed: async (context) => calls.push({ ...context, claudeDirExisted: fs.existsSync(path.join(context.home, '.claude')) }),
   });
   await config.prepare({ home, workspace, effort: 'high', task: { id: 't' } });
-  assert.deepEqual(calls, [{ home, workspace, claudeDirExisted: true }]);
+  assert.deepEqual(calls, [{ home, workspace, engramPort: 41500, claudeDirExisted: true }]);
 
   const bare = path.join(tmp('seed'), 'home');
   await currentConfig(OPTIONS).prepare({ home: bare, workspace, effort: 'high', task: { id: 't' } });
@@ -252,6 +256,109 @@ test('minimal does not take a seed: its home stays bare', async () => {
   const config = minimalConfig({ ...OPTIONS, seed: () => assert.fail('minimal must not seed') });
   await config.prepare({ home, workspace: tmp('ws') });
   assert.deepEqual(fs.readdirSync(path.join(home, '.claude')), []);
+});
+
+// ---- the engram port of a trial ------------------------------------------------------------------------------
+
+test('sandboxEnv needs the trial\'s engram port and never falls back to the real one', () => {
+  for (const engramPort of [undefined, null, '41234', 0, 80, 70000, 41234.5, REAL_ENGRAM_PORT]) {
+    assert.throws(() => sandboxEnv({ home: HOME, engramPort }), /engram port/, String(engramPort));
+  }
+  assert.throws(() => sandboxEnv({ home: HOME }), /engram port/);
+  assert.equal(sandboxEnv({ home: HOME, engramPort: 41234 }).ENGRAM_PORT, '41234', 'a string, as an environment holds it');
+});
+
+for (const platform of PLATFORMS) {
+  test(`sandboxEnv (${platform}) replaces an inherited ENGRAM_PORT and removes ENGRAM_URL, ENGRAM_SOCKET and the rest of engram's own settings`, () => {
+    const inherited = {
+      ...fakeInherited(platform),
+      ENGRAM_PORT: String(REAL_ENGRAM_PORT),
+      ENGRAM_URL: `http://127.0.0.1:${REAL_ENGRAM_PORT}`,
+      ENGRAM_SOCKET: '/run/engram.sock',
+      ENGRAM_PROJECT: 'real-project',
+      ENGRAM_HTTP_TOKEN: 'real-token',
+      ENGRAM_CLOUD_TOKEN: 'cloud-token',
+      ENGRAM_CLOUD_SERVER: 'https://cloud.example',
+    };
+    const overrides = sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform });
+    assert.equal(overrides.ENGRAM_PORT, String(PORT));
+    for (const name of ['ENGRAM_URL', 'ENGRAM_SOCKET', 'ENGRAM_PROJECT', 'ENGRAM_HTTP_TOKEN', 'ENGRAM_CLOUD_TOKEN', 'ENGRAM_CLOUD_SERVER']) assert.equal(overrides[name], null, name);
+    const env = childEnv(overrides, inherited, platform);
+    assert.equal(env.ENGRAM_PORT, String(PORT));
+    assert.deepEqual(Object.keys(env).filter((name) => name.startsWith('ENGRAM_')).sort(), ['ENGRAM_DATA_DIR', 'ENGRAM_PORT']);
+  });
+}
+
+for (const [name, build] of BUILDERS) {
+  test(`${name}'s env without a prepared engram port fails loudly, because a default would be the real server`, () => {
+    const config = build(OPTIONS);
+    assert.throws(() => config.env({ effort: 'medium', home: HOME }), /engram port/);
+    assert.throws(() => config.env({ effort: 'medium', home: HOME, prepared: {} }), /engram port/);
+    assert.throws(() => config.env({ effort: 'medium', home: HOME, prepared: { engramPort: REAL_ENGRAM_PORT } }), /7437/);
+    assert.equal(config.env({ effort: 'medium', home: HOME, prepared: { engramPort: PORT } }).ENGRAM_PORT, String(PORT));
+  });
+
+  test(`${name}'s prepare allocates the trial's engram port and returns it as the prepared state`, async () => {
+    const asked = [];
+    const home = path.join(tmp('port'), 'home');
+    const prepared = await build({ ...OPTIONS, allocatePort: async () => (asked.push('asked'), 42001) }).prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+    assert.deepEqual(prepared, { engramPort: 42001 });
+    assert.deepEqual(asked, ['asked'], 'one port per trial');
+  });
+
+  test(`${name}'s prepare gives two trials two different engram ports, by default`, async () => {
+    const first = await build(OPTIONS).prepare({ home: path.join(tmp('port'), 'home'), workspace: tmp('ws') });
+    const second = await build(OPTIONS).prepare({ home: path.join(tmp('port'), 'home'), workspace: tmp('ws') });
+    assert.notEqual(first.engramPort, second.engramPort);
+    for (const { engramPort } of [first, second]) assert.ok(Number.isInteger(engramPort) && engramPort >= 1024 && engramPort !== REAL_ENGRAM_PORT);
+  });
+
+  test(`${name}'s prepare refuses a port the allocator should never have given, the real engram port above all`, async () => {
+    await assert.rejects(build({ ...OPTIONS, allocatePort: async () => REAL_ENGRAM_PORT }).prepare({ home: path.join(tmp('port'), 'home'), workspace: tmp('ws') }), /7437/);
+  });
+
+  test(`${name}'s prepare gives the port back when a step after it fails`, async () => {
+    const released = [];
+    const config = build({ ...OPTIONS, allocatePort: async () => 42002, releasePort: (port) => released.push(port) });
+    // A relative workspace fails the shared preparation, whichever arm it is.
+    await assert.rejects(config.prepare({ home: path.join(tmp('port'), 'home'), workspace: 'relative' }), /absolute workspace/);
+    assert.deepEqual(released, [42002]);
+  });
+
+  test(`${name}'s cleanup kills whatever listens on the trial's engram port and gives the port back`, () => {
+    const killed = [];
+    const released = [];
+    const config = build({ ...OPTIONS, killPort: (port) => (killed.push(port), { killed: [7] }), releasePort: (port) => released.push(port) });
+    config.cleanup({ home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: 42003 } });
+    assert.deepEqual(killed, [42003]);
+    assert.deepEqual(released, [42003]);
+  });
+
+  test(`${name}'s cleanup of a trial that never got a port touches no port at all`, () => {
+    const config = build({ ...OPTIONS, killPort: () => assert.fail('no port, nothing to kill'), releasePort: () => assert.fail('nothing to release') });
+    config.cleanup({ home: HOME, workspace: path.join(scratch, 'ws'), prepared: undefined });
+    config.cleanup({ home: HOME, workspace: path.join(scratch, 'ws'), prepared: {} });
+  });
+
+  test(`${name}'s cleanup that cannot kill the listener throws, and the port is released all the same`, () => {
+    const released = [];
+    const config = build({ ...OPTIONS, killPort: () => { throw new Error('port 42004 still listens'); }, releasePort: (port) => released.push(port) });
+    assert.throws(() => config.cleanup({ home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: 42004 } }), /still listens/);
+    assert.deepEqual(released, [42004]);
+  });
+
+  test(`${name}'s cleanup defaults to the kill by port, which refuses the real engram port before it looks at anything`, () => {
+    const config = build(OPTIONS);
+    assert.throws(() => config.cleanup({ home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: REAL_ENGRAM_PORT } }), /7437/);
+  });
+}
+
+test('the port the child saw is the port the trial\'s cleanup freed, and a trial never frees another one', async () => {
+  const killed = [];
+  const { ports, reports } = await runThroughFakeAgent(() => minimalConfig({ ...OPTIONS, killPort: (port) => (killed.push(port), { killed: [] }) }), 2);
+  assert.deepEqual(killed, ports);
+  assert.deepEqual(reports.map((report) => report.env.ENGRAM_PORT), ports.map(String));
+  assert.ok(!killed.includes(REAL_ENGRAM_PORT));
 });
 
 // ---- end to end: what the child actually received --------------------------------------------------
@@ -276,6 +383,9 @@ const DIRTY_PROCESS_ENV = {
   ...Object.fromEntries(SCRUBBED.map((name) => [name, path.join(REAL_HOME, name)])),
   CLAUDE_CONFIG_DIR: path.join(REAL_HOME, '.claude'),
   ENGRAM_DATA_DIR: path.join(REAL_HOME, '.engram'),
+  ENGRAM_PORT: String(REAL_ENGRAM_PORT),
+  ENGRAM_URL: `http://127.0.0.1:${REAL_ENGRAM_PORT}`,
+  ENGRAM_SOCKET: path.join(REAL_HOME, 'engram.sock'),
   DISABLE_TELEMETRY: '0',
   CLAUDE_CODE_OAUTH_TOKEN: TOKEN,
 };
@@ -288,6 +398,7 @@ async function runThroughFakeAgent(build, repeats = 1) {
   const workRoot = tmp('work');
   const runsDir = tmp('runs');
   const homes = [];
+  const ports = [];
   const config = build();
   const wrapped = {
     ...config,
@@ -296,7 +407,9 @@ async function runThroughFakeAgent(build, repeats = 1) {
     env: (context) => ({ ...config.env(context), FAKE_AGENT_MODE: 'noop', FAKE_AGENT_REPORT: path.join(reportDir, `${path.basename(context.home)}.json`) }),
     prepare: async (context) => {
       homes.push(context.home);
-      await config.prepare(context);
+      const prepared = await config.prepare(context);
+      ports.push(prepared.engramPort);
+      return prepared;
     },
   };
   const reportTexts = [];
@@ -307,29 +420,32 @@ async function runThroughFakeAgent(build, repeats = 1) {
       reportTexts.push(fs.readFileSync(path.join(reportDir, `${path.basename(homes[repeat - 1])}.json`), 'utf8'));
     }
   });
-  return { homes, reports: reportTexts.map((text) => JSON.parse(text)), reportTexts, runsDir, workRoot };
+  return { homes, ports, reports: reportTexts.map((text) => JSON.parse(text)), reportTexts, runsDir, workRoot };
 }
 
 for (const [name, build] of BUILDERS) {
   test(`${name}: the child process receives the sandbox paths and switches, none of the real env, and a different home each trial`, async () => {
-    const { homes, reports, workRoot } = await runThroughFakeAgent(() => build(OPTIONS), 2);
+    const { homes, ports, reports, workRoot } = await runThroughFakeAgent(() => build(OPTIONS), 2);
     assert.equal(homes.length, 2);
     assert.notEqual(homes[0], homes[1], 'a trial never reuses the previous home');
+    assert.notEqual(ports[0], ports[1], 'nor the previous engram port');
     const fold = (key) => (process.platform === 'win32' ? key.toLowerCase() : key);
     // Windows adds LOGONSERVER (a host name) to every process whatever its env block holds, and would add
     // the real HOMEDRIVE and HOMEPATH as well if `sandboxEnv` did not set them, which is why it does.
     const osAdded = process.platform === 'win32' ? ['LOGONSERVER'] : [];
-    const allowed = new Set([...EXPECTED_ALLOWLIST, ...PATH_NAMES, ...(process.platform === 'win32' ? WINDOWS_PATH_NAMES : []), ...Object.keys(EXPECTED_SWITCHES), ...osAdded].map(fold));
+    const allowed = new Set([...EXPECTED_ALLOWLIST, ...PATH_NAMES, 'ENGRAM_PORT', ...(process.platform === 'win32' ? WINDOWS_PATH_NAMES : []), ...Object.keys(EXPECTED_SWITCHES), ...osAdded].map(fold));
     reports.forEach((report, index) => {
       const home = homes[index];
       // This is the predecessor's failure: switches and paths were declared but never reached the child.
-      for (const [key, value] of nonNull(sandboxEnv({ home }))) {
+      for (const [key, value] of nonNull(sandboxEnv({ home, engramPort: ports[index] }))) {
         if (process.platform !== 'win32' && WINDOWS_PATH_NAMES.includes(key)) continue;
         assert.equal(report.env[key], value, `${key} as the child saw it`);
       }
       assert.equal(report.env.USERPROFILE, home);
       assert.equal(report.env.HOME, home);
-      for (const key of SCRUBBED) assert.ok(!Object.keys(report.env).some((seen) => fold(seen) === fold(key)), `${key} reached the child`);
+      assert.equal(report.env.ENGRAM_PORT, String(ports[index]), 'the engram port the child saw is the trial own');
+      for (const key of [...SCRUBBED, 'ENGRAM_URL', 'ENGRAM_SOCKET']) assert.ok(!Object.keys(report.env).some((seen) => fold(seen) === fold(key)), `${key} reached the child`);
+      assert.notEqual(report.env.ENGRAM_PORT, String(REAL_ENGRAM_PORT), 'the inherited port is replaced, not passed on');
       const stray = Object.keys(report.env).filter((key) => !allowed.has(fold(key)) && !key.startsWith('FAKE_AGENT_'));
       assert.deepEqual(stray, [], 'only the allowlist, the paths and the switches');
       assert.deepEqual(report.argv, name === 'minimal' ? [...sharedArgs('high'), ...MINIMAL_ONLY] : sharedArgs('high'), 'the argv as the child saw it');
@@ -352,7 +468,7 @@ test('an OAuth token in the environment reaches the child but never a report or 
 
 /** Runs git in `cwd` under the env a trial's agent would get, so what it prints is what the agent would see. */
 function gitUnderSandbox(home, cwd, ...args) {
-  const result = spawnSync('git', args, { cwd, env: childEnv(sandboxEnv({ home })), encoding: 'utf8', windowsHide: true });
+  const result = spawnSync('git', args, { cwd, env: childEnv(sandboxEnv({ home, engramPort: PORT })), encoding: 'utf8', windowsHide: true });
   assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
   return result.stdout.trim();
 }
@@ -418,7 +534,7 @@ test('prepare ignores the system git config: one a commit would honour does not 
     const home = path.join(tmp('nosystem'), 'home');
     const workspace = tmp('ws');
     writeFixtureFiles(workspace);
-    prepareSandbox({ home, workspace, env });
+    prepareSandbox({ home, workspace, env, engramPort: PORT });
     assert.equal(gitUnderSandbox(home, workspace, 'log', '--format=%s'), 'fixture', 'the commit was made');
   }
 });
@@ -430,12 +546,12 @@ test('the agent keeps the system git config: GIT_CONFIG_NOSYSTEM is set for the 
   // variable, and say nothing about the child either way.
   for (const inherited of [{ PATH: '/bin' }, { PATH: '/bin', GIT_CONFIG_NOSYSTEM: '1' }, { PATH: '/bin', git_config_nosystem: '1' }]) {
     for (const platform of ['win32', 'linux']) {
-      const child = childEnv(sandboxEnv({ home: HOME, inherited, platform }), inherited, platform);
+      const child = childEnv(sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform }), inherited, platform);
       assert.deepEqual(Object.keys(child).filter((name) => name.toLowerCase() === 'git_config_nosystem'), [], `${platform} with ${JSON.stringify(inherited)}`);
     }
   }
   const exported = { PATH: '/bin', GIT_CONFIG_NOSYSTEM: '1' };
-  assert.equal(sandboxEnv({ home: HOME, inherited: exported, platform: 'linux' }).GIT_CONFIG_NOSYSTEM, null, 'an inherited one is a removal, which a key check mistakes for a setting');
+  assert.equal(sandboxEnv({ home: HOME, engramPort: PORT, inherited: exported, platform: 'linux' }).GIT_CONFIG_NOSYSTEM, null, 'an inherited one is a removal, which a key check mistakes for a setting');
 });
 
 test('both arms get a byte-identical .gitconfig', async () => {

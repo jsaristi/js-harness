@@ -12,12 +12,37 @@
 // stderr and exits 2, to prove the probe scrubs what it quotes), hang (reads the prompt and never ends),
 // wrong-env (ok, but its tools report a HOME outside the sandbox), loads-real (ok, and the real global
 // CLAUDE.md is in what it sends), blind (ok, but it sends no CLAUDE.md at all, not even the sandbox copy),
-// side-call-only (blind, except that a small-model side call carries the sandbox copy), orphan (ok, and a
+// side-call-only (blind, except that a small-model side call carries the sandbox copy), subagent-only (blind,
+// except that the subagent request carries it), subagent / subagent-loads-real (ok, and one subagent request
+// is made on any arm, clean or carrying the real global CLAUDE.md), orphan (ok, and a
 // detached process that names the workspace is left running), touch-json / leak-key / leak-key-workroot (ok,
 // and the fake real `.claude.json` is rewritten: see below), late-leak (ok, and an orphan writes the nonce
 // into the fake real `.claude` shortly after the agent exits).
+//
+// What the engram plugin adds to the current arm is stood in for as well. The current arm (the one whose
+// sandbox has a `settings.json`) is offered the engram MCP tool and a subagent tool; the other arm is not,
+// as with the real `--strict-mcp-config`. In every mode that writes, the current arm's sandbox engram store
+// gets what the plugin's paths would put there: the prompt (UserPromptSubmit), the memory the MCP tool
+// saves, and the subagent's last message (SubagentStop). More modes: engram-server (ok, and a detached
+// stand-in for `engram serve`, as SessionStart starts one, is left listening on ENGRAM_PORT), prompt-only
+// (the memory is never saved), wrong-engram-env (its tools report ENGRAM_PORT=7437 and an ENGRAM_URL: only
+// text, nothing connects), leak-engram (ok, and the nonce is written into the fake real `.engram`).
+// The stand-in connects to no port but the fake API's and the trial's own ENGRAM_PORT, which it only probes, and the
+// stand-in server refuses port 7437.
+//
+// The current arm also leaves what the hooks leave on every path they take: a session id (the agent's result
+// carries it and the transcript is named after it), the state file UserPromptSubmit writes into TMPDIR, the
+// line `engram serve` logs when SessionStart starts it, and the session row SessionStart posts to the store.
+// Modes that take one of them away: safe-mode (the Windows Git Bash fast path of UserPromptSubmit: the state
+// file but no prompt in the store), no-hook-state, no-server-log, other-port-log (the server it started
+// listens on 7437), no-session-store, result-without-session-id (only the transcript's name has the id) and
+// unknown-session-id (nothing has it). leak-session-engram and leak-session-tree (ok, and the session id is
+// written into the fake real `.engram`, or the fake real `.claude`) are the leaks the session id must find.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
+import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -43,10 +68,16 @@ if (mode === 'noisy') {
 
 /** What this stand-in's "Bash tool" prints: the same NAME=value lines the probe's shell command prints. */
 const PRINTED = ['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CLAUDE_CONFIG_DIR', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'TMPDIR', 'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ENGRAM_DATA_DIR', 'JS_HARNESS_HOME', 'npm_config_cache', 'ANTHROPIC_BASE_URL'];
+  'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ENGRAM_DATA_DIR', 'JS_HARNESS_HOME', 'npm_config_cache', 'ANTHROPIC_BASE_URL', 'ENGRAM_PORT', 'ENGRAM_URL', 'ENGRAM_SOCKET'];
 // In `wrong-env` the tools see a home that is not the sandbox's, and no TMPDIR: what a writer that ignores
 // the sandbox's variables would show.
-const seen = (name) => (mode === 'wrong-env' && name === 'HOME' ? '/c/Users/someone-real' : mode === 'wrong-env' && name === 'TMPDIR' ? '' : process.env[name] ?? '');
+const seen = (name) => {
+  if (mode === 'wrong-env' && name === 'HOME') return '/c/Users/someone-real';
+  if (mode === 'wrong-env' && name === 'TMPDIR') return '';
+  if (mode === 'wrong-engram-env' && name === 'ENGRAM_PORT') return '7437';
+  if (mode === 'wrong-engram-env' && name === 'ENGRAM_URL') return 'http://127.0.0.1:7437';
+  return process.env[name] ?? '';
+};
 const envLines = () => [...PRINTED.map((name) => `${name}=${seen(name)}`), `OAUTH_TOKEN_SET=${process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'yes' : ''}`].join('\n');
 
 // What Claude Code would load as memory. The sandbox's own CLAUDE.md (the current arm's seeded copy; the
@@ -54,13 +85,16 @@ const envLines = () => [...PRINTED.map((name) => `${name}=${seen(name)}`), `OAUT
 // workspace that has the real home above it would.
 const readIfThere = (file) => (file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
 const memory = [
-  mode === 'blind' || mode === 'side-call-only' ? '' : readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md')),
+  mode === 'blind' || mode === 'side-call-only' || mode === 'subagent-only' ? '' : readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md')),
   mode === 'loads-real' ? readIfThere(path.join(realHome ?? '', '.claude', 'CLAUDE.md')) : '',
 ].filter(Boolean).join('\n\n');
 const system = `a system prompt that mentions ${nonce}${memory ? `\n\n# claudeMd\n${memory}` : ''}`;
 
 const sandboxMemory = readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'CLAUDE.md'));
-const post = async (messages, { model = 'claude-opus-5-5', system: sent = system, tools = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }] } = {}) => {
+// Only the arm with a seeded home has the plugin: its sandbox holds the `settings.json` the template copied.
+const hasPlugin = fs.existsSync(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'settings.json'));
+const TOOLS = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }, ...(hasPlugin ? [{ name: 'mcp__engram__mem_save' }, { name: 'Agent' }] : [])];
+const post = async (messages, { model = 'claude-opus-5-5', system: sent = system, tools = TOOLS } = {}) => {
   const response = await fetch(`${process.env.ANTHROPIC_BASE_URL}/v1/messages?beta=true`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '', authorization: `Bearer ${process.env.ANTHROPIC_API_KEY ?? ''}` },
@@ -74,6 +108,47 @@ const post = async (messages, { model = 'claude-opus-5-5', system: sent = system
 if (mode === 'side-call-only') await post([{ role: 'user', content: 'title please' }], { model: 'claude-haiku-4-5', system: `title\n\n# claudeMd\n${sandboxMemory}`, tools: [] });
 
 const writes = mode !== 'silent';
+// The current arm's sandbox engram store. It is only a file named like the real database, appended to by the
+// stand-in of whatever would write there (the plugin's hooks, the MCP server).
+const engramStore = (text) => {
+  if (!hasPlugin || !process.env.ENGRAM_DATA_DIR) return;
+  fs.mkdirSync(process.env.ENGRAM_DATA_DIR, { recursive: true });
+  fs.appendFileSync(path.join(process.env.ENGRAM_DATA_DIR, 'engram.db'), `${text}\n`);
+};
+const listening = (port) => new Promise((resolve) => {
+  const socket = net.connect({ port, host: '127.0.0.1' });
+  socket.once('connect', () => (socket.destroy(), resolve(true)));
+  socket.once('error', () => resolve(false));
+});
+// `engram-server`: what SessionStart does when nothing answers, a detached `engram serve` that outlives this
+// process. The stand-in refuses to default to 7437: with no port in the env it fails, it never guesses.
+if (mode === 'engram-server') {
+  const port = Number(process.env.ENGRAM_PORT);
+  if (!Number.isInteger(port) || port === 7437) throw new Error(`ENGRAM_PORT=${JSON.stringify(process.env.ENGRAM_PORT)} is not a trial port`);
+  // Started by an intermediate process that exits at once, as the hook's shell does after `engram serve &`: the
+  // server's parent is then gone, which is what keeps the runner's walk down from the agent from reaching it.
+  const intermediate = [
+    "const { spawn } = require('node:child_process');",
+    "const child = spawn(process.execPath, [process.argv[1]], { cwd: process.argv[2], detached: true, stdio: 'ignore', windowsHide: true });",
+    'child.unref();',
+  ].join('\n');
+  const serverFile = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fake-engram-server.mjs');
+  spawnSync(process.execPath, ['-e', intermediate, '--', serverFile, os.tmpdir()], { env: process.env, windowsHide: true });
+  for (let attempt = 0; attempt < 100 && !(await listening(port)); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
+}
+// Claude Code names the session and its transcript with one UUID. In `safe-mode` UserPromptSubmit takes the Windows
+// Git Bash fast path: it writes its state file in TMPDIR and never posts the prompt.
+const sessionId = crypto.randomUUID();
+if (writes && hasPlugin) {
+  if (mode !== 'no-server-log') {
+    // What `engram serve` writes to the data directory's log when SessionStart starts it.
+    const port = mode === 'other-port-log' ? 7437 : process.env.ENGRAM_PORT;
+    fs.appendFileSync(path.join(process.env.ENGRAM_DATA_DIR, 'serve.err.log'), `2026/10/02 13:05:18 [engram] HTTP server listening on 127.0.0.1:${port}\n`);
+  }
+  if (mode !== 'no-session-store') engramStore(`session: ${sessionId} directory: ${process.cwd()}`); // SessionStart posts the session
+  if (mode !== 'no-hook-state') write(path.join(process.env.TMPDIR, `engram-claude-${sessionId}-tools-loaded`), '');
+  if (mode !== 'safe-mode') engramStore(`prompt: ${prompt}`); // UserPromptSubmit stores the prompt
+}
 const messages = [{ role: 'user', content: prompt }];
 let turns = 0;
 let text = '';
@@ -83,7 +158,8 @@ for (; turns < 6; turns += 1) {
   const calls = reply.content.filter((block) => block.type === 'tool_use');
   text = reply.content.filter((block) => block.type === 'text').map((block) => block.text).join('');
   if (calls.length === 0) break;
-  const results = calls.map((call) => {
+  const results = [];
+  for (const call of calls) {
     let output = 'ok';
     if (call.name === 'Bash') {
       output = envLines();
@@ -93,15 +169,29 @@ for (; turns < 6; turns += 1) {
       }
     } else if (call.name === 'Write' && writes) {
       write(call.input.file_path, call.input.content);
+    } else if (call.name === 'mcp__engram__mem_save' && writes && mode !== 'prompt-only') {
+      engramStore(`saved: ${call.input.content}`); // the MCP server writes to its own store
+    } else if (call.name === 'Agent') {
+      // The subagent is one more request to the API; the SubagentStop hook then stores what it said last.
+      const sub = await post([{ role: 'user', content: call.input.prompt }], { tools: [{ name: 'Bash' }], ...(mode === 'subagent-only' && { system: `${system}\n\n# claudeMd\n${sandboxMemory}` }) });
+      output = sub.content.filter((block) => block.type === 'text').map((block) => block.text).join('');
+      if (writes) engramStore(`subagent stop: ${output}`);
     }
-    return { type: 'tool_result', tool_use_id: call.id, content: [{ type: 'text', text: output }] };
-  });
+    results.push({ type: 'tool_result', tool_use_id: call.id, content: [{ type: 'text', text: output }] });
+  }
   messages.push({ role: 'user', content: results });
 }
 
+// `subagent` and `subagent-loads-real`: a subagent request on any arm (the real one is only started where the
+// plugin offers the Agent tool), clean in the first, carrying the real global CLAUDE.md in the second.
+if (mode === 'subagent' || mode === 'subagent-loads-real') {
+  const real = mode === 'subagent-loads-real' ? readIfThere(path.join(realHome ?? '', '.claude', 'CLAUDE.md')) : '';
+  await post([{ role: 'user', content: 'Isolation probe subagent: reply in one line.' }], { tools: [{ name: 'Bash' }], system: `${system}${real ? `\n\n# claudeMd\n${real}` : ''}` });
+}
+
 if (writes) {
-  write(path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'x', 's.jsonl'), `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`);
-  if (process.env.ENGRAM_DATA_DIR) write(path.join(process.env.ENGRAM_DATA_DIR, 'engram.db'), 'pretend sqlite');
+  write(path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'x', `${mode === 'unknown-session-id' ? 's' : sessionId}.jsonl`), `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`);
+  if (process.env.ENGRAM_DATA_DIR && !hasPlugin) write(path.join(process.env.ENGRAM_DATA_DIR, 'engram.db'), 'pretend sqlite');
   write(path.join(process.env.CLAUDE_CONFIG_DIR, 'history.jsonl'), '{"display":"probe"}\n');
 }
 if (mode === 'leak') write(path.join(realHome, '.claude', 'leaked.txt'), `a transcript line with ${nonce} in it\n`);
@@ -147,6 +237,12 @@ if (mode === 'late-leak') {
   const started = spawnSync(process.execPath, ['-e', intermediate, '--', writer, path.join(realHome, '.claude', 'late-leak.txt'), nonce, '2000', process.cwd()], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true });
   if (pidFile) fs.writeFileSync(pidFile, started.stdout.trim());
 }
+if (mode === 'leak-engram') write(path.join(realHome, '.engram', 'leak.db'), `a prompt with ${nonce} in it\n`);
+// The session row of a SessionStart hook that posted to the real server holds the session id and neither the nonce
+// nor the sandbox's name.
+if (mode === 'leak-session-engram') write(path.join(realHome, '.engram', 'leak-session.db'), `a session row for ${sessionId}\n`);
+if (mode === 'leak-session-tree') write(path.join(realHome, '.claude', 'leaked-session.txt'), `a session ${sessionId} in a real tree\n`);
 if (mode === 'leak-path') write(path.join(realHome, '.claude', 'projects', process.cwd().replace(/[^A-Za-z0-9]/g, '-'), 'session.json'), '{}\n');
 
-console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, num_turns: turns + 1, usage: { input_tokens: 1, output_tokens: 1 } }));
+const withSession = mode === 'result-without-session-id' || mode === 'unknown-session-id' ? {} : { session_id: sessionId };
+console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, num_turns: turns + 1, ...withSession, usage: { input_tokens: 1, output_tokens: 1 } }));

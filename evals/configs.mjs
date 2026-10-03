@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { exists, isWithin, resolveReal } from './paths.mjs';
+import { allocatePort as allocateTrialPort, assertTrialPort, killByPort, releasePort as releaseTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
 
 /** The names Claude Code loads as project memory from every ancestor directory of its cwd (`CLAUDE.md`,
@@ -118,18 +119,24 @@ function homeDriveAndPath(home) {
   return { HOMEDRIVE: drive, HOMEPATH: home.slice(drive.length) };
 }
 
-/** The env overrides for a trial whose home is `home`, in the shape the runner's `childEnv` consumes: a
- * `null` removes a variable. `childEnv` merges over the real environment, so on its own an override only
- * adds; here every inherited name outside the allowlist is mapped to `null`, which makes the child's
- * environment an allowlist all the same. Names compare case-insensitively on Windows (`Path` is `PATH`).
- * Allowlisted names are left out of the result, so the child inherits them as they are, and a path or
- * switch name that the real environment also holds is overridden, not removed. */
-export function sandboxEnv({ home, inherited = process.env, platform = process.platform }) {
+/** The env overrides for a trial whose home is `home` and whose engram server listens on `engramPort`, in the
+ * shape the runner's `childEnv` consumes: a `null` removes a variable. `childEnv` merges over the real
+ * environment, so on its own an override only adds; here every inherited name outside the allowlist is
+ * mapped to `null`, which makes the child's environment an allowlist all the same. Names compare
+ * case-insensitively on Windows (`Path` is `PATH`). Allowlisted names are left out of the result, so the child
+ * inherits them as they are, and a path or switch name that the real environment also holds is overridden,
+ * not removed.
+ *
+ * `engramPort` is required and has no default, because the engram plugin's hooks fall back to port 7437 when
+ * they find none, and that is where this machine's real engram server answers. `ENGRAM_URL` and `ENGRAM_SOCKET`
+ * are not in the allowlist, so an inherited one is removed and the hooks can only reach `ENGRAM_PORT`. */
+export function sandboxEnv({ home, engramPort, inherited = process.env, platform = process.platform }) {
   if (typeof home !== 'string' || home === '') throw new Error('sandboxEnv needs the trial home directory');
   if (!path.isAbsolute(home)) throw new Error(`sandboxEnv needs an absolute home, got ${JSON.stringify(home)}: a child resolves a relative path against its own cwd, the graded workspace`);
+  assertTrialPort(engramPort);
   const fold = (name) => (platform === 'win32' ? name.toLowerCase() : name);
   const allowed = new Set(SANDBOX_ALLOWLIST.map(fold));
-  const set = { ...sandboxPaths(home), ...(platform === 'win32' ? homeDriveAndPath(home) : {}), ...SANDBOX_SWITCHES };
+  const set = { ...sandboxPaths(home), ENGRAM_PORT: String(engramPort), ...(platform === 'win32' ? homeDriveAndPath(home) : {}), ...SANDBOX_SWITCHES };
   const managed = new Set(Object.keys(set).map(fold));
   const removed = Object.fromEntries(Object.keys(inherited).filter((name) => !allowed.has(fold(name)) && !managed.has(fold(name))).map((name) => [name, null]));
   return { ...removed, ...set };
@@ -162,17 +169,18 @@ function git(args, { cwd, env }) {
  * `GIT_AUTHOR_*` and `GIT_DIR` are all outside the allowlist), and not the system one either. `env` adds
  * variables to those commands (a test points `GIT_CONFIG_SYSTEM` at a hostile file). An empty workspace
  * still gets a commit. */
-export function prepareSandbox({ home, workspace, env: extra = {} }) {
+export function prepareSandbox({ home, workspace, engramPort, env: extra = {} }) {
   if (typeof workspace !== 'string' || !path.isAbsolute(workspace)) {
     throw new Error(`the sandbox needs an absolute workspace, got ${JSON.stringify(workspace)}`);
   }
+  assertTrialPort(engramPort);
   ensureSandboxDirs(home);
   fs.writeFileSync(path.join(home, '.gitconfig'), `[user]\n\tname = ${GIT_IDENTITY.name}\n\temail = ${GIT_IDENTITY.email}\n`);
   // GIT_CONFIG_NOSYSTEM goes last, so `extra` cannot lift it. It is set for these commands only and
   // deliberately not in `sandboxEnv`: the fixture commit must not depend on the host's system gitconfig
   // (autocrlf, credential helpers, and at worst `commit.gpgsign` or `core.hooksPath`), but whether the
   // agent's own git should see that file is a separate decision about what the arms are measured under.
-  const options = { cwd: workspace, env: childEnv({ ...sandboxEnv({ home }), ...extra, GIT_CONFIG_NOSYSTEM: '1' }) };
+  const options = { cwd: workspace, env: childEnv({ ...sandboxEnv({ home, engramPort }), ...extra, GIT_CONFIG_NOSYSTEM: '1' }) };
   git(['init', '--quiet'], options);
   git(['add', '--all'], options);
   git(['commit', '--quiet', '--allow-empty', '--message', 'fixture'], options);
@@ -185,8 +193,14 @@ export function prepareSandbox({ home, workspace, env: extra = {} }) {
  * absolute path of the `claude` binary, spawned directly (no shell, no PATH lookup): a bare name could
  * resolve to another install, or to a `.cmd` shim that cannot be spawned without a shell. `--effort` is
  * the only flag that varies with the trial. Neither arm uses `--bare`: it skips OAuth, so a trial would
- * come back "Not logged in". */
-function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, seed) {
+ * come back "Not logged in".
+ *
+ * Every trial gets an engram port of its own (see `sandboxEnv`): `prepare` allocates it, returns it as the
+ * trial's prepared state (`{ engramPort }`, which the runner hands to `env` and `cleanup`), and `cleanup` kills
+ * whatever listens on it, because the engram server a hook starts is detached and nothing else would end it.
+ * Both arms get it, so they differ only in the layers under test. `allocatePort`, `releasePort` and `killPort`
+ * are injectable, for tests that must not touch real ports or processes. */
+function buildConfig(name, { command, model, permissionMode, allocatePort = allocateTrialPort, releasePort = releaseTrialPort, killPort = killByPort } = {}, extraArgs, seed) {
   if (!isNonEmptyString(command)) throw new Error(`${name} config: "command" is required, the absolute path of the claude binary`);
   if (!path.isAbsolute(command)) throw new Error(`${name} config: "command" must be an absolute path, got ${JSON.stringify(command)}: no PATH lookup is made`);
   if (!isNonEmptyString(model)) throw new Error(`${name} config: "model" is required and has no default`);
@@ -198,11 +212,30 @@ function buildConfig(name, { command, model, permissionMode } = {}, extraArgs, s
       if (!isNonEmptyString(effort)) throw new Error(`${name} config: the trial has no effort`);
       return ['--print', '--output-format', 'json', '--model', model, '--effort', effort, '--permission-mode', permissionMode, ...extraArgs];
     },
-    env: ({ home }) => sandboxEnv({ home }),
-    // The shared preparation first, then whatever this arm adds to its home and workspace.
+    env: ({ home, prepared }) => sandboxEnv({ home, engramPort: prepared?.engramPort }),
+    // The port first, then the shared preparation, then whatever this arm adds to its home and workspace. A
+    // step that fails gives the port back: the trial never starts, so nothing else would.
     prepare: async ({ home, workspace }) => {
-      prepareSandbox({ home, workspace });
-      if (seed) await seed({ home, workspace });
+      const engramPort = await allocatePort();
+      try {
+        assertTrialPort(engramPort);
+        prepareSandbox({ home, workspace, engramPort });
+        if (seed) await seed({ home, workspace, engramPort });
+      } catch (err) {
+        releasePort(engramPort);
+        throw err;
+      }
+      return { engramPort };
+    },
+    // After the trial, whatever the agent did: nothing may keep listening on the trial's engram port.
+    cleanup: ({ prepared }) => {
+      const port = prepared?.engramPort;
+      if (port === undefined) return undefined;
+      try {
+        return killPort(port);
+      } finally {
+        releasePort(port);
+      }
     },
   };
 }

@@ -11,6 +11,7 @@ import {
   checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
+import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
@@ -18,17 +19,13 @@ const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
 
 // Every directory a test makes lives under one root that is removed at the end.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-evals-test-'));
-// The processes a test started (`strays`, below) are killed first: one that is still running, in a test that
-// failed, holds a directory under the scratch root and would make its removal fail too. Windows lets go of a
-// directory a moment after its holder dies, hence the retries.
+// The processes a test started are recorded here and killed first: one that is still running, in a test that
+// failed, holds a directory under the scratch root and would make its removal fail too. A child is stopped
+// through its handle and a pid known only as a number by its creation time, never by a number alone (see
+// `process-tree.testkit.mjs`). Windows lets go of a directory a moment after its holder dies, hence the retries.
+const reaper = createReaper();
 after(() => {
-  for (const pid of strays) {
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-  }
+  reaper.sweep();
   for (let attempt = 0; ; attempt += 1) {
     try {
       fs.rmSync(scratch, { recursive: true, force: true });
@@ -445,6 +442,46 @@ for (const [mode, reason, message] of [
   });
 }
 
+// ---- an interrupted trial --------------------------------------------------------------------------
+
+test('an interrupt of a running trial stops the agent and its tree, cleans up as on every other way out, and records nothing', async () => {
+  const events = [];
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const { options, readReport, workRoot, runsDir } = trialEnv('hang', {
+    configExtra: { prepare: () => ({}), cleanup: () => { events.push('cleanup'); } },
+    sweep: () => { events.push('sweep'); return { killed: [] }; },
+    signal: controller.signal,
+  });
+  const pending = runTrial(options);
+  const reported = () => { try { return readReport(); } catch { return null; } };
+  assert.ok(await waitUntil(() => reported() !== null, 15000), 'the agent started');
+  const { pid, grandchildPid } = reported();
+  reaper.pids([pid, grandchildPid], { since: startedAt });
+  controller.abort();
+  assert.deepEqual(await pending, { status: 'interrupted' });
+  assert.ok(await waitUntil(() => !isAlive(pid) && !isAlive(grandchildPid), 10000), 'neither the agent nor its grandchild runs');
+  assert.deepEqual(events, ['sweep', 'cleanup'], 'the sweep by path and the config cleanup ran, in the order of every other way out');
+  assert.deepEqual(entriesOf(workRoot), [], 'the workspace and the home are gone');
+  assert.equal(fs.existsSync(runsDir), false, 'an interrupted trial is not a result, and keeps no log of one');
+});
+
+test('a trial interrupted before the agent starts starts none: nothing is made when the signal is already aborted, and what prepare made is cleaned up when it came during it', async () => {
+  const events = [];
+  const configExtra = { prepare: () => { events.push('prepare'); return {}; }, cleanup: () => { events.push('cleanup'); } };
+  const before = trialEnv('hang', { configExtra, signal: AbortSignal.abort() });
+  assert.deepEqual(await runTrial(before.options), { status: 'interrupted' });
+  assert.deepEqual(events, [], 'not even prepared');
+  assert.deepEqual(entriesOf(before.workRoot), []);
+
+  const controller = new AbortController();
+  const during = trialEnv('hang', { configExtra: { ...configExtra, prepare: () => { events.push('prepare'); controller.abort(); return {}; } }, signal: controller.signal });
+  assert.deepEqual(await runTrial(during.options), { status: 'interrupted' });
+  assert.deepEqual(events, ['prepare', 'cleanup']);
+  assert.equal(fs.existsSync(during.countFile), false, 'no agent ran');
+  assert.deepEqual(entriesOf(during.workRoot), []);
+});
+
 // ---- suites: order, results file, resume, stop ------------------------------------------------------
 
 test('planTrials orders by repeat first, so a suite stopped early still covers every cell once', () => {
@@ -504,6 +541,18 @@ test('runSuite skips every trial already in the results file', async () => {
   assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 2 });
 });
 
+test('runSuite reads what is recorded from a store and hands it each record as it is graded, so a results file of another shape can be resumed', async () => {
+  const kept = [{ task: 'a', config: 'x', effort: 'medium', repeat: 1, score: 0.5 }];
+  const store = { read: () => kept.map((record) => ({ ...record })), append: (record) => kept.push(record) };
+  const asked = [];
+  const { resultsPath, ...options } = suiteOptions({ store, runTrial: stubTrial(asked) });
+  const result = await runSuite(options);
+  assert.deepEqual(asked, ['a|x|medium|2'], 'the recorded trial is skipped');
+  assert.deepEqual(result, { status: 'complete', completed: 1, skipped: 1 });
+  assert.deepEqual(kept.map(trialKey), ['a|x|medium|1', 'a|x|medium|2']);
+  assert.equal(fs.existsSync(resultsPath), false, 'with a store there is no results file of the runner\'s own');
+});
+
 /** What the real `runTrial` does with the `readVersion` it is handed: ask for the CLI version under the
  * env its config resolves to for this trial. A test stub that needs a version calls this. */
 const versionOf = (trial) => trial.readVersion(trial.config, resolveAgent(trial.config, { effort: trial.effort, task: trial.task }).env);
@@ -548,6 +597,40 @@ test('runSuite stops at the first cap or auth stop: nothing more is run and noth
     assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2', 'a|x|medium|3']);
     assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
   }
+});
+
+test('runSuite stops at an interrupt: the trial that comes back interrupted is not recorded, and no trial starts after it', async () => {
+  const asked = [];
+  const controller = new AbortController();
+  const seen = [];
+  const options = suiteOptions({
+    repeats: 4,
+    signal: controller.signal,
+    runTrial: stubTrial(asked, (trial) => (trial.repeat === 3 ? { status: 'interrupted' } : null), (trial) => { seen.push(trial.signal === controller.signal); }),
+  });
+  const result = await runSuite(options);
+  assert.deepEqual(result, { status: 'interrupted', completed: 2 });
+  assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2', 'a|x|medium|3']);
+  assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
+  assert.ok(seen.every(Boolean), 'each trial is handed the signal, so it can be stopped');
+});
+
+test('runSuite checks the signal between trials: a trial that finished is recorded, and none starts once the signal is aborted', async () => {
+  const asked = [];
+  const controller = new AbortController();
+  const options = suiteOptions({
+    repeats: 4,
+    signal: controller.signal,
+    runTrial: stubTrial(asked, () => null, (trial) => { if (trial.repeat === 2) controller.abort(); }),
+  });
+  assert.deepEqual(await runSuite(options), { status: 'interrupted', completed: 2 });
+  assert.deepEqual(asked, ['a|x|medium|1', 'a|x|medium|2'], 'the trial that completed is a result; the next one never starts');
+  assert.deepEqual(readResults(options.resultsPath).map((record) => record.repeat), [1, 2]);
+
+  const never = [];
+  const refused = suiteOptions({ signal: AbortSignal.abort(), runTrial: stubTrial(never) });
+  assert.deepEqual(await runSuite(refused), { status: 'interrupted', completed: 0 });
+  assert.deepEqual(never, []);
 });
 
 test('running a suite twice against the fake agent spawns no agent for a recorded trial', async () => {
@@ -772,6 +855,112 @@ test('every close path sweeps the survivors exactly once, also when the pipes cl
   assert.deepEqual(kills, ['survivors']);
 });
 
+// A parent pid does not name a process on Windows: what a kill may take is proven from when the child started and
+// exited, so runProcess has to measure both and hand them over.
+test('the kill gets when the child was spawned, and the sweep also when it exited', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const seen = [];
+  const before = Date.now();
+  const pending = runProcess({
+    command: 'agent',
+    input: 'prompt',
+    timeoutMs: 40,
+    graceMs: 20,
+    spawn: () => child,
+    kill: (target, lifetime) => seen.push(['tree', target === child, lifetime]),
+    killSurvivors: (target, lifetime) => seen.push(['survivors', target === child, lifetime]),
+  });
+  await pending;
+  const after = Date.now();
+  assert.deepEqual(seen.map(([kind]) => kind), ['tree', 'survivors'], 'a timeout kills the tree, and the end sweeps once');
+  const [tree, survivors] = seen;
+  assert.ok(tree[1] && survivors[1]);
+  assert.ok(tree[2].startedAt >= before && tree[2].startedAt <= after);
+  assert.equal('exitedAt' in tree[2], false, 'it was still running when it was killed');
+  assert.equal(survivors[2].startedAt, tree[2].startedAt);
+  assert.equal('exitedAt' in survivors[2], false, 'it never exited here');
+
+  const exiting = Object.assign(new EventEmitter(), { pid: 4243, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const lifetimes = [];
+  const run = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 1000, spawn: () => exiting, kill: () => assert.fail('no tree kill'), killSurvivors: (target, lifetime) => lifetimes.push(lifetime) });
+  const exitedBefore = Date.now();
+  exiting.emit('exit', 0, null);
+  exiting.emit('close', 0, null);
+  await run;
+  assert.equal(lifetimes.length, 1);
+  assert.ok(lifetimes[0].exitedAt >= exitedBefore && lifetimes[0].exitedAt >= lifetimes[0].startedAt);
+});
+
+test('a kill that could not be done is reported on the result and never thrown out of the run', async () => {
+  const child = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+  const pending = runProcess({
+    command: 'agent', input: 'prompt', timeoutMs: 1000, spawn: () => child,
+    kill: () => assert.fail('no tree kill'),
+    killSurvivors: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); },
+  });
+  setTimeout(() => { child.emit('exit', 0, null); child.emit('close', 0, null); }, 10);
+  const run = await pending;
+  assert.equal(run.exitCode, 0);
+  assert.equal(run.sweepError, 'the process snapshot failed (exit 1): CIM is down');
+});
+
+// ---- an interrupt: the owner of the signal aborts, and the run is stopped before the process ends ----------------------------
+
+const stubChild = (pid = 4242) => Object.assign(new EventEmitter(), { pid, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+
+test('an abort kills the child\'s tree once, sweeps what it left, and resolves as aborted, not as a timeout', async () => {
+  const child = stubChild();
+  const calls = [];
+  const controller = new AbortController();
+  const pending = runProcess({
+    command: 'agent', input: 'prompt', timeoutMs: 60000, graceMs: 30, spawn: () => child, signal: controller.signal,
+    kill: () => calls.push('tree'), killSurvivors: () => calls.push('survivors'),
+  });
+  controller.abort();
+  const run = await pending;
+  assert.deepEqual(calls, ['tree', 'survivors']);
+  assert.equal(run.aborted, true);
+  assert.equal(run.timedOut, false);
+  controller.abort(new Error('again'));
+  assert.deepEqual(calls, ['tree', 'survivors'], 'nothing happens after the run ended');
+});
+
+test('an abort that comes after the child exited kills no tree, and a signal that is already aborted spawns nothing', async () => {
+  const child = stubChild();
+  const calls = [];
+  const controller = new AbortController();
+  const pending = runProcess({ command: 'agent', input: 'prompt', timeoutMs: 60000, spawn: () => child, signal: controller.signal, kill: () => calls.push('tree'), killSurvivors: () => calls.push('survivors') });
+  child.emit('exit', 0, null);
+  child.emit('close', 0, null);
+  controller.abort();
+  const run = await pending;
+  assert.deepEqual(calls, ['survivors']);
+  assert.equal(run.aborted ?? false, false, 'it finished before the abort');
+
+  const refused = await runProcess({ command: 'agent', timeoutMs: 1000, signal: AbortSignal.abort(), spawn: () => assert.fail('nothing is started for an interrupted suite') });
+  assert.equal(refused.aborted, true);
+  assert.equal(refused.spawnError, undefined);
+});
+
+test('a caller that passes a signal owns the interrupt: no forwarding is installed, and one that does not keeps the POSIX forwarding', { skip: process.platform === 'win32' ? 'the forwarding is POSIX only' : false }, async () => {
+  const count = () => process.listenerCount('SIGINT') + process.listenerCount('SIGTERM') + process.listenerCount('SIGHUP');
+  const baseline = count();
+  const owned = stubChild();
+  const controller = new AbortController();
+  const pendingOwned = runProcess({ command: 'agent', timeoutMs: 1000, graceMs: 10, spawn: () => owned, signal: controller.signal, kill: () => {}, killSurvivors: () => {} });
+  assert.equal(count(), baseline, 'a re-raised signal would end the process before the trial\'s cleanup');
+  controller.abort();
+  await pendingOwned;
+
+  const forwarded = stubChild();
+  const pendingForwarded = runProcess({ command: 'agent', timeoutMs: 1000, graceMs: 10, spawn: () => forwarded, kill: () => {}, killSurvivors: () => {} });
+  assert.equal(count(), baseline + 3, 'the forwarding other callers rely on is unchanged');
+  forwarded.emit('exit', 0, null);
+  forwarded.emit('close', 0, null);
+  await pendingForwarded;
+  assert.equal(count(), baseline);
+});
+
 // ---- third review round -----------------------------------------------------------------------------
 
 test('a grader command that cannot be spawned stops the trial without a record and cleans up', async () => {
@@ -977,7 +1166,7 @@ test('args and env resolve with the trial home and workspace; home is undefined 
 
   assert.equal(contexts.args.length, 2);
   for (const context of [...contexts.args, ...contexts.env]) {
-    assert.deepEqual(Object.keys(context).sort(), ['effort', 'home', 'task', 'workspace']);
+    assert.deepEqual(Object.keys(context).sort(), ['effort', 'home', 'prepared', 'task', 'workspace']);
     assert.equal(context.effort, 'medium');
     assert.equal(context.task.id, 'sample');
     assert.equal(typeof context.workspace, 'string');
@@ -1202,22 +1391,13 @@ test('runSuite does not share a version probe between an env without a variable 
 const WINDOWS_ONLY = process.platform === 'win32' ? false : 'killByPath sweeps on Windows only; on POSIX it is a documented no-op';
 const SWEEPER = path.join(here, 'fixtures', 'sweep-by-path.mjs');
 
-// Every process a test starts is recorded and killed when the file ends, pass or fail, so a failing test
-// cannot leave a sleeper behind.
-const strays = new Set(); // killed by the hook at the top of this file
-const killStray = (pid) => {
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    // already gone
-  }
-};
+// Every process a test starts is recorded with `reaper` and killed when the file ends, pass or fail, so a
+// failing test cannot leave a sleeper behind.
 
 /** A detached sleeper whose command line ends with `args`; returns its pid. */
 function sleeper(...args) {
-  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...args], { detached: true, stdio: 'ignore', windowsHide: true });
+  const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...args], { detached: true, stdio: 'ignore', windowsHide: true }));
   child.unref();
-  strays.add(child.pid);
   return child.pid;
 }
 
@@ -1278,6 +1458,30 @@ test('killByPath requires a boundary after the root: a sibling whose name extend
   assert.ok(siblings.every(isAlive), 'trial-10 is not trial-1');
 });
 
+test('killByPath ends a match on a delimiter only: a root inside a list or a key/value argument is matched, and anything that can continue a Windows directory name is not', { skip: WINDOWS_ONLY }, async () => {
+  const root = path.join(tmp('punct'), 'eval-trial-1');
+  const targets = [`${root};x`, `${root},x`, `${root}=x`, `${root})`, `(${root})`].map((argument) => sleeper(argument));
+  // Each of these is a legal name on Windows that merely starts with the root: killing it would be killing a bystander.
+  const siblings = ['0', '+backup', '(copy)', '[2]', '.bak', '_old', '-old', 'Z', '@x', '~1', '!', '#', '%', '&', '{x}'].map((suffix) => sleeper(`${root}${suffix}`));
+  const { killed } = killByPath([root]);
+  assert.deepEqual([...killed].sort((a, b) => a - b), [...targets].sort((a, b) => a - b));
+  assert.ok(await waitUntil(() => targets.every((pid) => !isAlive(pid))));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(siblings.every(isAlive), 'a character that can continue a name does not end the root');
+});
+
+test('the sweep script ends a root on the end of the line, a separator, a quote, whitespace or one of ; , = ) and nothing else', () => {
+  let script;
+  const sync = (command, args) => {
+    script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  killByPath([path.join(tmp('delimiters'), 'eval-d')], { platform: 'win32', spawnSync: sync });
+  assert.match(script, /\$delimiters = \[char\[\]\]@\(\[char\]92, \[char\]47, \[char\]34, \[char\]39, \[char\]59, \[char\]44, \[char\]61, \[char\]41\)/, '\\ / " \' ; , = )');
+  assert.match(script, /IsWhiteSpace\(\$next\)/);
+  assert.doesNotMatch(script, /IsLetterOrDigit/, 'a name is not defined by its own characters, a boundary by its delimiters');
+});
+
 test('killByPath given a root with a trailing separator still matches the processes that name it without one', { skip: WINDOWS_ONLY }, async () => {
   const root = path.join(tmp('trailing'), 'eval-trail-1');
   const target = sleeper(root);
@@ -1297,12 +1501,12 @@ test('killByPath kills each match with its tree: a child whose own command line 
     "require('node:fs').writeFileSync(process.argv[1], String(child.pid));",
     'setInterval(() => {}, 1000);',
   ].join('\n');
-  const parent = spawn(process.execPath, ['-e', parentCode, '--', pidFile, root], { detached: true, stdio: 'ignore', windowsHide: true });
+  const startedAt = Date.now();
+  const parent = reaper.child(spawn(process.execPath, ['-e', parentCode, '--', pidFile, root], { detached: true, stdio: 'ignore', windowsHide: true }));
   parent.unref();
-  strays.add(parent.pid);
   assert.ok(await waitUntil(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== ''), 'the parent started its child');
   const child = Number(fs.readFileSync(pidFile, 'utf8'));
-  strays.add(child);
+  reaper.pids([child], { since: startedAt });
   assert.ok(isAlive(child));
   const { killed } = killByPath([root]);
   assert.deepEqual(killed, [parent.pid], 'only the parent names the root');
@@ -1320,16 +1524,15 @@ test('killByPath succeeds when a match is already gone because an earlier match\
     "require('node:fs').writeFileSync(process.argv[2], String(child.pid));",
     'setInterval(() => {}, 1000);',
   ].join('\n');
+  const startedAt = Date.now();
   const pairs = [0, 1, 2, 3].map((index) => {
     const pidFile = path.join(tmp('gone-pid'), `child-${index}.txt`);
-    const parent = spawn(process.execPath, ['-e', parentCode, '--', root, pidFile], { detached: true, stdio: 'ignore', windowsHide: true });
+    const parent = reaper.child(spawn(process.execPath, ['-e', parentCode, '--', root, pidFile], { detached: true, stdio: 'ignore', windowsHide: true }));
     parent.unref();
-    strays.add(parent.pid);
     return { parent: parent.pid, pidFile };
   });
   assert.ok(await waitUntil(() => pairs.every(({ pidFile }) => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8') !== '')), 'every parent started its child');
-  const children = pairs.map(({ pidFile }) => Number(fs.readFileSync(pidFile, 'utf8')));
-  children.forEach((pid) => strays.add(pid));
+  const children = reaper.pids(pairs.map(({ pidFile }) => Number(fs.readFileSync(pidFile, 'utf8'))), { since: startedAt });
   const everyone = [...pairs.map(({ parent }) => parent), ...children];
   const { killed } = killByPath([root]);
   assert.deepEqual([...killed].sort((a, b) => a - b), [...everyone].sort((a, b) => a - b), 'every process that named the root is reported');
@@ -1340,12 +1543,23 @@ test('the sweep script is quiet: no progress stream, and a failure reaches the c
   let script;
   const sync = (command, args) => {
     script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
-    return { status: 1, stdout: '', stderr: 'still running after the kill: 12' };
+    return { status: 1, stdout: '', stderr: 'The CIM provider failed' };
   };
-  assert.throws(() => killByPath([path.join(tmp('quiet'), 'eval-q')], { platform: 'win32', spawnSync: sync }), /still running after the kill: 12/);
+  assert.throws(() => killByPath([path.join(tmp('quiet'), 'eval-q')], { platform: 'win32', spawnSync: sync }), /The CIM provider failed/);
   assert.match(script, /\$ProgressPreference = 'SilentlyContinue'/);
   assert.match(script, /\[Console\]::Error\.WriteLine/);
   assert.ok(!/\*> \$null|2>&1 \| Out-Null/.test(script), 'no native-command redirection that turns a stderr line into a terminating error');
+});
+
+test('the sweep script only finds: it kills nothing, and no tree', () => {
+  let script;
+  const sync = (command, args) => {
+    script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  killByPath([path.join(tmp('finds'), 'eval-f')], { platform: 'win32', spawnSync: sync });
+  assert.ok(!/taskkill|Stop-Process|\.Kill\(/.test(script), 'the kill is process-tree.mjs\'s, after a selection by pid and creation time');
+  assert.match(script, /Format-ProcessRow/);
 });
 
 test('killByPath spares the process it runs in and that process\'s ancestors, even when their command lines hold the root', { skip: WINDOWS_ONLY }, async () => {
@@ -1358,22 +1572,65 @@ test('killByPath spares the process it runs in and that process\'s ancestors, ev
   assert.ok(await waitUntil(() => !isAlive(target)));
 });
 
-test('killByPath hands the roots to PowerShell through the environment, not the command line, and reports the pids it printed', () => {
+/** What the sweep script prints for a snapshot of `rows` (`[pid, ppid, createdAt]`), `spared` pids and `matched` pids. */
+const sweepOutput = (rows, matched, spared = []) => [
+  ...rows.map(([pid, ppid, created]) => `${pid}\t${ppid}\t${created ?? ''}\tx.exe`),
+  ...spared.map((pid) => `S\t${pid}`),
+  ...matched.map((pid) => `M\t${pid}`),
+].join('\r\n') + '\r\n';
+
+/** A `spawnSync` that answers the sweep with `first`, every kill with `kill` (a string, or a function of the targets), and keeps the calls. */
+function sweepSync(first, kill = '') {
   const calls = [];
   const sync = (command, args, options) => {
     calls.push({ command, args, options });
-    return { status: 0, stdout: '4242\r\n77\r\n', stderr: '' };
+    if (calls.length === 1) return { status: 0, stdout: first, stderr: '' };
+    const targets = options.env.JS_HARNESS_KILL_TARGETS.split('\n');
+    return { status: 0, stdout: typeof kill === 'function' ? kill(targets) : kill, stderr: '' };
   };
+  sync.calls = calls;
+  return sync;
+}
+const killedAll = (targets) => targets.map((target) => `K\t${target.split('@')[0]}`).join('\r\n');
+
+test('killByPath hands the roots to PowerShell through the environment, not the command line, and kills the matches\' trees as the snapshot proves them', () => {
+  const rows = [[4242, 1, 5000], [4243, 4242, 5100], [77, 1, 6000], [88, 4242, 10], [99, 1, 5200]];
+  const sync = sweepSync(sweepOutput(rows, [4242, 77]), killedAll);
   const roots = [path.join(tmp('stub'), 'eval-St0b01'), path.join(tmp('stub'), 'eval Space')];
   const { killed } = killByPath(roots, { platform: 'win32', spawnSync: sync });
   assert.deepEqual(killed, [4242, 77]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, 'powershell');
-  assert.ok(calls[0].args.includes('-NoProfile'));
-  assert.ok(roots.every((root) => !calls[0].args.join(' ').includes(root)), 'no root is spliced into the script');
-  assert.deepEqual(calls[0].options.env.JS_HARNESS_KILL_ROOTS.split('\n'), roots);
+  assert.equal(sync.calls.length, 2, 'the sweep, then one kill');
+  const [sweep, kill] = sync.calls;
+  assert.equal(sweep.command, 'powershell');
+  assert.ok(sweep.args.includes('-NoProfile'));
+  assert.ok(roots.every((root) => !sweep.args.join(' ').includes(root)), 'no root is spliced into the script');
+  assert.deepEqual(sweep.options.env.JS_HARNESS_KILL_ROOTS.split('\n'), roots);
+  assert.deepEqual(kill.options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['4242@5000', '4243@5100', '77@6000'], 'pid 88 records pid 4242 but predates it; pid 99 matched nothing');
   assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ status: 1, stdout: '', stderr: 'boom' }) }), /sweep.*failed.*boom/);
   assert.throws(() => killByPath(roots, { platform: 'win32', spawnSync: () => ({ error: new Error('no powershell') }) }), /no powershell/);
+});
+
+test('killByPath with no match starts no kill, and spares what the script spared together with everything below it', () => {
+  const root = [path.join(tmp('spare'), 'eval-Sp4re1')];
+  const none = sweepSync(sweepOutput([[10, 1, 100]], []));
+  assert.deepEqual(killByPath(root, { platform: 'win32', spawnSync: none }), { killed: [] });
+  assert.equal(none.calls.length, 1);
+
+  // 11 is the sweeper itself (or an ancestor of it), below a match: it and what hangs below it must stay.
+  const rows = [[10, 1, 100], [11, 10, 110], [12, 11, 120], [13, 10, 130]];
+  const some = sweepSync(sweepOutput(rows, [10], [11]), killedAll);
+  killByPath(root, { platform: 'win32', spawnSync: some });
+  assert.deepEqual(some.calls[1].options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['10@100', '13@130']);
+});
+
+test('killByPath names a match it could not kill for want of a creation time, and one still running after the kill', () => {
+  const root = [path.join(tmp('unproven'), 'eval-Un9r00')];
+  const rows = [[10, 1, 100], [30, 1, null]];
+  const sync = sweepSync(sweepOutput(rows, [10, 30]), killedAll);
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sync }), /not killed.*unknown.*30/);
+  assert.deepEqual(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '10@100', 'the one that was proven is still killed');
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sweepSync(sweepOutput([[10, 1, 100]], [10]), 'R\t10\r\n') }), /still running after the kill: 10/);
+  assert.throws(() => killByPath(root, { platform: 'win32', spawnSync: sweepSync('M\t10\r\n') }), /listed none/, 'matches without a snapshot are a failed lookup');
 });
 
 test('killByPath refuses a root that could match more than one trial: empty, relative or a filesystem root', () => {
@@ -1416,6 +1673,7 @@ test('on POSIX killByPath does nothing, and says so: process groups already cove
 
 /** Reports from a trial that left a holder, and kills the holder afterwards if the test failed to. */
 async function orphanTrial(env, configExtra = {}) {
+  const startedAt = Date.now(); // the holder cannot have started before this
   const logs = [];
   const trial = trialEnv('orphan-by-path', { env, configExtra, sweep: undefined, log: (message) => logs.push(message) });
   const holder = () => {
@@ -1425,7 +1683,8 @@ async function orphanTrial(env, configExtra = {}) {
       return undefined;
     }
   };
-  return { ...trial, logs, holder, reap: () => holder() !== undefined && killStray(holder()) };
+  // The holder is a number read from the report, so it is killed only if it still runs and started in this trial.
+  return { ...trial, logs, holder, reap: () => holder() !== undefined && isAlive(holder()) && reaper.reap([holder()], { since: startedAt }) };
 }
 
 test('a descendant whose parent already exited, and whose command line names the workspace, is killed so the workspace can be removed', { skip: WINDOWS_ONLY }, async () => {
@@ -1452,6 +1711,87 @@ test('a descendant that names only the trial home is killed too, and both direct
   } finally {
     trial.reap();
   }
+});
+
+// ---- what prepare returns, and cleanup ---------------------------------------------------------------------------
+
+test('what prepare returns reaches args and env as `prepared`, and is undefined for a config without prepare', async () => {
+  const seen = { args: [], env: [] };
+  const hooks = {
+    args: (context) => (seen.args.push(context.prepared), [FAKE_AGENT]),
+    envFor: (context) => (seen.env.push(context.prepared), {}),
+  };
+  await runTrial(trialEnv('noop', { configExtra: { ...hooks, prepare: () => ({ engramPort: 42001 }) } }).options);
+  await runTrial(trialEnv('noop', { configExtra: hooks }).options);
+  assert.deepEqual(seen.args, [{ engramPort: 42001 }, undefined]);
+  assert.deepEqual(seen.env, [{ engramPort: 42001 }, undefined]);
+});
+
+for (const [label, mode, status] of [['a solved', 'solve', 'recorded'], ['a capped', 'cap', 'stopped'], ['a failed', 'exit', 'recorded'], ['a hung', 'hang', 'recorded']]) {
+  test(`cleanup runs once after ${label} trial with the prepared state, and before the directories are removed`, async () => {
+    const calls = [];
+    const task = mode === 'hang' ? { ...loadTask(SAMPLE), timeoutMs: 1500 } : loadTask(SAMPLE);
+    const { options, workRoot } = trialEnv(mode, {
+      task,
+      configExtra: {
+        prepare: (context) => (writeMarker(context), { engramPort: 42002 }),
+        cleanup: (context) => calls.push({ ...context, homeThere: fs.existsSync(context.home), workspaceThere: fs.existsSync(context.workspace) }),
+      },
+    });
+    const outcome = await runTrial(options);
+    assert.equal(outcome.status, status);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(Object.keys(calls[0]).sort(), ['home', 'homeThere', 'prepared', 'workspace', 'workspaceThere']);
+    assert.deepEqual(calls[0].prepared, { engramPort: 42002 });
+    assert.deepEqual([calls[0].homeThere, calls[0].workspaceThere], [true, true], 'the directories are still there');
+    assert.deepEqual(entriesOf(workRoot), [], 'and removed afterwards');
+  });
+}
+
+test('cleanup runs after the sweep by path, so a listener the sweep could not reach is still killed last', async () => {
+  const order = [];
+  const { options } = trialEnv('noop', {
+    sweep: () => (order.push('sweep'), { killed: [] }),
+    configExtra: { prepare: () => ({}), cleanup: () => order.push('cleanup') },
+  });
+  await runTrial(options);
+  assert.deepEqual(order, ['sweep', 'cleanup']);
+});
+
+test('cleanup does not run when prepare threw, nor for a config that has none', async () => {
+  const calls = [];
+  const cleanup = () => calls.push('cleanup');
+  await assert.rejects(runTrial(trialEnv('noop', { configExtra: { prepare: () => { throw new Error('prepare failed'); }, cleanup } }).options), /prepare failed/);
+  await runTrial(trialEnv('noop', { configExtra: { cleanup } }).options);
+  await runTrial(trialEnv('noop').options);
+  assert.deepEqual(calls, [], 'with no prepare there is nothing to clean up');
+});
+
+test('a cleanup that throws is logged, does not lose the record and does not stop the directories being removed', async () => {
+  const logs = [];
+  const { options, workRoot } = trialEnv('solve', {
+    log: (message) => logs.push(message),
+    configExtra: { prepare: writeMarker, cleanup: () => { throw new Error('port 42003 still listens'); } },
+  });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.record.score, 1);
+  assert.ok(logs.some((message) => /cleanup/.test(message) && /port 42003 still listens/.test(message)), logs.join('\n'));
+  assert.deepEqual(entriesOf(workRoot), []);
+});
+
+test('a cleanup that returns a promise is waited for before the directories go', async () => {
+  let finished = false;
+  const { options } = trialEnv('noop', {
+    configExtra: {
+      prepare: writeMarker,
+      cleanup: async ({ home }) => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        finished = fs.existsSync(home);
+      },
+    },
+  });
+  await runTrial(options);
+  assert.equal(finished, true);
 });
 
 test('runTrial sweeps the trial home and workspace, and only those, before it removes them, even when the trial throws', async () => {
@@ -1489,9 +1829,8 @@ test('a workspace that still will not delete after the sweep is logged, not thro
   const { options, workRoot } = trialEnv('noop', {
     configExtra: {
       prepare: async ({ workspace }) => {
-        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true }));
         child.unref();
-        strays.add(child.pid);
       },
     },
     sweep: () => ({ killed: [] }), // finds nothing, so the holder stays
@@ -1510,19 +1849,18 @@ test('a workspace that will not delete is swept again and its removal retried', 
     configExtra: {
       prepare: async ({ workspace }) => {
         // A process whose cwd is the workspace: on Windows the directory cannot be removed while it runs.
-        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true });
+        const child = reaper.child(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: workspace, detached: true, stdio: 'ignore', windowsHide: true }));
         child.unref();
-        strays.add(child.pid);
-        holders.push(child.pid);
+        holders.push(child);
       },
     },
     sweep: () => {
       calls.push(calls.length);
       // The first sweep finds nothing (the holder's command line names no trial directory); the second is the retry.
       if (calls.length === 2) {
-        killStray(holders[0]);
-        // A real sweep returns once `taskkill` has: wait for the holder to be gone, as that does.
-        for (const until = Date.now() + 3000; isAlive(holders[0]) && Date.now() < until;);
+        holders[0].kill('SIGKILL'); // through its handle
+        // A real sweep returns once its kill has: wait for the holder to be gone, as that does.
+        for (const until = Date.now() + 3000; isAlive(holders[0].pid) && Date.now() < until;);
       }
       return { killed: [] };
     },

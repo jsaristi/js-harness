@@ -185,6 +185,53 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   treats a missing `bin` as `null` and reports a malformed v2 item as `EFORMAT` (gentle-ai
   suggestions) (route: delegated writer): a data-model change carried through parse, validate, store,
   report, import/export and CLI, with old files still loading (route: delegated writer)
+- [x] T4a Sandbox isolation holds with the engram plugin: the current arm's engram hooks and the
+  server they spawn stay inside the trial. A per-trial `ENGRAM_PORT` (and no inherited
+  `ENGRAM_URL`) in `sandboxEnv`, the listener on that port swept with the trial's other
+  processes, and the isolation probe's fake agent extended with a memory write and a subagent
+  stop, so the proof exercises the paths the plugin added (route: delegated writer)
+- [x] T4ar T4a review findings: on POSIX a listener lookup that failed is never read as a free
+  port. `lsof` means "no listener" only on its documented no-match (exit 1, nothing on stdout
+  or stderr), and an `ss` row for the port with no owner is an inconclusive lookup (gentle-ai
+  WARNING, Codex P2 twice) (route: delegated writer, finished inline)
+- [x] T4as Findings of Codex's first full read of T4a: the Windows lookup no longer swallows a
+  real error as "no listener" (only `ObjectNotFound` is the empty case), and the probe's
+  contamination check examines the subagent's requests too (Codex P2 twice) (route: delegated
+  writer)
+- [x] T4k Tree kills cannot hit an unrelated process: on Windows a process is another's descendant
+  only by parent pid **and** creation time, each selected process is killed on its own after
+  its creation time is re-checked, and no `taskkill /T` or bare `ParentProcessId` query remains
+  in `bin/` or `evals/`. One shared module, `bin/lib/process-tree.mjs`, used by `bin/check.mjs`,
+  `bin/codex-review.mjs`, `evals/runner.mjs` and `evals/ports.mjs` (route: delegated writer)
+- [x] T4kr T4k review findings: a process still running after its kill makes `killTree` and
+  `killSurvivors` throw (Codex P2), and `runSensor` takes injectable kills so the path from a
+  throwing kill to `sweepError` is tested (gentle-ai suggestion) (route: inline, two small
+  understood edits)
+- [x] T4kt Test teardowns never signal a process by a bare number: a spawned child is stopped
+  through its handle, a pid learned as a number gets its `{ pid, createdAt }` identity when it
+  is learned and is killed with `killProcesses`, and a guard test fails any test or fixture
+  that does otherwise (Codex P1) (route: delegated writer)
+- [x] T4s The suite entry, `node evals/suite.mjs`: explicit arguments with no default permission
+  mode, the token read from `JS_HARNESS_EVAL_OAUTH_TOKEN` and passed only as
+  `CLAUDE_CODE_OAUTH_TOKEN` in a trial's env, the template removed on every path, one results
+  file per run that names the stack and refuses a resume on a changed one, `--summary` with the
+  screen's keep/drop/incomplete, and the sweep-boundary follow-up (route: delegated writer)
+- [x] T4sr T4s review findings: an interrupt stops the active trial and waits for its cleanup
+  before the process ends (Codex P1), the sweep's boundary is a set of delimiters instead of
+  "anything that is not a name character" (Codex P1), raw logs go under `evals/runs/<name>/`
+  (Codex P2), and an empty task set is a usage error (gentle-ai suggestion) (route: delegated
+  writer)
+- [x] T4srr The suite also owns SIGHUP: a terminal that closes stops the trial like an interrupt
+  (gentle-ai WARNING and Codex P1 on T4sr, the same finding) (route: inline, one file)
+- [x] T4ap The current arm's engram controls match what the plugin's hooks really write. The first
+  real-binary run (2026-10-02) held the isolation and failed `engramPrompt`: on Windows the
+  plugin's UserPromptSubmit hook runs in its safe mode and never posts the prompt, so that
+  control cannot pass there. Controls that hold on every path of the hooks replace it, and
+  what the hooks do post joins the leak needles (route: delegated writer; the probe, its test
+  and its fixtures)
+- [x] T4kg A reused pid held by a process this user cannot read is "gone", not "running": the
+  kill settles that case through CIM instead of failing the caller (found by the gate, a real
+  reuse) (route: inline, two small understood edits)
 - [ ] T4 Headroom screen: minimal at `medium`, 3 trials per candidate; keep the tasks under 0.8
   (route: inline run, results committed)
 - [ ] T5 A/B run: both configs at `medium` and `high`, 3 repeats, over the kept tasks (route:
@@ -631,6 +678,247 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   **T3 is complete**: five candidates, each proven by `node --test evals/tasks.test.mjs`
   (fixture / total: `spec-drift` 13/51, `house-rules` 11/47, `resolver` 15/45, `lost-updates`
   13/43, `format-v2` 12/47; fixture plus reference 1 on every one).
+- 2026-10-01: the stack moved under the feature. `gentle-ai upgrade` (00:25Z) took engram to
+  3.0.0 and `gentle-ai sync` (00:33Z) ran `engram setup claude-code`, which installed the Claude
+  plugin `engram@engram` 0.1.5: hooks and one skill, no MCP server
+  (`~/.claude/plugins/cache/engram/engram/0.1.5/` has `hooks/`, `scripts/`, `skills/` and no
+  `.mcp.json`). Its hooks talk HTTP to `ENGRAM_URL` or `127.0.0.1:${ENGRAM_PORT:-7437}`:
+  SessionStart posts `/sessions` and starts a detached `engram serve` when nothing answers,
+  PreToolUse runs on every `mem_*` write, SubagentStop posts `/observations/passive`. None of
+  that honours `ENGRAM_DATA_DIR`, and the allowlist drops `ENGRAM_PORT`, so a current-arm trial
+  would reach the real server on 7437 (it answers today: version 3.0.0) and could write the real
+  store. The T2c/T2s proof never exercised this: its fake agent runs only Bash and Write. T4 is
+  blocked on T4a. gentle-ai itself is now 4.0.0 (`odd/tasks/stack-v4.md`), so the current arm is
+  gentle-ai 4.0.0 + engram 3.0.0 + plugin 0.1.5; the versions are fixed before T4 and must not
+  change between T4 and T5, and the report names them.
+- 2026-10-02: T4a implemented (delegated writer, resumed after a session restart with its work
+  intact; RED observed per module, GREEN: the five evals test files 349 pass, 0 fail, 1 skipped,
+  the EPERM file-symlink test that was skipped before; `npm run test` 1242 pass, 0 fail, 8
+  skipped; parent spot check re-ran the five files with the same result). What it does:
+  - **A port per trial.** `evals/ports.mjs` `allocatePort()` binds port 0 and releases it, never
+    returns 7437 or a port under 1024, and keeps overlapping trials apart with a reserved set.
+    Each config allocates it in `prepare` and returns `{ engramPort }`; `sandboxEnv`,
+    `prepareSandbox`, `seedHome` and `initWorkspace` throw without one, so nothing can fall back
+    to 7437. Both arms carry `ENGRAM_PORT`; `ENGRAM_URL` and `ENGRAM_SOCKET` are outside the
+    allowlist. `seedHome` writes `ENGRAM_PORT` next to `ENGRAM_DATA_DIR` in the sandbox
+    `.claude.json` engram entry and drops a URL or socket it carried.
+  - **The listener dies with the trial.** A config may have a `cleanup`, which `runTrial` calls
+    once on every path after `prepare` (success, failure, timeout, cap), after the sweep by path
+    and before the directories go. It runs `killByPort`: on Windows `Get-NetTCPConnection` plus
+    `Get-Process` (`netstat` prints its state column in the OS language), then `taskkill /T /F`;
+    on POSIX `lsof`, `ps`, `ss` as a fallback, `SIGKILL`. `assertTrialPort` refuses 7437 before
+    anything runs, and a listener not named `engram` is left alone and reported.
+  - **The probe drives the plugin's paths.** The fake API now scripts a `mem_save` and a
+    subagent besides Bash and Write, and the prompt carries a nonce. For the current arm two
+    positive controls must hold (the sandbox store has the prompt and the memory), the agent's
+    tools must see the trial's `ENGRAM_PORT` and no URL or socket, and after cleanup nothing may
+    accept a connection on the trial port and no engram process may exist that was not there
+    before (a failed listing is inconclusive, never a pass). The real `~/.engram` is
+    content-hashed and scanned for the nonce, as the real home already was.
+  **Not yet proven:** the probe with the real `claude` binary has not run, so T4a stays open.
+  Unknown until it does: whether the engram MCP tool is offered to the model without a
+  ToolSearch step, whether SessionStart starts a server on the trial port and the prompt hook
+  reaches it, and whether the trial's `engram mcp` exits with Claude. Observed on this machine:
+  the only `engram.exe` processes are two `mcp --tools=agent`, no `serve`, so what answers on
+  7437 may be an MCP process. The run is zero spend (a loopback fake API), but if the fix were
+  wrong it would be the trial that writes the real store, which is an Ask-me-before: it waits
+  for Sebastián. Command:
+  `node evals/isolation-probe.mjs --claude <path to claude.exe> --arm both --control-ms 60000`.
+  The change is about 1,370 lines against the ~400 heuristic (half of it tests): one behavior
+  across four modules that each had to refuse a missing port, not split because a half-wired
+  port is the unsafe state.
+- 2026-10-02: `d0bc904..514dd43` (T4a) reviewed. gentle-ai: medium, lineage
+  `review-5b4f5f6e02658d8d`, lens reliability, approved and acknowledged, authority burned; one
+  WARNING and one suggestion. Codex: two P2, but **no record**: its successful commands showed
+  497 of the 1,314 changed lines, and `codex-review` records only on evidence that the whole diff
+  was read. It said its coverage was limited because "delegation tools were unavailable"; to
+  re-run after T4ar. All findings are one defect: on POSIX, `findListeners` returned an empty
+  list when `lsof` failed with only stderr output, or when `ss` listed the socket without its
+  owner, so `killByPort` reported a clean port without checking. Not reachable on this Windows
+  host, but it broke the module's own rule that an empty list means free, never "could not ask".
+- 2026-10-02: T4ar done. The writer was cut off by a second session restart with the fix on disk
+  and uncommitted; the parent verified it rather than redo it. RED, observed by stashing the
+  code change and running the new tests against the old code: `node --test evals/ports.test.mjs`
+  21 pass, 3 fail (the three new tests). GREEN with the change:
+  `node --test evals/ports.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 207/207. The
+  POSIX paths are tested against fixtures only; nothing here ran on Linux or macOS.
+- 2026-10-02: `514dd43..58492e4` (T4ar) reviewed by gentle-ai: lineage `review-9aa775fe0120483f`,
+  lens reliability, approved and acknowledged, authority burned; one suggestion (a host whose
+  `lsof` warns on every run can never confirm a free port; it fails closed, so a follow-up).
+  Codex re-ran over `d0bc904..58492e4`, read the whole diff this time and is recorded. Two new
+  P2, both on T4a's code and both about the property the task exists for, so they became T4as
+  instead of follow-ups: on Windows, the host these evals run on,
+  `Get-NetTCPConnection -ErrorAction SilentlyContinue` hid real errors and the lookup answered
+  "free"; and the probe dropped a subagent's requests from the contamination check, so a
+  minimal-arm run with a contaminated subagent would have passed.
+- 2026-10-02: T4as done (delegated writer; RED: the CIM-failure case did not throw, and the
+  subagent request was not examined; GREEN: `node --test evals/ports.test.mjs
+  evals/isolation-probe.test.mjs evals/configs.test.mjs evals/runner.test.mjs` 321/321). On this
+  host, with real PowerShell: a free port from `allocatePort()` gives `[]` and a real listener
+  is found.
+- 2026-10-02: **the harness was killing unrelated processes on this machine** (T4k). The Claude
+  desktop app closed three times in one evening (2026-10-01 23:31, 2026-10-02 00:36 and 01:14,
+  local time) while these tests and the pre-commit gate ran. Its `main.log` at 01:13:59 says
+  `Network Service process gone (reason=killed, exitCode=1) outside app quit` and its shell PTY
+  exited with code 1, the code `taskkill /F` leaves; Windows logged no application error for
+  it. Cause: `killSurvivors` (`evals/runner.mjs` and its twin in `bin/check.mjs`) ran
+  `Get-CimInstance Win32_Process -Filter 'ParentProcessId=<pid>'` and killed each match with
+  `taskkill /T /F`, and `killTree`, the sweep by path, `killByPort` and `bin/codex-review.mjs`
+  used `taskkill /T`. Windows keeps a dead parent's pid in its children and reuses pids quickly,
+  so when a short-lived test child receives the pid some long-lived process records as its
+  long-dead parent, that process and its tree die (`explorer.exe` always has a dead parent).
+  The defect is on `main` too: slice 1 of this feature and F4's `bin/check.mjs`, which is the
+  pre-commit gate of every project that installs the harness.
+- 2026-10-02: T4k done (delegated writer; trigger: 2+ non-trivial files). Design: a pid is not an
+  identity on Windows, a pid with its creation time is. `selectDescendants` is pure: under a
+  live root a child needs `createdAt >= root.createdAt`; under an exited root it needs
+  `startedAt - 100 ms <= createdAt <= exitedAt + 100 ms` (Node's clock against the kernel's);
+  below the first generation, `createdAt >= parent.createdAt`; unknown creation time or a pid
+  of 4 or less is never selected. The selection runs in Node from one `Get-CimInstance`
+  snapshot; the kill script receives `pid@createdMs` pairs, opens each process, compares its
+  start time and kills that handle only. A failed snapshot throws where the caller relies on
+  the kill. RED: the regression cases (an old process whose parent pid equals the root's) were
+  selected by a bare parent-pid match. GREEN: `node --test bin/lib/process-tree.test.mjs` 33/33
+  (re-run by the parent), `bin/check.test.mjs evals/runner.test.mjs evals/ports.test.mjs`
+  220/220, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip, `bin/codex-review.test.mjs` with the module 107/107; `rg -n taskkill bin evals`
+  finds only comments and assertions. Not verified: a real pid collision (the tests use a
+  synthetic snapshot), the POSIX paths (unchanged, not run on this host), other Windows
+  versions. Closes the follow-up that `killSurvivors` lived twice. Commit `298d739`.
+- 2026-10-02: `58492e4..298d739` (T4as and T4k) reviewed by gentle-ai: lineage
+  `review-f4236dab534e95b7`, medium risk, one lens (reliability), approved and acknowledged,
+  one suggestion (nothing tested that a kill throwing inside `runSensor`'s timers lands on
+  `sweepError`). Codex on the same range: one P2 (`killProcesses` returns the processes still
+  running, and `killTree` and `killSurvivors` dropped that list, so a survivor reached neither
+  `sweepError` nor `killFailure`), and no record, because its commands showed 993 of the 1,062
+  changed lines. Both findings became T4kr.
+- 2026-10-02: T4kr done inline. RED: `killTree` and `killSurvivors` returned on an `R` outcome
+  ("Missing expected exception"), and `runSensor` had no way to take a kill, so `sweepError` was
+  `undefined`. GREEN: `node --test bin/lib/process-tree.test.mjs bin/check.test.mjs
+  evals/runner.test.mjs evals/ports.test.mjs bin/codex-review.test.mjs` 329/329. `killByPort`
+  still ignores the kill's report on purpose: the port lookup after it decides. Commit
+  `ca08a0c`; gentle-ai assessed `298d739..ca08a0c` as medium, not due (`under_budget`).
+- 2026-10-02: Codex on `58492e4..ca08a0c`: one P1 and again no record (1,029 of 1,106 changed
+  lines shown). The P1 is T4k's own defect in the tests: `bin/lib/process-tree.test.mjs` kept a
+  set of pids, some already killed by the tests, and its `after` hook signalled each by number;
+  `evals/runner.test.mjs` (since slice 1) and `evals/isolation-probe.test.mjs` did the same.
+- 2026-10-02: T4kt done (delegated writer; trigger: 2+ non-trivial files). New
+  `identifyProcesses` in the module and `bin/lib/process-tree.testkit.mjs` (`createReaper`:
+  `child`, `pids`, `reap`, `sweep`); a pid learned as a number is identified when learned, and
+  only if it started after the test began (`since`). RED: the helper's and the reaper's unit
+  tests against a stub, and the guard against the unfixed sites. GREEN:
+  `bin/lib/process-tree.test.mjs` 44/44 (re-run by the parent), `evals/runner.test.mjs
+  evals/ports.test.mjs` 153/153, `evals/isolation-probe.test.mjs` 111/111, `bin/check.test.mjs
+  bin/codex-review.test.mjs` 142/142; `rg -n "process\.kill\(" -g "*.test.mjs" bin evals` shows
+  only `process.kill(pid, 0)` probes. POSIX still signals a learned pid by number (the module
+  reads no creation time there); not exercised on this host. Commit `0f96ffd`.
+- 2026-10-02: `298d739..0f96ffd` (T4kr, T4kt) reviewed by gentle-ai: lineage
+  `review-306ad3f6c220ebdb`, medium risk, one lens (reliability), approved and acknowledged,
+  three suggestions. (1) No caller is shown to handle `killTree` now throwing or to have used
+  its old return value: checked, `rg -n "= (await )?(killTree|killSurvivors)\(" bin evals`
+  finds no reader, and `killByPort` calls `killProcesses`, not `killTree`. (2) `reapHolder` in
+  `evals/isolation-probe.test.mjs` takes the holder's identity at teardown instead of when the
+  pid is written: a follow-up. (3) The `runSensor` test's scripted kill could be replaced by
+  the real kill's own throw: fixed, the real kill is wrapped.
+- 2026-10-02: Codex could not read `58492e4..HEAD` whole (four runs showed 993 of 1,062, 1,029
+  of 1,106, 496 of 1,355 and 791 of 1,062 changed lines; none recorded), so the range was
+  reviewed as three, the older two from a detached worktree at that commit (records live in the
+  shared git directory): `58492e4..7ddc047` no findings; `7ddc047..298d739` the P1 and P2
+  already fixed by T4kt and T4kr; `298d739..0f96ffd` no findings. All three recorded.
+- 2026-10-02: T4s done (delegated writer, cut by a session restart with the work on disk and
+  stashed while T4k went first; reconciled by the parent: one conflict in `evals/runner.mjs`,
+  between the new boundary comment and T4k's sweep script). `evals/suite.mjs` exports
+  `suiteMain(argv, env, deps)`. Results: `evals/results/<name>.json`, `{ format: 1, name,
+  createdAt, permissionMode, model, stack, args, trials }`, written through a `.tmp` file;
+  `runSuite` takes a `store` (`{ read, append }`) so the suite keeps its own file shape and
+  resume still skips recorded trials. The sweep by path now ends a match on any character that
+  cannot continue a name, so `trial-1;` matches and `trial-10` does not. GREEN after the
+  reconcile: `node --test evals/runner.test.mjs evals/suite.test.mjs
+  bin/lib/process-tree.test.mjs` 207/207 (38 of them the suite's). Not verified: a run with the
+  real binary, which is T4 itself. Commit `267dc13`.
+- 2026-10-02: `0f96ffd..267dc13` reviewed by gentle-ai: lineage `review-c31fc7a3d66fd048`, medium
+  risk, one lens (reliability), approved and acknowledged, one suggestion (`--tasks all` over
+  an empty tasks directory exits 0 with nothing run). Codex on the same range, recorded: two P1
+  and a P2. The suite's interrupt handler exited before `runTrial`'s cleanup, leaving a
+  detached agent running and spending; the new sweep boundary matched `trial-1+backup` when
+  sweeping `trial-1` (on Windows `+`, `(`, `[` continue a name), so it could kill an unrelated
+  process; and two runs with different names shared one raw-log directory, so T5 would have
+  overwritten T4's logs. All four became T4sr.
+- 2026-10-02: T4sr done (delegated writer; trigger: 2+ non-trivial files). The suite owns an
+  `AbortController` passed through `runSuite` and `runTrial` to `runProcess` and the grader: the
+  first signal aborts, the trial ends as `{ status: 'interrupted' }` through its own `finally`
+  and records nothing, then the template is removed and the process exits `128 + n`; a second
+  signal exits at once. A caller that passes a signal to `runProcess` gets no POSIX forwarding
+  (it would end the process before the cleanup). The sweep ends a match at the end of the line,
+  a separator, a quote, whitespace or one of `;`, `,`, `=`, `)`: a wrong kill is worse than a
+  missed survivor. RED observed per change. GREEN: `evals/suite.test.mjs` 43/43 (re-run by the
+  parent), `evals/runner.test.mjs` 132 pass and 1 skip (POSIX-only), `bin/lib/process-tree.test.mjs`
+  44/44, `evals/isolation-probe.test.mjs evals/configs.test.mjs evals/home.test.mjs` 213 pass
+  and 1 skip. Not verified: POSIX, and a real SIGINT to a real `suite.mjs` process (the signal
+  is injected through the `process` seam). Commit `24774db`.
+- 2026-10-02: `267dc13..24774db` (T4sr) reviewed by gentle-ai (lineage `review-061383905cd4dbe2`,
+  medium, reliability lens, approved and acknowledged) and Codex (recorded). Both found the
+  same defect: with the suite's abort signal `runProcess` forwards nothing, and the suite
+  listened to SIGINT and SIGTERM only, so a SIGHUP (the terminal closing) ended the suite and
+  left the detached agent running. gentle-ai also noted that an interrupt during grading
+  leaves the agent's raw logs, against `runTrial`'s comment, with no test on that path.
+- 2026-10-02: T4srr done inline. RED: the SIGHUP case exited with nothing (`[]` instead of
+  `[129]`). GREEN: `node --test evals/suite.test.mjs` 43/43. `runTrial`'s comment now says the
+  logs of an agent that had ended stay when its grader is interrupted, as they do for a cap or
+  an auth stop; the missing test of that path is a follow-up.
+- 2026-10-02: Sebastián gave the go-ahead for the real-binary probe. First run, `node
+  evals/isolation-probe.mjs --claude C:\Users\Oficina\.local\bin\claude.exe --arm both
+  --control-ms 60000`: exit 1. The isolation held in both arms (leak scan of the real trees and
+  of the real engram store: nothing; no real tree changed outside the control window; nothing
+  left on the trial's engram port), and one positive control failed, `engramPrompt`. Cause, read
+  from the plugin (`~/.claude/plugins/cache/engram/engram/0.1.5/scripts/user-prompt-submit.sh:464-489`):
+  under Git Bash on Windows the UserPromptSubmit hook takes a builtin-only safe path that writes
+  its state file and exits without `POST /prompts`. The prompt is never stored on this machine,
+  in a trial or in real use, so the control could not pass. A second run with `--keep-sandbox`
+  confirmed it: the state file was in the sandbox's temp directory, the trial's own
+  `serve.err.log` named the trial's port, and the session id was in the trial's store.
+- 2026-10-02: T4ap done by a delegated writer (Sonnet). `engramPrompt` is no longer a control;
+  three replace it for the current arm: `engramHook` (the hook's
+  `engram-claude-<session id>-tools-loaded` state file in the sandbox's temp directory, written
+  on both of the hook's paths), `engramServer` (the server log in the trial's data directory
+  names the trial's port) and `engramSession` (the session id is in the trial's store; only
+  `session-start.sh` posts `/sessions`, though a content scan cannot tell its row from the MCP
+  write that names the same session). Whether the prompt was stored is reported as information,
+  like the subagent stop. The trial's session id (from the agent's result, else its transcript's
+  name) is a new needle for the real engram store and the real trees, added after the agent ran
+  and never printed before the scans. RED: 11 failing tests on the controls, 2 on the needles
+  (a session row planted in the fake real store went unseen). GREEN: `node --test
+  evals/isolation-probe.test.mjs` 122/122, `bin/lib/process-tree.test.mjs` 44/44, runner, suite,
+  home and configs 277 pass, 2 skipped.
+- 2026-10-02: T4a's proof, run by the parent after T4ap: the same command, both arms, 60 s
+  control window: **exit 0, PASS**. Current: `transcript ok, workspaceNonce ok, workspaceWrite
+  ok, engramDb ok, engramHook ok, engramServer ok, engramSession ok, engramMemSave ok`; the real
+  global CLAUDE.md reached 7 of 7 requests; real engram store (8 files, 57 MB) scanned for the
+  nonce, the sandbox name and the session id: nothing; leak scan of the real trees: nothing; no
+  real tree changed outside the control window. Minimal: the three applicable controls ok, the
+  real CLAUDE.md reached none of 6 requests, nothing found, nothing changed. Information only:
+  on this machine the engram hooks store neither the prompt nor the subagent stop. The probe ran
+  as `claude-opus-5-5`, effort medium, permission mode `bypassPermissions`. No spend (loopback
+  fake API). The sandbox kept for the diagnosis and the work root were removed.
+- 2026-10-02: T4ap committed as `e54ff9f`. `24774db..e54ff9f` (T4srr, the docs commit and T4ap,
+  437 lines) reviewed by gentle-ai (lineage `review-286adcc0baffe81a`, medium, reliability lens,
+  approved and acknowledged) with two suggestions, both about untested fallbacks, now
+  Follow-ups. `f99f859..e54ff9f` reviewed by Codex (recorded): no actionable finding, a static
+  read.
+- 2026-10-02: the gate of the docs commit that recorded those reviews went red once:
+  `evals/runner.test.mjs`'s teardown threw `still running after the kill: pid 7980`. Pid 7980
+  was by then a `SearchFilterHost.exe` of SYSTEM created at 13:59:19, during the gate: a real
+  pid reuse. The identity check did its job, the unrelated process was not killed. The defect
+  was the report: `KILL_SCRIPT` read the start time through a handle, which PowerShell returns
+  as null for another user's process, the comparison threw, and the outcome stayed `R`
+  (running), so `killTree`, `killSurvivors` and the test reaper threw on a process that was
+  never theirs. T4kg, inline: when the handle cannot be read, CIM (which reads any process's
+  creation date) decides: no row or a different creation time is `G`, the same one or none
+  stays `R`, and no kill is tried either way. RED: `killProcesses` on a `spoolsv.exe`-class
+  process with a creation time an hour off answered `running: [1092]`. GREEN: `node --test
+  bin/lib/process-tree.test.mjs` 45/45. The same defect is in no other branch: `main` and
+  `feat/stack-v4` do not have T4k at all. Commit `09d7a90`; gentle-ai assessed it medium,
+  under budget; Codex reviewed `e54ff9f..09d7a90` (recorded): no actionable finding.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
@@ -645,7 +933,8 @@ the docs):
 | Updater | `~/.local/bin/claude.exe`, `~/.local/share/claude`, `~/.local/state/claude` | `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1` (`autoUpdates:false` in `.claude.json` is ignored for a native install) |
 | MCP logs | `%LOCALAPPDATA%\claude-cli-nodejs\Cache\` | `LOCALAPPDATA` only, not `CLAUDE_CONFIG_DIR` |
 | Scratch | `%TEMP%\claude\` | `TEMP`/`TMP` |
-| engram (MCP server only; no hook writes it) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram MCP server (stdio) | `~/.engram/engram.db` | `ENGRAM_DATA_DIR` |
+| engram plugin hooks (since 2026-10-01: SessionStart, PreToolUse on `mem_*` writes, SubagentStop, SessionEnd) and the `engram serve` they start | the HTTP server on `127.0.0.1:7437`, which writes its own store | `ENGRAM_PORT` (or `ENGRAM_URL`); not `ENGRAM_DATA_DIR` (T4a) |
 | gentle-ai | `~/.gentle-ai/` (`state.json`, `telemetry.json`, `review-stop-hook/`); per repo `.git/gentle-ai/` | `USERPROFILE`/`HOME` (no dedicated variable; `USERPROFILE=Z:\nope` made it fail on `mkdir Z:\nope`) |
 | codegraph | `~/.codegraph/` (telemetry, queue, update check, daemons); workspace `.codegraph/` | `USERPROFILE` (proven the same way) |
 | js-harness doctor cache | `~/.js-harness/doctor.json` | `JS_HARNESS_HOME` |
@@ -687,8 +976,8 @@ the docs):
   token; pending.
 - **Permission mode is explicit and equal on both arms**, a required argument of the config
   builders with no default: the minimal arm reads no settings, and a headless agent with no
-  permission mode cannot edit or run tests. The real settings use `bypassPermissions`; which mode
-  the eval passes is Sebastián's decision, pending.
+  permission mode cannot edit or run tests. The real settings use `bypassPermissions`, and that
+  is the mode the eval passes (Sebastián, 2026-10-02).
 - **The gentle-ai Stop hook stays in the current arm**, because the run measures what is
   installed. Open: it may spawn reviewer `claude` runs whose tokens the trial's own JSON result
   does not count; T5 must account for them or say so.
@@ -759,16 +1048,30 @@ Decided 2026-10-01, before the first candidate was written:
 - gentle-ai's Stop hook always proposes the branch point as the review base, so after every
   commit it offers the accumulated branch as a fresh candidate even when slice reviews cover every
   commit in it. Worth raising with gentle-ai if it keeps costing a decline per stretch.
-- The sweep's boundary (end, separator, quote, whitespace after the root) misses a process that
-  names the root inside a list or key/value argument (`;`, `,`, `=`, `)` after it) (gentle-ai
-  WARNING on T2s). Trial directory names end in a random `[A-Za-z0-9]` suffix, so the sharper
-  rule is "the next character is not a name character `[A-Za-z0-9._-]`": it spares `trial-10`
-  and still matches `trial-1;`. Fix with T4's suite entry.
 - Untested (gentle-ai suggestions on T2s): the probe's `finally` sweep for an arm that throws
   before its early sweep (a throwing `seed` would reach it), and `leakHits` with a previous
   snapshot and an inherited directory-name hit.
-- `killSurvivors` now lives twice (`bin/check.mjs` and `evals/runner.mjs`); export it from one
-  place when either changes.
+- No test interrupts a trial while its grader runs (`gradeWorkspace` returning `aborted`), so the
+  cleanup and the no-record rule on that path are unproven (gentle-ai suggestion on T4sr).
+- The probe's `engramServer` control reads engram's `listening on <host>:<port>` log line, seen
+  only for engram 0.1.5; another format fails the control with its hint, it does not pass
+  silently. The engram controls are unverified on POSIX (T4ap).
+- A flake in the gate, seen once (2026-10-02, a docs-only commit): `evals/task-proof.test.mjs:304`
+  ("a visible suite that rewrites or deletes a source file...") reported `task quote: the
+  visible suite fails on the untouched fixture (1 of 2 pass)` after 21 s, under the full
+  parallel run. It passed on the gate runs before and after. Not diagnosed.
+- Untested in the probe (gentle-ai suggestions on T4ap): with an unknown session id `engramHook`
+  accepts any `engram-claude-*-tools-loaded` file in the sandbox's temp directory (the arm still
+  fails then, on `engramSession`), and `engramServer`'s second log location,
+  `engram-serve.err.log` in the temp directory, is never written by the fake agent.
+- `reapHolder` (`evals/isolation-probe.test.mjs`) identifies the holder at teardown, not when its
+  pid file appears; the `since` filter bounds the risk to a process started during that test
+  (gentle-ai suggestion on T4kt).
+- `js-harness codex-review` records nothing when Codex does not show every changed line, and
+  Codex did not get through a range of about 1,000 lines in four runs. Splitting by commit
+  worked; the command could take `--head <rev>` so a split needs no worktree.
+- The unsafe tree kill T4k removes is still on `main` (`bin/check.mjs`, `evals/runner.mjs`) and
+  on `feat/stack-v4` until this branch merges; how to deliver it sooner is Sebastián's call.
 
 ## T1 decisions (carried into T2–T6)
 - Agent config: `{ name, command, args, env, versionArgs? }`; `args` and `env` may be functions
@@ -799,13 +1102,31 @@ Decided 2026-10-01, before the first candidate was written:
 ## Next step
 Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is complete on
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
-Next: T4, the headroom screen. Before it, two of Sebastián's decisions, asked one at a time:
-1. His `claude setup-token`. Decided by the parent: the token goes in a user environment variable
-   of its own, `JS_HARNESS_EVAL_OAUTH_TOKEN`, never in chat or a file in the repo; T4's suite entry
-   maps it to `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
+Since then, all on `feat/evals` and not pushed: T4a (done: the isolation probe passes with the
+real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
+The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
+**Do not commit on `main` or `feat/stack-v4` from this machine until T4k is there**: their
+pre-commit gate still kills by parent pid (see Progress, 2026-10-02) and can close unrelated
+programs. That is also why one line owed to `odd/tasks/stack-v4.md` is not written yet: the 11
+`~/.claude/commands/gentle-sdd-*.md` files were moved to
+`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers. How T4k reaches
+`main` (a small hotfix PR, or with this branch's PR) is Sebastián's call.
+Next: T4, the headroom screen. Before
+T4, two of Sebastián's decisions, asked one at a time:
+1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
+   `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
+   prefix, no whitespace), never in chat or a file in the repo; the suite entry maps it to
+   `CLAUDE_CODE_OAUTH_TOKEN` inside each trial's env only, because a global
    `CLAUDE_CODE_OAUTH_TOKEN` would also log his daily sessions in with a token that has no
-   claude.ai connectors.
-2. The permission mode both arms pass (`permissionMode` has no default).
-Then T4: the suite entry (`defaultWorkRoot` + `assertWorkRoot`, `removeTemplate` on every path,
-the sweep-boundary follow-up, the token mapping), then minimal at `medium`, 3 trials per candidate.
-Reviewed boundary: `d0bc904`.
+   claude.ai connectors (there is none: checked). A process started before the variable was
+   stored does not have it: the suite must run from a shell that does, or with the variable
+   passed for that one command.
+2. The permission mode both arms pass (`permissionMode` has no default): **`bypassPermissions`**
+   (Sebastián, 2026-10-02: "as I have it"). It is what his real settings use and the mode the
+   isolation probe ran under; `acceptEdits` would leave a headless agent unable to run the tests.
+Then T4, minimal at `medium`, 3 trials per candidate, with the suite entry (T4s): `node
+evals/suite.mjs --claude <binary> --configs minimal --efforts medium --repeats 3 --tasks all
+--permission-mode <mode> --name headroom`, then `--summary --name headroom`. Raw logs land in
+`evals/runs/headroom/`.
+Reviewed boundary: gentle-ai `e54ff9f` (`09d7a90`, T4kg, 62 lines, is under budget and pending
+in the slice); Codex `09d7a90`.
