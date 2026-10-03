@@ -226,6 +226,14 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   and the payload rows still list the four plugin hooks. The Machine changes table gained the
   row it was owed (`odd/tasks/evals.md`, Next step): the eleven `gentle-sdd-*` commands, counted
   in the backup folder (11) and in `~/.claude/commands` (0).
+- 2026-10-03: on `7fa428b`, `node bin/js-harness.mjs contract run odd/tasks/stack-v4.md` prints
+  `met` (three commands PASS, 9m41s, nothing else running), and the three by-hand lines were
+  observed: `doctor` shows gentle-ai 4.0.0 `ok` in every column, `progress` shows the F2 step
+  checked, `~/.codex/config.toml` reads `gpt-6.1-sol`/`high`. `check --push --remote origin
+  --head HEAD`: five code commits since `origin/main`, all covered by a Codex review record.
+  gentle-ai assessed `5438dc1..7fa428b` passive, review not due. An earlier `contract run`,
+  started while a second full `check` was still running, printed `not met`; its output was
+  not kept, so which command failed is unknown (see Follow-ups).
 
 ## Follow-ups
 - A separator inside a quoted message (`echo "done; gentle-ai sdd-x"`) is still read as a call
@@ -240,6 +248,13 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   times the size of 3.7's. Filing either is Sebastián's call (Ask me before).
 - The pre-commit gate takes about four and a half minutes on this branch; worth a look at which
   tests carry it.
+- Two full gates at once are not safe on this host (2026-10-03): a `contract run` overlapping a
+  second `check` printed `not met`, and one of the two left
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in the repository root at 12:23:46 local,
+  which looks like PowerShell's module cache written with an empty `LOCALAPPDATA` (inferred from
+  the path, not tested). Neither happened in three runs alone (one `npm run check`, one
+  pre-commit, one `contract run`). Not reproduced; the stray directory was removed. Worth
+  finding which child starts PowerShell without `LOCALAPPDATA`.
 
 ## Next step
 The feature is complete on `feat/stack-v4` and carries `main` since `5438dc1`; not pushed. The
