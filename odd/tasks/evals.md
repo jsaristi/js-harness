@@ -1218,9 +1218,14 @@ score at 2.7× the input tokens and 1.55× the time. The direction for T4h is Se
 with that data in hand.
 Reviewed boundary: gentle-ai `d470eaa`; Codex `09d7a90` (the commits after it hold no code:
 docs and the results files).
-Also asked on 2026-10-02 and unanswered: whether to fix three points an audit of `AGENTS.md`
-found (it is otherwise coherent, accurate, not duplicated, and no `CLAUDE.md` in the repo
-conflicts with it): the rule that every decision is committed in the session contradicts the
-global "never commit unless asked" without naming the exception; "the handoff is the roadmap
-and the feature document, nothing else" against resuming from the `/compact` summary; and line
-73, 141 characters, never re-wrapped.
+`AGENTS.md` was audited on 2026-10-02 (coherent, its 14 concrete claims true, nothing
+duplicated, no `CLAUDE.md` in the repo) and, on Sebastián's go-ahead, revised on this branch:
+decision records are committed on the feature branch as part of the work (the global file's
+"never commit unless asked" had been contradicted silently); a `/compact` resume is checked
+against the feature document, which stays the handoff; "a session holds one task" became "one
+feature", which is what the cut rules already meant; a candidate is a commit or a slice, never
+the branch the Stop hook offers (with consent pre-granted nothing would stop a review that
+size); a step he reports doing outside the session is checked first, since he often taps the
+suggested prompt from his phone (twice that day for a token that was not stored); and line 73
+re-wrapped. It now measures about 1,455 of its 1,500 tokens. The roadmap's stale stack line
+(engram v2) is already fixed on `feat/stack-v4`, so it is left alone here.
