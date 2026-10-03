@@ -312,6 +312,19 @@ test('loadRuns refuses an empty directory and one that does not exist: a report 
   assert.match(refusal(() => loadRuns({ dir: path.join(scratch, 'nowhere') })), /nowhere/);
 });
 
+test('runs that recorded no trial are refused, so neither gate can pass on nothing', async () => {
+  // A run stopped by a usage cap before its first trial writes a document with no trials.
+  const dir = resultsDir({ empty: docOf('empty', []) });
+  assert.match(refusal(() => buildReport(loadRuns({ dir }))), /no trial/);
+  const stdout = [];
+  const stderr = [];
+  const code = await reportMain(['--require-complete', '--min-discriminating', '3', '--results-dir', dir], {}, {
+    stdout: { write: (text) => stdout.push(text) }, stderr: { write: (text) => stderr.push(text) },
+  });
+  assert.equal(code, 1);
+  assert.match(stderr.join(''), /no trial/);
+});
+
 test('a file that is not a results document of format 1 is an error that names it', () => {
   const cases = {
     'old.json': docOf('old', [], { format: 2 }),

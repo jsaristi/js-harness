@@ -1033,6 +1033,12 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   no score verdict anywhere (every score pair equal under the rule). `format-v2` at `high` is
   the exception: the current config was cheaper on average there, inside the spread. The
   predecessor's pure score rule fires once (`spec-drift` at `medium`, 0.99 against 1.00).
+- 2026-10-02: `fe0d423..1c2691c` (the report, 1,105 lines) reviewed by gentle-ai (lineage
+  `review-61b1835f73b24115`, medium, reliability lens, approved and acknowledged). One WARNING,
+  right: runs that recorded no trial (a run a usage cap stopped before its first trial) passed
+  both gates, since there was no effort to check. Fixed inline: `buildReport` refuses them. RED:
+  the new test got no `ReportError`. GREEN: `node --test evals/report.test.mjs` 40/40; the real
+  report still exits 0.
 - 2026-10-02: `d8ad2ae..d470eaa` reviewed by gentle-ai (lineage `review-351ab09341db3998`,
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.

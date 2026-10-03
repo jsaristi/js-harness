@@ -260,10 +260,13 @@ export function checkRuns(runs) {
  * see `compareCells`) and `counts` (`tasks`, one count per verdict, and `discriminating`, the tasks whose verdict
  * is `score` or `cost`). Tasks, configs and efforts come from the trials alone, never from a run's `args`: a run
  * continued in two invocations keeps only the last one's. Throws a `ReportError` for runs that cannot be read
- * together (`checkRuns`). */
+ * together (`checkRuns`), and for runs that hold no trial at all (a run a usage cap stopped before its first
+ * trial): with no effort to check, both gates would pass on nothing. */
 export function buildReport(runs) {
   checkRuns(runs);
-  const cells = buildCells(runs.flatMap((run) => run.doc.trials));
+  const trials = runs.flatMap((run) => run.doc.trials);
+  if (trials.length === 0) throw new ReportError(`the runs ${runs.map((run) => run.name).join(', ')} hold no trial: a report of nothing is not a pass`);
+  const cells = buildCells(trials);
   const efforts = [...new Set(cells.map((cell) => cell.effort))].sort(byEffort);
   const cellOf = (task, effort, config) => cells.find((cell) => cell.task === task && cell.effort === effort && cell.config === config) ?? null;
   return {
