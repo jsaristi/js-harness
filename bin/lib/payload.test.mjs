@@ -358,6 +358,158 @@ test('missing or malformed project-scoped Claude settings contribute no hooks, w
   });
 });
 
+// --- enabled Claude plugins add their own context hooks (hooks/hooks.json under the install path) ---
+
+const PLUGIN_ID = 'engram@engram';
+
+/** A plugin installed under `<home>/.claude/plugins/cache/<name>`, recorded in installed_plugins.json
+ * and declaring `hooks` in its `hooks/hooks.json` (a raw string is written as-is, to fake bad JSON). */
+function installPlugin(home, pluginId, hooks) {
+  const installPath = path.join(home, '.claude', 'plugins', 'cache', pluginId.replace('@', '-'));
+  const recordPath = path.join(home, '.claude', 'plugins', 'installed_plugins.json');
+  let record = { version: 2, plugins: {} };
+  if (fs.existsSync(recordPath)) record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
+  record.plugins[pluginId] = [{ scope: 'user', installPath, version: '0.1.5' }];
+  write(recordPath, JSON.stringify(record));
+  if (hooks !== undefined) {
+    write(path.join(installPath, 'hooks', 'hooks.json'), typeof hooks === 'string' ? hooks : JSON.stringify({ hooks }));
+  }
+}
+
+const ENGRAM_HOOKS = {
+  SessionStart: [{ matcher: 'startup', hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh"' }] }],
+  UserPromptSubmit: [{ hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"' }] }],
+  Stop: [{ hooks: [{ type: 'command', command: 'should-not-appear' }] }],
+};
+
+test('an enabled plugin adds its UserPromptSubmit and SessionStart hooks after the settings hooks, naming the plugin', () => {
+  withFixture((home, cwd) => {
+    write(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({
+        enabledPlugins: { [PLUGIN_ID]: true },
+        hooks: { SessionStart: [{ hooks: [{ command: 'settings-hook' }] }] },
+      }),
+    );
+    installPlugin(home, PLUGIN_ID, ENGRAM_HOOKS);
+    const { hosts } = measurePayload({ home, cwd });
+    assert.deepEqual(hosts[0].hooks, [
+      { event: 'SessionStart', command: 'settings-hook' },
+      { event: 'UserPromptSubmit', command: '"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"', plugin: PLUGIN_ID },
+      { event: 'SessionStart', command: '"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh"', plugin: PLUGIN_ID },
+    ]);
+    assert.deepEqual(hosts[1].hooks, []);
+  });
+});
+
+test('a disabled plugin, or one with no install record, contributes no hooks', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: false, 'ghost@nowhere': true } }));
+    installPlugin(home, PLUGIN_ID, ENGRAM_HOOKS);
+    assert.deepEqual(measurePayload({ home, cwd }).hosts[0].hooks, []);
+  });
+});
+
+test('a plugin with a missing or malformed hooks.json contributes no hooks, without throwing', () => {
+  for (const hooks of [undefined, '{ not json']) {
+    withFixture((home, cwd) => {
+      write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+      installPlugin(home, PLUGIN_ID, hooks);
+      assert.doesNotThrow(() => measurePayload({ home, cwd }));
+      assert.deepEqual(measurePayload({ home, cwd }).hosts[0].hooks, []);
+    });
+  }
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), '{ not json');
+    assert.deepEqual(measurePayload({ home, cwd }).hosts[0].hooks, []);
+  });
+});
+
+/** Several install records for one plugin, each `{ scope, projectPath?, hook }`: every record gets its
+ * own install directory whose hooks.json declares one SessionStart hook with the record's `hook`. */
+function installRecords(home, pluginId, records) {
+  const entries = records.map(({ scope, projectPath, hook }, i) => {
+    const installPath = path.join(home, '.claude', 'plugins', 'cache', `record-${i}`);
+    write(
+      path.join(installPath, 'hooks', 'hooks.json'),
+      JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ command: hook }] }] } }),
+    );
+    return { ...(scope ? { scope } : {}), ...(projectPath ? { projectPath } : {}), installPath, version: '0.1.5' };
+  });
+  write(
+    path.join(home, '.claude', 'plugins', 'installed_plugins.json'),
+    JSON.stringify({ version: 2, plugins: { [pluginId]: entries } }),
+  );
+}
+
+function pluginCommands(home, cwd) {
+  return measurePayload({ home, cwd }).hosts[0].hooks.map((h) => h.command);
+}
+
+test('the install record that applies to the current project wins, whatever its position in the file', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    installRecords(home, PLUGIN_ID, [
+      { scope: 'project', projectPath: path.join(cwd, 'other-project'), hook: 'other-project-hook' },
+      { scope: 'project', projectPath: cwd, hook: 'this-project-hook' },
+    ]);
+    assert.deepEqual(pluginCommands(home, cwd), ['this-project-hook']);
+  });
+});
+
+test('a record bound to another project never applies, and a project record beats a user record', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    installRecords(home, PLUGIN_ID, [{ scope: 'local', projectPath: path.join(cwd, 'other-project'), hook: 'other-hook' }]);
+    assert.deepEqual(pluginCommands(home, cwd), []);
+
+    installRecords(home, PLUGIN_ID, [
+      { scope: 'user', hook: 'user-hook' },
+      { scope: 'local', projectPath: cwd, hook: 'this-project-hook' },
+    ]);
+    assert.deepEqual(pluginCommands(home, cwd), ['this-project-hook']);
+  });
+});
+
+test('a user record, or a record with no scope and no projectPath, applies to every project', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    installRecords(home, PLUGIN_ID, [
+      { scope: 'project', projectPath: path.join(cwd, 'other-project'), hook: 'other-hook' },
+      { scope: 'user', hook: 'user-hook' },
+    ]);
+    assert.deepEqual(pluginCommands(home, cwd), ['user-hook']);
+
+    installRecords(home, PLUGIN_ID, [{ hook: 'unscoped-hook' }]);
+    assert.deepEqual(pluginCommands(home, cwd), ['unscoped-hook']);
+  });
+});
+
+test('a record\'s projectPath is compared as a resolved path, case-insensitively on Windows', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    installRecords(home, PLUGIN_ID, [{ scope: 'project', projectPath: path.join(cwd, '.', 'sub', '..'), hook: 'this-project-hook' }]);
+    assert.deepEqual(pluginCommands(home, cwd), ['this-project-hook']);
+    if (process.platform === 'win32') {
+      installRecords(home, PLUGIN_ID, [{ scope: 'project', projectPath: cwd.toUpperCase(), hook: 'this-project-hook' }]);
+      assert.deepEqual(pluginCommands(home, cwd), ['this-project-hook']);
+    }
+  });
+});
+
+test('a plugin enabled only in the project settings is listed, and project-local settings can switch it off', () => {
+  withFixture((home, cwd) => {
+    installPlugin(home, PLUGIN_ID, ENGRAM_HOOKS);
+    write(path.join(cwd, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: true } }));
+    const listed = measurePayload({ home, cwd }).hosts[0].hooks;
+    assert.deepEqual(listed.map((h) => h.plugin), [PLUGIN_ID, PLUGIN_ID]);
+
+    write(path.join(cwd, '.claude', 'settings.local.json'), JSON.stringify({ enabledPlugins: { [PLUGIN_ID]: false } }));
+    assert.deepEqual(measurePayload({ home, cwd }).hosts[0].hooks, []);
+  });
+});
+
 // --- Codex project AGENTS.md prefers AGENTS.override.md, same as the global selection (Codex P2 follow-up) ---
 
 test('Codex project instructions prefer AGENTS.override.md over AGENTS.md in cwd', () => {

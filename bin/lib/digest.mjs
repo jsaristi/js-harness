@@ -3,7 +3,7 @@
 // odd/tasks/stack-doctor.md.
 import crypto from 'node:crypto';
 
-const GAP_STATES = new Set(['missing', 'outdated']);
+const GAP_STATES = new Set(['missing', 'outdated', 'stale']);
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
 
 /** Every (tool id, dimension, state) gap in a doctor report. Sorted by id then dimension so the

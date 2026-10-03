@@ -104,6 +104,33 @@ test('gentle-ai upToDate fix is a two-step list, not one line joined by a separa
   assert.deepEqual(findTool('gentle-ai').fix({}).upToDate, ['gentle-ai upgrade', 'gentle-ai sync']);
 });
 
+test('gentle-ai upgrade fix goes through go install for the new module path when the latest crosses a major', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  assert.deepEqual(upToDateFix('3.7.0', '4.0.0'), [
+    'go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0',
+    'gentle-ai sync',
+  ]);
+  assert.deepEqual(upToDateFix('3.7.0', '5.2.1')[0], 'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.2.1');
+});
+
+test('gentle-ai upgrade fix builds the tag from the parsed semver, so a v-prefixed latest never prints @vv', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  assert.equal(
+    upToDateFix('4.0.0', 'v5.0.0')[0],
+    'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.0.0',
+  );
+});
+
+test('gentle-ai upgrade fix is unchanged within a major and when a version is unknown or unparseable', () => {
+  const { upToDateFix } = findTool('gentle-ai');
+  const unchanged = ['gentle-ai upgrade', 'gentle-ai sync'];
+  assert.deepEqual(upToDateFix('4.0.0', '4.1.0'), unchanged);
+  assert.deepEqual(upToDateFix('3.7.0', null), unchanged);
+  assert.deepEqual(upToDateFix(null, '4.0.0'), unchanged);
+  assert.deepEqual(upToDateFix('3.7.0', 'not-a-version'), unchanged);
+  assert.deepEqual(upToDateFix('4.0.0', '3.9.0'), unchanged);
+});
+
 test('no fix command string carries a shell separator (`;` or `&&`), and codegraph installed stays one string', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
@@ -366,6 +393,326 @@ test('gentle-ai configured is missing for both hosts when state.json does not ex
   try {
     const tool = findTool('gentle-ai');
     assert.deepEqual(tool.configured({ home }), { claude: 'missing', codex: 'missing' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- gentle-ai: a host hook that runs a command `gentle-ai help` does not list is `stale` ---
+
+// The shape of gentle-ai 4's `help`: a command line is indented by exactly two spaces, a
+// continuation line deeper, and the USAGE section has two-space lines of its own.
+const GENTLE_AI_HELP = [
+  'USAGE',
+  '  gentle-ai <command> [flags]',
+  '',
+  'COMMANDS',
+  '  install      Configure AI coding agents on this machine',
+  '  sync         Sync agent configs and skills to current version',
+  '  skill-registry refresh',
+  '               Refresh .atl/skill-registry.md with cache-hit fast path',
+  '  review start [--cwd <repo>] [--base-ref <ref>]',
+  '  review mode <enable|disable|status> [--cwd <repo>] [--scope <global|clone>]',
+  '               User-owned kill switch; off wins',
+  'COMPATIBILITY COMMANDS',
+  '  review-start --cwd <repo> --lineage <id> --policy-file <path>',
+  '  telemetry <status|enable|disable|preview|trigger> [--json]',
+  '  doctor       Run ecosystem health diagnostics',
+  '  version      Print version',
+  '',
+].join('\n');
+
+const DEAD_HOOK = 'gentle-ai sdd-preflight-hook --agent claude-code';
+
+/** A fake spawn that answers `gentle-ai help` and records every command line it was asked to run. */
+function helpSpawn(help, calls = []) {
+  return (cmd, args) => {
+    calls.push([cmd, ...args].join(' '));
+    return help;
+  };
+}
+
+const helpOk = { status: 0, stdout: GENTLE_AI_HELP, stderr: '' };
+
+/** A hooks config in the shape both hosts use: `hooks.<Event>[].hooks[].command`. */
+function hooksConfig(events) {
+  const hooks = {};
+  for (const [event, commands] of Object.entries(events)) {
+    hooks[event] = [{ matcher: '*', hooks: commands.map((command) => ({ type: 'command', command })) }];
+  }
+  return { hooks };
+}
+
+/** A fixture home with gentle-ai configured for both hosts and the given hooks files. */
+function makeGentleAiHome({ claude, codex } = {}) {
+  const home = makeTmpHome();
+  writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
+  if (claude !== undefined) writeJson(path.join(home, '.claude', 'settings.json'), claude);
+  if (codex !== undefined) writeJson(path.join(home, '.codex', 'hooks.json'), codex);
+  return home;
+}
+
+test('a dead gentle-ai hook in Claude settings makes the claude cell stale and the fix names hook, event and file', () => {
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ PreToolUse: [DEAD_HOOK], SessionStart: ['gentle-ai sync'] }),
+    codex: hooksConfig({ SessionStart: ['gentle-ai sync'] }),
+  });
+  try {
+    const tool = findTool('gentle-ai');
+    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.equal(configured.claude, 'stale');
+    assert.equal(configured.codex, 'ok');
+    const fix = tool.fix({}, configured);
+    assert.equal(fix.claude.length, 1);
+    assert.match(fix.claude[0], /^remove the hook "gentle-ai sdd-preflight-hook --agent claude-code" \(PreToolUse\)/);
+    assert.match(fix.claude[0], /from ~\/\.claude\/settings\.json: /);
+    assert.match(fix.claude[0], /"gentle-ai help" lists no "sdd-preflight-hook" command/);
+    assert.equal(fix.codex, 'gentle-ai install');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a dead gentle-ai hook in Codex hooks.json makes the codex cell stale and leaves claude alone', () => {
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ SessionStart: ['gentle-ai sync'] }),
+    codex: hooksConfig({ Stop: ['gentle-ai sdd-preflight-hook --agent codex'] }),
+  });
+  try {
+    const tool = findTool('gentle-ai');
+    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.equal(configured.claude, 'ok');
+    assert.equal(configured.codex, 'stale');
+    const fix = tool.fix({}, configured);
+    assert.match(fix.codex[0], /^remove the hook "gentle-ai sdd-preflight-hook --agent codex" \(Stop\)/);
+    assert.match(fix.codex[0], /from ~\/\.codex\/hooks\.json: /);
+    assert.equal(fix.claude, 'gentle-ai install');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('each dead hook gets its own fix line, and a live hook next to a dead one is not listed', () => {
+  const home = makeGentleAiHome({
+    claude: hooksConfig({
+      PreToolUse: [DEAD_HOOK, 'gentle-ai sync'],
+      PostToolUse: ['gentle-ai sdd-status-hook'],
+    }),
+  });
+  try {
+    const tool = findTool('gentle-ai');
+    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    const fix = tool.fix({}, configured);
+    assert.equal(fix.claude.length, 2);
+    assert.ok(fix.claude.every((line) => !line.includes('"gentle-ai sync"')));
+    assert.match(fix.claude[1], /\(PostToolUse\)/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a wrapped or .exe gentle-ai call counts, so a dead one inside a wrapper is stale', () => {
+  const wrapped = `powershell -Command 'Write-Host hi; ${DEAD_HOOK} --quiet'`;
+  for (const command of [wrapped, '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" sdd-preflight-hook']) {
+    const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [command] }) });
+    try {
+      const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+      assert.equal(configured.claude, 'stale', command);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a wrapped call to a listed gentle-ai command, or a listed multi-word command, is not stale', () => {
+  const commands = [
+    "powershell -Command '$ErrorActionPreference = \"Stop\"; gentle-ai skill-registry refresh --quiet --cwd .'",
+    '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" skill-registry refresh',
+    'gentle-ai review stop-hook',
+    'gentle-ai telemetry runtime claude --json',
+    'cat ~/.gentle-ai/state.json',
+  ];
+  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: commands }) });
+  try {
+    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('gentle-ai stays as it is when `gentle-ai help` cannot be read: no help, no claim', () => {
+  const failures = [
+    { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' },
+    { status: 1, stdout: GENTLE_AI_HELP, stderr: 'boom' },
+    { status: null, signal: 'SIGTERM', stdout: '', stderr: '' },
+    { status: 0, stdout: 'no command lines here\n', stderr: '' },
+    { status: 0, stdout: '', stderr: '' },
+  ];
+  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
+  try {
+    for (const failure of failures) {
+      const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(failure), platform: 'linux' });
+      assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+    }
+    const throwing = () => {
+      throw new Error('spawn blew up');
+    };
+    assert.equal(findTool('gentle-ai').configured({ home, spawn: throwing, platform: 'linux' }).claude, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a malformed or missing hooks file never makes a gentle-ai cell stale', () => {
+  const home = makeGentleAiHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{ nope', 'utf8');
+    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+    // A well-formed file of the wrong shape contributes nothing either.
+    writeJson(path.join(home, '.claude', 'settings.json'), { hooks: { PreToolUse: 'nope', Stop: [{ hooks: [null, 3] }] } });
+    assert.deepEqual(
+      findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' }),
+      { claude: 'ok', codex: 'ok' },
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('help that is only partly understood makes no claim: no command found in a COMMANDS section, no stale host', () => {
+  const usageOnly = ['USAGE', '  gentle-ai <command> [flags]', ''].join('\n');
+  // The COMMANDS section is indented differently, so none of its lines parse as command lines.
+  const reindented = ['USAGE', '  gentle-ai <command> [flags]', '', 'COMMANDS', '    sync     Sync', '    review stop-hook', ''].join('\n');
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ SessionStart: ['gentle-ai review stop-hook', 'gentle-ai telemetry runtime claude --json'] }),
+    codex: hooksConfig({ Stop: [DEAD_HOOK] }),
+  });
+  try {
+    for (const stdout of [usageOnly, reindented]) {
+      const spawn = helpSpawn({ status: 0, stdout, stderr: '' });
+      const configured = findTool('gentle-ai').configured({ home, spawn, platform: 'linux' });
+      assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('commands are read from every section whose header names COMMANDS, and from no other', () => {
+  const home = makeGentleAiHome({
+    claude: hooksConfig({ SessionStart: ['gentle-ai review-start --cwd .', 'gentle-ai flags-only'] }),
+  });
+  const help = ['USAGE', '  gentle-ai <command> [flags]', '', 'FLAGS', '  flags-only  not a command', ''].join('\n');
+  try {
+    // review-start sits under COMPATIBILITY COMMANDS in the shared help; `flags-only` under FLAGS.
+    const spawn = helpSpawn({ status: 0, stdout: `${GENTLE_AI_HELP}\n${help}`, stderr: '' });
+    const tool = findTool('gentle-ai');
+    const configured = tool.configured({ home, spawn, platform: 'linux' });
+    assert.equal(configured.claude, 'stale');
+    const fix = tool.fix({}, configured);
+    assert.equal(fix.claude.length, 1);
+    assert.match(fix.claude[0], /lists no "flags-only" command/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a longer name that ends in gentle-ai is not a gentle-ai call, but the binary by full path is', () => {
+  const longer = ['my-gentle-ai sdd-preflight-hook', 'not-gentle-ai sdd-preflight-hook', 'x_gentle-ai sdd-preflight-hook'];
+  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: longer }) });
+  try {
+    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  const byPath = ['C:\\Users\\x\\go\\bin\\gentle-ai.exe sdd-preflight-hook', '/home/x/go/bin/gentle-ai sdd-preflight-hook'];
+  for (const command of byPath) {
+    const pathHome = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [command] }) });
+    try {
+      const configured = findTool('gentle-ai').configured({ home: pathHome, spawn: helpSpawn(helpOk), platform: 'linux' });
+      assert.equal(configured.claude, 'stale', command);
+    } finally {
+      fs.rmSync(pathHome, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a gentle-ai call is detected only where a command can start', () => {
+  const stale = [
+    'gentle-ai sdd-preflight-hook --agent claude-code',
+    '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" sdd-preflight-hook',
+    '/home/x/go/bin/gentle-ai sdd-preflight-hook',
+    "powershell -NoProfile -Command 'if ($x) { $d = 1 }; gentle-ai sdd-preflight-hook --quiet; exit 0'",
+    'bash -c "gentle-ai sdd-preflight-hook"',
+    'cd repo && gentle-ai sdd-preflight-hook',
+    'true || gentle-ai sdd-preflight-hook',
+    'echo hi | gentle-ai sdd-preflight-hook',
+    'echo hi\ngentle-ai sdd-preflight-hook',
+  ];
+  const unclassified = [
+    'echo "gentle-ai sdd-preflight-hook was retired"',
+    'echo gentle-ai sdd-preflight-hook',
+    'my-gentle-ai sdd-preflight-hook',
+    "powershell -NoProfile -Command 'if (Test-Path env:CLAUDE_PROJECT_DIR) { $dir = $env:CLAUDE_PROJECT_DIR } else { $dir = $PWD }; gentle-ai skill-registry refresh --quiet --no-gitignore --cwd \"$dir\"; exit 0'",
+  ];
+  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [] }) });
+  try {
+    const tool = findTool('gentle-ai');
+    for (const [commands, expected] of [[stale, 'stale'], [unclassified, 'ok']]) {
+      for (const command of commands) {
+        writeJson(path.join(home, '.claude', 'settings.json'), hooksConfig({ SessionStart: [command] }));
+        const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+        assert.equal(configured.claude, expected, command);
+      }
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a host that is not configured stays missing even when its hooks file has a dead hook', () => {
+  const home = makeTmpHome();
+  try {
+    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['codex'] });
+    writeJson(path.join(home, '.claude', 'settings.json'), hooksConfig({ PreToolUse: [DEAD_HOOK] }));
+    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
+    assert.deepEqual(configured, { claude: 'missing', codex: 'ok' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the only command run is `gentle-ai help`, and only when a hook calls gentle-ai', () => {
+  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
+  const quietHome = makeGentleAiHome({ claude: hooksConfig({ SessionStart: ['echo hello'] }) });
+  try {
+    const calls = [];
+    findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk, calls), platform: 'linux' });
+    assert.deepEqual(calls, ['gentle-ai help']);
+
+    const quietCalls = [];
+    findTool('gentle-ai').configured({ home: quietHome, spawn: helpSpawn(helpOk, quietCalls), platform: 'linux' });
+    assert.deepEqual(quietCalls, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(quietHome, { recursive: true, force: true });
+  }
+});
+
+test('probeTool puts stale in the row and keeps the internal hook list out of it', () => {
+  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
+  try {
+    const spawn = (cmd, args) =>
+      [cmd, ...args].join(' ') === 'gentle-ai help' ? helpOk : { status: 0, stdout: 'gentle-ai 4.0.0', stderr: '' };
+    const row = probeTool(findTool('gentle-ai'), { home, project: home, spawn, platform: 'linux' });
+    assert.equal(row.claude, 'stale');
+    assert.equal(row.codex, 'ok');
+    assert.equal(row.staleHooks, undefined);
+    assert.equal(row.fix.claude.length, 1);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

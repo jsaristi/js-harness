@@ -57,7 +57,8 @@ export function checkPayload(cwd, home) {
       const tokens = s.tokens === null ? 'not found' : String(s.tokens);
       return `${s.name.padEnd(18)} ${tokens.padStart(9)}  ${tildePath(s.path, home)}`;
     });
-    const hooks = host.hooks.map((h) => `hook ${h.event.padEnd(16)} ${h.command}`);
+    // A plugin's hook names the plugin it comes from; a settings hook keeps its row as it was.
+    const hooks = host.hooks.map((h) => `hook ${h.event.padEnd(16)} ${h.plugin ? `${h.plugin}: ` : ''}${h.command}`);
     const detail = `${host.total} estimated tokens per turn from files (tools and hook output not counted)`;
     return { name: `payload ${host.host}`, pass: true, info: true, detail, lines: [...sources, ...hooks] };
   });

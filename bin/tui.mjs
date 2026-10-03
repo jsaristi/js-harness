@@ -88,7 +88,7 @@ export function withLocation(state, location) {
 
 // --- T5: the stack block — one compact line per tool, from local probes + cache only ---
 
-const STATE_SEVERITY = { missing: 2, outdated: 2, unknown: 1, ok: 0, 'n/a': 0 };
+const STATE_SEVERITY = { missing: 2, outdated: 2, stale: 2, unknown: 1, ok: 0, 'n/a': 0 };
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
 // `installed` and `upToDate` describe the tool's own version, so a gap there reads fine bare
 // ("missing", "outdated"); `claude`/`codex`/`project` are per-host/per-project, so a gap there

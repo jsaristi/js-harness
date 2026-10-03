@@ -141,7 +141,7 @@ const CONTEXT_HOOK_EVENTS = ['UserPromptSubmit', 'SessionStart'];
 /** Context-injecting hook commands from a Claude/Codex hooks config: only `UserPromptSubmit` and
  * `SessionStart` add their stdout to the model's context, so only those events are read, in
  * configured order. Missing or malformed JSON yields no hooks, never a throw. */
-function readHooks(configPath) {
+function readHooks(configPath, plugin) {
   const config = readJson(configPath);
   const hooksConfig = config && typeof config === 'object' ? config.hooks : null;
   if (!hooksConfig || typeof hooksConfig !== 'object') return [];
@@ -153,7 +153,9 @@ function readHooks(configPath) {
     for (const matcher of matchers) {
       const entries = matcher && Array.isArray(matcher.hooks) ? matcher.hooks : [];
       for (const entry of entries) {
-        if (entry && typeof entry.command === 'string') hooks.push({ event, command: entry.command });
+        if (entry && typeof entry.command === 'string') {
+          hooks.push(plugin ? { event, command: entry.command, plugin } : { event, command: entry.command });
+        }
       }
     }
   }
@@ -164,16 +166,59 @@ function totalTokens(sources) {
   return sources.reduce((sum, s) => sum + (s.tokens ?? 0), 0);
 }
 
+/** The plugin ids enabled across the settings layers: a later layer's `enabledPlugins` entry
+ * overrides an earlier one, and only `true` counts as enabled. */
+function enabledPluginIds(settingsPaths) {
+  const enabled = new Map();
+  for (const settingsPath of settingsPaths) {
+    const plugins = readJson(settingsPath)?.enabledPlugins;
+    if (!plugins || typeof plugins !== 'object') continue;
+    for (const [id, value] of Object.entries(plugins)) enabled.set(id, value === true);
+  }
+  return [...enabled].filter(([, on]) => on).map(([id]) => id);
+}
+
+/** The context hooks of every enabled plugin, each tagged with its plugin id: the plugin's
+ * `hooks/hooks.json` under the `installPath` recorded in `installed_plugins.json` (the same shape
+ * as a settings file). A plugin with no install record, no hooks file or malformed JSON adds nothing. */
+function pluginHooks(home, cwd, settingsPaths) {
+  const installed = readJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins;
+  return enabledPluginIds(settingsPaths).flatMap((id) => {
+    const record = applicableInstallRecord(installed && typeof installed === 'object' ? installed[id] : null, cwd);
+    return record ? readHooks(path.join(record.installPath, 'hooks', 'hooks.json'), id) : [];
+  });
+}
+
+/** Whether two paths are the same directory once resolved; Windows paths compare case-insensitively. */
+function samePath(a, b) {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+/** The one install record of a plugin that applies to the project at `cwd`: a record bound to that
+ * project (`projectPath`, as a `project` or `local` install writes it) wins over a user-level one
+ * (`scope: "user"`, or no scope and no `projectPath`). A record bound to another project, or a
+ * `project`/`local` one that names none, never applies. */
+function applicableInstallRecord(records, cwd) {
+  const usable = (Array.isArray(records) ? records : []).filter((r) => typeof r?.installPath === 'string');
+  const bound = usable.find((r) => typeof r.projectPath === 'string' && samePath(r.projectPath, cwd));
+  if (bound) return bound;
+  const userLevel = (r) => typeof r.projectPath !== 'string' && r.scope !== 'project' && r.scope !== 'local';
+  return usable.find(userLevel) ?? null;
+}
+
 /** Claude's context-injecting hook commands, concatenated the same way Claude Code itself merges
  * settings layers: user (`<home>/.claude/settings.json`), then project (`<cwd>/.claude/settings.json`),
- * then project-local (`<cwd>/.claude/settings.local.json`). A missing or malformed file contributes
- * nothing, never throws. */
+ * then project-local (`<cwd>/.claude/settings.local.json`), followed by the hooks of the enabled
+ * plugins. A missing or malformed file contributes nothing, never throws. */
 function claudeHooks(home, cwd) {
-  return [
-    ...readHooks(path.join(home, '.claude', 'settings.json')),
-    ...readHooks(path.join(cwd, '.claude', 'settings.json')),
-    ...readHooks(path.join(cwd, '.claude', 'settings.local.json')),
+  const settingsPaths = [
+    path.join(home, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.local.json'),
   ];
+  const settingsHooks = settingsPaths.flatMap((settingsPath) => readHooks(settingsPath));
+  return [...settingsHooks, ...pluginHooks(home, cwd, settingsPaths)];
 }
 
 /** Claude's per-turn sources, in load order: global `CLAUDE.md`, the active output style, the

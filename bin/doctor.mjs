@@ -7,13 +7,13 @@
 // is the one exception with its own, stricter contract — see `hookMain` below.
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { probeStack, resolveProjectRoot } from './lib/stack.mjs';
+import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { gapList, gapDigest } from './lib/digest.mjs';
 
-const GAP_STATES = new Set(['missing', 'outdated']);
+const GAP_STATES = new Set(['missing', 'outdated', 'stale']);
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
@@ -58,9 +58,10 @@ function headerRow() {
   return HEADER_LABELS.map((label, i) => label.padEnd(COLUMN_WIDTHS[i])).join('') + 'up to date';
 }
 
-/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing` or `outdated`
- * (`unknown` and `n/a` are not actionable the same way). A gap with no fix command defined is still
- * a gap — `fix` is `null` — so `gaps` always agrees with the row states and the hook's digest. */
+/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing`, `outdated` or
+ * `stale` (a host whose hook calls a removed command); `unknown` and `n/a` are not actionable the
+ * same way. A gap with no fix command defined is still a gap — `fix` is `null` — so `gaps` always
+ * agrees with the row states and the hook's digest. */
 function rowGaps(row) {
   const gaps = [];
   for (const dimension of DIMENSIONS) {
@@ -154,7 +155,13 @@ export async function buildReport({ home, cwd, offline }, deps) {
 
   const localRows = probeStack({ home, project, spawn, platform });
   const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
-  return localRows.map((row) => ({ ...row, upToDate: computeUpToDate(row, latestVersions[row.id]) }));
+  return localRows.map((row) => {
+    const latest = latestVersions[row.id];
+    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
+    const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
+    return { ...row, upToDate: computeUpToDate(row, latest), fix };
+  });
 }
 
 export async function doctorMain(argv, env = process.env, deps = {}) {
