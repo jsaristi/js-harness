@@ -107,6 +107,7 @@ test('summarizeUsage gives null for a cost, model usage or subagent count that i
     { total_cost_usd: '1.5', modelUsage: [], subagent_stats: { spawned: 'two' } },
     { total_cost_usd: Number.NaN, modelUsage: 'none', subagent_stats: 3 },
     { total_cost_usd: null, modelUsage: null, subagent_stats: null },
+    { total_cost_usd: -1 },
   ]) {
     const summary = summarizeUsage(output);
     assert.equal(summary.costUsd, null, JSON.stringify(output));

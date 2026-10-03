@@ -45,15 +45,16 @@ const MODEL_COUNTS = ['inputTokens', 'cacheReadInputTokens', 'cacheCreationInput
 
 /** The tokens of one trial, `{ input, output }` (each `null` when unknown), input being the input, cache reads and
  * cache writes. They are summed over every model of its `modelUsage`, because the session's subagents ran on models
- * of their own; a trial without a usable `modelUsage` (an older record, one that lacks a count, an empty object)
- * keeps the main thread's `inputTokens` and `outputTokens` as the runner recorded them. */
+ * of their own. A trial without a usable `modelUsage` (an older record, one that lacks a count, an empty object) has
+ * unknown tokens: its `inputTokens` and `outputTokens` count the main thread only, and a mean over both measures
+ * would compare a whole session with part of one. */
 export function trialTokens(entry) {
   const models = isObject(entry.modelUsage) ? Object.values(entry.modelUsage) : [];
-  if (models.length > 0 && models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field])))) {
-    const total = (...fields) => models.reduce((sum, model) => sum + fields.reduce((inner, field) => inner + model[field], 0), 0);
-    return { input: total('inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens'), output: total('outputTokens') };
+  if (models.length === 0 || !models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field])))) {
+    return { input: null, output: null };
   }
-  return { input: finite(entry.inputTokens) ? entry.inputTokens : null, output: finite(entry.outputTokens) ? entry.outputTokens : null };
+  const total = (...fields) => models.reduce((sum, model) => sum + fields.reduce((inner, field) => inner + model[field], 0), 0);
+  return { input: total('inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens'), output: total('outputTokens') };
 }
 
 // ---- cells -------------------------------------------------------------------------------------------------------

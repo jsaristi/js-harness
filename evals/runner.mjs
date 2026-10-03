@@ -61,7 +61,8 @@ export function summarizeUsage(output) {
     outputTokens: sum('output_tokens'),
     turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
     usage,
-    costUsd: Number.isFinite(output?.total_cost_usd) ? output.total_cost_usd : null,
+    // A cost is never negative; one that is says the field is broken, not that the session paid back.
+    costUsd: Number.isFinite(output?.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null,
     modelUsage: isObject(output?.modelUsage) ? output.modelUsage : null,
     subagents: Number.isFinite(output?.subagent_stats?.spawned) ? output.subagent_stats.spawned : null,
   };

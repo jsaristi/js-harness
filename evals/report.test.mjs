@@ -48,15 +48,18 @@ const verdictOf = (minimal, current) => {
   return compareCells(cells.find((cell) => cell.config === 'minimal') ?? null, cells.find((cell) => cell.config === 'current') ?? null);
 };
 
+/** A `modelUsage` of one model whose input, cache included, is `input`. */
+const oneModel = (input, output) => ({ a: { inputTokens: input, outputTokens: output, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 1 } });
+
 const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} is not ${expected}`);
 
 // ---- cells -------------------------------------------------------------------------------------------------------
 
 test('buildCells makes one cell per task, effort and config, with the statistics of its trials', () => {
   const trials = [
-    trial({ repeat: 1, score: 0.9, costUsd: 1000, inputTokens: 100, outputTokens: 10, wallMs: 1000, turns: 4 }),
-    trial({ repeat: 2, score: 1, costUsd: 2000, inputTokens: 300, outputTokens: 30, wallMs: 3000, turns: 8 }),
-    trial({ repeat: 3, score: 0.8, costUsd: 3000, inputTokens: 200, outputTokens: 20, wallMs: 2000, turns: 6 }),
+    trial({ repeat: 1, score: 0.9, costUsd: 1000, modelUsage: oneModel(100, 10), wallMs: 1000, turns: 4 }),
+    trial({ repeat: 2, score: 1, costUsd: 2000, modelUsage: oneModel(300, 30), wallMs: 3000, turns: 8 }),
+    trial({ repeat: 3, score: 0.8, costUsd: 3000, modelUsage: oneModel(200, 20), wallMs: 2000, turns: 6 }),
     trial({ task: 'beta' }),
     trial({ effort: 'high' }),
     trial({ config: 'current' }),
@@ -130,15 +133,19 @@ test('the token columns sum modelUsage over every model: input, cache reads and 
   assert.equal(cell.outputTokens, (2 + 20 + 200) / 2);
 });
 
-test('the token columns fall back to the recorded input and output tokens when a trial has no usable modelUsage', () => {
-  const [cell] = buildCells([
+test('a trial without a usable modelUsage has unknown tokens: its main-thread counts are not mixed with whole sessions', () => {
+  const unusable = [
     trial({ repeat: 1, inputTokens: 100, outputTokens: 10, modelUsage: undefined }),
     trial({ repeat: 2, inputTokens: 300, outputTokens: 30, modelUsage: null }),
     trial({ repeat: 3, inputTokens: 200, outputTokens: 20, modelUsage: {} }),
     trial({ repeat: 4, inputTokens: 400, outputTokens: 40, modelUsage: { a: { inputTokens: 5 } } }),
-  ]);
-  assert.equal(cell.inputTokens, 250, 'an empty modelUsage and one lacking counts are not a measurement of 0');
-  assert.equal(cell.outputTokens, 25);
+  ];
+  const [none] = buildCells(unusable);
+  assert.equal(none.inputTokens, null, 'the main thread alone is not the session, and an empty modelUsage is not 0');
+  assert.equal(none.outputTokens, null);
+  const [mixed] = buildCells([...unusable, trial({ repeat: 5, modelUsage: oneModel(7000, 700) })]);
+  assert.equal(mixed.inputTokens, 7000, 'the mean is over the whole-session counts only');
+  assert.equal(mixed.outputTokens, 700);
 });
 
 test('a trial whose score is unknown is left out of the score statistics, not read as 0', () => {
@@ -440,7 +447,7 @@ test('reportMain prints cost in US dollars, explains it as the whole session at 
   const { out } = await run([], { ab: docOf('ab', trials) });
   const row = out.split('\n').find((entry) => entry.startsWith('alpha'));
   assert.match(row, /\$3\.08\s+\$6\.50\s+2\.11x/, 'two decimals, and the ratio');
-  assert.match(row, /1\.1k\s+8\.0k/, 'minimal falls back to input 1000 + output 100, current sums both models: 2 * 4000');
+  assert.match(row, /\s\?\s+8\.0k/, 'minimal has no modelUsage, so its tokens are unknown; current sums both models: 2 * 4000');
   assert.match(out, /list cost of the whole session, subagents included/);
   assert.doesNotMatch(out, /cost units/);
 });

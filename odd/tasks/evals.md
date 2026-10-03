@@ -1079,6 +1079,15 @@ against `main`, merged in order. Slices: 1 = T1–T2, 2 = T3–T4, 3 = T5–T6.
   medium, reliability lens, approved and acknowledged). One suggestion, right and fixed here:
   the record said the turns "roughly double on the short tasks"; the table shows 1.2× to 2.4×.
   No code in the slice, so no Codex review is owed.
+- 2026-10-02: `fe0d423..879c3bb` (T6, its fix and T6c) reviewed by gentle-ai (lineage
+  `review-d88d39766c46a469`, from a detached worktree at `879c3bb`, approved and acknowledged)
+  with one warning and one suggestion, both fixed inline, test first. Warning: `trialTokens`
+  fell back to the main-thread counts for a trial without a usable `modelUsage`, so a cell
+  could average whole sessions with part of one; such a trial now has unknown tokens, and a
+  cell's mean is over whole-session counts only. Suggestion: the runner took a negative
+  `total_cost_usd` as a cost; it now records `null`. RED observed for both (the report row
+  still read `1.1k`, and `-1 !== null`), then GREEN: report 40/40. The real report is
+  unchanged, since all 60 trials carry `modelUsage`.
 
 ## T2 map and decisions
 Where the current config writes on this machine, and what moves each write (evidence gathered
