@@ -104,6 +104,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
   lock), an unreadable state file is `unknown` instead of `gone`, and every `unknown`
   message says how to get out of it (Codex P1, P2, P2; gentle-ai `R3-unknown-no-recovery`)
   (route: delegated writer)
+- [x] T2t Codex's second findings: the supervisor is revalidated in the snapshot its tree is
+  read from, so a reused pid never hands over an unrelated program's children; `stop` holds
+  the same lock as `start` and removes only the record it read; a descendant that cannot be
+  identified makes `stop` refuse instead of reporting a clean tree; the home is resolved to
+  an absolute path before any path is built; the lock is released only by its owner and a
+  failed release never replaces the command's result (Codex P1, P2, P2, P2; gentle-ai
+  `R3-lock-release-unconditional-and-may-throw`) (route: delegated writer)
 - [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
   delegated writer)
@@ -270,6 +277,35 @@ the chain strategy is asked once, before the commit that crosses the budget.
   file may be removed by hand once no such supervisor runs. Decided by the parent: the race
   that is left (Follow-ups) is recorded, not closed with a stop request the supervisor would
   poll, because that adds a protocol for a window of milliseconds.
+- 2026-10-04: T2s is `1ae255e` (gate `PASS tests`, 560 s). gentle-ai reviewed
+  `c74e42c..1ae255e`: medium, 670 lines, due (`slice_budget_reached`); lineage
+  `review-37b98d774c3eb2f7`, lens reliability, approved and acknowledged, authority burned.
+  One WARNING and three SUGGESTIONs, advisory: after a `stop` that killed the supervisor
+  and then failed, the record names a dead supervisor (already in Follow-ups); the
+  stale-lock takeover's re-read branches are untested; the lock release is unconditional and
+  can throw over a successful start (taken in T2t); a target that was already gone at kill
+  time widens the exited-parent window by the look-to-kill interval.
+- 2026-10-04: Codex over `535ef09..1ae255e`, recorded this time, with four findings it
+  reproduced read-only, taken as T2t: [P1] between `stop`'s identity check and its snapshot
+  a reused pid makes `selectDescendants` select the children of an unrelated process, and
+  the kill ends them; [P2] a `start` between `stop`'s kill and its removal of the state
+  file records a replacement that `stop` then deletes; [P2] a descendant with a null
+  creation time is left out with everything under it, and `stop` reports a clean tree;
+  [P2] a relative `--home` with a `--cwd` in another repository makes the supervisor and
+  `status` use different log paths.
+- 2026-10-04: T2t done (delegated writer, the same agent; the four test files 149/149, 0
+  skipped, re-run by the parent; `remote status` still reads the live server and no lock is
+  left in the real home). The supervisor is a live root only when the snapshot its tree is
+  read from shows its pid with the recorded creation time: absent or another creation time
+  is `gone` and selects nothing, an unreadable one is `unknown` (RED: the kills reached
+  pids 910 and 911, the children of the pid's new owner). `stop` takes `start`'s lock
+  before it reads the state and removes the state file only while it still records the pid
+  and creation time it read (RED: a start during the kill launched a replacement, whose
+  record `stop` deleted). A process with no creation time under the tree makes `stop`
+  refuse before any kill, naming it; found in a later look, the rest is killed and the stop
+  fails. `--home` and `JS_HARNESS_HOME` are resolved in argument parsing. The lock is
+  released only while it holds its owner's identity, and a failed removal is a line in the
+  output, not the command's result. Committed with this entry.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -315,6 +351,15 @@ the chain strategy is asked once, before the commit that crosses the budget.
   SUGGESTIONs: the timeout and no-pid branches of stopping a spawned supervisor are
   untested; the `reg query` parser has no test for an empty value, a name with spaces or a
   value with a four-space run.
+- `selectDescendants` in `bin/lib/process-tree.mjs` accepts a live root `{ pid, createdAt }`
+  without checking that the snapshot holds that row; `resolveRoot` and `selectTrees` do
+  check. `remote stop` now checks before calling it (T2t); the guard belongs in the function,
+  outside this feature's surface.
+- Left open by T2t. A process with no creation time under the supervisor's tree blocks
+  `stop` for as long as it exists; the message says to end it by hand. When the supervisor
+  is already gone in the snapshot, what it left is not searched for, because its exit time
+  is unknown and a window bounded by "now" could take in the children of whoever reused the
+  pid.
 - Left open by T2s. A server the supervisor launches between `stop`'s first look and the
   supervisor's death dies with it, and whatever that newborn server had already started is
   left with nothing tying it to the tree; it needs a stop during the instant a backoff
@@ -333,16 +378,17 @@ the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Next step
 State on 2026-10-04: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes (merge
-`9070a8b`) and T1r with T2r (`c74e42c`) are committed on `feat/remote-control`, not pushed;
-the three slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
+`9070a8b`), T1r with T2r (`c74e42c`) and T2s (`1ae255e`) are committed on `feat/remote-control`, not pushed;
+the four slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
 with `js-harness remote start` (detached; `remote status` shows it, `remote stop` ends it).
 It still runs T2's code: `remote stop` then `remote start` loads T1r and T2r, and ends the
 sessions opened through it, so it waits for his word. In order:
 
-1. T2s is committed with this entry: assess it with `gentle-ai review assess --base-ref
-   c74e42c --committed-only` and review it if due.
-2. Codex again over the range: `js-harness codex-review --base 535ef09`. The first run read
-   725 of 1,911 lines and recorded nothing.
+1. T2t is committed with this entry: `gentle-ai review assess --base-ref 1ae255e
+   --committed-only`, and Codex over its range: `js-harness codex-review --base 1ae255e`
+   (`535ef09..1ae255e` is recorded).
+2. If Codex finds more in the lifecycle, Sebastián decides whether a further round goes
+   before T3 or into Follow-ups: two rounds already found seven defects.
 3. PR #27 is merged on his go-ahead; then the first slice of this feature can be pushed.
 4. T3 to T6.
 

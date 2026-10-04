@@ -477,7 +477,7 @@ test('a start that overlaps another launches nothing: the lock is held from befo
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, first.deps), 0, first.err());
   assert.equal(await overlapping, 1, 'the second is refused');
   assert.equal(second.spawned.length, 0, 'and launches no supervisor of its own');
-  assert.match(second.err(), /another js-harness remote start is in progress/);
+  assert.match(second.err(), /another js-harness remote start or stop is in progress/);
   assert.ok(second.err().includes(lockPathOf(home, root)), second.err());
   assert.deepEqual(atLaunch, { lock: { pid: process.pid, createdAt: OWN_CREATED }, recorded: false }, 'the lock names its owner while the supervisor is launched');
   assert.equal(first.spawned.length, 1);
@@ -493,7 +493,7 @@ test('start refuses while another start holds the lock, and leaves the lock and 
   const world = fakeWorld({ alive: new Map([[555, CREATED]]) });
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), 1);
   assert.equal(world.spawned.length, 0);
-  assert.match(world.err(), /another js-harness remote start is in progress/);
+  assert.match(world.err(), /another js-harness remote start or stop is in progress/);
   assert.match(world.err(), /pid 555/);
   assert.ok(world.err().includes(lockPathOf(home, root)), world.err());
   assert.equal(fs.readFileSync(lockPathOf(home, root), 'utf8'), before, 'the lock is its owner\'s to release');
@@ -581,6 +581,67 @@ test('the lock never outlives start: it is released when start succeeds, refuses
     arrange({ world, home, root });
     assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), code, `${what}: ${world.err()}`);
     assert.equal(fs.existsSync(lockPathOf(home, root)), false, what);
+  }
+});
+
+const CANNOT_UNLINK = () => { throw Object.assign(new Error('EPERM: operation not permitted, unlink'), { code: 'EPERM' }); };
+
+test('a lock that cannot be removed does not change the result: start and stop still report what they did, and say the file may be removed by hand', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  const world = fakeWorld();
+  world.deps.removeFile = CANNOT_UNLINK;
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), 0, world.err());
+  assert.equal(readState(home, root).pid, 4242, 'the supervisor is launched and recorded');
+  assert.match(world.out(), /started/);
+  assert.match(world.err(), /lock file could not be removed/);
+  assert.match(world.err(), /EPERM/);
+  assert.match(world.err(), /removed by hand/);
+  assert.ok(world.err().includes(lockPathOf(home, root)), world.err());
+  assert.deepEqual(readLock(home, root), { pid: process.pid, createdAt: OWN_CREATED }, 'it is still there');
+
+  fs.rmSync(lockPathOf(home, root));
+  const stopping = fakeWorld({ alive: new Map([[4242, CREATED + 5]]) });
+  stopping.deps.removeFile = CANNOT_UNLINK;
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, stopping.deps), 0, stopping.err());
+  assert.match(stopping.out(), /stopped/);
+  assert.equal(fs.existsSync(statePath(home, root)), false, 'the record is removed all the same');
+  assert.match(stopping.err(), /lock file could not be removed/);
+  assert.ok(stopping.err().includes(lockPathOf(home, root)), stopping.err());
+});
+
+test('the lock is released only while it is still this command\'s own: one that names another owner is left alone', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  const world = fakeWorld();
+  // Someone removed the lock by hand and another command took it, while this one was launching.
+  world.hooks.onSpawn = () => writeLock(home, root, { pid: 555, createdAt: CREATED });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), 0, world.err());
+  assert.deepEqual(readLock(home, root), { pid: 555, createdAt: CREATED }, 'it is its owner\'s to release');
+});
+
+// ---- the home, resolved once -------------------------------------------------------------------------------------------
+
+test('a relative home is resolved against the folder the command runs in, before any path is made from it: the state, the log and what the supervisor is handed are absolute', { skip: WINDOWS_ONLY }, async () => {
+  const original = process.cwd();
+  for (const [homeArgs, env] of [[['--home', 'rel-home'], {}], [[], { JS_HARNESS_HOME: 'rel-home' }]]) {
+    const root = makeProject('elsewhere');
+    process.chdir(tempDir());
+    try {
+      const home = path.resolve('rel-home');
+      const world = fakeWorld({ claude: { path: path.join('tools', 'claude.exe'), shell: false } });
+      assert.equal(await remoteMain(['start', '--cwd', root, ...homeArgs], env, world.deps), 0, world.err());
+      const { args } = world.spawned[0];
+      const handed = (flag) => args[args.indexOf(flag) + 1];
+      // The supervisor runs in the repository: a relative path would mean another file there than here.
+      assert.equal(handed('--log'), logPathOf(home, root));
+      assert.ok(path.isAbsolute(handed('--log')), handed('--log'));
+      assert.equal(handed('--claude'), path.resolve('tools', 'claude.exe'));
+      assert.equal(readState(home, root).logPath, logPathOf(home, root), 'the record is under the same home, and names the same log');
+      assert.ok(world.out().includes(logPathOf(home, root)), world.out());
+    } finally {
+      process.chdir(original);
+    }
   }
 });
 
@@ -821,20 +882,21 @@ test('stop keeps the state and fails when the kill cannot be confirmed afterward
 /** The machine's processes, faked under the stop the command really performs: `takeSnapshot` and `killProcesses`
  * as `process-tree.mjs` gives them. A kill ends a row only when it names it by pid and creation time, and
  * `unkillable` pids survive it. `hooks.beforeKill(n, targets)` and `hooks.beforeSnapshot(n)` run before the nth of
- * each, to change the table the way a live machine does between two looks. */
+ * each, to change the table the way a live machine does between two looks. The table also holds the command's
+ * own process, which `pids()` leaves out, and `looks` keeps what each snapshot showed. */
 function fakeProcesses(rows) {
-  const table = rows.map((row) => ({ name: 'node.exe', ...row }));
+  const table = [{ pid: process.pid, ppid: 4, createdAt: OWN_CREATED }, ...rows].map((row) => ({ name: 'node.exe', ...row }));
   const kills = [];
+  const looks = [];
   const hooks = {};
   const unkillable = new Set();
   const out = [];
   const err = [];
-  let snapshots = 0;
   const deps = {
     platform: 'win32',
     takeSnapshot: () => {
-      snapshots += 1;
-      hooks.beforeSnapshot?.(snapshots);
+      hooks.beforeSnapshot?.(looks.length + 1);
+      looks.push(table.map((row) => ({ ...row })));
       return table.map((row) => ({ ...row }));
     },
     killProcesses: (targets) => {
@@ -856,8 +918,8 @@ function fakeProcesses(rows) {
     error: (line) => err.push(String(line)),
   };
   return {
-    deps, table, kills, hooks, unkillable,
-    pids: () => table.map((row) => row.pid).sort((a, b) => a - b),
+    deps, table, kills, looks, hooks, unkillable,
+    pids: () => table.map((row) => row.pid).filter((pid) => pid !== process.pid).sort((a, b) => a - b),
     out: () => out.join('\n'),
     err: () => err.join('\n'),
   };
@@ -963,6 +1025,221 @@ test('stop keeps the state, fails and names the pids when something of the tree 
     assert.ok(world.err().includes(statePath(home, root)), world.err());
     assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before, what);
     assert.doesNotMatch(world.out(), /stopped|not running/, what);
+  }
+});
+
+/** Runs `change` on the table once stop has checked the recorded supervisor's identity, so that the next look,
+ * the one its tree is read from, shows a machine that moved on in between. */
+function afterTheIdentityCheck(world, change) {
+  let checked = false;
+  let changed = false;
+  world.deps.identifyProcesses = (pids) => {
+    const rows = world.deps.takeSnapshot().filter((row) => pids.includes(row.pid)).map(({ pid, createdAt }) => ({ pid, createdAt }));
+    if (pids.includes(777)) checked = true;
+    return rows;
+  };
+  world.hooks.beforeSnapshot = () => {
+    if (!checked || changed) return;
+    changed = true;
+    change();
+  };
+  return { changed: () => changed };
+}
+
+test('stop kills nothing under a program that took the supervisor\'s pid between the identity check and the look its tree is read from', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const world = fakeProcesses(supervisedTree());
+  const moved = afterTheIdentityCheck(world, () => {
+    // The supervisor exits, its tree with it, and Windows hands its pid to another program that starts its own.
+    for (const pid of [777, 800, 801]) world.table.splice(world.table.findIndex((row) => row.pid === pid), 1);
+    world.table.push(
+      { pid: 777, ppid: 50, createdAt: CREATED + 50_000, name: 'other.exe' },
+      { pid: 910, ppid: 777, createdAt: CREATED + 51_000, name: 'other-child.exe' },
+      { pid: 911, ppid: 910, createdAt: CREATED + 52_000, name: 'other-grandchild.exe' },
+    );
+  });
+  const code = await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps);
+  assert.ok(moved.changed(), 'the pid changed hands after the check, before the tree was read');
+  assert.deepEqual(world.pids(), [50, 60, 777, 910, 911], 'the program that has the pid now, and what it started, are untouched');
+  assert.deepEqual(world.kills, [], 'nothing is selected from a look in which the pid is not the recorded process');
+  assert.equal(code, 0, world.err());
+  assert.match(world.out(), /not running/);
+  assert.equal(fs.existsSync(statePath(home, root)), false, 'the supervisor is proven gone');
+});
+
+test('stop kills nothing when, in the look its tree is read from, the supervisor\'s creation time cannot be read', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const before = fs.readFileSync(statePath(home, root), 'utf8');
+  const world = fakeProcesses(supervisedTree());
+  const moved = afterTheIdentityCheck(world, () => {
+    world.table.find((row) => row.pid === 777).createdAt = null;
+  });
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.ok(moved.changed());
+  assert.deepEqual(world.kills, [], 'it may be the supervisor or another program: nothing under it is taken for the tree');
+  assert.deepEqual(world.pids(), [50, 60, 777, 800, 801]);
+  assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before);
+  assertWayOut(world, home, root, 'unreadable at the tree read');
+});
+
+test('stop refuses before killing anything when a process under the supervisor cannot be identified: the record still names a live supervisor', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const before = fs.readFileSync(statePath(home, root), 'utf8');
+  // The server started a process Windows gives no creation time for, with one of its own under it.
+  const world = fakeProcesses([...supervisedTree(), { pid: 802, ppid: 800, createdAt: null }, { pid: 803, ppid: 802, createdAt: CREATED + 3000 }]);
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.deepEqual(world.kills, [], 'a tree that cannot be read whole is not started on');
+  assert.deepEqual(world.pids(), [50, 60, 777, 800, 801, 802, 803]);
+  assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before);
+  assert.match(world.err(), /pid 802/);
+  assert.match(world.err(), /creation time/);
+  assert.match(world.err(), /js-harness remote stop again/);
+  assert.match(world.err(), /by hand/);
+  assert.match(world.err(), /kept/);
+  assert.ok(world.err().includes(statePath(home, root)), world.err());
+  assert.doesNotMatch(world.out(), /stopped|not running/);
+});
+
+test('stop does not report a clean tree when a later look finds a process it cannot identify', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const before = fs.readFileSync(statePath(home, root), 'utf8');
+  const world = fakeProcesses(supervisedTree());
+  world.hooks.beforeKill = (n) => {
+    // One more server as the supervisor is about to be killed, and Windows gives no creation time for it.
+    if (n === 1) world.table.push({ pid: 900, ppid: 777, createdAt: null, name: 'claude.exe' });
+  };
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.ok(world.pids().includes(900), 'it cannot be killed by identity, so it is left');
+  assert.match(world.err(), /pid 900/);
+  assert.match(world.err(), /creation time/);
+  assert.match(world.err(), /kept/);
+  assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before, 'the stop is not proven complete');
+  assert.doesNotMatch(world.out(), /stopped|not running/);
+});
+
+// ---- stop and start, one at a time for a project ----------------------------------------------------------------------
+
+test('a start that runs after stop killed the supervisor and before it removes the record is refused: stop holds the lock start takes', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const stopping = fakeWorld({ alive: new Map([[777, CREATED]]) });
+  const starting = fakeWorld();
+  let overlapping;
+  let atTheKill;
+  const kill = stopping.deps.kill;
+  stopping.deps.kill = (identity) => {
+    kill(identity);
+    // The old supervisor is dead and its record is still there: a start now would see it gone, and record a
+    // replacement that stop would then delete.
+    atTheKill = readLock(home, root);
+    overlapping = remoteMain(['start', '--cwd', root, '--home', home], {}, starting.deps);
+  };
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, stopping.deps), 0, stopping.err());
+  assert.equal(await overlapping, 1, 'the start is refused');
+  assert.equal(starting.spawned.length, 0, 'and launches nothing');
+  assert.match(starting.err(), /another js-harness remote start or stop is in progress/);
+  assert.ok(starting.err().includes(lockPathOf(home, root)), starting.err());
+  assert.deepEqual(atTheKill, { pid: process.pid, createdAt: OWN_CREATED }, 'the lock names stop while it kills');
+  assert.equal(fs.existsSync(statePath(home, root)), false);
+  assert.equal(fs.existsSync(lockPathOf(home, root)), false, 'and does not outlive it');
+});
+
+test('stop removes the state file only while it still holds the record it read: a replacement is kept, and said', { skip: WINDOWS_ONLY }, async () => {
+  const replacement = (home, root) => writeState(home, root, { pid: 4343, startedAt: CREATED + 9 });
+  const replacedWhile = {
+    'the supervisor is being killed': (world, home, root) => {
+      const kill = world.deps.kill;
+      world.deps.kill = (identity) => {
+        kill(identity);
+        replacement(home, root);
+      };
+    },
+    'a stale record is being checked': (world, home, root) => {
+      world.alive.delete(777);
+      const identify = world.deps.identifyProcesses;
+      world.deps.identifyProcesses = (pids) => {
+        if (pids.includes(777)) replacement(home, root);
+        return identify(pids);
+      };
+    },
+  };
+  for (const [what, arrange] of Object.entries(replacedWhile)) {
+    const root = makeProject();
+    const home = tempDir();
+    writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+    arrange(world, home, root);
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1, what);
+    assert.equal(readState(home, root).pid, 4343, `${what}: the record of another supervisor is not this stop's to delete`);
+    assert.match(world.err(), /pid 4343/, what);
+    assert.match(world.err(), /kept/, what);
+    assert.ok(world.err().includes(statePath(home, root)), world.err());
+  }
+});
+
+test('stop refuses while a start or another stop holds the lock: it kills nothing and leaves the lock and the record alone', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject();
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  writeLock(home, root, { pid: 555, createdAt: CREATED });
+  const lockBefore = fs.readFileSync(lockPathOf(home, root), 'utf8');
+  const stateBefore = fs.readFileSync(statePath(home, root), 'utf8');
+  const world = fakeWorld({ alive: new Map([[777, CREATED], [555, CREATED]]) });
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.deepEqual(world.killed, []);
+  assert.match(world.err(), /another js-harness remote start or stop is in progress/);
+  assert.match(world.err(), /pid 555/);
+  assert.ok(world.err().includes(lockPathOf(home, root)), world.err());
+  assert.equal(fs.readFileSync(lockPathOf(home, root), 'utf8'), lockBefore);
+  assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), stateBefore);
+});
+
+test('stop takes a lock whose owner is proven gone, and refuses one whose owner, or its own identity, cannot be told', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'the owner of the lock is gone': { lock: { pid: 555, createdAt: CREATED }, arrange: () => {}, code: 0, says: null },
+    'the lock is not a record': { lock: 'half-writ', arrange: () => {}, code: 1, says: /removed by hand/ },
+    'the command cannot read its own creation time': { lock: null, arrange: (world) => world.alive.set(process.pid, null), code: 1, says: /lock/ },
+  };
+  for (const [what, { lock, arrange, code, says }] of Object.entries(cases)) {
+    const root = makeProject();
+    const home = tempDir();
+    writeState(home, root, { pid: 777, startedAt: CREATED });
+    if (lock) writeLock(home, root, lock);
+    const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+    arrange(world);
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), code, `${what}: ${world.err()}`);
+    assert.deepEqual(world.killed, code === 0 ? [{ pid: 777, createdAt: CREATED }] : [], what);
+    assert.equal(fs.existsSync(statePath(home, root)), code !== 0, what);
+    if (says) assert.match(world.err(), says, what);
+    assert.equal(fs.existsSync(lockPathOf(home, root)), typeof lock === 'string', `${what}: only a lock that is not its own is left`);
+  }
+});
+
+test('the lock never outlives stop: it is released when stop succeeds, finds nothing, cannot tell, or fails', { skip: WINDOWS_ONLY }, async () => {
+  const ways = {
+    'it stops the supervisor': { code: 0, arrange: () => {} },
+    'the record is stale': { code: 0, arrange: ({ world }) => world.alive.delete(777) },
+    'it cannot tell whether the supervisor runs': { code: 1, arrange: ({ world }) => world.alive.set(777, null) },
+    'the kill fails': { code: 1, arrange: ({ world }) => { world.deps.kill = () => { throw new Error('still running after the kill: pid 777'); }; } },
+    'nothing is recorded': { code: 0, arrange: ({ home, root }) => fs.rmSync(statePath(home, root)) },
+  };
+  for (const [what, { code, arrange }] of Object.entries(ways)) {
+    const root = makeProject();
+    const home = tempDir();
+    writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+    arrange({ world, home, root });
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), code, `${what}: ${world.err()}`);
+    assert.equal(fs.existsSync(lockPathOf(home, root)), false, what);
   }
 });
 

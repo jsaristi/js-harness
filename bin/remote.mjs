@@ -6,8 +6,8 @@
 // and `stop` act on that record only when the process with that pid was still created at that time, because
 // Windows reuses pids and a bare-pid kill closed unrelated programs on this machine. A record is the only thing
 // that names a supervisor, so whatever does not prove it gone (a look that failed, a file that cannot be read)
-// answers `unknown`: nothing is started, killed or deleted, and the human is told what to check. One `start` runs
-// at a time for a project, under a lock file beside the state file.
+// answers `unknown`: nothing is started, killed or deleted, and the human is told what to check. One `start` or
+// `stop` runs at a time for a project, under a lock file beside the state file.
 import { spawn as spawnChild } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -60,7 +60,8 @@ function parseArgs(argv, env) {
   return {
     subcommand,
     cwd: values['--cwd'] ?? process.cwd(),
-    home: values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    // Absolute from here on: the supervisor runs in the repository, where a relative home would be another folder.
+    home: path.resolve(values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir()),
     name,
     spawnMode,
     permissionMode,
@@ -218,11 +219,32 @@ const SWEEP_LOOKS = 5;
  *    theirs: `selectDescendants`), and kills it, until a look finds none.
  * Throws, naming the pids, when something is still running, when a look fails, and when processes keep appearing.
  * Not covered: a server the supervisor launches after the first look, which dies with it, having started something
- * in those instants; nothing a snapshot holds ties that orphan to this tree. */
+ * in those instants; nothing a snapshot holds ties that orphan to this tree.
+ *
+ * Two things a look can show stop it short of a kill, because nothing here is killed on a guess:
+ *  - the supervisor is a live root only in a snapshot that shows its pid with the recorded creation time. It can
+ *    exit, and its pid go to another program, after the caller checked it: `selectDescendants` trusts the root it
+ *    is handed, and would select that program's children. Without that row the answer is `gone` and nothing is
+ *    selected; with the pid and no creation time it throws an error marked `unknown`;
+ *  - a process with no creation time that records a process of the tree as its parent may belong to it, and
+ *    cannot be killed by identity, nor can what is under it be reached. In the first look that is a refusal,
+ *    before any kill, so the record still names a live supervisor; in a later one the stop is not complete.
+ * Returns `stopped`, or `gone` when the supervisor was not there to stop. */
 function stopSupervisorTree({ pid, createdAt }, { look = takeSnapshot, kill = killProcesses } = {}) {
   const alive = look();
+  const root = alive.find((entry) => entry.pid === pid);
+  if (!root || (Number.isInteger(root.createdAt) && root.createdAt !== createdAt)) return 'gone';
+  if (root.createdAt !== createdAt) {
+    throw Object.assign(new Error(`a process has pid ${pid} and its creation time could not be read in the look its tree is read from, so it may be the recorded supervisor or another program`), { unknown: true });
+  }
+  const tree = selectDescendants(alive, { pid, createdAt });
+  const unreadable = unidentifiedUnder(alive, tree);
+  if (unreadable.length > 0) {
+    throw new Error(`Windows gives no creation time for pid ${unreadable.join(', ')}, which may be part of its tree, and nothing is killed by a pid alone; nothing was killed, and the supervisor still runs. Run js-harness remote stop again, or end them by hand`);
+  }
   const createdThen = new Map(alive.map((entry) => [entry.pid, entry.createdAt]));
-  let targets = selectDescendants(alive, { pid, createdAt }).filter((target) => target !== pid).map((target) => ({ pid: target, createdAt: createdThen.get(target) }));
+  let targets = tree.filter((target) => target !== pid).map((target) => ({ pid: target, createdAt: createdThen.get(target) }));
+  let unidentified = [];
   if (kill([{ pid, createdAt }]).running.length > 0) throw new Error(`still running after the kill: pid ${pid}`);
   // From here the supervisor is gone, and a later stop would find only that: what is left is named for the human.
   const orphans = (what) => `the supervisor (pid ${pid}) is stopped, but ${what}; end what is left by hand, because js-harness remote stop finds a tree through its supervisor, and that one is gone`;
@@ -234,6 +256,9 @@ function stopSupervisorTree({ pid, createdAt }, { look = takeSnapshot, kill = ki
       const exitedAt = Date.now();
       exited.push(...targets.map((target) => ({ pid: target.pid, startedAt: target.createdAt, exitedAt })));
     }
+    if (unidentified.length > 0) {
+      throw new Error(orphans(`Windows gives no creation time for pid ${unidentified.join(', ')}, which may be part of its tree and could not be killed by identity`));
+    }
     if (looks === SWEEP_LOOKS) {
       throw new Error(orphans(`processes kept appearing under it; the last look found pid ${targets.map((target) => target.pid).join(', ')}, which were killed, and more may have followed`));
     }
@@ -244,12 +269,21 @@ function stopSupervisorTree({ pid, createdAt }, { look = takeSnapshot, kill = ki
       throw new Error(orphans(`what it started could not be listed (${err.message})`));
     }
     const created = new Map(snapshot.map((entry) => [entry.pid, entry.createdAt]));
-    targets = [...new Set(exited.flatMap((root) => selectDescendants(snapshot, root)))].map((target) => ({ pid: target, createdAt: created.get(target) }));
-    if (targets.length === 0) return;
+    const found = [...new Set(exited.flatMap((gone) => selectDescendants(snapshot, gone)))];
+    targets = found.map((target) => ({ pid: target, createdAt: created.get(target) }));
+    unidentified = unidentifiedUnder(snapshot, [...exited.map((gone) => gone.pid), ...found]);
+    if (targets.length === 0 && unidentified.length === 0) return 'stopped';
   }
 }
 
-// ---- one start at a time for a project -------------------------------------------------------------------------------
+/** The pids of `snapshot` that record one of `parents` as their parent and have no creation time: each may be a
+ * child of that process or an older program that records a reused pid, and nothing tells which. */
+function unidentifiedUnder(snapshot, parents) {
+  const under = new Set(parents);
+  return snapshot.filter((entry) => under.has(entry.ppid) && !Number.isInteger(entry.createdAt)).map((entry) => entry.pid);
+}
+
+// ---- one start or stop at a time for a project -----------------------------------------------------------------------
 
 /** Who holds the lock file: `{ found, pid, text, why }`. `gone` when the file is not there any more, or the
  * process it names is proven not to run (its owner died without releasing it: the lock is free); `running` when
@@ -269,7 +303,7 @@ function lockHolder(lockPath, identify) {
     owner = null;
   }
   if (!Number.isInteger(owner?.pid) || !Number.isInteger(owner?.createdAt)) {
-    return { found: 'unknown', why: 'the lock file does not name its owner (a start may be writing it right now, or one died while it did)' };
+    return { found: 'unknown', why: 'the lock file does not name its owner (a start or stop may be writing it right now, or one died while it did)' };
   }
   try {
     const found = whereabouts({ pid: owner.pid, startedAt: owner.createdAt }, identify);
@@ -279,39 +313,53 @@ function lockHolder(lockPath, identify) {
   }
 }
 
-/** Takes the lock of `start` for one project: `{ release }`, or `{ refusal }` saying why it is not to be had.
- * Two starts that overlap would both read "nothing recorded", both launch a supervisor, and the second to write
- * would leave the first one running with no record; so the lock is taken before the state is read and held
- * until the supervisor is recorded. It is a file created with `wx` (it fails when the file exists) that names its
- * owner by pid and creation time, so that a lock left by a start that died does not block for good: an owner
- * proven gone frees it. An owner that cannot be identified does not, and the human is told the file may be
- * removed. Taking a stale lock over is not atomic (the file is read again just before it is removed): two starts
- * that both find the same stale lock in the same instant can still both take it. */
-function takeStartLock({ lockPath, root, identify }) {
+/** Takes the lock `start` and `stop` share for one project: `{ release }`, or `{ refusal }` saying why it is not
+ * to be had (`undone` is what the caller then did not do: `started`, `stopped`). Both read the state file and
+ * act on what it says, and the two must not interleave: two starts would both read "nothing recorded" and both
+ * launch, the second to write leaving the first supervisor with no record; a start between a stop's kill and its
+ * removal of the record would record a replacement that the stop then deletes. So the lock is taken before the
+ * state is read and held until the record is written, removed or kept. It is a file created with `wx` (it fails
+ * when the file exists) that names its owner by pid and creation time, so that a lock left by a command that died
+ * does not block for good: an owner proven gone frees it. An owner that cannot be identified does not, and the
+ * human is told the file may be removed. Taking a stale lock over is not atomic (the file is read again just
+ * before it is removed): two commands that both find the same stale lock in the same instant can still both
+ * take it.
+ *
+ * `release()` removes the file only while it still names this command, and never throws: the command's result
+ * stands whatever becomes of the lock. It returns what to tell the human when the file could not be removed. */
+function takeLock({ lockPath, root, identify, undone, removeFile }) {
   const where = path.normalize(root);
   let own;
   try {
     own = identify([process.pid]).find(({ pid }) => pid === process.pid);
   } catch (err) {
-    return { refusal: `cannot take the start lock for ${where}: this command's own process could not be identified (${err.message}). Nothing was started.` };
+    return { refusal: `cannot take the lock for ${where}: this command's own process could not be identified (${err.message}). Nothing was ${undone}.` };
   }
   if (!Number.isInteger(own?.createdAt)) {
-    return { refusal: `cannot take the start lock for ${where}: this command's own creation time could not be read, and a pid alone would not name the owner of the lock. Nothing was started.` };
+    return { refusal: `cannot take the lock for ${where}: this command's own creation time could not be read, and a pid alone would not name the owner of the lock. Nothing was ${undone}.` };
   }
   const mine = `${JSON.stringify({ pid: own.pid, createdAt: own.createdAt })}\n`;
-  const busy = (holder) => `another js-harness remote start is in progress for ${where} (${holder} the lock ${lockPath}). Nothing was started; run it again once that one has finished.`;
+  const busy = (holder) => `another js-harness remote start or stop is in progress for ${where} (${holder} the lock ${lockPath}). Nothing was ${undone}; run it again once that one has finished.`;
+  const release = () => {
+    try {
+      if (fs.readFileSync(lockPath, 'utf8') === mine) removeFile(lockPath);
+    } catch (err) {
+      if (err.code !== 'ENOENT') return `the lock file could not be removed (${err.message}); it may be removed by hand: ${lockPath}`;
+    }
+    return undefined;
+  };
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       fs.writeFileSync(lockPath, mine, { flag: 'wx' });
-      return { release: () => fs.rmSync(lockPath, { force: true }) };
+      return { release };
     } catch (err) {
       if (err.code !== 'EEXIST') throw err;
     }
     const holder = lockHolder(lockPath, identify);
     if (holder.found === 'running') return { refusal: busy(`pid ${holder.pid} holds`) };
     if (holder.found === 'unknown') {
-      return { refusal: `cannot tell whether another js-harness remote start is in progress for ${where}: ${holder.why}. Nothing was started. Once you have checked that no js-harness remote start is running, the lock file may be removed by hand: ${lockPath}` };
+      return { refusal: `cannot tell whether another js-harness remote start or stop is in progress for ${where}: ${holder.why}. Nothing was ${undone}. Once you have checked that no js-harness remote start or stop is running, the lock file may be removed by hand: ${lockPath}` };
     }
     try {
       if (holder.text !== undefined && fs.readFileSync(lockPath, 'utf8') === holder.text) fs.rmSync(lockPath);
@@ -409,11 +457,13 @@ async function start(opts, context) {
     error(`the folder name ${JSON.stringify(name)} cannot name the server (no & | < > ^ % " or control characters): pass --name <name>`);
     return 1;
   }
-  const claude = deps.resolveClaude({ env });
-  if (!claude) {
+  const found = deps.resolveClaude({ env });
+  if (!found) {
     error("Claude Code's CLI (claude) is not on PATH: install Claude Code, or add the folder that holds claude.exe (or claude.cmd) to PATH, then run this again.");
     return 1;
   }
+  // A PATH entry may be relative, and was resolved here: the supervisor, which runs elsewhere, is handed where it is.
+  const claude = { ...found, path: path.resolve(found.path) };
   const args = serverArgs({ name, spawnMode: opts.spawnMode, permissionMode: opts.permissionMode });
   if (claude.shell) {
     try {
@@ -489,36 +539,55 @@ function stop(context) {
     error(`cannot tell whether the remote server is running for ${path.normalize(root)}: ${before.why}. Nothing was killed. ${wayOut(state, files)}`);
     return 1;
   }
-  if (before.found === 'gone') {
-    if (state) fs.rmSync(files.statePath, { force: true });
-    log(`remote: not running for ${path.normalize(root)}${state ? '; removed its stale state file' : ''}`);
-    return 0;
+  let stopped = false;
+  if (before.found === 'running') {
+    try {
+      // `gone`: the supervisor exited between the look above and the one its tree is read from; nothing was killed.
+      stopped = deps.kill({ pid: state.pid, createdAt: state.startedAt }) !== 'gone';
+    } catch (err) {
+      if (err.unknown) error(`cannot tell whether the remote server is running for ${path.normalize(root)}: ${err.message}. Nothing was killed. ${wayOut(state, files)}`);
+      else error(`could not stop the remote server (supervisor pid ${state.pid}): ${err.message}. Its state file is kept: ${files.statePath}`);
+      return 1;
+    }
+    const after = locate(state, identify);
+    if (after.found === 'running') {
+      error(`the supervisor (pid ${state.pid}) is still running after the kill; its state file is kept: ${files.statePath}`);
+      return 1;
+    }
+    if (after.found === 'unknown') {
+      error(`the supervisor (pid ${state.pid}) was killed, but that could not be confirmed: ${after.why}. ${wayOut(state, files)}`);
+      return 1;
+    }
   }
-  try {
-    deps.kill({ pid: state.pid, createdAt: state.startedAt });
-  } catch (err) {
-    error(`could not stop the remote server (supervisor pid ${state.pid}): ${err.message}. Its state file is kept: ${files.statePath}`);
-    return 1;
+  if (state) {
+    const replaced = removeRecord(files.statePath, state);
+    if (replaced) {
+      error(`${stopped ? `the supervisor (pid ${state.pid}) was stopped, but the` : 'the'} state file no longer holds the record this stop read: ${replaced}. It is kept: ${files.statePath}; js-harness remote status says what it names now.`);
+      return 1;
+    }
   }
-  const after = locate(state, identify);
-  if (after.found === 'running') {
-    error(`the supervisor (pid ${state.pid}) is still running after the kill; its state file is kept: ${files.statePath}`);
-    return 1;
-  }
-  if (after.found === 'unknown') {
-    error(`the supervisor (pid ${state.pid}) was killed, but that could not be confirmed: ${after.why}. ${wayOut(state, files)}`);
-    return 1;
-  }
-  fs.rmSync(files.statePath, { force: true });
-  log(`remote: stopped for ${path.normalize(root)}`);
+  if (stopped) log(`remote: stopped for ${path.normalize(root)}`);
+  else log(`remote: not running for ${path.normalize(root)}${state ? '; removed its stale state file' : ''}`);
   return 0;
+}
+
+/** Removes the state file while it still holds the record `state`, the one this stop read and acted on. The lock
+ * keeps a start from writing another meanwhile; this is the second guard, for a record that got there some other
+ * way: it names another supervisor, and is not this stop's to delete. Returns what the file holds instead. */
+function removeRecord(statePath, state) {
+  const now = readState(statePath);
+  if (now === null) return undefined;
+  if (now.unreadable) return `it is there and ${now.unreadable}`;
+  if (now.pid !== state.pid || now.startedAt !== state.startedAt) return `it records a supervisor as pid ${now.pid}`;
+  fs.rmSync(statePath, { force: true });
+  return undefined;
 }
 
 /** `js-harness remote ...`. `deps`: `spawn` (async), `takeSnapshot()` and `killProcesses(targets)` (those of
  * `process-tree.mjs`), `identifyProcesses(pids)` (`lookUpProcesses`) and `kill({ pid, createdAt })`
  * (`stopSupervisorTree`), both built on the two before unless given, `stopSpawned(child, { startedAt })`,
- * `resolveClaude({ env })`, `platform`, `log`, `error`, and for the hidden supervisor `readPersistentEnv()`,
- * `supervise(options)` and `signals`; the defaults are the real ones. */
+ * `resolveClaude({ env })`, `removeFile(path)` (what releases the lock), `platform`, `log`, `error`, and for the
+ * hidden supervisor `readPersistentEnv()`, `supervise(options)` and `signals`; the defaults are the real ones. */
 export async function remoteMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const log = deps.log ?? console.log;
@@ -530,6 +599,7 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     kill: deps.kill ?? ((identity) => stopSupervisorTree(identity, { look, kill: deps.killProcesses ?? killProcesses })),
     stopSpawned: deps.stopSpawned ?? stopSpawnedSupervisor,
     resolveClaude: deps.resolveClaude ?? findClaude,
+    removeFile: deps.removeFile ?? ((file) => fs.rmSync(file)),
   };
   if (argv[0] === 'supervise') return superviseMain(argv.slice(1), env, deps);
 
@@ -554,22 +624,22 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
   const files = { statePath: path.join(dir, `${id}.json`), logPath: path.join(dir, `${id}.log`), lockPath: path.join(dir, `${id}.lock`) };
   const context = { env, deps: resolved, log, error, root, files, identify: resolved.identifyProcesses };
   try {
-    if (opts.subcommand === 'start') {
-      // The state is read under the lock, which is released on every way out, a throw included.
-      const lock = takeStartLock({ lockPath: files.lockPath, root, identify: context.identify });
-      if (lock.refusal) {
-        error(lock.refusal);
-        return 1;
-      }
-      try {
-        return await start(opts, { ...context, state: readState(files.statePath) });
-      } finally {
-        lock.release();
-      }
+    if (opts.subcommand === 'status') return status({ ...context, state: readState(files.statePath) });
+    const starting = opts.subcommand === 'start';
+    const lock = takeLock({ lockPath: files.lockPath, root, identify: context.identify, undone: starting ? 'started' : 'stopped', removeFile: resolved.removeFile });
+    if (lock.refusal) {
+      error(lock.refusal);
+      return 1;
     }
-    context.state = readState(files.statePath);
-    if (opts.subcommand === 'stop') return stop(context);
-    return status(context);
+    // The state is read under the lock, which is released on every way out, a throw included. The release adds a
+    // line when it fails, and nothing more: what the command did stands.
+    try {
+      const locked = { ...context, state: readState(files.statePath) };
+      return starting ? await start(opts, locked) : stop(locked);
+    } finally {
+      const left = lock.release();
+      if (left) error(left);
+    }
   } catch (err) {
     error(`js-harness remote ${opts.subcommand}: ${err.message}`);
     return 1;
