@@ -306,6 +306,12 @@ the chain strategy is asked once, before the commit that crosses the budget.
   fails. `--home` and `JS_HARNESS_HOME` are resolved in argument parsing. The lock is
   released only while it holds its owner's identity, and a failed removal is a line in the
   output, not the command's result. Committed with this entry.
+- 2026-10-04: T2t is `0493630` (gate `PASS tests`, 553 s). gentle-ai reviewed
+  `1ae255e..0493630`: medium, 547 lines, due; lineage `review-f64ba0043126b5ac`, lens
+  reliability, approved and acknowledged, authority burned, two SUGGESTIONs (Follow-ups).
+  Codex over `1ae255e..0493630`: no actionable defects, recorded. With `535ef09..1ae255e`
+  recorded before, every code commit of the first slice has a Codex record; the reviewed
+  boundary is `0493630`.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -355,6 +361,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   without checking that the snapshot holds that row; `resolveRoot` and `selectTrees` do
   check. `remote stop` now checks before calling it (T2t); the guard belongs in the function,
   outside this feature's surface.
+- T2s and T2t review suggestions (gentle-ai, advisory), tests that are missing: the
+  stale-lock takeover when the lock text changes between the look and the re-read; a target
+  already gone at kill time, whose exited-parent window is widened by the look-to-kill
+  interval; the state file vanishing or becoming unreadable between `stop`'s read and its
+  removal; a lock already removed by hand, or unreadable, at release.
 - Left open by T2t. A process with no creation time under the supervisor's tree blocks
   `stop` for as long as it exists; the message says to end it by hand. When the supervisor
   is already gone in the snapshot, what it left is not searched for, because its exit time
@@ -377,26 +388,29 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes (merge
-`9070a8b`), T1r with T2r (`c74e42c`) and T2s (`1ae255e`) are committed on `feat/remote-control`, not pushed;
-the four slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
-with `js-harness remote start` (detached; `remote status` shows it, `remote stop` ends it).
-It still runs T2's code: `remote stop` then `remote start` loads T1r and T2r, and ends the
-sessions opened through it, so it waits for his word. In order:
+State on 2026-10-04: the first slice is written, committed and reviewed on
+`feat/remote-control`, not pushed: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes
+(merge `9070a8b`), T1r with T2r (`c74e42c`), T2s (`1ae255e`) and T2t (`0493630`). Each code
+commit was approved by gentle-ai and is covered by a Codex record. The server for
+`D:js-harness` is running, started with `js-harness remote start` (detached; `remote
+status` shows it, `remote stop` ends it). It still runs T2's code: `remote stop` then
+`remote start` loads the fixes, and ends the sessions opened through it, so it waits for his
+word. In order:
 
-1. T2t is committed with this entry: `gentle-ai review assess --base-ref 1ae255e
-   --committed-only`, and Codex over its range: `js-harness codex-review --base 1ae255e`
-   (`535ef09..1ae255e` is recorded).
-2. If Codex finds more in the lifecycle, Sebastián decides whether a further round goes
-   before T3 or into Follow-ups: two rounds already found seven defects.
-3. PR #27 is merged on his go-ahead; then the first slice of this feature can be pushed.
-4. T3 to T6.
+1. PR #27 (the gate fixes, four commits) is merged on his go-ahead: `gh pr merge 27 --merge`,
+   pull `main`. This branch already holds those commits through `9070a8b`.
+2. The first slice goes out: load the `chained-pr` and `work-unit-commits` skills, push,
+   open its PR against `main`.
+3. T3 and T5 (second slice), then T4 and T6 (third slice), each task with its commit, its
+   `gentle-ai review assess --base-ref <last reviewed boundary> --committed-only` and, per
+   slice with code, `js-harness codex-review --base <boundary>`.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
-slices, each its own PR merged in order: plan+T1+T1r+T2+T2r (above the 400-line budget, which
-that slicing accepts), then T3+T5, then T4+T6. The gate's limit for a sensor is twenty
-minutes.
+slices, each its own PR merged in order: plan+T1+T1r+T2+T2r (with T2s and T2t, above the
+400-line budget, which that slicing accepts), then T3+T5, then T4+T6. The gate's limit for a
+sensor is twenty minutes.
 Never run two gates at once, and after a failed gate check `git rev-parse --is-inside-work-tree`.
-A gate takes about eleven minutes here; a commit message file is written before its commit
-starts, not inside a command a guard can abort.
+A gate takes about ten minutes here, so commits run in the background and a document-only
+change rides on the next task's commit when it can; a commit message file is written before
+its commit starts, not inside a command a guard can abort.
