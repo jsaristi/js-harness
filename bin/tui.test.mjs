@@ -523,7 +523,8 @@ const INVALID = { kind: 'invalidHarnessJson', root: '/repo', harnessJsonPath: '/
 
 /** A menu as one comparable list: headers as `[label]`, items by id. */
 const ids = (menu) => menu.map((entry) => (entry.header ? `[${entry.label}]` : entry.id));
-const PROJECT_MENU = ['[project]', 'project-sync', 'project-status', 'project-uninstall'];
+const REMOTE_MENU = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
+const PROJECT_MENU = ['[project]', 'project-sync', 'project-status', 'project-uninstall', ...REMOTE_MENU];
 
 function stateAt(location, id) {
   const state = initialState({ installedVersion: '0.1.0', updateAvailable: null, location });
@@ -550,8 +551,25 @@ test('buildMenu is exactly today\'s machine menu outside a git repository', () =
 
 test('buildMenu offers Init, then the machine section, in a repository that is not initialized', () => {
   const menu = buildMenu(NOT_INITIALIZED);
-  assert.deepEqual(ids(menu), ['[project]', 'project-init', '[machine]', ...MENU_ITEMS]);
+  assert.deepEqual(ids(menu), ['[project]', 'project-init', ...REMOTE_MENU, '[machine]', ...MENU_ITEMS]);
   assert.equal(menu[1].label, 'Init');
+});
+
+test('buildMenu offers the remote server after the project items in every git repository, and never outside one', () => {
+  for (const location of [NOT_INITIALIZED, INITIALIZED, STALE, INVALID]) {
+    const menu = buildMenu(location);
+    const machine = menu.findIndex((entry) => entry.header && entry.label === 'machine');
+    assert.deepEqual(ids(menu).slice(machine - 3, machine), REMOTE_MENU, `${location.kind}: the last three items of the project section`);
+    assert.deepEqual(
+      menu.slice(machine - 3, machine).map((entry) => entry.label),
+      ['Remote status', 'Remote start', 'Remote stop'],
+    );
+  }
+  for (const location of [NOT_GIT, { kind: 'noSuchDirectory', cwd: '/x' }]) {
+    assert.equal(ids(buildMenu(location)).some((id) => id.includes('remote')), false, location.kind);
+  }
+  const everyLabel = [NOT_INITIALIZED, INITIALIZED].flatMap((location) => buildMenu(location).map((entry) => entry.label));
+  assert.equal(everyLabel.some((label) => /login/i.test(label)), false, 'the login launcher is not offered here');
 });
 
 test('buildMenu offers Sync, Status and Uninstall in an initialized project, stale and invalid ones included', () => {
@@ -588,11 +606,11 @@ test('render outside a repository shows no section headers', () => {
 });
 
 test('down and up skip the headers and wrap around the whole menu', () => {
-  const start = stateAt(INITIALIZED, 'project-uninstall');
+  const start = stateAt(INITIALIZED, 'project-remote-stop');
   const machineStatus = press(start, 'down').state;
   assert.equal(machineStatus.menu[machineStatus.selected].id, 'status', 'down from the last project item skips [machine]');
   const back = press(machineStatus, 'up').state;
-  assert.equal(back.menu[back.selected].id, 'project-uninstall', 'up skips [machine] the other way');
+  assert.equal(back.menu[back.selected].id, 'project-remote-stop', 'up skips [machine] the other way');
 
   const first = stateAt(INITIALIZED, 'project-sync');
   const wrapped = press(first, 'up').state;
@@ -633,6 +651,35 @@ test('the two uninstalls ask different questions and run different commands', ()
   assert.match(render(machine.state).join('\n'), /Uninstall js-harness from this home\? \(y\/N\)/);
   assert.doesNotMatch(render(machine.state).join('\n'), /in this project/);
   assert.deepEqual(handleKey(machine.state, 'y').effect, { type: 'run', command: 'uninstall' });
+});
+
+test('Remote status and Remote start run directly; Remote stop asks first, saying what it ends', () => {
+  for (const location of [NOT_INITIALIZED, INITIALIZED]) {
+    assert.deepEqual(press(stateAt(location, 'project-remote-status'), 'enter').effect, { type: 'run', command: 'project-remote-status' });
+    assert.deepEqual(press(stateAt(location, 'project-remote-start'), 'enter').effect, { type: 'run', command: 'project-remote-start' });
+
+    const stop = press(stateAt(location, 'project-remote-stop'), 'enter');
+    assert.equal(stop.effect, null, 'nothing runs before the answer');
+    assert.equal(stop.state.mode, 'confirm');
+    assert.equal(stop.state.pending, 'project-remote-stop');
+    const prompt = render(stop.state).at(-1);
+    assert.match(prompt, /^Stop the remote server of this project\? .*\(y\/N\)$/);
+    assert.match(prompt, /sessions opened through it/i, 'stopping the server ends them, and the prompt says so');
+    assert.deepEqual(handleKey(stop.state, 'y').effect, { type: 'run', command: 'project-remote-stop' });
+    for (const key of ['n', 'enter', 'escape']) {
+      const cancelled = handleKey(stop.state, key);
+      assert.equal(cancelled.effect, null, key);
+      assert.equal(cancelled.state.mode, 'menu', key);
+    }
+  }
+});
+
+test('withLocation keeps a remote item selected while the repository stays one, and leaves it when the repository is gone', () => {
+  const kept = withLocation(stateAt(NOT_INITIALIZED, 'project-remote-start'), INITIALIZED);
+  assert.equal(kept.menu[kept.selected].id, 'project-remote-start', 'init changes the items above it, not this one');
+  const outside = withLocation(stateAt(INITIALIZED, 'project-remote-stop'), NOT_GIT);
+  assert.deepEqual(ids(outside.menu), MENU_ITEMS);
+  assert.ok(!outside.menu[outside.selected].header);
 });
 
 test('withLocation rebuilds the menu and keeps the selection on the same item when it survives', () => {
@@ -766,6 +813,61 @@ test('buildCommands has every project command with no root, and each refuses cle
   }
 });
 
+// --- remote: the server of the repository, through `remoteMain` ---
+
+test('buildCommands runs remote status, start and stop on the root of the location, with the home, and returns its exit code', async () => {
+  const calls = [];
+  const env = { APPDATA: 'C:\\nowhere' };
+  const remoteMain = async (argv, givenEnv) => {
+    calls.push({ argv, env: givenEnv });
+    return argv[0] === 'stop' ? 1 : 0;
+  };
+  const commands = buildCommands({ home: '/home/x', root: '/opened', env, remoteMain });
+  const location = { kind: 'notInitialized', root: '/current' };
+
+  assert.equal(await commands['project-remote-status'](location), 0);
+  assert.equal(await commands['project-remote-start'](location), 0);
+  assert.equal(await commands['project-remote-stop'](location), 1, 'the command\'s own exit code');
+  assert.equal(await commands['project-remote-status'](), 0);
+
+  assert.deepEqual(calls.map((call) => call.argv), [
+    ['status', '--cwd', '/current', '--home', '/home/x'],
+    ['start', '--cwd', '/current', '--home', '/home/x'],
+    ['stop', '--cwd', '/current', '--home', '/home/x'],
+    ['status', '--cwd', '/opened', '--home', '/home/x'],
+  ]);
+  assert.ok(calls.every((call) => call.env === env), 'the same environment as every other command');
+  assert.equal(calls.some((call) => call.argv.includes('--at-login')), false, 'the menu never turns the login launcher on or off');
+});
+
+test('the remote commands refuse cleanly without a location, and start nothing', async () => {
+  let ran = 0;
+  const commands = buildCommands({ home: os.tmpdir(), remoteMain: async () => { ran += 1; return 0; } });
+  for (const id of ['project-remote-status', 'project-remote-start', 'project-remote-stop']) {
+    assert.equal(typeof commands[id], 'function', id);
+    await assert.rejects(() => commands[id](), /no project/, id);
+  }
+  assert.equal(ran, 0);
+});
+
+// The arguments the menu passes are ones the real command takes: `status`, which only reads, on a repository
+// with no server, a home of its own and an APPDATA that is not this machine's.
+test('Remote status reaches the real command with arguments it accepts', { skip: process.platform === 'win32' ? false : 'js-harness remote runs on Windows only' }, async () => {
+  const repo = makeFixtureRepo('js-harness-tui-remote-');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-remote-home-'));
+  try {
+    const commands = buildCommands({ home, env: { APPDATA: path.join(home, 'Roaming') } });
+    const status = await silently(() => commands['project-remote-status']({ kind: 'notInitialized', root: repo }));
+    assert.equal(status.result, 0, status.lines.join('\n'));
+    assert.match(status.lines.join('\n'), /^remote: not running$/m);
+    assert.match(status.lines.join('\n'), /^login launcher: off$/m);
+    assert.deepEqual(fs.readdirSync(home), [], 'reading the status writes nothing');
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('project commands act on the root of the location they are given, not the one they were built with', async () => {
   const opened = makeFixtureRepo('js-harness-tui-opened-');
   const current = makeFixtureRepo('js-harness-tui-current-');
@@ -813,7 +915,8 @@ test('runTui hands the command the location just read: open outside a repository
   stdin.emit('data', '\r'); // Status (machine) runs, then the re-read finds a repository
   await flush();
   assert.match(stdout.chunks.at(-1), /^project$/m);
-  stdin.emit('data', 'k'); // up, over the [machine] header, to Init
+  // Up, over the [machine] header and the remote items, to Init.
+  for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'k');
   stdin.emit('data', '\r');
   await flush();
 
@@ -912,7 +1015,7 @@ for (const [label, fail] of [
       stdin,
       stdout,
     });
-    stdin.emit('data', 'j'); // to machine Status
+    for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'j'); // past the remote items, to machine Status
     const { lines } = await silently(async () => {
       stdin.emit('data', '\r');
       await flush();
@@ -1119,7 +1222,7 @@ test('a failed stack read does not stop the location re-read', async () => {
     stdin,
     stdout,
   });
-  stdin.emit('data', 'j'); // machine Status
+  for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'j'); // past the remote items, to machine Status
   await silently(async () => {
     stdin.emit('data', '\r');
     await flush();

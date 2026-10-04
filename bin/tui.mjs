@@ -9,10 +9,13 @@ import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
+import { remoteMain } from './remote.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
 export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+/** The remote-control server of the repository, last in the project section. */
+const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
 const MENU_LABELS = {
   status: 'Status',
   doctor: 'Doctor',
@@ -25,12 +28,17 @@ const MENU_LABELS = {
   'project-sync': 'Sync',
   'project-status': 'Status',
   'project-uninstall': 'Uninstall',
+  'project-remote-status': 'Remote status',
+  'project-remote-start': 'Remote start',
+  'project-remote-stop': 'Remote stop',
 };
 // The uninstalls ask before they run; each prompt names what it undoes. A command has a prompt here
-// exactly when it asks first, and `state.pending` names the command the open prompt is for.
+// exactly when it asks first, and `state.pending` names the command the open prompt is for. Stopping the
+// remote server asks too: the sessions the phone opened through it end with it.
 const CONFIRM_PROMPTS = {
   uninstall: 'Uninstall js-harness from this home? (y/N)',
   'project-uninstall': 'Undo js-harness in this project? (y/N)',
+  'project-remote-stop': 'Stop the remote server of this project? The sessions opened through it end. (y/N)',
 };
 
 // --- T5: the menu by location. Data built by a pure function, so it is tested without a terminal ---
@@ -42,13 +50,15 @@ const header = (label) => ({ header: true, label });
  * machine menu; inside one, a non-selectable `project` header with Init (not initialized) or Sync, Status
  * and Uninstall (initialized, a stale manifest or a bad `harness.json` included: `status` and `sync` name
  * the problem and `uninstall` clears it), then a non-selectable `machine` header with the machine items.
+ * In every one of those the project section ends with Remote status, start and stop: `js-harness remote`
+ * acts on any git repository, initialized or not. The login launcher (`--at-login`) is not offered here.
  * Entries are `{ id, label }`, or `{ header: true, label }` for a section header. */
 export function buildMenu(location = { kind: 'notGit' }) {
   const machine = MENU_ITEMS.map(item);
-  if (location.kind === 'notInitialized') return [header('project'), item('project-init'), header('machine'), ...machine];
+  const section = (...ids) => [header('project'), ...[...ids, ...REMOTE_ITEMS].map(item), header('machine'), ...machine];
+  if (location.kind === 'notInitialized') return section('project-init');
   if (['initialized', 'staleManifest', 'invalidHarnessJson'].includes(location.kind)) {
-    const project = ['project-sync', 'project-status', 'project-uninstall'].map(item);
-    return [header('project'), ...project, header('machine'), ...machine];
+    return section('project-sync', 'project-status', 'project-uninstall');
   }
   return machine;
 }
@@ -323,6 +333,7 @@ export function buildCommands({
   spawn = spawnSync,
   fetch: fetchImpl = fetch,
   now,
+  remoteMain: remote = remoteMain,
 } = {}) {
   const argsAt = (location) => {
     const at = location?.root ?? root;
@@ -334,6 +345,10 @@ export function buildCommands({
     'project-sync': async (location) => syncMain(argsAt(location), env),
     'project-status': async (location) => statusMain(argsAt(location), env, spawn),
     'project-uninstall': async (location) => uninstallMain(argsAt(location), env),
+    // `remote` takes the same `--cwd` and `--home` for its three subcommands, and nothing else is passed.
+    'project-remote-status': async (location) => remote(['status', ...argsAt(location)], env),
+    'project-remote-start': async (location) => remote(['start', ...argsAt(location)], env),
+    'project-remote-stop': async (location) => remote(['stop', ...argsAt(location)], env),
     status: () => statusMain(['--global', '--home', home], env, spawn),
     doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
     install: () => installMain(['--home', home]),

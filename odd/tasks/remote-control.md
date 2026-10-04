@@ -128,7 +128,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   delegated writer)
 - [ ] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
   delegated writer)
-- [ ] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
+- [x] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
 - [ ] T6 Roadmap: the phase and its steps, the Commands row, and the live check on this machine
   (route: inline)
 
@@ -351,6 +351,14 @@ the chain strategy is asked once, before the commit that crosses the budget.
   edited or unrecorded file. Not turned on on this machine: the real Startup folder holds
   only `desktop.ini`, no manifest exists in the real home, and `remote status` reads the
   live server with `login launcher: off`. Committed with this entry.
+- 2026-10-04: T3 is `0be9491` (gate `PASS tests`, 542 s). T5 done (the same writer; `node --test
+  bin/tui.test.mjs` 69/69, re-run by the parent; RED: 10 of 69, `commands.project-remote-status
+  is not a function`). The project section of every git repository ends with `Remote status`,
+  `Remote start` and `Remote stop`, each calling `remoteMain` with the `--cwd` and `--home` the
+  other project commands get, through an injectable seam; stop asks first and its prompt
+  says the sessions opened through the server end. Four existing tests that reached the
+  machine section by a fixed number of key presses were adjusted to the longer menu.
+  Committed with this entry; gentle-ai and Codex review the slice (`0493630..HEAD`) next.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
