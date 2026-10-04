@@ -184,12 +184,14 @@ work) these tasks do not measure.
 
 ## Next
 
-1. F6 Codex parity, the next phase in order: no feature document yet. Its plan, and any spend
+1. Remote sessions (`odd/tasks/remote-control.md`, branch `feat/remote-control`): open a local
+   session from the phone through `js-harness remote`. Sebastián put it before F6 on 2026-10-03.
+2. F6 Codex parity, the next phase in order: no feature document yet. Its plan, and any spend
    its runs need, are Sebastián's to approve before work starts.
-2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
+3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.
-3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
+4. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
    taken at any time.
 
 ## Stack doctor notes
