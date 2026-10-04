@@ -87,8 +87,9 @@ export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}
  * the program it starts, and control characters, a line end among them. */
 const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
 
-/** What each value of the launcher is called when it is refused. */
-const LAUNCHER_VALUES = {
+/** The values a launcher holds, each with what it is called when it is refused. `loginLauncher` checks these and
+ * builds the file from what it checked, so no value reaches the file unchecked or is refused without a name. */
+const LAUNCHER_LABELS = {
   node: 'the node executable',
   script: 'this install of js-harness',
   root: 'the project folder',
@@ -107,14 +108,17 @@ const LAUNCHER_VALUES = {
  * real cmd.exe on 2026-10-04: it reads a batch file in the console's code page, line by line, so a path with a
  * letter beyond ASCII is not found under code page 850, 437 or 1252, and is found once a `chcp 65001` line has
  * run before it. That line is written only when the command needs it: the console is the launcher's own. */
-export function loginLauncher({ node, script, root, name, permissionMode, spawnMode, home }) {
-  const values = { node, script, root, name, permissionMode, spawnMode, home };
-  for (const [key, value] of Object.entries(values)) {
+export function loginLauncher(options) {
+  const checked = {};
+  for (const [key, label] of Object.entries(LAUNCHER_LABELS)) {
+    const value = options[key];
     const found = value === undefined ? null : UNSAFE_IN_BATCH.exec(value);
     if (found) {
-      throw new Error(`the login launcher cannot hold ${LAUNCHER_VALUES[key]} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
+      throw new Error(`the login launcher cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
     }
+    checked[key] = value;
   }
+  const { node, script, root, name, permissionMode, spawnMode, home } = checked;
   const args = [
     script, 'start', '--cwd', root, '--name', name,
     ...(permissionMode ? ['--permission-mode', permissionMode] : []),

@@ -616,7 +616,7 @@ test('loginLauncher refuses, naming it, any value that holds what cmd.exe acts o
   }
 });
 
-test('a generated launcher run by a real cmd.exe hands the script its arguments intact, through a space and a letter beyond ASCII', { skip: process.platform === 'win32' ? false : 'cmd.exe only', timeout: 120000 }, () => {
+test('a generated launcher run by a real cmd.exe hands the script its arguments intact, through a space and a letter beyond ASCII', { skip: process.platform === 'win32' ? false : 'cmd.exe only', timeout: 120000 }, (t) => {
   const dir = path.join(tempDir(), 'lanzador ñ');
   const root = path.join(dir, 'mi proyecto ñandú');
   fs.mkdirSync(root, { recursive: true });
@@ -626,23 +626,32 @@ test('a generated launcher run by a real cmd.exe hands the script its arguments 
   const received = path.join(dir, 'args.json');
   const launcher = path.join(dir, 'js-harness-remote-test.cmd');
   const text = loginLauncher({ node: process.execPath, script: fake, root, name: 'café del móvil', permissionMode: 'acceptEdits', home: path.join(dir, 'otra casa') });
-  // The console a launcher gets at login has the machine's OEM code page (850 here in Spanish, 437 in English),
-  // not UTF-8: each run below starts in a console of its own (`windowsHide`) that is switched to 850 first.
-  const runUnder850 = (content) => {
+  // The console a launcher gets at login has the machine's OEM code page (850 in Spanish, 437 in English), not
+  // UTF-8: each run below starts in a console of its own (`windowsHide`), asks for 850, and prints the code page
+  // it then has, because the switch does not take everywhere (a machine set to UTF-8 system-wide, a console
+  // where `chcp` fails). `under850` says whether the launcher really ran under 850.
+  const runAskingFor850 = (content) => {
     fs.writeFileSync(launcher, content);
     fs.rmSync(received, { force: true });
-    const result = spawnChildSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"chcp 850 >nul & "${launcher}""`], { encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true, timeout: 60000 });
-    return { result, args: fs.existsSync(received) ? JSON.parse(fs.readFileSync(received, 'utf8')) : null };
+    const result = spawnChildSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"chcp 850 >nul & chcp & "${launcher}""`], { encoding: 'latin1', windowsHide: true, windowsVerbatimArguments: true, timeout: 60000 });
+    const under850 = /\b850\b/.test(String(result.stdout).split(/\r?\n/)[0]);
+    return { result, under850, args: fs.existsSync(received) ? JSON.parse(fs.readFileSync(received, 'utf8')) : null };
   };
 
-  const run = runUnder850(text);
+  // Whatever the console's code page turned out to be, the arguments arrive as they were given.
+  const run = runAskingFor850(text);
   assert.equal(run.result.status, 0, run.result.stderr);
   assert.deepEqual(run.args, ['start', '--cwd', root, '--name', 'café del móvil', '--permission-mode', 'acceptEdits', '--home', path.join(dir, 'otra casa')]);
-
-  // Measured on 2026-10-04, and why the file has that line: without it cmd.exe reads the UTF-8 bytes in the
-  // console's code page, and the path it then runs does not exist.
   assert.match(text, /^chcp 65001 >nul\r\n/m);
-  const without = runUnder850(text.replace('chcp 65001 >nul\r\n', ''));
-  assert.notEqual(without.result.status, 0, 'the same file without the code page line does not find the script');
-  assert.equal(without.args, null);
+
+  // Why the file has that line, measured on 2026-10-04 under code pages 850, 437 and 1252: without it cmd.exe
+  // reads the UTF-8 bytes in the console's code page, and the path it then runs does not exist. That is a fact
+  // about cmd.exe under 850, so it is asserted only where this run's console really was 850.
+  const without = runAskingFor850(text.replace('chcp 65001 >nul\r\n', ''));
+  if (run.under850 && without.under850) {
+    assert.notEqual(without.result.status, 0, 'the same file without the code page line does not find the script');
+    assert.equal(without.args, null);
+  } else {
+    t.diagnostic('the console did not switch to code page 850 here, so the need for the chcp line was not re-measured');
+  }
 });

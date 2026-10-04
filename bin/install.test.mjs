@@ -256,6 +256,65 @@ test('uninstallMain reports an optional file with the removed files, and an edit
   }
 });
 
+// A machine where only `remote start --at-login` ever wrote: its manifest has a null version.
+
+test('syncMain --global over a manifest that only records an optional file installs as on a clean home, and keeps the record', async () => {
+  const home = makeTmpHome();
+  const clean = makeTmpHome();
+  try {
+    const record = recordLauncher(home);
+    const synced = await captureConsole(() => syncMain(['--global', '--home', home]));
+    const expected = await captureConsole(() => syncMain(['--global', '--home', clean]));
+
+    assert.equal(synced.code, 0);
+    assert.deepEqual(
+      synced.outLines.map((line) => line.replaceAll(home, '<home>')),
+      expected.outLines.map((line) => line.replaceAll(clean, '<home>')),
+      'the same report as with no manifest at all',
+    );
+    assert.equal(readManifest(home).version, currentVersion());
+    assert.equal(readManifest(home).files.length, readManifest(clean).files.length);
+    assert.deepEqual(readManifest(home).optional, [record]);
+    assert.ok(fs.existsSync(record.path));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(clean, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global over a manifest that only records a file that is gone says nothing is installed, and removes the manifest', async () => {
+  const home = makeTmpHome();
+  try {
+    const record = recordLauncher(home);
+    fs.rmSync(record.path);
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(code, 0);
+    assert.deepEqual(outLines, [`nothing installed under ${home}`]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain reports an optional file it cannot remove as kept, and still removes the rest and the manifest', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const blocked = path.join(home, 'Startup', 'js-harness-remote-blocked.cmd');
+    fs.mkdirSync(blocked, { recursive: true }); // a folder at the recorded path
+    recordOptionalFile(home, blocked, 'as written');
+
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.includes(`kept (modified by you) ${blocked}`), outLines.join('\n'));
+    assert.ok(outLines.some((line) => line.startsWith('removed ') && line.endsWith('SKILL.md')), outLines.join('\n'));
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- T3 (project-init): uninstallMain's scope routing — see project.mjs's uninstallProject and
 // "T3 design" ---
 

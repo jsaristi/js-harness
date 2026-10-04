@@ -1468,15 +1468,76 @@ test('start --at-login leaves no launcher that no record names: when recording f
   assert.match(world.err(), /EACCES/);
   assert.match(world.err(), /removed again/);
   assert.equal(world.spawned.length, 0, 'and nothing was started');
+});
 
-  // The same when the file it replaced was its own: the record that is left names a file that is gone, which
-  // stop --at-login and uninstall both take for nothing to remove.
+test('start --at-login that cannot record the launcher it replaced puts the earlier one back: the file and its record are as they were', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
   assert.equal(await remoteMain(argv, env, world.deps), 0, world.err());
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) };
+
   const failing = fakeWorld();
-  assert.equal(await remoteMain([...argv, '--name', 'other'], env, { ...failing.deps, recordOptionalFile: cannotRecord }), 1);
-  assert.deepEqual(fs.readdirSync(startupDir), []);
+  const seen = [];
+  const recordOptionalFile = () => {
+    seen.push(fs.readFileSync(file, 'utf8'));
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain([...argv, '--name', 'other'], env, { ...failing.deps, recordOptionalFile }), 1);
+  assert.match(seen[0], /--name other/, 'the new launcher had been written when recording it failed');
+  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) }, before, 'the earlier launcher still works, and its record still names it');
+  assert.match(failing.err(), /EACCES/);
+  assert.match(failing.err(), /earlier launcher was put back/);
   assert.equal(failing.spawned.length, 0);
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, fakeWorld().deps), 0, 'and it is still removed exactly');
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+});
+
+test('start --at-login says so, naming the file, when the earlier launcher cannot be put back either', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, world.deps), 0, world.err());
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+
+  const failing = fakeWorld();
+  const recordOptionalFile = () => {
+    // A folder takes the launcher's place, so nothing can be written there any more.
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain([...argv, '--name', 'other'], env, { ...failing.deps, recordOptionalFile }), 1);
+  assert.match(failing.err(), /EACCES/);
+  assert.match(failing.err(), /could not be put back/);
+  assert.ok(failing.err().includes(file), failing.err());
+  assert.match(failing.err(), /by hand/);
+  assert.equal(failing.spawned.length, 0);
+});
+
+test('start --at-login refuses a name it cannot use before the launcher is written: a repository at a drive root has no folder name', { skip: WINDOWS_ONLY }, async () => {
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  // No test can make a repository at a drive root, so git's answer is given: the folder name of `Q:\` is empty.
+  const deps = { ...world.deps, gitTopLevel: () => 'Q:/' };
+  const argv = ['start', '--cwd', tempDir(), '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, deps), 1);
+  assert.match(world.err(), /cannot name the server/);
+  assert.match(world.err(), /pass --name/);
+  assert.deepEqual(fs.readdirSync(startupDir), [], 'a launcher left on would repeat a start that refuses at every login');
+  assert.equal(fs.existsSync(manifestPath(home)), false, 'and nothing is recorded');
+  assert.equal(world.spawned.length, 0);
+
+  assert.equal(await remoteMain([...argv, '--name', 'drive root'], env, deps), 0, world.err());
+  assert.match(fs.readFileSync(path.join(startupDir, fs.readdirSync(startupDir)[0]), 'utf8'), /start --cwd Q:\\ --name "drive root"/);
 });
 
 test('stop --at-login removes the launcher and its record, then stops the server: the home holds no manifest again', { skip: WINDOWS_ONLY }, async () => {

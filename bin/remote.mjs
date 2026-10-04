@@ -458,10 +458,14 @@ function lookAtLauncher(home, file) {
 
 /** `start --at-login`: writes the launcher and records it in the machine manifest as an optional file, so that
  * `stop --at-login` and `uninstall` remove exactly it. Returns `true` with the launcher on, and `false` after
- * saying why it is not, with nothing of this command's left behind. A file already at the path is left alone
- * when it has the very content, replaced when it is one js-harness recorded writing (an earlier start with other
- * options), and refused otherwise: it is the user's, or one they edited. A launcher that no record names would
- * outlive every uninstall, so the file this writes is removed again when it cannot be recorded. */
+ * saying why it is not, with nothing of this command's left behind. Validated before anything is written: that
+ * `APPDATA` gives a Startup folder that exists, and that no value the launcher holds (the node executable, this
+ * install, the project folder, the name, the modes, the home) has what cmd.exe acts on (`loginLauncher`); the
+ * caller has already refused a name the server cannot take. A file already at the path is left alone when it has
+ * the very content, replaced when it is one js-harness recorded writing (an earlier start with other options),
+ * and refused otherwise: it is the user's, or one they edited. A launcher that no record names would outlive
+ * every uninstall, so when the file cannot be recorded what was there before is put back: a file this command
+ * created is removed again, and one it replaced gets its earlier bytes, which its record still names. */
 function enableLauncher(opts, name, { env, deps, log, error, root, id, home }) {
   const refuse = (why) => {
     error(`the login launcher was not written: ${why}. Nothing was started.`);
@@ -500,12 +504,20 @@ function enableLauncher(opts, name, { env, deps, log, error, root, id, home }) {
     } catch (err) {
       const unrecorded = `it could not be recorded in the machine manifest (${err.message})`;
       if (same) return refuse(`${unrecorded}; the file at ${where.file} was there before this command, and is left`);
-      try {
-        fs.rmSync(where.file, { force: true });
-      } catch (left) {
-        return refuse(`${unrecorded}, and the file written could not be removed again (${left.message}): remove ${where.file} by hand`);
+      if (found.bytes === null) {
+        try {
+          fs.rmSync(where.file, { force: true });
+        } catch (left) {
+          return refuse(`${unrecorded}, and the file written could not be removed again (${left.message}): remove ${where.file} by hand`);
+        }
+        return refuse(`${unrecorded}, so the file written was removed again`);
       }
-      return refuse(`${unrecorded}, so the file written was removed again`);
+      try {
+        fs.writeFileSync(where.file, found.bytes);
+      } catch (left) {
+        return refuse(`${unrecorded}, and the earlier launcher could not be put back (${left.message}): what is at ${where.file} is no longer what its record names, so neither js-harness remote stop --at-login nor uninstall removes it; remove it by hand`);
+      }
+      return refuse(`${unrecorded}, so the earlier launcher was put back: ${where.file} and its record are as they were`);
     }
   }
   log(`login launcher: on (${where.file})`);
@@ -574,12 +586,12 @@ function launcherLine({ env, id, home }) {
  * js-harness initialized that repository does not matter: nothing here reads `harness.json` or the project
  * manifest, and the first place the command is needed (this repository) has neither. So it asks git for the
  * top level and nothing else (`projectLocation` would spend a second git call finding files it never reads). */
-function repositoryRoot(opts, error) {
+function repositoryRoot(opts, error, topLevel = gitTopLevel) {
   if (!fs.existsSync(opts.cwd)) {
     error(`no such directory: ${opts.cwd}`);
     return null;
   }
-  const root = gitTopLevel(opts.cwd);
+  const root = topLevel(opts.cwd);
   if (!root) {
     error(`not inside a git repository: ${opts.cwd}; js-harness remote acts on the repository a folder is in (run it inside one, or pass --cwd <path> to one)`);
     return null;
@@ -604,13 +616,28 @@ function reportStatus({ found, state, name, root, logPath }, log) {
   log(`environment: ${server.environmentUrl ?? 'unknown (not in the log yet)'}`);
 }
 
-/** With `--at-login` the launcher comes first: it is validated, written and recorded before anything is started,
- * and a failure there starts nothing. A server that already runs is then not an error: the launcher was what
- * was asked for, and the server is left as it is. */
+/** With `--at-login` the launcher comes before the server, and after everything `start` refuses on its own input:
+ * the name, which is the folder's unless `--name` gives one (the flags were checked when they were parsed, and
+ * `enableLauncher` checks what the launcher holds before it writes). So a start that refuses on what it was asked
+ * writes no launcher, and no login repeats it. What depends on the machine's state comes after the launcher and
+ * leaves it on: a `claude` that is not on PATH, a `.cmd` CLI in a folder cmd.exe acts on, a recorded supervisor
+ * that cannot be told from another program. Those can be put right before a later login, and the command says
+ * both that the launcher is on and why nothing was started. A server that already runs is not an error with
+ * `--at-login`: the launcher was what was asked for, and the server is left as it is.
+ *
+ * Without `--at-login` the order is the one it always was: the name is checked after the recorded supervisor. */
 async function start(opts, context) {
   const { env, deps, log, error, root, files, state, identify } = context;
   const name = opts.name ?? path.basename(root);
-  if (opts.atLogin && !enableLauncher(opts, name, context)) return 1;
+  const unusableName = UNSAFE_NAME.test(name) || name.trim() === '';
+  const refuseName = () => {
+    error(`the folder name ${JSON.stringify(name)} cannot name the server (no & | < > ^ % " or control characters): pass --name <name>`);
+    return 1;
+  };
+  if (opts.atLogin) {
+    if (unusableName) return refuseName();
+    if (!enableLauncher(opts, name, context)) return 1;
+  }
   // Only a record whose process is proven gone is replaced: a second supervisor beside one that still runs would
   // take over the state file, and nothing would name the first any more.
   const recorded = locate(state, identify);
@@ -629,10 +656,7 @@ async function start(opts, context) {
     error(`cannot tell whether the remote server is already running for ${path.normalize(root)}: ${recorded.why}. Nothing was started; run js-harness remote status or js-harness remote stop to look again. ${wayOut(state, files)}`);
     return 1;
   }
-  if (UNSAFE_NAME.test(name) || name.trim() === '') {
-    error(`the folder name ${JSON.stringify(name)} cannot name the server (no & | < > ^ % " or control characters): pass --name <name>`);
-    return 1;
-  }
+  if (unusableName) return refuseName();
   const found = deps.resolveClaude({ env });
   if (!found) {
     error("Claude Code's CLI (claude) is not on PATH: install Claude Code, or add the folder that holds claude.exe (or claude.cmd) to PATH, then run this again.");
@@ -763,7 +787,8 @@ function removeRecord(statePath, state) {
 /** `js-harness remote ...`. `deps`: `spawn` (async), `takeSnapshot()` and `killProcesses(targets)` (those of
  * `process-tree.mjs`), `identifyProcesses(pids)` (`lookUpProcesses`) and `kill({ pid, createdAt })`
  * (`stopSupervisorTree`), both built on the two before unless given, `stopSpawned(child, { startedAt })`,
- * `resolveClaude({ env })`, `removeFile(path)` (what releases the lock), `platform`, `log`, `error`, for the login
+ * `resolveClaude({ env })`, `removeFile(path)` (what releases the lock), `gitTopLevel(cwd)` (that of
+ * `project.mjs`: the repository's top level, or nothing), `platform`, `log`, `error`, for the login
  * launcher `execPath` (the node it runs), `homedir()`, `recordOptionalFile` and `forgetOptionalFile` (those of
  * `manifest.mjs`), and for the hidden supervisor `readPersistentEnv()`, `supervise(options)` and `signals`; the
  * defaults are the real ones. The launcher's folder comes from the `APPDATA` of `env`, never from anywhere else. */
@@ -794,7 +819,7 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const topLevel = repositoryRoot(opts, error);
+  const topLevel = repositoryRoot(opts, error, deps.gitTopLevel);
   if (!topLevel) return 1;
   if (platform !== 'win32') {
     error('js-harness remote runs on Windows only for now: it tells its supervisor from a reused pid by creation time, which it only reads there.');
@@ -819,11 +844,12 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     try {
       const locked = { ...context, state: readState(files.statePath) };
       if (starting) return await start(opts, locked);
-      // The launcher goes first, and a launcher that is kept fails the command after the server is stopped all
-      // the same: what was asked for is a machine that no longer starts it.
-      const launcherKept = opts.atLogin && !disableLauncher(locked);
+      // The launcher goes first. When it is not off afterwards (a file that is kept, one that could not be looked
+      // for or removed, a record that could not be forgotten) the server is stopped all the same and the command
+      // then fails: what was asked for is a machine that no longer starts it.
+      const launcherNotOff = opts.atLogin && !disableLauncher(locked);
       const code = stop(locked);
-      return launcherKept ? 1 : code;
+      return launcherNotOff ? 1 : code;
     } finally {
       const left = lock.release();
       if (left) error(left);

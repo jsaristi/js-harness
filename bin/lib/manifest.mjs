@@ -275,6 +275,13 @@ export function readManifest(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/** The version `install` recorded under `home`, or `null` when nothing is installed there: no manifest, or one
+ * that only records optional files (`recordOptionalFile` writes it with a `null` version). Whoever reports or
+ * compares the installed version asks this, so that manifest is never printed as a version. */
+export function installedVersion(home) {
+  return readManifest(home)?.version ?? null;
+}
+
 function writeManifest(home, manifest) {
   const file = manifestPath(home);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -288,8 +295,15 @@ function writeManifest(home, manifest) {
  * still what was recorded, and never the folder it is in, which is not ours.
  *
  * Records that `content` (a string, or the bytes) was written to `file`, replacing any record of that path. With
- * no manifest (js-harness was never installed on this machine) it creates one whose `version` is `null`: every
- * reader takes that for "not installed", and the record still lets `uninstall` undo the file. */
+ * no manifest (js-harness was never installed on this machine) it creates one whose `version` is `null`, with no
+ * files and no entries. What each reader of the manifest does with that one:
+ *  - `status --global` and `upgrade` (`bin/update.mjs`) ask `installedVersion`, which answers `null`, and say
+ *    `(not installed)`;
+ *  - `install` and `sync` do what they do with no manifest (write every component, set the version) and carry
+ *    `optional` forward;
+ *  - `uninstall` finds no component and no entry to remove, removes the optional files and then the manifest;
+ *  - `remote` (`bin/remote.mjs`) reads only `optional`.
+ * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-04). */
 export function recordOptionalFile(home, file, content) {
   const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
   const record = { path: file, sha256: sha256(content) };
@@ -434,15 +448,19 @@ export function uninstall(home) {
   }
 
   // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
-  // empty: it is the system's (the Windows Startup folder), not one install made.
+  // empty: it is the system's (the Windows Startup folder), not one install made. One that cannot be read or
+  // removed (locked, or a folder at the recorded path) is kept and reported like an edited one: the components
+  // above are already gone, so stopping here would leave a manifest that names files that no longer exist.
   for (const file of manifest.optional ?? []) {
     if (!fs.existsSync(file.path)) continue;
-    if (sha256(fs.readFileSync(file.path)) === file.sha256) {
-      fs.rmSync(file.path);
-      removed.push(file.path);
-    } else {
-      kept.push(file.path);
+    let undone = false;
+    try {
+      undone = sha256(fs.readFileSync(file.path)) === file.sha256;
+      if (undone) fs.rmSync(file.path);
+    } catch {
+      undone = false;
     }
+    (undone ? removed : kept).push(file.path);
   }
 
   const entriesRemoved = [];
