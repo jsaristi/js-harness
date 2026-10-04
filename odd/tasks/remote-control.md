@@ -468,6 +468,15 @@ the chain strategy is asked once, before the commit that crosses the budget.
   Remote sessions phase with its five steps (three checked, the live check and the merges
   open), `remote` in the Commands row, and Next says what is left is his. `js-harness
   progress` counts the phase. The live check became T7.
+- 2026-10-04: T4 with T6 is `879f990` (gate `PASS tests`, 540 s). gentle-ai reviewed
+  `1640f01..879f990`, T3s and T4 together: medium, 16 paths, 785 lines, due
+  (`slice_budget_reached`); lineage `review-1ed423e2cfcccefd`, lens reliability, approved and
+  acknowledged, authority burned. Three SUGGESTIONs, advisory, in Follow-ups. Codex over
+  `1640f01..879f990`: no actionable defects, recorded; it said again that it could not
+  delegate a broader verification. That one record covers both branches: the push gate takes
+  a record whose head is ahead of the branch being pushed (`bin/check.mjs`, the
+  `merge-base --is-ancestor` test). The reviewed boundary is `879f990`. Every task but T7 is
+  done; nothing of slices 2 and 3 is pushed.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -558,6 +567,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
   be dropped, not refused; after a failed record the message says the file and its record
   are as they were, which holds only if the recorder failed before it touched the manifest,
   whose write is not atomic.
+- T3s and T4 review suggestions (gentle-ai, advisory), not taken: the mismatch tests of the
+  TUI, `doctor` and the hook pass `platform: 'win32'`, and nothing asserts that
+  `computeStackState` and `doctorMain` forward it to the probe, so on another system a
+  dropped option would show only there; the unreadable-file test pins `EISDIR`, a code that
+  comes from the system and the Node version, where a thrown read error with a chosen code
+  would prove the same; no test has an identifier with spaces around it, so removing the
+  trim would fail nothing.
 - Left open by T4. `DIMENSIONS` is still written three times (`bin/doctor.mjs`,
   `bin/lib/digest.mjs`, `bin/tui.mjs`); only the gap states were made one. The account row
   is `unknown` on a machine without the desktop app (Linux, or a PC that uses only the
@@ -576,11 +592,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
-`aaa79db`, against `main`), reviewed, waiting for his go-ahead to merge. The second slice is
-on `feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
+State on 2026-10-04: every task is written, committed and reviewed except T7, the live check,
+which needs him. PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
+`aaa79db`, against `main`), waiting for his go-ahead to merge. The second slice is on
+`feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
 and T3s (`7fda4ce`), not pushed. The third slice is on `feat/remote-account`, cut from
-`7fda4ce`: T4 and T6. The server for `D:js-harness` is running, started with `js-harness remote start`
+`7fda4ce`: T4 with T6 (`879f990`) and the commit of this record, not pushed. Each code commit
+was approved by gentle-ai and lies in a Codex record. The server for `D:js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
@@ -588,12 +606,16 @@ asks. In order:
 
 1. PR #28 is merged on his go-ahead (`gh pr merge 28 --merge`, pull `main`).
 2. The second slice (`feat/remote-at-login`, through `7fda4ce`) is pushed and its PR opened
-   against `main` once #28 is merged, so the diff holds only this slice. Codex reviews
-   `1640f01..7fda4ce` from that branch with a clean tree (`--base 1640f01`).
-3. The third slice (`feat/remote-account`): T4 is assessed by gentle-ai together with T3s
-   (`--base-ref 1640f01 --committed-only`, the reviewed boundary) and reviewed by Codex
-   (`--base 7fda4ce`), then T6; its PR is opened
-   once the second slice's is merged.
+   against `main` once #28 is merged, so the diff holds only this slice; merged on his
+   go-ahead.
+3. The third slice (`feat/remote-account`) is pushed and its PR opened once the second is
+   merged; merged on his go-ahead. With each merge, pull `main`; with the last, check the
+   roadmap's `Reviewed and merged (three slices)` step.
+4. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
+   the merged code, he opens a session from the iOS app and says it runs there, then
+   `remote stop` must leave no process of it (`remote status` says `not running`); check
+   T7 and the roadmap's live-check step. Whether the login launcher is turned on on this
+   machine is his call, asked then.
    T6's live check needs him: a session opened from the phone after `remote stop` and
    `remote start`, which he has to allow.
 
