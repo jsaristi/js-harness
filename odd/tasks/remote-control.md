@@ -4,7 +4,7 @@ Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tas
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
-an initialized project, because `js-harness remote` keeps Claude Code's `claude remote-control`
+a git repository, because `js-harness remote` keeps Claude Code's `claude remote-control`
 server alive there, and `js-harness doctor` says when the CLI and the desktop app are signed into
 different accounts, which makes those sessions invisible to the phone.
 
@@ -66,8 +66,10 @@ Forecast: ~900–1,200 authored lines with tests, above the ~400 budget. Strateg
 the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Design
-- `js-harness remote start|stop|status [--name <n>] [--cwd <path>]` acts on an initialized
-  project, like `status`, and refuses elsewhere.
+- `js-harness remote start|stop|status [--name <n>] [--cwd <path>]` acts on the git
+  repository that holds the working directory, initialized as a js-harness project or not, and
+  refuses outside one (changed 2026-10-03: this repository has no `harness.json`, and nothing
+  the command does depends on one).
 - `start` launches a detached supervisor (`node bin/remote.mjs supervise ...`) that runs
   `claude remote-control --name <n>` in the project root with every `CLAUDE*` variable and
   `ANTHROPIC_BASE_URL` removed, writes its output to a log, and restarts it with a capped backoff
@@ -84,7 +86,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
 ## Tasks
 - [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
   backoff; tested with a fake `claude` (route: delegated writer)
-- [ ] T2 `remote start|stop|status`: scope, state file, identity-checked stop, status read from
+- [ ] T1r T1 review findings: keep a `CLAUDE*` variable the user set persistently (only the
+  ones a parent session injected are removed), and a log that cannot be opened or written never
+  ends the supervisor (gentle-ai WARNINGs `R3-env-strip-too-broad`,
+  `R3-log-failure-kills-supervisor`) (route: delegated writer)
+- [x] T2 `remote start|stop|status`: scope, state file, identity-checked stop, status read from
   the log; usage and registry (route: delegated writer)
 - [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
@@ -113,6 +119,60 @@ the chain strategy is asked once, before the commit that crosses the budget.
   server, the restart after each exit, the run in the project folder, a stop that kills the
   server and its grandchild with no restart, and a `.cmd` shim receiving a quoted name intact.
   A failed kill on stop is logged and thrown, never waited on forever.
+- 2026-10-03: `535ef09..ae8a75e` (plan, T1) reviewed by gentle-ai: medium risk, review due
+  (`slice_budget_reached`, 575 lines); lineage `review-5ed5017fe0239302`, lens reliability,
+  approved and acknowledged, authority burned. Three WARNINGs and three SUGGESTIONs, all
+  advisory. Two WARNINGs are taken as T1r: stripping every `CLAUDE*` variable also drops ones a
+  user sets on purpose (a config directory, the Git Bash path Claude Code needs on Windows), and
+  a log that cannot be opened or appended rejects the loop with no backoff. The third, that a
+  kill reporting failure through a promise would go unhandled, does not apply as written: T1's
+  writer measured `killTree` as synchronous. The suggestions go to Follow-ups. Codex reviews
+  this range together with T2, because `codex-review` refuses a dirty tree and T2 is being
+  written.
+- 2026-10-03: T2 done (delegated writer; RED: 21 of 21 in `bin/remote.test.mjs` and 1 of 18 in
+  `bin/js-harness.test.mjs` failing against a stub; GREEN after two fixes, git's `C:/` root form
+  and a case-folded id: `node --test bin/remote.test.mjs` 21/21, re-run by the parent with the
+  same result; with `bin/lib/remote.test.mjs`, `bin/js-harness.test.mjs` and
+  `bin/lib/process-tree.test.mjs` 80/80). `remote start` launches a hidden detached supervisor
+  (`node bin/remote.mjs supervise`, not in the usage) running exactly the CLI it resolved, and
+  records its pid and creation time in `~/.js-harness/remote/<folder>-<12 hex>.json`; `status`
+  checks that identity and reads the log's tail with escape sequences stripped (connected, the
+  `Capacity` count, the environment address); `stop` kills by identity (snapshot, descendants,
+  `killProcesses`) and keeps the state file if anything survives. Names and `.cmd` paths with
+  characters cmd.exe would act on are refused up front. The end-to-end test runs a fake
+  `claude.cmd` through a real detached supervisor and proves nothing of it is left after
+  `stop`. Decided by the writer, kept: the command refuses off Windows, because creation times
+  are read only there and a supervisor it could not identify would be left running.
+- 2026-10-03: T2 corrected before its commit (delegated writer). The first live `remote start`
+  in `D:\js-harness` answered `not an initialized project`: this repository has no
+  `harness.json`. The command now acts on any git repository and refuses only a missing
+  directory or one outside git (RED: 21 of 42 failing; GREEN: `node --test bin/remote.test.mjs
+  bin/js-harness.test.mjs` 42/42). Live, on this machine: `remote start` answered `started
+  "js-harness" for D:\js-harness`, and `remote status` twelve seconds later `running`, `server:
+  connected`, `capacity: 1/32` and the environment address; the supervisor is detached, so it
+  outlives the session that started it. The end-to-end test's timeout went from 60 s to 5
+  minutes, since it takes 6 s alone and about 40 s inside the suite.
+- 2026-10-03: T2's first commit was refused by the gate (`FAIL tests`) while `npm test` alone
+  passed (1490 tests, 0 fail). The cause is older and unrelated: `evals/task-proof.test.mjs:304`
+  has a fixture where one spec deletes `calc.mjs` while another imports it, and `node --test`
+  runs them at once; reproduced at 10 red of 25 with eight busy cores and 0 of 25 on a quiet
+  machine. See Follow-ups.
+- 2026-10-04: T2's second commit was refused too (`npm run test timed out after 600 s`), and
+  during it the real repository's `.git/config` turned to `core.bare=true`. Restored by hand
+  (`git config --local core.bare false`; `git fsck` clean, staged files intact). The cause,
+  found in a throwaway clone, is not this commit: a second session, opened from the phone
+  through the very server T2 starts, was committing in the linked worktree
+  `D:\js-harness-worktrees\codex-parity` at the same time. A commit in a linked worktree hands
+  its hook `GIT_DIR=<main>/.git/worktrees/<name>` and an absolute `GIT_INDEX_FILE` (a commit in
+  the main checkout hands only a relative `GIT_INDEX_FILE`); a test that runs `git init` in a
+  temp directory with that `GIT_DIR` reinitialises the shared repository as bare. The timeout
+  was two gates at once: the gate alone takes 475 s here against a 600 s cap. Fixed in this
+  task's surface: `bin/remote.test.mjs` and `bin/js-harness.test.mjs` scrub `GIT_*` before any
+  test, each with a guard test that runs under a decoy worktree's `GIT_DIR` and proves the
+  decoy's config stays byte-identical (RED: `+ bare = true`; GREEN: 61/61 with
+  `bin/lib/remote.test.mjs`). Still open, outside this task: `bin/contract.test.mjs:137` and
+  `:317` and `evals/task-proof.test.mjs:459` leak the same way, and the right layer is the
+  gate itself (see Follow-ups). `repositoryRoot` now calls `gitTopLevel`, one git call fewer.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -120,6 +180,26 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `bin/lib` is a small refactor outside T1's surface.
 - A name with `& | < > ^ %` makes the `.cmd` quoting throw, which `supervise` would log and
   retry forever: T2 rejects such a name before starting.
+- T1 review suggestions (gentle-ai, advisory): `nextDelay` accepts a `minMs` above `maxMs`; the
+  cwd assertion in the real-process test is platform-fragile; the healthy-run reset is proved in
+  `nextDelay` but not through `supervise`.
+- The log is appended across restarts and never rotated; `status` reads only its last 64 KiB,
+  but the file grows without limit.
+- **A commit in a linked worktree can turn the main repository bare** (2026-10-04): the gate
+  passes git's repository variables to its sensors, and `bin/contract.test.mjs:137`, `:317` and
+  `evals/task-proof.test.mjs:459` run `git init` under them (the last also `git add --all`,
+  which replaced that worktree's index). The fix at the right layer is in `bin/check.mjs`: drop
+  git's repository-local variables (`git rev-parse --local-env-vars`) from every sensor's
+  environment, which protects every project the hook is installed in. It needs its own fix on
+  `main`, because every branch with a worktree is exposed until it has it. Until then: no
+  commit from a linked worktree, and never two gates at once.
+- `evals/task-proof.test.mjs:304` fails under load (a spec deletes the file another imports).
+  A fix that keeps what it proves: delete from the same spec file that imports it. It can
+  refuse any commit on a busy machine, so it is worth its own small fix.
+- The whole suite now takes 428–470 s against the gate's 600 s limit for a sensor
+  (`bin/check.mjs:69`); the next slow test crosses it.
+- Two `remote start` at the same moment are not locked against each other and could launch two
+  supervisors.
 
 ## Next step
 T2 (`remote start|stop|status`). The branch passed the delivery budget with T1, so the chain
