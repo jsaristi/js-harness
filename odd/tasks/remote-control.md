@@ -92,6 +92,12 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `R3-log-failure-kills-supervisor`) (route: delegated writer)
 - [x] T2 `remote start|stop|status`: scope, state file, identity-checked stop, status read from
   the log; usage and registry (route: delegated writer)
+- [ ] T2r T2 review findings: a failure after the supervisor is spawned (its identity cannot be
+  read) must not leave it running unrecorded, and `stop` must keep the state file when the
+  process's identity could not be established, deleting it only when the process is proven gone
+  (gentle-ai WARNINGs `R3-start-orphans-supervisor-on-post-spawn-failure`,
+  `R3-stop-deletes-record-when-identity-unproved`); the fake-world tests are skipped or made to
+  pass off Windows (`R3-tests-fail-off-windows`) (route: delegated writer, with T1r)
 - [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
   delegated writer)
@@ -173,6 +179,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `bin/lib/remote.test.mjs`). Still open, outside this task: `bin/contract.test.mjs:137` and
   `:317` and `evals/task-proof.test.mjs:459` leak the same way, and the right layer is the
   gate itself (see Follow-ups). `repositoryRoot` now calls `gitTopLevel`, one git call fewer.
+- 2026-10-04: T2 committed as `380c6e2` (gate green, run alone: `PASS tests`). gentle-ai
+  reviewed `ae8a75e..380c6e2`: medium risk, review due (`slice_budget_reached`, 1,086 lines);
+  lineage `review-29de521059f8c9b4`, lens reliability, approved and acknowledged, authority
+  burned. Three WARNINGs, taken as T2r, and four SUGGESTIONs, in Follow-ups. Codex has not
+  reviewed `535ef09..380c6e2` yet: it runs after T1r and T2r, over the whole range.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -183,6 +194,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - T1 review suggestions (gentle-ai, advisory): `nextDelay` accepts a `minMs` above `maxMs`; the
   cwd assertion in the real-process test is platform-fragile; the healthy-run reset is proved in
   `nextDelay` but not through `supervise`.
+- T2 review suggestions (gentle-ai, advisory): `start` reports success before the supervisor
+  proves it stays up; the `Connected` match is case-insensitive but compared case-sensitively;
+  the `supervise` entry (argument parsing, exit codes, the failure line in the log, the signal
+  wiring) is asserted only through the end-to-end test; the log tail is cut at a byte offset
+  and its first line can start inside a character or an escape sequence.
 - The log is appended across restarts and never rotated; `status` reads only its last 64 KiB,
   but the file grows without limit.
 - **A commit in a linked worktree can turn the main repository bare** (2026-10-04): the gate
@@ -202,5 +218,19 @@ the chain strategy is asked once, before the commit that crosses the budget.
   supervisors.
 
 ## Next step
-T2 (`remote start|stop|status`). The branch passed the delivery budget with T1, so the chain
-strategy is asked of Sebastián now; the slices are cut along these commits either way.
+State on 2026-10-04: the plan, T1 (`ae8a75e`) and T2 (`380c6e2`) are committed on
+`feat/remote-control`, not pushed; both slices approved by gentle-ai. The server for
+`D:\js-harness` is running, started with `js-harness remote start` (detached; `remote status`
+shows it, `remote stop` ends it). In order:
+
+1. The gate fix on `main` (Follow-ups, first item): until it lands, a commit from a linked
+   worktree can turn this repository bare, and the F6 session works in one. Proposed to
+   Sebastián as its own PR against `main`; waiting for his answer. He was asked to keep that
+   session from committing meanwhile.
+2. T1r and T2r, one delegated writer, then their commit and assessment.
+3. Codex over the range: `js-harness codex-review --base 535ef09`.
+4. T3 to T6.
+
+Two questions are open with Sebastián: the chain strategy (proposed: stacked to `main` in three
+slices, plan+T1+T2 with a size exception, T3+T5, T4+T6), and the gate fix as its own PR.
+Never run two gates at once, and after a failed gate check `git rev-parse --is-inside-work-tree`.
