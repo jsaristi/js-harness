@@ -1,8 +1,8 @@
 # Remote sessions: open a local session from the phone
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
-(slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, cut from it), `feat/remote-account` (slice 3, cut
-from slice 2)
+(slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
+`feat/remote-account` (slice 3, PR #30, cut from slice 2)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -482,6 +482,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   four code commits, all covered by a Codex record; 15 files, 1,791 insertions and 73
   deletions, and its diff against `main` holds only T3, T5, T3r and T3s). It waits for his
   go-ahead. The third slice is not pushed.
+- 2026-10-04: PR #29 merged on Sebastián's go-ahead (`0d430af` on `main`). The third slice
+  is PR #30 (`feat/remote-account`, against `main`; the pre-push hook passed: one code
+  commit, `879f990`, covered by a Codex record; 12 files, 557 insertions and 47 deletions
+  when opened, its diff against `main` holding only T4, T6 and this document). It waits for
+  his go-ahead. The commit of this entry is pushed to the same PR.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -598,23 +603,20 @@ the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Next step
 State on 2026-10-04: every task is written, committed and reviewed except T7, the live check,
-which needs him. PRs #27 and #28 are merged (`main` at `9390972`). The second slice is
-PR #29 (`feat/remote-at-login`, cut from `aaa79db`: T3 `0be9491`, T5 `c7be78f`, T3r
-`1640f01` and T3s `7fda4ce`), against `main`, waiting for his go-ahead to merge. The third
-slice is on `feat/remote-account`, cut from `7fda4ce`: T4 with T6 (`879f990`) and the
-commits of this record, not pushed. Each code commit was approved by gentle-ai and lies in
-a Codex record. The server for `D:\js-harness` is running, started with `js-harness remote start`
+which needs him. PRs #27, #28 and #29 are merged (`main` at `0d430af`). The third slice is
+PR #30 (`feat/remote-account`, cut from `7fda4ce`: T4 with T6 `879f990`, and the commits
+of this record), against `main`, waiting for his go-ahead to merge. Each code commit was
+approved by gentle-ai and lies in a Codex record. The server for `D:\js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
 asks. In order:
 
-1. PR #29, the second slice, is merged on his go-ahead (`gh pr merge 29 --merge`, pull
-   `main`).
-2. The third slice (`feat/remote-account`) is pushed and its PR opened against `main` once
-   #29 is merged, so the diff holds only this slice; merged on his go-ahead, then pull
-   `main` and check the roadmap's `Reviewed and merged (three slices)` step.
-3. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
+1. PR #30, the third slice, is merged on his go-ahead (`gh pr merge 30 --merge`, pull
+   `main`). The roadmap's `Reviewed and merged (three slices)` step is then checked on a
+   branch cut from `main`, since nothing is committed on `main` directly; it can ride on
+   the commit that closes T7.
+2. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
    the merged code, he opens a session from the iOS app and says it runs there, then
    `remote stop` must leave no process of it (`remote status` says `not running`); check
    T7 and the roadmap's live-check step. Whether the login launcher is turned on on this
