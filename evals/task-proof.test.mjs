@@ -302,8 +302,9 @@ test('the visible suite never sees the hidden grader', async () => {
 });
 
 test('a visible suite that rewrites or deletes a source file does not change what the hidden grader measures', async () => {
-  const touch = (action) => `import { test } from 'node:test';
-import fs from 'node:fs';
+  // The touch lives in the spec that imports `calc.mjs`: in a spec of its own Node runs it at the same
+  // time as that one, and on a busy machine the import found the file already deleted.
+  const touch = (action) => `${VISIBLE_SPEC}import fs from 'node:fs';
 
 test('touches the workspace', () => {
   const calc = new URL('../calc.mjs', import.meta.url);
@@ -312,7 +313,7 @@ test('touches the workspace', () => {
 `;
   const solve = `fs.writeFileSync(calc, ${JSON.stringify(CALC_SOLVED)});`;
   for (const action of [solve, 'fs.rmSync(calc);']) {
-    const result = await prove({ ...validFiles(), 'fixture/tests/touch.spec.mjs': touch(action) });
+    const result = await prove({ ...validFiles(), 'fixture/tests/calc.spec.mjs': touch(action) });
     assert.deepEqual(result.problems, [], action);
     assert.equal(result.fixture.passed, 2, 'the graded fixture is the one nobody touched');
   }
