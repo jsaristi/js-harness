@@ -296,7 +296,7 @@ test('uninstallMain --global over a manifest that only records a file that is go
   }
 });
 
-test('uninstallMain reports an optional file it cannot remove as kept, and still removes the rest and the manifest', async () => {
+test('uninstallMain says an optional file it could not read was left, with the error code and what to do, and still removes the rest and the manifest', async () => {
   const home = makeTmpHome();
   try {
     await captureConsole(() => installMain(['--home', home]));
@@ -304,11 +304,40 @@ test('uninstallMain reports an optional file it cannot remove as kept, and still
     fs.mkdirSync(blocked, { recursive: true }); // a folder at the recorded path
     recordOptionalFile(home, blocked, 'as written');
 
-    const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
 
-    assert.equal(code, 0);
-    assert.ok(outLines.includes(`kept (modified by you) ${blocked}`), outLines.join('\n'));
-    assert.ok(outLines.some((line) => line.startsWith('removed ') && line.endsWith('SKILL.md')), outLines.join('\n'));
+    assert.equal(code, 1, 'a file left behind and unrecorded is not a clean uninstall');
+    const line = errLines.find((text) => text.includes(blocked));
+    assert.ok(line, errLines.join('\n'));
+    assert.match(line, /^could not read /);
+    assert.match(line, /\(EISDIR\)/);
+    assert.match(line, /no longer recorded/);
+    assert.match(line, /remove it by hand/);
+    assert.doesNotMatch(outLines.join('\n'), /modified by you/, 'nobody edited it');
+    assert.ok(outLines.some((text) => text.startsWith('removed ') && text.endsWith('SKILL.md')), outLines.join('\n'));
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says an optional file it could not remove was left, with the error code and what to do', async () => {
+  const home = makeTmpHome();
+  try {
+    const locked = recordLauncher(home);
+    const removeFile = (target, ...rest) => {
+      if (target === locked.path) throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${locked.path}'`), { code: 'EBUSY' });
+      fs.rmSync(target, ...rest);
+    };
+
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+
+    assert.equal(code, 1, 'a file left behind and unrecorded is not a clean uninstall');
+    assert.deepEqual(errLines, [
+      `could not remove ${locked.path} (EBUSY): it is still there and no longer recorded, so nothing else will remove it; remove it by hand`,
+    ]);
+    assert.doesNotMatch(outLines.join('\n'), /modified by you|nothing installed/);
+    assert.ok(fs.existsSync(locked.path));
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

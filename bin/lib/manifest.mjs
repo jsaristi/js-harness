@@ -428,10 +428,18 @@ export function sync(home, version, deps = {}) {
  * included (reported in the same two lists). Removes each
  * recorded entry the same way (deep-equal match only, file left alone otherwise — see
  * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content") and finally the manifest itself. */
-export function uninstall(home) {
+ * `files`/`entries` since it is not "installed content") and finally the manifest itself.
+ *
+ * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
+ * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
+ * The last two are not the user's doing, and the manifest that named the file is gone when this returns, so
+ * the caller has to say that the file is left for the human to remove. `deps.removeFile` (default `fs.rmSync`)
+ * is the seam that removes a component or an optional file, so a test can make a removal fail without relying
+ * on file permissions (the same reason as `install`'s `deps.writeFile`). */
+export function uninstall(home, deps = {}) {
+  const removeFile = deps.removeFile ?? fs.rmSync;
   const manifest = readManifest(home);
-  if (!manifest) return { removed: [], kept: [], entriesRemoved: [], entriesKept: [] };
+  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] };
 
   const removed = [];
   const kept = [];
@@ -439,7 +447,7 @@ export function uninstall(home) {
     if (!fs.existsSync(file.path)) continue;
     const current = fs.readFileSync(file.path, 'utf8');
     if (sha256(current) === file.sha256) {
-      fs.rmSync(file.path);
+      removeFile(file.path);
       removeEmptyDirsUpTo(path.dirname(file.path), home);
       removed.push(file.path);
     } else {
@@ -449,18 +457,18 @@ export function uninstall(home) {
 
   // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
   // empty: it is the system's (the Windows Startup folder), not one install made. One that cannot be read or
-  // removed (locked, or a folder at the recorded path) is kept and reported like an edited one: the components
-  // above are already gone, so stopping here would leave a manifest that names files that no longer exist.
+  // removed (locked, or a folder at the recorded path) is kept, with the reason: the components above are
+  // already gone, so stopping here would leave a manifest that names files that no longer exist.
+  const keptOptional = [];
   for (const file of manifest.optional ?? []) {
     if (!fs.existsSync(file.path)) continue;
-    let undone = false;
-    try {
-      undone = sha256(fs.readFileSync(file.path)) === file.sha256;
-      if (undone) fs.rmSync(file.path);
-    } catch {
-      undone = false;
+    const why = keepOptionalFile(file, removeFile);
+    if (!why) {
+      removed.push(file.path);
+      continue;
     }
-    (undone ? removed : kept).push(file.path);
+    kept.push(file.path);
+    keptOptional.push({ path: file.path, ...why });
   }
 
   const entriesRemoved = [];
@@ -476,5 +484,23 @@ export function uninstall(home) {
   fs.rmSync(manifestPath(home), { force: true });
   removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
 
-  return { removed, kept, entriesRemoved, entriesKept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept };
+}
+
+/** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing
+ * once it is removed, else why it is kept: `{ reason }`, with the error's `code` when an error is the reason. */
+function keepOptionalFile(file, removeFile) {
+  let bytes;
+  try {
+    bytes = fs.readFileSync(file.path);
+  } catch (err) {
+    return { reason: 'unreadable', code: err.code ?? 'unknown error' };
+  }
+  if (sha256(bytes) !== file.sha256) return { reason: 'edited' };
+  try {
+    removeFile(file.path);
+  } catch (err) {
+    return { reason: 'unremovable', code: err.code ?? 'unknown error' };
+  }
+  return undefined;
 }

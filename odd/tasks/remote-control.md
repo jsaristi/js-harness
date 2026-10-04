@@ -94,6 +94,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
   The login launcher is not offered there (decided 2026-10-04, before T5).
 - `doctor` gains a Claude account check: `ok` when both identifiers match, `mismatch` (a gap in
   Fix, the session digest and the TUI) when they differ, with `claude auth login` as the fix.
+  Decided on 2026-10-04, before T4: it is one row, `claude-account`, after the tool rows, with
+  its state in the `claude` dimension and `n/a` in the others. Both files are found from the
+  home the command was given (`<home>/.claude.json`; `<home>/AppData/Roaming/Claude/config.json`
+  on Windows, `<home>/Library/Application Support/Claude/config.json` on macOS), never from
+  the environment, so a test with a temp home cannot read the real account. On any other
+  platform the state is `unknown`. Measured on this machine without printing either value:
+  both identifiers are present and equal.
 
 ## Tasks
 - [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
@@ -135,6 +142,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `R2-name-validated-after-launcher`, `R3-launcher-written-before-name-validation`,
   `R2-null-version-every-reader-claim`, `R3-uninstall-optional-throw-untested`,
   `R3-cmd-negative-assertion-machine-dependent`; Codex P2) (route: delegated writer)
+- [x] T3s `uninstall` says why it kept an optional file: one it could not read or remove is
+  named with the error code and the advice to remove it by hand, since no record of it is
+  left, and the remove failure is tested through an injected seam (gentle-ai
+  `R4-uninstall-optional-kept-not-retryable`, `R3-uninstall-remove-failure-untested`,
+  `R3-kept-label-pinned`, `R3-drive-root-test-machine-state`) (route: delegated writer)
 - [ ] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
   delegated writer)
 - [x] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
@@ -402,6 +414,29 @@ the chain strategy is asked once, before the commit that crosses the budget.
   reads the code page back in the same console and asserts the failing half only when it
   really was 850. `launcherKept` is `launcherNotOff` and `LAUNCHER_VALUES` is
   `LAUNCHER_LABELS`, iterated as the one list. Committed with this entry.
+- 2026-10-04: T3r is `1640f01` (gate `PASS tests`, 540 s). gentle-ai reviewed
+  `c7be78f..1640f01`: high risk, 9 paths, 470 lines, due (`high_risk`); lineage
+  `review-b927eaf4aba0ad53`, the four lenses, approved and acknowledged, authority burned.
+  One WARNING and six SUGGESTIONs, advisory. Taken as T3s: `uninstall` keeps a launcher it
+  could not remove, prints it as `kept (modified by you)` and deletes the manifest, so a file
+  locked for an instant stays in the Startup folder with no record and a wrong reason; the
+  remove failure has no test; the drive-root test's second half may depend on the machine
+  having a `Q:` drive. The other two are in Follow-ups. Codex over `c7be78f..1640f01`: no
+  actionable defects, recorded, and no notice of partial coverage this time.
+- 2026-10-04: T3s done (delegated writer, a fresh agent that also wrote T4; `node --test
+  bin/lib/manifest.test.mjs bin/install.test.mjs bin/update.test.mjs` 135/135, re-run by
+  the parent). `uninstall(home, deps)` takes a `deps.removeFile` seam and returns
+  `keptOptional`, each entry with its reason (`edited`, `unreadable`, `unremovable`) and
+  the error code; `kept` is unchanged for its callers. `uninstall --global` prints `could
+  not remove <path> (EBUSY): it is still there and no longer recorded, so nothing else will
+  remove it; remove it by hand` on stderr, and keeps `kept (modified by you)` for a file
+  that was edited (RED: `actual: undefined` for `keptOptional`, and `actual: []` for the
+  line). Decided by the parent, inline: such an uninstall exits 1, as the project-scope
+  one does, since a file left behind that nothing records is not a finished uninstall
+  (RED: `0 !== 1` in both tests). The drive-root test stays as it is: with the root faked
+  as `Q:\`, the state, log and lock live under the temp home, the launcher under the temp
+  `APPDATA`, and spawn, identify and the CLI look-up are fakes, so nothing opens the root;
+  it passes on this machine, which has no `Q:`. Committed with this entry.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -485,10 +520,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
   paths of node and of this checkout's script, and `status` says `on` when either has moved
   since; the TUI offers the remote items on every platform while the command refuses off
   Windows, and no test asserts what the menu shows there.
-- Left open by T3r. `uninstall --global` prints an optional file it kept because it is locked
-  or a folder as `kept (modified by you)`, which is not what happened: `uninstall` returns
-  paths with no reason. Over a manifest that holds only an optional record it also removes
-  the doctor cache, which an uninstall with no manifest leaves.
+- Left open by T3r. Over a manifest that holds only an optional record `uninstall` also
+  removes the doctor cache, which an uninstall with no manifest leaves. Review suggestions
+  (gentle-ai, advisory), not taken: nothing asserts that the keys of `LAUNCHER_LABELS` and
+  the names `loginLauncher` destructures stay the same set, so a value without a label would
+  be dropped, not refused; after a failed record the message says the file and its record
+  are as they were, which holds only if the recorder failed before it touched the manifest,
+  whose write is not atomic.
 - Left open by T3. At login the `.cmd` shows a console window for an instant, and a start
   that fails there is seen by nobody: its output goes to that window. The record matches by
   exact path string, so an `APPDATA` spelled in another letter case makes a second record
@@ -503,19 +541,21 @@ the chain strategy is asked once, before the commit that crosses the budget.
 ## Next step
 State on 2026-10-04: PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
 `aaa79db`, against `main`), reviewed, waiting for his go-ahead to merge. The second slice is
-on `feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`) and T3r, not
-pushed. The server for `D:js-harness` is running, started with `js-harness remote start`
+on `feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
+and T3s, not pushed. The server for `D:js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
 asks. In order:
 
 1. PR #28 is merged on his go-ahead (`gh pr merge 28 --merge`, pull `main`).
-2. T3r is committed, assessed by gentle-ai (`--base-ref c7be78f --committed-only`) and
-   reviewed by Codex (`--base c7be78f`); then the second slice is pushed and its PR opened
-   against `main`, which needs #28 merged first so the diff holds only this slice.
-3. T4 and T6 (third slice) on a branch cut from the second, each task with its commit, its
-   gentle-ai assessment and, for the slice, `js-harness codex-review --base <boundary>`.
+2. T3s is committed on `feat/remote-at-login`, assessed by gentle-ai (`--base-ref 1640f01
+   --committed-only`) and reviewed by Codex (`--base 1640f01`); then the second slice is
+   pushed and its PR opened against `main`, which needs #28 merged first so the diff holds
+   only this slice. The reviewed boundary is `1640f01`.
+3. T4 and T6 (third slice) on `feat/remote-account`, cut from the second, each task with its
+   commit, its gentle-ai assessment and, for the slice, `js-harness codex-review --base
+   <boundary>`.
    T6's live check needs him: a session opened from the phone after `remote stop` and
    `remote start`, which he has to allow.
 

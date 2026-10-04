@@ -141,7 +141,7 @@ test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [], kept: [], entriesRemoved: [], entriesKept: [] });
+    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -822,6 +822,7 @@ test('uninstall removes an optional file whose content is untouched, keeps an ed
     assert.equal(fs.readFileSync(edited, 'utf8'), 'the user was here');
     assert.ok(result.removed.includes(file), 'reported with the removed files');
     assert.ok(result.kept.includes(edited), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: edited, reason: 'edited' }], 'and with why it was kept');
     assert.equal(result.removed.includes(gone) || result.kept.includes(gone), false, 'a file that is gone is neither');
     assert.equal(fs.existsSync(manifestPath(home)), false);
 
@@ -846,7 +847,7 @@ test('uninstall leaves the folder of an optional file even when removing it empt
   }
 });
 
-test('uninstall keeps and reports an optional file it cannot read or remove, and still finishes', () => {
+test('uninstall keeps an optional file it cannot read, reports it with the error code, and still finishes', () => {
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
@@ -859,10 +860,56 @@ test('uninstall keeps and reports an optional file it cannot read or remove, and
     const result = uninstall(home);
 
     assert.ok(result.kept.includes(blocked), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: blocked, reason: 'unreadable', code: 'EISDIR' }], 'not as one the user edited');
     assert.equal(fs.statSync(blocked).isDirectory(), true, 'and left as it is');
     assert.ok(result.removed.includes(file), 'the optional files after it are still undone');
     assert.equal(fs.existsSync(components[0].target(home)), false);
     assert.equal(fs.existsSync(manifestPath(home)), false, 'the uninstall runs to its end: no manifest is left naming files that are gone');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps an optional file it read and matched but cannot remove, reports it with the error code, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const { dir, file, content } = makeOptionalFile(home);
+    const locked = path.join(dir, 'js-harness-remote-locked.cmd');
+    fs.writeFileSync(locked, 'as written');
+    recordOptionalFile(home, locked, 'as written');
+    recordOptionalFile(home, file, content);
+    // Another program holds the file for an instant: the read succeeds, the hash matches, the removal fails.
+    const removeFile = (target, ...rest) => {
+      if (target === locked) throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${locked}'`), { code: 'EBUSY' });
+      fs.rmSync(target, ...rest);
+    };
+
+    const result = uninstall(home, { removeFile });
+
+    assert.ok(result.kept.includes(locked), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: locked, reason: 'unremovable', code: 'EBUSY' }]);
+    assert.equal(fs.readFileSync(locked, 'utf8'), 'as written', 'and left as it is');
+    assert.equal(result.removed.includes(locked), false);
+    assert.ok(result.removed.includes(file), 'the optional files after it are still undone');
+    assert.equal(fs.existsSync(components[0].target(home)), false, 'the components went through the same remover');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall reports a failure that carries no error code as such, never as an edit', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    const result = uninstall(home, {
+      removeFile: () => {
+        throw new Error('the remover failed');
+      },
+    });
+    assert.deepEqual(result.keptOptional, [{ path: file, reason: 'unremovable', code: 'unknown error' }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -919,7 +966,7 @@ test('uninstall over a manifest that only records optional files removes them an
     fs.mkdirSync(path.dirname(others), { recursive: true });
     fs.writeFileSync(others, '{"hooks":{}}');
 
-    assert.deepEqual(uninstall(home), { removed: [file], kept: [], entriesRemoved: [], entriesKept: [] });
+    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
     assert.equal(fs.existsSync(manifestPath(home)), false);
     assert.equal(fs.readFileSync(others, 'utf8'), '{"hooks":{}}', 'no component or hook entry was recorded, so none is looked for');
   } finally {

@@ -277,8 +277,8 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * or a project manifest present), undo the project; anywhere else, or with `--global`, undo the
  * machine install exactly as before T3. `--global` skips the project check entirely rather than
  * running it and discarding the result — `--cwd` (project-only) is a usage error alongside it, so
- * there is nothing project-scoped left to even attempt. `deps` (`spawn`/`rm`) reaches only
- * `uninstallProject`; the machine engine below takes none. */
+ * there is nothing project-scoped left to even attempt. `deps` reaches both engines: `spawn`/`rm` for
+ * `uninstallProject`, `removeFile` for the machine one — each ignores what it does not use. */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
@@ -306,9 +306,22 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   }
 
   const home = parsed.home;
-  const result = uninstall(home);
+  const result = uninstall(home, deps);
   for (const p of result.removed) console.log(`removed ${p}`);
-  for (const p of result.kept) console.log(`kept (modified by you) ${p}`);
+  // An optional file that could not be read or removed is not one the user edited, and the manifest that
+  // named it is gone by now: it goes to stderr with the error code and what is left to do.
+  const notUndone = new Map(result.keptOptional.filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
+  for (const p of result.kept) {
+    const failed = notUndone.get(p);
+    if (!failed) {
+      console.log(`kept (modified by you) ${p}`);
+      continue;
+    }
+    const verb = failed.reason === 'unreadable' ? 'read' : 'remove';
+    console.error(
+      `could not ${verb} ${p} (${failed.code}): it is still there and no longer recorded, so nothing else will remove it; remove it by hand`,
+    );
+  }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
   if (
@@ -319,5 +332,6 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   ) {
     console.log(`nothing installed under ${home}`);
   }
-  return 0;
+  // A file left behind that nothing records is not a finished uninstall, as in the project scope.
+  return notUndone.size > 0 ? 1 : 0;
 }
