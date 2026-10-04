@@ -1,7 +1,8 @@
 # Remote sessions: open a local session from the phone
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
-(slice 1, PR #28), `feat/remote-at-login` (slice 2, cut from it)
+(slice 1, PR #28), `feat/remote-at-login` (slice 2, cut from it), `feat/remote-account` (slice 3, cut
+from slice 2)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -147,10 +148,14 @@ the chain strategy is asked once, before the commit that crosses the budget.
   left, and the remove failure is tested through an injected seam (gentle-ai
   `R4-uninstall-optional-kept-not-retryable`, `R3-uninstall-remove-failure-untested`,
   `R3-kept-label-pinned`, `R3-drive-root-test-machine-state`) (route: delegated writer)
-- [ ] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
+- [x] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
   delegated writer)
 - [x] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
-- [ ] T6 Roadmap: the phase and its steps, the Commands row, and the live check on this machine
+- [x] T6 Roadmap: the phase and its steps, the Commands row (route: inline)
+- [ ] T7 Live check on this machine, split from T6 because it needs Sebastián: `remote stop`
+  and `remote start` load the reviewed code and end the sessions opened through the server,
+  then a session opened from the iOS app runs in `D:\js-harness`, and `remote stop` leaves no
+  process of it. The other live check is done: `doctor` shows the account check `ok` here
   (route: inline)
 
 ## Progress
@@ -437,6 +442,32 @@ the chain strategy is asked once, before the commit that crosses the budget.
   as `Q:\`, the state, log and lock live under the temp home, the launcher under the temp
   `APPDATA`, and spawn, identify and the CLI look-up are fakes, so nothing opens the root;
   it passes on this machine, which has no `Q:`. Committed with this entry.
+- 2026-10-04: T3s is `7fda4ce` (gate `PASS tests`, 540 s), the last commit of the second
+  slice. gentle-ai: medium, 5 paths, 232 lines, not due (`under_budget`), so it stays
+  pending and is assessed with T4 from `1640f01`. The third slice is the branch
+  `feat/remote-account`, cut from it.
+- 2026-10-04: T4 done (delegated writer, the agent that wrote T3s; `node --test
+  bin/doctor.test.mjs bin/doctor-hook.test.mjs bin/lib/stack.test.mjs bin/lib/digest.test.mjs
+  bin/tui.test.mjs` 238/238, re-run by the parent). RED: 20 of 238 against stubs, among
+  them `expected: 'claude-account  n/a       ok …'` and `actual: 'ok'` against `'mismatch
+  claude'`. `bin/lib/stack.mjs` exports a `checks` array beside `tools`, with
+  `claude-account` in the tools' shape, and `probeStack` returns the tools and then the
+  checks; `tools` is untouched, since other modules read it as the list of tools. The gap
+  states are defined once, `GAP_STATES` in `bin/lib/digest.mjs`, now with `mismatch`, and
+  `bin/doctor.mjs` and the TUI's severity are built on it. `computeUpToDate` answers `n/a`
+  for a row whose `installed` is `n/a`, by state and not by id. Decided by the writer,
+  kept: the identifiers are compared trimmed and without letter case, a blank one counts as
+  missing, and a refetch stores `claude-account: null` in the cache as it does for a row
+  with no version to look up, never an identifier. A test asserts that neither fixture
+  identifier appears in the plain or the `--json` output of a mismatch. Found by the
+  parent's re-run, outside the writer's surface: `bin/js-harness.test.mjs` pinned the six
+  row ids (`+ 'claude-account'`), updated inline. On this machine `doctor --offline` prints
+  `claude-account  n/a       ok        n/a       n/a       n/a` and no Fix entry for it.
+  The full suite passed with T4 in the tree (T3s's gate). Committed with this entry.
+- 2026-10-04: T6 done, inline, in T4's commit since it is a document: `docs/ROADMAP.md` has the
+  Remote sessions phase with its five steps (three checked, the live check and the merges
+  open), `remote` in the Commands row, and Next says what is left is his. `js-harness
+  progress` counts the phase. The live check became T7.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -527,6 +558,12 @@ the chain strategy is asked once, before the commit that crosses the budget.
   be dropped, not refused; after a failed record the message says the file and its record
   are as they were, which holds only if the recorder failed before it touched the manifest,
   whose write is not atomic.
+- Left open by T4. `DIMENSIONS` is still written three times (`bin/doctor.mjs`,
+  `bin/lib/digest.mjs`, `bin/tui.mjs`); only the gap states were made one. The account row
+  is `unknown` on a machine without the desktop app (Linux, or a PC that uses only the
+  CLI), where there is nothing to compare.
+- Left open by T3s. `uninstall` still deletes the manifest after it kept a file it could
+  not remove: the file is reported and the command fails, but it is not retried.
 - Left open by T3. At login the `.cmd` shows a console window for an instant, and a start
   that fails there is seen by nobody: its output goes to that window. The record matches by
   exact path string, so an `APPDATA` spelled in another letter case makes a second record
@@ -542,20 +579,21 @@ the chain strategy is asked once, before the commit that crosses the budget.
 State on 2026-10-04: PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
 `aaa79db`, against `main`), reviewed, waiting for his go-ahead to merge. The second slice is
 on `feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
-and T3s, not pushed. The server for `D:js-harness` is running, started with `js-harness remote start`
+and T3s (`7fda4ce`), not pushed. The third slice is on `feat/remote-account`, cut from
+`7fda4ce`: T4 and T6. The server for `D:js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
 asks. In order:
 
 1. PR #28 is merged on his go-ahead (`gh pr merge 28 --merge`, pull `main`).
-2. T3s is committed on `feat/remote-at-login`, assessed by gentle-ai (`--base-ref 1640f01
-   --committed-only`) and reviewed by Codex (`--base 1640f01`); then the second slice is
-   pushed and its PR opened against `main`, which needs #28 merged first so the diff holds
-   only this slice. The reviewed boundary is `1640f01`.
-3. T4 and T6 (third slice) on `feat/remote-account`, cut from the second, each task with its
-   commit, its gentle-ai assessment and, for the slice, `js-harness codex-review --base
-   <boundary>`.
+2. The second slice (`feat/remote-at-login`, through `7fda4ce`) is pushed and its PR opened
+   against `main` once #28 is merged, so the diff holds only this slice. Codex reviews
+   `1640f01..7fda4ce` from that branch with a clean tree (`--base 1640f01`).
+3. The third slice (`feat/remote-account`): T4 is assessed by gentle-ai together with T3s
+   (`--base-ref 1640f01 --committed-only`, the reviewed boundary) and reviewed by Codex
+   (`--base 7fda4ce`), then T6; its PR is opened
+   once the second slice's is merged.
    T6's live check needs him: a session opened from the phone after `remote stop` and
    `remote start`, which he has to allow.
 

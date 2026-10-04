@@ -126,7 +126,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
   }
 });
 
-test('doctorMain --json prints a parseable array with the six tool ids and upToDate unknown (or n/a for hosted context7)', async () => {
+test('doctorMain --json prints a parseable array with the six tool ids, then the account check, and upToDate unknown (or n/a where there is no version to compare)', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
@@ -139,12 +139,13 @@ test('doctorMain --json prints a parseable array with the six tool ids and upToD
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
-      // except hosted context7, which has no version of its own to compare and is `n/a` instead.
-      assert.equal(row.upToDate, row.id === 'context7' ? 'n/a' : 'unknown');
+      // except hosted context7 and the account check, which have no version of their own to compare
+      // and are `n/a` instead.
+      assert.equal(row.upToDate, ['context7', 'claude-account'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -391,6 +392,151 @@ test('a gap with no known fix command is still reported, in --json gaps and in t
 
     const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
     assert.match(text.output, /context7 \(installed\): no fix command known/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- the Claude account check: the CLI and the desktop app signed into the same account ---
+
+const CLI_ACCOUNT = '11111111-aaaa-4bbb-8ccc-000000000001';
+const APP_ACCOUNT = '22222222-dddd-4eee-8fff-000000000002';
+
+/** Adds the two account identifiers to a home: the CLI's in `~/.claude.json`, beside what is there, and the
+ * desktop app's in its Windows config. The tests below pass `platform: 'win32'`, so that is the place read on
+ * whatever machine runs them. */
+function seedAccounts(home, { cli, app }) {
+  const claudeJson = path.join(home, '.claude.json');
+  const existing = fs.existsSync(claudeJson) ? JSON.parse(fs.readFileSync(claudeJson, 'utf8')) : {};
+  writeJson(claudeJson, { ...existing, oauthAccount: { accountUuid: cli, emailAddress: 'someone@example.com' } });
+  writeJson(path.join(home, 'AppData', 'Roaming', 'Claude', 'config.json'), {
+    lastKnownAccountUuid: app,
+    'oauth:tokenCache': 'never read',
+  });
+}
+
+/** A healthy home and project with the two accounts given, and the deps that read them. */
+function seedHealthyWithAccounts(home, project, accounts) {
+  seedHealthyHome(home);
+  fs.mkdirSync(path.join(project, '.codegraph'));
+  if (accounts) seedAccounts(home, accounts);
+  const spawn = fakeSpawn({
+    versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+    gitToplevel: project,
+    codexLogin: 'in',
+  });
+  return { spawn, fetch: noopFetch, platform: 'win32' };
+}
+
+const accountLine = (state) =>
+  'claude-account'.padEnd(16) + 'n/a'.padEnd(10) + state.padEnd(10) + 'n/a'.padEnd(10) + 'n/a'.padEnd(10) + 'n/a';
+
+test('doctorMain shows the account check after the tools, ok when both accounts match, with nothing to fix', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+
+    assert.equal(code, 0);
+    const lines = output.split('\n').filter(Boolean);
+    assert.equal(lines.at(-1), accountLine('ok'), output);
+    assert.equal(lines.length, 8, 'the header, the six tools and the account check');
+    assert.doesNotMatch(output, /\nFix:/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain reports accounts that differ as a mismatch gap whose fix is claude auth login, in the table, under Fix and in --json', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: APP_ACCOUNT });
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.equal(text.code, 0);
+    assert.ok(text.output.split('\n').includes(accountLine('mismatch')), text.output);
+    assert.match(text.output, /\nFix:\n  claude-account \(claude\): claude auth login\n$/, 'the only gap of this home');
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
+    const row = JSON.parse(json.output).find((r) => r.id === 'claude-account');
+    assert.deepEqual(row, {
+      id: 'claude-account',
+      version: null,
+      installed: 'n/a',
+      claude: 'mismatch',
+      codex: 'n/a',
+      project: 'n/a',
+      upToDate: 'n/a',
+      fix: { claude: 'claude auth login' },
+      gaps: [{ dimension: 'claude', state: 'mismatch', fix: 'claude auth login' }],
+    });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain never prints or stores an account identifier: not in the table, the Fix section, --json or the cache', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: APP_ACCOUNT });
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
+    const cache = fs.readFileSync(path.join(home, '.js-harness', 'doctor.json'), 'utf8');
+    for (const [where, written] of Object.entries({ 'the plain output': text.output, 'the --json output': json.output, 'the cache': cache })) {
+      for (const identifier of [CLI_ACCOUNT, APP_ACCOUNT]) {
+        assert.equal(written.toLowerCase().includes(identifier), false, `${where} holds an account identifier`);
+      }
+      assert.doesNotMatch(written, /someone@example\.com|never read/, `${where} holds something else of those files`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the account check as unknown, with no fix, when an identifier is missing', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, undefined);
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.ok(text.output.split('\n').includes(accountLine('unknown')), text.output);
+    assert.doesNotMatch(text.output, /\nFix:/, 'unknown is not a gap');
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
+    assert.deepEqual(JSON.parse(json.output).find((r) => r.id === 'claude-account').gaps, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('the account check has no latest version: it is never looked up, and never makes a fresh cache refetch', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: APP_ACCOUNT });
+    const checkedAt = new Date().toISOString();
+    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': '3.7.0', ...NULL_VERSIONS } }, notified: null });
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
+      return { ok: false };
+    };
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { ...deps, fetch: fetchImpl });
+
+    assert.deepEqual(urls, []);
+    assert.equal(readCache(home).latest.checkedAt, checkedAt);
+    assert.equal(JSON.parse(output).find((r) => r.id === 'claude-account').upToDate, 'n/a');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

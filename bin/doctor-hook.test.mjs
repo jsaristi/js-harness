@@ -176,6 +176,56 @@ test('doctor --hook prints nothing and stores an empty digest when there are no 
   }
 });
 
+// The Claude account check: accounts that differ are a gap like any other, notified once.
+
+const CLI_ACCOUNT = '11111111-aaaa-4bbb-8ccc-000000000001';
+const APP_ACCOUNT = '22222222-dddd-4eee-8fff-000000000002';
+
+/** Adds the two account identifiers to a seeded home: the CLI's in `~/.claude.json`, beside what is there, and
+ * the desktop app's in its Windows config (the tests pass `platform: 'win32'`, so that is the place read). */
+function seedAccounts(home, { cli, app }) {
+  const claudeJson = path.join(home, '.claude.json');
+  writeJson(claudeJson, { ...JSON.parse(fs.readFileSync(claudeJson, 'utf8')), oauthAccount: { accountUuid: cli } });
+  writeJson(path.join(home, 'AppData', 'Roaming', 'Claude', 'config.json'), { lastKnownAccountUuid: app });
+}
+
+test('doctor --hook notifies once when the CLI and the desktop app are signed into different accounts, and never names them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: APP_ACCOUNT });
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+    });
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32' };
+    const argv = ['--hook', '--home', home, '--cwd', project];
+
+    const first = await runHook(argv, {}, deps);
+    assert.equal(first.code, 0);
+    assert.equal(first.stderr, '');
+    assert.deepEqual(JSON.parse(first.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor' });
+
+    const second = await runHook(argv, {}, deps);
+    assert.equal(second.stdout, '', 'the same gap is not notified twice');
+
+    const cacheText = fs.readFileSync(path.join(home, '.js-harness', 'doctor.json'), 'utf8');
+    for (const identifier of [CLI_ACCOUNT, APP_ACCOUNT]) {
+      assert.equal(`${first.stdout}${cacheText}`.includes(identifier), false, 'neither the message nor the cache holds an account identifier');
+    }
+
+    // Signed into the same account again: no gap is left, and the stored digest is the empty one.
+    seedAccounts(home, { cli: APP_ACCOUNT, app: APP_ACCOUNT });
+    const third = await runHook(argv, {}, deps);
+    assert.equal(third.stdout, '');
+    assert.equal(readCache(home).notified, '');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
 // care — its message only counts gaps, so one report carrying two list fixes (codex-plugin
 // `installed`, gentle-ai `upToDate`) is still exactly one well-formed count line.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `doctor`: reports each stack tool's installed, configured and up-to-date state, and each gap's
-// own fix command. Local probes are read-only and synchronous (bin/lib/stack.mjs); `upToDate` adds
+// own fix command, then whether the Claude CLI and the desktop app are signed into the same account
+// (`checks` in bin/lib/stack.mjs). Local probes are read-only and synchronous; `upToDate` adds
 // one round of latest-version lookups (bin/lib/latest.mjs) behind a 6h cache (bin/lib/cache.mjs) —
 // see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
 // a gate, and every probe underneath fails open into `unknown` rather than throwing. `--hook` (T3)
@@ -11,9 +12,8 @@ import { probeStack, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
 import { readCache, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
-import { gapList, gapDigest } from './lib/digest.mjs';
+import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 
-const GAP_STATES = new Set(['missing', 'outdated', 'stale']);
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
@@ -58,10 +58,10 @@ function headerRow() {
   return HEADER_LABELS.map((label, i) => label.padEnd(COLUMN_WIDTHS[i])).join('') + 'up to date';
 }
 
-/** Every `{ dimension, state, fix }` gap on one row: a dimension that is `missing`, `outdated` or
- * `stale` (a host whose hook calls a removed command); `unknown` and `n/a` are not actionable the
- * same way. A gap with no fix command defined is still a gap — `fix` is `null` — so `gaps` always
- * agrees with the row states and the hook's digest. */
+/** Every `{ dimension, state, fix }` gap on one row: a dimension in one of `GAP_STATES` (`missing`,
+ * `outdated`, `stale`, `mismatch`; the list is digest.mjs's, shared with the hook's digest and the
+ * TUI); `unknown` and `n/a` are not actionable the same way. A gap with no fix command defined is
+ * still a gap — `fix` is `null` — so `gaps` always agrees with the row states and the hook's digest. */
 function rowGaps(row) {
   const gaps = [];
   for (const dimension of DIMENSIONS) {
@@ -72,10 +72,12 @@ function rowGaps(row) {
 }
 
 /** context7 hosted has no version of its own to compare against npm, so it is never `outdated` —
- * always `n/a`. Every other tool compares its installed version against the fetched/cached latest,
- * and is `unknown` whenever either side is missing or unparseable (never `n/a`, since every other
- * tool does have a latest-version source). */
+ * always `n/a`. So is a row with nothing to install (`installed` is `n/a`: a check, such as the
+ * Claude account one, not a tool): it has no version at all. Every other tool compares its installed
+ * version against the fetched/cached latest, and is `unknown` whenever either side is missing or
+ * unparseable (never `n/a`, since every other tool does have a latest-version source). */
 function computeUpToDate(row, latestVersion) {
+  if (row.installed === 'n/a') return 'n/a';
   if (row.id === 'context7' && row.version === 'hosted') return 'n/a';
   if (row.installed !== 'ok' || !latestVersion) return 'unknown';
   return compareSemver(row.version, latestVersion) >= 0 ? 'ok' : 'outdated';

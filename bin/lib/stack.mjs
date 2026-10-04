@@ -2,7 +2,8 @@
 // installed (+ version), configured (per host, per project). `outdated` is T2's job — see
 // odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
 // The Codex plugin row (`codex-plugin`, T6) keeps the column meanings: `claude` is the plugin
-// enabled, `codex` is "the Codex side is ready", i.e. logged in.
+// enabled, `codex` is "the Codex side is ready", i.e. logged in. `checks` holds what doctor reports
+// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
@@ -390,6 +391,52 @@ export const tools = [
   },
 ];
 
+// Where the desktop app keeps its config, under the home, on the platforms it has one this reads.
+const DESKTOP_APP_CONFIG = {
+  win32: ['AppData', 'Roaming', 'Claude', 'config.json'],
+  darwin: ['Library', 'Application Support', 'Claude', 'config.json'],
+};
+
+/** The account identifier at `keys` in the JSON file at `filePath`, or `null` when it cannot be had: no file,
+ * one that cannot be read or parsed, or anything at that key but a non-blank string. Nothing else of the file
+ * is taken, and the identifier never leaves `claudeAccountState` below. */
+function accountIdentifier(filePath, keys) {
+  let value = readJsonFile(filePath).data;
+  for (const key of keys) value = value?.[key];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim().toLowerCase() : null;
+}
+
+/** Whether the Claude Code CLI and the desktop app are signed into the same account: a session opened from
+ * the phone runs on this machine only when they are, and when they are not the phone just says the session is
+ * not available. The CLI's identifier is `oauthAccount.accountUuid` in `<home>/.claude.json`, the app's is
+ * `lastKnownAccountUuid` in its `config.json`; both paths come from `home`, never from the environment, so a
+ * fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
+ * they are hexadecimal), `mismatch` when both are there and differ, `unknown` when either is missing, which
+ * it always is on a platform with no known app config. Only the state is returned: that `config.json` also
+ * holds token caches, and neither identifier is ever printed, stored or put in a row. */
+function claudeAccountState({ home, platform = process.platform }) {
+  const appConfig = Object.hasOwn(DESKTOP_APP_CONFIG, platform) ? DESKTOP_APP_CONFIG[platform] : null;
+  const cli = accountIdentifier(path.join(home, '.claude.json'), ['oauthAccount', 'accountUuid']);
+  const app = appConfig ? accountIdentifier(path.join(home, ...appConfig), ['lastKnownAccountUuid']) : null;
+  if (cli === null || app === null) return 'unknown';
+  return cli === app ? 'ok' : 'mismatch';
+}
+
+/** Checks that are not tools, in the tools' own shape so `probeTool` and every reader of a doctor row take
+ * them as they are: nothing to install (`installed` is `n/a`, with no version, so nothing to be up to date
+ * with either) and one cell that carries the state. They are kept apart from `tools`, which other modules
+ * read as the list of tools. The account check's gap is `mismatch`; its fix is the human's to run, since
+ * nothing here signs in or out. */
+export const checks = [
+  {
+    id: 'claude-account',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: (deps) => ({ claude: claudeAccountState(deps), codex: 'n/a' }),
+    project: () => 'n/a',
+    fix: () => ({ claude: 'claude auth login' }),
+  },
+];
+
 /** The project root for per-project checks: the given `cwd`, resolved up to its git toplevel when
  * it is inside a repo. Falls back to `cwd` itself on any failure (no repo, no `git` on PATH). */
 export function resolveProjectRoot(cwd, spawn = spawnSync) {
@@ -419,7 +466,7 @@ export function probeTool(tool, deps) {
   };
 }
 
-/** Every tool's row, in `tools` order. */
+/** Every tool's row, in `tools` order, then every check's, in `checks` order. */
 export function probeStack(deps) {
-  return tools.map((tool) => probeTool(tool, deps));
+  return [...tools, ...checks].map((tool) => probeTool(tool, deps));
 }

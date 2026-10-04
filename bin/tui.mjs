@@ -9,6 +9,7 @@ import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
+import { GAP_STATES } from './lib/digest.mjs';
 import { remoteMain } from './remote.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
@@ -96,9 +97,15 @@ export function withLocation(state, location) {
   return { ...state, location, menu, selected, pending: undefined };
 }
 
-// --- T5: the stack block — one compact line per tool, from local probes + cache only ---
+// --- T5: the stack block — one compact line per doctor row, from local probes + cache only ---
 
-const STATE_SEVERITY = { missing: 2, outdated: 2, stale: 2, unknown: 1, ok: 0, 'n/a': 0 };
+/** How bad a cell is: a gap outranks `unknown`, which outranks a healthy or not-applicable cell. What a gap
+ * is comes from the one list doctor and the session digest use (`GAP_STATES`), so every gap state, `mismatch`
+ * (the Claude accounts differ) included, is as severe here as `missing`. */
+function severityOf(state) {
+  if (GAP_STATES.has(state)) return 2;
+  return state === 'unknown' ? 1 : 0;
+}
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
 // `installed` and `upToDate` describe the tool's own version, so a gap there reads fine bare
 // ("missing", "outdated"); `claude`/`codex`/`project` are per-host/per-project, so a gap there
@@ -114,7 +121,7 @@ export function worstState(row) {
   let best = { severity: -1, dimension: 'installed', state: 'ok' };
   for (const dimension of DIMENSIONS) {
     const state = row[dimension];
-    const severity = STATE_SEVERITY[state] ?? 0;
+    const severity = severityOf(state);
     if (severity > best.severity) best = { severity, dimension, state };
   }
   if (best.severity === 0) return 'ok';

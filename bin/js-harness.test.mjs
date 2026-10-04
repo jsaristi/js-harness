@@ -198,7 +198,7 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     const rows = JSON.parse(result.stdout);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
