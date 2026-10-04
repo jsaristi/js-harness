@@ -98,6 +98,12 @@ the chain strategy is asked once, before the commit that crosses the budget.
   (gentle-ai WARNINGs `R3-start-orphans-supervisor-on-post-spawn-failure`,
   `R3-stop-deletes-record-when-identity-unproved`); the fake-world tests are skipped or made to
   pass off Windows (`R3-tests-fail-off-windows`) (route: delegated writer, with T1r)
+- [x] T2s Codex findings on the lifecycle: a successful `stop` never leaves a server running
+  (the supervisor is quiesced before its descendants are collected, and a fresh look confirms
+  nothing is left), two overlapping `start` cannot both launch (an exclusive per-project
+  lock), an unreadable state file is `unknown` instead of `gone`, and every `unknown`
+  message says how to get out of it (Codex P1, P2, P2; gentle-ai `R3-unknown-no-recovery`)
+  (route: delegated writer)
 - [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
   delegated writer)
@@ -229,6 +235,41 @@ the chain strategy is asked once, before the commit that crosses the budget.
   The branch is merged here as `9070a8b`, because nothing can be committed on this branch
   without the limit; PR #27 carries the same commits to `main` and waits for his go-ahead.
   T1r and T2r are committed with this entry; the next one names the commit.
+- 2026-10-04: T1r and T2r are `c74e42c` (gate `PASS tests`, 589 s). `gentle-ai review
+  assess --base-ref 9070a8b --committed-only`: medium, 905 lines, due
+  (`slice_budget_reached`), and its status offers a fresh start. Nothing was started: the
+  four code files of the commit are byte-identical to the tree approved under
+  `review-be363b8d8e047b9a` (`git diff 7767622 c74e42c` over them is empty), and the rest of
+  the range is this document. The reviewed boundary is `c74e42c`.
+- 2026-10-04: Codex over `535ef09..c74e42c` found three defects and recorded nothing, because
+  its commands showed 725 of the 1,911 changed lines; it is rerun after the fixes. Taken as
+  T2s: [P1] between `stop`'s snapshot and its kill the supervisor can restart the server,
+  which then survives while `stop` deletes the record and reports success; [P2] two
+  overlapping `start` both launch and only the last is recorded (already in Follow-ups, now
+  a task); [P2] a state file that cannot be read or parsed answers `gone`, so `start`
+  overwrites it and `stop` deletes it without killing anything. T2s also takes gentle-ai's
+  `R3-unknown-no-recovery`, since the third fix makes a corrupt file block the three
+  subcommands until someone removes it.
+- 2026-10-04: T2s done (delegated writer, the same agent; `node --test bin/remote.test.mjs
+  bin/lib/remote.test.mjs bin/js-harness.test.mjs bin/lib/process-tree.test.mjs` 137/137, 0
+  skipped, re-run by the parent; `remote status` still reads the live server). `stop` reads
+  the supervisor's tree while it lives, kills the supervisor alone so nothing more is
+  launched, kills what it read, and looks again for what the killed processes left until a
+  look finds nothing (five looks at most); a survivor or a failed look keeps the state file
+  and exits 1 naming the pids (RED: `stop reported success while pid 900 of the supervisor's
+  tree still ran`). The order Codex asked for, supervisor first and then its descendants,
+  was measured and does not work on Windows: killing the supervisor took the `.cmd` shell
+  with it and the server under that shell was left with a parent no snapshot lists. `start`
+  holds `<id>.lock` beside the state file (created with `wx`, owner's pid and creation
+  time inside) from before the state is read until it is recorded, released in a
+  `finally`; a held lock refuses, a lock whose owner is proven gone is taken over, and one
+  whose owner cannot be identified refuses and says it may be removed by hand (RED: both
+  launched, `0 !== 1`). A state file that cannot be read, is not JSON or names no pid is
+  `unknown` in the three subcommands, and only a missing one is `gone` (RED: `it is not
+  JSON: 0 !== 1`). Every `unknown` message names the state file and the pid, and says the
+  file may be removed by hand once no such supervisor runs. Decided by the parent: the race
+  that is left (Follow-ups) is recorded, not closed with a stop request the supervisor would
+  poll, because that adds a protocol for a window of milliseconds.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -264,8 +305,6 @@ the chain strategy is asked once, before the commit that crosses the budget.
   1,454 tests done). Decided by Sebastián: the limit is twenty minutes (`7687b19`, PR #27).
   Still open: the suite takes more than ten minutes on a busy machine, and the limit now
   hides that instead of fixing it.
-- Two `remote start` at the same moment are not locked against each other and could launch two
-  supervisors.
 - T1r and T2r review findings (gentle-ai, advisory). WARNINGs: a record whose process stays
   `unknown` (a reused pid with an unreadable creation time) blocks `start`, `status` and
   `stop` for as long as it lasts, and no message says the state file may be removed by hand
@@ -276,6 +315,16 @@ the chain strategy is asked once, before the commit that crosses the budget.
   SUGGESTIONs: the timeout and no-pid branches of stopping a spawned supervisor are
   untested; the `reg query` parser has no test for an empty value, a name with spaces or a
   value with a four-space run.
+- Left open by T2s. A server the supervisor launches between `stop`'s first look and the
+  supervisor's death dies with it, and whatever that newborn server had already started is
+  left with nothing tying it to the tree; it needs a stop during the instant a backoff
+  expires. A cooperative stop (a request the supervisor polls, the kill as fallback) would
+  close it. After a `stop` that killed the supervisor and then failed, a second `stop`
+  finds the supervisor gone and removes the record; the first one's message names the pids
+  left. A state-file write that fails midway leaves a file that now reads as `unknown`; a
+  temp file and a rename would prevent it. Two `start` that find the same stale lock in
+  the same instant can both take it. A supervisor that dies on its own can leave its
+  server's children running, and `stop` then says `not running`.
 - Left by T1r and T2r's writer, not fixed: when the supervisor's identity is unreadable and it
   survives `killTree`, `start` only reports the pid; a state-file write that fails can leave a
   partial file; in `bin/remote.test.mjs` the temp folder is removed before the reaper sweep,
@@ -284,16 +333,18 @@ the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Next step
 State on 2026-10-04: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes (merge
-`9070a8b`) and T1r with T2r are committed on `feat/remote-control`, not pushed; the three
-slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
+`9070a8b`) and T1r with T2r (`c74e42c`) are committed on `feat/remote-control`, not pushed;
+the three slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
 with `js-harness remote start` (detached; `remote status` shows it, `remote stop` ends it).
 It still runs T2's code: `remote stop` then `remote start` loads T1r and T2r, and ends the
 sessions opened through it, so it waits for his word. In order:
 
-1. Codex over the range: `js-harness codex-review --base 535ef09`; its findings are treated
-   like gentle-ai's.
-2. PR #27 is merged on his go-ahead; then the first slice of this feature can be pushed.
-3. T3 to T6.
+1. T2s is committed with this entry: assess it with `gentle-ai review assess --base-ref
+   c74e42c --committed-only` and review it if due.
+2. Codex again over the range: `js-harness codex-review --base 535ef09`. The first run read
+   725 of 1,911 lines and recorded nothing.
+3. PR #27 is merged on his go-ahead; then the first slice of this feature can be pushed.
+4. T3 to T6.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
