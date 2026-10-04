@@ -2,7 +2,8 @@
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
-`feat/remote-account` (slice 3, PR #30, cut from slice 2)
+`feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (this
+record and T7's, cut from `main`)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -487,6 +488,10 @@ the chain strategy is asked once, before the commit that crosses the budget.
   commit, `879f990`, covered by a Codex record; 12 files, 557 insertions and 47 deletions
   when opened, its diff against `main` holding only T4, T6 and this document). It waits for
   his go-ahead. The commit of this entry is pushed to the same PR.
+- 2026-10-04: PR #30 merged on Sebastián's go-ahead (`7d3741b` on `main`), at `8bc87fa`. The
+  three slices are on `main`, so the roadmap's `Reviewed and merged (three slices)` step is
+  checked. This entry is the first commit of `docs/remote-live-check`, cut from `7d3741b`;
+  the record of T7 goes on the same branch, and the branch is one PR against `main`.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -603,24 +608,22 @@ the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Next step
 State on 2026-10-04: every task is written, committed and reviewed except T7, the live check,
-which needs him. PRs #27, #28 and #29 are merged (`main` at `0d430af`). The third slice is
-PR #30 (`feat/remote-account`, cut from `7fda4ce`: T4 with T6 `879f990`, and the commits
-of this record), against `main`, waiting for his go-ahead to merge. Each code commit was
-approved by gentle-ai and lies in a Codex record. The server for `D:\js-harness` is running, started with `js-harness remote start`
+which needs him. PRs #27, #28, #29 and #30 are merged (`main` at `7d3741b`): the whole
+feature is on `main`. Each code commit was approved by gentle-ai and lies in a Codex
+record. This record is on `docs/remote-live-check`, cut from `main`, not pushed. The server for `D:\js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
 asks. In order:
 
-1. PR #30, the third slice, is merged on his go-ahead (`gh pr merge 30 --merge`, pull
-   `main`). The roadmap's `Reviewed and merged (three slices)` step is then checked on a
-   branch cut from `main`, since nothing is committed on `main` directly; it can ride on
-   the commit that closes T7.
-2. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
+1. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
    the merged code, he opens a session from the iOS app and says it runs there, then
    `remote stop` must leave no process of it (`remote status` says `not running`); check
    T7 and the roadmap's live-check step. Whether the login launcher is turned on on this
    machine is his call, asked then.
+2. `docs/remote-live-check` is pushed and its PR opened against `main` once T7 is recorded
+   on it (documents only, so no Codex record is needed); merged on his go-ahead. That
+   closes the feature: a new session starts F6.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
