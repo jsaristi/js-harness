@@ -70,16 +70,15 @@ A session holds one feature, because the conversation is lost on a new session o
 and only files survive. So every decision made in the conversation is written to the roadmap or
 the feature document and committed on the feature branch in the same session; that record is part
 of the work and needs no separate request. Tell him when to cut: a new session when a feature
-closes, a PR merges or a phase starts; `/compact` with what to keep when a feature is still open
+closes, a PR merges or a phase starts; `/compact` when a feature is still open
 but the conversation has grown long. End every reply with exactly one prompt, the next thing he
 sends, in a fenced code block, so the app shows a copy button, under a label that says which it
 is: next prompt, compact or new session. The block holds only the text to send, with no filler
-in front. When it is time to cut, that one prompt is the full `/compact` command or the new
-session's opening prompt, and nothing else;
-after a `/compact` he sends only "seguí", and the reply to it resumes from the summary, checked
-against the feature document, and repeats any question still pending. Two prompts in one reply
-have already been sent in the wrong order and cost a session. He never writes the handoff
-himself. In every reply, just before that prompt, show the map: each roadmap phase with its
+in front. A compact is the one exception, two numbered blocks: first the bare `/compact`, alone
+because text after it fails when pasted from the phone, then the prompt that resumes. The reply
+to that prompt resumes from the summary, checked against the feature document, and repeats any
+question still pending. Otherwise never two: two prompts in one reply have already been sent in
+the wrong order and cost a session. He never writes the handoff himself. In every reply, just before that prompt, show the map: each roadmap phase with its
 percentage and the total, from `js-harness progress`; if it fails, say so instead of guessing.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
