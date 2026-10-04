@@ -7,7 +7,9 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readServerState, remoteId, remoteMain } from './remote.mjs';
+import { forgetOptionalFile, manifestPath, readManifest, recordOptionalFile, sha256, uninstall } from './lib/manifest.mjs';
 import { identifyProcesses } from './lib/process-tree.mjs';
+import { loginLauncher } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -54,6 +56,8 @@ const WINDOWS_ONLY = process.platform === 'win32' ? false : 'js-harness remote r
 const CREATED = 1_760_000_000_000;
 /** When the process that runs the command was created, in the fake world. */
 const OWN_CREATED = CREATED + 3_600_000;
+/** The node executable that runs the command, in the fake world: what a login launcher is told to run. */
+const NODE = 'C:\\Program Files\\nodejs\\node.exe';
 
 /** Everything `remoteMain` reaches outside itself, faked: `alive` maps a pid to its creation time (`null` for one
  * Windows does not give) and holds the command's own process, the one launch gets pid 4242 and then runs
@@ -70,6 +74,7 @@ function fakeWorld({ alive = new Map(), claude = { path: 'C:\\bin\\claude.exe', 
   let resolved = 0;
   const deps = {
     platform,
+    execPath: NODE,
     resolveClaude: () => {
       resolved += 1;
       return claude;
@@ -1241,6 +1246,456 @@ test('the lock never outlives stop: it is released when stop succeeds, finds not
     assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), code, `${what}: ${world.err()}`);
     assert.equal(fs.existsSync(lockPathOf(home, root)), false, what);
   }
+});
+
+// ---- the login launcher: --at-login ------------------------------------------------------------------------------------
+
+/** A stand-in for `%APPDATA%`, with the Startup folder Windows keeps there unless told otherwise. No test here
+ * may reach the real one: every command below gets this as its `APPDATA`. */
+function makeAppData({ startup = true } = {}) {
+  const appData = path.join(tempDir('js-harness-remote-appdata-'), 'Roaming');
+  const startupDir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+  fs.mkdirSync(startup ? startupDir : appData, { recursive: true });
+  return { env: { APPDATA: appData }, startupDir };
+}
+const launcherOf = (startupDir, root) => path.join(startupDir, `js-harness-remote-${remoteId(root)}.cmd`);
+const launcherRecord = (file) => ({ path: file, sha256: sha256(fs.readFileSync(file)) });
+/** What the manifest of a home where js-harness was never installed holds once it records optional files. */
+const onlyOptional = (...records) => ({ version: null, files: [], entries: [], optional: records });
+
+test('start --at-login writes the launcher in the Startup folder, records it in the machine manifest, then starts the server', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  world.hooks.onSpawn = () => {
+    assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(launcherOf(startupDir, root))), 'the launcher is written and recorded before the server is started');
+  };
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+
+  const file = launcherOf(startupDir, root);
+  assert.deepEqual(fs.readdirSync(startupDir), [path.basename(file)], 'one file, named after the project');
+  assert.equal(fs.readFileSync(file, 'utf8'), loginLauncher({ node: NODE, script: SELF, root, name: 'proj', home }));
+  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+  assert.equal(world.spawned.length, 1, 'then the ordinary start');
+  assert.equal(world.spawned[0].args.includes('--at-login'), false, 'the supervisor is started as ever');
+  assert.equal(readState(home, root).pid, 4242);
+  assert.ok(world.out().includes(`login launcher: on (${file})`), world.out());
+  assert.match(world.out(), /remote: started "proj"/);
+});
+
+test('the launcher repeats the options the server was started with, and names the home only when it is not the user\'s own', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--at-login', '--cwd', root, '--home', home, '--name', 'my phone', '--permission-mode', 'acceptEdits', '--spawn', 'worktree'];
+  assert.equal(await remoteMain(argv, env, { ...world.deps, homedir: () => home.toUpperCase() }), 0, world.err());
+  assert.equal(
+    fs.readFileSync(launcherOf(startupDir, root), 'utf8'),
+    loginLauncher({ node: NODE, script: SELF, root, name: 'my phone', permissionMode: 'acceptEdits', spawnMode: 'worktree' }),
+    'no --home: at login the command finds the same home by itself',
+  );
+  assert.equal(world.spawned[0].args.includes('my phone'), true);
+});
+
+test('start --at-login refuses, writing and starting nothing, when the Startup folder cannot be found, and never creates it', { skip: WINDOWS_ONLY }, async () => {
+  const noFolder = makeAppData({ startup: false });
+  const cases = {
+    'APPDATA is not set': [{}, /APPDATA/],
+    'APPDATA is empty': [{ APPDATA: '' }, /APPDATA/],
+    'the Startup folder does not exist': [noFolder.env, /Startup folder does not exist/],
+  };
+  for (const [what, [env, message]] of Object.entries(cases)) {
+    const root = makeProject();
+    const home = tempDir();
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.match(world.err(), message, what);
+    assert.match(world.err(), /Nothing was started/, what);
+    assert.equal(world.spawned.length, 0, what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, `${what}: nothing is recorded`);
+    assert.equal(fs.existsSync(statePath(home, root)), false, what);
+  }
+  assert.equal(fs.existsSync(noFolder.startupDir), false, 'the folder is Windows\'s to make');
+});
+
+test('start --at-login anywhere but Windows refuses like any start, and writes nothing', async () => {
+  const root = makeProject();
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld({ platform: 'linux' });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.match(world.err(), /Windows/);
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('start --at-login refuses, naming it, a value cmd.exe would act on in the launcher, before anything is written', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'the project folder': { project: 'wow!', argv: [], message: /project folder/ },
+    'the server name': { project: 'proj', argv: ['--name', 'ready!'], message: /server name/ },
+    'the home': { project: 'proj', home: 'my%home', argv: [], message: /the home/ },
+    'the node executable': { project: 'proj', argv: [], execPath: 'C:\\R&D\\node.exe', message: /node executable/ },
+  };
+  for (const [what, { project, home: homeName, argv, execPath = NODE, message }] of Object.entries(cases)) {
+    const root = makeProject(project);
+    const home = homeName ? path.join(tempDir(), homeName) : tempDir();
+    fs.mkdirSync(home, { recursive: true });
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login', ...argv], env, { ...world.deps, execPath }), 1, what);
+    assert.match(world.err(), message, what);
+    assert.match(world.err(), /cmd\.exe/, what);
+    assert.deepEqual(fs.readdirSync(startupDir), [], what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, what);
+    assert.equal(world.spawned.length, 0, what);
+  }
+  // Without the flag nothing of this applies: the server's own command line takes such a name.
+  const root = makeProject('proj');
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', tempDir(), '--name', 'ready!'], {}, world.deps), 0, world.err());
+});
+
+test('start --at-login with the launcher already there and the server already running changes nothing and exits 0', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const first = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, first.deps), 0, first.err());
+  const file = launcherOf(startupDir, root);
+  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)), state: fs.readFileSync(statePath(home, root)) };
+
+  const again = fakeWorld({ alive: first.alive });
+  assert.equal(await remoteMain(argv, env, again.deps), 0, again.err());
+  assert.equal(again.err(), '', 'with --at-login a server that already runs is not an error');
+  assert.equal(again.spawned.length, 0);
+  assert.ok(again.out().includes(`login launcher: on (${file})`), again.out());
+  assert.match(again.out(), /already running/);
+  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)), state: fs.readFileSync(statePath(home, root)) }, before);
+
+  // A server started without the flag gets its launcher the same way, and is left running.
+  const plain = makeProject('plain');
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', plain, '--home', home], env, world.deps), 0, world.err());
+  assert.equal(await remoteMain(['start', '--cwd', plain, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.equal(world.spawned.length, 1);
+  assert.equal(fs.existsSync(launcherOf(startupDir, plain)), true);
+  assert.equal(readManifest(home).optional.length, 2, 'one record per project');
+});
+
+test('start --at-login replaces a launcher of its own from an earlier start with other options, and updates the record', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const start = (...more) => remoteMain(['start', '--cwd', root, '--home', home, '--at-login', ...more], env, world.deps);
+  assert.equal(await start('--name', 'one'), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  const first = fs.readFileSync(file, 'utf8');
+
+  assert.equal(await start('--name', 'two'), 0, world.err());
+  assert.notEqual(fs.readFileSync(file, 'utf8'), first);
+  assert.equal(fs.readFileSync(file, 'utf8'), loginLauncher({ node: NODE, script: SELF, root, name: 'two', home }));
+  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)), 'still one record, of what is there now');
+});
+
+test('the launcher comes first: a start that then fails leaves it written and recorded, and says both', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld({ claude: null });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  const file = launcherOf(startupDir, root);
+  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+  assert.ok(world.out().includes(`login launcher: on (${file})`), world.out());
+  assert.match(world.err(), /claude/);
+  assert.equal(world.spawned.length, 0);
+});
+
+test('this command file takes start when node runs it directly, which is how the launcher runs it', () => {
+  // `node bin/remote.mjs start ...`, with no dispatcher in front, here in a folder where start refuses at once.
+  const notGit = tempDir();
+  const result = spawnSync(process.execPath, [SELF, 'start', '--cwd', notGit, '--home', tempDir()], { encoding: 'utf8', timeout: 60000, env: { ...process.env, APPDATA: tempDir() } });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /not inside a git repository/, 'it parsed its arguments and ran start, which refused before starting anything');
+});
+
+test('start --at-login refuses a file at the launcher\'s path that is not its own, and leaves it untouched', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'it is not recorded': () => {},
+    'it is recorded, and was edited since': ({ home, file }) => recordOptionalFile(home, file, 'what js-harness wrote'),
+  };
+  for (const [what, arrange] of Object.entries(cases)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const file = launcherOf(startupDir, root);
+    fs.writeFileSync(file, '@echo the user was here\r\n');
+    arrange({ home, file });
+    const manifest = fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null;
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.equal(fs.readFileSync(file, 'utf8'), '@echo the user was here\r\n', what);
+    assert.equal(fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null, manifest, `${what}: the manifest is as it was`);
+    assert.ok(world.err().includes(file), world.err());
+    assert.match(world.err(), /Nothing was started/, what);
+    assert.equal(world.spawned.length, 0, what);
+  }
+});
+
+test('start --at-login adopts a launcher with the very content it would write that no record names', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const file = launcherOf(startupDir, root);
+  fs.writeFileSync(file, loginLauncher({ node: NODE, script: SELF, root, name: 'proj', home })); // a start that died before recording it
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+});
+
+test('start --at-login leaves no launcher that no record names: when recording fails, the file it wrote is removed again', { skip: WINDOWS_ONLY }, async () => {
+  const cannotRecord = () => { throw new Error('EACCES: permission denied, open manifest.json'); };
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, { ...world.deps, recordOptionalFile: cannotRecord }), 1);
+  assert.deepEqual(fs.readdirSync(startupDir), [], 'the launcher is gone again');
+  assert.match(world.err(), /EACCES/);
+  assert.match(world.err(), /removed again/);
+  assert.equal(world.spawned.length, 0, 'and nothing was started');
+});
+
+test('start --at-login that cannot record the launcher it replaced puts the earlier one back: the file and its record are as they were', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, world.deps), 0, world.err());
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) };
+
+  const failing = fakeWorld();
+  const seen = [];
+  const recordOptionalFile = () => {
+    seen.push(fs.readFileSync(file, 'utf8'));
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain([...argv, '--name', 'other'], env, { ...failing.deps, recordOptionalFile }), 1);
+  assert.match(seen[0], /--name other/, 'the new launcher had been written when recording it failed');
+  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) }, before, 'the earlier launcher still works, and its record still names it');
+  assert.match(failing.err(), /EACCES/);
+  assert.match(failing.err(), /earlier launcher was put back/);
+  assert.equal(failing.spawned.length, 0);
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, fakeWorld().deps), 0, 'and it is still removed exactly');
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+});
+
+test('start --at-login says so, naming the file, when the earlier launcher cannot be put back either', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, world.deps), 0, world.err());
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+
+  const failing = fakeWorld();
+  const recordOptionalFile = () => {
+    // A folder takes the launcher's place, so nothing can be written there any more.
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain([...argv, '--name', 'other'], env, { ...failing.deps, recordOptionalFile }), 1);
+  assert.match(failing.err(), /EACCES/);
+  assert.match(failing.err(), /could not be put back/);
+  assert.ok(failing.err().includes(file), failing.err());
+  assert.match(failing.err(), /by hand/);
+  assert.equal(failing.spawned.length, 0);
+});
+
+test('start --at-login refuses a name it cannot use before the launcher is written: a repository at a drive root has no folder name', { skip: WINDOWS_ONLY }, async () => {
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  // No test can make a repository at a drive root, so git's answer is given: the folder name of `Q:\` is empty.
+  const deps = { ...world.deps, gitTopLevel: () => 'Q:/' };
+  const argv = ['start', '--cwd', tempDir(), '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, deps), 1);
+  assert.match(world.err(), /cannot name the server/);
+  assert.match(world.err(), /pass --name/);
+  assert.deepEqual(fs.readdirSync(startupDir), [], 'a launcher left on would repeat a start that refuses at every login');
+  assert.equal(fs.existsSync(manifestPath(home)), false, 'and nothing is recorded');
+  assert.equal(world.spawned.length, 0);
+
+  assert.equal(await remoteMain([...argv, '--name', 'drive root'], env, deps), 0, world.err());
+  assert.match(fs.readFileSync(path.join(startupDir, fs.readdirSync(startupDir)[0]), 'utf8'), /start --cwd Q:\\ --name "drive root"/);
+});
+
+test('stop --at-login removes the launcher and its record, then stops the server: the home holds no manifest again', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(fs.existsSync(startupDir), true);
+  assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest the start made is removed with its last record');
+  assert.deepEqual(world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], 'then the ordinary stop');
+  assert.equal(fs.existsSync(statePath(home, root)), false);
+  assert.ok(world.out().includes(`login launcher: off (removed ${file})`), world.out());
+  assert.match(world.out(), /remote: stopped/);
+
+  // With no server running it is not an error either, and a launcher that is not there is not one.
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.equal(world.err(), '');
+});
+
+test('a plain stop leaves the launcher and its record alone', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) };
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) }, before);
+  assert.doesNotMatch(world.out(), /login launcher: off/);
+  assert.match(world.out(), /remote: stopped/);
+});
+
+test('stop --at-login keeps a launcher that is not as js-harness wrote it, says so, still stops the server, and fails', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'it was edited since': ({ file }) => fs.appendFileSync(file, 'rem the user was here\r\n'),
+    'no record names it': ({ home, file }) => forgetOptionalFile(home, file),
+  };
+  for (const [what, arrange] of Object.entries(cases)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+    const file = launcherOf(startupDir, root);
+    arrange({ home, file });
+    const before = { launcher: fs.readFileSync(file), manifest: fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null };
+
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null }, before, `${what}: kept, with what the manifest said`);
+    assert.ok(world.err().includes(file), world.err());
+    assert.match(world.err(), /kept/, what);
+    assert.deepEqual(world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], `${what}: the server is stopped all the same`);
+    assert.equal(fs.existsSync(statePath(home, root)), false, what);
+  }
+});
+
+test('stop --at-login removes the file before its record: a record that cannot be removed is said, never a launcher left that no record names', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  const seen = [];
+  const forgetOptionalFile = () => {
+    seen.push(fs.existsSync(file));
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, { ...world.deps, forgetOptionalFile }), 1);
+  assert.deepEqual(seen, [false], 'the file was gone when its record was to be forgotten');
+  assert.match(world.err(), /was removed, but its record .* could not be \(EACCES/);
+  assert.match(world.err(), /js-harness remote stop --at-login again/);
+  assert.deepEqual(world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], 'the server is stopped all the same');
+
+  // The record that is left names a file that is gone: the next stop --at-login forgets it.
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0);
+  assert.equal(fs.existsSync(manifestPath(home)), false);
+});
+
+test('stop --at-login forgets the record of a launcher that is already gone', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  fs.rmSync(launcherOf(startupDir, root));
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.equal(fs.existsSync(manifestPath(home)), false);
+  assert.match(world.out(), /login launcher: off/);
+});
+
+test('stop --at-login that cannot find the Startup folder still stops the server, and fails', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], {}, world.deps), 1);
+  assert.match(world.err(), /APPDATA/);
+  assert.deepEqual(world.killed, [{ pid: 777, createdAt: CREATED }]);
+  assert.equal(fs.existsSync(statePath(home, root)), false);
+});
+
+test('uninstall removes the launcher start --at-login wrote, and leaves the Startup folder', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  assert.deepEqual(uninstall(home).removed, [file]);
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+});
+
+test('status says whether the login launcher is on for this repository, and exits as it did', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const file = launcherOf(startupDir, root);
+  const statusLine = async (world = fakeWorld(), environment = env) => {
+    const code = await remoteMain(['status', '--cwd', root, '--home', home], environment, world.deps);
+    return { code, line: world.out().split('\n').find((line) => line.startsWith('login launcher: ')) };
+  };
+
+  assert.deepEqual(await statusLine(), { code: 0, line: 'login launcher: off' });
+
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.deepEqual(await statusLine(fakeWorld({ alive: world.alive })), { code: 0, line: `login launcher: on (${file})` });
+
+  fs.appendFileSync(file, 'rem the user was here\r\n');
+  assert.match((await statusLine()).line, /^login launcher: on \(.*changed since js-harness wrote it\)$/);
+
+  forgetOptionalFile(home, file);
+  assert.match((await statusLine()).line, /^login launcher: off \(a file js-harness did not record is at /, 'on means the file is there and recorded');
+
+  const noAppData = await statusLine(fakeWorld(), {});
+  assert.equal(noAppData.code, 0);
+  assert.match(noAppData.line, /^login launcher: unknown \(APPDATA is not set/);
+
+  // The line never changes the exit code, in either direction: a status that cannot tell still fails.
+  const unknown = fakeWorld({ alive: world.alive });
+  unknown.alive.set(4242, null);
+  assert.equal((await statusLine(unknown)).code, 1);
+});
+
+test('--at-login is a switch of start and stop only, and the usage line says what it does', async () => {
+  const root = makeProject();
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['status', '--cwd', root, '--at-login'], {}, world.deps), 2);
+  assert.match(world.err(), /unknown flag: --at-login/);
+  assert.match(world.err(), /start and stop also take \[--at-login\]/);
+  assert.match(world.err(), /Startup folder/);
 });
 
 // ---- the hidden supervisor: what it hands the server -------------------------------------------------------------------

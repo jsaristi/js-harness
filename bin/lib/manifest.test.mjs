@@ -12,6 +12,9 @@ import {
   install,
   sync,
   uninstall,
+  recordOptionalFile,
+  forgetOptionalFile,
+  installedVersion,
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 
@@ -138,7 +141,7 @@ test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [], kept: [], entriesRemoved: [], entriesKept: [] });
+    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -723,4 +726,325 @@ test('the installed skill names codex-review and check --push', () => {
   assert.match(text, /js-harness check --push/);
   assert.match(text, /only check it runs/);
   assert.match(text, /default branch/);
+});
+
+// --- optional files: written outside the components, on request (the login launcher of `remote start --at-login`) ---
+
+/** A folder that is not ours (the Windows Startup folder in production) holding one optional file. */
+function makeOptionalFile(home, content = '@echo off\r\nrem a launcher\r\n') {
+  const dir = path.join(home, 'Startup');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'js-harness-remote-x.cmd');
+  fs.writeFileSync(file, content);
+  return { dir, file, content };
+}
+
+test('recordOptionalFile creates a manifest that says nothing is installed when there is none', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    const record = recordOptionalFile(home, file, content);
+    assert.deepEqual(record, { path: file, sha256: sha256(content) });
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [record] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('recordOptionalFile adds to an installed manifest without touching the rest, one record per path', () => {
+  const home = makeTmpHome();
+  try {
+    const installed = install(home, '0.1.0');
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    assert.deepEqual(readManifest(home), { ...installed, optional: [{ path: file, sha256: sha256(content) }] });
+
+    recordOptionalFile(home, file, 'other content');
+    const other = path.join(home, 'Startup', 'js-harness-remote-y.cmd');
+    recordOptionalFile(home, other, 'y');
+    assert.deepEqual(readManifest(home).optional, [
+      { path: file, sha256: sha256('other content') },
+      { path: other, sha256: sha256('y') },
+    ]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('install and sync carry the optional files forward: never rewritten, dropped or pruned', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    const record = recordOptionalFile(home, file, content);
+
+    const installed = install(home, '0.1.0');
+    assert.equal(installed.version, '0.1.0');
+    assert.deepEqual(installed.optional, [record]);
+    assert.deepEqual(readManifest(home).optional, [record]);
+
+    const synced = sync(home, '0.2.0');
+    assert.deepEqual(synced.optional, [record], 'sync prunes files no component declares, and an optional file is not one of them');
+    assert.deepEqual(readManifest(home).optional, [record]);
+    assert.equal(fs.readFileSync(file, 'utf8'), content, 'the file itself is left as it was');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a manifest without an optional field still loads, and install does not add one', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    assert.equal(Object.hasOwn(readManifest(home), 'optional'), false);
+    assert.equal(Object.hasOwn(sync(home, '0.2.0'), 'optional'), false);
+    assert.doesNotThrow(() => uninstall(home));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall removes an optional file whose content is untouched, keeps an edited one, and leaves their folder', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const { dir, file, content } = makeOptionalFile(home);
+    const edited = path.join(dir, 'js-harness-remote-edited.cmd');
+    fs.writeFileSync(edited, 'as written');
+    const gone = path.join(dir, 'js-harness-remote-gone.cmd');
+    recordOptionalFile(home, file, content);
+    recordOptionalFile(home, edited, 'as written');
+    recordOptionalFile(home, gone, 'never there');
+    fs.writeFileSync(edited, 'the user was here');
+
+    const result = uninstall(home);
+
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.readFileSync(edited, 'utf8'), 'the user was here');
+    assert.ok(result.removed.includes(file), 'reported with the removed files');
+    assert.ok(result.kept.includes(edited), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: edited, reason: 'edited' }], 'and with why it was kept');
+    assert.equal(result.removed.includes(gone) || result.kept.includes(gone), false, 'a file that is gone is neither');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+
+    fs.rmSync(edited);
+    assert.equal(fs.existsSync(dir), true, 'the folder is not ours, even empty');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall leaves the folder of an optional file even when removing it empties the folder', () => {
+  const home = makeTmpHome();
+  try {
+    const { dir, file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    const result = uninstall(home);
+    assert.deepEqual(result.removed, [file], 'a machine that never ran install still has its optional file undone');
+    assert.deepEqual(fs.readdirSync(dir), []);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps an optional file it cannot read, reports it with the error code, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const { dir, file, content } = makeOptionalFile(home);
+    const blocked = path.join(dir, 'js-harness-remote-blocked.cmd');
+    fs.mkdirSync(blocked); // a folder where the file was recorded: it is there, and reading it fails
+    recordOptionalFile(home, blocked, 'as written');
+    recordOptionalFile(home, file, content);
+
+    const result = uninstall(home);
+
+    assert.ok(result.kept.includes(blocked), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: blocked, reason: 'unreadable', code: 'EISDIR' }], 'not as one the user edited');
+    assert.equal(fs.statSync(blocked).isDirectory(), true, 'and left as it is');
+    assert.ok(result.removed.includes(file), 'the optional files after it are still undone');
+    assert.equal(fs.existsSync(components[0].target(home)), false);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the uninstall runs to its end: no manifest is left naming files that are gone');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps an optional file it read and matched but cannot remove, reports it with the error code, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const { dir, file, content } = makeOptionalFile(home);
+    const locked = path.join(dir, 'js-harness-remote-locked.cmd');
+    fs.writeFileSync(locked, 'as written');
+    recordOptionalFile(home, locked, 'as written');
+    recordOptionalFile(home, file, content);
+    // Another program holds the file for an instant: the read succeeds, the hash matches, the removal fails.
+    const removeFile = (target, ...rest) => {
+      if (target === locked) throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${locked}'`), { code: 'EBUSY' });
+      fs.rmSync(target, ...rest);
+    };
+
+    const result = uninstall(home, { removeFile });
+
+    assert.ok(result.kept.includes(locked), 'reported with the kept ones');
+    assert.deepEqual(result.keptOptional, [{ path: locked, reason: 'unremovable', code: 'EBUSY' }]);
+    assert.equal(fs.readFileSync(locked, 'utf8'), 'as written', 'and left as it is');
+    assert.equal(result.removed.includes(locked), false);
+    assert.ok(result.removed.includes(file), 'the optional files after it are still undone');
+    assert.equal(fs.existsSync(components[0].target(home)), false, 'the components went through the same remover');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall reports a failure that carries no error code as such, never as an edit', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    const result = uninstall(home, {
+      removeFile: () => {
+        throw new Error('the remover failed');
+      },
+    });
+    assert.deepEqual(result.keptOptional, [{ path: file, reason: 'unremovable', code: 'unknown error' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- a manifest that only records optional files (`version: null`): what each reader of the manifest does with it ---
+
+test('installedVersion is the version install recorded, and null when nothing is installed: no manifest, or one that only records optional files', () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(installedVersion(home), null);
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    assert.equal(installedVersion(home), null);
+    install(home, '0.1.0');
+    assert.equal(installedVersion(home), '0.1.0');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('install and sync over a manifest that only records optional files do what they do with no manifest, and keep the record', () => {
+  for (const run of [install, sync]) {
+    const fresh = makeTmpHome();
+    const home = makeTmpHome();
+    try {
+      const { file, content } = makeOptionalFile(home);
+      const record = recordOptionalFile(home, file, content);
+
+      const expected = run(fresh, '0.2.0');
+      const manifest = run(home, '0.2.0');
+
+      const relative = (base, list) => list.map((entry) => path.relative(base, entry.path));
+      assert.equal(manifest.version, '0.2.0', run.name);
+      assert.deepEqual(relative(home, manifest.files), relative(fresh, expected.files), `${run.name}: the same components`);
+      assert.deepEqual(relative(home, manifest.entries), relative(fresh, expected.entries), `${run.name}: the same hook entries`);
+      assert.deepEqual(manifest.optional, [record], run.name);
+      assert.deepEqual(readManifest(home), manifest, run.name);
+      assert.equal(fs.readFileSync(file, 'utf8'), content, `${run.name}: the optional file is left as it was`);
+      for (const component of components) assert.ok(fs.existsSync(component.target(home)), run.name);
+    } finally {
+      fs.rmSync(fresh, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('uninstall over a manifest that only records optional files removes them and the manifest, and nothing else', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    const others = path.join(home, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(others), { recursive: true });
+    fs.writeFileSync(others, '{"hooks":{}}');
+
+    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+    assert.equal(fs.readFileSync(others, 'utf8'), '{"hooks":{}}', 'no component or hook entry was recorded, so none is looked for');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall compares an optional file by its bytes, whatever its encoding', () => {
+  const home = makeTmpHome();
+  try {
+    const bytes = Buffer.from([0x40, 0x65, 0xf1, 0xff, 0x0d, 0x0a]); // not valid UTF-8
+    const { file } = makeOptionalFile(home, bytes);
+    recordOptionalFile(home, file, bytes);
+    assert.deepEqual(uninstall(home).removed, [file]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('forgetOptionalFile removes the record, and the manifest with it when nothing else was ever recorded', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    const other = path.join(home, 'Startup', 'js-harness-remote-y.cmd');
+    recordOptionalFile(home, file, content);
+    recordOptionalFile(home, other, 'y');
+
+    assert.equal(forgetOptionalFile(home, other), true);
+    assert.deepEqual(readManifest(home).optional, [{ path: file, sha256: sha256(content) }]);
+
+    assert.equal(forgetOptionalFile(home, file), true);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'a manifest that records nothing is not left behind');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nor its folder, when empty');
+    assert.equal(fs.readFileSync(file, 'utf8'), content, 'forgetting a record never touches the file');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('forgetOptionalFile keeps the folder of the manifest when something else is in it', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    fs.mkdirSync(path.join(home, '.js-harness', 'remote'));
+    forgetOptionalFile(home, file);
+    assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness')), ['remote']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('forgetOptionalFile leaves an installed manifest exactly as it was before the record', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const before = fs.readFileSync(manifestPath(home), 'utf8');
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    assert.notEqual(fs.readFileSync(manifestPath(home), 'utf8'), before);
+    assert.equal(forgetOptionalFile(home, file), true);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('forgetOptionalFile with no record, or no manifest, changes nothing', () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(forgetOptionalFile(home, path.join(home, 'nothing.cmd')), false);
+    assert.deepEqual(fs.readdirSync(home), [], 'no manifest is created to forget from');
+
+    install(home, '0.1.0');
+    const before = fs.readFileSync(manifestPath(home), 'utf8');
+    assert.equal(forgetOptionalFile(home, path.join(home, 'nothing.cmd')), false);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

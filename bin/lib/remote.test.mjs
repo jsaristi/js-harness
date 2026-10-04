@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn as spawnChild } from 'node:child_process';
-import { cleanServerEnv, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise } from './remote.mjs';
+import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
+import { cleanServerEnv, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -559,4 +559,99 @@ test('a .cmd shim is started through the shell as one command line, with its arg
   const log = readLog(logPath);
   assert.ok(log.includes('args=["remote-control","--name","my project","--spawn","same-dir"]'), log);
   assert.match(log, /session=none base=none/);
+});
+
+// ---- the login launcher: a batch file that starts the server again ---------------------------------------------------
+
+const LAUNCHER = { node: 'C:\\Program Files\\nodejs\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root: 'D:\\work\\proj', name: 'proj' };
+/** The lines of a launcher, which all end in CRLF: the last one is the command. */
+const launcherLines = (text) => {
+  assert.ok(text.endsWith('\r\n'), 'the file ends with a line ending');
+  const lines = text.slice(0, -2).split('\r\n');
+  assert.ok(lines.every((line) => !line.includes('\n') && !line.includes('\r')), 'every line ends in CRLF, which is what cmd.exe reads reliably');
+  return lines;
+};
+
+test('loginLauncher is a batch file whose one command starts the same server, and says what it is', () => {
+  const lines = launcherLines(loginLauncher(LAUNCHER));
+  assert.equal(lines[0], '@echo off');
+  assert.match(lines[1], /^rem .*js-harness remote stop --at-login/, 'whoever finds it in the Startup folder is told how it is removed');
+  assert.equal(lines.at(-1), '"C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd D:\\work\\proj --name proj');
+  assert.equal(lines.length, 3, 'nothing else: no code page line for a file that is all ASCII');
+  assert.doesNotMatch(lines.at(-1), /--at-login/, 'the launcher starts the server, it does not write itself again');
+  assert.equal(loginLauncher(LAUNCHER), loginLauncher({ ...LAUNCHER }), 'the same options give the same bytes');
+});
+
+test('loginLauncher passes the options the server was started with, quoted where cmd.exe needs it', () => {
+  const text = loginLauncher({ ...LAUNCHER, root: 'D:\\my work\\proj', name: 'my phone', permissionMode: 'acceptEdits', spawnMode: 'worktree', home: 'D:\\other home' });
+  assert.equal(
+    launcherLines(text).at(-1),
+    '"C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd "D:\\my work\\proj" --name "my phone" --permission-mode acceptEdits --spawn worktree --home "D:\\other home"',
+  );
+});
+
+test('loginLauncher quotes the executable even when its path has nothing to quote: cmd.exe splits a bare command at , ; and =', () => {
+  const lines = launcherLines(loginLauncher({ ...LAUNCHER, node: 'C:\\tools,x=1\\node.exe' }));
+  assert.ok(lines.at(-1).startsWith('"C:\\tools,x=1\\node.exe" '), lines.at(-1));
+});
+
+test('loginLauncher switches the console to UTF-8 only when the command holds a letter beyond ASCII', () => {
+  const lines = launcherLines(loginLauncher({ ...LAUNCHER, root: 'D:\\año\\proj' }));
+  assert.deepEqual(lines.slice(2), ['chcp 65001 >nul', '"C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd "D:\\año\\proj" --name proj']);
+  assert.doesNotMatch(loginLauncher(LAUNCHER), /chcp/);
+});
+
+test('loginLauncher refuses, naming it, any value that holds what cmd.exe acts on in a batch file', () => {
+  const fields = { node: /node executable/, script: /install of js-harness/, root: /project folder/, name: /server name/, home: /home/, permissionMode: /permission mode/, spawnMode: /spawn mode/ };
+  for (const [field, label] of Object.entries(fields)) {
+    for (const bad of ['&', '|', '<', '>', '^', '%', '"', '!', '\n', '\u0007', '\u007f']) {
+      const value = `C:\\a${bad}b`;
+      assert.throws(() => loginLauncher({ ...LAUNCHER, [field]: value }), (err) => {
+        assert.match(err.message, label, `${field} with ${JSON.stringify(bad)}`);
+        assert.ok(err.message.includes(JSON.stringify(value)), err.message);
+        assert.match(err.message, /cmd\.exe/);
+        return true;
+      });
+    }
+  }
+});
+
+test('a generated launcher run by a real cmd.exe hands the script its arguments intact, through a space and a letter beyond ASCII', { skip: process.platform === 'win32' ? false : 'cmd.exe only', timeout: 120000 }, (t) => {
+  const dir = path.join(tempDir(), 'lanzador ñ');
+  const root = path.join(dir, 'mi proyecto ñandú');
+  fs.mkdirSync(root, { recursive: true });
+  // Not the real `remote start`: a script that writes down what it was called with, next to itself.
+  const fake = path.join(dir, 'fake remote ñ.mjs');
+  fs.writeFileSync(fake, "import fs from 'node:fs';\nfs.writeFileSync(new URL('./args.json', import.meta.url), JSON.stringify(process.argv.slice(2)));\n");
+  const received = path.join(dir, 'args.json');
+  const launcher = path.join(dir, 'js-harness-remote-test.cmd');
+  const text = loginLauncher({ node: process.execPath, script: fake, root, name: 'café del móvil', permissionMode: 'acceptEdits', home: path.join(dir, 'otra casa') });
+  // The console a launcher gets at login has the machine's OEM code page (850 in Spanish, 437 in English), not
+  // UTF-8: each run below starts in a console of its own (`windowsHide`), asks for 850, and prints the code page
+  // it then has, because the switch does not take everywhere (a machine set to UTF-8 system-wide, a console
+  // where `chcp` fails). `under850` says whether the launcher really ran under 850.
+  const runAskingFor850 = (content) => {
+    fs.writeFileSync(launcher, content);
+    fs.rmSync(received, { force: true });
+    const result = spawnChildSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"chcp 850 >nul & chcp & "${launcher}""`], { encoding: 'latin1', windowsHide: true, windowsVerbatimArguments: true, timeout: 60000 });
+    const under850 = /\b850\b/.test(String(result.stdout).split(/\r?\n/)[0]);
+    return { result, under850, args: fs.existsSync(received) ? JSON.parse(fs.readFileSync(received, 'utf8')) : null };
+  };
+
+  // Whatever the console's code page turned out to be, the arguments arrive as they were given.
+  const run = runAskingFor850(text);
+  assert.equal(run.result.status, 0, run.result.stderr);
+  assert.deepEqual(run.args, ['start', '--cwd', root, '--name', 'café del móvil', '--permission-mode', 'acceptEdits', '--home', path.join(dir, 'otra casa')]);
+  assert.match(text, /^chcp 65001 >nul\r\n/m);
+
+  // Why the file has that line, measured on 2026-10-04 under code pages 850, 437 and 1252: without it cmd.exe
+  // reads the UTF-8 bytes in the console's code page, and the path it then runs does not exist. That is a fact
+  // about cmd.exe under 850, so it is asserted only where this run's console really was 850.
+  const without = runAskingFor850(text.replace('chcp 65001 >nul\r\n', ''));
+  if (run.under850 && without.under850) {
+    assert.notEqual(without.result.status, 0, 'the same file without the code page line does not find the script');
+    assert.equal(without.args, null);
+  } else {
+    t.diagnostic('the console did not switch to code page 850 here, so the need for the chcp line was not re-measured');
+  }
 });

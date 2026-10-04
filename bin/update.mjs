@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
-import { readManifest } from './lib/manifest.mjs';
+import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage } from './lib/project.mjs';
 import { latestFromSource, splitCommand, viewArgs, installArgs, isNewer } from './lib/version.mjs';
 
@@ -166,11 +166,11 @@ function notInitializedMessage(cwd) {
 
 async function machineStatus(opts, env, spawn) {
   const installed = currentVersion();
-  const manifest = readManifest(opts.home);
+  const recorded = installedVersion(opts.home);
   const latest = resolveLatest(opts, env, spawn);
 
   console.log(`installed package version: ${installed}`);
-  console.log(`manifest version: ${manifest ? manifest.version : '(not installed)'}`);
+  console.log(`manifest version: ${recorded ?? '(not installed)'}`);
   if (latest) {
     console.log(`latest available: ${latest.version}`);
     if (isNewer(latest.version, installed)) console.log(`update available: ${latest.version}`);
@@ -234,11 +234,11 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // Verify the sync we just ran actually belonged to the upgraded version: a stale `js-harness`
   // still on PATH (or a --prefix bin that never landed) would silently sync the wrong release.
-  const manifest = readManifest(opts.home);
-  if (!manifest || manifest.version !== latest.version) {
+  const recorded = installedVersion(opts.home);
+  if (recorded !== latest.version) {
     console.error(
       `sync ran, but the manifest under ${opts.home} reports ` +
-        `${manifest ? manifest.version : '(not installed)'}, not ${latest.version}: the js-harness ` +
+        `${recorded ?? '(not installed)'}, not ${latest.version}: the js-harness ` +
         'found is not the upgraded one — run `js-harness sync --global` with the upgraded binary',
     );
     return 1;

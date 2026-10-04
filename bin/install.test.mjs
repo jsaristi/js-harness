@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
-import { manifestPath, readManifest } from './lib/manifest.mjs';
+import { manifestPath, readManifest, recordOptionalFile } from './lib/manifest.mjs';
 import { initProject } from './lib/project.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -198,6 +198,146 @@ test('syncMain and uninstallMain also resolve home from JS_HARNESS_HOME when --h
     // T3b item 6, R3-uninstall-cwd-dependent-machine-tests: pinned with --global (see above).
     const uninstallCode = await uninstallMain(['--global'], { JS_HARNESS_HOME: home });
     assert.equal(uninstallCode, 0);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- optional files (the login launcher of `remote start --at-login`): recorded apart from the components ---
+
+/** An optional file in a folder that stands in for the Windows Startup folder, recorded under `home`. */
+function recordLauncher(home, name = 'js-harness-remote-x.cmd', content = '@echo off\r\n') {
+  const dir = path.join(home, 'Startup');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, content);
+  return recordOptionalFile(home, file, content);
+}
+
+test('installMain and syncMain keep the record of an optional file, and the file', async () => {
+  const home = makeTmpHome();
+  try {
+    const record = recordLauncher(home);
+    assert.equal(readManifest(home).version, null, 'recorded on a machine where nothing is installed');
+
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(installed.code, 0);
+    assert.equal(readManifest(home).version, currentVersion());
+    assert.deepEqual(readManifest(home).optional, [record]);
+
+    const synced = await captureConsole(() => syncMain(['--global', '--home', home]));
+    assert.equal(synced.code, 0);
+    assert.deepEqual(readManifest(home).optional, [record]);
+    assert.ok(fs.existsSync(record.path));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain reports an optional file with the removed files, and an edited one with the kept ones', async () => {
+  const home = makeTmpHome();
+  try {
+    const untouched = recordLauncher(home);
+    const edited = recordLauncher(home, 'js-harness-remote-y.cmd');
+    fs.writeFileSync(edited.path, 'the user was here');
+
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+
+    assert.equal(code, 0);
+    assert.ok(outLines.includes(`removed ${untouched.path}`), outLines.join('\n'));
+    assert.ok(outLines.includes(`kept (modified by you) ${edited.path}`), outLines.join('\n'));
+    assert.doesNotMatch(outLines.join('\n'), /nothing installed/, 'a home with only an optional file is not "nothing"');
+    assert.equal(fs.existsSync(untouched.path), false);
+    assert.equal(fs.readFileSync(edited.path, 'utf8'), 'the user was here');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A machine where only `remote start --at-login` ever wrote: its manifest has a null version.
+
+test('syncMain --global over a manifest that only records an optional file installs as on a clean home, and keeps the record', async () => {
+  const home = makeTmpHome();
+  const clean = makeTmpHome();
+  try {
+    const record = recordLauncher(home);
+    const synced = await captureConsole(() => syncMain(['--global', '--home', home]));
+    const expected = await captureConsole(() => syncMain(['--global', '--home', clean]));
+
+    assert.equal(synced.code, 0);
+    assert.deepEqual(
+      synced.outLines.map((line) => line.replaceAll(home, '<home>')),
+      expected.outLines.map((line) => line.replaceAll(clean, '<home>')),
+      'the same report as with no manifest at all',
+    );
+    assert.equal(readManifest(home).version, currentVersion());
+    assert.equal(readManifest(home).files.length, readManifest(clean).files.length);
+    assert.deepEqual(readManifest(home).optional, [record]);
+    assert.ok(fs.existsSync(record.path));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(clean, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global over a manifest that only records a file that is gone says nothing is installed, and removes the manifest', async () => {
+  const home = makeTmpHome();
+  try {
+    const record = recordLauncher(home);
+    fs.rmSync(record.path);
+    const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(code, 0);
+    assert.deepEqual(outLines, [`nothing installed under ${home}`]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says an optional file it could not read was left, with the error code and what to do, and still removes the rest and the manifest', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const blocked = path.join(home, 'Startup', 'js-harness-remote-blocked.cmd');
+    fs.mkdirSync(blocked, { recursive: true }); // a folder at the recorded path
+    recordOptionalFile(home, blocked, 'as written');
+
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+
+    assert.equal(code, 1, 'a file left behind and unrecorded is not a clean uninstall');
+    const line = errLines.find((text) => text.includes(blocked));
+    assert.ok(line, errLines.join('\n'));
+    assert.match(line, /^could not read /);
+    assert.match(line, /\(EISDIR\)/);
+    assert.match(line, /no longer recorded/);
+    assert.match(line, /remove it by hand/);
+    assert.doesNotMatch(outLines.join('\n'), /modified by you/, 'nobody edited it');
+    assert.ok(outLines.some((text) => text.startsWith('removed ') && text.endsWith('SKILL.md')), outLines.join('\n'));
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says an optional file it could not remove was left, with the error code and what to do', async () => {
+  const home = makeTmpHome();
+  try {
+    const locked = recordLauncher(home);
+    const removeFile = (target, ...rest) => {
+      if (target === locked.path) throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${locked.path}'`), { code: 'EBUSY' });
+      fs.rmSync(target, ...rest);
+    };
+
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+
+    assert.equal(code, 1, 'a file left behind and unrecorded is not a clean uninstall');
+    assert.deepEqual(errLines, [
+      `could not remove ${locked.path} (EBUSY): it is still there and no longer recorded, so nothing else will remove it; remove it by hand`,
+    ]);
+    assert.doesNotMatch(outLines.join('\n'), /modified by you|nothing installed/);
+    assert.ok(fs.existsSync(locked.path));
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

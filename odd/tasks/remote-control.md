@@ -1,6 +1,7 @@
 # Remote sessions: open a local session from the phone
 
-Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branch: `feat/remote-control`
+Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
+(slice 1, PR #28), `feat/remote-at-login` (slice 2, cut from it)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -80,8 +81,26 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - `stop` kills the supervisor and its children by identity and removes the state file.
 - `start --at-login` writes a launcher in the Windows Startup folder, recorded in the machine
   manifest as an optional file; `remote stop --at-login` and `uninstall` remove it exactly.
+  Decided on 2026-10-04, before T3: the launcher is `js-harness-remote-<id>.cmd`, running the
+  same `remote start` (never `--at-login` itself); the record is a top-level `optional` array of
+  `{ path, sha256 }` in the manifest, which `install` and `sync` carry forward untouched and
+  `uninstall` removes by hash without touching the folder. This machine has no manifest (the
+  harness runs from its checkout), so recording creates one with a `null` version that still
+  reads as not installed, and forgetting the last record removes it again. The flag is
+  symmetric: `start --at-login` starts and turns the launcher on, `stop --at-login` stops and
+  turns it off, plain `stop` leaves it on, and `status` says which it is.
+- The TUI shows `Remote status`, `Remote start` and `Remote stop` in the project section of
+  any git repository; stop asks first, because it ends the sessions opened through the server.
+  The login launcher is not offered there (decided 2026-10-04, before T5).
 - `doctor` gains a Claude account check: `ok` when both identifiers match, `mismatch` (a gap in
   Fix, the session digest and the TUI) when they differ, with `claude auth login` as the fix.
+  Decided on 2026-10-04, before T4: it is one row, `claude-account`, after the tool rows, with
+  its state in the `claude` dimension and `n/a` in the others. Both files are found from the
+  home the command was given (`<home>/.claude.json`; `<home>/AppData/Roaming/Claude/config.json`
+  on Windows, `<home>/Library/Application Support/Claude/config.json` on macOS), never from
+  the environment, so a test with a temp home cannot read the real account. On any other
+  platform the state is `unknown`. Measured on this machine without printing either value:
+  both identifiers are present and equal.
 
 ## Tasks
 - [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
@@ -111,12 +130,26 @@ the chain strategy is asked once, before the commit that crosses the budget.
   an absolute path before any path is built; the lock is released only by its owner and a
   failed release never replaces the command's result (Codex P1, P2, P2, P2; gentle-ai
   `R3-lock-release-unconditional-and-may-throw`) (route: delegated writer)
-- [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
+- [x] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
   delegated writer)
+- [x] T3r Review findings on the launcher: `start` checks its own input (the name) before the
+  launcher is written, so a start that refuses leaves none; replacing a recorded launcher
+  restores the earlier one when the new one cannot be recorded; what each reader does with a
+  manifest that holds only an optional record is tested and the comment says what is true;
+  `uninstall` keeps and reports an optional file it cannot read or remove; the real-cmd test
+  no longer pins one machine's code page (gentle-ai `R4-launcher-before-name-validation`,
+  `R2-name-validated-after-launcher`, `R3-launcher-written-before-name-validation`,
+  `R2-null-version-every-reader-claim`, `R3-uninstall-optional-throw-untested`,
+  `R3-cmd-negative-assertion-machine-dependent`; Codex P2) (route: delegated writer)
+- [x] T3s `uninstall` says why it kept an optional file: one it could not read or remove is
+  named with the error code and the advice to remove it by hand, since no record of it is
+  left, and the remove failure is tested through an injected seam (gentle-ai
+  `R4-uninstall-optional-kept-not-retryable`, `R3-uninstall-remove-failure-untested`,
+  `R3-kept-label-pinned`, `R3-drive-root-test-machine-state`) (route: delegated writer)
 - [ ] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
   delegated writer)
-- [ ] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
+- [x] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
 - [ ] T6 Roadmap: the phase and its steps, the Commands row, and the live check on this machine
   (route: inline)
 
@@ -312,6 +345,98 @@ the chain strategy is asked once, before the commit that crosses the budget.
   Codex over `1ae255e..0493630`: no actionable defects, recorded. With `535ef09..1ae255e`
   recorded before, every code commit of the first slice has a Codex record; the reviewed
   boundary is `0493630`.
+- 2026-10-04: PR #27 merged on Sebastián's go-ahead (`a3a1eb1` on `main`). The first slice
+  is PR #28 (`feat/remote-control` at `aaa79db`, against `main`; the pre-push hook passed:
+  five code commits, all covered by a Codex record; 3,396 insertions, the size exception he
+  accepted). The second slice is the branch `feat/remote-at-login`, cut from `aaa79db`; its
+  PR is opened against `main` once #28 is merged, so its diff holds only T3 and T5.
+- 2026-10-04: T3 done (delegated writer, a fresh agent that also wrote T5; `node --test
+  bin/remote.test.mjs bin/lib/remote.test.mjs bin/js-harness.test.mjs
+  bin/lib/process-tree.test.mjs` 177/177 and `node --test bin/lib/manifest.test.mjs
+  bin/install.test.mjs bin/update.test.mjs` 125/125, 0 skipped, both re-run by the parent).
+  RED: `unknown flag: --at-login` (18 of 18), `not implemented` for the manifest functions
+  (10 of 47) and the launcher text (6 of 6), `manifest version: null` in `status --global`.
+  `bin/lib/manifest.mjs` exports `recordOptionalFile` and `forgetOptionalFile`; optional
+  files are hashed by bytes, an empty `optional` is dropped so an installed manifest comes
+  back byte-identical, and `bin/update.mjs` reads a `null` version as not installed.
+  `loginLauncher` in `bin/lib/remote.mjs` builds the text and refuses, naming it, a value
+  with `& | < > ^ % " !` or a control character. Measured with a real `cmd.exe`: a batch
+  file is decoded line by line in the console's code page, so a non-ASCII path is not found
+  under 850, 437 or 1252 and is found after a `chcp 65001 >nul` line; the file is UTF-8
+  without a BOM, and that line is written only when the command holds non-ASCII (the test
+  forces code page 850, since this machine's console already uses 65001). Decided by the
+  writer, kept: a launcher with the same content and no record is adopted; `stop --at-login`
+  keeps an edited or unrecorded file, says so and exits 1 after the ordinary stop; when the
+  ordinary start fails after the launcher was written, the launcher stays on and recorded
+  and the command exits 1; `status` adds `login launcher: on|off`, with a note for an
+  edited or unrecorded file. Not turned on on this machine: the real Startup folder holds
+  only `desktop.ini`, no manifest exists in the real home, and `remote status` reads the
+  live server with `login launcher: off`. Committed with this entry.
+- 2026-10-04: T3 is `0be9491` (gate `PASS tests`, 542 s). T5 done (the same writer; `node --test
+  bin/tui.test.mjs` 69/69, re-run by the parent; RED: 10 of 69, `commands.project-remote-status
+  is not a function`). The project section of every git repository ends with `Remote status`,
+  `Remote start` and `Remote stop`, each calling `remoteMain` with the `--cwd` and `--home` the
+  other project commands get, through an injectable seam; stop asks first and its prompt
+  says the sessions opened through the server end. Four existing tests that reached the
+  machine section by a fixed number of key presses were adjusted to the longer menu.
+  Committed with this entry; gentle-ai and Codex review the slice (`0493630..HEAD`) next.
+- 2026-10-04: T5 is `c7be78f` (gate `PASS tests`). gentle-ai reviewed `0493630..c7be78f`, T3
+  and T5 together: high risk, 14 paths, 1,364 lines, due (`high_risk`); lineage
+  `review-f6d1164ce87b4799`, the four lenses, approved and acknowledged, authority burned.
+  Seven WARNINGs and eight SUGGESTIONs, all advisory. Taken as T3r: the launcher is written
+  before `start` checks the name, so a repository at a drive root leaves a launcher that
+  refuses at every login (three lenses); a replaced launcher is deleted, not restored, when
+  its record cannot be written (also Codex's P2); the comment that every reader takes a
+  null-version manifest for not installed is proved for two readers only; an optional file
+  that cannot be read aborts `uninstall` halfway; the real-cmd test asserts a failure that
+  depends on the machine's code page; two names that say less than they hold. One WARNING
+  was this document: Next step still told the reader to merge PR #27 and to start T3 and
+  T5; rewritten. The rest are in Follow-ups.
+- 2026-10-04: Codex over `0493630..c7be78f`, twice. The first run was recorded and is not a
+  review: its own message says the diff was truncated and the review not completed, because
+  its instructions ask it to delegate and that session has no sub-agents. The second run
+  found one defect, [P2] the replaced launcher above, and again called its coverage partial
+  for the same reason. Both records stand in `codex-reviews.jsonl`; see Follow-ups.
+- 2026-10-04: T3r done (delegated writer, the same agent; `node --test bin/remote.test.mjs
+  bin/lib/remote.test.mjs bin/js-harness.test.mjs bin/lib/process-tree.test.mjs` 180/180 and
+  the manifest, install, update and TUI files 201/201, 0 skipped, re-run by the parent).
+  With `--at-login` the name is checked before the launcher is written (RED: `a launcher
+  left on would repeat a start that refuses at every login`); the name is the only refusal
+  that depends on input alone, the flags being checked at parse time, and a test places the
+  repository at a drive root through a new `deps.gitTopLevel` seam. A replaced launcher is
+  put back when the new one cannot be recorded, and only a file this command created is
+  removed (RED: `ENOENT` on the launcher that should still be there). The readers of a
+  manifest that holds only an optional record were checked one by one and none misbehaved:
+  `install`, `sync --global` and `uninstall --global` already did the right thing, so their
+  four new tests had no RED; the two version readers in `bin/update.mjs` now go through one
+  helper, `installedVersion(home)`, and the comment names each reader. `uninstall` keeps an
+  optional file it cannot read or remove and finishes (RED: `EISDIR`). The real-cmd test
+  reads the code page back in the same console and asserts the failing half only when it
+  really was 850. `launcherKept` is `launcherNotOff` and `LAUNCHER_VALUES` is
+  `LAUNCHER_LABELS`, iterated as the one list. Committed with this entry.
+- 2026-10-04: T3r is `1640f01` (gate `PASS tests`, 540 s). gentle-ai reviewed
+  `c7be78f..1640f01`: high risk, 9 paths, 470 lines, due (`high_risk`); lineage
+  `review-b927eaf4aba0ad53`, the four lenses, approved and acknowledged, authority burned.
+  One WARNING and six SUGGESTIONs, advisory. Taken as T3s: `uninstall` keeps a launcher it
+  could not remove, prints it as `kept (modified by you)` and deletes the manifest, so a file
+  locked for an instant stays in the Startup folder with no record and a wrong reason; the
+  remove failure has no test; the drive-root test's second half may depend on the machine
+  having a `Q:` drive. The other two are in Follow-ups. Codex over `c7be78f..1640f01`: no
+  actionable defects, recorded, and no notice of partial coverage this time.
+- 2026-10-04: T3s done (delegated writer, a fresh agent that also wrote T4; `node --test
+  bin/lib/manifest.test.mjs bin/install.test.mjs bin/update.test.mjs` 135/135, re-run by
+  the parent). `uninstall(home, deps)` takes a `deps.removeFile` seam and returns
+  `keptOptional`, each entry with its reason (`edited`, `unreadable`, `unremovable`) and
+  the error code; `kept` is unchanged for its callers. `uninstall --global` prints `could
+  not remove <path> (EBUSY): it is still there and no longer recorded, so nothing else will
+  remove it; remove it by hand` on stderr, and keeps `kept (modified by you)` for a file
+  that was edited (RED: `actual: undefined` for `keptOptional`, and `actual: []` for the
+  line). Decided by the parent, inline: such an uninstall exits 1, as the project-scope
+  one does, since a file left behind that nothing records is not a finished uninstall
+  (RED: `0 !== 1` in both tests). The drive-root test stays as it is: with the root faked
+  as `Q:\`, the state, log and lock live under the temp home, the launcher under the temp
+  `APPDATA`, and spawn, identify and the CLI look-up are fakes, so nothing opens the root;
+  it passes on this machine, which has no `Q:`. Committed with this entry.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -333,9 +458,9 @@ the chain strategy is asked once, before the commit that crosses the budget.
   passed git's repository variables to its sensors, and `bin/contract.test.mjs:137`, `:317` and
   `evals/task-proof.test.mjs:459` run `git init` under them (the last also `git add --all`,
   which replaced that worktree's index). Fixed in `bin/check.mjs` on `fix/gate-git-env`
-  (`5e31d14`, PR #27, not merged): a sensor's environment loses every variable
-  `git rev-parse --local-env-vars` lists. Until it is on `main` and each branch has it: no
-  commit from a linked worktree, and never two gates at once.
+  (`5e31d14`, PR #27, merged as `a3a1eb1`): a sensor's environment loses every variable
+  `git rev-parse --local-env-vars` lists. Until each branch has it: no commit from a linked
+  worktree of a branch cut before `a3a1eb1`, and never two gates at once.
 - `evals/task-proof.test.mjs:304` fails under load (a spec deletes the file another imports).
   Fixed in `e006a4b` (PR #27): the touching test moved into the spec that imports the file.
 - **The suite no longer fits the gate's limit on a busy machine** (2026-10-04): 600 s for a
@@ -381,6 +506,32 @@ the chain strategy is asked once, before the commit that crosses the budget.
   temp file and a rename would prevent it. Two `start` that find the same stale lock in
   the same instant can both take it. A supervisor that dies on its own can leave its
   server's children running, and `stop` then says `not running`.
+- **`codex-review` recorded a review Codex itself called incomplete** (2026-10-04, range
+  `0493630..c7be78f`): the record is written when the commands Codex ran showed every changed
+  line, whatever its final message says. In both runs of that range Codex said its coverage
+  was partial because its global instructions require delegation and `codex exec review`
+  gives it no sub-agents; earlier ranges of this feature were reviewed without that notice.
+  Open: whether the recorder should refuse a review whose message says it is not complete,
+  and what in Codex's instructions changed.
+- T3 and T5 review suggestions (gentle-ai, advisory), not taken: `recordOptionalFile` and
+  `forgetOptionalFile` read, change and rewrite the machine manifest under no lock of its
+  own, so two commands for different repositories, or one beside `install` or `sync`, can
+  drop a record (`start --at-login` again adopts the file); the launcher pins the absolute
+  paths of node and of this checkout's script, and `status` says `on` when either has moved
+  since; the TUI offers the remote items on every platform while the command refuses off
+  Windows, and no test asserts what the menu shows there.
+- Left open by T3r. Over a manifest that holds only an optional record `uninstall` also
+  removes the doctor cache, which an uninstall with no manifest leaves. Review suggestions
+  (gentle-ai, advisory), not taken: nothing asserts that the keys of `LAUNCHER_LABELS` and
+  the names `loginLauncher` destructures stay the same set, so a value without a label would
+  be dropped, not refused; after a failed record the message says the file and its record
+  are as they were, which holds only if the recorder failed before it touched the manifest,
+  whose write is not atomic.
+- Left open by T3. At login the `.cmd` shows a console window for an instant, and a start
+  that fails there is seen by nobody: its output goes to that window. The record matches by
+  exact path string, so an `APPDATA` spelled in another letter case makes a second record
+  (`uninstall` handles both). `uninstall` deletes the manifest even when it kept an edited
+  launcher, as it already does for an edited component file.
 - Left by T1r and T2r's writer, not fixed: when the supervisor's identity is unreadable and it
   survives `killTree`, `start` only reports the pid; a state-file write that fails can leave a
   partial file; in `bin/remote.test.mjs` the temp folder is removed before the reaper sweep,
@@ -388,22 +539,25 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: the first slice is written, committed and reviewed on
-`feat/remote-control`, not pushed: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes
-(merge `9070a8b`), T1r with T2r (`c74e42c`), T2s (`1ae255e`) and T2t (`0493630`). Each code
-commit was approved by gentle-ai and is covered by a Codex record. The server for
-`D:js-harness` is running, started with `js-harness remote start` (detached; `remote
-status` shows it, `remote stop` ends it). It still runs T2's code: `remote stop` then
-`remote start` loads the fixes, and ends the sessions opened through it, so it waits for his
-word. In order:
+State on 2026-10-04: PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
+`aaa79db`, against `main`), reviewed, waiting for his go-ahead to merge. The second slice is
+on `feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
+and T3s, not pushed. The server for `D:js-harness` is running, started with `js-harness remote start`
+(detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
+`remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
+so it waits for his word. The login launcher is off on this machine and stays off until he
+asks. In order:
 
-1. PR #27 (the gate fixes, four commits) is merged on his go-ahead: `gh pr merge 27 --merge`,
-   pull `main`. This branch already holds those commits through `9070a8b`.
-2. The first slice goes out: load the `chained-pr` and `work-unit-commits` skills, push,
-   open its PR against `main`.
-3. T3 and T5 (second slice), then T4 and T6 (third slice), each task with its commit, its
-   `gentle-ai review assess --base-ref <last reviewed boundary> --committed-only` and, per
-   slice with code, `js-harness codex-review --base <boundary>`.
+1. PR #28 is merged on his go-ahead (`gh pr merge 28 --merge`, pull `main`).
+2. T3s is committed on `feat/remote-at-login`, assessed by gentle-ai (`--base-ref 1640f01
+   --committed-only`) and reviewed by Codex (`--base 1640f01`); then the second slice is
+   pushed and its PR opened against `main`, which needs #28 merged first so the diff holds
+   only this slice. The reviewed boundary is `1640f01`.
+3. T4 and T6 (third slice) on `feat/remote-account`, cut from the second, each task with its
+   commit, its gentle-ai assessment and, for the slice, `js-harness codex-review --base
+   <boundary>`.
+   T6's live check needs him: a session opened from the phone after `remote stop` and
+   `remote start`, which he has to allow.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three

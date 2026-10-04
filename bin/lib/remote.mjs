@@ -10,6 +10,7 @@
 // unrelated programs on this machine.
 //
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
+// `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder.
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,6 +80,61 @@ export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}
   if (typeof name !== 'string' || name.trim() === '') throw new Error('The remote server needs a non-empty name.');
   if (!SPAWN_MODES.includes(spawnMode)) throw new Error(`Unknown spawn mode ${JSON.stringify(spawnMode)}: use one of ${SPAWN_MODES.join(', ')}.`);
   return ['remote-control', '--name', name, '--spawn', spawnMode, ...(permissionMode ? ['--permission-mode', permissionMode] : [])];
+}
+
+/** What cmd.exe acts on in a line of a batch file, quoted or not: the operators, `%` (a variable, expanded inside
+ * quotes too), `!` (the same, where delayed expansion is on), a quote, which no escape gets past both cmd.exe and
+ * the program it starts, and control characters, a line end among them. */
+const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
+
+/** The values a launcher holds, each with what it is called when it is refused. `loginLauncher` checks these and
+ * builds the file from what it checked, so no value reaches the file unchecked or is refused without a name. */
+const LAUNCHER_LABELS = {
+  node: 'the node executable',
+  script: 'this install of js-harness',
+  root: 'the project folder',
+  name: 'the server name',
+  permissionMode: 'the permission mode',
+  spawnMode: 'the spawn mode',
+  home: 'the home',
+};
+
+/** The text of the login launcher: a batch file whose one command runs `node <script> start --cwd <root> --name
+ * <name>`, with `--permission-mode`, `--spawn` and `--home` when given, so a login starts the same server `remote
+ * start` did. Every line ends in CRLF. Throws, naming the value, when one holds what cmd.exe would act on: a
+ * launcher that runs something else at every login is worse than none.
+ *
+ * The file is UTF-8 with no byte order mark (a mark makes the first line an unknown command). Measured with a
+ * real cmd.exe on 2026-10-04: it reads a batch file in the console's code page, line by line, so a path with a
+ * letter beyond ASCII is not found under code page 850, 437 or 1252, and is found once a `chcp 65001` line has
+ * run before it. That line is written only when the command needs it: the console is the launcher's own. */
+export function loginLauncher(options) {
+  const checked = {};
+  for (const [key, label] of Object.entries(LAUNCHER_LABELS)) {
+    const value = options[key];
+    const found = value === undefined ? null : UNSAFE_IN_BATCH.exec(value);
+    if (found) {
+      throw new Error(`the login launcher cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
+    }
+    checked[key] = value;
+  }
+  const { node, script, root, name, permissionMode, spawnMode, home } = checked;
+  const args = [
+    script, 'start', '--cwd', root, '--name', name,
+    ...(permissionMode ? ['--permission-mode', permissionMode] : []),
+    ...(spawnMode ? ['--spawn', spawnMode] : []),
+    ...(home ? ['--home', home] : []),
+  ];
+  // The command is quoted whatever it holds: cmd.exe splits a bare command name at `,`, `;` and `=`.
+  const quoted = quoteWindowsArg(node);
+  const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, args);
+  return [
+    '@echo off',
+    'rem Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.',
+    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
+    command,
+    '',
+  ].join('\r\n');
 }
 
 const isFile = (file) => {

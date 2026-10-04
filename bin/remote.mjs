@@ -7,7 +7,9 @@
 // Windows reuses pids and a bare-pid kill closed unrelated programs on this machine. A record is the only thing
 // that names a supervisor, so whatever does not prove it gone (a look that failed, a file that cannot be read)
 // answers `unknown`: nothing is started, killed or deleted, and the human is told what to check. One `start` or
-// `stop` runs at a time for a project, under a lock file beside the state file.
+// `stop` runs at a time for a project, under a lock file beside the state file. `start --at-login` also writes a
+// launcher in the user's Windows Startup folder, so a login starts the server again; it is recorded in the machine
+// manifest as an optional file, and `stop --at-login` and `uninstall` remove exactly that file.
 import { spawn as spawnChild } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -15,19 +17,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { quoteWindowsArg, windowsCommandLine } from './codex-review.mjs';
+import { forgetOptionalFile, readManifest, recordOptionalFile, sha256 } from './lib/manifest.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { killProcesses, killTree, selectDescendants, takeSnapshot } from './lib/process-tree.mjs';
-import { SPAWN_MODES, cleanServerEnv, logNote, readPersistentEnv, resolveClaude as findClaude, serverArgs, supervise } from './lib/remote.mjs';
+import { SPAWN_MODES, cleanServerEnv, logNote, loginLauncher, readPersistentEnv, resolveClaude as findClaude, serverArgs, supervise } from './lib/remote.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
 const USAGE =
-  'Usage: js-harness remote start|stop|status [--cwd <path>] [--home <path>]; start also takes [--name <name>] [--permission-mode <mode>] [--spawn same-dir|worktree|session]';
+  'Usage: js-harness remote start|stop|status [--cwd <path>] [--home <path>]; start also takes [--name <name>] [--permission-mode <mode>] [--spawn same-dir|worktree|session]; start and stop also take [--at-login] (start writes a launcher in the Windows Startup folder that starts the server at every login, stop removes it)';
 
 class ArgError extends Error {}
 
 const SUBCOMMANDS = ['start', 'stop', 'status'];
 const START_ONLY = ['--name', '--permission-mode', '--spawn'];
+/** The one flag that takes no value. `status` only reads, so it does not take it. */
+const AT_LOGIN = '--at-login';
 
 /** What cmd.exe would act on in a server name (a `.cmd` CLI gets the name on its command line, and the quoting
  * throws on these inside the supervisor, which would retry forever), and control characters. */
@@ -41,6 +46,10 @@ function parseArgs(argv, env) {
   const values = {};
   for (let i = 0; i < rest.length; i++) {
     const token = rest[i];
+    if (token === AT_LOGIN && subcommand !== 'status') {
+      values[token] = true;
+      continue;
+    }
     if (!flags.includes(token)) throw new ArgError(`unknown flag: ${token}`);
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ArgError(`${token} requires a value`);
@@ -65,6 +74,7 @@ function parseArgs(argv, env) {
     name,
     spawnMode,
     permissionMode,
+    atLogin: values[AT_LOGIN] === true,
   };
 }
 
@@ -402,18 +412,186 @@ async function stopSpawnedSupervisor(child, lifetime) {
   if (child.pid && !(await exitedWithin(child, EXIT_WAIT_MS))) throw new Error('it has not exited, and nothing identifies it for a kill');
 }
 
+// ---- the login launcher ----------------------------------------------------------------------------------------------
+
+const isDirectory = (dir) => {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+/** Whether two paths name one folder on Windows, which does not tell `C:\Users\X` from `c:\users\x`. */
+const sameFolder = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+
+/** Where the login launcher of the project `id` goes: `{ dir, file }`, the user's Startup folder (what Windows
+ * runs at every login) and the launcher in it, from the `APPDATA` of `env` and nothing else; `{ why }` when `env`
+ * has none. Nothing is created: that folder is Windows's to make. */
+function launcherLocation(env, id) {
+  const key = Object.keys(env).find((name) => /^appdata$/i.test(name));
+  const appData = key === undefined ? '' : String(env[key]).trim();
+  if (appData === '') return { why: 'APPDATA is not set, so the Windows Startup folder cannot be found' };
+  const dir = path.resolve(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+  return { dir, file: path.join(dir, `js-harness-remote-${id}.cmd`) };
+}
+
+/** What is at the launcher's path and what the machine manifest records for it: `{ bytes, record, ours }`.
+ * `bytes` is `null` when no file is there; `ours` says the file is, byte for byte, what js-harness recorded
+ * writing: the only launcher it replaces or removes. Throws when the file or the manifest cannot be read, since
+ * neither answer is then known. */
+function lookAtLauncher(home, file) {
+  let bytes = null;
+  try {
+    bytes = fs.readFileSync(file);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw new Error(`what is at ${file} could not be read (${err.message})`);
+  }
+  let record;
+  try {
+    record = readManifest(home)?.optional?.find((entry) => entry.path === file);
+  } catch (err) {
+    throw new Error(`the machine manifest under ${home} could not be read (${err.message})`);
+  }
+  return { bytes, record, ours: bytes !== null && record !== undefined && sha256(bytes) === record.sha256 };
+}
+
+/** `start --at-login`: writes the launcher and records it in the machine manifest as an optional file, so that
+ * `stop --at-login` and `uninstall` remove exactly it. Returns `true` with the launcher on, and `false` after
+ * saying why it is not, with nothing of this command's left behind. Validated before anything is written: that
+ * `APPDATA` gives a Startup folder that exists, and that no value the launcher holds (the node executable, this
+ * install, the project folder, the name, the modes, the home) has what cmd.exe acts on (`loginLauncher`); the
+ * caller has already refused a name the server cannot take. A file already at the path is left alone when it has
+ * the very content, replaced when it is one js-harness recorded writing (an earlier start with other options),
+ * and refused otherwise: it is the user's, or one they edited. A launcher that no record names would outlive
+ * every uninstall, so when the file cannot be recorded what was there before is put back: a file this command
+ * created is removed again, and one it replaced gets its earlier bytes, which its record still names. */
+function enableLauncher(opts, name, { env, deps, log, error, root, id, home }) {
+  const refuse = (why) => {
+    error(`the login launcher was not written: ${why}. Nothing was started.`);
+    return false;
+  };
+  const where = launcherLocation(env, id);
+  if (where.why) return refuse(where.why);
+  if (!isDirectory(where.dir)) return refuse(`the Windows Startup folder does not exist (${where.dir}), and js-harness does not create it`);
+  let content;
+  let found;
+  try {
+    // At login the command finds the user's own home by itself; any other home has to be named.
+    const text = loginLauncher({
+      node: deps.execPath, script: SELF, root, name, permissionMode: opts.permissionMode, spawnMode: opts.spawnMode,
+      home: sameFolder(home, deps.homedir()) ? undefined : home,
+    });
+    content = Buffer.from(text, 'utf8');
+    found = lookAtLauncher(home, where.file);
+  } catch (err) {
+    return refuse(err.message);
+  }
+  const same = found.bytes !== null && found.bytes.equals(content);
+  if (found.bytes !== null && !same && !found.ours) {
+    const what = found.record ? `the launcher at ${where.file} was changed since js-harness wrote it` : `a file js-harness did not write is at ${where.file}`;
+    return refuse(`${what}, and is left as it is; remove it by hand, then run this again`);
+  }
+  if (!(same && found.ours)) {
+    try {
+      // `wx` for a new file: one that appeared since the look above is not this command's to overwrite.
+      if (!same) fs.writeFileSync(where.file, content, { flag: found.bytes === null ? 'wx' : 'w' });
+    } catch (err) {
+      return refuse(`${where.file} could not be written (${err.message})`);
+    }
+    try {
+      deps.recordOptionalFile(home, where.file, content);
+    } catch (err) {
+      const unrecorded = `it could not be recorded in the machine manifest (${err.message})`;
+      if (same) return refuse(`${unrecorded}; the file at ${where.file} was there before this command, and is left`);
+      if (found.bytes === null) {
+        try {
+          fs.rmSync(where.file, { force: true });
+        } catch (left) {
+          return refuse(`${unrecorded}, and the file written could not be removed again (${left.message}): remove ${where.file} by hand`);
+        }
+        return refuse(`${unrecorded}, so the file written was removed again`);
+      }
+      try {
+        fs.writeFileSync(where.file, found.bytes);
+      } catch (left) {
+        return refuse(`${unrecorded}, and the earlier launcher could not be put back (${left.message}): what is at ${where.file} is no longer what its record names, so neither js-harness remote stop --at-login nor uninstall removes it; remove it by hand`);
+      }
+      return refuse(`${unrecorded}, so the earlier launcher was put back: ${where.file} and its record are as they were`);
+    }
+  }
+  log(`login launcher: on (${where.file})`);
+  return true;
+}
+
+/** `stop --at-login`: removes the launcher and its record. Returns `true` with the launcher off (removed, or not
+ * there: a record whose file is gone is forgotten), and `false` after saying why a file is kept: only one that is
+ * still what js-harness recorded writing is removed. The file goes before its record, so a failure in between
+ * leaves a record of a file that is gone, never a launcher that no record names. */
+function disableLauncher({ env, deps, log, error, id, home }) {
+  const where = launcherLocation(env, id);
+  if (where.why) {
+    error(`the login launcher could not be looked for: ${where.why}.`);
+    return false;
+  }
+  let found;
+  try {
+    found = lookAtLauncher(home, where.file);
+  } catch (err) {
+    error(`the login launcher could not be looked for: ${err.message}.`);
+    return false;
+  }
+  const there = found.bytes !== null;
+  if (there && !found.ours) {
+    error(found.record
+      ? `the login launcher at ${where.file} was changed since js-harness wrote it, so it is kept: remove it by hand, then run js-harness remote stop --at-login again to forget its record.`
+      : `the file at ${where.file} is not one js-harness recorded writing, so it is kept: remove it by hand if it is not wanted.`);
+    return false;
+  }
+  try {
+    if (there) fs.rmSync(where.file);
+  } catch (err) {
+    error(`the login launcher at ${where.file} could not be removed (${err.message}); it is kept, and still recorded.`);
+    return false;
+  }
+  try {
+    if (found.record) deps.forgetOptionalFile(home, where.file);
+  } catch (err) {
+    error(`the login launcher ${there ? 'was removed' : 'was already gone'}, but its record in the machine manifest could not be (${err.message}); run js-harness remote stop --at-login again.`);
+    return false;
+  }
+  if (there) log(`login launcher: off (removed ${where.file})`);
+  else log(`login launcher: off (${found.record ? 'its file was already gone, and its record was removed' : 'there was none'})`);
+  return true;
+}
+
+/** The line `status` adds: `on` when the launcher file is there and the machine manifest records it. */
+function launcherLine({ env, id, home }) {
+  const where = launcherLocation(env, id);
+  if (where.why) return `login launcher: unknown (${where.why})`;
+  let found;
+  try {
+    found = lookAtLauncher(home, where.file);
+  } catch (err) {
+    return `login launcher: unknown (${err.message})`;
+  }
+  if (found.bytes !== null && found.record) return `login launcher: on (${where.file}${found.ours ? '' : ', changed since js-harness wrote it'})`;
+  if (found.bytes !== null) return `login launcher: off (a file js-harness did not record is at ${where.file})`;
+  return `login launcher: off${found.record ? ` (recorded, but its file is gone: ${where.file})` : ''}`;
+}
+
 // ---- the subcommands -------------------------------------------------------------------------------------------------
 
 /** The top level of the git repository `opts.cwd` is in, or `null` after saying why there is none. Whether
  * js-harness initialized that repository does not matter: nothing here reads `harness.json` or the project
  * manifest, and the first place the command is needed (this repository) has neither. So it asks git for the
  * top level and nothing else (`projectLocation` would spend a second git call finding files it never reads). */
-function repositoryRoot(opts, error) {
+function repositoryRoot(opts, error, topLevel = gitTopLevel) {
   if (!fs.existsSync(opts.cwd)) {
     error(`no such directory: ${opts.cwd}`);
     return null;
   }
-  const root = gitTopLevel(opts.cwd);
+  const root = topLevel(opts.cwd);
   if (!root) {
     error(`not inside a git repository: ${opts.cwd}; js-harness remote acts on the repository a folder is in (run it inside one, or pass --cwd <path> to one)`);
     return null;
@@ -438,25 +616,47 @@ function reportStatus({ found, state, name, root, logPath }, log) {
   log(`environment: ${server.environmentUrl ?? 'unknown (not in the log yet)'}`);
 }
 
+/** With `--at-login` the launcher comes before the server, and after everything `start` refuses on its own input:
+ * the name, which is the folder's unless `--name` gives one (the flags were checked when they were parsed, and
+ * `enableLauncher` checks what the launcher holds before it writes). So a start that refuses on what it was asked
+ * writes no launcher, and no login repeats it. What depends on the machine's state comes after the launcher and
+ * leaves it on: a `claude` that is not on PATH, a `.cmd` CLI in a folder cmd.exe acts on, a recorded supervisor
+ * that cannot be told from another program. Those can be put right before a later login, and the command says
+ * both that the launcher is on and why nothing was started. A server that already runs is not an error with
+ * `--at-login`: the launcher was what was asked for, and the server is left as it is.
+ *
+ * Without `--at-login` the order is the one it always was: the name is checked after the recorded supervisor. */
 async function start(opts, context) {
   const { env, deps, log, error, root, files, state, identify } = context;
+  const name = opts.name ?? path.basename(root);
+  const unusableName = UNSAFE_NAME.test(name) || name.trim() === '';
+  const refuseName = () => {
+    error(`the folder name ${JSON.stringify(name)} cannot name the server (no & | < > ^ % " or control characters): pass --name <name>`);
+    return 1;
+  };
+  if (opts.atLogin) {
+    if (unusableName) return refuseName();
+    if (!enableLauncher(opts, name, context)) return 1;
+  }
   // Only a record whose process is proven gone is replaced: a second supervisor beside one that still runs would
   // take over the state file, and nothing would name the first any more.
   const recorded = locate(state, identify);
   if (recorded.found === 'running') {
+    const running = () => reportStatus({ found: 'running', state, name: state.name ?? path.basename(root), root, logPath: state.logPath ?? files.logPath }, log);
+    if (opts.atLogin) {
+      log(`remote: already running for ${path.normalize(root)}, and left as it is: the launcher's options apply from the next login`);
+      running();
+      return 0;
+    }
     error(`the remote server is already running for ${path.normalize(root)}; js-harness remote stop stops it`);
-    reportStatus({ found: 'running', state, name: state.name ?? path.basename(root), root, logPath: state.logPath ?? files.logPath }, log);
+    running();
     return 1;
   }
   if (recorded.found === 'unknown') {
     error(`cannot tell whether the remote server is already running for ${path.normalize(root)}: ${recorded.why}. Nothing was started; run js-harness remote status or js-harness remote stop to look again. ${wayOut(state, files)}`);
     return 1;
   }
-  const name = opts.name ?? path.basename(root);
-  if (UNSAFE_NAME.test(name) || name.trim() === '') {
-    error(`the folder name ${JSON.stringify(name)} cannot name the server (no & | < > ^ % " or control characters): pass --name <name>`);
-    return 1;
-  }
+  if (unusableName) return refuseName();
   const found = deps.resolveClaude({ env });
   if (!found) {
     error("Claude Code's CLI (claude) is not on PATH: install Claude Code, or add the folder that holds claude.exe (or claude.cmd) to PATH, then run this again.");
@@ -523,6 +723,7 @@ function status(context) {
   const { found, why } = locate(state, identify);
   const known = state && !state.unreadable ? state : {};
   reportStatus({ found, state, name: known.name ?? path.basename(root), root, logPath: known.logPath ?? files.logPath }, log);
+  log(launcherLine(context));
   if (found !== 'unknown') return 0;
   error(`cannot tell whether the remote server is running for ${path.normalize(root)}: ${why}. ${wayOut(state, files)}`);
   return 1;
@@ -586,8 +787,11 @@ function removeRecord(statePath, state) {
 /** `js-harness remote ...`. `deps`: `spawn` (async), `takeSnapshot()` and `killProcesses(targets)` (those of
  * `process-tree.mjs`), `identifyProcesses(pids)` (`lookUpProcesses`) and `kill({ pid, createdAt })`
  * (`stopSupervisorTree`), both built on the two before unless given, `stopSpawned(child, { startedAt })`,
- * `resolveClaude({ env })`, `removeFile(path)` (what releases the lock), `platform`, `log`, `error`, and for the
- * hidden supervisor `readPersistentEnv()`, `supervise(options)` and `signals`; the defaults are the real ones. */
+ * `resolveClaude({ env })`, `removeFile(path)` (what releases the lock), `gitTopLevel(cwd)` (that of
+ * `project.mjs`: the repository's top level, or nothing), `platform`, `log`, `error`, for the login
+ * launcher `execPath` (the node it runs), `homedir()`, `recordOptionalFile` and `forgetOptionalFile` (those of
+ * `manifest.mjs`), and for the hidden supervisor `readPersistentEnv()`, `supervise(options)` and `signals`; the
+ * defaults are the real ones. The launcher's folder comes from the `APPDATA` of `env`, never from anywhere else. */
 export async function remoteMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const log = deps.log ?? console.log;
@@ -600,6 +804,10 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     stopSpawned: deps.stopSpawned ?? stopSpawnedSupervisor,
     resolveClaude: deps.resolveClaude ?? findClaude,
     removeFile: deps.removeFile ?? ((file) => fs.rmSync(file)),
+    execPath: deps.execPath ?? process.execPath,
+    homedir: deps.homedir ?? os.homedir,
+    recordOptionalFile: deps.recordOptionalFile ?? recordOptionalFile,
+    forgetOptionalFile: deps.forgetOptionalFile ?? forgetOptionalFile,
   };
   if (argv[0] === 'supervise') return superviseMain(argv.slice(1), env, deps);
 
@@ -611,7 +819,7 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const topLevel = repositoryRoot(opts, error);
+  const topLevel = repositoryRoot(opts, error, deps.gitTopLevel);
   if (!topLevel) return 1;
   if (platform !== 'win32') {
     error('js-harness remote runs on Windows only for now: it tells its supervisor from a reused pid by creation time, which it only reads there.');
@@ -622,7 +830,7 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
   const id = remoteId(root, platform);
   const dir = path.join(opts.home, '.js-harness', 'remote');
   const files = { statePath: path.join(dir, `${id}.json`), logPath: path.join(dir, `${id}.log`), lockPath: path.join(dir, `${id}.lock`) };
-  const context = { env, deps: resolved, log, error, root, files, identify: resolved.identifyProcesses };
+  const context = { env, deps: resolved, log, error, root, id, home: opts.home, files, identify: resolved.identifyProcesses };
   try {
     if (opts.subcommand === 'status') return status({ ...context, state: readState(files.statePath) });
     const starting = opts.subcommand === 'start';
@@ -635,7 +843,13 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     // line when it fails, and nothing more: what the command did stands.
     try {
       const locked = { ...context, state: readState(files.statePath) };
-      return starting ? await start(opts, locked) : stop(locked);
+      if (starting) return await start(opts, locked);
+      // The launcher goes first. When it is not off afterwards (a file that is kept, one that could not be looked
+      // for or removed, a record that could not be forgotten) the server is stopped all the same and the command
+      // then fails: what was asked for is a machine that no longer starts it.
+      const launcherNotOff = opts.atLogin && !disableLauncher(locked);
+      const code = stop(locked);
+      return launcherNotOff ? 1 : code;
     } finally {
       const left = lock.release();
       if (left) error(left);
@@ -679,7 +893,8 @@ async function superviseMain(argv, env, { signals = process, supervise: run = su
   }
 }
 
-// Run directly as the supervisor (`node bin/remote.mjs supervise ...`); real paths, as in `js-harness.mjs`.
+// Run directly as the supervisor (`node bin/remote.mjs supervise ...`) and by the login launcher (`node
+// bin/remote.mjs start ...`); real paths, as in `js-harness.mjs`.
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   remoteMain(process.argv.slice(2)).then((code) => {
     process.exitCode = code;

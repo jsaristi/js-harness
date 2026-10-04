@@ -275,10 +275,64 @@ export function readManifest(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/** The version `install` recorded under `home`, or `null` when nothing is installed there: no manifest, or one
+ * that only records optional files (`recordOptionalFile` writes it with a `null` version). Whoever reports or
+ * compares the installed version asks this, so that manifest is never printed as a version. */
+export function installedVersion(home) {
+  return readManifest(home)?.version ?? null;
+}
+
 function writeManifest(home, manifest) {
   const file = manifestPath(home);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(manifest, null, 2), 'utf8');
+}
+
+/** Optional files: a file js-harness writes outside the home's own folders only when asked (the login launcher
+ * of `remote start --at-login`, in the Windows Startup folder), kept in the manifest's `optional` array as
+ * `{ path, sha256 }`, apart from `files`. No component declares one, so `install` and `sync` carry the array
+ * forward as it is and never write, prune or drop such a file; `uninstall` removes each one whose bytes are
+ * still what was recorded, and never the folder it is in, which is not ours.
+ *
+ * Records that `content` (a string, or the bytes) was written to `file`, replacing any record of that path. With
+ * no manifest (js-harness was never installed on this machine) it creates one whose `version` is `null`, with no
+ * files and no entries. What each reader of the manifest does with that one:
+ *  - `status --global` and `upgrade` (`bin/update.mjs`) ask `installedVersion`, which answers `null`, and say
+ *    `(not installed)`;
+ *  - `install` and `sync` do what they do with no manifest (write every component, set the version) and carry
+ *    `optional` forward;
+ *  - `uninstall` finds no component and no entry to remove, removes the optional files and then the manifest;
+ *  - `remote` (`bin/remote.mjs`) reads only `optional`.
+ * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-04). */
+export function recordOptionalFile(home, file, content) {
+  const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
+  const record = { path: file, sha256: sha256(content) };
+  const optional = [...(manifest.optional ?? [])];
+  const at = optional.findIndex((entry) => entry.path === file);
+  if (at === -1) optional.push(record);
+  else optional[at] = record;
+  writeManifest(home, { ...manifest, optional });
+  return record;
+}
+
+/** Forgets the record of `file`, never touching the file itself; `false` when there was none. An empty `optional`
+ * is dropped, so the manifest reads as it did before the first record, and a manifest left with nothing in it
+ * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. */
+export function forgetOptionalFile(home, file) {
+  const manifest = readManifest(home);
+  if (!manifest?.optional?.some((entry) => entry.path === file)) return false;
+  const { optional, ...rest } = manifest;
+  const left = optional.filter((entry) => entry.path !== file);
+  const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0;
+  if (left.length > 0) {
+    writeManifest(home, { ...rest, optional: left });
+  } else if (empty) {
+    fs.rmSync(manifestPath(home), { force: true });
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+  } else {
+    writeManifest(home, rest);
+  }
+  return true;
 }
 
 /** Removes `dir` and any now-empty parent up to (but not including) `home`. */
@@ -327,7 +381,8 @@ export function install(home, version, deps = {}) {
     }
   }
   const entries = installEntries(home, previous);
-  const manifest = { version, files, entries };
+  // Optional files are carried forward as recorded (see `recordOptionalFile`): nothing here writes or drops one.
+  const manifest = { version, files, entries, ...(previous?.optional ? { optional: previous.optional } : {}) };
   writeManifest(home, manifest);
   return manifest;
 }
@@ -369,13 +424,22 @@ export function sync(home, version, deps = {}) {
   return manifest;
 }
 
-/** Deletes manifest files whose content is untouched; keeps and reports edited ones. Removes each
+/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files
+ * included (reported in the same two lists). Removes each
  * recorded entry the same way (deep-equal match only, file left alone otherwise — see
  * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content") and finally the manifest itself. */
-export function uninstall(home) {
+ * `files`/`entries` since it is not "installed content") and finally the manifest itself.
+ *
+ * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
+ * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
+ * The last two are not the user's doing, and the manifest that named the file is gone when this returns, so
+ * the caller has to say that the file is left for the human to remove. `deps.removeFile` (default `fs.rmSync`)
+ * is the seam that removes a component or an optional file, so a test can make a removal fail without relying
+ * on file permissions (the same reason as `install`'s `deps.writeFile`). */
+export function uninstall(home, deps = {}) {
+  const removeFile = deps.removeFile ?? fs.rmSync;
   const manifest = readManifest(home);
-  if (!manifest) return { removed: [], kept: [], entriesRemoved: [], entriesKept: [] };
+  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] };
 
   const removed = [];
   const kept = [];
@@ -383,12 +447,28 @@ export function uninstall(home) {
     if (!fs.existsSync(file.path)) continue;
     const current = fs.readFileSync(file.path, 'utf8');
     if (sha256(current) === file.sha256) {
-      fs.rmSync(file.path);
+      removeFile(file.path);
       removeEmptyDirsUpTo(path.dirname(file.path), home);
       removed.push(file.path);
     } else {
       kept.push(file.path);
     }
+  }
+
+  // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
+  // empty: it is the system's (the Windows Startup folder), not one install made. One that cannot be read or
+  // removed (locked, or a folder at the recorded path) is kept, with the reason: the components above are
+  // already gone, so stopping here would leave a manifest that names files that no longer exist.
+  const keptOptional = [];
+  for (const file of manifest.optional ?? []) {
+    if (!fs.existsSync(file.path)) continue;
+    const why = keepOptionalFile(file, removeFile);
+    if (!why) {
+      removed.push(file.path);
+      continue;
+    }
+    kept.push(file.path);
+    keptOptional.push({ path: file.path, ...why });
   }
 
   const entriesRemoved = [];
@@ -404,5 +484,23 @@ export function uninstall(home) {
   fs.rmSync(manifestPath(home), { force: true });
   removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
 
-  return { removed, kept, entriesRemoved, entriesKept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept };
+}
+
+/** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing
+ * once it is removed, else why it is kept: `{ reason }`, with the error's `code` when an error is the reason. */
+function keepOptionalFile(file, removeFile) {
+  let bytes;
+  try {
+    bytes = fs.readFileSync(file.path);
+  } catch (err) {
+    return { reason: 'unreadable', code: err.code ?? 'unknown error' };
+  }
+  if (sha256(bytes) !== file.sha256) return { reason: 'edited' };
+  try {
+    removeFile(file.path);
+  } catch (err) {
+    return { reason: 'unremovable', code: err.code ?? 'unknown error' };
+  }
+  return undefined;
 }

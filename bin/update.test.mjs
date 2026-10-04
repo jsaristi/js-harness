@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { install } from './lib/manifest.mjs';
+import { install, recordOptionalFile } from './lib/manifest.mjs';
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
 import { resolveLatest, resolveSpec, statusMain, updateMain, upgradeMain } from './update.mjs';
@@ -123,6 +123,50 @@ test('statusMain reports no manifest when nothing is installed', async () => {
     assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// `remote start --at-login` records its launcher in a manifest of its own making when nothing is installed: that
+// manifest has a null version, which is not a version.
+test('statusMain reports not installed for a manifest that only records an optional file', async () => {
+  const home = makeTmpDir('js-harness-status-home4-');
+  try {
+    recordOptionalFile(home, path.join(home, 'launcher.cmd'), '@echo off\r\n');
+    const lines = [];
+    const original = console.log;
+    console.log = (line) => lines.push(String(line));
+    try {
+      await statusMain(['--global', '--home', home], {}, fakeSpawnOk(currentVersion()));
+    } finally {
+      console.log = original;
+    }
+    assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
+    assert.doesNotMatch(lines.join('\n'), /null/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('upgradeMain says not installed, not null, when the manifest it finds only records an optional file', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-optional-');
+  const source = makeTmpDir('js-harness-upgrade-src-optional-');
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    recordOptionalFile(home, path.join(home, 'launcher.cmd'), '@echo off\r\n');
+    const lines = [];
+    const original = console.error;
+    console.error = (line) => lines.push(String(line));
+    let code;
+    try {
+      code = await upgradeMain(['--source', source, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }));
+    } finally {
+      console.error = original;
+    }
+    assert.equal(code, 1);
+    assert.match(lines.join('\n'), /reports \(not installed\), not 0\.9\.0/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
   }
 });
 
