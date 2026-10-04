@@ -224,13 +224,15 @@ State on 2026-10-04: the plan, T1 (`ae8a75e`) and T2 (`380c6e2`) are committed o
 shows it, `remote stop` ends it). In order:
 
 1. The gate fix on `main` (Follow-ups, first item): until it lands, a commit from a linked
-   worktree can turn this repository bare, and the F6 session works in one. Proposed to
-   Sebastián as its own PR against `main`; waiting for his answer. He was asked to keep that
-   session from committing meanwhile.
+   worktree can turn this repository bare, and the F6 session works in one. Approved as its
+   own PR (see below); not started.
 2. T1r and T2r, one delegated writer, then their commit and assessment.
 3. Codex over the range: `js-harness codex-review --base 535ef09`.
 4. T3 to T6.
 
-Two questions are open with Sebastián: the chain strategy (proposed: stacked to `main` in three
-slices, plan+T1+T2 with a size exception, T3+T5, T4+T6), and the gate fix as its own PR.
+Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
+(branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
+slices, each its own PR merged in order: plan+T1+T1r+T2+T2r (above the 400-line budget, which
+that slicing accepts), then T3+T5, then T4+T6. He tells the F6 session not to commit from its
+worktree until the gate fix is on `main`.
 Never run two gates at once, and after a failed gate check `git rev-parse --is-inside-work-tree`.
