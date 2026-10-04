@@ -170,7 +170,8 @@ async function machineStatus(opts, env, spawn) {
   const latest = resolveLatest(opts, env, spawn);
 
   console.log(`installed package version: ${installed}`);
-  console.log(`manifest version: ${manifest ? manifest.version : '(not installed)'}`);
+  // A manifest with no version only records an optional file (`remote start --at-login`): nothing is installed.
+  console.log(`manifest version: ${manifest?.version ?? '(not installed)'}`);
   if (latest) {
     console.log(`latest available: ${latest.version}`);
     if (isNewer(latest.version, installed)) console.log(`update available: ${latest.version}`);
@@ -238,7 +239,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   if (!manifest || manifest.version !== latest.version) {
     console.error(
       `sync ran, but the manifest under ${opts.home} reports ` +
-        `${manifest ? manifest.version : '(not installed)'}, not ${latest.version}: the js-harness ` +
+        `${manifest?.version ?? '(not installed)'}, not ${latest.version}: the js-harness ` +
         'found is not the upgraded one — run `js-harness sync --global` with the upgraded binary',
     );
     return 1;

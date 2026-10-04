@@ -238,6 +238,11 @@ test('--help lists remote, and remote without a subcommand exits 2 with its usag
   assert.match(result.stderr, /Usage: js-harness remote start\|stop\|status/);
 });
 
+test('--help says what --at-login does to remote start and stop, and so does the usage of remote', () => {
+  assert.match(run(['--help']).stdout, /^ {2}remote\s+.*start --at-login.*login.*stop --at-login/m);
+  assert.match(run(['remote']).stderr, /start and stop also take \[--at-login\]/);
+});
+
 // A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.
 test('runs when invoked through a linked directory', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));

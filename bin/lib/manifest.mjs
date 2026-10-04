@@ -281,6 +281,46 @@ function writeManifest(home, manifest) {
   fs.writeFileSync(file, JSON.stringify(manifest, null, 2), 'utf8');
 }
 
+/** Optional files: a file js-harness writes outside the home's own folders only when asked (the login launcher
+ * of `remote start --at-login`, in the Windows Startup folder), kept in the manifest's `optional` array as
+ * `{ path, sha256 }`, apart from `files`. No component declares one, so `install` and `sync` carry the array
+ * forward as it is and never write, prune or drop such a file; `uninstall` removes each one whose bytes are
+ * still what was recorded, and never the folder it is in, which is not ours.
+ *
+ * Records that `content` (a string, or the bytes) was written to `file`, replacing any record of that path. With
+ * no manifest (js-harness was never installed on this machine) it creates one whose `version` is `null`: every
+ * reader takes that for "not installed", and the record still lets `uninstall` undo the file. */
+export function recordOptionalFile(home, file, content) {
+  const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
+  const record = { path: file, sha256: sha256(content) };
+  const optional = [...(manifest.optional ?? [])];
+  const at = optional.findIndex((entry) => entry.path === file);
+  if (at === -1) optional.push(record);
+  else optional[at] = record;
+  writeManifest(home, { ...manifest, optional });
+  return record;
+}
+
+/** Forgets the record of `file`, never touching the file itself; `false` when there was none. An empty `optional`
+ * is dropped, so the manifest reads as it did before the first record, and a manifest left with nothing in it
+ * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. */
+export function forgetOptionalFile(home, file) {
+  const manifest = readManifest(home);
+  if (!manifest?.optional?.some((entry) => entry.path === file)) return false;
+  const { optional, ...rest } = manifest;
+  const left = optional.filter((entry) => entry.path !== file);
+  const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0;
+  if (left.length > 0) {
+    writeManifest(home, { ...rest, optional: left });
+  } else if (empty) {
+    fs.rmSync(manifestPath(home), { force: true });
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+  } else {
+    writeManifest(home, rest);
+  }
+  return true;
+}
+
 /** Removes `dir` and any now-empty parent up to (but not including) `home`. */
 function removeEmptyDirsUpTo(dir, home) {
   let current = path.resolve(dir);
@@ -327,7 +367,8 @@ export function install(home, version, deps = {}) {
     }
   }
   const entries = installEntries(home, previous);
-  const manifest = { version, files, entries };
+  // Optional files are carried forward as recorded (see `recordOptionalFile`): nothing here writes or drops one.
+  const manifest = { version, files, entries, ...(previous?.optional ? { optional: previous.optional } : {}) };
   writeManifest(home, manifest);
   return manifest;
 }
@@ -369,7 +410,8 @@ export function sync(home, version, deps = {}) {
   return manifest;
 }
 
-/** Deletes manifest files whose content is untouched; keeps and reports edited ones. Removes each
+/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files
+ * included (reported in the same two lists). Removes each
  * recorded entry the same way (deep-equal match only, file left alone otherwise — see
  * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
  * `files`/`entries` since it is not "installed content") and finally the manifest itself. */
@@ -385,6 +427,18 @@ export function uninstall(home) {
     if (sha256(current) === file.sha256) {
       fs.rmSync(file.path);
       removeEmptyDirsUpTo(path.dirname(file.path), home);
+      removed.push(file.path);
+    } else {
+      kept.push(file.path);
+    }
+  }
+
+  // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
+  // empty: it is the system's (the Windows Startup folder), not one install made.
+  for (const file of manifest.optional ?? []) {
+    if (!fs.existsSync(file.path)) continue;
+    if (sha256(fs.readFileSync(file.path)) === file.sha256) {
+      fs.rmSync(file.path);
       removed.push(file.path);
     } else {
       kept.push(file.path);

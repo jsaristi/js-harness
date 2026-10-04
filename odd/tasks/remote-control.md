@@ -1,6 +1,7 @@
 # Remote sessions: open a local session from the phone
 
-Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branch: `feat/remote-control`
+Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
+(slice 1, PR #28), `feat/remote-at-login` (slice 2, cut from it)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -80,6 +81,17 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - `stop` kills the supervisor and its children by identity and removes the state file.
 - `start --at-login` writes a launcher in the Windows Startup folder, recorded in the machine
   manifest as an optional file; `remote stop --at-login` and `uninstall` remove it exactly.
+  Decided on 2026-10-04, before T3: the launcher is `js-harness-remote-<id>.cmd`, running the
+  same `remote start` (never `--at-login` itself); the record is a top-level `optional` array of
+  `{ path, sha256 }` in the manifest, which `install` and `sync` carry forward untouched and
+  `uninstall` removes by hash without touching the folder. This machine has no manifest (the
+  harness runs from its checkout), so recording creates one with a `null` version that still
+  reads as not installed, and forgetting the last record removes it again. The flag is
+  symmetric: `start --at-login` starts and turns the launcher on, `stop --at-login` stops and
+  turns it off, plain `stop` leaves it on, and `status` says which it is.
+- The TUI shows `Remote status`, `Remote start` and `Remote stop` in the project section of
+  any git repository; stop asks first, because it ends the sessions opened through the server.
+  The login launcher is not offered there (decided 2026-10-04, before T5).
 - `doctor` gains a Claude account check: `ok` when both identifiers match, `mismatch` (a gap in
   Fix, the session digest and the TUI) when they differ, with `claude auth login` as the fix.
 
@@ -111,7 +123,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   an absolute path before any path is built; the lock is released only by its owner and a
   failed release never replaces the command's result (Codex P1, P2, P2, P2; gentle-ai
   `R3-lock-release-unconditional-and-may-throw`) (route: delegated writer)
-- [ ] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
+- [x] T3 Login launcher: `--at-login` writes the Startup-folder file, recorded as an optional
   machine-manifest file and removed exactly by `stop --at-login` and `uninstall` (route:
   delegated writer)
 - [ ] T4 `doctor` account check with the `mismatch` state through Fix, digest and TUI (route:
@@ -312,6 +324,33 @@ the chain strategy is asked once, before the commit that crosses the budget.
   Codex over `1ae255e..0493630`: no actionable defects, recorded. With `535ef09..1ae255e`
   recorded before, every code commit of the first slice has a Codex record; the reviewed
   boundary is `0493630`.
+- 2026-10-04: PR #27 merged on Sebastián's go-ahead (`a3a1eb1` on `main`). The first slice
+  is PR #28 (`feat/remote-control` at `aaa79db`, against `main`; the pre-push hook passed:
+  five code commits, all covered by a Codex record; 3,396 insertions, the size exception he
+  accepted). The second slice is the branch `feat/remote-at-login`, cut from `aaa79db`; its
+  PR is opened against `main` once #28 is merged, so its diff holds only T3 and T5.
+- 2026-10-04: T3 done (delegated writer, a fresh agent that also wrote T5; `node --test
+  bin/remote.test.mjs bin/lib/remote.test.mjs bin/js-harness.test.mjs
+  bin/lib/process-tree.test.mjs` 177/177 and `node --test bin/lib/manifest.test.mjs
+  bin/install.test.mjs bin/update.test.mjs` 125/125, 0 skipped, both re-run by the parent).
+  RED: `unknown flag: --at-login` (18 of 18), `not implemented` for the manifest functions
+  (10 of 47) and the launcher text (6 of 6), `manifest version: null` in `status --global`.
+  `bin/lib/manifest.mjs` exports `recordOptionalFile` and `forgetOptionalFile`; optional
+  files are hashed by bytes, an empty `optional` is dropped so an installed manifest comes
+  back byte-identical, and `bin/update.mjs` reads a `null` version as not installed.
+  `loginLauncher` in `bin/lib/remote.mjs` builds the text and refuses, naming it, a value
+  with `& | < > ^ % " !` or a control character. Measured with a real `cmd.exe`: a batch
+  file is decoded line by line in the console's code page, so a non-ASCII path is not found
+  under 850, 437 or 1252 and is found after a `chcp 65001 >nul` line; the file is UTF-8
+  without a BOM, and that line is written only when the command holds non-ASCII (the test
+  forces code page 850, since this machine's console already uses 65001). Decided by the
+  writer, kept: a launcher with the same content and no record is adopted; `stop --at-login`
+  keeps an edited or unrecorded file, says so and exits 1 after the ordinary stop; when the
+  ordinary start fails after the launcher was written, the launcher stays on and recorded
+  and the command exits 1; `status` adds `login launcher: on|off`, with a note for an
+  edited or unrecorded file. Not turned on on this machine: the real Startup folder holds
+  only `desktop.ini`, no manifest exists in the real home, and `remote status` reads the
+  live server with `login launcher: off`. Committed with this entry.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -333,9 +372,9 @@ the chain strategy is asked once, before the commit that crosses the budget.
   passed git's repository variables to its sensors, and `bin/contract.test.mjs:137`, `:317` and
   `evals/task-proof.test.mjs:459` run `git init` under them (the last also `git add --all`,
   which replaced that worktree's index). Fixed in `bin/check.mjs` on `fix/gate-git-env`
-  (`5e31d14`, PR #27, not merged): a sensor's environment loses every variable
-  `git rev-parse --local-env-vars` lists. Until it is on `main` and each branch has it: no
-  commit from a linked worktree, and never two gates at once.
+  (`5e31d14`, PR #27, merged as `a3a1eb1`): a sensor's environment loses every variable
+  `git rev-parse --local-env-vars` lists. Until each branch has it: no commit from a linked
+  worktree of a branch cut before `a3a1eb1`, and never two gates at once.
 - `evals/task-proof.test.mjs:304` fails under load (a spec deletes the file another imports).
   Fixed in `e006a4b` (PR #27): the touching test moved into the spec that imports the file.
 - **The suite no longer fits the gate's limit on a busy machine** (2026-10-04): 600 s for a
@@ -381,6 +420,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   temp file and a rename would prevent it. Two `start` that find the same stale lock in
   the same instant can both take it. A supervisor that dies on its own can leave its
   server's children running, and `stop` then says `not running`.
+- Left open by T3. At login the `.cmd` shows a console window for an instant, and a start
+  that fails there is seen by nobody: its output goes to that window. The record matches by
+  exact path string, so an `APPDATA` spelled in another letter case makes a second record
+  (`uninstall` handles both). `uninstall` deletes the manifest even when it kept an edited
+  launcher, as it already does for an edited component file.
 - Left by T1r and T2r's writer, not fixed: when the supervisor's identity is unreadable and it
   survives `killTree`, `start` only reports the pid; a state-file write that fails can leave a
   partial file; in `bin/remote.test.mjs` the temp folder is removed before the reaper sweep,
