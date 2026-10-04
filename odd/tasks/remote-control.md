@@ -86,13 +86,13 @@ the chain strategy is asked once, before the commit that crosses the budget.
 ## Tasks
 - [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
   backoff; tested with a fake `claude` (route: delegated writer)
-- [ ] T1r T1 review findings: keep a `CLAUDE*` variable the user set persistently (only the
+- [x] T1r T1 review findings: keep a `CLAUDE*` variable the user set persistently (only the
   ones a parent session injected are removed), and a log that cannot be opened or written never
   ends the supervisor (gentle-ai WARNINGs `R3-env-strip-too-broad`,
   `R3-log-failure-kills-supervisor`) (route: delegated writer)
 - [x] T2 `remote start|stop|status`: scope, state file, identity-checked stop, status read from
   the log; usage and registry (route: delegated writer)
-- [ ] T2r T2 review findings: a failure after the supervisor is spawned (its identity cannot be
+- [x] T2r T2 review findings: a failure after the supervisor is spawned (its identity cannot be
   read) must not leave it running unrecorded, and `stop` must keep the state file when the
   process's identity could not be established, deleting it only when the process is proven gone
   (gentle-ai WARNINGs `R3-start-orphans-supervisor-on-post-spawn-failure`,
@@ -184,6 +184,51 @@ the chain strategy is asked once, before the commit that crosses the budget.
   lineage `review-29de521059f8c9b4`, lens reliability, approved and acknowledged, authority
   burned. Three WARNINGs, taken as T2r, and four SUGGESTIONs, in Follow-ups. Codex has not
   reviewed `535ef09..380c6e2` yet: it runs after T1r and T2r, over the whole range.
+- 2026-10-04: the gate fix is PR #27 (`fix/gate-git-env`, cut from `main`, commit `5e31d14`,
+  inline). RED: three new tests in `bin/check.test.mjs` failed, the third with `bare = true`
+  in a decoy repository's config; GREEN: `node --test bin/check.test.mjs` 72/72, and the gate
+  on the commit `PASS tests`. `checkSensor` drops the fifteen variables git lists as
+  repository-local, in any letter case; a test asks the installed git for its own list, so a
+  git that grows one fails here first. gentle-ai: medium, 107 lines, not due (`under_budget`);
+  Codex over `535ef09..5e31d14`: no actionable defects, recorded. Not merged: his go-ahead.
+- 2026-10-04: two more changes for that branch could not be committed and wait in a stash
+  (`git stash list`, "fix/gate-git-env pending"): the fix of the flaky
+  `evals/task-proof.test.mjs:304`, and `AGENTS.md` saying a compact is two blocks, the bare
+  `/compact` and then the prompt that resumes (1,491 of 1,500 tokens). Three gates refused
+  them, none for what they change (Follow-ups, the suite and the limit). `core.bare` stayed
+  `false` after each.
+- 2026-10-04: T1r and T2r written and verified, not committed: no gate can finish until the
+  limit is decided (delegated writer, one agent, two rounds; `node --test bin/remote.test.mjs
+  bin/lib/remote.test.mjs bin/js-harness.test.mjs bin/lib/process-tree.test.mjs` 125/125, 0
+  skipped, re-run by the parent; 711 insertions, about 500 of them tests). T1r: a variable
+  the server would lose is kept when the Windows registry holds it (user over machine; the
+  registry's value for a plain `REG_SZ`, the inherited one otherwise), read with `reg.exe`
+  through an injectable reader; a registry that cannot be read strips them all, as before,
+  with one line in the log. This machine's registry holds no `CLAUDE*` or `ANTHROPIC*` name,
+  so nothing changes here. A log that cannot be opened or appended is skipped and tried again
+  on the next write; the server and the backoff go on (RED: the loop rejected with `EISDIR`
+  and `EEXIST`). T2r: any failure after the spawn stops the supervisor through `killTree`
+  with the handle `start` holds, confirms its exit and exits 1, or names the pid when it
+  cannot; the recorded process is now `running`, `gone` or `unknown`, shared by the three
+  subcommands, and `unknown` (creation time unreadable, snapshot failed) kills nothing, keeps
+  the state file and exits 1. That last rule was widened by the parent to `start` (which
+  launched a second supervisor over the record: RED `0 !== 1`) and `status` (which said `not
+  running` and exited 0), the same defect the review named in `stop`. The 23 tests that need
+  Windows are skipped elsewhere by `process.platform`; no RED was possible for that here.
+  The live server (supervisor pid 2260) was not touched and `remote status` still reads it.
+- 2026-10-04: gentle-ai reviewed T1r and T2r as the pending change of the working tree, since
+  the commit is blocked (5 paths, 872 lines, medium risk, `slice_budget_reached`): lineage
+  `review-be363b8d8e047b9a`, lens reliability, approved and acknowledged, authority burned.
+  Three WARNINGs and two SUGGESTIONs, all advisory, in Follow-ups. The reviewed tree is
+  `7767622`; this entry and those follow-ups were written after it, in this document only.
+- 2026-10-04: Sebastián decided the limit: twenty minutes, in PR #27. `fix/gate-git-env`
+  now holds four commits, pushed: `5e31d14` (git's variables), `7687b19` (the limit; RED
+  `600000 !== 1200000`), `e006a4b` (the flaky test) and `0efda15` (`AGENTS.md`). Their
+  gates took 664 s, 644 s and 632 s, each past the old limit. gentle-ai: 19 more lines, not
+  due (`under_budget`); Codex over `5e31d14..0efda15`: no actionable defects, recorded.
+  The branch is merged here as `9070a8b`, because nothing can be committed on this branch
+  without the limit; PR #27 carries the same commits to `main` and waits for his go-ahead.
+  T1r and T2r are committed with this entry; the next one names the commit.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -202,37 +247,59 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - The log is appended across restarts and never rotated; `status` reads only its last 64 KiB,
   but the file grows without limit.
 - **A commit in a linked worktree can turn the main repository bare** (2026-10-04): the gate
-  passes git's repository variables to its sensors, and `bin/contract.test.mjs:137`, `:317` and
+  passed git's repository variables to its sensors, and `bin/contract.test.mjs:137`, `:317` and
   `evals/task-proof.test.mjs:459` run `git init` under them (the last also `git add --all`,
-  which replaced that worktree's index). The fix at the right layer is in `bin/check.mjs`: drop
-  git's repository-local variables (`git rev-parse --local-env-vars`) from every sensor's
-  environment, which protects every project the hook is installed in. It needs its own fix on
-  `main`, because every branch with a worktree is exposed until it has it. Until then: no
+  which replaced that worktree's index). Fixed in `bin/check.mjs` on `fix/gate-git-env`
+  (`5e31d14`, PR #27, not merged): a sensor's environment loses every variable
+  `git rev-parse --local-env-vars` lists. Until it is on `main` and each branch has it: no
   commit from a linked worktree, and never two gates at once.
 - `evals/task-proof.test.mjs:304` fails under load (a spec deletes the file another imports).
-  A fix that keeps what it proves: delete from the same spec file that imports it. It can
-  refuse any commit on a busy machine, so it is worth its own small fix.
-- The whole suite now takes 428–470 s against the gate's 600 s limit for a sensor
-  (`bin/check.mjs:69`); the next slow test crosses it.
+  Fixed in `e006a4b` (PR #27): the touching test moved into the spec that imports the file.
+- **The suite no longer fits the gate's limit on a busy machine** (2026-10-04): 600 s for a
+  sensor (`bin/check.mjs`, `SENSOR_TIMEOUT_MS`) against a suite that took 428–470 s on a quiet
+  machine. With about two of eight cores taken by other programs (a language server of an
+  older desktop session spinning on a full core for 77 CPU-minutes, and a browser), three
+  gates in a row refused a commit on `fix/gate-git-env`: one at 592 s on the flaky test
+  above, two with `npm run test timed out after 600 s` (the last measured 607 s, 1,350 of
+  1,454 tests done). Decided by Sebastián: the limit is twenty minutes (`7687b19`, PR #27).
+  Still open: the suite takes more than ten minutes on a busy machine, and the limit now
+  hides that instead of fixing it.
 - Two `remote start` at the same moment are not locked against each other and could launch two
   supervisors.
+- T1r and T2r review findings (gentle-ai, advisory). WARNINGs: a record whose process stays
+  `unknown` (a reused pid with an unreadable creation time) blocks `start`, `status` and
+  `stop` for as long as it lasts, and no message says the state file may be removed by hand
+  once the pid is checked (`R3-unknown-no-recovery`); the default process look-up is never
+  tested for what `unknown` rests on, a row kept with a null creation time and a failed
+  snapshot that throws (`R3-default-lookup-unproved`); the Windows-only skip also covers
+  tests of platform-neutral logic that run through fakes (`R3-windows-only-skips`).
+  SUGGESTIONs: the timeout and no-pid branches of stopping a spawned supervisor are
+  untested; the `reg query` parser has no test for an empty value, a name with spaces or a
+  value with a four-space run.
+- Left by T1r and T2r's writer, not fixed: when the supervisor's identity is unreadable and it
+  survives `killTree`, `start` only reports the pid; a state-file write that fails can leave a
+  partial file; in `bin/remote.test.mjs` the temp folder is removed before the reaper sweep,
+  so a leaked process fails the teardown with `EPERM`; a persistent variable that the
+  session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: the plan, T1 (`ae8a75e`) and T2 (`380c6e2`) are committed on
-`feat/remote-control`, not pushed; both slices approved by gentle-ai. The server for
-`D:\js-harness` is running, started with `js-harness remote start` (detached; `remote status`
-shows it, `remote stop` ends it). In order:
+State on 2026-10-04: the plan, T1 (`ae8a75e`), T2 (`380c6e2`), the gate fixes (merge
+`9070a8b`) and T1r with T2r are committed on `feat/remote-control`, not pushed; the three
+slices of code were approved by gentle-ai. The server for `D:js-harness` is running, started
+with `js-harness remote start` (detached; `remote status` shows it, `remote stop` ends it).
+It still runs T2's code: `remote stop` then `remote start` loads T1r and T2r, and ends the
+sessions opened through it, so it waits for his word. In order:
 
-1. The gate fix on `main` (Follow-ups, first item): until it lands, a commit from a linked
-   worktree can turn this repository bare, and the F6 session works in one. Approved as its
-   own PR (see below); not started.
-2. T1r and T2r, one delegated writer, then their commit and assessment.
-3. Codex over the range: `js-harness codex-review --base 535ef09`.
-4. T3 to T6.
+1. Codex over the range: `js-harness codex-review --base 535ef09`; its findings are treated
+   like gentle-ai's.
+2. PR #27 is merged on his go-ahead; then the first slice of this feature can be pushed.
+3. T3 to T6.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
 slices, each its own PR merged in order: plan+T1+T1r+T2+T2r (above the 400-line budget, which
-that slicing accepts), then T3+T5, then T4+T6. He tells the F6 session not to commit from its
-worktree until the gate fix is on `main`.
+that slicing accepts), then T3+T5, then T4+T6. The gate's limit for a sensor is twenty
+minutes.
 Never run two gates at once, and after a failed gate check `git rev-parse --is-inside-work-tree`.
+A gate takes about eleven minutes here; a commit message file is written before its commit
+starts, not inside a command a guard can abort.

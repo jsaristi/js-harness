@@ -3,25 +3,75 @@
 //
 // Three facts measured by hand on 2026-10-03 shape it. The server must run in a plain environment: started from a
 // desktop session it inherits that session's `CLAUDE_CODE_*` variables and `ANTHROPIC_BASE_URL`, and the phone
-// does not see its sessions (`cleanServerEnv`). The server exits after about ten minutes offline, so it is
+// does not see its sessions (`cleanServerEnv`, which keeps the ones the user set persistently, read from the
+// registry by `readPersistentEnv`). The server exits after about ten minutes offline, so it is
 // restarted, with a capped backoff so a server that cannot run is not restarted in a tight loop (`nextDelay`).
 // And it is stopped as a tree, by pid and creation time, through `process-tree.mjs`: a bare-pid kill closed
 // unrelated programs on this machine.
 //
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
-import { spawn as spawnChild } from 'node:child_process';
+import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { quoteWindowsArg, windowsCommandLine } from '../codex-review.mjs';
 import { killTree } from './process-tree.mjs';
 
+/** Whether a variable of that name may be one a Claude session injected into what it starts. */
+const tiesToSession = (name) => /^claude/i.test(name) || /^anthropic_base_url$/i.test(name);
+
 /** `env` without what ties a process to the session that started it: every variable whose name starts with
- * `CLAUDE` (any case: `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, ...) and `ANTHROPIC_BASE_URL`. A new object. */
-export function cleanServerEnv(env) {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => !/^claude/i.test(name) && !/^anthropic_base_url$/i.test(name)));
+ * `CLAUDE` (any case: `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, ...) and `ANTHROPIC_BASE_URL`, except those the user
+ * set persistently (a config directory, the Git Bash path Claude Code needs on Windows), which no session
+ * injected. `readPersistent()` says which those are (`readPersistentEnv`; none by default, so every one is
+ * removed): such a name keeps the persistent value when that is known, since the session may have overwritten
+ * the inherited one, and the inherited value otherwise. A reader that throws removes them all, after one
+ * `warn(text)`; with nothing to remove it is not called. A new object. */
+export function cleanServerEnv(env, { readPersistent = () => new Map(), warn = () => {} } = {}) {
+  const entries = Object.entries(env);
+  let persistent = new Map();
+  if (entries.some(([name]) => tiesToSession(name))) {
+    try {
+      persistent = readPersistent();
+    } catch (err) {
+      warn(`could not read the persistent environment from the registry (${err.message}): every CLAUDE* variable and ANTHROPIC_BASE_URL is removed from the server's environment, including any set on purpose`);
+    }
+  }
+  return Object.fromEntries(entries.flatMap(([name, value]) => {
+    if (!tiesToSession(name)) return [[name, value]];
+    const key = name.toUpperCase(); // Windows does not tell `Path` from `PATH`
+    return persistent.has(key) ? [[name, persistent.get(key) ?? value]] : [];
+  }));
 }
 
-export const SPAWN_MODES = ['same-dir', 'worktree', 'session'];
+/** Where Windows keeps the variables set to stay. The machine's key is read first, so the user's overwrite its
+ * values here as they do in the environment of a process. */
+const PERSISTENT_ENV_KEYS = ['HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment', 'HKCU\\Environment'];
+
+/** The variables set persistently on this machine, from the registry environment of the machine and of the
+ * user: a `Map` from the name in capitals to its value, or to `undefined` when only its being set can be
+ * trusted. That is an expandable string (`REG_EXPAND_SZ`: the registry holds `%USERPROFILE%\...`, not the value
+ * a process gets) and a value beyond ASCII, which `reg.exe` writes in a code page this cannot know. Empty off
+ * Windows, where nothing is run. Throws when either key cannot be read: half an answer would remove what the
+ * user set. `reg.exe` is run by its full path, never one found in the working directory. */
+export function readPersistentEnv({ platform = process.platform, env = process.env, spawnSync: sync = spawnChildSync } = {}) {
+  const persistent = new Map();
+  if (platform !== 'win32') return persistent;
+  const reg = path.win32.join(env.SystemRoot ?? env.windir ?? 'C:\\Windows', 'System32', 'reg.exe');
+  for (const key of PERSISTENT_ENV_KEYS) {
+    const result = sync(reg, ['query', key], { encoding: 'latin1', windowsHide: true, timeout: 15000 });
+    if (result.error) throw new Error(`reg query ${key} could not run: ${result.error.message}`);
+    if (result.status !== 0) throw new Error(`reg query ${key} failed (exit ${result.status}): ${String(result.stderr).trim()}`);
+    for (const line of String(result.stdout).split(/\r?\n/)) {
+      const match = /^ {4}(.+?) {4}(REG_SZ|REG_EXPAND_SZ)(?: {4}(.*))?$/.exec(line);
+      if (!match) continue;
+      const value = match[3] ?? '';
+      persistent.set(match[1].toUpperCase(), match[2] === 'REG_SZ' && /^[\x20-\x7e]*$/.test(value) ? value : undefined);
+    }
+  }
+  return persistent;
+}
+
+export const SPAWN_MODES =['same-dir', 'worktree', 'session'];
 
 /** The arguments of `claude remote-control`: named `name`, sessions started in `spawnMode` (the project folder by
  * default), and `--permission-mode` only when one is given, so the user's own mode applies otherwise. */
@@ -83,6 +133,31 @@ function abortableSleep(ms, signal) {
   });
 }
 
+/** The log opened for appending, its folder made first, or `null` when it cannot be: the log is best effort, and
+ * every use asks again, so a log that becomes writable is written to from then on. */
+function openLog(logPath) {
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    return fs.openSync(logPath, 'a');
+  } catch {
+    return null;
+  }
+}
+
+/** Adds one `[js-harness remote] ...` line to the log, best effort: the supervisor has nowhere else to say that
+ * its log cannot be written, and must keep the server up all the same. */
+export function logNote(logPath, text) {
+  const fd = openLog(logPath);
+  if (fd === null) return;
+  try {
+    fs.appendFileSync(fd, `[js-harness remote] ${text}\n`);
+  } catch {
+    // an unwritable log loses the line, nothing else
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Starts the server: a `.cmd` shim as one command line through the shell (the quoting of `codex-review`), anything
  * else directly. */
 function launch(spawn, claude, args, options) {
@@ -91,10 +166,11 @@ function launch(spawn, claude, args, options) {
     : spawn(claude.path, args, options);
 }
 
-/** One run of the server, its output appended to `logPath`. Resolves with `{ code, signal, ranFor }` when it
- * exits, `{ error, ranFor }` when it could not start, `{ killError }` when the abort could not stop it. On abort
- * the server's tree is killed by identity, from the `Date.now()` taken just before the spawn (the clock the
- * process snapshot is compared with, so not the injectable `now`, which only times the run). */
+/** One run of the server, its output appended to `logPath`, or discarded when the log cannot be opened: the
+ * server runs either way. Resolves with `{ code, signal, ranFor }` when it exits, `{ error, ranFor }` when it
+ * could not start, `{ killError }` when the abort could not stop it. On abort the server's tree is killed by
+ * identity, from the `Date.now()` taken just before the spawn (the clock the process snapshot is compared with,
+ * so not the injectable `now`, which only times the run). */
 function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform, signal }) {
   return new Promise((resolve) => {
     let settled = false;
@@ -114,7 +190,8 @@ function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform
         finish({ killError }); // the tree may still be running: waiting for its exit could wait forever
       }
     }
-    const out = fs.openSync(logPath, 'a');
+    const log = openLog(logPath);
+    const out = log ?? 'ignore';
     try {
       // Detached off Windows, so the child leads the process group `killTree` kills; on Windows that would
       // only open a console.
@@ -123,7 +200,7 @@ function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform
       finish({ error });
       return;
     } finally {
-      fs.closeSync(out); // the child holds its own copy
+      if (log !== null) fs.closeSync(log); // the child holds its own copy
     }
     child.once('error', (error) => finish({ error }));
     child.once('exit', (code, exitSignal) => finish({ code, signal: exitSignal }));
@@ -136,15 +213,15 @@ function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform
  * with `env` as given (clean it with `cleanServerEnv` first), its stdout and stderr appended to `logPath`. Each
  * exit, or failure to start, adds one `[js-harness remote] ...` line to the log and is followed by a wait of
  * `nextDelay(..., backoff)` and a restart. On abort the running server and what it started are killed, by
- * identity, with no restart, and it resolves; a kill that failed is logged and thrown. `spawn`, `sleep(ms,
- * signal)`, `now`, `kill` (`killTree`) and `platform` are injectable. */
+ * identity, with no restart, and it resolves; a kill that failed is logged and thrown. The log is best effort:
+ * one that cannot be opened or written loses its lines, never the server, the backoff or a later write.
+ * `spawn`, `sleep(ms, signal)`, `now`, `kill` (`killTree`) and `platform` are injectable. */
 export async function supervise({
   claude, args = [], cwd, env, logPath, signal, backoff = {},
   spawn = spawnChild, sleep = abortableSleep, now = Date.now, kill = killTree, platform = process.platform,
 }) {
   if (signal?.aborted) return;
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  const note = (text) => fs.appendFileSync(logPath, `[js-harness remote] ${text}\n`);
+  const note = (text) => logNote(logPath, text);
   let delay;
   while (!signal?.aborted) {
     const run = await runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform, signal });

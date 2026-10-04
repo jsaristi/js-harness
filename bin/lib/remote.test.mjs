@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild } from 'node:child_process';
-import { cleanServerEnv, nextDelay, resolveClaude, serverArgs, supervise } from './remote.mjs';
+import { cleanServerEnv, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -33,6 +33,129 @@ test('cleanServerEnv drops every CLAUDE* variable, in any case, and ANTHROPIC_BA
     MY_CLAUDE: 'kept, the name does not start with CLAUDE',
   });
   assert.equal(env.CLAUDECODE, '1', 'the input is not changed');
+});
+
+// ---- cleanServerEnv: what the user set persistently stays -----------------------------------------------------------
+
+/** What a desktop session hands the server: the user's own variables, one of them overwritten, and its own. */
+const sessionEnv = () => ({
+  PATH: 'C:\\bin',
+  CLAUDE_CONFIG_DIR: 'D:\\claude-config',
+  CLAUDE_CODE_GIT_BASH_PATH: 'C:\\overwritten-by-the-session\\bash.exe',
+  Claude_Code_Tmpdir: 'C:\\inherited-tmp',
+  ANTHROPIC_BASE_URL: 'http://injected-by-the-session',
+  CLAUDE_CODE_SESSION_ID: 'abc',
+  CLAUDECODE: '1',
+});
+
+test('cleanServerEnv keeps a name it would strip when it is set persistently: the registry\'s value for a plain string, the inherited one otherwise', () => {
+  const env = sessionEnv();
+  let reads = 0;
+  const readPersistent = () => {
+    reads += 1;
+    return new Map([
+      ['CLAUDE_CONFIG_DIR', undefined], // only known to be set (an expandable string): the inherited value stays
+      ['CLAUDE_CODE_GIT_BASH_PATH', 'C:\\Program Files\\Git\\bin\\bash.exe'],
+      ['CLAUDE_CODE_TMPDIR', 'C:\\persistent-tmp'], // names match in any case, as on Windows
+      ['ANTHROPIC_BASE_URL', 'http://the-users-own-proxy'],
+      ['CLAUDE_NOT_INHERITED', 'only in the registry'],
+      ['PATH', 'C:\\registry'],
+    ]);
+  };
+  assert.deepEqual(cleanServerEnv(env, { readPersistent }), {
+    PATH: 'C:\\bin',
+    CLAUDE_CONFIG_DIR: 'D:\\claude-config',
+    CLAUDE_CODE_GIT_BASH_PATH: 'C:\\Program Files\\Git\\bin\\bash.exe',
+    Claude_Code_Tmpdir: 'C:\\persistent-tmp',
+    ANTHROPIC_BASE_URL: 'http://the-users-own-proxy',
+  });
+  assert.equal(reads, 1, 'the registry is read once');
+  assert.deepEqual(env, sessionEnv(), 'the input is not changed');
+});
+
+test('cleanServerEnv strips them all, and says so once, when the registry cannot be read', () => {
+  const warnings = [];
+  const readPersistent = () => { throw new Error('reg query HKCU\\Environment failed (exit 1)'); };
+  assert.deepEqual(cleanServerEnv(sessionEnv(), { readPersistent, warn: (text) => warnings.push(text) }), { PATH: 'C:\\bin' });
+  assert.equal(warnings.length, 1, warnings.join('\n'));
+  assert.match(warnings[0], /registry/);
+  assert.ok(warnings[0].includes('reg query HKCU\\Environment failed (exit 1)'), warnings[0]);
+});
+
+test('cleanServerEnv reads no registry when nothing would be stripped, nor unless it is handed a reader', () => {
+  const readPersistent = () => assert.fail('nothing to keep, so nothing to read');
+  assert.deepEqual(cleanServerEnv({ PATH: 'C:\\bin', MY_CLAUDE: 'kept' }, { readPersistent }), { PATH: 'C:\\bin', MY_CLAUDE: 'kept' });
+  assert.deepEqual(cleanServerEnv(sessionEnv()), { PATH: 'C:\\bin' }, 'without a reader every one is stripped');
+});
+
+// ---- readPersistentEnv: the Windows registry, through an injected reg.exe -------------------------------------------
+
+const USER_KEY = 'HKCU\\Environment';
+const MACHINE_KEY = 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment';
+
+/** What `reg query` prints for each key (captured from this machine's format, the values invented). */
+const REG_OUTPUT = {
+  [MACHINE_KEY]: [
+    '',
+    'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+    '    ComSpec    REG_EXPAND_SZ    %SystemRoot%\\system32\\cmd.exe',
+    '    CLAUDE_CODE_GIT_BASH_PATH    REG_SZ    C:\\machine\\bash.exe',
+    '    CLAUDE_CONFIG_DIR    REG_SZ    D:\\machine-config',
+    '    ANTHROPIC_BASE_URL    REG_SZ    http://machine-proxy',
+    '',
+  ].join('\r\n'),
+  [USER_KEY]: [
+    '',
+    'HKEY_CURRENT_USER\\Environment',
+    '    CLAUDE_CODE_GIT_BASH_PATH    REG_SZ    C:\\Program Files\\Git\\bin\\bash.exe',
+    '    Claude_Config_Dir    REG_EXPAND_SZ    %USERPROFILE%\\.claude-work',
+    '    CLAUDE_ACCENT    REG_SZ    C:\\Users\\Sebasti\u00a0n\\claude',
+    '    CLAUDE_NUMBER    REG_DWORD    0x1',
+    '',
+    'HKEY_CURRENT_USER\\Environment\\Subkey',
+    '',
+  ].join('\r\n'),
+};
+
+function fakeReg(outputs = REG_OUTPUT) {
+  const calls = [];
+  const spawnSync = (command, args, options) => {
+    calls.push({ command, args, options });
+    const stdout = outputs[args[1]];
+    return stdout === undefined ? { status: 1, stdout: '', stderr: 'ERROR: The system was unable to find the specified registry key or value.\r\n' } : { status: 0, stdout, stderr: '' };
+  };
+  return { spawnSync, calls };
+}
+
+test('readPersistentEnv lists what the user and machine keys set, the user\'s winning, with a value only where it can be trusted', () => {
+  const { spawnSync, calls } = fakeReg();
+  const persistent = readPersistentEnv({ platform: 'win32', env: { SystemRoot: 'C:\\Windows' }, spawnSync });
+  assert.deepEqual([...persistent].sort(([a], [b]) => a.localeCompare(b)), [
+    ['ANTHROPIC_BASE_URL', 'http://machine-proxy'],
+    ['CLAUDE_ACCENT', undefined], // beyond ASCII: reg.exe wrote it in a code page this cannot know
+    ['CLAUDE_CODE_GIT_BASH_PATH', 'C:\\Program Files\\Git\\bin\\bash.exe'], // the user's, over the machine's
+    ['CLAUDE_CONFIG_DIR', undefined], // the user's expandable string, over the machine's plain one
+    ['COMSPEC', undefined],
+  ]);
+  assert.deepEqual(calls.map(({ args }) => args).sort(), [['query', MACHINE_KEY], ['query', USER_KEY]].sort());
+  for (const { command, options } of calls) {
+    assert.equal(command, 'C:\\Windows\\System32\\reg.exe', 'by its full path: a reg.exe in the project folder is never the one run');
+    assert.equal(options.windowsHide, true);
+  }
+});
+
+test('readPersistentEnv throws when either key cannot be read: half an answer would strip what the user set', () => {
+  for (const missing of [USER_KEY, MACHINE_KEY]) {
+    const outputs = { ...REG_OUTPUT, [missing]: undefined };
+    assert.throws(() => readPersistentEnv({ platform: 'win32', env: {}, spawnSync: fakeReg(outputs).spawnSync }), /reg query .*Environment failed \(exit 1\).*unable to find/s, missing);
+  }
+  const broken = () => ({ error: new Error('spawnSync reg.exe ENOENT'), status: null, stdout: '', stderr: '' });
+  assert.throws(() => readPersistentEnv({ platform: 'win32', env: {}, spawnSync: broken }), /could not run: spawnSync reg\.exe ENOENT/);
+});
+
+test('off Windows nothing is set persistently, and nothing is run to find out', () => {
+  const persistent = readPersistentEnv({ platform: 'linux', spawnSync: () => assert.fail('no registry to read') });
+  assert.equal(persistent.size, 0);
 });
 
 // ---- serverArgs ------------------------------------------------------------------------------------------------------
@@ -217,7 +340,7 @@ test('supervise runs the server in the project folder', async () => {
   const controller = new AbortController();
   await supervise({
     claude: { path: process.execPath, shell: false },
-    args: ['-e', 'console.log("cwd=" + process.cwd())'],
+    args: ['-e', 'console.log("cwd=" + require("node:fs").realpathSync(process.cwd()))'],
     cwd: project,
     env: cleanServerEnv(process.env),
     logPath,
@@ -225,7 +348,9 @@ test('supervise runs the server in the project folder', async () => {
     sleep: async () => controller.abort(),
     signal: controller.signal,
   });
-  assert.ok(readLog(logPath).includes(`cwd=${project}`), readLog(logPath));
+  // Real paths on both sides: a temp folder is reached through a link on some platforms (`/var` on macOS), and
+  // the server's own cwd is then spelled differently from the path it was given.
+  assert.ok(readLog(logPath).includes(`cwd=${fs.realpathSync(project)}`), readLog(logPath));
 });
 
 test('aborting the signal while the server runs kills it and what it started, and does not restart it', async () => {
@@ -362,6 +487,57 @@ test('a spawn that throws is logged and retried too', async () => {
   assert.deepEqual(delays, [5000, 10000]);
   assert.equal(count(readLog(logPath), 'could not start \\(spawn EINVAL\\)'), 2);
 });
+
+/** A fake that proves it ran even when its output goes nowhere: a line in the file its first argument names. */
+const MARKING_FAKE = [
+  "require('node:fs').appendFileSync(process.argv[2], 'ran\\n');",
+  "console.log('Connected');",
+  'process.exitCode = 1;',
+].join('\n');
+
+/** Two ways a log cannot be opened or appended to, each with what makes it usable again. */
+const BLOCKED_LOGS = {
+  'the log path is a directory': (dir) => {
+    const logPath = path.join(dir, 'remote.log');
+    fs.mkdirSync(logPath);
+    return { logPath, unblock: () => fs.rmdirSync(logPath) };
+  },
+  'the folder of the log is a file': (dir) => {
+    const folder = path.join(dir, 'logs');
+    fs.writeFileSync(folder, '');
+    return { logPath: path.join(folder, 'remote.log'), unblock: () => fs.rmSync(folder) };
+  },
+};
+
+for (const [what, block] of Object.entries(BLOCKED_LOGS)) {
+  test(`a log that cannot be written never ends the supervisor (${what}): the server runs, the backoff holds, and the next write is tried`, async () => {
+    const dir = tempDir();
+    const marker = path.join(dir, 'ran.txt');
+    const { logPath, unblock } = block(dir);
+    const controller = new AbortController();
+    const delays = [];
+    await supervise({
+      claude: { path: process.execPath, shell: false },
+      args: [fakeServer(dir, MARKING_FAKE), marker],
+      cwd: dir,
+      env: cleanServerEnv(process.env),
+      logPath,
+      spawn: trackedSpawn().spawn,
+      sleep: async (ms) => {
+        delays.push(ms);
+        if (delays.length === 1) unblock();
+        if (delays.length === 2) controller.abort();
+      },
+      signal: controller.signal,
+    });
+    assert.equal(count(readLog(marker), 'ran'), 2, 'the server ran with nowhere to log, and was restarted');
+    assert.deepEqual(delays, [5000, 10000], 'the restarts keep the backoff');
+    const log = readLog(logPath);
+    assert.equal(count(log, 'Connected'), 1, `only the second run found a log to write to: ${log}`);
+    assert.equal(count(log, /\[js-harness remote\] server exited \(code 1\) after \S+; restarting in 10s/.source), 1, log);
+    assert.match(log, /\[js-harness remote\] stopped/);
+  });
+}
 
 test('a .cmd shim is started through the shell as one command line, with its arguments intact', { skip: process.platform === 'win32' ? false : 'Windows shims only' }, async () => {
   const dir = tempDir();
