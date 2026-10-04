@@ -1,7 +1,7 @@
 # Remote sessions: open a local session from the phone
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
-(slice 1, PR #28), `feat/remote-at-login` (slice 2, cut from it), `feat/remote-account` (slice 3, cut
+(slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, cut from it), `feat/remote-account` (slice 3, cut
 from slice 2)
 
 ## Goal
@@ -477,6 +477,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   a record whose head is ahead of the branch being pushed (`bin/check.mjs`, the
   `merge-base --is-ancestor` test). The reviewed boundary is `879f990`. Every task but T7 is
   done; nothing of slices 2 and 3 is pushed.
+- 2026-10-04: PR #28 merged on Sebastián's go-ahead (`9390972` on `main`). The second slice
+  is PR #29 (`feat/remote-at-login` at `7fda4ce`, against `main`; the pre-push hook passed:
+  four code commits, all covered by a Codex record; 15 files, 1,791 insertions and 73
+  deletions, and its diff against `main` holds only T3, T5, T3r and T3s). It waits for his
+  go-ahead. The third slice is not pushed.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -593,31 +598,27 @@ the chain strategy is asked once, before the commit that crosses the budget.
 
 ## Next step
 State on 2026-10-04: every task is written, committed and reviewed except T7, the live check,
-which needs him. PR #27 is merged. The first slice is PR #28 (`feat/remote-control` at
-`aaa79db`, against `main`), waiting for his go-ahead to merge. The second slice is on
-`feat/remote-at-login`, cut from `aaa79db`: T3 (`0be9491`), T5 (`c7be78f`), T3r (`1640f01`)
-and T3s (`7fda4ce`), not pushed. The third slice is on `feat/remote-account`, cut from
-`7fda4ce`: T4 with T6 (`879f990`) and the commit of this record, not pushed. Each code commit
-was approved by gentle-ai and lies in a Codex record. The server for `D:js-harness` is running, started with `js-harness remote start`
+which needs him. PRs #27 and #28 are merged (`main` at `9390972`). The second slice is
+PR #29 (`feat/remote-at-login`, cut from `aaa79db`: T3 `0be9491`, T5 `c7be78f`, T3r
+`1640f01` and T3s `7fda4ce`), against `main`, waiting for his go-ahead to merge. The third
+slice is on `feat/remote-account`, cut from `7fda4ce`: T4 with T6 (`879f990`) and the
+commits of this record, not pushed. Each code commit was approved by gentle-ai and lies in
+a Codex record. The server for `D:\js-harness` is running, started with `js-harness remote start`
 (detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
 `remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
 so it waits for his word. The login launcher is off on this machine and stays off until he
 asks. In order:
 
-1. PR #28 is merged on his go-ahead (`gh pr merge 28 --merge`, pull `main`).
-2. The second slice (`feat/remote-at-login`, through `7fda4ce`) is pushed and its PR opened
-   against `main` once #28 is merged, so the diff holds only this slice; merged on his
-   go-ahead.
-3. The third slice (`feat/remote-account`) is pushed and its PR opened once the second is
-   merged; merged on his go-ahead. With each merge, pull `main`; with the last, check the
-   roadmap's `Reviewed and merged (three slices)` step.
-4. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
+1. PR #29, the second slice, is merged on his go-ahead (`gh pr merge 29 --merge`, pull
+   `main`).
+2. The third slice (`feat/remote-account`) is pushed and its PR opened against `main` once
+   #29 is merged, so the diff holds only this slice; merged on his go-ahead, then pull
+   `main` and check the roadmap's `Reviewed and merged (three slices)` step.
+3. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
    the merged code, he opens a session from the iOS app and says it runs there, then
    `remote stop` must leave no process of it (`remote status` says `not running`); check
    T7 and the roadmap's live-check step. Whether the login launcher is turned on on this
    machine is his call, asked then.
-   T6's live check needs him: a session opened from the phone after `remote stop` and
-   `remote start`, which he has to allow.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
