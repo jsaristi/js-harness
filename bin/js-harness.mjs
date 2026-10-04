@@ -8,6 +8,7 @@ import { doctorMain } from './doctor.mjs';
 import { progressMain } from './progress.mjs';
 import { contractMain } from './contract.mjs';
 import { codexReviewMain } from './codex-review.mjs';
+import { remoteMain } from './remote.mjs';
 import { tuiMain } from './tui.mjs';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -27,6 +28,7 @@ Commands:
   progress    Show roadmap and feature progress from their checkboxes.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
+  remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;
@@ -44,6 +46,7 @@ const commands = {
   progress: progressMain,
   contract: contractMain,
   'codex-review': codexReviewMain,
+  remote: remoteMain,
 };
 
 async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui = tuiMain } = {}) {
