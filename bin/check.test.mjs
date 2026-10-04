@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 
@@ -280,6 +281,86 @@ test('checkSensor drops inherited case variants of the variables it overrides', 
     assert.deepEqual(keys, [name], `${name} keys: ${keys}`);
   }
   assert.ok(env.npm_config_cache.startsWith(env.HOME));
+});
+
+// A hook's git exports the variables that bind every git command to its repository; a sensor that
+// inherits them runs its own `git init` or `git add` against that repository instead of its fixture.
+test('checkSensor drops the variables that bind git to one repository, and keeps the others', async () => {
+  const saved = { ...process.env };
+  let env;
+  const spawn = (_command, options) => {
+    env = options.env;
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  try {
+    process.env.GIT_DIR = 'real/.git/worktrees/feature';
+    process.env.GIT_INDEX_FILE = 'real/.git/worktrees/feature/index';
+    process.env.Git_Work_Tree = 'real';
+    process.env.GIT_COMMON_DIR = 'real/.git';
+    process.env.GIT_AUTHOR_NAME = 'Someone';
+    await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  const bound = Object.keys(env).filter((key) => /^git_(dir|index_file|work_tree|common_dir)$/i.test(key));
+  assert.deepEqual(bound, []);
+  assert.equal(env.GIT_AUTHOR_NAME, 'Someone');
+});
+
+/** Runs git in `cwd` with none of git's own variables, so building a fixture never acts on the
+ * repository a hook exported. */
+function git(cwd, ...args) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key)));
+  const result = spawnSync('git', args, { cwd, env, encoding: 'utf8' });
+  assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+// The list is git's own; a git that grows a variable must fail here, not in someone's repository.
+test('checkSensor covers every variable git itself calls repository-local', async () => {
+  let env;
+  const spawn = (_command, options) => {
+    env = options.env;
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  const names = git(os.tmpdir(), 'rev-parse', '--local-env-vars').split(/\r?\n/).filter(Boolean);
+  assert.ok(names.includes('GIT_DIR'), `git answered: ${names}`);
+  const saved = { ...process.env };
+  try {
+    for (const name of names) process.env[name] = 'leaked';
+    await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  assert.deepEqual(names.filter((name) => name in env), []);
+});
+
+// What happened on 2026-10-04: a commit in a linked worktree hands its hook that worktree's GIT_DIR,
+// and a test's `git init` in a temp directory then re-initialised the shared repository as bare.
+test('checkSensor keeps a sensor that runs git init from touching the repository the hook exported', async () => {
+  const dir = makeTmpDir();
+  const saved = { ...process.env };
+  try {
+    const decoy = path.join(dir, 'decoy');
+    fs.mkdirSync(decoy);
+    git(decoy, 'init', '--quiet');
+    git(decoy, '-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '--quiet', '--allow-empty', '-m', 'root');
+    git(decoy, 'worktree', 'add', '--quiet', path.join(dir, 'linked'));
+    const config = path.join(decoy, '.git', 'config');
+    const before = fs.readFileSync(config);
+    process.env.GIT_DIR = path.join(decoy, '.git', 'worktrees', 'linked');
+    process.env.GIT_INDEX_FILE = path.join(decoy, '.git', 'worktrees', 'linked', 'index');
+    const row = await checkSensor(dir, { name: 'tests', command: 'git init --quiet fresh' });
+    assert.equal(row.pass, true, row.output);
+    assert.deepEqual(fs.readFileSync(config), before, fs.readFileSync(config, 'utf8'));
+    assert.equal(fs.existsSync(path.join(dir, 'fresh', '.git')), true, 'the sensor initialised its own repository');
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('checkSensor gives every sensor a 10 minute timeout by default', async () => {

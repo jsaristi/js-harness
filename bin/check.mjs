@@ -68,7 +68,27 @@ export function checkPayload(cwd, home) {
 // gate forever; ten minutes is longer than a commit gate's suite should take, and still bounded.
 const SENSOR_TIMEOUT_MS = 10 * 60 * 1000;
 
-const NPM_PLACEHOLDER_TEST = 'echo "Error: no test specified" && exit 1';
+// The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
+// them. Git exports some to a hook: from a linked worktree, `GIT_DIR` and an absolute `GIT_INDEX_FILE`.
+const GIT_LOCAL_ENV = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+];
+
+const NPM_PLACEHOLDER_TEST ='echo "Error: no test specified" && exit 1';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isCommand = (value) => typeof value === 'string' && value.trim() !== '';
@@ -219,7 +239,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act
   // as a child and skip files. Every case variant of an override goes too: Windows keeps the
   // uppercase one of two keys that differ only in case, and npm reads either.
-  const replaced = new Set([...Object.keys(overrides), 'NODE_TEST_CONTEXT'].map((key) => key.toLowerCase()));
+  // Git's repository variables go as well: with the `GIT_DIR` a hook exports, a sensor's own `git init`
+  // in a temp directory acts on the repository being committed to, and once left it bare.
+  const replaced = new Set([...Object.keys(overrides), 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
