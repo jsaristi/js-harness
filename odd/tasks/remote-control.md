@@ -47,8 +47,9 @@ exits after about ten minutes offline, so something must restart it. Each fact b
 - Every file written outside the repo is recorded so `uninstall` removes it exactly — because that
   is the rule the harness exists to keep.
 - The server inherits the user's own permission mode and runs sessions in the project folder
-  (`--spawn same-dir`) unless a flag says otherwise — the defaults proposed to Sebastián on
-  2026-10-03; sessions started from the phone then behave like his desktop sessions.
+  (`--spawn same-dir`) unless a flag says otherwise, and the login launcher is off until asked
+  for — the defaults Sebastián confirmed on 2026-10-03; sessions started from the phone then
+  behave like his desktop sessions.
 
 ## Effort
 medium
@@ -81,7 +82,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   Fix, the session digest and the TUI) when they differ, with `claude auth login` as the fix.
 
 ## Tasks
-- [ ] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
+- [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
   backoff; tested with a fake `claude` (route: delegated writer)
 - [ ] T2 `remote start|stop|status`: scope, state file, identity-checked stop, status read from
   the log; usage and registry (route: delegated writer)
@@ -102,6 +103,24 @@ the chain strategy is asked once, before the commit that crosses the budget.
   spawns `claude` yet; `claude.exe` lives in `~/.local/bin` on this machine). The desktop app keeps
   `lastKnownAccountUuid` in `%APPDATA%\Claude\config.json`, and its organization-scoped keys name
   the same organization the desktop session reports, so the account check needs no token.
+- 2026-10-03: T1 done (delegated writer; RED: 16 of 16 failing against a stub that threw
+  `not implemented`; GREEN: `node --test bin/lib/remote.test.mjs` 17/17 in about 4 s, re-run by
+  the parent with the same result; `node --test bin/lib/process-tree.test.mjs` 45/45, so the
+  bare-pid guard passes with the new file). `bin/lib/remote.mjs` exports `cleanServerEnv`,
+  `serverArgs`, `resolveClaude` (PATH only, `claude.exe` before `claude.cmd`, runs nothing),
+  `nextDelay` (5 s doubling to 60 s, reset after 5 minutes up) and `supervise`. Real-process
+  tests prove the leaked `CLAUDE_CODE_SESSION_ID` and `ANTHROPIC_BASE_URL` never reach the
+  server, the restart after each exit, the run in the project folder, a stop that kills the
+  server and its grandchild with no restart, and a `.cmd` shim receiving a quoted name intact.
+  A failed kill on stop is logged and thrown, never waited on forever.
+
+## Follow-ups
+- `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
+  `bin/codex-review.mjs`, so a lib module depends on a command module; moving the two into
+  `bin/lib` is a small refactor outside T1's surface.
+- A name with `& | < > ^ %` makes the `.cmd` quoting throw, which `supervise` would log and
+  retry forever: T2 rejects such a name before starting.
 
 ## Next step
-T1, after Sebastián confirms the defaults in Constraints (proposed 2026-10-03).
+T2 (`remote start|stop|status`). The branch passed the delivery budget with T1, so the chain
+strategy is asked of Sebastián now; the slices are cut along these commits either way.
