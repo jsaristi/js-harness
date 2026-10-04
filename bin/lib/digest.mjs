@@ -3,7 +3,11 @@
 // odd/tasks/stack-doctor.md.
 import crypto from 'node:crypto';
 
-const GAP_STATES = new Set(['missing', 'outdated', 'stale']);
+/** The states that are a gap, something to fix: `stale` is a host whose hook calls a removed command, and
+ * `mismatch` the Claude CLI and the desktop app signed into different accounts. `unknown` and `n/a` are not
+ * gaps. This is the one list: `doctor` (its Fix section and `--json` gaps) and the TUI's stack block read it
+ * from here, so the three cannot disagree on what counts. */
+export const GAP_STATES = new Set(['missing', 'outdated', 'stale', 'mismatch']);
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
 
 /** Every (tool id, dimension, state) gap in a doctor report. Sorted by id then dimension so the

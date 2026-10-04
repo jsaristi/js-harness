@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gapList, gapDigest } from './digest.mjs';
+import { GAP_STATES, gapList, gapDigest } from './digest.mjs';
 
 function row(overrides) {
   return { id: 'x', installed: 'ok', claude: 'ok', codex: 'ok', project: 'n/a', upToDate: 'ok', ...overrides };
@@ -27,6 +27,21 @@ test('gapList counts a stale cell as a gap, so the session hook notifies about a
   assert.deepEqual(gapList([row({ id: 'gentle-ai', claude: 'stale' })]), [
     { id: 'gentle-ai', dimension: 'claude', state: 'stale' },
   ]);
+});
+
+test('gapList counts a mismatch cell as a gap, so the session hook notifies when the Claude accounts differ', () => {
+  const account = { id: 'claude-account', installed: 'n/a', claude: 'mismatch', codex: 'n/a', project: 'n/a', upToDate: 'n/a' };
+  assert.deepEqual(gapList([account]), [{ id: 'claude-account', dimension: 'claude', state: 'mismatch' }]);
+  assert.notEqual(gapDigest([account]), gapDigest([{ ...account, claude: 'ok' }]));
+});
+
+test('GAP_STATES is the one list of what counts as a gap: every state in it is one, in every dimension', () => {
+  assert.deepEqual([...GAP_STATES].sort(), ['mismatch', 'missing', 'outdated', 'stale']);
+  for (const state of GAP_STATES) {
+    for (const dimension of ['installed', 'claude', 'codex', 'project', 'upToDate']) {
+      assert.deepEqual(gapList([row({ id: 'x', [dimension]: state })]), [{ id: 'x', dimension, state }]);
+    }
+  }
 });
 
 test('gapList ignores unknown and n/a states', () => {

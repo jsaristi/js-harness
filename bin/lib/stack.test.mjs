@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tools, resolveProjectRoot, probeTool, probeStack } from './stack.mjs';
+import { tools, checks, resolveProjectRoot, probeTool, probeStack } from './stack.mjs';
 
 function makeTmpHome(prefix = 'js-harness-stack-home-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -1282,18 +1282,144 @@ test('probeTool assembles one full row, leaving upToDate unknown for T2', () => 
   }
 });
 
-test('probeStack returns one row per tool, in order, never throwing on an empty home', () => {
+test('probeStack returns one row per tool, in order, then one per check, never throwing on an empty home', () => {
   const home = makeTmpHome();
   const project = makeTmpHome('js-harness-stack-project4-');
   try {
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- the Claude account check: the CLI and the desktop app signed into the same account ---
+
+const CLI_ACCOUNT = '11111111-aaaa-4bbb-8ccc-000000000001';
+const OTHER_ACCOUNT = '22222222-dddd-4eee-8fff-000000000002';
+/** Where the desktop app keeps its config under a home, on the platforms it has one the check reads. */
+const APP_CONFIG = {
+  win32: ['AppData', 'Roaming', 'Claude', 'config.json'],
+  darwin: ['Library', 'Application Support', 'Claude', 'config.json'],
+};
+
+/** Writes the two files the check reads, each with its identifier among other keys; `undefined` writes no file. */
+function seedAccounts(home, { cli, app, platform = 'win32' }) {
+  if (cli !== undefined) {
+    writeJson(path.join(home, '.claude.json'), { mcpServers: {}, oauthAccount: { accountUuid: cli, emailAddress: 'someone@example.com' } });
+  }
+  if (app !== undefined) {
+    writeJson(path.join(home, ...APP_CONFIG[platform]), { lastKnownAccountUuid: app, 'oauth:tokenCache': 'never read' });
+  }
+}
+
+/** The check's `claude` cell for a home seeded by `seed`. A spawn that throws proves nothing is run to find it. */
+function accountState(seed, platform = 'win32') {
+  const home = makeTmpHome('js-harness-stack-account-');
+  try {
+    seed(home);
+    const spawn = () => {
+      throw new Error('the account check runs nothing');
+    };
+    return checks[0].configured({ home, platform, spawn }).claude;
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('checks carries the Claude account check, apart from the tools', () => {
+  assert.deepEqual(checks.map((check) => check.id), ['claude-account']);
+  assert.equal(tools.some((tool) => tool.id === 'claude-account'), false);
+});
+
+test('claude-account is ok when the CLI and the desktop app name the same account, on Windows and on macOS', () => {
+  for (const platform of ['win32', 'darwin']) {
+    assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT, platform }), platform), 'ok', platform);
+  }
+  // An identifier is hexadecimal: the same account written in another letter case is the same account.
+  assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT.toUpperCase() })), 'ok');
+});
+
+test('claude-account is mismatch when both identifiers are there and differ', () => {
+  for (const platform of ['win32', 'darwin']) {
+    assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT, platform }), platform), 'mismatch', platform);
+  }
+});
+
+test('claude-account is unknown, never a gap, when either identifier cannot be had', () => {
+  const appConfig = (home) => path.join(home, ...APP_CONFIG.win32);
+  const cases = {
+    'an empty home': () => {},
+    'no ~/.claude.json': (home) => seedAccounts(home, { app: CLI_ACCOUNT }),
+    'no desktop app config': (home) => seedAccounts(home, { cli: CLI_ACCOUNT }),
+    '~/.claude.json is not JSON': (home) => {
+      seedAccounts(home, { app: CLI_ACCOUNT });
+      fs.writeFileSync(path.join(home, '.claude.json'), '{ nope');
+    },
+    'the app config is not JSON': (home) => {
+      seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+      fs.writeFileSync(appConfig(home), 'not json');
+    },
+    'the app config cannot be read (a folder is there)': (home) => {
+      seedAccounts(home, { cli: CLI_ACCOUNT });
+      fs.mkdirSync(appConfig(home), { recursive: true });
+    },
+    'the CLI is signed out (no oauthAccount)': (home) => {
+      seedAccounts(home, { app: CLI_ACCOUNT });
+      writeJson(path.join(home, '.claude.json'), { mcpServers: {} });
+    },
+    'the app has no account key': (home) => {
+      seedAccounts(home, { cli: CLI_ACCOUNT });
+      writeJson(appConfig(home), { locale: 'en' });
+    },
+    'an identifier is the empty string': (home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: '' }),
+    'an identifier is blank': (home) => seedAccounts(home, { cli: '  ', app: '  ' }),
+    'an identifier is not a string': (home) => seedAccounts(home, { cli: 7, app: 7 }),
+    'a file holds JSON that is not an object': (home) => {
+      seedAccounts(home, { app: CLI_ACCOUNT });
+      fs.writeFileSync(path.join(home, '.claude.json'), 'null');
+    },
+  };
+  for (const [what, seed] of Object.entries(cases)) assert.equal(accountState(seed), 'unknown', what);
+});
+
+test('claude-account is unknown on a platform where the desktop app has no known config, whatever the home holds', () => {
+  const seed = (home) => {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT, platform: 'win32' });
+    seedAccounts(home, { app: OTHER_ACCOUNT, platform: 'darwin' });
+  };
+  assert.equal(accountState(seed, 'linux'), 'unknown');
+});
+
+test('claude-account reads the app config of the platform it is given, under the home it is given', () => {
+  // The macOS location is not read on Windows, nor the Windows one on macOS.
+  assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT, platform: 'darwin' }), 'win32'), 'unknown');
+  assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT, platform: 'win32' }), 'darwin'), 'unknown');
+});
+
+test('the claude-account row has only a claude cell, the sign-in command as its fix, and neither identifier', () => {
+  const home = makeTmpHome('js-harness-stack-account-');
+  try {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT });
+    const row = probeTool(checks[0], { home, project: home, spawn: fakeSpawnMissing(), platform: 'win32' });
+    assert.deepEqual(row, {
+      id: 'claude-account',
+      version: null,
+      installed: 'n/a',
+      claude: 'mismatch',
+      codex: 'n/a',
+      project: 'n/a',
+      upToDate: 'unknown',
+      fix: { claude: 'claude auth login' },
+    });
+    const all = JSON.stringify(probeStack({ home, project: home, spawn: fakeSpawnMissing(), platform: 'win32' }));
+    assert.equal(all.includes(CLI_ACCOUNT) || all.includes(OTHER_ACCOUNT), false, 'no row carries an account identifier');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });

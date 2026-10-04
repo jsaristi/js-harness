@@ -21,6 +21,7 @@ import {
 } from './tui.mjs';
 import { installMain } from './install.mjs';
 import { manifestPath } from './lib/manifest.mjs';
+import { GAP_STATES } from './lib/digest.mjs';
 import { spawnSync } from 'node:child_process';
 
 // T5: the menu depends on where the TUI opens, and these tests run real `git`: keep it off the host's
@@ -308,6 +309,25 @@ test('worstState reports a stale host cell instead of passing it as ok', () => {
   assert.equal(worstState(makeDoctorRow({ claude: 'stale' })), 'stale claude');
 });
 
+test('worstState reports accounts that differ as a gap as severe as a missing tool', () => {
+  const account = { id: 'claude-account', version: null, installed: 'n/a', claude: 'mismatch', codex: 'n/a', project: 'n/a', upToDate: 'n/a' };
+  assert.equal(worstState(account), 'mismatch claude');
+  assert.deepEqual(summarizeStackRow(account), { id: 'claude-account', version: 'n/a', state: 'mismatch claude' });
+  assert.equal(worstState({ ...account, claude: 'unknown' }), 'unknown claude');
+  assert.equal(worstState({ ...account, claude: 'ok' }), 'ok');
+  // As severe as `missing`: the first of the two wins, whichever it is, and both outrank `unknown`.
+  assert.equal(worstState(makeDoctorRow({ claude: 'mismatch', codex: 'missing' })), 'mismatch claude');
+  assert.equal(worstState(makeDoctorRow({ claude: 'missing', codex: 'mismatch' })), 'missing claude');
+});
+
+test('every state doctor and the session digest count as a gap outranks unknown in the stack block', () => {
+  assert.ok(GAP_STATES.has('mismatch') && GAP_STATES.has('missing'));
+  for (const state of GAP_STATES) {
+    assert.equal(worstState(makeDoctorRow({ installed: 'unknown', codex: state })), `${state} codex`, state);
+  }
+  for (const state of ['ok', 'n/a']) assert.equal(worstState(makeDoctorRow({ installed: 'unknown', codex: state })), 'unknown', state);
+});
+
 test('worstState is bare (no dimension suffix) for an installed or up-to-date gap', () => {
   assert.equal(worstState(makeDoctorRow({ installed: 'missing' })), 'missing');
   assert.equal(worstState(makeDoctorRow({ upToDate: 'outdated' })), 'outdated');
@@ -369,8 +389,31 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
     );
+    assert.deepEqual(stack.at(-1), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('computeStackState shows accounts that differ as a mismatch in the stack block, and no identifier', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-stack-'));
+  const [cli, app] = ['11111111-aaaa-4bbb-8ccc-000000000001', '22222222-dddd-4eee-8fff-000000000002'];
+  const spawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+  try {
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: cli } }));
+    const appConfig = path.join(home, 'AppData', 'Roaming', 'Claude', 'config.json');
+    fs.mkdirSync(path.dirname(appConfig), { recursive: true });
+    fs.writeFileSync(appConfig, JSON.stringify({ lastKnownAccountUuid: app }));
+
+    const stack = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
+
+    assert.deepEqual(stack.at(-1), { id: 'claude-account', version: 'n/a', state: 'mismatch claude' });
+    const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack };
+    const text = render(state).join('\n');
+    assert.match(text, /claude-account\s+n\/a\s+mismatch claude/);
+    assert.equal(text.includes(cli) || text.includes(app), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

@@ -46,7 +46,7 @@ First request of a one-word prompt, estimated tokens:
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
-| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), and a TUI over the same commands |
+| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), and a TUI over the same commands |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
@@ -80,6 +80,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
+| Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts; the TUI offers the three commands inside a repository | Written and reviewed, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`) and the login launcher with the TUI entry (`jsaristi/js-harness#29`) are merged; the account check is `jsaristi/js-harness#30`. The live check from the phone and the last merge are pending |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
@@ -147,6 +148,13 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Tasks that separate the configs under the eval verdict rule
 - [x] A/B minimal vs current config at medium and high
 
+### Remote sessions
+- [x] Supervisor and `remote start`, `stop`, `status`
+- [x] Login launcher, recorded so `uninstall` removes it, and the TUI entry
+- [x] `doctor` account check
+- [ ] Live check on this machine: a session opened from the phone after `remote stop` and `remote start`
+- [ ] Reviewed and merged (three slices)
+
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
 - [ ] Differences measured and written down
@@ -184,8 +192,9 @@ work) these tasks do not measure.
 
 ## Next
 
-1. Remote sessions (`odd/tasks/remote-control.md`, branch `feat/remote-control`): open a local
-   session from the phone through `js-harness remote`. Sebastián put it before F6 on 2026-10-03.
+1. Remote sessions (`odd/tasks/remote-control.md`): open a local session from the phone through
+   `js-harness remote`. Sebastián put it before F6 on 2026-10-03. Written and reviewed; what is
+   left is his: the merge of the last slice and the live check from the phone.
 2. F6 Codex parity, the next phase in order: no feature document yet. Its plan, and any spend
    its runs need, are Sebastián's to approve before work starts.
 3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
