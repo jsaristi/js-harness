@@ -65,8 +65,10 @@ export function checkPayload(cwd, home) {
 }
 
 // A sensor that never exits (a watch-mode script, a linter waiting on stdin) would hold the pre-commit
-// gate forever; ten minutes is longer than a commit gate's suite should take, and still bounded.
-const SENSOR_TIMEOUT_MS = 10 * 60 * 1000;
+// gate forever, so the wait is bounded. Twenty minutes, not ten: this repository's own suite takes about
+// eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
+// commits whose tests were green.
+const SENSOR_TIMEOUT_MS = 20 * 60 * 1000;
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
 // them. Git exports some to a hook: from a linked worktree, `GIT_DIR` and an absolute `GIT_INDEX_FILE`.

@@ -363,14 +363,16 @@ test('checkSensor keeps a sensor that runs git init from touching the repository
   }
 });
 
-test('checkSensor gives every sensor a 10 minute timeout by default', async () => {
+// Ten minutes refused three commits in a row on 2026-10-04: this repository's own suite needs about
+// eight on a quiet machine and went past ten with two of eight cores taken by other programs.
+test('checkSensor gives every sensor a 20 minute timeout by default', async () => {
   let options;
   const spawn = (_command, opts) => {
     options = opts;
     return { status: 0, stdout: '', stderr: '' };
   };
   await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
-  assert.equal(options.timeout, 10 * 60 * 1000);
+  assert.equal(options.timeout, 20 * 60 * 1000);
 });
 
 /** Whether a process with this pid is alive; polled up to 5 s so the OS has time to reap it. */
