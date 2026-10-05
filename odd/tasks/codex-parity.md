@@ -105,13 +105,21 @@ nothing committed.
   inside a table, an escape in a quoted key and a multi-line env value are refused at build
   instead of read wrong); profile layers are not copied; the shim, cleanup and login-path tests
   hold on any host and prove what they claim (route: the T2 writer, resumed) — `22dd665`
-- [ ] T3 Isolation proof for Codex: the real `~/.codex`, engram and gentle-ai trees hashed before
+- [x] T3 Isolation proof for Codex: the real `~/.codex`, engram and gentle-ai trees hashed before
   and after one real trial per arm, the report committed, and the real login verified afterwards
-  (route: delegated writer for the probe, the two real trials run by the parent)
-- [ ] T1r Reader hardening from T1's review, after T3 because its first part needs what a real
+  (route: delegated writer for the probe, the two real trials run by the parent) — `a4a72ee`,
+  both arms PASS on 2026-10-05, report in `evals/proofs/codex-isolation.md`, reviewed (Progress)
+- [x] T3r T3's review findings, one correction: the environment control resolves a path before
+  it calls it inside the sandbox; a surviving engram process is the trial's only by its port or
+  its path; thread ids are scrubbed from the report; the report path is checked before any paid
+  session and a failure after one is not a usage error; the untested fail-the-arm branches get
+  tests; no login copy survives a failed prepare; a future-dated login is refused (route: the T3
+  writer, resumed) — `9c5ef12`, reviewed (Progress, 2026-10-05)
+- [x] T1r Reader hardening from T1's review, after T3 because its first part needs what a real
   failed Codex run prints: which messages decide a stop when a recovered notice and an unrelated
   `turn.failed` are in the same run, pinned by a test of that mixed case; and the runner refuses
-  a reading of the wrong shape and lets no key of `usage` replace a graded field
+  a reading of the wrong shape and lets no key of `usage` replace a graded field (route: the T3
+  writer, same delegation, disjoint files) — `41509d3`, reviewed (Progress, 2026-10-05)
 
 ### Slice B — suite and report
 - [ ] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
@@ -298,6 +306,92 @@ nothing committed.
     (`evals/codex-home.mjs:218`). It refuses too much, never too little, and the real config
     passes; taken as a follow-up, not a second correction.
   - `check --push`: 3 code commits, all covered by a Codex review record.
+- 2026-10-05, T3 closed: the probe is `a4a72ee` (gate green in about eleven minutes, `core.bare`
+  `false`) and the two smoke trials of the staged spend are spent. Route: delegated writer for
+  `evals/codex-isolation-probe.mjs` (strict TDD against the fake agent, 15 tests, plus a mutation
+  check of 11 behaviours because most tests had no RED of their own); the parent ran the real
+  trials. The full record of the run is `evals/proofs/codex-isolation.md`; the probe's JSON report
+  and each arm's raw output stay outside the repository, in
+  `D:\js-harness-worktrees\codex-parity-t3-raw`. The report is Markdown because the push check
+  counts any other file as code, and a 1,705-line JSON file is not something Codex can review.
+  - Result: PASS, both arms, in 5m43s. No nonce, sandbox name or thread id in any real tree; the
+    only real-tree change not seen in the 60 s control window was Claude Code rotating the
+    backups of its own account file. The login was 177.4 h old; the trial's copy stayed
+    byte-identical and the real file kept its date, so nothing refreshed it.
+  - Tokens: minimal 47,442 input (43,520 cached) and 402 output in 46.2 s; current 142,308 input
+    (113,024 cached) and 593 output in 63.1 s, on a task of four literal steps. The current arm
+    made three engram calls nobody asked two of (`mem_current_project`, `mem_session_summary`).
+  - Settled, of what T1 and T2 left unverified: the shell, the hooks and the MCP servers of a
+    trial all see its environment (22 of 22 variables identical to what the sandbox set, the
+    engram hook's marker and store inside the trial's home, `mem_save` in the trial's store);
+    `--dangerously-bypass-hook-trust` runs the hooks and prints its notice as an ITEM of type
+    `error`, twice, which the reader ignores; a completed session exits 0; `usage` has a fifth
+    field, `cache_write_input_tokens`, for T5's price; the marketplace is synced again, into the
+    trial's home (592 files, 59 MB of `.tmp/marketplaces/engram` per current trial); nothing was
+    written outside the trial's home.
+  - Found: `codex --version` itself writes into its `CODEX_HOME` (a `tmp/arg0` directory), so the
+    probe reads the version under the trial's environment. The writer found it by running the
+    real binary twice under the real environment, which replaced the real `~/.codex/tmp/arg0`
+    directory twice; nothing else changed there.
+  - Found: the minimal arm is not an empty Codex. Starting from a home with the login alone,
+    Codex wrote 374 files, 61 MB: its curated plugins (312 files), its bundled skills (49), a
+    `config.toml` of 127 bytes, caches and five sqlite stores. The session used no tool but the
+    shell; whether those plugins and skills reach the prompt is not known (the home is removed).
+    So `minimal` means Codex as it comes, which the F6 result must say.
+  - Not settled: `reasoning_output_tokens` was 0 in both sessions, so this run does not show that
+    `-c model_reasoning_effort="medium"` reached the model (T6's first trials will, on real
+    tasks); no session failed, so the wording of a cap or a login failure is still unseen.
+  - gentle-ai over `4b2fa50..a4a72ee` (T2r, pending since it was under budget, and T3): `medium`,
+    review due (`slice_budget_reached`, 1,888 lines); consent granted under the pre-grant; one
+    lens, `review-reliability`; approved and acknowledged (`review-b3f3d89087f45fc6`). Five
+    advisory findings: two WARNINGs — the report is written only after every paid session,
+    unguarded, and a failure after a session exits 2 like a usage error
+    (`evals/codex-isolation-probe.mjs:835-845`); four fail-the-arm branches of the environment
+    control have no test (`:197-206`) — and three SUGGESTIONs: thread ids are not scrubbed
+    (`:428`), a failed prepare skips the cleanup that deletes the login copy (`:384`), a
+    future-dated login passes the age check (`evals/codex-home.mjs:55-56`).
+  - Codex over `fcf15ef..a4a72ee`: it ran on the real login, which therefore still works after
+    the trials, and gave three P2 findings, but recorded nothing ("its successful commands showed
+    830 of 1250 changed lines": it never read the test file), so the skip is recorded with that
+    reason. The findings: the environment control accepts a path that holds the sandbox's name
+    and leaves it through `..` (`evals/codex-isolation-probe.mjs:186`); a new engram process is
+    taken for the trial's by PID alone, so another session's engram fails the arm and skips the
+    next paid one (`:395`); thread ids survive in the report's free text (`:671`).
+  - None of the eight changes the run's verdict: every one of the 22 variables was identical to
+    the value the sandbox set, which is stronger than containment, and no engram process
+    survived. All eight are T3r.
+  - `check --push`: 4 code commits, all covered by a Codex review record (two of them skips).
+- 2026-10-05, T3r and T1r closed, which completes slice A. One delegation to the T3 writer, two
+  commits on disjoint files, each with a green gate of about eleven minutes and `core.bare`
+  `false` afterwards.
+  - T3r, `9c5ef12` (593 added, 100 removed; the probe's tests went from 15 to 37): the eight
+    findings as listed in the task. Beyond them: the environment control is now "inside the
+    trial's home", so a required variable that points at the workspace fails the arm; exit code 3
+    means a session ran and something broke afterwards (its summary is printed first), and exit 2
+    means no session was started; a login dated up to two seconds ahead counts as age 0, because
+    a file written in the same millisecond can read slightly ahead of the clock.
+  - T1r, `41509d3` (243 added, 22 removed): the messages that decide a stop are the
+    `turn.failed` message and the last `error` event before it, a rule chosen without a real
+    failed sample and marked so; a `turn.failed` with no `error` event of its own is still read
+    with the notice before it, which a test pins; the hook-trust notice, an item of type `error`,
+    is pinned from the real line; `cacheWriteInputTokens` is summed apart from the input total;
+    `assertReading` refuses a reading of the wrong shape, and a key of `usage` that collides with
+    a graded field is an error (chosen over "graded fields win" because it keeps the record's key
+    order and every recorded F5 field). Not checked: what `runSuite` does with a trial that
+    `assertReading` rejects, which T4 must decide.
+  - Codex: `a4a72ee..9c5ef12` recorded as `reviewed`, "no substantiated, actionable regressions";
+    `9c5ef12..41509d3` recorded as `reviewed`, "no actionable defects". Both ranges are under 700
+    lines, the size at which its reviews have been recorded here; for each the other pending
+    files were stashed and restored.
+  - gentle-ai over `a4a72ee..41509d3`: `medium`, review due (`slice_budget_reached`, 958 lines);
+    its first assessment came back unassessable because of the untracked report under
+    `evals/proofs/`, which was moved aside for the review; consent granted under the pre-grant;
+    one lens, `review-reliability`; approved and acknowledged. Four advisory findings, all
+    follow-ups below: two WARNINGs (an engram process the trial starts with no evidence in its
+    command line and no listening port is now only a warning; a test compares a file date to the
+    millisecond) and two SUGGESTIONs (no test reads a Claude result with subagents and model
+    usage through `assertReading`; an infinite count is reported as `null`).
+  - `check --push`: 6 code commits, all covered by a Codex review record (two of them skips).
 
 ## Follow-ups
 - The config scan refuses a single-line value that holds a triple quote inside a string or a
@@ -305,10 +399,32 @@ nothing committed.
   and comment context when a real config trips it; until then the build stops and names the line.
 - The scan depends on Codex writing `config.toml` with one value per line. If an update starts
   writing multi-line arrays, the current arm stops at template build, by design.
-- Codex could not review a range above about a thousand lines here, twice. A slice this size
-  needs commits small enough for it, or the skip that was recorded.
+- Codex could not review a range above about a thousand lines here, three times. A slice this
+  size needs commits small enough for it, or the skip that was recorded.
+- Every trial downloads its own setup: about 60 MB of curated plugins and caches in either arm,
+  and 59 MB more of the engram marketplace in the current arm. That time is inside a Codex
+  trial's wall time and has no counterpart in a Claude trial, so T5's wall-time comparison must
+  say so, or T4 must measure it apart.
+- The real login reaches the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
+  real Codex has refreshed its own login (any ordinary use of it does), never with a copy that
+  could be refreshed inside a trial.
+
+- The probe ties a new engram process to a trial by its command line or its port, so one the
+  trial started that takes both from its environment and does not listen (a stdio server) is
+  only a warning, while the summary still says no engram process of the trial is left
+  (gentle-ai WARNING, `evals/codex-isolation-probe.mjs:422-425`). The real run had no new engram
+  process at all. Before the probe is run again: attribute by parent process too, and word the
+  summary by what was shown.
+- `evals/codex-home.test.mjs:684` expects a file date to the millisecond (gentle-ai WARNING).
+  On this host a date set from a `Date` read back exact 5,000 times out of 5,000; another file
+  system may round it. Compare to the second if it ever fails.
+- No test reads a Claude result with subagents and per-model usage through `assertReading`
+  (`evals/runner.test.mjs:1982-1987`), and an infinite count is reported as `null`
+  (`evals/runner.mjs:462`). T4 runs the suite's tests over both readers and is where the first
+  belongs.
 
 ## Next step
-T3: the isolation proof and its two real trials, the first spend of this feature. Before the
-login is copied, the date of the real `~/.codex/auth.json` is read again; the trials settle what
-T1 and T2 left unverified and what T1r needs.
+Slice A is whole: T1, T2 and T3 with their corrections, six code commits, all reviewed. Its pull
+request against `main` is Sebastián's call (stacked-to-main). Then T4, `evals/suite.mjs --agent
+codex`, opens slice B; it decides what the suite does with a trial `assertReading` rejects and
+whether a trial's setup download is measured apart from its wall time.
