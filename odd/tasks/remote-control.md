@@ -511,6 +511,18 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - 2026-10-04: decided by Sebastián after T7: the login launcher stays off on this machine.
   After a restart of the PC the server is started by hand (`js-harness remote start` in
   `D:\js-harness`). The feature is closed with the PR of `docs/remote-live-check`.
+- 2026-10-04, later the same day: he changed that decision and asked for the server to come
+  back when the PC starts. `js-harness remote start --at-login` in `D:\js-harness`, run
+  while the server was up, exited 0 and left it as it was (`capacity: 2/32` before and
+  after, the same supervisor): it wrote
+  `js-harness-remote-js-harness-86aa68a6ffce.cmd` in the Startup folder
+  (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`), which runs `node
+  D:\js-harness\bin\remote.mjs start --cwd D:\js-harness --name js-harness`, and created
+  `~/.js-harness/manifest.json` with a `null` version and that file in `optional`, by
+  path and hash. `remote status` says `login launcher: on`. Not yet seen: a real login,
+  so whether the server comes up after a restart of the PC is unproved until one happens.
+  To undo it: `js-harness remote stop --at-login` (which also stops the server) or
+  `uninstall`; both remove the launcher, and the manifest goes with its last record.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -638,11 +650,12 @@ gentle-ai and lies in a Codex record. What a later session needs to know:
 
 - The server for `D:\js-harness` is running the merged code, started with `js-harness
   remote start` (detached; `remote status` shows it, `remote stop` ends it, and with it
-  the sessions opened through it). It does not survive a restart of the PC: the login
-  launcher is off on this machine, by his decision. Should he change his mind,
-  `js-harness remote start --at-login` writes `js-harness-remote-<id>.cmd` in the Startup
-  folder and creates the machine manifest that records it, and `remote stop --at-login`
-  or `uninstall` removes both; ask him first.
+  the sessions opened through it). The login launcher is on on this machine, by his
+  decision: a `.cmd` in the Startup folder, recorded in `~/.js-harness/manifest.json`,
+  starts the server at login. It has not been through a real login yet; after the next
+  restart of the PC, `remote status` says whether it worked. It pins the paths of node
+  (`C:\nvm4w\nodejs\node.exe`) and of this checkout, so moving either breaks it.
+  `remote stop --at-login` or `uninstall` removes the launcher and its record.
 - A session opened from the phone through the server works in `D:\js-harness` itself
   (`--spawn same-dir`), the same folder as a desktop session there: two sessions that
   write at once share one working tree and one branch.
