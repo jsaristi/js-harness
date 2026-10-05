@@ -192,9 +192,16 @@ work) these tasks do not measure.
 
 ## Next
 
-1. F6 Codex parity, the next phase in order: no feature document yet. Its plan, and any spend
-   its runs need, are Sebastián's to approve before work starts. Remote sessions, which he put
-   before it on 2026-10-03, closed on 2026-10-04 (`odd/tasks/remote-control.md`).
+1. F6 Codex parity, the next phase in order. Remote sessions, which he put before it on
+   2026-10-03, closed on 2026-10-04 (`odd/tasks/remote-control.md`). F6 was started on
+   2026-10-03 in the linked worktree `D:\js-harness-worktrees\codex-parity` (branch
+   `feat/codex-parity`, cut from `535ef09`) and nothing of it is committed: its feature
+   document `odd/tasks/codex-parity.md`, two new files and three changed ones under `evals/`
+   are on disk there, and the session that wrote them was ended on 2026-10-04. Before any
+   commit in that worktree, bring `main` into the branch: it predates the gate fix
+   (`a3a1eb1`), and a commit from a linked worktree without it can turn this repository bare.
+   The plan and the spend its runs need are in that document; what is not written there as
+   approved is Sebastián's to approve before work starts.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.

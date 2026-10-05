@@ -508,6 +508,9 @@ the chain strategy is asked once, before the commit that crosses the budget.
   none left, `remote status` said `not running`. The server was started again
   (supervisor pid 7564, `connected`, `capacity: 0/32`) and is left running. `doctor
   --offline` shows `claude-account  n/a       ok`. The login launcher is off.
+- 2026-10-04: decided by Sebastián after T7: the login launcher stays off on this machine.
+  After a restart of the PC the server is started by hand (`js-harness remote start` in
+  `D:\js-harness`). The feature is closed with the PR of `docs/remote-live-check`.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -628,22 +631,24 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: every task is done. PRs #27, #28, #29 and #30 are merged (`main` at
-`7d3741b`): the whole feature is on `main`, and the live check passed. Each code commit was
-approved by gentle-ai and lies in a Codex record. This record is on
-`docs/remote-live-check`, cut from `main`, not pushed. The server for `D:\js-harness` is
-running the merged code, started with `js-harness remote start` (detached; `remote status`
-shows it, `remote stop` ends it, and with it the sessions opened through it). The login
-launcher is off on this machine: whether it is turned on is his call, and he has been
-asked. In order:
+Closed on 2026-10-04: every task is done and nothing is left. PRs #27, #28, #29 and #30
+are merged, the live check passed, and this record reaches `main` through the PR of
+`docs/remote-live-check`, the last of the feature. Each code commit was approved by
+gentle-ai and lies in a Codex record. What a later session needs to know:
 
-1. `docs/remote-live-check` is pushed and its PR opened against `main` (documents only, so
-   no Codex record is needed); merged on his go-ahead. That closes the feature: a new
-   session starts F6.
-2. If he asks for the login launcher: `js-harness remote start --at-login` in
-   `D:\js-harness`, which writes `js-harness-remote-<id>.cmd` in the Startup folder and
-   creates the machine manifest that records it; `remote stop --at-login` and `uninstall`
-   remove both. It is recorded here when done.
+- The server for `D:\js-harness` is running the merged code, started with `js-harness
+  remote start` (detached; `remote status` shows it, `remote stop` ends it, and with it
+  the sessions opened through it). It does not survive a restart of the PC: the login
+  launcher is off on this machine, by his decision. Should he change his mind,
+  `js-harness remote start --at-login` writes `js-harness-remote-<id>.cmd` in the Startup
+  folder and creates the machine manifest that records it, and `remote stop --at-login`
+  or `uninstall` removes both; ask him first.
+- A session opened from the phone through the server works in `D:\js-harness` itself
+  (`--spawn same-dir`), the same folder as a desktop session there: two sessions that
+  write at once share one working tree and one branch.
+- T7's first `remote stop` ended the session that was writing F6 in the linked worktree
+  `D:\js-harness-worktrees\codex-parity`. Its work is on disk there, not committed; the
+  roadmap's Next says what to do before a commit in that worktree.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
