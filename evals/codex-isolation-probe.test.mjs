@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { codexSandboxEnv } from './codex-configs.mjs';
 import { assertWorkRoot } from './configs.mjs';
 import { defaultTrees, snapshotTrees } from './isolation-probe.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
-import { PROBE_WORD, codexTrees, formatSummary, main, probeEnvNames, probePrompt, runCodexIsolationProbe } from './codex-isolation-probe.mjs';
+import { PROBE_WORD, attributeEngram, codexTrees, formatSummary, inspectEnv, main, probeEnvNames, probePrompt, runCodexIsolationProbe } from './codex-isolation-probe.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
@@ -81,8 +82,9 @@ const noInit = async () => ({ status: 0, stdout: '', stderr: '' });
 
 /** The fake agent's own settings, added to the env the config builds: the config's command, arguments,
  * sandbox, `prepare` and `cleanup` stay as a measured trial has them. `acts` is a list or a function of the
- * arm. What each run saw (argv, prompt) goes to `<seenDir>/<arm>.json`. */
-const fakeCodex = (machine, { mode = 'codex-probe', acts = '' } = {}) => (config, { arm }) => {
+ * arm, and `shellEnv` what its shell reports for a variable in place of the truth (`<HOME>` is the trial's
+ * home). What each run saw (argv, prompt) goes to `<seenDir>/<arm>.json`. */
+const fakeCodex = (machine, { mode = 'codex-probe', acts = '', shellEnv = {} } = {}) => (config, { arm }) => {
   fs.mkdirSync(machine.seenDir, { recursive: true });
   return {
     ...config,
@@ -90,6 +92,7 @@ const fakeCodex = (machine, { mode = 'codex-probe', acts = '' } = {}) => (config
       ...config.env(context),
       FAKE_AGENT_MODE: mode,
       FAKE_AGENT_PROBE_ACTS: typeof acts === 'function' ? acts(arm) : acts,
+      FAKE_AGENT_PROBE_ENV: JSON.stringify(shellEnv),
       FAKE_AGENT_REAL_HOME: machine.realHome,
       FAKE_AGENT_COUNT_FILE: machine.countFile,
       FAKE_AGENT_REPORT: path.join(machine.seenDir, `${arm}.json`),
@@ -100,7 +103,7 @@ const fakeCodex = (machine, { mode = 'codex-probe', acts = '' } = {}) => (config
 /** What every run of the probe on a fake machine is handed: the fake agent behind `node`, the machine's
  * paths, and stand-ins for what costs a second each and has its own tests (the sweep by path, the kill by
  * port, the listing of engram processes). */
-const overridesFor = (machine, { mode, acts, ...extra } = {}) => ({
+const overridesFor = (machine, { mode, acts, shellEnv, ...extra } = {}) => ({
   commandArgs: [FAKE_AGENT],
   nonce: FAKE_NONCE,
   realHome: machine.realHome,
@@ -110,7 +113,7 @@ const overridesFor = (machine, { mode, acts, ...extra } = {}) => ({
   workRoot: machine.workRoot,
   checkWorkRoot: checkInScratch,
   runInit: noInit,
-  adaptConfig: fakeCodex(machine, { mode, acts }),
+  adaptConfig: fakeCodex(machine, { mode, acts, shellEnv }),
   sweep: () => ({ killed: [] }),
   killPort: () => ({ killed: [] }),
   listEngram: () => [],
@@ -191,6 +194,106 @@ test('the prompt asks for the four steps in plain words: every variable the sand
   assert.equal(prompt.match(/[0-9a-f]{32}/g).length, 2, 'the nonce, and the needle made of it, and no other');
   assert.ok(prompt.length < 1600, `a real model reads this: ${prompt.length} characters`);
   assert.doesNotMatch(prompt, /[$%`]|\bGet-|\becho\b|\bprintf\b/, 'it says what the files must hold, in no shell\'s syntax');
+});
+
+// ---- the environment control -----------------------------------------------------------------------
+
+const PORT = 41234;
+/** A sandbox as an arm makes it, whose workspace holds the environment file a shell would have written:
+ * what the sandbox set, with `changes` on top (`undefined` leaves the line out, `<HOME>` is the trial's home). */
+function envFile(changes = {}) {
+  const sandbox = tmp('js-harness-codex-iso-probe-unit');
+  const home = path.join(sandbox, 'home');
+  const workspace = path.join(sandbox, 'workspace');
+  const env = { ...codexSandboxEnv({ home, engramPort: PORT, inherited: {} }), ENGRAM_URL: '', ENGRAM_SOCKET: '', ...changes };
+  const lines = Object.entries(env).filter(([, value]) => value !== undefined).map(([name, value]) => `${name}=${String(value).replaceAll('<HOME>', home)}`);
+  write(path.join(workspace, 'probe-env.txt'), `${lines.join('\n')}\n`);
+  return { sandbox, home, workspace, port: PORT };
+}
+const up = (...parts) => ['<HOME>', ...parts].join(path.sep);
+
+test('the environment control passes what the sandbox set, in any spelling that is still the same place', () => {
+  const exact = inspectEnv(envFile());
+  assert.deepEqual(exact.problems, []);
+  assert.deepEqual(exact.warnings, []);
+  assert.ok(Object.values(exact.checks).every((check) => check === 'same'));
+  // Another spelling of the same directories: resolved, they are where the sandbox put them.
+  const respelled = inspectEnv(envFile({ HOME: up('.', 'tmp', '..'), CODEX_HOME: `"${up('.codex', 'skills', '..')}${path.sep}"`, TEMP: up('tmp').replaceAll('\\', '/') }));
+  assert.deepEqual(respelled.problems, []);
+  assert.deepEqual({ HOME: respelled.checks.HOME, CODEX_HOME: respelled.checks.CODEX_HOME, TEMP: respelled.checks.TEMP }, { HOME: 'inside', CODEX_HOME: 'inside', TEMP: 'same' });
+  assert.deepEqual(respelled.warnings, ["the agent's shell reports HOME inside the trial's home under another path than the one set", "the agent's shell reports CODEX_HOME inside the trial's home under another path than the one set"]);
+  // Elsewhere in the trial's home is still the sandbox: reported, not failed.
+  const moved = inspectEnv(envFile({ TEMP: up('scratch') }));
+  assert.deepEqual(moved.problems, []);
+  assert.equal(moved.checks.TEMP, 'inside');
+});
+
+// One row per way the control fails an arm: what the shell reported, and the problem it must name.
+const ENV_FAULTS = [
+  ['a HOME that names the sandbox and leaves it through ..', { HOME: up('..', '..', '..', 'real-home') }, /^HOME is outside the trial's home$/],
+  ['a TEMP in the sandbox but above the home', { TEMP: up('..', 'workspace') }, /^TEMP is outside the trial's home$/],
+  ['a relative path, which no place can be told from', { APPDATA: path.join('home', 'AppData', 'Roaming') }, /^APPDATA is outside the trial's home$/],
+  ['a required variable the shell does not have', { ENGRAM_DATA_DIR: '' }, /^ENGRAM_DATA_DIR is not set$/],
+  ['a required variable with no line at all', { LOCALAPPDATA: undefined }, /^LOCALAPPDATA is not set$/],
+  ['a CODEX_HOME in the trial\'s home that is not the trial\'s own', { CODEX_HOME: up('other-codex') }, /^CODEX_HOME is inside the trial's home but is not the trial's own$/],
+  ['a CODEX_HOME that is the home itself', { CODEX_HOME: up('.codex', '..') }, /^CODEX_HOME is inside the trial's home but is not the trial's own$/],
+  ['no ENGRAM_PORT', { ENGRAM_PORT: undefined }, /^ENGRAM_PORT is not set, not the trial's port 41234$/],
+  ['another ENGRAM_PORT', { ENGRAM_PORT: '41235' }, /^ENGRAM_PORT is 41235, not the trial's port 41234$/],
+  ['the real engram port', { ENGRAM_PORT: String(REAL_ENGRAM_PORT) }, /^ENGRAM_PORT is 7437, where the real engram server listens, not the trial's port 41234$/],
+  ['an ENGRAM_URL', { ENGRAM_URL: 'http://127.0.0.1:7437/secret-path' }, /^ENGRAM_URL is set \(value not shown\)/],
+  ['an ENGRAM_SOCKET', { ENGRAM_SOCKET: '/run/engram-secret.sock' }, /^ENGRAM_SOCKET is set \(value not shown\)/],
+];
+for (const [what, changes, problem] of ENV_FAULTS) {
+  test(`the environment control fails an arm on ${what}`, () => {
+    const result = inspectEnv(envFile(changes));
+    assert.equal(result.problems.length, 1, result.problems.join('\n'));
+    assert.match(result.problems[0], problem);
+    assert.ok(!/secret/.test(JSON.stringify(result.problems)), 'a URL or a socket is named, never shown');
+  });
+}
+
+test('the environment control reads a Git Bash spelling of a Windows path as the place it is', { skip: process.platform === 'win32' ? false : 'drive letters are a Windows matter' }, () => {
+  const msys = (value) => `/${value[0].toLowerCase()}${value.slice(2).replaceAll('\\', '/')}`;
+  const sandbox = envFile();
+  const result = inspectEnv(envFile({ HOME: msys(sandbox.home) }));
+  assert.match(result.problems.join('\n'), /^HOME is outside the trial's home$/, 'another sandbox\'s home is not this one\'s');
+  const own = envFile();
+  write(path.join(own.workspace, 'probe-env.txt'), fs.readFileSync(path.join(own.workspace, 'probe-env.txt'), 'utf8').replace(`HOME=${own.home}`, `HOME=${msys(own.home)}`));
+  assert.deepEqual(inspectEnv(own).problems, []);
+  assert.equal(inspectEnv(own).checks.HOME, 'inside');
+});
+
+test('an environment file that is not there is the one problem', () => {
+  const sandbox = envFile();
+  fs.rmSync(path.join(sandbox.workspace, 'probe-env.txt'));
+  assert.deepEqual(inspectEnv(sandbox).problems, ['the agent wrote no probe-env.txt']);
+});
+
+// ---- whose engram process it is --------------------------------------------------------------------
+
+test('an engram process that outlives a trial is the trial\'s only on evidence: its port or its sandbox in the command line, or its port still answering', () => {
+  const root = path.join(scratch, 'work', 'js-harness-codex-iso-probe-AbC123');
+  const before = [{ pid: 11, command: 'engram mcp' }, { pid: 12, command: `engram serve ${PORT}` }];
+  const byPort = { pid: 21, command: `C:\\bin\\engram.exe serve --port ${PORT}` };
+  const byEnvPort = { pid: 22, command: `engram serve :${PORT}/` };
+  // Its sandbox as another tool may spell it: the other separator, doubled inside a quoted argument, and on
+  // Windows in another case.
+  const spelled = root.split(path.sep).join('//');
+  const bySandbox = { pid: 23, command: `engram mcp --data "${process.platform === 'win32' ? spelled.toUpperCase() : spelled}//home//.engram"` };
+  const stranger = { pid: 24, command: `engram mcp --tools=agent --port ${PORT}5` };
+  const silent = { pid: 25, command: '' };
+  const after = [...before, byPort, byEnvPort, bySandbox, stranger, silent];
+  const quiet = attributeEngram({ before, after, port: PORT, root, listening: false });
+  assert.deepEqual(quiet.survivors, [{ ...byPort, evidence: ['port'] }, { ...byEnvPort, evidence: ['port'] }, { ...bySandbox, evidence: ['sandbox'] }]);
+  assert.deepEqual(quiet.unattributed, [stranger, silent], 'a longer number is not the port, and what was running before is nobody\'s');
+  // The port still answers: something of the trial is alive, and a new engram process is the first suspect.
+  const loud = attributeEngram({ before, after: [...before, byPort, stranger], port: PORT, root, listening: true });
+  assert.deepEqual(loud.survivors, [{ ...byPort, evidence: ['port', 'listening'] }, { ...stranger, evidence: ['listening'] }]);
+  assert.deepEqual(loud.unattributed, []);
+  assert.deepEqual(attributeEngram({ before, after: before, port: PORT, root, listening: true }), { survivors: [], unattributed: [] });
+  // A command line is cut for the report, after it was read whole.
+  const long = { pid: 30, command: `engram ${'x'.repeat(300)} ${PORT}` };
+  assert.deepEqual(attributeEngram({ before, after: [long], port: PORT, root, listening: false }).survivors, [{ pid: 30, command: long.command.slice(0, 200), evidence: ['port'] }]);
 });
 
 // ---- the probe end to end, against the fake agent --------------------------------------------------
@@ -293,11 +396,23 @@ test('the command runs one trial per arm, minimal first, proves each wrote insid
   assert.doesNotMatch(io.out.stderr, SANDBOX_NAME, 'progress lines never name the sandbox');
 });
 
-test('what a real model may do differently is a warning, never a failure: no engram call, an answer in other words, files in UTF-16, a login copy it rewrote', async () => {
+test('what a real model, or another session, may do is a warning, never a failure: no engram call, an answer in other words, files in UTF-16, a login copy it rewrote, an engram process of someone else', async () => {
   const machine = fakeMachine();
-  const report = await probe(machine, { arms: ['current'], acts: 'utf16,echo,refresh' });
+  const rawDir = path.join(tmp('out'), 'raw');
+  // Another live session starts an engram process while the trial runs: new, and nothing says it is the trial's.
+  const listings = [[{ pid: 11, command: 'engram mcp' }], [{ pid: 11, command: 'engram mcp' }, { pid: 77, command: 'engram mcp --tools=agent' }]];
+  const report = await probe(machine, { arms: ['current'], acts: 'utf16,echo,echo-thread,refresh', rawDir, listEngram: () => listings.shift(), isListening: async () => false });
   const [arm] = report.arms;
   assert.deepEqual(report.failures, []);
+  assert.deepEqual(arm.engram.survivors, []);
+  assert.deepEqual(arm.engram.unattributed, [{ pid: 77, command: 'engram mcp --tools=agent' }]);
+  assert.match(arm.warnings.join('\n'), /an engram process started during the trial that nothing ties to it \(pid 77\)/);
+  // The thread id is a needle the real trees are scanned for: wherever Codex repeats it, the report has none.
+  const threadId = JSON.parse(fs.readFileSync(arm.raw.stdout, 'utf8').split('\n')[1]).thread_id;
+  assert.match(threadId, /^[0-9a-f-]{36}$/);
+  assert.ok(fs.readFileSync(arm.raw.stderr, 'utf8').includes(threadId), 'the fake agent did print it on stderr');
+  assert.ok(arm.stderrTail.includes('<thread id>'));
+  for (const output of [JSON.stringify(report), formatSummary(report)]) assert.ok(!output.includes(threadId) && !output.includes(threadId.toUpperCase()));
   assert.equal(report.ok, true);
   assert.deepEqual(arm.controls, { agent: { ok: true }, envFile: { ok: true }, nonceFile: { ok: true } }, 'the files PowerShell 5.1 writes are read');
   assert.equal(arm.env.checks.CODEX_HOME, 'same');
@@ -306,8 +421,8 @@ test('what a real model may do differently is a warning, never a failure: no eng
   assert.equal(arm.realLogin, 'unchanged');
   assert.equal(fs.readFileSync(machine.authFile, 'utf8'), LOGIN);
   assert.equal(arm.agent.answered, false);
-  assert.equal(arm.agent.finalMessage, `${PROBE_WORD} <nonce>`, 'the answer is kept, scrubbed');
-  assert.equal(arm.warnings.length, 3, arm.warnings.join('\n'));
+  assert.equal(arm.agent.finalMessage, `${PROBE_WORD} <nonce> <thread id>`, 'the answer is kept, scrubbed');
+  assert.equal(arm.warnings.length, 4, arm.warnings.join('\n'));
   assert.match(arm.warnings.join('\n'), /engram was not exercised/);
   assert.match(arm.warnings.join('\n'), /rewrote its copy of the login.*real login may no longer be valid/);
   assert.match(arm.warnings.join('\n'), /did not answer with the one word/);
@@ -339,18 +454,21 @@ test('a trial that reaches the real home fails, each hit named by its path and n
   assert.ok(!fs.existsSync(machine.workRoot), 'the template built for the arm that never ran is gone too');
 });
 
-test('a trial that did not write what it was asked to, or whose shell sees another CODEX_HOME, fails: a clean scan would prove nothing, and the command exits 1', async () => {
+test('a trial that did not write what it was asked to, or whose shell sees a CODEX_HOME or a HOME outside its sandbox, fails: a clean scan would prove nothing, and the command exits 1', async () => {
   const machine = fakeMachine();
   const out = tmp('out');
   const reportFile = path.join(out, 'report.json');
-  // A raw directory that cannot be made (a file is in its place): the session is paid for, so the report
-  // must still come, with that said in it.
-  const rawDir = path.join(out, 'not-a-directory');
-  fs.writeFileSync(rawDir, '');
+  const rawDir = path.join(out, 'raw');
+  // The raw directory passes the preflight and is gone by the time the session ends (a file is in its place):
+  // the session is paid for, so the report must still come, with that said in it.
+  const adaptConfig = (config, context) => {
+    const adapted = fakeCodex(machine, { acts: 'no-nonce,wrong-home', shellEnv: { HOME: ['<HOME>', '..', '..', '..', 'real-home'].join(path.sep) } })(config, context);
+    return { ...adapted, prepare: async (trial) => { fs.rmSync(rawDir, { recursive: true }); fs.writeFileSync(rawDir, ''); return adapted.prepare(trial); } };
+  };
   const io = capture();
   const argv = ['--codex', process.execPath, '--arm', 'minimal', '--report', reportFile, '--raw-dir', rawDir, '--keep-sandbox'];
-  const code = await main(argv, { ...io, overrides: overridesFor(machine, { acts: 'no-nonce,wrong-home', readVersion: () => '0.0.0' }) });
-  assert.equal(code, 1);
+  const code = await main(argv, { ...io, overrides: overridesFor(machine, { adaptConfig, readVersion: () => '0.0.0' }) });
+  assert.equal(code, 1, io.out.stderr);
   const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
   const [arm] = report.arms;
   assert.equal(arm.raw, null);
@@ -360,11 +478,14 @@ test('a trial that did not write what it was asked to, or whose shell sees anoth
   assert.equal(arm.controls.nonceFile.ok, false);
   assert.equal(arm.controls.envFile.ok, false);
   assert.equal(arm.env.checks.CODEX_HOME, 'outside');
-  assert.equal(arm.env.checks.HOME, 'same');
+  // Its text holds the sandbox's name, and `..` takes it out of the sandbox all the same.
+  assert.ok(arm.env.lines.HOME.includes(arm.sandboxToken));
+  assert.equal(arm.env.checks.HOME, 'outside');
+  assert.equal(arm.env.checks.USERPROFILE, 'same');
   assert.deepEqual(arm.leak.hits, []);
   assert.equal(arm.failures.length, 2, arm.failures.join('\n'));
   assert.match(arm.failures.join('\n'), /positive control "nonceFile" failed/);
-  assert.match(arm.failures.join('\n'), /positive control "envFile" failed.*CODEX_HOME/);
+  assert.match(arm.failures.join('\n'), /positive control "envFile" failed.*HOME is outside the trial's home; CODEX_HOME is outside the trial's home\./);
   assert.match(io.out.stdout, /codex isolation probe: FAIL/);
   // --keep-sandbox: the sandbox is left for a look, without the login.
   assert.ok(fs.existsSync(path.join(arm.sandbox.kept, 'workspace', 'probe-env.txt')));
@@ -380,11 +501,12 @@ test('what a trial leaves behind fails it: a real login that changed, a listener
   assert.equal(arm.realLogin, 'changed');
   assert.equal(arm.loginCopy, 'changed', 'the copy no longer equals the real one');
   assert.equal(arm.engram.listening, true);
-  assert.deepEqual(arm.engram.survivors, [{ pid: 4242, command: 'engram serve --port 1' }]);
+  assert.deepEqual(arm.engram.survivors, [{ pid: 4242, command: 'engram serve --port 1', evidence: ['listening'] }], 'with its port still answering, a new engram process is taken for the trial\'s');
+  assert.deepEqual(arm.engram.unattributed, []);
   assert.equal(arm.failures.length, 3, arm.failures.join('\n'));
   assert.match(arm.failures.join('\n'), /the real Codex login changed during the trial/);
   assert.match(arm.failures.join('\n'), /something still listens on the trial's engram port/);
-  assert.match(arm.failures.join('\n'), /engram process that was not running before the trial is still running after it: pid 4242/);
+  assert.match(arm.failures.join('\n'), /engram process the trial started is still running after it \(the trial's engram port still answers\): pid 4242/);
   assert.deepEqual(arm.leak.diff['.codex'].changed.paths, ['auth.json']);
   assert.ok(!JSON.stringify(report).includes('SENTINEL-DUMMY-LOGIN'));
 });
@@ -441,7 +563,170 @@ test('--version is read in the trial\'s own sandbox, never under the real enviro
   assert.ok(!fs.existsSync(machine.workRoot));
 });
 
+test('a prepare that fails after the login was copied leaves no login behind, not even in a sandbox that is kept', async () => {
+  const machine = fakeMachine();
+  let copied = false;
+  const adaptConfig = (config, context) => {
+    const adapted = fakeCodex(machine)(config, context);
+    return {
+      ...adapted,
+      prepare: async (trial) => {
+        await adapted.prepare(trial);
+        copied = fs.existsSync(path.join(trial.home, '.codex', 'auth.json'));
+        throw new Error('the last step of the seed broke');
+      },
+    };
+  };
+  const report = await probe(machine, { arms: ['minimal'], keepSandbox: true, adaptConfig });
+  const [arm] = report.arms;
+  assert.equal(copied, true, 'the login was in the home when the step failed');
+  assert.match(arm.error, /the last step of the seed broke/);
+  assert.deepEqual(runsOf(machine), []);
+  const kept = path.join(machine.workRoot, arm.sandboxToken);
+  assert.ok(fs.existsSync(path.join(kept, 'home', '.codex')), 'the sandbox is kept, as asked');
+  assert.ok(!fs.existsSync(path.join(kept, 'home', '.codex', 'auth.json')), 'without the credential');
+  assert.equal(fs.readFileSync(machine.authFile, 'utf8'), LOGIN, 'and the real one is where it was');
+});
+
+test('an engram process list that cannot be read leaves "nothing of the trial is left" unproven, which fails the arm', async () => {
+  const broken = () => {
+    throw new Error('tasklist is not there');
+  };
+  let calls = 0;
+  const brokenLater = () => (calls++ === 0 ? [] : broken());
+  for (const listEngram of [broken, brokenLater]) {
+    // A binary that does not answer: the arm ends before any session, and the processes are listed all the same.
+    const report = await probe(fakeMachine(), { arms: ['minimal'], readVersion: () => null, listEngram });
+    const [arm] = report.arms;
+    assert.equal(arm.engram.listingError, 'tasklist is not there');
+    assert.deepEqual(arm.engram.survivors, []);
+    assert.match(arm.failures.join('\n'), /minimal: inconclusive: the engram processes could not be listed \(tasklist is not there\), so "no engram process of the trial is left" is unproven/);
+    assert.match(formatSummary(report), /engram processes could not be listed: INCONCLUSIVE/);
+  }
+});
+
+// ---- a probe that breaks after a session was paid for ----------------------------------------------
+
+test('a probe that breaks after a session still reports what that session showed and exits 3; one that breaks before any session exits 2', async () => {
+  const machine = fakeMachine();
+  const reportFile = path.join(tmp('out'), 'report.json');
+  let passes = 0;
+  // The first pass over the real trees works; the one after the minimal arm's session does not.
+  const takeSnapshot = (trees, options) => {
+    passes += 1;
+    if (passes === 2) throw new Error('the disk went away');
+    return snapshotTrees(trees, options);
+  };
+  const io = capture();
+  const code = await main(['--codex', process.execPath, '--report', reportFile], { ...io, overrides: overridesFor(machine, { takeSnapshot, readVersion: () => '0.0.0' }) });
+  assert.equal(code, 3, io.out.stderr);
+  const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.incomplete, ['minimal: the real trees could not be checked after the trial: the disk went away']);
+  const [arm] = report.arms;
+  assert.deepEqual(arm.controls, { agent: { ok: true }, envFile: { ok: true }, nonceFile: { ok: true } }, 'what the session showed is kept');
+  assert.equal(arm.agent.answered, true);
+  assert.equal(arm.realLogin, 'unchanged');
+  assert.equal(arm.leak, null, 'no scan, so no verdict on a leak');
+  assert.equal(arm.failures.length, 1, arm.failures.join('\n'));
+  assert.match(arm.failures[0], /minimal: inconclusive: the probe itself broke after the trial began \(the real trees could not be checked after the trial: the disk went away\)/);
+  assert.deepEqual(report.skipped.map((entry) => entry.arm), ['current'], 'and no other session is paid for');
+  assert.deepEqual(runsOf(machine), ['codex-probe']);
+  assert.match(io.out.stdout, /codex isolation probe: INCOMPLETE[\s\S]*arm minimal: FAILED[\s\S]*positive controls: agent ok, envFile ok, nonceFile ok[\s\S]*leak scan of the real trees: not done/);
+  assert.ok(io.out.stdout.includes(reportFile));
+  assert.match(io.out.stderr, /the Codex isolation probe broke after a session had started, so what it reports is incomplete: minimal: .*the disk went away/);
+  assert.doesNotMatch(io.out.stderr, /could not run/);
+  assert.ok(!fs.existsSync(machine.workRoot), 'the sandbox and the template are removed all the same');
+
+  // Before any session there is nothing to keep: the run could not start, which is exit 2.
+  const early = capture();
+  const other = fakeMachine();
+  const none = () => {
+    throw new Error('no disk at all');
+  };
+  assert.equal(await main(['--codex', process.execPath, '--report', reportFile], { ...early, overrides: overridesFor(other, { takeSnapshot: none }) }), 2);
+  assert.match(early.out.stderr, /the Codex isolation probe could not run: no disk at all/);
+  assert.equal(early.out.stdout, '');
+  assert.deepEqual(runsOf(other), []);
+});
+
+test('a probe that cannot even make the sandbox of a later arm keeps the arm that was paid for, and exits 3', async () => {
+  const machine = fakeMachine();
+  const reportFile = path.join(tmp('out'), 'report.json');
+  let passes = 0;
+  // The work root is gone by the time the minimal arm has been checked: the current arm has nowhere to run.
+  const takeSnapshot = async (trees, options) => {
+    const taken = await snapshotTrees(trees, options);
+    passes += 1;
+    if (passes === 2) fs.rmSync(machine.workRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    return taken;
+  };
+  const io = capture();
+  const code = await main(['--codex', process.execPath, '--report', reportFile], { ...io, overrides: overridesFor(machine, { takeSnapshot, readVersion: () => '0.0.0' }) });
+  assert.equal(code, 3, io.out.stderr);
+  const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+  const [minimal, current] = report.arms;
+  assert.equal(minimal.ok, true, minimal.failures.join('\n'));
+  assert.deepEqual(minimal.leak.hits, []);
+  assert.deepEqual({ ok: current.ok, sandboxToken: current.sandboxToken, leak: current.leak }, { ok: false, sandboxToken: null, leak: null });
+  assert.match(current.probeError, /ENOENT.*mkdtemp/);
+  assert.deepEqual(report.incomplete, [`current: ${current.probeError}`]);
+  assert.equal(report.ok, false);
+  assert.deepEqual(runsOf(machine), ['codex-probe'], 'the one session that could run');
+  assert.match(io.out.stdout, /codex isolation probe: INCOMPLETE[\s\S]*arm minimal: ok[\s\S]*arm current: FAILED, agent exit none[\s\S]*the probe itself broke after a session had started/);
+});
+
+test('a report that cannot be written at the end does not cost what the session showed: the summary is printed, the failure is named, and the command exits 3', async () => {
+  const machine = fakeMachine();
+  const reportFile = path.join(tmp('out'), 'report.json');
+  // The path was free when the run was checked; by the end a directory is in its place.
+  const adaptConfig = (config, context) => {
+    const adapted = fakeCodex(machine)(config, context);
+    return { ...adapted, prepare: async (trial) => { fs.mkdirSync(reportFile); return adapted.prepare(trial); } };
+  };
+  const io = capture();
+  const code = await main(['--codex', process.execPath, '--arm', 'minimal', '--report', reportFile], { ...io, overrides: overridesFor(machine, { adaptConfig, readVersion: () => '0.0.0' }) });
+  assert.equal(code, 3, io.out.stderr);
+  assert.match(io.out.stdout, /codex isolation probe: PASS[\s\S]*arm minimal: ok/);
+  assert.ok(!io.out.stdout.includes('full report:'), 'no report is promised');
+  assert.match(io.out.stderr, /the report could not be written to .*report\.json \(.+\): the summary on stdout is all that is kept of this run/);
+  assert.deepEqual(runsOf(machine), ['codex-probe']);
+});
+
 // ---- before anything is created or spent -----------------------------------------------------------
+
+test('a report or a raw directory that cannot be written refuses the run before anything is probed or spent', async () => {
+  const machine = fakeMachine();
+  const out = tmp('out');
+  const blocker = path.join(out, 'a-file');
+  fs.writeFileSync(blocker, '');
+  let probed = false;
+  const readVersion = () => {
+    probed = true;
+    return '0.0.0';
+  };
+  const cases = [
+    [['--report', path.join(blocker, 'report.json')], /the report cannot be written: its directory .*a-file cannot be made or written \(.+\)/],
+    [['--report', out], /the report cannot be written: .*out-\d+ is a directory/],
+    [['--report', path.join(out, 'report.json'), '--raw-dir', path.join(blocker, 'raw')], /the raw output directory .*raw cannot be made or written \(.+\)/],
+  ];
+  for (const [argv, message] of cases) {
+    const io = capture();
+    const code = await main(['--codex', process.execPath, '--arm', 'minimal', ...argv], { ...io, overrides: overridesFor(machine, { readVersion }) });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(io.out.stderr, /the Codex isolation probe could not run: /);
+    assert.match(io.out.stderr, message);
+    assert.equal(io.out.stdout, '');
+  }
+  assert.equal(probed, false);
+  assert.deepEqual(runsOf(machine), []);
+  assert.ok(!fs.existsSync(machine.workRoot));
+  assert.deepEqual(fs.readdirSync(out), ['a-file'], 'and the check leaves nothing of its own');
+  // A caller of the function is checked the same way as one of the command.
+  await assert.rejects(probe(machine, { rawDir: path.join(blocker, 'raw') }), /raw output directory .* cannot be made or written/);
+  await assert.rejects(probe(machine, { reportFile: out }), /is a directory/);
+  await assert.rejects(probe(machine, { reportFile: 'report.json' }), /the report file must be an absolute path, got "report\.json"/);
+});
 
 test('a login old enough to be refreshed inside a trial refuses the run before anything is created, probed or spent', async () => {
   const machine = fakeMachine({ loginAgeHours: 187 });
@@ -517,6 +802,7 @@ test('the command rejects bad arguments with exit 2, a message and the usage, an
   const io = capture();
   assert.equal(await main(['--help'], { ...io, overrides: overridesFor(machine) }), 0);
   assert.match(io.out.stdout, /usage: node evals\/codex-isolation-probe\.mjs --codex/);
+  assert.match(io.out.stdout, /Exit 2: bad usage, or the run could not start: no\s+session was started\. Exit 3: the probe itself broke after a session had started/);
   assert.ok(!fs.existsSync(machine.workRoot));
   assert.deepEqual(runsOf(machine), []);
 });

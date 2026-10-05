@@ -42,17 +42,31 @@ export function assertLogin(authFile) {
 export const LOGIN_REFRESH_AFTER_HOURS = 192;
 /** The oldest login a run may copy: six hours short of that, the room a run needs to end before the refresh. */
 export const DEFAULT_MAX_LOGIN_AGE_HOURS = LOGIN_REFRESH_AFTER_HOURS - 6;
+/** How far after "now" a file's date may read and still be now: a file written this instant carries a fraction
+ * of a millisecond the clock (`Date.now()`) has dropped, and some file systems keep dates to two seconds. */
+const CLOCK_SLACK_MS = 2000;
 
 /** Throws unless the login `authFile` was last written less than `maxAgeHours` before `now` (milliseconds);
  * returns `{ ageHours }`. Why: once a login is that old Codex refreshes it, and a refresh made by a trial
  * rewrites the trial's COPY and may leave the real login invalid, which a run must not risk for a
  * measurement (`odd/tasks/codex-parity.md`, Constraints). The age is the file's date and nothing else: the
  * login is never opened. That date is when the file was last written, ASSUMED to be its last refresh; a file
- * restored or touched since then looks younger than its login is. */
+ * restored or touched since then looks younger than its login is.
+ *
+ * An age that cannot be trusted is refused too, since "under the limit" would then mean nothing: a `now` that
+ * is not a finite number (every comparison with the NaN it makes is false, so it would pass), and a file
+ * dated after `now`, whose age comes out negative and so under any limit. */
 export function assertLoginFresh(authFile, { maxAgeHours = DEFAULT_MAX_LOGIN_AGE_HOURS, now = Date.now() } = {}) {
   if (typeof maxAgeHours !== 'number' || !(maxAgeHours > 0)) throw new Error(`the oldest login allowed must be a positive number of hours, got ${JSON.stringify(maxAgeHours)}`);
+  if (typeof now !== 'number' || !Number.isFinite(now)) throw new Error(`the time the age of the Codex login is measured from must be a finite number of milliseconds, got ${typeof now === 'number' ? String(now) : JSON.stringify(now)}`);
   assertLogin(authFile);
-  const ageHours = (now - fs.statSync(authFile).mtimeMs) / 3_600_000;
+  const written = fs.statSync(authFile).mtimeMs;
+  const aheadMs = written - now;
+  if (aheadMs > CLOCK_SLACK_MS) {
+    const ahead = aheadMs < 3_600_000 ? `${Math.round(aheadMs / 1000)} seconds` : `${(aheadMs / 3_600_000).toFixed(1)} hours`;
+    throw new Error(`the Codex login at ${authFile} is dated ${ahead} in the future (${new Date(written).toISOString()}, and it is ${new Date(now).toISOString()}): its age cannot be told, so neither can whether Codex would refresh it inside a trial. Check this machine's clock and the date of that file, then run again`);
+  }
+  const ageHours = Math.max(0, -aheadMs) / 3_600_000;
   if (ageHours > maxAgeHours) {
     throw new Error(`the Codex login at ${authFile} was last written ${ageHours.toFixed(1)} hours ago, over the ${maxAgeHours} hours allowed: Codex refreshes a ChatGPT login in place once it is about eight days (${LOGIN_REFRESH_AFTER_HOURS} hours) old, and a refresh made inside a trial's copy may leave the real login invalid. Use the real Codex once, so that it refreshes its own login, then run again`);
   }

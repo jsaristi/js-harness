@@ -9,10 +9,13 @@
 //                      codex-probe: obeys the prompt of `codex-isolation-probe.mjs` as a real Codex is asked to
 //   FAKE_AGENT_PROBE_ACTS  for codex-probe, a comma-separated list of what it does besides, each the stand-in for
 //                      one thing the probe must see: engram (saves the memory in the trial's engram store), utf16
-//                      (writes its files as PowerShell 5.1 does), echo (repeats the nonce in its answer), refresh
-//                      (rewrites its own copy of the login), no-nonce (leaves the nonce file out), wrong-home
-//                      (its shell reports the real CODEX_HOME), login (changes the real login), leak (writes the
-//                      nonce, its thread id and a file named after the sandbox into the real home)
+//                      (writes its files as PowerShell 5.1 does), echo (repeats the nonce in its answer), echo-thread
+//                      (repeats its thread id in its answer and on stderr), refresh (rewrites its own copy of the
+//                      login), no-nonce (leaves the nonce file out), wrong-home (its shell reports the real
+//                      CODEX_HOME), login (changes the real login), leak (writes the nonce, its thread id and a
+//                      file named after the sandbox into the real home)
+//   FAKE_AGENT_PROBE_ENV   for codex-probe, a JSON object of what its shell reports for a variable in place of
+//                      the truth (`<HOME>` in a value is the home it was given)
 //   FAKE_AGENT_REAL_HOME   for those acts, the fixture home that stands for the real one: never the machine's own
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
 //                      prompt, cwd, argv, the workspace entries and the whole environment it received
@@ -265,7 +268,8 @@ switch (mode) {
     const threadId = crypto.randomUUID();
     // PowerShell 5.1 redirects into UTF-16LE with a byte order mark.
     const encoded = (text) => (acts.has('utf16') ? Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]) : text);
-    const seen = (name) => (acts.has('wrong-home') && name === 'CODEX_HOME' ? path.join(realHome, '.codex') : process.env[name] ?? '');
+    const told = Object.fromEntries(Object.entries(JSON.parse(process.env.FAKE_AGENT_PROBE_ENV || '{}')).map(([name, value]) => [name, String(value).replaceAll('<HOME>', process.env.HOME)]));
+    const seen = (name) => (acts.has('wrong-home') && name === 'CODEX_HOME' ? path.join(realHome, '.codex') : told[name] ?? process.env[name] ?? '');
     fs.writeFileSync(path.join(cwd, 'probe-env.txt'), encoded(names.map((name) => `${name}=${seen(name)}\r\n`).join('')));
     if (!acts.has('no-nonce')) fs.writeFileSync(path.join(cwd, 'probe-nonce.txt'), encoded(`${nonce}\r\n`));
     // Something Codex itself leaves in its home, whatever the real one turns out to write there.
@@ -287,10 +291,11 @@ switch (mode) {
       { type: 'thread.started', thread_id: threadId },
       { type: 'turn.started' },
       ...items.map((item, index) => ({ type: 'item.completed', item: { id: `item_${index}`, ...item } })),
-      { type: 'item.completed', item: { id: `item_${items.length}`, type: 'agent_message', text: acts.has('echo') ? `PROBE-DONE ${nonce}` : 'PROBE-DONE' } },
+      { type: 'item.completed', item: { id: `item_${items.length}`, type: 'agent_message', text: ['PROBE-DONE', acts.has('echo') && nonce, acts.has('echo-thread') && threadId].filter(Boolean).join(' ') } },
       { type: 'turn.completed', usage: { input_tokens: 2000, cached_input_tokens: 1500, output_tokens: 80, reasoning_output_tokens: 30 } },
     ];
     console.error('fake codex: a line on stderr');
+    if (acts.has('echo-thread')) console.error(`fake codex: thread ${threadId}`);
     console.log(['Reading prompt from stdin...', ...events.map((event) => JSON.stringify(event))].join('\n'));
     break;
   }

@@ -30,15 +30,18 @@
 //    saw a completed turn, the environment file says every variable points into the sandbox, the nonce file
 //    is there. An engram store the model never wrote to is a warning, since a real model may not call a tool.
 // The nonce is never printed, logged or written to the report, which is scrubbed of it last; the thread id
-// of each session is a needle too and is in no output either. The raw stdout and stderr that `--raw-dir`
-// keeps do hold both: they are evidence, in a directory the scan is known not to read.
+// of each session is a needle too, and the report is scrubbed of it the same way, wherever Codex repeated it.
+// The raw stdout and stderr that `--raw-dir` keeps do hold both: they are evidence, in a directory the scan
+// is known not to read.
+// A SESSION THAT WAS PAID FOR IS NEVER LOST TO THE PROBE'S OWN FAILURE. Where the report and the raw output go
+// is checked before the first session; after one, a probe that breaks says so in the report and exits 3.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCodexOutput } from './agent-output.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
-import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
+import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, removeLogin, seedFromCodexTemplate } from './codex-home.mjs';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import {
   cap, defaultTrees, diffLines, diffSnapshots, errorMessage, findInStore, leakHits, makeNonce, makeScrubber, megabytes, parseEnvLines, reportDiff, scanFile, seconds,
@@ -145,6 +148,33 @@ function assertRawDir(rawDir, trees) {
   if (tree) throw new Error(`the raw output directory ${rawDir} is inside ${tree.root}, which is scanned (${tree.name}): the raw output holds the nonce, so the scan would find it there. Pass a directory outside the real home`);
 }
 
+/** Throws unless a file can be written in `dir`, which is made if it is not there: a file is written and
+ * removed, since that is the only answer a file system gives. `what` names the directory in the message. */
+function assertWritableDir(dir, what) {
+  const trial = path.join(dir, `.js-harness-write-check-${process.pid}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(trial, '');
+    fs.rmSync(trial);
+  } catch (err) {
+    throw new Error(`${what} ${dir} cannot be made or written (${errorMessage(err)})`);
+  }
+}
+
+/** Throws unless the report can be written at `reportFile`: its directory takes a file, and the path itself
+ * is not a directory. */
+function assertReportFile(reportFile) {
+  if (typeof reportFile !== 'string' || !path.isAbsolute(reportFile)) throw new Error(`the report file must be an absolute path, got ${JSON.stringify(reportFile)}`);
+  let isDirectory = false;
+  try {
+    isDirectory = fs.statSync(reportFile, { throwIfNoEntry: false })?.isDirectory() === true;
+  } catch {
+    // not a path that leads anywhere yet: the directory check below says why
+  }
+  if (isDirectory) throw new Error(`the report cannot be written: ${reportFile} is a directory`);
+  assertWritableDir(path.dirname(reportFile), 'the report cannot be written: its directory');
+}
+
 // ---- looking inside the sandbox ----------------------------------------------------------------------
 
 /** A text file as a shell may have written it: UTF-16LE with or without its byte order mark (PowerShell 5.1
@@ -161,12 +191,28 @@ function decodeText(buffer) {
 const REQUIRED_INSIDE = ['CODEX_HOME', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'ENGRAM_DATA_DIR'];
 const ENV_FILE_LIMIT = 64 * 1024;
 
+/** Where a path the agent's shell printed leads, as the file system resolves it, or null when it names no
+ * place that can be told: a relative value, or one that cannot be resolved. A value is judged by where it
+ * leads and never by the names it passes through: `<home>\..\..\elsewhere` holds the sandbox's name and is
+ * not in it, and so is a link inside the home that points out of it (`resolveReal`). On Windows the spelling
+ * Git Bash prints (`/c/Users/x`) is the drive it means. */
+function placeOf(value) {
+  const text = process.platform === 'win32' ? value.replace(/^\/([A-Za-z])(?=\/|$)/, '$1:') : value;
+  if (!path.isAbsolute(text)) return null;
+  try {
+    return resolveReal(text);
+  } catch {
+    return null;
+  }
+}
+
 /** What the agent's shell said its environment is, against what the sandbox set (`codexSandboxEnv`): the
- * `lines` of the file for the names asked, and for each variable the sandbox sets a `check`: `same`, `inside`
- * (another spelling of a path that still holds the sandbox's unique name), `outside`, `differs` (not a path)
- * or `empty`. `problems` is what fails the arm, `warnings` the rest. Values compare as paths do: either
- * separator, any case on Windows, no trailing separator, no quotes. */
-function inspectEnv({ workspace, home, token, port }) {
+ * `lines` of the file for the names asked, and for each variable the sandbox sets a `check`: `same` (the value
+ * set: either separator, any case on Windows, no trailing separator, no quotes), `inside` (another path, which
+ * resolves to the trial's home or below it), `outside` (one that does not, whatever its text holds),
+ * `differs` (not a path, and not the value set) or `empty`. `problems` is what fails the arm, `warnings` the
+ * rest. `home` is the trial's home and `port` its engram port. */
+export function inspectEnv({ workspace, home, port }) {
   let text;
   try {
     text = decodeText(fs.readFileSync(path.join(workspace, ENV_FILE)).subarray(0, ENV_FILE_LIMIT));
@@ -177,25 +223,31 @@ function inspectEnv({ workspace, home, token, port }) {
   const got = (name) => (parsed[name] ?? '').trim().replace(/^(["'])(.*)\1$/, '$2');
   const plain = (value) => fold(value.replaceAll('\\', '/').replace(/\/+$/, ''));
   const expected = codexSandboxEnv({ home, engramPort: port, inherited: {} });
+  const realHome = resolveReal(home);
+  const places = {};
   const checks = {};
   for (const [name, want] of Object.entries(expected)) {
-    const isPath = fold(want).includes(fold(token));
     const value = got(name);
     if (value === '') checks[name] = 'empty';
     else if (plain(value) === plain(want)) checks[name] = 'same';
-    else if (isPath) checks[name] = fold(value).includes(fold(token)) ? 'inside' : 'outside';
-    else checks[name] = 'differs';
+    // The path variables are the ones the sandbox points into the home; the rest are words (a port, a switch).
+    else if (!plain(want).startsWith(plain(home))) checks[name] = 'differs';
+    else {
+      places[name] = placeOf(value);
+      checks[name] = places[name] !== null && isWithin(realHome, places[name]) ? 'inside' : 'outside';
+    }
   }
   const problems = [];
   const warnings = [];
-  const said = { empty: 'not set', outside: 'outside the sandbox', differs: 'not the value the sandbox set', inside: 'inside the sandbox under another path than the one set' };
+  const said = { empty: 'not set', outside: "outside the trial's home", differs: 'not the value the sandbox set', inside: "inside the trial's home under another path than the one set" };
   for (const [name, check] of Object.entries(checks)) {
     if (name === 'ENGRAM_PORT') continue;
     if (REQUIRED_INSIDE.includes(name) && (check === 'empty' || check === 'outside')) problems.push(`${name} is ${said[check]}`);
     else if (check !== 'same') warnings.push(`the agent's shell reports ${name} ${said[check]}`);
   }
-  // A CODEX_HOME that only holds the sandbox's name could still be another directory of it.
-  if (checks.CODEX_HOME === 'inside' && !plain(got('CODEX_HOME')).endsWith(plain(`/${token}/home/.codex`))) problems.push("CODEX_HOME is inside the sandbox but is not the trial's own");
+  // A CODEX_HOME in the trial's home could still be another directory of it: Codex would run on a home the
+  // trial did not prepare, and the login would not be where the cleanup deletes it.
+  if (checks.CODEX_HOME === 'inside' && path.relative(resolveReal(codexHomeOf(home)), places.CODEX_HOME) !== '') problems.push("CODEX_HOME is inside the trial's home but is not the trial's own");
   if (checks.ENGRAM_PORT !== 'same') {
     const value = got('ENGRAM_PORT');
     problems.push(`ENGRAM_PORT is ${value === '' ? 'not set' : value}${value === String(REAL_ENGRAM_PORT) ? ', where the real engram server listens' : ''}, not the trial's port ${port}`);
@@ -283,7 +335,7 @@ const homeSnapshot = (home) => snapshotTrees([{ name: 'home', root: home, mode: 
 
 /** Everything the probe learns from the sandbox once the agent has exited, written onto `result`. It runs
  * BEFORE the config's cleanup, which deletes the copy of the login. */
-async function inspectSandbox({ p, result, run, config, root, home, workspace, token, prepared, seeded }) {
+async function inspectSandbox({ p, result, run, config, root, home, workspace, prepared, seeded }) {
   const { o, nonce } = p;
   const reading = config.reader(run);
   const output = parseCodexOutput(run.stdout);
@@ -300,7 +352,7 @@ async function inspectSandbox({ p, result, run, config, root, home, workspace, t
   };
   result.events = tallyEvents(run.stdout);
 
-  const { problems, warnings, ...env } = inspectEnv({ workspace, home, token, port: prepared?.engramPort });
+  const { problems, warnings, ...env } = inspectEnv({ workspace, home, port: prepared?.engramPort });
   result.env = env;
   let nonceWritten = false;
   try {
@@ -341,19 +393,58 @@ async function inspectSandbox({ p, result, run, config, root, home, workspace, t
 
 // ---- one arm -----------------------------------------------------------------------------------------
 
-/** One trial of one arm, built the way the eval builds it. Returns the arm's report and the real trees'
- * snapshot taken after it, which is the next arm's "before". `p` is the shared probe context. */
-async function runArm(p, arm, before) {
+/** How an engram process that outlived a trial is tied to it, in the words a failure uses. */
+const ENGRAM_EVIDENCE = {
+  port: "its command line names the trial's engram port",
+  sandbox: "its command line names the trial's sandbox",
+  listening: "the trial's engram port still answers",
+};
+
+/** Whose the engram processes running after a trial are. `before` and `after` are the two listings
+ * (`{ pid, command }`), `port` the trial's engram port, `root` its sandbox, and `listening` whether that port
+ * still answers. A process that was not running before is the trial's (`survivors`, each with its `evidence`)
+ * only when something ties it to the trial: its command line names the port, as a whole number, or a path
+ * under the sandbox, or the port still answers, in which case something of the trial is alive and a new
+ * engram process is what it would be. Being new is not enough: other sessions on this machine start engram
+ * servers of their own at any moment, and failing a paid trial for one of theirs proves nothing. Those are
+ * `unattributed`, which the arm reports as a warning. A command line is read whole and reported cut. */
+export function attributeEngram({ before, after, port, root, listening }) {
+  const known = new Set(before.map((entry) => entry.pid));
+  // Either separator, doubled or not (a path inside a JSON argument), and any case on Windows.
+  const slashed = (text) => fold(String(text).replace(/[\\/]+/g, '/'));
+  const sandbox = slashed(root);
+  const namesPort = new RegExp(`(?<![0-9])${port}(?![0-9])`);
+  const survivors = [];
+  const unattributed = [];
+  for (const entry of after) {
+    if (known.has(entry.pid)) continue;
+    const command = String(entry.command ?? '');
+    const evidence = [namesPort.test(command) && 'port', slashed(command).includes(sandbox) && 'sandbox', listening === true && 'listening'].filter(Boolean);
+    const row = { pid: entry.pid, command: command.slice(0, 200) };
+    if (evidence.length > 0) survivors.push({ ...row, evidence });
+    else unattributed.push(row);
+  }
+  return { survivors, unattributed };
+}
+
+/** The report of an arm before anything is known of it. */
+const newArm = (arm) => ({
+  arm, sandboxToken: null, failures: [], warnings: [], raw: null, leak: null,
+  engram: { applies: arm === 'current', port: null, db: null, exercised: false, memSave: false, nonce: false, listening: null, survivors: [], unattributed: [] },
+});
+
+/** One trial of one arm, built the way the eval builds it. Fills `result`, the arm's report (`newArm`), and
+ * returns the real trees' snapshot taken after it, which is the next arm's "before". `p` is the shared probe
+ * context. Whatever it throws, it throws after its own cleanup. */
+async function runArm(p, result) {
   const { o } = p;
+  const { arm } = result;
   const root = fs.mkdtempSync(path.join(o.workRoot, SANDBOX_PREFIX));
   const token = path.basename(root);
   p.tokens.push(token);
+  result.sandboxToken = token;
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'workspace');
-  const result = {
-    arm, sandboxToken: token, failures: [], warnings: [], raw: null,
-    engram: { applies: arm === 'current', port: null, db: null, exercised: false, memSave: false, nonce: false, listening: null, survivors: [] },
-  };
   const cleanupFailures = [];
   const loginBefore = loginStamp(p.authFile);
   let config = null;
@@ -378,21 +469,41 @@ async function runArm(p, arm, before) {
   };
   // The config's own cleanup (it deletes the copy of the login and kills what listens on the trial's engram
   // port, which the sweep by path cannot reach), then two facts the arm is judged by: nothing listens on
-  // that port, and no engram process the trial started is still running.
+  // that port, and no engram process of the trial is still running.
   let stopped = false;
   const stopTrial = async () => {
-    if (stopped || !isPrepared) return;
+    if (stopped) return;
     stopped = true;
+    if (isPrepared) {
+      try {
+        await config.cleanup?.({ home, workspace, prepared });
+      } catch (err) {
+        cleanupFailures.push(`the cleanup of the trial failed: ${errorMessage(err)}`);
+      }
+    }
+    // The copy of the login goes whatever the config did, or never got to do: a `prepare` that throws after
+    // the login was copied has no cleanup to call, and a sandbox that is kept must not hold a credential.
     try {
-      await config.cleanup?.({ home, workspace, prepared });
+      removeLogin({ authFile: p.authFile, home });
     } catch (err) {
-      cleanupFailures.push(`the cleanup of the trial failed: ${errorMessage(err)}`);
+      cleanupFailures.push(`could not delete the trial's copy of the login: ${errorMessage(err)}`);
     }
     if (!prepared?.engramPort) return;
-    result.engram.listening = await (o.isListening ?? portIsListening)(prepared.engramPort);
+    try {
+      result.engram.listening = await (o.isListening ?? portIsListening)(prepared.engramPort);
+    } catch (err) {
+      cleanupFailures.push(`could not tell whether anything still listens on the trial's engram port ${prepared.engramPort}: ${errorMessage(err)}`);
+    }
     const listed = await listEngram();
     if (listed.error) result.engram.listingError ??= listed.error;
-    else if (baseline) result.engram.survivors = listed.list.filter((entry) => !baseline.has(entry.pid)).map((entry) => ({ pid: entry.pid, command: String(entry.command).slice(0, 200) }));
+    else if (baseline) {
+      Object.assign(result.engram, attributeEngram({ before: baseline, after: listed.list, port: prepared.engramPort, root, listening: result.engram.listening }));
+      const { unattributed } = result.engram;
+      if (unattributed.length > 0) {
+        const what = unattributed.length === 1 ? 'an engram process' : `${unattributed.length} engram processes`;
+        result.warnings.push(`${what} started during the trial that nothing ties to it (${unattributed.map((entry) => `pid ${entry.pid}`).join(', ')}): no command line names the trial's port or its sandbox, and that port does not answer, so it is taken for another session's`);
+      }
+    }
   };
   let swept = false;
   try {
@@ -408,7 +519,7 @@ async function runArm(p, arm, before) {
       result.engram.port = prepared?.engramPort ?? null;
       const listed = await listEngram();
       if (listed.error) result.engram.listingError = listed.error;
-      else baseline = new Set(listed.list.map((entry) => entry.pid));
+      else baseline = listed.list;
       seeded = await homeSnapshot(home);
       const agent = resolveAgent(config, { effort: o.effort, task: undefined, home, workspace, prepared });
       // Under the trial's own env, as a measured trial reads it, and never the real one: `codex --version`
@@ -417,6 +528,9 @@ async function runArm(p, arm, before) {
       result.codexVersion = await o.readVersion(config, agent.env);
       if (!result.codexVersion) throw new Error(`${config.command} --version printed nothing under the trial's environment: no session is started on a binary that cannot say what it is`);
       p.log(`${arm}: running the agent (one session, never retried)`);
+      // Counted before it starts: from here on the run has cost something, and whatever breaks must not
+      // take what this session showed with it.
+      p.sessions += 1;
       const began = performance.now();
       run = await runProcess({ ...agent, env: childEnv(agent.env), cwd: workspace, input: probePrompt(p.nonce), timeoutMs: o.timeoutMs });
       result.wallMs = Math.round(performance.now() - began);
@@ -440,7 +554,7 @@ async function runArm(p, arm, before) {
         }
       }
       try {
-        await inspectSandbox({ p, result, run, config, root, home, workspace, token, prepared, seeded });
+        await inspectSandbox({ p, result, run, config, root, home, workspace, prepared, seeded });
       } catch (err) {
         result.error = `the sandbox could not be inspected: ${errorMessage(err)}`;
       }
@@ -454,7 +568,11 @@ async function runArm(p, arm, before) {
     await stopTrial();
     result.realLogin = loginStamp(p.authFile) === loginBefore ? 'unchanged' : 'changed';
     p.log(`${arm}: checking the real trees`);
-    return { result, after: await p.snapshot(`after:${arm}`, p.needles()) };
+    try {
+      return await p.snapshot(`after:${arm}`, p.needles());
+    } catch (err) {
+      throw new Error(`the real trees could not be checked after the trial: ${errorMessage(err)}`);
+    }
   } finally {
     if (!swept) sweepSandbox();
     await stopTrial();
@@ -476,9 +594,10 @@ function armFailures(result) {
   if (result.realLogin === 'changed') failures.push(`${label}: the real Codex login changed during the trial (its size or its date; its content is never read): use the real Codex once and see that it still works before any other run`);
   const { engram } = result;
   if (engram.port && engram.listening === true) failures.push(`${label}: something still listens on the trial's engram port ${engram.port} after the trial: an engram server it started was not stopped`);
-  for (const entry of engram.survivors) failures.push(`${label}: an engram process that was not running before the trial is still running after it: pid ${entry.pid} (${entry.command})`);
+  for (const entry of engram.survivors) failures.push(`${label}: an engram process the trial started is still running after it (${entry.evidence.map((kind) => ENGRAM_EVIDENCE[kind]).join(', and ')}): pid ${entry.pid} (${entry.command})`);
   if (engram.listingError) failures.push(`${label}: inconclusive: the engram processes could not be listed (${engram.listingError}), so "no engram process of the trial is left" is unproven`);
   for (const hit of result.leak?.hits ?? []) failures.push(`${label}: LEAK: the real ${hit.tree} has ${hit.path} (${hit.via} holds the ${hit.found.join(' and the ')})`);
+  if (result.probeError) failures.push(`${label}: inconclusive: the probe itself broke after the trial began (${result.probeError}), so the checks it did not reach prove nothing about this arm`);
   return failures;
 }
 
@@ -490,25 +609,32 @@ function armFailures(result) {
  * `arms` is `['minimal', 'current']` by default, the cheaper one first; `model` and `effort`; `controlMs`,
  * the length of the no-agent window that measures live churn (0 skips it); `timeoutMs`, the agent's bound;
  * `maxLoginAgeHours` (`assertLoginFresh`); `rawDir`, where each arm's raw stdout and stderr are written;
- * `keepSandbox`. For tests and unusual machines: `commandArgs` (what comes before Codex's own arguments when
- * the command is a launcher), `workRoot` and `checkWorkRoot(root, { realHome })`, `realHome`, `localAppData`,
- * `appData` and `tempDir` (default: the real ones), `trees` (default `codexTrees`), `nonce`, `runInit` (passed
- * to the seed), `adaptConfig(config, { arm })`, `readVersion(config, env)` (default `probeVersion`),
- * `sweep`, `allocatePort`, `releasePort` and `killPort` (the config builders' seams), `isListening(port)`,
- * `listEngram()`, `wait(ms)`, `log(message)`, and `concurrency`, `chunkSize`, `openRead` and `retryDelayMs`
- * (how a real file is read).
+ * `reportFile`, where the caller will write the report (only checked here, never written); `keepSandbox`.
+ * For tests and unusual machines: `commandArgs` (what comes before Codex's own arguments when the command is
+ * a launcher), `workRoot` and `checkWorkRoot(root, { realHome })`, `realHome`, `localAppData`, `appData` and
+ * `tempDir` (default: the real ones), `trees` (default `codexTrees`), `nonce`, `runInit` (passed to the
+ * seed), `adaptConfig(config, { arm })`, `readVersion(config, env)` (default `probeVersion`), `sweep`,
+ * `allocatePort`, `releasePort` and `killPort` (the config builders' seams), `isListening(port)`,
+ * `listEngram()`, `takeSnapshot(trees, options)` (default `snapshotTrees`), `wait(ms)`, `log(message)`, and
+ * `concurrency`, `chunkSize`, `openRead` and `retryDelayMs` (how a real file is read).
  *
- * Before anything is created or spent, it throws unless the command is a real binary, the login exists and is
- * young enough, the work root is a place trials can run and the raw directory is not one the scan reads.
- * Then: the template of the real `.codex` is built once if the current arm runs (and removed whatever
- * happens), the real trees are snapshotted, and each arm reads `--version` in its own sandbox (an arm whose
- * binary does not answer fails there, with no session) and runs ONE agent process. An arm that fails ends
- * the run: the arms after it are listed in `skipped` and not started.
+ * Before anything is spent, it throws unless the command is a real binary, the login exists and is young
+ * enough, the work root is a place trials can run, the raw directory is not one the scan reads, and the raw
+ * directory and the report's can be written (both are made here). Then: the template of the real `.codex`
+ * is built once if the current arm runs (and removed whatever happens), the real trees are snapshotted, and
+ * each arm reads `--version` in its own sandbox (an arm whose binary does not answer fails there, with no
+ * session) and runs ONE agent process. An arm that fails ends the run: the arms after it are listed in
+ * `skipped` and not started.
+ *
+ * It throws only while no session has started. Once one has, whatever breaks in the probe itself (a real tree
+ * that cannot be read, a sandbox that cannot be made) is written into the report instead: the arm fails as
+ * inconclusive with a `probeError`, the report lists it in `incomplete`, and what the session showed is kept.
  *
  * `ok` is true only when every arm ran and, for each, the positive controls hold (the agent completed its
  * session, the environment file says the sandbox, the nonce file is there), no needle (the nonce, the
  * sandbox's name, the session's thread id) was found in a real tree, the real login kept its size and date,
- * and nothing was left listening or running. The report is scrubbed of the nonce before it is returned. */
+ * and nothing was left listening or running. The report is scrubbed of the nonce and of every thread id
+ * before it is returned. */
 export async function runCodexIsolationProbe(options) {
   const given = Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
   const realHome = given.realHome ?? os.homedir();
@@ -545,6 +671,10 @@ export async function runCodexIsolationProbe(options) {
   (o.checkWorkRoot ?? assertWorkRoot)(workRoot, { realHome });
   const trees = o.trees ?? codexTrees(o);
   if (o.rawDir !== undefined) assertRawDir(o.rawDir, trees);
+  // Last of the checks, because these two make a directory: what a paid session prints and what the run
+  // concludes need somewhere to go, and that is found out now, not after the sessions.
+  if (o.reportFile !== undefined) assertReportFile(o.reportFile);
+  if (o.rawDir !== undefined) assertWritableDir(o.rawDir, 'the raw output directory');
 
   const workRootCreated = !exists(workRoot);
   fs.mkdirSync(workRoot, { recursive: true });
@@ -569,7 +699,7 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
   const began = performance.now();
   const hashing = [];
   const snapshot = async (label, needles = []) => {
-    const taken = await snapshotTrees(trees, { needles, concurrency: o.concurrency, chunkSize: o.chunkSize, openRead: o.openRead, retryDelayMs: o.retryDelayMs });
+    const taken = await (o.takeSnapshot ?? snapshotTrees)(trees, { needles, concurrency: o.concurrency, chunkSize: o.chunkSize, openRead: o.openRead, retryDelayMs: o.retryDelayMs });
     const all = Object.values(taken.trees);
     hashing.push({
       label, ms: taken.ms, files: all.reduce((total, tree) => total + tree.files.size, 0), bytes: all.reduce((total, tree) => total + tree.bytes, 0),
@@ -587,13 +717,16 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
     tool: 'codex-isolation-probe', startedAt, node: process.version, platform: process.platform, codex: o.codex, codexVersion: null, workRoot: o.workRoot, workRootCreated,
     config: { model: o.model, effort: o.effort }, login: { ageHours: Math.round(login.ageHours * 10) / 10, maxAgeHours: o.maxLoginAgeHours },
     trees: trees.map(({ name, mode, statOnly }) => ({ name, mode, ...(statOnly?.length > 0 && { statOnly: statOnly.length }) })), notes: unread,
-    template: null, control: null, arms: [], skipped: [], hashing,
+    template: null, control: null, arms: [], skipped: [], incomplete: [], hashing,
   };
   const tokens = [];
   const threadIds = [];
+  // Every spelling of every thread id so far: what the real trees are scanned for, and what the report is
+  // scrubbed of.
+  const threadNeedles = () => [...new Set(threadIds.flatMap((id) => [id, id.toLowerCase(), id.toUpperCase()]))];
   let templateDir = null;
   const p = {
-    o, nonce, authFile, tokens, threadIds, snapshot, log: o.log,
+    o, nonce, authFile, tokens, threadIds, snapshot, log: o.log, sessions: 0,
     buildConfig: (arm) => (arm === 'current' ? codexCurrentConfig({ ...configOptions, seed: seedFromCodexTemplate(templateDir, { runInit: o.runInit }) }) : codexMinimalConfig(configOptions)),
     // The nonce, the unique name of every sandbox so far (also lowercased, as a Windows tool may spell a
     // path) and the thread id of every session so far, which is what anything Codex or a hook records about
@@ -601,7 +734,7 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
     needles: () => [
       { label: 'nonce', values: [nonce] },
       { label: 'sandbox', values: [...new Set(tokens.flatMap((token) => [token, token.toLowerCase()]))] },
-      ...(threadIds.length > 0 ? [{ label: 'thread id', values: [...new Set(threadIds.flatMap((id) => [id, id.toLowerCase(), id.toUpperCase()]))] }] : []),
+      ...(threadIds.length > 0 ? [{ label: 'thread id', values: threadNeedles() }] : []),
     ],
   };
 
@@ -634,21 +767,32 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
         report.skipped.push({ arm, reason: `the ${failed} arm failed, and an arm is a real, paid trial: fix what failed, then run this arm` });
         continue;
       }
-      const { result, after } = await runArm(p, arm, before);
-      const diff = diffSnapshots(before, after);
-      const unreadable = Object.entries(after.trees).flatMap(([tree, { unreadable: list }]) => list.map((entry) => `${tree}/${entry.path} (${entry.code})`));
-      result.leak = { hits: leakHits(after, before), unreadable: cap(unreadable, 50), diff: reportDiff(diff) };
-      if (controlDiff) {
-        const split = splitByControl(diff, controlDiff);
-        result.leak.fresh = reportDiff(split.fresh);
-        result.leak.baseline = reportDiff(split.baseline);
+      const result = newArm(arm);
+      try {
+        const after = await runArm(p, result);
+        const diff = diffSnapshots(before, after);
+        const unreadable = Object.entries(after.trees).flatMap(([tree, { unreadable: list }]) => list.map((entry) => `${tree}/${entry.path} (${entry.code})`));
+        const leak = { hits: leakHits(after, before), unreadable: cap(unreadable, 50), diff: reportDiff(diff) };
+        if (controlDiff) {
+          const split = splitByControl(diff, controlDiff);
+          leak.fresh = reportDiff(split.fresh);
+          leak.baseline = reportDiff(split.baseline);
+        }
+        result.leak = leak;
+        if (unreadable.length > 0) result.warnings.push(`${unreadable.length} real file(s) could not be read, so they were not scanned for the nonce, the sandbox's name or the thread id (listed in the report)`);
+        before = after;
+      } catch (err) {
+        // Before any session nothing is lost by stopping: the run could not start, and the caller is told so.
+        // After one, the session is paid for: what it showed stays in the report, the arm fails as
+        // inconclusive, and no other session is started.
+        if (p.sessions === 0) throw err;
+        result.probeError = errorMessage(err);
+        report.incomplete.push(`${arm}: ${result.probeError}`);
       }
-      if (unreadable.length > 0) result.warnings.push(`${unreadable.length} real file(s) could not be read, so they were not scanned for the nonce, the sandbox's name or the thread id (listed in the report)`);
       result.failures = armFailures(result);
       result.ok = result.failures.length === 0;
       report.arms.push(result);
       if (!result.ok) failed = arm;
-      before = after;
     }
   } finally {
     // Always, also when the run dies: the template is a copy of the real setup.
@@ -666,9 +810,14 @@ async function probeUnder(o, { authFile, login, configOptions, trees, workRootCr
   report.codexVersion = report.arms.find((arm) => arm.codexVersion)?.codexVersion ?? null;
   report.failures = [...report.arms.flatMap((arm) => arm.failures), ...cleanupFailures];
   report.warnings = report.arms.flatMap((arm) => arm.warnings.map((warning) => `${arm.arm}: ${warning}`));
-  report.ok = report.failures.length === 0 && report.skipped.length === 0 && report.arms.length === o.arms.length;
+  report.ok = report.failures.length === 0 && report.skipped.length === 0 && report.incomplete.length === 0 && report.arms.length === o.arms.length;
   report.wallMs = Math.round(performance.now() - began);
-  return JSON.parse(makeScrubber(nonce)(JSON.stringify(report)));
+  // Last, the report loses what the real trees were scanned for and a reader has no use for: the nonce, and
+  // every thread id, which Codex repeats where it likes (its answer, its stderr, an error message). A thread
+  // id is replaced as JSON spells it. The sandbox's name stays: the report says which sandbox it was.
+  const ids = threadNeedles().filter((id) => id.length >= 8).map((id) => JSON.stringify(id).slice(1, -1));
+  const scrubbed = ids.reduce((text, id) => text.split(id).join('<thread id>'), makeScrubber(nonce)(JSON.stringify(report)));
+  return JSON.parse(scrubbed);
 }
 
 // ---- the summary and the command line ------------------------------------------------------------------
@@ -680,7 +829,7 @@ const names = ({ count, paths }, limit = 12) => (count === 0 ? '' : `: ${paths.s
 export function formatSummary(report) {
   const lines = [];
   const hashed = report.hashing.reduce((total, entry) => ({ ms: total.ms + entry.ms, bytes: Math.max(total.bytes, entry.bytes), files: Math.max(total.files, entry.files) }), { ms: 0, bytes: 0, files: 0 });
-  lines.push(`codex isolation probe: ${report.ok ? 'PASS' : 'FAIL'}`);
+  lines.push(`codex isolation probe: ${report.ok ? 'PASS' : report.incomplete.length > 0 ? 'INCOMPLETE' : 'FAIL'}`);
   lines.push(`codex ${report.codex} (${report.codexVersion ?? 'version not read'}) as ${report.config.model}, effort ${report.config.effort}; the login was last written ${report.login.ageHours} h ago (limit ${report.login.maxAgeHours} h)`);
   lines.push(`work root: ${report.workRoot} (${report.workRootCreated ? 'made by this run' : 'was there already'})`);
   lines.push(`real trees: ${report.hashing.length} passes in ${seconds(hashed.ms)}, ${hashed.files} files, ${megabytes(hashed.bytes)} content-hashed per pass (${report.hashing.map((entry) => `${entry.label} ${seconds(entry.ms)}`).join(', ')})`);
@@ -721,7 +870,8 @@ export function formatSummary(report) {
       const e = arm.engram;
       const port = e.listening === true ? 'STILL LISTENING afterwards: FAILED' : e.listening === false ? 'nothing listens on it afterwards' : 'what listens on it was not checked';
       const processes = e.survivors.length > 0 ? `; ${e.survivors.length} engram process(es) of the trial left running: FAILED` : e.listingError ? '; engram processes could not be listed: INCONCLUSIVE' : ', and no engram process of the trial is left';
-      lines.push(`  engram: port ${e.port}, ${port}${processes}`);
+      const others = e.unattributed.length > 0 ? ` (${e.unattributed.length} started meanwhile that nothing ties to the trial)` : '';
+      lines.push(`  engram: port ${e.port}, ${port}${processes}${others}`);
       lines.push(`  engram store of the trial: ${e.db ?? 'none'}; exercised: ${e.exercised}${e.exercised ? ` (${[e.memSave && 'the memory', e.nonce && 'the nonce'].filter(Boolean).join(', ')})` : ''}${e.applies ? '' : ' (the minimal arm has no engram)'}`);
     }
     if (arm.sandbox) {
@@ -743,10 +893,13 @@ export function formatSummary(report) {
         const baseline = diffLines(arm.leak.baseline, '    ');
         if (baseline.length > 0) lines.push('  also changed in the control window (live writers):', ...baseline);
       }
+    } else {
+      lines.push(`  leak scan of the real trees: not done${arm.probeError ? ` (${arm.probeError})` : ''}`);
     }
   }
   for (const { arm, reason } of report.skipped) lines.push('', `arm ${arm}: not run (${reason})`);
   if (report.failures.length > 0) lines.push('', 'failures:', ...report.failures.map((failure) => `  - ${failure}`));
+  if (report.incomplete.length > 0) lines.push('', 'the probe itself broke after a session had started, so this result is incomplete:', ...report.incomplete.map((entry) => `  - ${entry}`));
   return `${lines.join('\n')}\n`;
 }
 
@@ -765,7 +918,9 @@ and gentle-ai state was untouched.
 --work-root   where sandboxes and the template are built (default: js-harness-evals-work next to this repository)
 
 Exit 0: every positive control held, nothing of the run was found in the real trees, the real login kept its
-size and date, and nothing was left running. Exit 1: not so. Exit 2: bad usage, or the run could not start.`;
+size and date, and nothing was left running. Exit 1: not so. Exit 2: bad usage, or the run could not start: no
+session was started. Exit 3: the probe itself broke after a session had started, or could not write its
+report: what it printed is what is known, and it proves nothing either way.`;
 
 const DEFAULT_REPORT = fileURLToPath(new URL('./runs/codex-isolation-probe.json', import.meta.url));
 
@@ -812,8 +967,10 @@ function parseArgs(argv) {
   return options;
 }
 
-/** The command line. Resolves to the exit code (0 pass, 1 fail, 2 usage or a run that could not start). `io`
- * is for tests: `stdout` and `stderr` writers, and `overrides`, options merged into
+/** The command line. Resolves to the exit code: 0 pass, 1 fail, 2 usage or a run that could not start (no
+ * session was started), 3 a probe that broke after a session had started or could not write its report. The
+ * summary is printed before the report is written, so a report that cannot be written costs nothing a
+ * session showed. `io` is for tests: `stdout` and `stderr` writers, and `overrides`, options merged into
  * `runCodexIsolationProbe` (a fake home, the fake agent). Progress goes to stderr and never names the
  * sandbox: the output of a probe is often read back into a live session whose transcript the probe scans. */
 export async function main(argv = process.argv.slice(2), { stdout = process.stdout, stderr = process.stderr, overrides = {} } = {}) {
@@ -833,15 +990,25 @@ export async function main(argv = process.argv.slice(2), { stdout = process.stdo
   const { arm, report: reportFile, help, ...options } = args;
   let report;
   try {
-    report = await runCodexIsolationProbe({ ...options, arms: arm === 'both' ? ARMS : [arm], log: (message) => stderr.write(`${message}\n`), ...overrides, nonce });
+    report = await runCodexIsolationProbe({ ...options, reportFile, arms: arm === 'both' ? ARMS : [arm], log: (message) => stderr.write(`${message}\n`), ...overrides, nonce });
   } catch (err) {
+    // It throws only while no session has started: nothing was spent.
     stderr.write(`the Codex isolation probe could not run: ${makeScrubber(nonce)(errorMessage(err))}\n`);
     return 2;
   }
-  fs.mkdirSync(path.dirname(reportFile), { recursive: true });
-  fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
+  // The summary first: from here on sessions may have been paid for, and nothing below may cost what they showed.
   stdout.write(formatSummary(report));
-  stdout.write(`\nfull report: ${reportFile}\n`);
+  let written = false;
+  try {
+    fs.mkdirSync(path.dirname(reportFile), { recursive: true });
+    fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
+    written = true;
+    stdout.write(`\nfull report: ${reportFile}\n`);
+  } catch (err) {
+    stderr.write(`the report could not be written to ${reportFile} (${errorMessage(err)}): the summary on stdout is all that is kept of this run\n`);
+  }
+  if (report.incomplete.length > 0) stderr.write(`the Codex isolation probe broke after a session had started, so what it reports is incomplete: ${report.incomplete.join('; ')}\n`);
+  if (!written || report.incomplete.length > 0) return 3;
   return report.ok ? 0 : 1;
 }
 

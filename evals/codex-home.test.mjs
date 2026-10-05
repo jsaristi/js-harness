@@ -676,6 +676,27 @@ test('a login past the limit is refused with its age, why a refresh inside a cop
   assert.throws(() => assertLoginFresh(authFile, { now, maxAgeHours: 24 }), /over the 24 hours allowed/);
 });
 
+test('an age that cannot be trusted is refused with what was found: a login dated in the future, a clock that is not a time', () => {
+  const now = Date.now();
+  const ahead = loginWrittenHoursAgo(-2, now);
+  assert.throws(() => assertLoginFresh(ahead, { now }), (err) => {
+    assert.match(err.message, /is dated 2\.0 hours in the future/, 'how far ahead');
+    assert.ok(err.message.includes(new Date(now + 2 * HOUR).toISOString()) && err.message.includes(new Date(now).toISOString()), 'the two dates');
+    assert.match(err.message, /its age cannot be told/);
+    return true;
+  });
+  // However high the limit: the age is not known to be under it.
+  assert.throws(() => assertLoginFresh(ahead, { now, maxAgeHours: 10_000 }), /in the future/);
+  assert.throws(() => assertLoginFresh(loginWrittenHoursAgo(-1 / 60, now), { now }), /is dated 60 seconds in the future/, 'a minute ahead is ahead');
+  // A file written this very second can read a hair ahead of a clock that counts whole milliseconds, or of a
+  // file system that keeps coarser dates: that is now, and its age is zero.
+  assert.deepEqual(assertLoginFresh(loginWrittenHoursAgo(-1 / 3600, now), { now }), { ageHours: 0 });
+  const authFile = loginWrittenHoursAgo(1, now);
+  for (const [bad, shown] of [[Number.NaN, 'NaN'], [Number.POSITIVE_INFINITY, 'Infinity'], [Number.NEGATIVE_INFINITY, '-Infinity'], [String(now), `"${now}"`], [null, 'null']]) {
+    assert.throws(() => assertLoginFresh(authFile, { now: bad }), (err) => err.message === `the time the age of the Codex login is measured from must be a finite number of milliseconds, got ${shown}`, shown);
+  }
+});
+
 test('assertLoginFresh needs a login that is there and a limit that is a positive number', () => {
   const realHome = makeRealHome();
   const authFile = path.join(realHome, '.codex', 'auth.json');
