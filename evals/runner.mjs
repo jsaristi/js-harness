@@ -442,6 +442,44 @@ function readerOf(config) {
   return reader;
 }
 
+/** The counts every reading's `usage` carries (`agent-output.mjs`), and whether each is a number: the other two
+ * are the agent's own objects, kept as given. */
+const USAGE_KEYS = { inputTokens: true, outputTokens: true, turns: true, usage: false, costUsd: true, modelUsage: false, subagents: true };
+/** The fields of a record that do not come from the usage: the trial's identity, what the grader scored, and
+ * what the runner measured. */
+const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt'];
+
+/** Throws unless `reading`, what the reader of config `configName` returned, has the shape `agent-output.mjs`
+ * documents; returns it. The message names the first key that is missing or mistyped. Why it is checked: a
+ * reading is used as it comes, so a reader that forgot `parsed` would have every trial recorded as
+ * unparsable, and one that returned no `stop` would never stop a suite on the cap, both without a word.
+ *
+ * No key of `usage` may be a field the runner fills itself, because `usage` is spread into the record: a
+ * count named `score` would replace what the grader scored, and one named `error` would be replaced. That is
+ * an error and not a silent win for the graded field, so that the record keeps the order and the fields it
+ * has always had and a reader that collides is fixed where it is written. */
+export function assertReading(reading, configName) {
+  const show = (value) => (value === undefined || Number.isNaN(value) ? String(value) : JSON.stringify(value));
+  if (!isObject(reading)) throw new Error(`config ${configName}: its reader returned no reading: an object is expected, got ${show(reading)}`);
+  const refuse = (problem) => {
+    throw new Error(`config ${configName}: its reader returned a reading of the wrong shape: ${problem}`);
+  };
+  const { stop, usage } = reading;
+  if (stop !== null) {
+    if (!isObject(stop)) refuse(`"stop" must be null or an object with a kind and a message, got ${show(stop)}`);
+    if (typeof stop.kind !== 'string' || stop.kind === '') refuse(`"stop.kind" must be a non-empty string, got ${show(stop.kind)}`);
+    if (typeof stop.message !== 'string') refuse(`"stop.message" must be a string, got ${show(stop.message)}`);
+  }
+  for (const name of ['parsed', 'failed']) if (typeof reading[name] !== 'boolean') refuse(`"${name}" must be true or false, got ${show(reading[name])}`);
+  if (!isObject(usage)) refuse(`"usage" must be an object, got ${show(usage)}`);
+  for (const [name, isCount] of Object.entries(USAGE_KEYS)) {
+    if (usage[name] === undefined) refuse(`"usage.${name}" is missing`);
+    if (isCount && usage[name] !== null && !Number.isFinite(usage[name])) refuse(`"usage.${name}" must be a number or null, got ${show(usage[name])}`);
+  }
+  for (const name of RECORD_FIELDS) if (name in usage) refuse(`"usage.${name}" is a field of the record the runner fills itself, and a usage count must not replace it`);
+  return reading;
+}
+
 /** The short error string for an agent run that did not finish cleanly, else `null`. What the process did
  * (the timeout, its exit code) comes before what its reader made of the output (`reading`). */
 function agentError(run, reading) {
@@ -493,7 +531,8 @@ export function removeDir(dir, label, log, sweepAgain) {
  * time it resolves, so the caller may remove what it owns and end the process.
  *
  * What the agent printed is read once, by the config's reader (`readerOf`): whether the run was such a stop,
- * the usage counts of the record, and whether the agent's own output is an error.
+ * the usage counts of the record, and whether the agent's own output is an error. A reading of the wrong
+ * shape rejects the trial (`assertReading`), after the raw output was kept.
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
@@ -579,7 +618,9 @@ export async function runTrial({
     // would fail the same way, and a recorded one would score the untouched fixture and, on resume, be
     // skipped for good. Stop like a cap instead.
     if (run.spawnError) return { status: 'stopped', reason: 'spawn', message: run.spawnError.message };
-    const reading = read(run);
+    // Checked before it is used, and after the raw output was written: a reading of the wrong shape rejects the
+    // trial, and what the agent printed is still there to be read again once the reader is fixed.
+    const reading = assertReading(read(run), config.name);
     if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
 
     const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal });

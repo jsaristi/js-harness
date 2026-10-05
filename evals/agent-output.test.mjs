@@ -109,12 +109,29 @@ test('summarizeCodexUsage sums each count over the completed turns, with the cac
     modelUsage: null,
     subagents: null,
     cachedInputTokens: 900,
+    // Neither turn says: an older CLI's usage has no such count.
+    cacheWriteInputTokens: null,
     reasoningOutputTokens: 20,
   });
 });
 
+// The usage of a `turn.completed` as codex-cli 0.159.1 printed it on 2026-10-05 (the probe's current arm):
+// five counts, the third of which the documentation read for T1 did not list.
+const REAL_USAGE = { input_tokens: 142308, cached_input_tokens: 113024, cache_write_input_tokens: 0, output_tokens: 593, reasoning_output_tokens: 0 };
+
+test('summarizeCodexUsage keeps the cache-write count the real CLI reports, as a total of its own next to the cached input', () => {
+  const second = { ...REAL_USAGE, input_tokens: 500, cached_input_tokens: 0, cache_write_input_tokens: 400 };
+  const summary = summarizeCodexUsage(turnsOf(REAL_USAGE, second));
+  assert.deepEqual(Object.keys(summary), ['inputTokens', 'outputTokens', 'turns', 'usage', 'costUsd', 'modelUsage', 'subagents', 'cachedInputTokens', 'cacheWriteInputTokens', 'reasoningOutputTokens']);
+  assert.equal(summary.cacheWriteInputTokens, 400);
+  assert.equal(summary.inputTokens, 142808, 'and it is added to nothing: whether it is a part of the input is not known');
+  assert.deepEqual(summary.usage, [REAL_USAGE, second], 'the raw usage keeps all five counts');
+  assert.equal(summarizeCodexUsage(turnsOf(REAL_USAGE)).cacheWriteInputTokens, 0, 'the zero both real runs reported is a measurement');
+  assert.equal(summarizeCodexUsage(turnsOf(REAL_USAGE, USAGE)).cacheWriteInputTokens, null, 'one turn does not say, so the sum is unknown');
+});
+
 test('summarizeCodexUsage reports unknown, never zero, when no turn completed or the output could not be read', () => {
-  const unknown = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: null, reasoningOutputTokens: null };
+  const unknown = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: null, cacheWriteInputTokens: null, reasoningOutputTokens: null };
   assert.deepEqual(summarizeCodexUsage(null), unknown);
   assert.deepEqual(summarizeCodexUsage(turnsOf()), unknown);
 });
@@ -153,6 +170,38 @@ test('classifyCodexFailure stops on a failed turn whose message is the usage cap
   assert.equal(kindOf(jsonl(...started, turnFailed('Your refresh token was already used. Please log out and sign in again.'))), 'auth');
   // The message that names the cause may be on the `error` event and not on the `turn.failed` after it.
   assert.equal(kindOf(jsonl(...started, errorEvent(CAP), turnFailed('the turn failed'))), 'cap');
+});
+
+// A RULE CHOSEN WITHOUT A REAL FAILED SAMPLE: no real Codex run has failed here yet, so which events a failed
+// turn prints, and in what order, is assumed (an `error` event, then the `turn.failed`).
+test('classifyCodexFailure reads a failed turn by its own message and by the last error event before it, and by nothing earlier', () => {
+  const RECOVERED = 'Rate limit reached. Reconnecting... 2/5';
+  const UNRELATED = 'stream disconnected before completion';
+  // A rate-limit notice Codex recovered from, then a turn that failed for something else: a plain failure. Read
+  // as a cap, it would stop the suite at this trial on every resume.
+  const mixed = jsonl(...started, errorEvent(RECOVERED), agentMessage('working'), errorEvent(UNRELATED), turnFailed(UNRELATED));
+  assert.equal(classifyCodexFailure(run(mixed)), null);
+  const reading = readCodexOutput(run(mixed));
+  assert.deepEqual({ stop: reading.stop, parsed: reading.parsed, failed: reading.failed }, { stop: null, parsed: true, failed: true });
+  assert.equal(kindOf(jsonl(...started, errorEvent(CAP), errorEvent(RECOVERED), errorEvent(UNRELATED), turnFailed(UNRELATED))), null, 'however many came before');
+  assert.equal(kindOf(mixed, { stderr: 'the stream ended' }), null);
+  // A notice of a turn that then completed was recovered from: it says nothing of a later turn that failed.
+  assert.equal(kindOf(jsonl(...started, errorEvent(RECOVERED), agentMessage('done'), turnCompleted(USAGE), { type: 'turn.started' }, turnFailed('the model refused'))), null);
+
+  // The cap still stops: in the `turn.failed` itself, or in the `error` event right before it.
+  assert.deepEqual(classifyCodexFailure(run(jsonl(...started, errorEvent('Reconnecting... 1/5'), errorEvent(UNRELATED), turnFailed(CAP)))), { kind: 'cap', message: CAP });
+  assert.deepEqual(classifyCodexFailure(run(jsonl(...started, errorEvent('Reconnecting... 1/5'), errorEvent(CAP), turnFailed('the turn failed')))), { kind: 'cap', message: CAP });
+  assert.equal(kindOf(jsonl(...started, errorEvent(RECOVERED), errorEvent(AUTH), turnFailed('the turn failed'))), 'auth');
+  // Every failed turn is read that way, not only the last.
+  assert.equal(kindOf(jsonl(...started, errorEvent(CAP), turnFailed('the turn failed'), { type: 'turn.started' }, errorEvent(UNRELATED), turnFailed(UNRELATED))), 'cap');
+  // Not decided by the rule above, and erring on the side of stopping, as the patterns do: a failed turn with
+  // no `error` event of its own is read with the one before it, recovered or not.
+  assert.equal(kindOf(jsonl(...started, errorEvent(RECOVERED), turnFailed(UNRELATED))), 'cap');
+  // With no failed turn and none completed, it is the last `error` event that says how the run ended.
+  assert.equal(kindOf(jsonl(...started, errorEvent(RECOVERED), errorEvent(UNRELATED))), null);
+  assert.equal(kindOf(jsonl(...started, errorEvent(UNRELATED), errorEvent(CAP))), 'cap');
+  // An `error` event after the turn failed is not what failed it.
+  assert.equal(kindOf(jsonl(...started, errorEvent(UNRELATED), turnFailed(UNRELATED), errorEvent(RECOVERED))), null);
 });
 
 test('classifyCodexFailure ignores a failed turn that is neither the cap nor the login', () => {
@@ -196,8 +245,27 @@ test('readCodexOutput reads a completed turn: no stop, parsed, not failed, and t
     stop: null,
     parsed: true,
     failed: false,
-    usage: { inputTokens: 1000, outputTokens: 50, turns: null, usage: [USAGE], costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: 800, reasoningOutputTokens: 20 },
+    usage: { inputTokens: 1000, outputTokens: 50, turns: null, usage: [USAGE], costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: 800, cacheWriteInputTokens: null, reasoningOutputTokens: 20 },
   });
+});
+
+// As codex-cli 0.159.1 printed it on 2026-10-05, twice and before `turn.started`, in every session of the
+// probe's current arm, which passes that flag: a notice is an ITEM of type `error`, not an `error` event.
+const HOOK_NOTICE = { type: 'item.completed', item: { id: 'item_0', type: 'error', message: '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.' } };
+
+test('a notice Codex prints is an item, not an event: a session that completed with notices is a result, never failed and never stopped', () => {
+  const stdout = jsonl(started[0], HOOK_NOTICE, HOOK_NOTICE, { type: 'turn.started' }, agentMessage('PROBE-DONE'), turnCompleted(REAL_USAGE));
+  assert.deepEqual(parseCodexOutput(stdout), { threadId: 'thread-1', result: 'PROBE-DONE', turns: [REAL_USAGE], turnFailed: false, errors: [] });
+  const reading = readCodexOutput(run(stdout, { exitCode: 0 }));
+  assert.deepEqual({ stop: reading.stop, parsed: reading.parsed, failed: reading.failed }, { stop: null, parsed: true, failed: false });
+  assert.equal(reading.usage.inputTokens, 142308);
+  // Whatever a notice says, it is not what a failure is read from: not in a session that completed, and not
+  // in one whose turn failed for something else.
+  const loud = { type: 'item.completed', item: { id: 'item_0', type: 'error', message: CAP } };
+  assert.equal(readCodexOutput(run(jsonl(started[0], loud, { type: 'turn.started' }, agentMessage('done'), turnCompleted(REAL_USAGE)), { exitCode: 0 })).stop, null);
+  const refused = readCodexOutput(run(jsonl(started[0], loud, loud, { type: 'turn.started' }, errorEvent('the model refused'), turnFailed('the model refused'))));
+  assert.deepEqual({ stop: refused.stop, failed: refused.failed }, { stop: null, failed: true });
+  assert.equal(kindOf(jsonl(started[0], loud, { type: 'turn.started' })), null, 'nor in one that ended without a turn');
 });
 
 test('readCodexOutput marks a failed turn, and a run that never completed one, as failed; and as a stop only for the cap or the login', () => {

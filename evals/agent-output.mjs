@@ -102,8 +102,17 @@ export function readClaudeOutput(run) {
 // codex-cli 0.159.1): `thread.started` (`thread_id`), `turn.started`, `turn.completed` (`usage`),
 // `turn.failed`, `item.started` and `item.completed` (an `item` with a `type`: `agent_message` with its
 // `text`, `reasoning`, `command_execution`, and more), and `error`.
+//
+// Seen in two real sessions of codex-cli 0.159.1 that completed (2026-10-05, the isolation probe): the events
+// above but `turn.failed` and `error`; the notice of a flag as an ITEM of type `error`, printed before
+// `turn.started`; a fifth count in `usage`, `cache_write_input_tokens`. No real run has failed here yet, so
+// what a failed turn prints is still what the documentation says and nothing more.
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
+
+/** The message of a `turn.failed` (`error.message`) or of an `error` event (`message`); a bare string is read
+ * too, defensively. */
+const codexMessage = (event) => event.error?.message ?? event.message ?? event.error;
 
 /** The events among the lines of `stdout`: every line that is a JSON object with a `type`. Any other line
  * is ignored, because the CLI may print other text there (a banner, a blank line), and a run that was
@@ -130,8 +139,9 @@ function codexEvents(stdout) {
  * An `error` event does not by itself fail a turn: `turn.failed` is the event that says so, and a turn that
  * completed after an `error` (a dropped stream Codex reconnected, say) is a result. That Codex prints such
  * recoverable notices as `error` events is an ASSUMPTION, not verified against a real run. An item of type
- * `error` is not read at all: it is a warning (an unrecognized setting, for one), as `bin/codex-review.mjs`
- * found. */
+ * `error` is not read at all: it is a notice (an unrecognized setting, as `bin/codex-review.mjs` found, or a
+ * flag that is on: every real session run with `--dangerously-bypass-hook-trust` printed one, twice, and
+ * completed). */
 export function parseCodexOutput(stdout) {
   const events = codexEvents(stdout);
   if (events.length === 0) return null;
@@ -143,8 +153,7 @@ export function parseCodexOutput(stdout) {
       output.turns.push(isObject(event.usage) ? event.usage : null);
     } else if (event.type === 'turn.failed' || event.type === 'error') {
       if (event.type === 'turn.failed') output.turnFailed = true;
-      // `turn.failed` carries `error.message` and `error` a `message`; a bare string is read too, defensively.
-      const message = event.error?.message ?? event.message ?? event.error;
+      const message = codexMessage(event);
       if (isNonEmptyString(message)) output.errors.push(message);
     } else if (event.type === 'item.completed' && event.item?.type === 'agent_message' && typeof event.item.text === 'string') {
       output.result = event.item.text;
@@ -158,6 +167,9 @@ export function parseCodexOutput(stdout) {
  *    tokens are in it once; Claude Code's cache counts come on top of its `input_tokens`, which is why its
  *    summary adds them and this one must not. The cached part is kept as `cachedInputTokens`, because a list
  *    price charges it at another rate.
+ *  - `cacheWriteInputTokens` is the sum of `cache_write_input_tokens`, a count the real CLI reports (0 in both
+ *    real runs seen) and the documentation read for T1 did not list. Whether it is a part of `input_tokens`
+ *    is NOT verified, so it is added to nothing; an older CLI that does not report it leaves it `null`.
  *  - `outputTokens` is the sum of `output_tokens`. `reasoningOutputTokens` is the sum of
  *    `reasoning_output_tokens`, kept apart: whether the reasoning tokens are already inside `output_tokens`
  *    is NOT verified, so the two are never added here, and whoever prices them decides with evidence.
@@ -180,11 +192,13 @@ export function summarizeCodexUsage(output) {
     modelUsage: null,
     subagents: null,
     cachedInputTokens: sum('cached_input_tokens'),
+    cacheWriteInputTokens: sum('cache_write_input_tokens'),
     reasoningOutputTokens: sum('reasoning_output_tokens'),
   };
 }
 
-// UNVERIFIED ASSUMPTIONS, both patterns. The exact wording Codex uses when the ChatGPT plan's usage cap is
+// UNVERIFIED ASSUMPTIONS, both patterns, and still so after the first real runs (2026-10-05), which both
+// completed. The exact wording Codex uses when the ChatGPT plan's usage cap is
 // hit, and when it is not logged in, has not been observed in a real run: these are the phrases such
 // messages are expected to hold (Claude Code's own, plus an HTTP 429, a quota, an HTTP 401, the login
 // command and a refresh token that no longer works). They err on the side of stopping: a suite stopped by
@@ -197,20 +211,50 @@ const CODEX_AUTH_PATTERN = /not logged in|codex login|(?:log|sign) in again|unau
  * else `null`, with the same meaning and the same caution as `classifyAgentFailure`.
  *
  * A run whose turn completed, and in which none failed, is a result, whatever else was printed: nothing is
- * read. Otherwise the messages of the `turn.failed` and `error` events are read, and never the agent's own
- * messages, which may well talk about limits and logins (a task can be about them). When the run also
- * exited non-zero its stderr is read after those, since a CLI that dies may say why only there; with no
- * event at all the raw stdout and stderr are read, for a non-zero exit code only, as for Claude Code. A run
- * the timeout killed is read only when a `turn.failed` said why it failed, and its stderr never: an agent
- * that printed "rate limit" while it retried, and then hung, timed out, which is a recorded result. */
+ * read. Otherwise what is read is never the agent's own messages, which may well talk about limits and
+ * logins (a task can be about them), nor an item of type `error`, which is a notice.
+ *
+ * WHICH MESSAGES DECIDE, A RULE CHOSEN WITHOUT A REAL FAILED SAMPLE (no real Codex run has failed here yet):
+ * for each `turn.failed`, the message of the `error` event last printed before it and then its own, and no
+ * `error` event earlier than that one. Codex prints an `error` event for what it recovers from too (ASSUMED),
+ * so an earlier one is a notice: a rate limit it retried through, followed by a turn that failed for
+ * something else, is that turn's failure and not the cap, and read as a cap it would stop the suite at the
+ * same trial on every resume. An `error` event of a turn that then completed is such a notice, and is not
+ * carried into the next turn. What the rule cannot tell apart, it reads: a failed turn with no `error` event
+ * of its own is read with the one before it, recovered or not, which errs on the side of stopping, as the
+ * patterns do. With no failed turn and none completed, the last `error` event is how the run ended.
+ *
+ * When the run also exited non-zero its stderr is read after those, since a CLI that dies may say why only
+ * there; with no event at all the raw stdout and stderr are read, for a non-zero exit code only, as for
+ * Claude Code. A run the timeout killed is read only when a `turn.failed` said why it failed, and its stderr
+ * never: an agent that printed "rate limit" while it retried, and then hung, timed out, which is a recorded
+ * result. */
 export function classifyCodexFailure({ stdout = '', stderr = '', exitCode = null, timedOut = false }) {
-  const output = parseCodexOutput(stdout);
+  const events = codexEvents(stdout);
   const died = !timedOut && Number.isInteger(exitCode) && exitCode !== 0;
   let texts = [];
-  if (!output) {
+  if (events.length === 0) {
     if (died) texts = [`${stdout}\n${stderr}`.trim()];
-  } else if (output.turnFailed || (output.turns.length === 0 && !timedOut)) {
-    texts = [...output.errors, ...(died && isNonEmptyString(stderr) ? [stderr.trim()] : [])];
+  } else {
+    const deciding = [];
+    let lastError = null;
+    let turnFailed = false;
+    let completed = 0;
+    for (const event of events) {
+      if (event.type === 'error') {
+        lastError = codexMessage(event);
+      } else if (event.type === 'turn.completed') {
+        completed += 1;
+        lastError = null;
+      } else if (event.type === 'turn.failed') {
+        turnFailed = true;
+        deciding.push(lastError, codexMessage(event));
+        lastError = null;
+      }
+    }
+    if (turnFailed || (completed === 0 && !timedOut)) {
+      texts = [...(turnFailed ? deciding : [lastError]), ...(died ? [stderr.trim()] : [])].filter(isNonEmptyString);
+    }
   }
   for (const message of texts) {
     if (CODEX_AUTH_PATTERN.test(message)) return { kind: 'auth', message };
