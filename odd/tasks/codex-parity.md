@@ -91,11 +91,11 @@ nothing committed.
 
 ## Tasks
 ### Slice A — the agent seam
-- [ ] T1 The runner reads an agent's output through a parser the config carries: Claude's is
+- [x] T1 The runner reads an agent's output through a parser the config carries: Claude's is
   today's behavior; Codex's reads `codex exec --json` JSONL (final message, usage summed over
   `turn.completed`, cached input counted once, `turn.failed` and `error` classified as cap, auth
   or failure); the fake agent gains a Codex mode (route: delegated writer, strict TDD — trigger:
-  2+ non-trivial files)
+  2+ non-trivial files) — `1f63fd0`, reviewed (Progress, 2026-10-04)
 - [ ] T2 A Codex sandbox home and its two arms: `CODEX_HOME` inside the trial's home with a copy
   of `auth.json`; `minimal` is an empty home with user config ignored; `current` is a frozen
   copy of the real `~/.codex` with its paths rewritten, plus `js-harness init`; the real binary
@@ -103,6 +103,10 @@ nothing committed.
 - [ ] T3 Isolation proof for Codex: the real `~/.codex`, engram and gentle-ai trees hashed before
   and after one real trial per arm, the report committed, and the real login verified afterwards
   (route: delegated writer for the probe, the two real trials run by the parent)
+- [ ] T1r Reader hardening from T1's review, after T3 because its first part needs what a real
+  failed Codex run prints: which messages decide a stop when a recovered notice and an unrelated
+  `turn.failed` are in the same run, pinned by a test of that mixed case; and the runner refuses
+  a reading of the wrong shape and lets no key of `usage` replace a graded field
 
 ### Slice B — suite and report
 - [ ] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
@@ -193,7 +197,28 @@ nothing committed.
   so it was fast-forwarded to `main` with the pending files in place (`main` had touched none of
   them), and `bin/check.mjs` in this tree now removes git's hook variables from its sensors.
   Sebastián's rules for this worktree are in Constraints.
+- 2026-10-04, T1 closed. Commits: `ea0a860` (this document and the roadmap note; gate green,
+  assessed `passive`, no review due, so the reviewed boundary moved to it) and `1f63fd0` (T1;
+  gate green in about ten minutes, `core.bare` still `false` in the main checkout after both).
+  - gentle-ai: `1f63fd0` assessed `medium`, review due (`slice_budget_reached`, 751 lines);
+    consent granted under the standing pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-ecdddec225d6c967`, authority burned). Two advisory findings, neither
+    blocking, both taken as T1r: a WARNING, once a `turn.failed` is present the classifier reads
+    every collected message, earlier recoverable `error` notices included, so a recovered
+    rate-limit notice followed by an unrelated failure would stop the run as a cap and every
+    resume would stop at the same trial (`evals/agent-output.mjs:212-213`, no test of that mixed
+    case); and a SUGGESTION, the runner checks that `reader` is a function but not what it
+    returns, and spreads `usage` after the graded fields (`evals/runner.mjs:582-597`).
+  - Codex: `js-harness codex-review --base ea0a860`, recorded as `reviewed`
+    (`ea0a860..1f63fd0`); `check --push` reports the one code commit covered. Its text: "No
+    actionable defects were identified in the inspected changes. Confidence is limited: diff
+    output was truncated, tests were not run, and subagent tooling required for deeper review
+    was unavailable." So it is a weak review of a 751-line commit, the limit
+    `odd/tasks/evals.md` already records for ranges of this size.
+  - The real `~/.codex/auth.json` still carries its 2026-09-27 date after that Codex run. Codex
+    treats a login as stale after about eight days, so T3 checks the date again before it copies
+    the file: a refresh that happens inside a copy is the risk Constraints names.
 
 ## Next step
-Commit this document, then T1, one gate at a time and in the background; run T1's reviews
-(gentle-ai, then `js-harness codex-review --base <boundary>`); then T2.
+T2, with one writer; then T3's two real trials, which settle what T1 left assumed and what T1r
+needs.
