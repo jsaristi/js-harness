@@ -10,6 +10,12 @@ import {
   POWERSHELL_ROW_FUNCTION, killProcesses, killSurvivors, killTree, parseSnapshot, selectTrees,
 } from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
+import { readClaudeOutput } from './agent-output.mjs';
+
+// What an agent printed is read by the reader its config carries (see `readerOf`); this file knows no CLI's
+// output format, only which reader a config without one gets. These three are Claude Code's, kept under the
+// names they had while they lived here, for the callers that import them from the runner.
+export { classifyAgentFailure, parseAgentOutput, summarizeUsage } from './agent-output.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -31,78 +37,6 @@ export function parseTap(text) {
   });
   if (tests === null || pass === null || fail === null || tests === 0 || pass > tests) return null;
   return { tests, pass, fail };
-}
-
-/** The `type: "result"` object of `claude --print --output-format json` stdout, or `null`. Newer CLIs
- * may print an array of messages; the result is then its last `result` element. */
-export function parseAgentOutput(stdout) {
-  let value;
-  try {
-    value = JSON.parse(String(stdout).trim());
-  } catch {
-    return null;
-  }
-  if (Array.isArray(value)) value = value.filter((item) => isObject(item) && item.type === 'result').pop();
-  return isObject(value) && value.type === 'result' ? value : null;
-}
-
-/** Tokens, turns and cost from a parsed agent result. Input counts the cache-creation and cache-read tokens
- * too, because they are all tokens the plan's usage cap charges for. Those counts and `usage` are the main
- * thread's only. The whole session, subagents included, is `costUsd` (`total_cost_usd`, Claude Code's list
- * cost), `modelUsage` (the per-model token counts, as given) and `subagents` (`subagent_stats.spawned`).
- * Missing data is `null`, never 0: a zero would read as a measurement. */
-export function summarizeUsage(output) {
-  const usage = isObject(output?.usage) ? output.usage : null;
-  // Per count: a usage object that lacks one of the fields a count is summed from leaves that count
-  // unknown, rather than a sum of whatever happened to be there.
-  const sum = (...fields) => (usage && fields.every((field) => Number.isFinite(usage[field])) ? fields.reduce((total, field) => total + usage[field], 0) : null);
-  return {
-    inputTokens: sum('input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'),
-    outputTokens: sum('output_tokens'),
-    turns: Number.isFinite(output?.num_turns) ? output.num_turns : null,
-    usage,
-    // A cost is never negative; one that is says the field is broken, not that the session paid back.
-    costUsd: Number.isFinite(output?.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null,
-    modelUsage: isObject(output?.modelUsage) ? output.modelUsage : null,
-    subagents: Number.isFinite(output?.subagent_stats?.spawned) ? output.subagent_stats.spawned : null,
-  };
-}
-
-const CAP_PATTERN = /usage limit|hit your .*limit|limit reached|rate limit/i;
-const AUTH_PATTERN = /not logged in|please run \/login|invalid api key|oauth token/i;
-
-/** The texts an error result carries. Claude Code reports some failures as `result`, and others, such as
- * a startup failure, with no `result` at all and the same text as stderr in `errors` (an array of
- * strings in the installed CLI's schema). Objects with a `message` are read too, defensively. */
-function errorTexts(parsed) {
-  const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
-  return [parsed.result, ...errors.map((error) => (isObject(error) ? error.message : error))].filter(
-    (text) => typeof text === 'string' && text.trim() !== '',
-  );
-}
-
-/** Whether an agent run died of the plan's usage cap or of authentication: `{ kind: 'cap' | 'auth',
- * message }`, else `null`. Both mean the machine, not the configuration, failed the trial, so the suite
- * must stop instead of recording a zero (the predecessor lost 141 trials that way).
- *
- * A parsed result counts only when it is an error (`is_error`), and then its `result` and `errors` are
- * read: a successful answer that merely talks about rate limits is not a cap. With no parsable result,
- * the raw text counts only for a real non-zero exit code, and never for a run the timeout killed: a hung
- * agent that logged "rate limit" before the kill timed out, which is a recorded result, where a cap
- * stop would rerun that long trial on every resume. */
-export function classifyAgentFailure({ stdout = '', stderr = '', exitCode = null, timedOut = false }) {
-  const parsed = parseAgentOutput(stdout);
-  let texts = [];
-  if (parsed) {
-    if (parsed.is_error === true) texts = errorTexts(parsed);
-  } else if (!timedOut && Number.isInteger(exitCode) && exitCode !== 0) {
-    texts = [`${stdout}\n${stderr}`.trim()];
-  }
-  for (const message of texts) {
-    if (AUTH_PATTERN.test(message)) return { kind: 'auth', message };
-    if (CAP_PATTERN.test(message)) return { kind: 'cap', message };
-  }
-  return null;
 }
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
@@ -496,12 +430,25 @@ export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEO
   return { score: tap.pass / tap.tests, passed: tap.pass, total: tap.tests, error: null };
 }
 
-/** The short error string for an agent run that did not finish cleanly, else `null`. */
-function agentError(run, output) {
+/** The reader of `config`'s agent output: `config.reader`, a function of the finished run that says what it
+ * printed means (`agent-output.mjs` documents the reading). A config that carries none is read as Claude
+ * Code's `--print --output-format json`, which is what every config was before a second CLI was measured,
+ * so those configs and their recorded numbers stand as they are. A `reader` that is not a function throws:
+ * falling back to the default would read one CLI's output with another's rules, and every trial would be
+ * recorded as unparsable. */
+function readerOf(config) {
+  const reader = config.reader ?? readClaudeOutput;
+  if (typeof reader !== 'function') throw new Error(`config ${config.name}: "reader" must be a function of the agent run, got ${JSON.stringify(reader)}`);
+  return reader;
+}
+
+/** The short error string for an agent run that did not finish cleanly, else `null`. What the process did
+ * (the timeout, its exit code) comes before what its reader made of the output (`reading`). */
+function agentError(run, reading) {
   if (run.timedOut) return 'timeout';
   if (run.exitCode !== 0) return `agent-exit-${run.exitCode ?? run.signal}`;
-  if (!output) return 'agent-output-unparsable';
-  return output.is_error === true ? 'agent-error' : null;
+  if (!reading.parsed) return 'agent-output-unparsable';
+  return reading.failed ? 'agent-error' : null;
 }
 
 /** The file stem for a trial's raw agent output. */
@@ -545,6 +492,9 @@ export function removeDir(dir, label, log, sweepAgain) {
  * when the grader was interrupted stay, as evidence), and every cleanup below has run by the
  * time it resolves, so the caller may remove what it owns and end the process.
  *
+ * What the agent printed is read once, by the config's reader (`readerOf`): whether the run was such a stop,
+ * the usage counts of the record, and whether the agent's own output is an error.
+ *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
  * the workspace and fresh for every trial, because anything an earlier trial left in a shared one (a
@@ -582,6 +532,8 @@ export async function runTrial({
 }) {
   // Nothing is made for a suite that is already being interrupted.
   if (signal?.aborted) return { status: 'interrupted' };
+  // Before anything is made or spent: a config that cannot be read would cost a whole agent run to find out.
+  const read = readerOf(config);
   const startedAt = now().toISOString();
   // Absolute, whatever the caller passed: the agent runs with the workspace as its cwd, so a relative home
   // would mean one place to `prepare` (the runner's cwd) and another to the agent (inside the graded tree).
@@ -627,10 +579,9 @@ export async function runTrial({
     // would fail the same way, and a recorded one would score the untouched fixture and, on resume, be
     // skipped for good. Stop like a cap instead.
     if (run.spawnError) return { status: 'stopped', reason: 'spawn', message: run.spawnError.message };
-    const stop = classifyAgentFailure(run);
-    if (stop) return { status: 'stopped', reason: stop.kind, message: stop.message };
+    const reading = read(run);
+    if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
 
-    const output = parseAgentOutput(run.stdout);
     const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal });
     if (graderAborted) return { status: 'interrupted' };
     // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
@@ -643,10 +594,10 @@ export async function runTrial({
         effort,
         repeat,
         ...scored,
-        ...summarizeUsage(output),
+        ...reading.usage,
         wallMs,
         cliVersion,
-        error: agentError(run, output) ?? graderError,
+        error: agentError(run, reading) ?? graderError,
         startedAt,
       },
     };

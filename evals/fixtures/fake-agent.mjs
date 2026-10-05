@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// A stand-in for `claude --print --output-format json`, so the runner is proven end to end without a
-// real model. The mode comes from the environment, because the runner owns the real agent's argv.
+// A stand-in for `claude --print --output-format json` (and, in its `codex-*` modes, for `codex exec
+// --json`), so the runner is proven end to end without a real model. The mode comes from the environment,
+// because the runner owns the real agent's argv.
 //
 //   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | orphan-by-path | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | no-cost | garbage  (default noop)
+//                      codex-solve | codex-noop | codex-cap | codex-auth | codex-failed | codex-incomplete: the same
+//                      stand-in for `codex exec --json`, which prints an event per line instead (see `codexEvents`)
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
 //                      prompt, cwd, argv, the workspace entries and the whole environment it received
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
@@ -83,6 +86,21 @@ const errorsResult = (errors) => JSON.stringify({ type: 'result', subtype: 'erro
 const writeReport = () => {
   if (reportPath) fs.writeFileSync(reportPath, JSON.stringify(report));
 };
+
+// The Codex modes print what `codex exec --json` does: JSON Lines, one event per line, after a line that is
+// no event (the CLI may print other text there). The event types and the fields of `usage` are the documented
+// ones; `cached_input_tokens` is a part of `input_tokens`, and there is no cost. A failed turn is an `error`
+// event and then a `turn.failed` with the same message, and no usage. The wording of the cap and login
+// messages is ASSUMED, not observed from the real CLI.
+const codexEvents = (...events) => ['Reading prompt from stdin...', ...[{ type: 'thread.started', thread_id: 'fake-thread' }, { type: 'turn.started' }, ...events].map((event) => JSON.stringify(event))].join('\n');
+const codexSuccess = (text) => codexEvents(
+  { type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'thinking' } },
+  { type: 'item.started', item: { id: 'item_1', type: 'command_execution', command: 'node --test', status: 'in_progress' } },
+  { type: 'item.completed', item: { id: 'item_1', type: 'command_execution', command: 'node --test', aggregated_output: '', exit_code: 0, status: 'completed' } },
+  { type: 'item.completed', item: { id: 'item_2', type: 'agent_message', text } },
+  { type: 'turn.completed', usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50, reasoning_output_tokens: 20 } },
+);
+const codexFailure = (message) => codexEvents({ type: 'error', message }, { type: 'turn.failed', error: { message } });
 
 switch (mode) {
   case 'solve': {
@@ -193,6 +211,38 @@ switch (mode) {
   case 'garbage':
     writeReport();
     console.log('this is not json');
+    break;
+  case 'codex-solve': {
+    writeReport();
+    const file = path.join(cwd, 'calc.mjs');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/export const mul = [\s\S]*$/, 'export const mul = (a, b) => a * b;\n'));
+    console.log(codexSuccess('done'));
+    break;
+  }
+  case 'codex-noop':
+    writeReport();
+    console.log(codexSuccess('did nothing'));
+    break;
+  case 'codex-cap':
+    writeReport();
+    console.log(codexFailure("You've hit your usage limit. Try again later."));
+    process.exitCode = 1;
+    break;
+  case 'codex-auth':
+    // A CLI that is not logged in is assumed to end before its first event, with the reason on stderr only.
+    writeReport();
+    console.error('Error: Not logged in. Run `codex login` first.');
+    process.exitCode = 1;
+    break;
+  case 'codex-failed':
+    writeReport();
+    console.log(codexFailure('Something else went wrong'));
+    process.exitCode = 1;
+    break;
+  case 'codex-incomplete':
+    // The thread and the turn start, and the process ends, exit 0, without the turn ever ending.
+    writeReport();
+    console.log(codexEvents());
     break;
   default:
     writeReport();
