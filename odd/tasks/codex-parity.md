@@ -94,8 +94,10 @@ Slice A is pull request #33 against `main`, opened on 2026-10-05 at Sebastián's
 `40fa138` and the commit that records this. It is 5,222 changed lines against the forecast of
 about 950 for the slice (2,378 tests, 555 documents, 2,289 code, of which 1,019 are the probe):
 the probe needed its own arm driver and report, and three review rounds added their corrections
-here. A `size:exception` is his to accept. The reviewed boundary is `41509d3`. Slice B starts
-from `main` once #33 is merged.
+here. Sebastián accepted the `size:exception` and had #33 merged on 2026-10-05 (`b12d3cd`). The
+branch was then restarted from `main` at that merge, keeping its name, so slice B's commits
+start there and its review boundary is `b12d3cd`. The remote `feat/codex-parity` still points
+at the merged history until slice B is pushed, which needs `--force-with-lease`.
 
 ## Tasks
 ### Slice A — the agent seam
@@ -432,7 +434,6 @@ from `main` once #33 is merged.
   belongs.
 
 ## Next step
-Slice A is whole: T1, T2 and T3 with their corrections, six code commits, all reviewed, open as
-pull request #33; merging it is Sebastián's call. After the merge the branch restarts from
-`main` and T4, `evals/suite.mjs --agent codex`, opens slice B; it decides what the suite does with a trial `assertReading` rejects and
+Slice A is merged (#33). T4, `evals/suite.mjs --agent codex`, opens slice B on the branch
+restarted from `main`; it decides what the suite does with a trial `assertReading` rejects and
 whether a trial's setup download is measured apart from its wall time.
