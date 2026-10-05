@@ -132,12 +132,17 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
   writer, same delegation, disjoint files) — `41509d3`, reviewed (Progress, 2026-10-05)
 
 ### Slice B — suite and report
-- [ ] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
+- [x] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
   engram), results under `evals/results/codex/`, resume (route: delegated writer, strict TDD —
-  trigger: 2+ non-trivial files) — written and verified, unchecked until its commit and its
-  reviews are recorded (Progress, 2026-10-05)
+  trigger: 2+ non-trivial files) — `e880546`, reviewed (Progress, 2026-10-05)
+- [ ] T4r T4's review findings, one correction: a Codex run whose Codex version cannot be read is
+  refused before anything is built or paid; a work root the version probe created is removed
+  when the run does not go on; the test that compared two constants is removed (route: the T5
+  writer, same delegation, disjoint files) — written and verified, unchecked until its commit
+  and its reviews are recorded
 - [ ] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
-  against Codex table
+  against Codex table (route: delegated writer, strict TDD — trigger: 2+ non-trivial files) —
+  written and verified, unchecked until its commit and its reviews are recorded
 
 ### Slice C — runs and result
 - [ ] T6 Headroom run: 15 trials (`minimal`, `medium`), then the checkpoint with Sebastián
@@ -446,8 +451,66 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
     are `inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `reasoningOutputTokens` and
     `outputTokens`, and `usage` is an array.
   - Unverified until T6's real trials: that `codex --version` answers in a home with no login
-    and no config (if not, `stack.codex` is recorded as `null`); whether Codex refuses or ignores
-    an unknown effort; the wording of a cap or a login failure.
+    and no config (if not, the run is refused before any trial, since T4r); whether Codex refuses
+    or ignores an unknown effort; the wording of a cap or a login failure.
+- 2026-10-05, T4 closed as `e880546` (gate green in about fourteen minutes, `core.bare` `false`
+  in the main checkout afterwards; `.gitignore` gained `evals/results/codex/*.tmp`, which the
+  existing pattern did not cover).
+  - gentle-ai over `a53309c..e880546`: `medium`, review due (`slice_budget_reached`, 889 lines);
+    consent granted under the pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-d614e9ad14e49939`, authority burned). Three advisory findings, all
+    taken as T4r: a WARNING, a Codex version probe that returns nothing was recorded as
+    `stack.codex = null` with no message, and since `null` equals `null` such a run could be
+    resumed on another Codex CLI unnoticed (`evals/suite.mjs:313`); and two SUGGESTIONs — the
+    version probe creates the work root before a resume is refused, so a refusal can leave an
+    empty one behind (`:304`), and a test compared two exported constants with the same
+    literals (`evals/suite.test.mjs:784-787`).
+  - Codex: `js-harness codex-review --base a53309c`, recorded as `reviewed`
+    (`a53309c..e880546`): "No actionable regressions were identified in the Codex suite
+    integration or reader-stop handling. The diff passes whitespace checks; functional tests
+    were inspected but not executed."
+  - That Codex run worked on the real login and did not refresh it: `~/.codex/auth.json` still
+    carries its date of 2026-09-27 21:45Z at 17:54Z on 2026-10-05, 188 h later, past the 186 h
+    the suite accepts. So a `codex exec` run is not the "ordinary use" that refreshes the login
+    (Follow-ups), and T6 cannot start until something does.
+- 2026-10-05, T4r and T5 written and verified: one delegation, two units on disjoint files.
+  - T4r (`evals/suite.mjs` 52 added and 5 removed, `evals/suite.test.mjs` 88 and 5): a Codex
+    run whose version cannot be read exits 2 before the template and any trial, with the
+    command that was tried in the message; the directories the probe had to create are removed
+    again, and only if empty, on that refusal, on a probe that throws and on a refused resume.
+    RED first for both (`0 !== 2`; "what the probe made is removed"). `node --test
+    evals/suite.test.mjs` 69/69.
+  - T5 (`evals/report.mjs` 266 added and 33 removed, `evals/report.test.mjs` 296 and 1; 104
+    assertion lines added, none changed): `node evals/report.mjs --results-dir
+    evals/results/codex` reports a Codex directory, and `node evals/report.mjs
+    --codex-results-dir evals/results/codex` prints the Claude against Codex table, one row per
+    task, config and effort with each host's score, tokens, cost and wall time; a cell recorded
+    on one side only reads `missing`. RED first against stub exports, 14 of 55 failed; then
+    55/55 (rerun by the parent).
+  - The agent of a document is its `agent` key and none means Claude; a directory that mixes
+    agents, or names an unknown one, is refused. A Claude report carries no agent, so F5's
+    output did not move: `node evals/report.mjs --require-complete --min-discriminating 3` exits
+    0 and its plain and `--json` output are byte-identical to the output before the change.
+  - The estimated list cost of a Codex trial, computed when the report runs and never written
+    into a record: `gpt-6.1-sol`, standard tier, requests of at most 272K input tokens, per 1M
+    tokens: input $2.00, cached input $0.10, cache writes $2.50, output $10.00
+    (`developers.openai.com/api/docs/pricing`, read 2026-10-05; above 272K the published rates
+    are $4.00, $0.20, $5.00 and $15.00). The uncached remainder is input minus cached minus
+    cache writes. A record sums usage per turn and a turn holds several requests, so the long
+    tier cannot be told from a record: the estimate is a lower bound in that respect, which the
+    report's note says. A model with no price has an unknown cost, said once.
+  - Assumed, for T6 to settle, and the estimate fails closed where a record contradicts it: that
+    cache writes are a part of `input_tokens` and reasoning a part of `output_tokens` (both were
+    0 in the two real sessions). A negative remainder, or more reasoning than output, makes that
+    trial's cost and tokens unknown and the report names the trial and the reason.
+  - The token column is input plus output on both hosts: Claude's is input, cache reads and
+    cache creation plus output, over every model in `modelUsage`, subagents included; Codex's is
+    `inputTokens` plus `outputTokens` summed over the session's turns. Whether Codex's per-turn
+    usage includes subagent work is not known.
+  - The verdict rule is unchanged and is fed the estimate for a Codex directory. The gates are
+    refused together with `--codex-results-dir`: the comparison sets two hosts on two models
+    side by side and decides nothing. A single Codex report also prints the wall-time note.
+  - Size: 702 added, 44 removed over the two units (384 of the added lines are tests).
 
 ## Follow-ups
 - A reader that throws, instead of returning a reading of the wrong shape, still ends the run as
@@ -468,9 +531,13 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
   and 59 MB more of the engram marketplace in the current arm. That time is inside a Codex
   trial's wall time and has no counterpart in a Claude trial, so T5's wall-time comparison must
   say so, or T4 must measure it apart.
-- The real login reaches the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
-  real Codex has refreshed its own login (any ordinary use of it does), never with a copy that
-  could be refreshed inside a trial.
+- The real login reached the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
+  real Codex has refreshed its own login, never with a copy that could be refreshed inside a
+  trial. What refreshes it is not known: the `codex exec review` of 2026-10-05, 188 h after the
+  file's date, worked and left the date as it was. Before T6: find what does (the interactive
+  CLI, the desktop app, or `codex login`), which is Sebastián's step since it is his login, and
+  check the date afterwards; or, if nothing refreshes a login that still works, decide with him
+  whether the age limit measures the right thing.
 
 - The probe ties a new engram process to a trial by its command line or its port, so one the
   trial started that takes both from its environment and does not listen (a stdio server) is
@@ -487,6 +554,7 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
   belongs.
 
 ## Next step
-Slice A is merged (#33). T4 is written; its commit and its two reviews (gentle-ai, then Codex
-over the same range from `a53309c`) are next, then T5: the report's agent dimension, the
-estimated list cost of a Codex trial and the Claude against Codex table.
+Slice A is merged (#33). T4 is committed and reviewed (`e880546`). T4r and T5 are written: each
+gets its own commit, then gentle-ai over the range from `e880546` and Codex over each commit's
+range, which closes slice B. Slice C opens with T6, the first spend since the smoke trials: 15
+trials of `minimal` at `medium`, started with a login the real Codex refreshed that day.

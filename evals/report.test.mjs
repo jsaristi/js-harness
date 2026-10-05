@@ -5,7 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ReportError, USAGE, buildCells, buildReport, compareCells, incompleteCells, loadRuns, reportMain } from './report.mjs';
+import {
+  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, compareCells, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
+} from './report.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-report-test-'));
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -594,4 +596,297 @@ test('incompleteCells lists every cell of a task and effort in the runs that has
     { task: 'alpha', effort: 'medium', config: 'current', n: 2 },
     { task: 'gamma', effort: 'medium', config: 'current', n: 0 },
   ]);
+});
+
+// ---- Codex runs --------------------------------------------------------------------------------------------------
+// Built here like the Claude ones above. A Codex record holds tokens and no dollars (`agent-output.mjs`,
+// `summarizeCodexUsage`), so its cost in a report is an estimate at the list price.
+
+const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '4.0.0', engram: '3.0.0' };
+const CODEX_MODEL = 'gpt-6.1-sol';
+
+/** One Codex trial record as `runner.mjs` writes it: no `costUsd`, `modelUsage`, turns or subagents. By default 1M
+ * input tokens of which 600k were cached and none written to the cache, and 100k output tokens of which 4k were
+ * reasoning: 400k * $2 + 600k * $0.10 + 100k * $10 per 1M, $1.86. */
+const codexTrial = (over = {}) => trial({
+  inputTokens: 1_000_000, cachedInputTokens: 600_000, cacheWriteInputTokens: 0, outputTokens: 100_000, reasoningOutputTokens: 4_000,
+  turns: null, usage: [{ input_tokens: 1_000_000, cached_input_tokens: 600_000, cache_write_input_tokens: 0, output_tokens: 100_000, reasoning_output_tokens: 4_000 }],
+  costUsd: null, modelUsage: null, subagents: null, cliVersion: 'codex-cli 0.159.1',
+  ...over,
+});
+
+/** `n` Codex trials of one cell, the i-th with `scores[i]` and `outputs[i]` output tokens (a scalar repeats): every
+ * 100k output tokens are one US dollar on top of the $0.86 of the input. */
+const codexCellTrials = ({ config, scores = 1, outputs = 100_000, task = 'alpha', effort = 'medium', n = 3, ...rest }) => (
+  Array.from({ length: n }, (_, i) => codexTrial({
+    task, config, effort, repeat: i + 1,
+    score: Array.isArray(scores) ? scores[i] : scores,
+    outputTokens: Array.isArray(outputs) ? outputs[i] : outputs,
+    ...rest,
+  }))
+);
+
+const codexBoth = (minimal = {}, current = {}, shared = {}) => [
+  ...codexCellTrials({ config: 'minimal', ...shared, ...minimal }),
+  ...codexCellTrials({ config: 'current', ...shared, ...current }),
+];
+
+/** A results document of format 1 as `suite.mjs --agent codex` writes it: it names its agent. */
+const codexDocOf = (name, trials, over = {}) => ({
+  format: 1, name, createdAt: '2026-10-05T00:00:00.000Z', agent: 'codex', model: CODEX_MODEL, permissionMode: 'dangerously-bypass-approvals-and-sandbox',
+  stack: { ...CODEX_STACK }, args: { codex: 'codex.exe', configs: ['minimal', 'current'], efforts: ['medium', 'high'], repeats: 3, tasks: ['alpha', 'beta'], workRoot: 'work' },
+  trials, ...over,
+});
+
+/** Minimal at $1.86, $1.96 and $1.76, current one dollar above each: a cost verdict for minimal. */
+const codexAb = (shared = {}) => codexBoth({ outputs: [100_000, 110_000, 90_000] }, { outputs: [200_000, 210_000, 190_000] }, shared);
+
+test('the list price of the Codex model is a table entry with its source, the date it was read and its tier', () => {
+  const price = CODEX_LIST_PRICES[CODEX_MODEL];
+  assert.deepEqual(price.usdPerMillion, { input: 2, cachedInput: 0.1, cacheWrite: 2.5, output: 10 });
+  assert.equal(price.source, 'https://developers.openai.com/api/docs/pricing');
+  assert.equal(price.read, '2026-10-05');
+  assert.match(price.tier, /standard.*short context.*272K/);
+});
+
+test('estimateCodexCost prices a trial\'s tokens at the list price: uncached input, cached input, cache writes and output, each once at its own rate', () => {
+  const cost = (over) => estimateCodexCost(codexTrial(over), CODEX_MODEL);
+  near(cost().usd, 1.86, '400k uncached, 600k cached, 100k output');
+  assert.equal(cost().reason, null);
+  near(cost({ cachedInputTokens: 0 }).usd, 3, 'nothing cached: the whole input at the input rate');
+  near(cost({ cacheWriteInputTokens: 100_000 }).usd, 1.91, 'cache writes are taken out of the input and priced at their own rate');
+  near(cost({ reasoningOutputTokens: 100_000 }).usd, 1.86, 'reasoning tokens are a part of the output: they are not priced a second time');
+  near(cost({ reasoningOutputTokens: null }).usd, 1.86, 'a record without the reasoning count contradicts nothing');
+  near(cost({ costUsd: 99 }).usd, 1.86, 'a Codex record is priced from its tokens, whatever else it holds');
+  const nothing = cost({ inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 });
+  assert.equal(nothing.usd, 0, 'a trial that used nothing costs nothing, which is known');
+});
+
+test('the estimate fails closed: a record that contradicts an assumption, lacks a count or has no price has an unknown cost and a reason, never a clamped or guessed one', () => {
+  const unknown = (over, pattern, model = CODEX_MODEL) => {
+    const result = estimateCodexCost(codexTrial(over), model);
+    assert.equal(result.usd, null, JSON.stringify(over));
+    assert.match(result.reason, pattern, JSON.stringify(over));
+  };
+  // More cached and cache-written tokens than input tokens: they are not all a part of the input, as assumed.
+  unknown({ cachedInputTokens: 900_000, cacheWriteInputTokens: 200_000 }, /1100000.*1000000/);
+  unknown({ cachedInputTokens: 1_000_001 }, /1000001.*1000000/);
+  // More reasoning tokens than output tokens: they are not a part of the output, as assumed.
+  unknown({ reasoningOutputTokens: 100_001 }, /reasoning.*100001.*100000/);
+  for (const field of ['inputTokens', 'cachedInputTokens', 'cacheWriteInputTokens', 'outputTokens']) {
+    for (const value of [null, undefined, -1, '5']) unknown({ [field]: value }, new RegExp(field));
+  }
+  unknown({}, /no list price.*gpt-other/, 'gpt-other');
+});
+
+test('the tokens of a Codex trial are its input, cached input counted once inside it, and its output: what the Claude sum means', () => {
+  assert.deepEqual(trialTokens(codexTrial(), 'codex'), { input: 1_000_000, output: 100_000 }, 'neither the cached part nor the reasoning part is added again');
+  assert.deepEqual(trialTokens(codexTrial({ cacheWriteInputTokens: 100_000 }), 'codex'), { input: 1_000_000, output: 100_000 }, 'cache writes are a part of the input');
+  assert.deepEqual(trialTokens(codexTrial({ cachedInputTokens: null, cacheWriteInputTokens: null }), 'codex'), { input: 1_000_000, output: 100_000 }, 'the parts are not needed for the sum');
+  const none = { input: null, output: null };
+  assert.deepEqual(trialTokens(codexTrial({ outputTokens: null }), 'codex'), none, 'a missing count is unknown, not 0');
+  assert.deepEqual(trialTokens(codexTrial({ inputTokens: -1 }), 'codex'), none);
+  assert.deepEqual(trialTokens(codexTrial({ cachedInputTokens: 900_000, cacheWriteInputTokens: 200_000 }), 'codex'), none, 'a contradicted assumption: the input may not hold its cache writes');
+  assert.deepEqual(trialTokens(codexTrial({ reasoningOutputTokens: 100_001 }), 'codex'), none, 'a contradicted assumption: the output may not hold its reasoning');
+  // Read as Claude's, the default, a Codex record has no modelUsage and so no tokens: nothing changed for F5.
+  assert.deepEqual(trialTokens(codexTrial()), none);
+  const [cell] = buildCells([codexTrial({ repeat: 1 }), codexTrial({ repeat: 2, inputTokens: 2_000_000, outputTokens: 300_000 })], { agent: 'codex', model: CODEX_MODEL });
+  assert.equal(cell.inputTokens, 1_500_000);
+  assert.equal(cell.outputTokens, 200_000);
+  assert.equal(cell.turns, null, 'Codex reports no count that means what a Claude turn means');
+});
+
+test('a Codex results directory is reported with its agent, its stack and the estimated cost in place of costUsd, under the same verdict rule', () => {
+  const dir = resultsDir({ cx: codexDocOf('cx', codexAb()) });
+  const before = fs.readFileSync(path.join(dir, 'cx.json'), 'utf8');
+  const report = buildReport(loadRuns({ dir }));
+  assert.equal(report.agent, 'codex');
+  assert.equal(report.model, CODEX_MODEL);
+  assert.deepEqual(report.stack, CODEX_STACK);
+  assert.deepEqual(report.costEstimate, { estimated: true, model: CODEX_MODEL, price: CODEX_LIST_PRICES[CODEX_MODEL], unknown: [] });
+  const [row] = report.efforts[0].rows;
+  near(row.minimal.cost.mean, 1.86, 'minimal');
+  near(row.current.cost.mean, 2.86, 'current');
+  assert.equal(row.minimal.cost.known, 3);
+  assert.equal(row.verdict, 'cost');
+  assert.equal(row.winner, 'minimal');
+  near(row.costRatio, 2.86 / 1.86, 'current / minimal, from the estimates');
+  assert.equal(row.current.inputTokens, 1_000_000);
+  assert.equal(row.current.outputTokens, 200_000);
+  assert.deepEqual(incompleteCells(report), []);
+  assert.equal(fs.readFileSync(path.join(dir, 'cx.json'), 'utf8'), before, 'the estimate is made at report time: no recorded document is rewritten');
+
+  // A Claude report has the shape it had: it names no agent and holds no estimate.
+  const claude = buildReport(loadRuns({ dir: resultsDir({ ab: docOf('ab', bothConfigs()) }) }));
+  assert.deepEqual(['agent' in claude, 'costEstimate' in claude], [false, false]);
+});
+
+test('a Codex trial whose cost cannot be estimated is named with the reason, and is left out of its cell\'s cost, not counted as 0', () => {
+  const trials = codexAb().map((entry) => (entry.config === 'minimal' && entry.repeat === 2 ? { ...entry, reasoningOutputTokens: 500_000 } : entry));
+  const report = buildReport(loadRuns({ dir: resultsDir({ cx: codexDocOf('cx', trials) }) }));
+  assert.equal(report.costEstimate.unknown.length, 1);
+  assert.equal(report.costEstimate.unknown[0].trial, 'alpha minimal medium #2');
+  assert.match(report.costEstimate.unknown[0].reason, /reasoning/);
+  const [row] = report.efforts[0].rows;
+  assert.equal(row.minimal.n, 3);
+  assert.equal(row.minimal.cost.known, 2);
+  near(row.minimal.cost.mean, (1.86 + 1.76) / 2, 'the mean of the two that are known');
+});
+
+test('a results directory that mixes agents is refused like a model or stack mismatch, and a document that names no agent is Claude\'s', () => {
+  const mixed = resultsDir({ a: docOf('a', bothConfigs()), b: codexDocOf('b', codexBoth({}, {}, { task: 'beta' })) });
+  const message = refusal(() => buildReport(loadRuns({ dir: mixed })));
+  assert.match(message, /runs a and b differ in agent: "claude" vs "codex"/);
+  const named = resultsDir({ a: docOf('a', bothConfigs()), b: docOf('b', bothConfigs({}, {}, { task: 'beta' }), { agent: 'claude' }) });
+  assert.equal('agent' in buildReport(loadRuns({ dir: named })), false, 'naming Claude changes nothing');
+  assert.match(refusal(() => loadRuns({ dir: resultsDir({ odd: docOf('odd', bothConfigs(), { agent: 'gemini' }) }) })), /odd\.json.*"gemini"/, 'an agent the report cannot read is refused by file');
+});
+
+test('reportMain on a Codex results directory says which agent it reports and that every cost is an estimate, with the price, its source, date and tier', async () => {
+  const { code, out, err } = await run(['--require-complete'], { cx: codexDocOf('cx', codexAb()) });
+  assert.equal(code, 0, err);
+  assert.equal(err, '');
+  assert.match(out, /^agent codex, model gpt-6\.1-sol, permission mode dangerously-bypass-approvals-and-sandbox$/m);
+  assert.match(out, /^stack: codex codex-cli 0\.159\.1, gentleAi 4\.0\.0, engram 3\.0\.0$/m);
+  const costLine = out.split('\n').find((entry) => entry.startsWith('cost: '));
+  for (const part of ['ESTIMATED', 'gpt-6.1-sol', 'standard', '272K', 'input $2.00', 'cached input $0.10', 'cache writes $2.50', 'output $10.00', 'https://developers.openai.com/api/docs/pricing', 'read 2026-10-05', 'lower bound']) {
+    assert.ok(costLine.includes(part), `the cost line names ${part}: ${costLine}`);
+  }
+  assert.match(costLine, /cost verdicts need the scores equal/, 'the verdict rule is the one it was');
+  assert.doesNotMatch(out, /Claude Code's list cost/);
+  assert.match(out, /est\. cost min\s+est\. cost cur/, 'the columns are labelled too');
+  assert.match(out, /^wall: a Codex trial's wall time includes its per-trial setup download .* more in the current arm/m, 'what the wall columns of the two arms include');
+  const row = out.split('\n').find((entry) => entry.startsWith('alpha'));
+  assert.match(row, /\$1\.86\s+\$2\.86\s+1\.54x\s+1\.10M\s+1\.20M/, 'estimated cost, its ratio, and input + output tokens');
+  assert.match(row, /cost: minimal/);
+});
+
+test('reportMain names a Codex trial whose cost is not estimated, and says plainly when the model has no list price', async () => {
+  const trials = codexAb().map((entry) => (entry.config === 'current' && entry.repeat === 3 ? { ...entry, cachedInputTokens: 2_000_000 } : entry));
+  const contradicted = await run([], { cx: codexDocOf('cx', trials) });
+  assert.equal(contradicted.code, 0, contradicted.err);
+  assert.match(contradicted.out, /^cost not estimated for alpha current medium #3: .*2000000.*1000000/m);
+
+  const unpriced = await run([], { cx: codexDocOf('cx', codexAb(), { model: 'gpt-other' }) });
+  assert.equal(unpriced.code, 0, unpriced.err);
+  const costLine = unpriced.out.split('\n').find((entry) => entry.startsWith('cost: '));
+  assert.match(costLine, /unknown.*no list price.*gpt-other/);
+  assert.doesNotMatch(unpriced.out, /\$\d/, 'no price is assumed for it');
+  assert.match(unpriced.out.split('\n').find((entry) => entry.startsWith('alpha')), /incomplete/, 'without a cost there is no verdict');
+  assert.doesNotMatch(unpriced.out, /cost not estimated for/, 'said once, not once per trial');
+});
+
+test('a Claude report says what it said: no agent line, no estimate, in text or in JSON', async () => {
+  const text = await run([]);
+  assert.match(text.out, /^model claude-opus-5-5, permission mode bypassPermissions$/m);
+  assert.doesNotMatch(text.out, /estimate|est\. cost|agent /i);
+  const json = JSON.parse((await run(['--json'])).out);
+  assert.deepEqual(Object.keys(json), ['runs', 'model', 'permissionMode', 'stack', 'efforts', 'checks']);
+});
+
+// ---- Claude Code against Codex -------------------------------------------------------------------------------------
+
+/** The Claude side: alpha at medium for both configs, and a beta cell that only Claude ran. */
+const claudeSide = () => ({ ab: docOf('ab', [
+  ...bothConfigs({ costs: [1, 1.1, 0.9], modelUsage: oneModel(400_000, 50_000), wallMs: 120_000 }, { costs: 2, modelUsage: oneModel(900_000, 100_000), wallMs: 180_000 }),
+  ...cellTrials({ config: 'minimal', task: 'beta', effort: 'high', scores: 0.5 }),
+]) });
+/** The Codex side: the same alpha cells, and a gamma cell that only Codex ran. */
+const codexSide = () => ({ cx: codexDocOf('cx', [
+  ...codexBoth({ scores: 0.9, wallMs: 240_000 }, { outputs: 200_000, wallMs: 300_000 }),
+  ...codexCellTrials({ config: 'current', task: 'gamma', effort: 'high' }),
+]) });
+
+test('--codex-results-dir prints Claude Code against Codex: one row per task, config and effort with each host\'s score, tokens, cost and wall time', async () => {
+  const codexDir = resultsDir(codexSide());
+  const { code, out, err } = await run(['--codex-results-dir', codexDir], claudeSide());
+  assert.equal(code, 0, err);
+  assert.equal(err, '');
+  assert.match(out, /^claude: runs ab; model claude-opus-5-5; stack: claude 2\.1\.284 \(Claude Code\), gentleAi 4\.0\.0, engram 3\.0\.0, engramPlugin 0\.1\.5$/m);
+  assert.match(out, /^codex: runs cx; model gpt-6\.1-sol; stack: codex codex-cli 0\.159\.1, gentleAi 4\.0\.0, engram 3\.0\.0$/m);
+  const lines = out.split('\n');
+  const header = lines.find((entry) => entry.startsWith('task'));
+  assert.match(header, /^task\s+config\s+effort\s+n claude\/codex\s+score claude\s+score codex\s+tokens claude\s+tokens codex\s+cost claude\s+est\. cost codex\s+wall claude\s+wall codex$/);
+  const rows = lines.slice(lines.indexOf(header) + 1, lines.indexOf(header) + 5);
+  assert.match(rows[0], /^alpha\s+minimal\s+medium\s+3\/3\s+1\.00\s+0\.90\s+450\.0k\s+1\.10M\s+\$1\.00\s+\$1\.86\s+2m00s\s+4m00s$/);
+  assert.match(rows[1], /^alpha\s+current\s+medium\s+3\/3\s+1\.00\s+1\.00\s+1\.00M\s+1\.20M\s+\$2\.00\s+\$2\.86\s+3m00s\s+5m00s$/);
+  // A cell one host did not record is shown as missing, never dropped; a value a host recorded but does not know is `?`.
+  assert.match(rows[2], /^beta\s+minimal\s+high\s+3\/0\s+0\.50\s+missing\s+\?\s+missing\s+\$1000\.00\s+missing\s+1m00s\s+missing$/);
+  assert.match(rows[3], /^gamma\s+current\s+high\s+0\/3\s+missing\s+1\.00\s+missing\s+1\.10M\s+missing\s+\$1\.86\s+missing\s+1m00s$/);
+});
+
+test('under the comparison, notes say that the Codex cost is an estimate at list price, what the tokens count, and what a Codex wall time includes', async () => {
+  const { out } = await run(['--codex-results-dir', resultsDir(codexSide())], claudeSide());
+  const note = (start) => out.split('\n').find((entry) => entry.startsWith(start));
+  for (const part of ["Claude Code's list cost of the whole session", 'ESTIMATED', 'gpt-6.1-sol', 'standard', '272K', 'input $2.00', 'https://developers.openai.com/api/docs/pricing', 'read 2026-10-05', 'lower bound']) {
+    assert.ok(note('cost: ').includes(part), `the cost note names ${part}: ${note('cost: ')}`);
+  }
+  assert.match(note('tokens: '), /input.*cache.*output/);
+  assert.match(note('wall: '), /Codex trial.*setup download.*curated plugins and marketplaces.*about 60 MB.*more in the current arm.*no counterpart in a Claude trial.*not measured apart/);
+
+  // A trial whose cost is not estimated is named here too, and an errored trial of either host is counted.
+  const codex = codexSide();
+  codex.cx.trials[1] = { ...codex.cx.trials[1], reasoningOutputTokens: 900_000, error: 'timeout' };
+  const flawed = await run(['--codex-results-dir', resultsDir(codex)], claudeSide());
+  assert.match(flawed.out, /^cost not estimated for alpha minimal medium #2: .*reasoning/m);
+  assert.match(flawed.out, /^alpha minimal medium, codex: 1 of 3 trials recorded an error/m);
+});
+
+test('the comparison as data: buildComparison pairs the cells of two reports, and --json prints it', async () => {
+  const claude = buildReport(loadRuns({ dir: resultsDir(claudeSide()) }));
+  const codex = buildReport(loadRuns({ dir: resultsDir(codexSide()) }));
+  const comparison = buildComparison(claude, codex);
+  assert.deepEqual(comparison.rows.map((row) => [row.task, row.config, row.effort, row.claude?.n ?? null, row.codex?.n ?? null]), [
+    ['alpha', 'minimal', 'medium', 3, 3], ['alpha', 'current', 'medium', 3, 3], ['beta', 'minimal', 'high', 3, null], ['gamma', 'current', 'high', null, 3],
+  ]);
+  near(comparison.rows[0].codex.cost.mean, 1.86, 'the estimated cost of the Codex cell');
+  assert.equal(comparison.rows[0].claude.cost.mean, 1);
+  assert.equal(comparison.codex.costEstimate.estimated, true);
+  assert.deepEqual([comparison.claude.runs, comparison.claude.model, comparison.codex.runs, comparison.codex.model], [['ab'], 'claude-opus-5-5', ['cx'], CODEX_MODEL]);
+  // Efforts of one cell follow the order of effort, not of name.
+  const efforts = buildComparison(
+    buildReport(loadRuns({ dir: resultsDir({ ab: docOf('ab', [...bothConfigs({}, {}, { effort: 'medium' }), ...bothConfigs({}, {}, { effort: 'high' })]) }) })),
+    buildReport(loadRuns({ dir: resultsDir({ cx: codexDocOf('cx', [...codexAb({ effort: 'high' }), ...codexAb({ effort: 'medium' })]) }) })),
+  );
+  assert.deepEqual(efforts.rows.map((row) => `${row.config} ${row.effort}`), ['minimal medium', 'minimal high', 'current medium', 'current high']);
+
+  const printed = await run(['--codex-results-dir', resultsDir(codexSide()), '--json'], claudeSide());
+  assert.equal(printed.code, 0, printed.err);
+  const json = JSON.parse(printed.out);
+  assert.equal(json.rows.length, 4);
+  assert.equal(json.rows[2].codex, null);
+  assert.equal(json.codex.costEstimate.price.source, 'https://developers.openai.com/api/docs/pricing');
+});
+
+test('each side of the comparison must pass its own checks and be the agent its flag names, or nothing is printed', async () => {
+  const refused = async (argv, docs, pattern, label) => {
+    const { code, out, err } = await run(argv, docs);
+    assert.equal(code, 1, label);
+    assert.equal(out, '', `${label}: nothing is printed as a result`);
+    assert.match(err, pattern, label);
+  };
+  const mixedStack = resultsDir({ a: codexDocOf('a', codexAb()), b: codexDocOf('b', codexAb({ effort: 'high' }), { stack: { ...CODEX_STACK, codex: 'codex-cli 0.160.0' } }) });
+  await refused(['--codex-results-dir', mixedStack], claudeSide(), /runs a and b differ in stack\.codex/, 'a Codex side on two CLIs');
+  await refused(['--codex-results-dir', resultsDir(codexSide())], { a: docOf('a', bothConfigs()), b: docOf('b', bothConfigs(), { model: 'claude-other' }) }, /differ in model/, 'a Claude side on two models');
+  await refused(['--codex-results-dir', resultsDir(claudeSide())], claudeSide(), /--codex-results-dir .* holds runs of claude/, 'Claude runs where the Codex ones are expected');
+  await refused(['--codex-results-dir', resultsDir(codexSide())], codexSide(), /holds runs of codex.*--codex-results-dir/, 'Codex runs where the Claude ones are expected');
+  await refused(['--codex-results-dir', path.join(scratch, 'nowhere')], claudeSide(), /nowhere/, 'a Codex directory that is not there');
+  await refused(['--codex-results-dir', resultsDir({ empty: codexDocOf('empty', []) })], claudeSide(), /no trial/, 'a Codex side with no trial');
+});
+
+test('--codex-results-dir takes a directory, once, and neither gate: a gate holds one host\'s A/B result', async () => {
+  for (const argv of [['--codex-results-dir'], ['--codex-results-dir', '--json'], ['--codex-results-dir', 'a', '--codex-results-dir', 'b'],
+    ['--codex-results-dir', 'a', '--require-complete'], ['--min-discriminating', '2', '--codex-results-dir', 'a']]) {
+    const { code, out, err } = await run(argv);
+    assert.equal(code, 2, JSON.stringify(argv));
+    assert.equal(out, '', JSON.stringify(argv));
+    assert.ok(err.includes(USAGE), `usage for ${JSON.stringify(argv)}`);
+  }
+  assert.match((await run(['--codex-results-dir', 'a', '--require-complete'])).err, /--require-complete.*--codex-results-dir/);
+  assert.match(USAGE, /--codex-results-dir <dir>/);
+  // --runs still names runs of the results directory, the Claude side.
+  const docs = { ...claudeSide(), other: docOf('other', bothConfigs({}, {}, { task: 'delta' })) };
+  const only = await run(['--codex-results-dir', resultsDir(codexSide()), '--runs', 'other', '--json'], docs);
+  assert.equal(only.code, 0, only.err);
+  assert.deepEqual(JSON.parse(only.out).claude.runs, ['other']);
 });

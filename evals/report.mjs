@@ -4,6 +4,10 @@
 //
 //   node evals/report.mjs [--runs <name,name>] [--results-dir <dir>] [--json]
 //                         [--require-complete] [--min-discriminating <n>]
+//   node evals/report.mjs --codex-results-dir <dir> [--runs <name,name>] [--results-dir <dir>] [--json]
+//
+// The first form reports the runs of one host, Claude Code's or Codex's (`--results-dir evals/results/codex`); the
+// second prints the two hosts side by side (`odd/tasks/codex-parity.md`, T5).
 //
 // The rule it applies is the Constraints' bullet on "discriminates" in `odd/tasks/evals.md`: score is the floor and
 // cost is what separates, with the predecessor's pure score rule reported beside it so its "0 of 32" stays
@@ -39,6 +43,76 @@ const pooledSd = (a, b) => Math.sqrt((a ** 2 + b ** 2) / 2);
 // 0.020000000000000018 and read as larger than the tolerance.
 const round = (value) => Math.round(value * 1e9) / 1e9;
 
+// ---- agents ------------------------------------------------------------------------------------------------------
+
+/** The CLIs whose runs the report reads. A results document names its agent only when it is not Claude Code
+ * (`suite.mjs`, `AGENTS`): every document F5 recorded names none, and none of them is ever rewritten. A report
+ * follows the same rule (`buildReport`), so what is printed for F5's runs is what was printed before Codex. */
+const AGENTS = ['claude', 'codex'];
+const agentOf = (run) => run?.agent ?? 'claude';
+
+// ---- the estimated cost of a Codex trial -------------------------------------------------------------------------
+
+/** The published list price of each model a Codex run is measured on, in US dollars per 1M tokens, with where and
+ * when it was read. Codex reports tokens and no dollars, so the cost of a Codex trial is these rates applied to its
+ * tokens: an ESTIMATE, and every place that shows it says so. Claude Code's `costUsd` is a list cost too, which is
+ * what keeps one unit across the hosts and the verdict rule as it is (`odd/tasks/codex-parity.md`, Constraints).
+ *
+ * The rates are the standard tier's for a request of at most 272K input tokens. Above that the published rates are
+ * higher (input 4.00, cached input 0.20, cache writes 5.00, output 15.00), and a record cannot tell which a request
+ * was: its usage is summed per turn, and a turn holds several requests. So every token is priced at the rates
+ * below, and the estimate is a lower bound in that respect. A model that is not here has no price: there is no
+ * fallback, because a cost at another model's rates would be a number about nothing. */
+export const CODEX_LIST_PRICES = {
+  'gpt-6.1-sol': {
+    source: 'https://developers.openai.com/api/docs/pricing',
+    read: '2026-10-05',
+    tier: 'standard tier, short context (requests of at most 272K input tokens)',
+    usdPerMillion: { input: 2.00, cachedInput: 0.10, cacheWrite: 2.50, output: 10.00 },
+  },
+};
+const listPrice = (model) => (Object.hasOwn(CODEX_LIST_PRICES, model) ? CODEX_LIST_PRICES[model] : null);
+
+const isCount = (value) => finite(value) && value >= 0;
+
+/** Why the counts of a Codex record cannot be read the way the report reads them, or `null` when they can; `needed`
+ * are the counts the caller cannot do without.
+ *
+ * ASSUMED, not verified, and for the first real trials (`odd/tasks/codex-parity.md`, T6) to settle, since both
+ * counts were 0 in the only two real sessions seen (`agent-output.mjs`, `summarizeCodexUsage`): that the cache
+ * writes are a part of `input_tokens`, as the cached input is known to be, and that the reasoning tokens are a part
+ * of `output_tokens`. A record that cannot be so, with more cached and cache-written tokens than input tokens or
+ * more reasoning tokens than output tokens, is named with that reason instead of read: clamping the remainder at 0
+ * or adding the part on top would be choosing the answer the assumption was meant to give. */
+function codexCountsProblem(entry, needed) {
+  const lacking = needed.filter((field) => !isCount(entry[field]));
+  if (lacking.length > 0) return `it does not record ${lacking.join(', ')} as a count`;
+  const parts = ['cachedInputTokens', 'cacheWriteInputTokens'].reduce((total, field) => total + (isCount(entry[field]) ? entry[field] : 0), 0);
+  if (parts > entry.inputTokens) return `its cached input and cache writes (${parts}) exceed its input tokens (${entry.inputTokens}), so they are not all a part of them, as assumed`;
+  if (isCount(entry.reasoningOutputTokens) && entry.reasoningOutputTokens > entry.outputTokens) {
+    return `its reasoning tokens (${entry.reasoningOutputTokens}) exceed its output tokens (${entry.outputTokens}), so they are not a part of them, as assumed`;
+  }
+  return null;
+}
+
+const COST_COUNTS = ['inputTokens', 'cachedInputTokens', 'cacheWriteInputTokens', 'outputTokens'];
+
+/** The estimated list cost of one Codex trial on `model`, `{ usd, reason }`: its input tokens that were neither
+ * read from the cache nor written to it at the input rate, the cached ones and the cache writes each at their own,
+ * and the output tokens, reasoning inside them, at the output rate (`CODEX_LIST_PRICES`). `usd` is `null`, with the
+ * `reason`, for a model without a list price and for a record `codexCountsProblem` refuses: an unknown cost is left
+ * out of a cell's mean and counted out, like a Claude trial without `costUsd`. The reasoning count is checked when
+ * the record has it and is never priced by itself. Nothing is stored: the estimate is made each time a report is. */
+export function estimateCodexCost(entry, model) {
+  const price = listPrice(model);
+  if (price === null) return { usd: null, reason: `no list price is recorded for model ${JSON.stringify(model)}` };
+  const problem = codexCountsProblem(entry, COST_COUNTS);
+  if (problem !== null) return { usd: null, reason: problem };
+  const { input, cachedInput, cacheWrite, output } = price.usdPerMillion;
+  const uncached = entry.inputTokens - entry.cachedInputTokens - entry.cacheWriteInputTokens;
+  return { usd: (uncached * input + entry.cachedInputTokens * cachedInput + entry.cacheWriteInputTokens * cacheWrite + entry.outputTokens * output) / 1e6, reason: null };
+}
+
 // ---- tokens ------------------------------------------------------------------------------------------------------
 
 const MODEL_COUNTS = ['inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens', 'outputTokens'];
@@ -47,8 +121,17 @@ const MODEL_COUNTS = ['inputTokens', 'cacheReadInputTokens', 'cacheCreationInput
  * cache writes. They are summed over every model of its `modelUsage`, because the session's subagents ran on models
  * of their own. A trial without a usable `modelUsage` (an older record, one that lacks a count or holds a negative one, an empty object) has
  * unknown tokens: its `inputTokens` and `outputTokens` count the main thread only, and a mean over both measures
- * would compare a whole session with part of one. */
-export function trialTokens(entry) {
+ * would compare a whole session with part of one.
+ *
+ * That is a Claude Code record, the default. A Codex record (`agent` `codex`) has no `modelUsage`, and its two
+ * counts already mean the same: `inputTokens` holds the cached input once (`agent-output.mjs`) and, as assumed,
+ * the cache writes, where Claude Code reports both on top of its input; `outputTokens` holds, as assumed, the
+ * reasoning, as Claude Code's holds the thinking. So nothing is added to either, and a record that contradicts an
+ * assumption (`codexCountsProblem`) has unknown tokens, since its counts would then leave a part out. */
+export function trialTokens(entry, agent = 'claude') {
+  if (agent === 'codex') {
+    return codexCountsProblem(entry, ['inputTokens', 'outputTokens']) === null ? { input: entry.inputTokens, output: entry.outputTokens } : { input: null, output: null };
+  }
   const models = isObject(entry.modelUsage) ? Object.values(entry.modelUsage) : [];
   if (models.length === 0 || !models.every((model) => isObject(model) && MODEL_COUNTS.every((field) => finite(model[field]) && model[field] >= 0))) {
     return { input: null, output: null };
@@ -70,8 +153,13 @@ export function trialTokens(entry) {
  * (`evals/runner.mjs`, `runTrial`), so leaving those out would flatter a config that fails. A trial the runner
  * never recorded (a usage cap, an authentication failure) is not in the results at all. The cell counts the errors
  * so the table can show them. A value a trial does not know (no `costUsd`, a `null` score) is left out of its mean and
- * counted out in `known`, never read as 0. */
-export function buildCells(trials) {
+ * counted out in `known`, never read as 0.
+ *
+ * `agent` says whose records these are, Claude Code's when it is not given. For Codex's, on `model`, the cost of a
+ * trial is `estimateCodexCost` in place of the `costUsd` Codex does not report, and the tokens are read as Codex
+ * records them (`trialTokens`); the cell has the same shape, so the verdict rule is fed the same way. */
+export function buildCells(trials, { agent = 'claude', model } = {}) {
+  const costOf = agent === 'codex' ? (entry) => estimateCodexCost(entry, model).usd : (entry) => entry.costUsd;
   const groups = new Map();
   for (const entry of trials) {
     const key = JSON.stringify([entry.task, entry.effort, entry.config]);
@@ -80,8 +168,8 @@ export function buildCells(trials) {
   }
   return [...groups.values()].map((group) => {
     const scores = known(group.map((entry) => entry.score));
-    const costs = known(group.map((entry) => entry.costUsd));
-    const tokens = group.map(trialTokens);
+    const costs = known(group.map(costOf));
+    const tokens = group.map((entry) => trialTokens(entry, agent));
     return {
       task: group[0].task,
       effort: group[0].effort,
@@ -180,6 +268,8 @@ function readRun(file, name) {
     throw new ReportError(`${file} cannot be read as JSON (${err.message})`);
   }
   if (!isObject(doc) || doc.format !== FORMAT || !Array.isArray(doc.trials)) throw new ReportError(`${file} is not a results file of format ${FORMAT}`);
+  // How a record's tokens and cost are read depends on the agent, so one the report does not know cannot be read.
+  if (!AGENTS.includes(agentOf(doc))) throw new ReportError(`${file} is a run of agent ${JSON.stringify(doc.agent)}: the report reads the runs of ${AGENTS.join(' and ')}`);
   doc.trials.forEach((entry) => checkTrial(entry, file));
   return { name, file, doc };
 }
@@ -213,15 +303,17 @@ function stackDifferences(a, b) {
     .map((key) => ({ field: `stack.${key}`, a: left[key], b: right[key] }));
 }
 
-/** Throws a `ReportError` when the runs cannot be read together: a model, a permission mode or a stack that differs
- * from the first run's (deep equality), or the same trial (task, config, effort, repeat) recorded twice, in two runs
- * or in one. Half the trials on one CLI and half on another measure neither, and a trial counted twice would
- * shrink every spread. Every difference is listed, so the message names all that must be fixed. */
+/** Throws a `ReportError` when the runs cannot be read together: an agent, a model, a permission mode or a stack that
+ * differs from the first run's (deep equality), or the same trial (task, config, effort, repeat) recorded twice, in
+ * two runs or in one. Half the trials on one CLI and half on another measure neither, and a trial counted twice would
+ * shrink every spread. Every difference is listed, so the message names all that must be fixed. A run that names
+ * no agent is Claude Code's (`AGENTS`). */
 export function checkRuns(runs) {
   const problems = [];
   const [first, ...rest] = runs;
   for (const run of rest) {
     const pairs = [
+      ['agent', agentOf(first.doc), agentOf(run.doc)],
       ['model', first.doc.model, run.doc.model],
       ['permission mode', first.doc.permissionMode, run.doc.permissionMode],
       ...stackDifferences(first.doc.stack, run.doc.stack).map(({ field, a, b }) => [field, a, b]),
@@ -253,19 +345,27 @@ export function checkRuns(runs) {
  * is `score` or `cost`). Tasks, configs and efforts come from the trials alone, never from a run's `args`: a run
  * continued in two invocations keeps only the last one's. Throws a `ReportError` for runs that cannot be read
  * together (`checkRuns`), and for runs that hold no trial at all (a run a usage cap stopped before its first
- * trial): with no effort to check, both gates would pass on nothing. */
+ * trial): with no effort to check, both gates would pass on nothing.
+ *
+ * The report of Codex runs has two keys more, after `runs` and after `stack`: `agent`, and `costEstimate`, which
+ * says that every cost in it is an estimate and at what price (`codexCostEstimate`). A report of Claude Code runs
+ * has neither, as a results document of Claude Code names no agent: it is what it was before Codex. */
 export function buildReport(runs) {
   checkRuns(runs);
   const trials = runs.flatMap((run) => run.doc.trials);
   if (trials.length === 0) throw new ReportError(`the runs ${runs.map((run) => run.name).join(', ')} hold no trial: a report of nothing is not a pass`);
-  const cells = buildCells(trials);
+  const agent = agentOf(runs[0].doc);
+  const { model } = runs[0].doc;
+  const cells = buildCells(trials, { agent, model });
   const efforts = [...new Set(cells.map((cell) => cell.effort))].sort(byEffort);
   const cellOf = (task, effort, config) => cells.find((cell) => cell.task === task && cell.effort === effort && cell.config === config) ?? null;
   return {
     runs: runs.map((run) => run.name).sort(),
-    model: runs[0].doc.model,
+    ...(agent !== 'claude' && { agent }),
+    model,
     permissionMode: runs[0].doc.permissionMode,
     stack: runs[0].doc.stack,
+    ...(agent === 'codex' && { costEstimate: codexCostEstimate(trials, model) }),
     efforts: efforts.map((effort) => {
       const tasks = [...new Set(cells.filter((cell) => cell.effort === effort).map((cell) => cell.task))].sort();
       const rows = tasks.map((task) => compareCells(cellOf(task, effort, 'minimal'), cellOf(task, effort, 'current')));
@@ -277,6 +377,39 @@ export function buildReport(runs) {
       };
     }),
   };
+}
+
+/** What the costs of a report of Codex runs are: `{ estimated: true, model, price, unknown }`, `price` being the
+ * entry of `CODEX_LIST_PRICES` they were estimated at, or `null` for a model that has none (then no trial has a
+ * cost), and `unknown` the trials whose own record gave no estimate, as `[{ trial, reason }]`. */
+function codexCostEstimate(trials, model) {
+  const price = listPrice(model);
+  const unknown = price === null ? [] : trials
+    .map((entry) => ({ trial: trialLabel(entry), reason: estimateCodexCost(entry, model).reason }))
+    .filter((entry) => entry.reason !== null);
+  return { estimated: true, model, price, unknown };
+}
+
+/** Claude Code against Codex, from the report of each host's runs (`buildReport`, so each side has passed its own
+ * `checkRuns`): `{ claude, codex, rows }`. `claude` and `codex` say what each side was (`runs`, `model`,
+ * `permissionMode`, `stack`, and Codex's `costEstimate`), and `rows` holds one entry per task, config and effort
+ * that either host recorded, `{ task, config, effort, claude, codex }`, each host's value being its cell
+ * (`buildCells`) or `null` when it recorded no trial there: a cell only one host ran is a row, never left out.
+ * Rows are in order of task name, then config, then effort. The two hosts ran different models, so nothing here
+ * decides between them: it is the two measurements side by side. */
+export function buildComparison(claude, codex) {
+  const cellsOf = (report) => report.efforts.flatMap(({ rows }) => rows.flatMap((row) => CONFIGS.map((config) => row[config]).filter((cell) => cell !== null)));
+  const sideOf = (report) => ({
+    runs: report.runs, model: report.model, permissionMode: report.permissionMode, stack: report.stack,
+    ...(report.costEstimate !== undefined && { costEstimate: report.costEstimate }),
+  });
+  const keyOf = (cell) => JSON.stringify([cell.task, cell.config, cell.effort]);
+  const sides = { claude: new Map(cellsOf(claude).map((cell) => [keyOf(cell), cell])), codex: new Map(cellsOf(codex).map((cell) => [keyOf(cell), cell])) };
+  const rows = [...new Set([...sides.claude.keys(), ...sides.codex.keys()])].map((key) => {
+    const [task, config, effort] = JSON.parse(key);
+    return { task, config, effort, claude: sides.claude.get(key) ?? null, codex: sides.codex.get(key) ?? null };
+  }).sort((a, b) => (a.task < b.task ? -1 : a.task > b.task ? 1 : 0) || CONFIGS.indexOf(a.config) - CONFIGS.indexOf(b.config) || byEffort(a.effort, b.effort));
+  return { claude: sideOf(claude), codex: sideOf(codex), rows };
 }
 
 /** The cells that fail `--require-complete`: for every task at every effort that appears in the runs, each config
@@ -299,13 +432,17 @@ export function checkDiscriminating(report, n) {
 
 export const USAGE = [
   'Usage: node evals/report.mjs [--runs <name,name>] [--results-dir <dir>] [--json] [--require-complete] [--min-discriminating <n>]',
+  '       node evals/report.mjs --codex-results-dir <dir> [--runs <name,name>] [--results-dir <dir>] [--json]',
   '',
   '  --runs <list>              report only these runs of the results directory (default: every *.json)',
-  '  --results-dir <dir>        where the runs are (default: evals/results)',
+  '  --results-dir <dir>        where the runs are (default: evals/results); the runs of one agent, Claude Code or Codex',
   '  --json                     print one JSON document instead of the tables',
   `  --require-complete         exit 1 unless every cell of a task and effort in the runs has ${COMPLETE_TRIALS} trials for both configs`,
   '  --min-discriminating <n>   exit 1 unless at every effort at least n tasks have the verdict score or cost',
+  '  --codex-results-dir <dir>  print Claude Code against Codex instead: the Claude Code runs of the results directory beside',
+  '                             every Codex run of <dir> (evals/results/codex), per task, config and effort; takes neither gate',
   '',
+  'The cost of a Codex trial is an estimate: Codex reports tokens and no cost, so they are priced at the published list price.',
   'Exit codes: 0 reported, 1 refused (runs that cannot be read together) or a gate failed, 2 usage error.',
 ].join('\n');
 
@@ -313,11 +450,13 @@ export class UsageError extends Error {}
 
 const RUN_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/;
 
-/** The command line as `{ runs, resultsDir, json, requireComplete, minDiscriminating }` (`undefined` or `false` for
- * what was not given). A flag that is unknown, repeated or missing its value, a value that is not a positive integer
- * for `--min-discriminating`, and a run name that is not a plain file name are a `UsageError`. */
+/** The command line as `{ runs, resultsDir, codexResultsDir, json, requireComplete, minDiscriminating }` (`undefined`
+ * or `false` for what was not given). A flag that is unknown, repeated or missing its value, a value that is not a
+ * positive integer for `--min-discriminating`, and a run name that is not a plain file name are a `UsageError`. So
+ * is a gate given with `--codex-results-dir`: a gate holds the A/B result of one host, the comparison is of two, and
+ * a gate that was typed and checked nothing would let a command pass for one it was not. */
 export function parseArgs(argv) {
-  const options = { runs: undefined, resultsDir: undefined, json: false, requireComplete: false, minDiscriminating: undefined };
+  const options = { runs: undefined, resultsDir: undefined, codexResultsDir: undefined, json: false, requireComplete: false, minDiscriminating: undefined };
   const given = new Set();
   const once = (flag) => {
     if (given.has(flag)) throw new UsageError(`${flag} was given twice`);
@@ -341,9 +480,9 @@ export function parseArgs(argv) {
       if (twice !== undefined) throw new UsageError(`--runs: ${JSON.stringify(twice)} is listed twice`);
       options.runs = names;
       i += 1;
-    } else if (token === '--results-dir') {
+    } else if (token === '--results-dir' || token === '--codex-results-dir') {
       once(token);
-      options.resultsDir = valueOf(token, i);
+      options[token === '--results-dir' ? 'resultsDir' : 'codexResultsDir'] = valueOf(token, i);
       i += 1;
     } else if (token === '--min-discriminating') {
       once(token);
@@ -356,6 +495,10 @@ export function parseArgs(argv) {
     } else {
       throw new UsageError(`unexpected argument ${JSON.stringify(token)}`);
     }
+  }
+  if (options.codexResultsDir !== undefined) {
+    const gate = ['--require-complete', '--min-discriminating'].find((flag) => given.has(flag));
+    if (gate !== undefined) throw new UsageError(`${gate} is not taken with --codex-results-dir: a gate holds the A/B result of one host, and the comparison is of two`);
   }
   return options;
 }
@@ -380,7 +523,30 @@ const spreadText = (cell) => (cell === null ? '-' : `${scoreText(cell.score.mean
 const verdictText = (row) => (row.winner === null ? row.verdict : `${row.verdict}: ${row.winner}`);
 const tokensOf = (cell) => (cell === null || !finite(cell.inputTokens) || !finite(cell.outputTokens) ? null : cell.inputTokens + cell.outputTokens);
 
-function effortLines({ effort, rows }) {
+const stackText = (stack) => Object.entries(stack ?? {}).map(([key, value]) => `${key} ${value ?? 'unknown'}`).join(', ');
+const errorText = (cell) => `${cell.errors} of ${cell.n} trials recorded an error (counted, with the score they were graded at)`;
+
+// What a cost is, said wherever one is shown. Claude Code's wording is the one F5's report has always printed.
+const CLAUDE_COST = "Claude Code's list cost of the whole session, subagents included, in US dollars";
+const VERDICT_RULE = 'cost verdicts need the scores equal (0.02 or the pooled deviation) and a gap above the pooled cost deviation';
+/** The column label of a cost that is an estimate, so the table says it and not only the line above it. */
+const ESTIMATED_COST = 'est. cost';
+/** What the costs of Codex runs are (`codexCostEstimate`), in words: an estimate, at which price, read where and
+ * when, and in what respect a lower bound; or that there is none. */
+function estimateText({ model, price }) {
+  if (price === null) return `unknown: no list price is recorded for model ${model} (CODEX_LIST_PRICES in evals/report.mjs) and Codex reports no cost, so none is estimated`;
+  const rate = (value) => `$${value.toFixed(2)}`;
+  const { input, cachedInput, cacheWrite, output } = price.usdPerMillion;
+  return `ESTIMATED, since Codex reports tokens and no cost: each trial's tokens at the list price of ${model}, ${price.tier}: input ${rate(input)}, cached input ${rate(cachedInput)}, `
+    + `cache writes ${rate(cacheWrite)}, output ${rate(output)} per 1M tokens, in US dollars (${price.source}, read ${price.read}); a lower bound where a request was over that context, which a record cannot tell`;
+}
+const unestimatedLines = (estimate) => (estimate?.unknown ?? []).map(({ trial, reason }) => `cost not estimated for ${trial}: ${reason}`);
+// Decided in T4 (`odd/tasks/codex-parity.md`, Progress): the download happens inside the agent process, and nothing
+// in a record separates it from `wallMs`, so every wall time of a Codex trial is shown with this beside it.
+const CODEX_WALL = "a Codex trial's wall time includes its per-trial setup download (curated plugins and marketplaces, about 60 MB, more in the current arm), "
+  + 'which has no counterpart in a Claude trial and is not measured apart';
+
+function effortLines({ effort, rows }, costLabel = 'cost') {
   const per = (cell, pick) => (cell === null ? '-' : pick(cell));
   const body = rows.map((row) => [
     row.task,
@@ -394,13 +560,13 @@ function effortLines({ effort, rows }) {
     row.predecessor === null ? '-' : row.predecessor ? 'yes' : 'no',
   ]);
   const lines = [`effort ${effort}`, ...table(
-    ['task', 'n min/cur', 'score min', 'score cur', 'cost min', 'cost cur', 'cur/min', 'tokens min', 'tokens cur', 'wall min', 'wall cur', 'verdict', 'old rule'],
+    ['task', 'n min/cur', 'score min', 'score cur', `${costLabel} min`, `${costLabel} cur`, 'cur/min', 'tokens min', 'tokens cur', 'wall min', 'wall cur', 'verdict', 'old rule'],
     body,
   )];
   for (const row of rows) {
     for (const config of CONFIGS) {
       const cell = row[config];
-      if (cell !== null && cell.errors > 0) lines.push(`${row.task} ${config}: ${cell.errors} of ${cell.n} trials recorded an error (counted, with the score they were graded at)`);
+      if (cell !== null && cell.errors > 0) lines.push(`${row.task} ${config}: ${errorText(cell)}`);
     }
   }
   return lines;
@@ -408,16 +574,22 @@ function effortLines({ effort, rows }) {
 
 /** The report as text: a table per effort (task, trials per config, mean score and its [min-max] per config, cost
  * in US dollars, the ratio current / minimal, input + output tokens, wall time, the verdict and whether the predecessor's rule
- * would call it a difference), then the count of discriminating tasks per effort. */
+ * would call it a difference), then the count of discriminating tasks per effort.
+ *
+ * A report of Codex runs names its agent, says in the cost line and in the column labels that its costs are
+ * estimates and at what price, says what its wall times include, and names each trial whose cost was not estimated.
+ * A report of Claude Code runs is, to the byte, what it was before there was a second agent. */
 export function formatReport(report, { minDiscriminating } = {}) {
-  const stack = Object.entries(report.stack ?? {}).map(([key, value]) => `${key} ${value ?? 'unknown'}`).join(', ');
+  const codex = agentOf(report) === 'codex';
   const lines = [
     `runs: ${report.runs.join(', ')}`,
-    `model ${report.model}, permission mode ${report.permissionMode}`,
-    `stack: ${stack}`,
-    "cost: Claude Code's list cost of the whole session, subagents included, in US dollars; cost verdicts need the scores equal (0.02 or the pooled deviation) and a gap above the pooled cost deviation",
+    `${codex ? `agent ${report.agent}, ` : ''}model ${report.model}, permission mode ${report.permissionMode}`,
+    `stack: ${stackText(report.stack)}`,
+    `cost: ${codex ? estimateText(report.costEstimate) : CLAUDE_COST}; ${VERDICT_RULE}`,
   ];
-  for (const entry of report.efforts) lines.push('', ...effortLines(entry));
+  if (codex) lines.push(`wall: ${CODEX_WALL}`);
+  for (const entry of report.efforts) lines.push('', ...effortLines(entry, codex ? ESTIMATED_COST : 'cost'));
+  if (unestimatedLines(report.costEstimate).length > 0) lines.push('', ...unestimatedLines(report.costEstimate));
   lines.push('', 'Discriminating tasks per effort (verdict score or cost):');
   for (const { effort, counts } of report.efforts) lines.push(`  ${effort}: ${counts.discriminating} of ${counts.tasks} (score ${counts.score}, cost ${counts.cost}, none ${counts.none}, incomplete ${counts.incomplete})`);
   if (minDiscriminating !== undefined) {
@@ -427,13 +599,61 @@ export function formatReport(report, { minDiscriminating } = {}) {
   return `${lines.join('\n')}\n`;
 }
 
+/** The comparison (`buildComparison`) as text: what each side was, one table with a row per task, config and effort
+ * (the trials of each host, then each host's mean score, input + output tokens, cost and wall time, formatted as
+ * `formatReport` formats them), and the notes without which the columns would be read wrong. A cell a host did not
+ * record reads `missing` in that host's columns; `?` is a value the host recorded trials for and does not know. */
+export function formatComparison(comparison) {
+  const sideLine = (name) => `${name}: runs ${comparison[name].runs.join(', ')}; model ${comparison[name].model}; stack: ${stackText(comparison[name].stack)}`;
+  const per = (cell, pick) => (cell === null ? 'missing' : pick(cell));
+  const pair = (row, pick) => [per(row.claude, pick), per(row.codex, pick)];
+  const body = comparison.rows.map((row) => [
+    row.task, row.config, row.effort,
+    `${row.claude?.n ?? 0}/${row.codex?.n ?? 0}`,
+    ...pair(row, (cell) => scoreText(cell.score.mean)),
+    ...pair(row, (cell) => countText(tokensOf(cell))),
+    ...pair(row, (cell) => costText(cell.cost.mean)),
+    ...pair(row, (cell) => durationText(cell.wallMs)),
+  ]);
+  const lines = [
+    'Claude Code against Codex: one row per task, config and effort, each value the mean over the trials of its cell that know it',
+    sideLine('claude'),
+    sideLine('codex'),
+    '',
+    ...table(
+      ['task', 'config', 'effort', 'n claude/codex', 'score claude', 'score codex', 'tokens claude', 'tokens codex', 'cost claude', `${ESTIMATED_COST} codex`, 'wall claude', 'wall codex'],
+      body,
+    ),
+  ];
+  for (const row of comparison.rows) {
+    for (const host of AGENTS) {
+      if (row[host] !== null && row[host].errors > 0) lines.push(`${row.task} ${row.config} ${row.effort}, ${host}: ${errorText(row[host])}`);
+    }
+  }
+  lines.push(
+    '',
+    `cost: ${CLAUDE_COST}, beside a Codex cost that is ${estimateText(comparison.codex.costEstimate)}`,
+    ...unestimatedLines(comparison.codex.costEstimate),
+    "tokens: input plus output as each host reports them, the cache reads and cache writes counted once in the input and the reasoning in the output; Claude Code's are summed over every model "
+      + "of the session, subagents included, Codex's over the turns of the session; that Codex counts its cache writes inside its input and its reasoning inside its output is assumed, "
+      + 'and a trial whose record contradicts it has unknown tokens and no estimated cost',
+    `wall: ${CODEX_WALL}`,
+  );
+  return `${lines.join('\n')}\n`;
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** The command. Resolves to the exit code: 0 for a report printed, 1 for runs it refuses to read together (a model,
- * permission mode or stack that differs, a trial recorded twice, a file it cannot read), for a gate that failed
+/** The command. Resolves to the exit code: 0 for a report printed, 1 for runs it refuses to read together (an agent,
+ * model, permission mode or stack that differs, a trial recorded twice, a file it cannot read), for a gate that failed
  * (the report is still printed, the failure goes to stderr) and 2 for a usage error. A refusal prints nothing as a
  * result. Everything it prints goes through `deps.stdout` and `deps.stderr`; `deps.resultsDir` is the directory
- * `--results-dir` overrides. Nothing here writes a file or runs anything: it only reads. */
+ * `--results-dir` overrides. Nothing here writes a file or runs anything: it only reads.
+ *
+ * With `--codex-results-dir <dir>` it prints the comparison instead (`buildComparison`): the report of the results
+ * directory, which must be of Claude Code runs, beside the report of every run in `<dir>`, which must be of Codex
+ * runs. Each side is built as a report of its own, so each is refused for what would refuse it alone, and a side
+ * that holds the other agent's runs is refused too: the columns would be named for a host that did not run them. */
 export async function reportMain(argv, env = process.env, deps = {}) {
   const { stdout = process.stdout, stderr = process.stderr, resultsDir = path.join(HERE, 'results') } = deps;
   let options;
@@ -445,12 +665,25 @@ export async function reportMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   let report;
+  let comparison = null;
   try {
-    report = buildReport(loadRuns({ dir: path.resolve(options.resultsDir ?? resultsDir), names: options.runs }));
+    const dir = path.resolve(options.resultsDir ?? resultsDir);
+    report = buildReport(loadRuns({ dir, names: options.runs }));
+    if (options.codexResultsDir !== undefined) {
+      if (agentOf(report) !== 'claude') throw new ReportError(`the results directory ${dir} holds runs of ${agentOf(report)}: the comparison reads the Claude Code runs there, and the Codex ones in --codex-results-dir`);
+      const codexDir = path.resolve(options.codexResultsDir);
+      const codex = buildReport(loadRuns({ dir: codexDir }));
+      if (agentOf(codex) !== 'codex') throw new ReportError(`--codex-results-dir ${codexDir} holds runs of ${agentOf(codex)}: the comparison reads the Codex runs there`);
+      comparison = buildComparison(report, codex);
+    }
   } catch (error) {
     if (!(error instanceof ReportError)) throw error;
     stderr.write(`${error.message}\n`);
     return 1;
+  }
+  if (comparison !== null) {
+    stdout.write(options.json ? `${JSON.stringify(comparison, null, 2)}\n` : formatComparison(comparison));
+    return 0;
   }
 
   const missing = options.requireComplete ? incompleteCells(report) : null;
