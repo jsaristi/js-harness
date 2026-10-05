@@ -1,0 +1,563 @@
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  CODEX_TEMPLATE_KIND, DESKTOP_APP, assertLogin, buildCodexTemplate, codexHomeOf, copyLogin, removeCodexTemplate, removeLogin, seedCodexHome, seedFromCodexTemplate,
+  withEngramEnv, withoutDesktopApp,
+} from './codex-home.mjs';
+import { buildTemplate, removeTemplate, seedHome } from './home.mjs';
+
+const PORT = 41234;
+const WINDOWS = process.platform === 'win32';
+
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-codex-home-test-'));
+after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+let counter = 0;
+const tmp = (name) => {
+  const dir = path.join(scratch, `${name}-${counter++}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+// ---- a fake real home --------------------------------------------------------------------------------
+// No test reads the machine's own `~/.codex`: everything below is built in the scratch directory.
+
+const NEVER = 'SENTINEL-NEVER-COPIED';
+const LOGIN = '{"auth_mode":"chatgpt","tokens":{"id_token":"SENTINEL-DUMMY-LOGIN"}}\n';
+const HEADER = 'SENTINEL-DUMMY-HEADER';
+const write = (file, content) => {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+};
+
+// The three ways a config file spells one path: a TOML basic or JSON string doubles each backslash, a TOML
+// literal string keeps it, and a path inside a JSON value a tool wrote may use `/`. On POSIX the three agree.
+const escaped = (value) => JSON.stringify(value).slice(1, -1);
+const slashed = (value) => value.replaceAll('\\', '/');
+
+// The desktop app's pieces, which the current arm leaves out. The tests hold their own copy of the list, as
+// they do for every boundary: a name dropped from the module by accident fails here.
+const DESKTOP_PLUGINS = ['unified-computer-use@openai-bundled', 'computer-use@openai-bundled', 'browser@openai-bundled', 'chrome@openai-bundled', 'codex-app-tools@openai-bundled'];
+const DESKTOP_DIRS = ['unified-computer-use', 'computer-use', 'browser', 'chrome', 'codex-app-tools'].map((name) => `.codex/plugins/cache/openai-bundled/${name}`);
+
+/** The `config.toml` of the fake home: every shape the real one holds a home path in. The paths inside
+ * `.codex` must end up in the trial's own; the ones elsewhere in the home (a program installed in the user
+ * profile) are left as they are. With `desktop: false` it is the same file without the desktop app's
+ * pieces (the `notify` key, the `node_repl` server and the five plugins), which is what a template keeps. */
+function configToml(home, { desktop = true, eol = '\n' } = {}) {
+  const codex = path.join(home, '.codex');
+  const local = path.join(home, 'AppData', 'Local');
+  const only = (...lines) => (desktop ? lines : []);
+  const plugin = (id) => only(`[plugins."${id}"]`, 'enabled = true', '');
+  return [
+    `# engram-windows-hook-command-v1: "${escaped(path.join(local, 'engram', 'bin', 'engram.exe'))}"`,
+    ...only(`notify = [ "${escaped(path.join(local, 'OpenAI', 'codex-computer-use.exe'))}", "turn-ended" ]`),
+    `model_instructions_file = "${escaped(path.join(codex, 'engram-instructions.md'))}"`,
+    `experimental_compact_prompt_file = "${escaped(path.join(codex, 'engram-compact-prompt.md'))}"`,
+    'model = "some-model"',
+    '',
+    '[marketplaces.bundled]',
+    'source_type = "local"',
+    `source = '\\\\?\\${path.join(codex, '.tmp', 'bundled-marketplaces', 'bundled')}'`,
+    '',
+    ...plugin(DESKTOP_PLUGINS[0]),
+    '[plugins."demo@bundled"]',
+    'enabled = true',
+    '',
+    ...DESKTOP_PLUGINS.slice(1, 4).flatMap(plugin),
+    '[plugins."code-review@openai-bundled"]',
+    'enabled = true',
+    '',
+    ...plugin(DESKTOP_PLUGINS[4]),
+    ...only(
+      '[mcp_servers.node_repl]',
+      'args = []',
+      `command = '${path.join(local, 'OpenAI', 'node_repl.exe')}'`,
+      '',
+      '[mcp_servers.node_repl.env]',
+      `CODEX_HOME = '${codex}'`,
+      'SKY_CUA_NATIVE_PIPE = "1"',
+      '',
+    ),
+    '[mcp_servers.tools]',
+    `command = '${path.join(local, 'OpenAI', 'tools.exe')}'`,
+    '',
+    '[mcp_servers.tools.env]',
+    `CODEX_HOME = '${codex}'`,
+    `TRUSTED_SERVICES = '{"browser":"${slashed(path.join(codex, 'plugins', 'cache', 'bundled', 'demo', '1.0.0', 'service.mjs'))}"}'`,
+    `TRUSTED_PATHS = '${codex};${path.join(local, 'OpenAI', 'modules')}'`,
+    '',
+    `[hooks.state.'${path.join(codex, 'hooks.json')}:session_start:0:0']`,
+    'trusted_hash = "sha256:0123"',
+    '',
+    '[mcp_servers.context7.http_headers]',
+    `Authorization = "Bearer ${HEADER}"`,
+    '',
+    `[projects.'${home.toLowerCase()}']`,
+    'trust_level = "trusted"',
+    '',
+    '[mcp_servers.engram]',
+    'command = "engram"',
+    'args = ["mcp", "--tools=agent"]',
+    '',
+  ].join(eol);
+}
+
+const hooksJson = (home) => `${JSON.stringify({
+  hooks: {
+    SessionStart: [{ hooks: [{ type: 'command', command: `powershell -File "${path.join(home, '.codex', 'herdr-agent-state.ps1')}" session`, timeout: 10 }] }],
+    Stop: [{ hooks: [{ type: 'command', command: 'gentle-ai telemetry runtime codex --json', timeout: 4 }] }],
+  },
+}, null, 2)}\n`;
+
+/** What is copied, relative to the home, and what never is (each of those holds the sentinel, so a copy of
+ * it anywhere is found by content as well as by name). */
+const COPIED = [
+  '.codex/config.toml', '.codex/AGENTS.md', '.codex/hooks.json', '.codex/engram-instructions.md', '.codex/engram-compact-prompt.md', '.codex/sdd-cheap.config.toml',
+  '.codex/herdr-agent-state.ps1', '.codex/skills/demo/SKILL.md', '.codex/skills/.system/.codex-system-skills.marker',
+  '.codex/plugins/cache/bundled/demo/1.0.0/.codex-plugin/plugin.json', '.codex/plugins/cache/bundled/demo/1.0.0/.mcp.json',
+  '.codex/plugins/cache/bundled/demo/1.0.0/service.mjs', '.codex/plugins/cache/openai-bundled/code-review/1.0.0/plugin.json', '.gentle-ai/state.json',
+];
+const PLUGIN_MCP = '.codex/plugins/cache/bundled/demo/1.0.0/.mcp.json';
+const REWRITTEN = ['.codex/config.toml', '.codex/hooks.json', PLUGIN_MCP];
+const EXCLUDED = [
+  '.codex/state_5.sqlite', '.codex/state_5.sqlite-shm', '.codex/state_5.sqlite-wal', '.codex/logs_2.sqlite', '.codex/memories_1.sqlite', '.codex/goals_1.sqlite',
+  '.codex/queue_1.sqlite', '.codex/sessions/2026/rollout.jsonl', '.codex/cache/c.json', '.codex/.tmp/bundled-marketplaces/bundled/marketplace.json', '.codex/.sandbox/s.txt',
+  '.codex/app-server-control/c.json', '.codex/app-server-daemon/d.json', '.codex/.codex-global-state.json', '.codex/.codex-global-state.json.bak', '.codex/config.toml.bak',
+  '.codex/plugins/.plugin-appserver/codex.exe', '.codex/plugins/.remote-plugin-install-staging/x.json', '.codex/models_cache.json', '.codex/installation_id',
+  '.codex/version.json', '.codex/stray.txt', '.engram/engram.db', '.gentle-ai/telemetry.json', 'notes.txt',
+  // The desktop app's plugins, each with the MCP server it would declare.
+  ...DESKTOP_DIRS.flatMap((dir) => [`${dir}/1.0.0/.mcp.json`, `${dir}/1.0.0/.codex-plugin/plugin.json`]), `${DESKTOP_DIRS[3]}/latest/.mcp.json`,
+];
+
+/** A believable stand-in for the machine's real home. `config` replaces the `config.toml` text. */
+function makeRealHome({ config } = {}) {
+  const home = path.join(tmp('real'), 'Person');
+  const codex = path.join(home, '.codex');
+  write(path.join(codex, 'config.toml'), config ?? configToml(home));
+  write(path.join(codex, 'AGENTS.md'), '# global instructions\n');
+  write(path.join(codex, 'hooks.json'), hooksJson(home));
+  write(path.join(codex, 'engram-instructions.md'), 'memory protocol\n');
+  write(path.join(codex, 'engram-compact-prompt.md'), 'compact prompt\n');
+  write(path.join(codex, 'sdd-cheap.config.toml'), 'model = "cheap-model"\n');
+  write(path.join(codex, 'herdr-agent-state.ps1'), 'exit 0\n');
+  write(path.join(codex, 'skills', 'demo', 'SKILL.md'), '# demo skill\n');
+  write(path.join(codex, 'skills', '.system', '.codex-system-skills.marker'), 'marker\n');
+  write(path.join(codex, 'plugins', 'cache', 'bundled', 'demo', '1.0.0', '.codex-plugin', 'plugin.json'), '{"name":"demo"}\n');
+  // A plugin declares its own MCP server, and hands it the home: the shape of the real computer-use plugin.
+  const server = { command: path.join(home, 'AppData', 'Local', 'OpenAI', 'tools.exe'), env: { CODEX_HOME: codex } };
+  write(path.join(home, ...PLUGIN_MCP.split('/')), `${JSON.stringify({ mcpServers: { demo: server } }, null, 2)}\n`);
+  write(path.join(codex, 'plugins', 'cache', 'bundled', 'demo', '1.0.0', 'service.mjs'), 'export {};\n');
+  write(path.join(codex, 'plugins', 'cache', 'openai-bundled', 'code-review', '1.0.0', 'plugin.json'), '{"name":"code-review"}\n');
+  write(path.join(home, '.gentle-ai', 'state.json'), '{"rdd_mode":"on"}\n');
+  write(path.join(codex, 'auth.json'), LOGIN);
+  for (const rel of EXCLUDED) write(path.join(home, ...rel.split('/')), `${NEVER}\n`);
+  return home;
+}
+
+/** Every entry below `root`, path to `sha256:size` (a directory is `dir`, a link `link:<target>`), walked
+ * without following links: two equal trees are byte-identical. */
+function hashTree(root) {
+  const tree = new Map();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      const rel = path.relative(root, full).split(path.sep).join('/');
+      if (entry.isSymbolicLink()) tree.set(rel, `link:${fs.readlinkSync(full)}`);
+      else if (entry.isDirectory()) {
+        tree.set(rel, 'dir');
+        walk(full);
+      } else {
+        const bytes = fs.readFileSync(full);
+        tree.set(rel, `${crypto.createHash('sha256').update(bytes).digest('hex')}:${bytes.length}`);
+      }
+    }
+  };
+  walk(root);
+  return tree;
+}
+
+const filesOf = (root) => [...hashTree(root)].filter(([, hash]) => hash !== 'dir' && !hash.startsWith('link:')).map(([rel]) => rel).sort();
+const read = (root, rel) => fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8');
+/** How many times `text` names `target`, whatever the separators (one or two backslashes, or a slash) and,
+ * on Windows, whatever the case. */
+function mentions(text, target) {
+  const fold = (value) => (process.platform === 'win32' ? value.toLowerCase() : value);
+  const flat = (value) => fold(value.replace(/\\+/g, '/'));
+  return flat(text).split(flat(target)).length - 1;
+}
+
+/** A template of a fresh fake real home, and a function that seeds a new trial home from it. */
+function setup(options) {
+  const realHome = makeRealHome(options);
+  const templateDir = path.join(tmp('template'), 'tpl');
+  const summary = buildCodexTemplate({ realHome, templateDir });
+  const seed = (engramPort = PORT) => {
+    const home = path.join(tmp('trial'), 'home');
+    seedCodexHome(templateDir, home, { engramPort });
+    return home;
+  };
+  return { realHome, templateDir, summary, seed };
+}
+
+// ---- buildCodexTemplate ------------------------------------------------------------------------------
+
+test('buildCodexTemplate copies exactly the copy list of the real home into a template, and reports it', () => {
+  const { realHome, templateDir, summary } = setup();
+  assert.deepEqual(filesOf(templateDir), ['template.json', ...COPIED.map((rel) => `home/${rel}`)].sort(), 'a copy list, not a deny list: nothing else is there');
+  for (const rel of COPIED.filter((file) => !REWRITTEN.includes(file))) assert.equal(read(path.join(templateDir, 'home'), rel), read(realHome, rel), rel);
+  assert.equal(summary.templateDir, templateDir);
+  assert.equal(summary.files, COPIED.length);
+  assert.equal(summary.bytes, COPIED.reduce((total, rel) => total + fs.statSync(path.join(templateDir, 'home', ...rel.split('/'))).size, 0));
+  assert.equal(JSON.parse(read(templateDir, 'template.json')).kind, CODEX_TEMPLATE_KIND);
+});
+
+test('the template holds no login, no state database, no session, cache or backup: neither by name nor by content', () => {
+  const { templateDir } = setup();
+  const files = filesOf(templateDir);
+  const names = files.flatMap((rel) => rel.split('/'));
+  for (const name of ['auth.json', 'sessions', '.tmp', '.sandbox', 'app-server-control', 'app-server-daemon', '.plugin-appserver', '.remote-plugin-install-staging', '.engram']) {
+    assert.ok(!names.includes(name), `${name} is in the template`);
+  }
+  // `plugins/cache` is the plugins themselves; the `cache` of the home is Codex's own and stays behind.
+  assert.deepEqual(files.filter((rel) => rel.startsWith('home/.codex/cache/')), []);
+  assert.deepEqual(names.filter((name) => /sqlite|\.bak$|^\.codex-global-state/.test(name)), []);
+  for (const rel of files) {
+    const text = read(templateDir, rel);
+    assert.ok(!text.includes(NEVER), `${rel} holds something that is never copied`);
+    assert.ok(!text.includes('SENTINEL-DUMMY-LOGIN'), `${rel} holds the login`);
+  }
+});
+
+test('buildCodexTemplate reads the real home without changing a byte of it', () => {
+  const realHome = makeRealHome();
+  const before = hashTree(realHome);
+  buildCodexTemplate({ realHome, templateDir: path.join(tmp('template'), 'tpl') });
+  assert.deepEqual(hashTree(realHome), before);
+});
+
+test('in the template every path into the real .codex is a placeholder, whatever its spelling; the rest of the home is left and reported', () => {
+  const { realHome, templateDir, summary } = setup();
+  const codex = path.join(realHome, '.codex');
+  for (const rel of REWRITTEN) assert.equal(mentions(read(path.join(templateDir, 'home'), rel), codex), 0, `${rel} still names the real .codex`);
+  const config = read(path.join(templateDir, 'home'), '.codex/config.toml');
+  // Six values and one table key in config.toml, in three spellings (on POSIX the three are one: `/`).
+  const count = (style) => config.split(`@@TRIAL_CODEX_HOME:${style}@@`).length - 1;
+  assert.deepEqual([count('escaped'), count('plain'), count('slash')], WINDOWS ? [2, 4, 1] : [0, 0, 7]);
+  // Programs installed in the user profile: a trial home holds no copy of them, so the value is kept.
+  assert.equal(mentions(config, path.join(realHome, 'AppData', 'Local')), 3);
+  assert.ok(config.includes(`[projects.'${realHome.toLowerCase()}']`));
+
+  const about = (file) => summary.warnings.filter((warning) => warning.startsWith(`${file}:`));
+  assert.equal(about('config.toml').length, 2, summary.warnings.join('\n'));
+  // Three programs (the desktop app's two are gone with their tables), and on Windows (where a path matches
+  // in any case) the trusted home of `[projects]`.
+  assert.match(about('config.toml')[0], new RegExp(`outside \\.codex in ${WINDOWS ? 4 : 3} place\\(s\\)`));
+  assert.match(about('config.toml')[1], /1 path\(s\).*does not hold.*\.tmp/, 'the marketplace source lives in .tmp, which is never copied');
+  assert.deepEqual(about('hooks.json'), []);
+  assert.equal(about(PLUGIN_MCP.slice('.codex/'.length)).length, 1, 'a plugin\'s own config is reported under its path');
+  assert.deepEqual(JSON.parse(read(templateDir, 'template.json')).rewritten, ['.codex/config.toml', '.codex/hooks.json', PLUGIN_MCP], 'the files a seed has to finish');
+  for (const warning of summary.warnings) {
+    assert.ok(!warning.includes(HEADER), 'a warning never carries a value');
+    assert.equal(mentions(warning, realHome), 0, 'nor a path of the real machine');
+  }
+});
+
+test('a copied file that is not rewritten and names the real home is reported, by item and count', () => {
+  const realHome = makeRealHome();
+  write(path.join(realHome, '.codex', 'AGENTS.md'), `read ${path.join(realHome, '.codex', 'skills', 'demo', 'SKILL.md')} first\n`);
+  write(path.join(realHome, '.codex', 'skills', 'demo', 'SKILL.md'), `see ${escaped(path.join(realHome, 'notes.txt'))} and ${slashed(realHome)}/x\n`);
+  const summary = buildCodexTemplate({ realHome, templateDir: path.join(tmp('template'), 'tpl') });
+  assert.ok(summary.warnings.some((warning) => /^AGENTS\.md: names the real home in 1 place\(s\)/.test(warning)), summary.warnings.join('\n'));
+  assert.ok(summary.warnings.some((warning) => /^skills: names the real home in 2 place\(s\)/.test(warning)), summary.warnings.join('\n'));
+});
+
+test('buildCodexTemplate takes only what exists, and refuses a home with no .codex directory', () => {
+  const realHome = path.join(tmp('sparse'), 'person');
+  write(path.join(realHome, '.codex', 'config.toml'), 'model = "m"\n');
+  const templateDir = path.join(tmp('template'), 'tpl');
+  assert.equal(buildCodexTemplate({ realHome, templateDir }).files, 1);
+  assert.deepEqual(filesOf(templateDir), ['home/.codex/config.toml', 'template.json']);
+  assert.throws(() => buildCodexTemplate({ realHome: tmp('empty-home'), templateDir: path.join(tmp('template'), 'tpl') }), /\.codex/);
+  assert.throws(() => buildCodexTemplate({ realHome: path.join(scratch, 'does-not-exist'), templateDir: path.join(tmp('template'), 'tpl') }), /real home/);
+});
+
+test('buildCodexTemplate keeps the guards of the Claude template: never inside the real home, never into a directory in use', () => {
+  const realHome = makeRealHome();
+  assert.throws(() => buildCodexTemplate({ realHome, templateDir: path.join(realHome, 'tpl') }), /inside the real home/);
+  assert.throws(() => buildCodexTemplate({ realHome, templateDir: 'relative/tpl' }), /absolute/);
+  const used = tmp('used');
+  write(path.join(used, 'mine.txt'), 'keep\n');
+  assert.throws(() => buildCodexTemplate({ realHome, templateDir: used }), /not empty/);
+  assert.deepEqual(fs.readdirSync(used), ['mine.txt']);
+});
+
+test('an engram server written in a shape that cannot be pointed at the trial fails the build, and nothing is left behind', () => {
+  for (const config of ['[mcp_servers.engram]\ncommand = "engram"\nenv = { ENGRAM_PORT = "7437" }\n', '[mcp_servers]\nengram = { command = "engram" }\n', 'mcp_servers.engram.command = "engram"\n']) {
+    const realHome = makeRealHome({ config });
+    const parent = tmp('template');
+    assert.throws(() => buildCodexTemplate({ realHome, templateDir: path.join(parent, 'tpl') }), /engram/);
+    assert.deepEqual(fs.readdirSync(parent), [], 'a failed build is rolled back');
+  }
+});
+
+// ---- the desktop app's pieces ------------------------------------------------------------------------
+
+test('the excluded set is the notify key, the node_repl server and the five plugins of the desktop app', () => {
+  assert.deepEqual(DESKTOP_APP, { keys: ['notify'], servers: ['node_repl'], plugins: DESKTOP_PLUGINS });
+});
+
+test('the template\'s config.toml has no notify, no node_repl table or sub-table and none of the five plugin tables; everything else is byte for byte', () => {
+  for (const eol of ['\n', '\r\n']) {
+    const realHome = makeRealHome();
+    const configFile = path.join(realHome, '.codex', 'config.toml');
+    fs.writeFileSync(configFile, configToml(realHome, { eol }));
+    const withDesktop = path.join(tmp('template'), 'tpl');
+    buildCodexTemplate({ realHome, templateDir: withDesktop });
+    const config = read(path.join(withDesktop, 'home'), '.codex/config.toml');
+    for (const gone of ['notify', 'node_repl', 'SKY_CUA_NATIVE_PIPE', 'codex-computer-use.exe', ...DESKTOP_PLUGINS]) assert.ok(!config.includes(gone), `${gone} is still in config.toml`);
+    for (const kept of ['[plugins."demo@bundled"]', '[plugins."code-review@openai-bundled"]', '[mcp_servers.tools]', '[mcp_servers.tools.env]', '[mcp_servers.engram]', '[hooks.state.']) {
+      assert.ok(config.includes(kept), `${kept} was taken out`);
+    }
+    // The same home, with a config that never had those pieces: the two templates hold the same bytes.
+    fs.writeFileSync(configFile, configToml(realHome, { desktop: false, eol }));
+    const without = path.join(tmp('template'), 'tpl');
+    buildCodexTemplate({ realHome, templateDir: without });
+    assert.equal(config, read(path.join(without, 'home'), '.codex/config.toml'), `with ${JSON.stringify(eol)} line endings`);
+  }
+});
+
+test('the five plugin directories are not in the copied cache, while a kept plugin of the same marketplace is', () => {
+  const { templateDir, seed } = setup();
+  const copied = (root) => filesOf(root).filter((rel) => rel.includes('.codex/plugins/cache/'));
+  for (const root of [templateDir, seed()]) {
+    const files = copied(root);
+    for (const dir of DESKTOP_DIRS) assert.deepEqual(files.filter((rel) => rel.includes(`${dir}/`)), [], `${dir} was copied`);
+    assert.equal(files.filter((rel) => rel.includes('.codex/plugins/cache/openai-bundled/code-review/')).length, 1);
+    assert.ok(!fs.existsSync(path.join(root, root === templateDir ? 'home' : '', ...DESKTOP_DIRS[0].split('/'))), 'not even as an empty directory');
+  }
+});
+
+test('withoutDesktopApp removes each table from its header to the next one, whatever the header\'s spelling, and nothing else', () => {
+  const kept = ['model = "m"', '', '[tui]', 'notify = true', '', '[plugins."demo@bundled"]', 'enabled = true', '', '[mcp_servers.other]', 'command = "other"', ''];
+  const toml = [
+    'notify = [ "C:\\\\x\\\\codex-computer-use.exe", "turn-ended" ] # a comment', ...kept.slice(0, 5),
+    '[ mcp_servers . "node_repl" ]', 'command = "x"', '# a comment inside', '', '[mcp_servers.node_repl.env]', 'A = "1"', '',
+    ...kept.slice(5, 8),
+    "[plugins.'chrome@openai-bundled']", 'enabled = true', '', '[plugins."browser@openai-bundled".settings]', 'x = 1', '',
+    ...kept.slice(8),
+  ];
+  for (const eol of ['\n', '\r\n']) assert.equal(withoutDesktopApp(toml.join(eol)), kept.join(eol));
+  for (const same of ['', 'model = "m"', kept.join('\n'), '[plugins]\n"demo@bundled" = { enabled = true }\n', 'plugins = { "demo@bundled" = { enabled = true } }\n']) assert.equal(withoutDesktopApp(same), same);
+});
+
+test('withoutDesktopApp refuses every spelling it cannot take out whole, rather than leave a piece in', () => {
+  for (const toml of [
+    'mcp_servers.node_repl.command = "x"\n',
+    '[mcp_servers]\nnode_repl = { command = "x" }\n',
+    '[mcp_servers]\nnode_repl.command = "x"\n',
+    'mcp_servers = { node_repl = { command = "x" } }\n',
+    '[[mcp_servers.node_repl]]\ncommand = "x"\n',
+    'plugins = { "browser@openai-bundled" = { enabled = true } }\n',
+    '[plugins]\n"chrome@openai-bundled" = { enabled = true }\n',
+    '[plugins]\n"chrome@openai-bundled".enabled = true\n',
+    'plugins."computer-use@openai-bundled".enabled = true\n',
+    'notify = [\n  "x.exe",\n  "turn-ended",\n]\n',
+    'notify = """\nx"""\n',
+    '# see node_repl below\nmodel = "m"\n',
+  ]) assert.throws(() => withoutDesktopApp(toml), /cannot take out/, toml);
+});
+
+test('a config whose desktop pieces cannot be taken out fails the build, and nothing is left behind', () => {
+  const realHome = makeRealHome({ config: '[mcp_servers]\nnode_repl = { command = "x" }\n' });
+  const parent = tmp('template');
+  assert.throws(() => buildCodexTemplate({ realHome, templateDir: path.join(parent, 'tpl') }), /node_repl.*cannot take out/);
+  assert.deepEqual(fs.readdirSync(parent), [], 'a failed build is rolled back');
+});
+
+test('a Codex template and a Claude template are different kinds: neither is seeded from, or removed as, the other', () => {
+  const { templateDir } = setup();
+  assert.throws(() => seedHome(templateDir, path.join(tmp('trial'), 'home'), { engramPort: PORT }), /not a js-harness eval home template/);
+  assert.throws(() => removeTemplate(templateDir), /not a js-harness eval home template/);
+  const claudeHome = path.join(tmp('real'), 'person');
+  write(path.join(claudeHome, '.claude', 'settings.json'), '{}\n');
+  const claudeTemplate = path.join(tmp('template'), 'tpl');
+  buildTemplate({ realHome: claudeHome, templateDir: claudeTemplate });
+  assert.throws(() => seedCodexHome(claudeTemplate, path.join(tmp('trial'), 'home'), { engramPort: PORT }), /not a js-harness eval Codex home template/);
+  assert.throws(() => removeCodexTemplate(claudeTemplate), /not a js-harness eval Codex home template/);
+  assert.ok(fs.existsSync(claudeTemplate) && fs.existsSync(templateDir));
+  removeCodexTemplate(templateDir);
+  assert.ok(!fs.existsSync(templateDir));
+  removeCodexTemplate(templateDir);
+});
+
+// ---- seedCodexHome -----------------------------------------------------------------------------------
+
+test('seedCodexHome copies the template and writes every placeholder as the trial\'s own .codex, in the spelling the value had', () => {
+  const { realHome, seed } = setup();
+  const home = seed();
+  const codex = path.join(home, '.codex');
+  assert.deepEqual(filesOf(home), [...COPIED].sort(), 'the copy list, and no login: that is a separate step');
+  for (const rel of COPIED.filter((file) => !REWRITTEN.includes(file))) assert.equal(read(home, rel), read(realHome, rel), rel);
+
+  const config = read(home, '.codex/config.toml');
+  for (const rel of REWRITTEN) {
+    assert.ok(!read(home, rel).includes('@@TRIAL_CODEX_HOME'), `${rel} still holds a placeholder`);
+    assert.equal(mentions(read(home, rel), path.join(realHome, '.codex')), 0, `${rel} names the real .codex`);
+  }
+  const lines = config.split('\n');
+  const line = (start) => lines.find((candidate) => candidate.startsWith(start));
+  assert.equal(line('model_instructions_file'), `model_instructions_file = "${escaped(path.join(codex, 'engram-instructions.md'))}"`);
+  assert.equal(line('source ='), `source = '\\\\?\\${path.join(codex, '.tmp', 'bundled-marketplaces', 'bundled')}'`);
+  assert.equal(line('CODEX_HOME'), `CODEX_HOME = '${codex}'`);
+  assert.equal(line('TRUSTED_SERVICES'), `TRUSTED_SERVICES = '{"browser":"${slashed(path.join(codex, 'plugins', 'cache', 'bundled', 'demo', '1.0.0', 'service.mjs'))}"}'`);
+  assert.equal(line('TRUSTED_PATHS'), `TRUSTED_PATHS = '${codex};${path.join(realHome, 'AppData', 'Local', 'OpenAI', 'modules')}'`, 'the first path moves, the program beside it stays');
+  assert.equal(line('[hooks.state'), `[hooks.state.'${path.join(codex, 'hooks.json')}:session_start:0:0']`, 'the key a hook\'s trust is stored under follows the file');
+  assert.equal(line('command = \''), `command = '${path.join(realHome, 'AppData', 'Local', 'OpenAI', 'tools.exe')}'`);
+  assert.equal(line('Authorization'), `Authorization = "Bearer ${HEADER}"`, 'what is not a path is not touched');
+
+  const hooks = JSON.parse(read(home, '.codex/hooks.json'));
+  assert.equal(hooks.hooks.SessionStart[0].hooks[0].command, `powershell -File "${path.join(codex, 'herdr-agent-state.ps1')}" session`);
+  assert.ok(fs.existsSync(path.join(codex, 'herdr-agent-state.ps1')), 'and the script it runs is there');
+  // A plugin's MCP server would otherwise be handed the real CODEX_HOME, and write there.
+  const { demo } = JSON.parse(read(home, PLUGIN_MCP)).mcpServers;
+  assert.deepEqual(demo, { command: path.join(realHome, 'AppData', 'Local', 'OpenAI', 'tools.exe'), env: { CODEX_HOME: codex } });
+});
+
+test('seedCodexHome points the engram server of config.toml at the trial\'s own store and port', () => {
+  const { seed } = setup();
+  const home = seed(45678);
+  const config = read(home, '.codex/config.toml');
+  const tail = ['', '[mcp_servers.engram]', 'command = "engram"', 'args = ["mcp", "--tools=agent"]', '', '[mcp_servers.engram.env]', `ENGRAM_DATA_DIR = "${escaped(path.join(home, '.engram'))}"`, 'ENGRAM_PORT = "45678"', ''];
+  assert.ok(config.endsWith(tail.join('\n')), config);
+  assert.ok(!config.includes('7437'));
+});
+
+test('seedCodexHome needs the trial\'s engram port and refuses the real one before anything is copied', () => {
+  const { templateDir } = setup();
+  for (const [engramPort, pattern] of [[undefined, /engram port/], [7437, /7437/], ['41234', /engram port/]]) {
+    const home = path.join(tmp('trial'), 'home');
+    assert.throws(() => seedCodexHome(templateDir, home, { engramPort }), pattern);
+    assert.ok(!fs.existsSync(home));
+  }
+  assert.throws(() => seedCodexHome(templateDir, 'relative/home', { engramPort: PORT }), /absolute/);
+  assert.throws(() => seedCodexHome(templateDir, path.join(tmp('trial'), "it's"), { engramPort: PORT }), /quote/);
+});
+
+test('two trials seeded from one template share nothing, and seeding changes neither the template nor the real home', () => {
+  const { realHome, templateDir, seed } = setup();
+  const before = { real: hashTree(realHome), template: hashTree(templateDir) };
+  const first = seed(41001);
+  const second = seed(41002);
+  fs.writeFileSync(path.join(first, '.codex', 'plugins', 'cache', 'bundled', 'demo', '1.0.0', 'service.mjs'), 'changed by the first trial\n');
+  assert.equal(read(second, '.codex/plugins/cache/bundled/demo/1.0.0/service.mjs'), 'export {};\n', 'a copy, not a link to a shared one');
+  assert.ok(read(first, '.codex/config.toml').includes('ENGRAM_PORT = "41001"') && read(second, '.codex/config.toml').includes('ENGRAM_PORT = "41002"'));
+  assert.equal(mentions(read(second, '.codex/config.toml'), first), 0);
+  assert.deepEqual(hashTree(templateDir), before.template);
+  assert.deepEqual(hashTree(realHome), before.real);
+});
+
+test('seedFromCodexTemplate seeds the home, then initializes the workspace under the trial\'s own CODEX_HOME', async () => {
+  const { templateDir } = setup();
+  assert.throws(() => seedFromCodexTemplate(tmp('not-a-template')), /not a js-harness eval Codex home template/);
+  const calls = [];
+  const seed = seedFromCodexTemplate(templateDir, { runInit: (call) => (calls.push(call), { status: 0, stdout: '', stderr: '' }) });
+  const home = path.join(tmp('trial'), 'home');
+  const workspace = tmp('workspace');
+  const saved = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sekrit-claude-token-0123456789';
+  try {
+    await seed({ home, workspace, engramPort: PORT });
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    else process.env.CLAUDE_CODE_OAUTH_TOKEN = saved;
+  }
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].workspace, workspace);
+  assert.equal(calls[0].env.CODEX_HOME, path.join(home, '.codex'));
+  assert.equal(calls[0].env.HOME, home);
+  assert.ok(!('CLAUDE_CODE_OAUTH_TOKEN' in calls[0].env), 'the other host\'s credential is not handed to a Codex trial\'s init');
+  assert.ok(fs.existsSync(path.join(home, '.codex', 'config.toml')), 'the home was seeded before init ran');
+});
+
+// ---- withEngramEnv -----------------------------------------------------------------------------------
+
+const ENV = { dataDir: path.join(scratch, 'trial home', '.engram'), port: 45678 };
+const OURS = [`ENGRAM_DATA_DIR = "${escaped(ENV.dataDir)}"`, 'ENGRAM_PORT = "45678"'];
+
+test('withEngramEnv leaves a config with no engram server alone', () => {
+  for (const toml of ['', 'model = "m"\n', '[mcp_servers.other]\ncommand = "engram-like"\n\n[mcp_servers.other.env]\nENGRAM_PORT = "7437"\n', '[plugins."engram@engram"]\nenabled = true\n']) {
+    assert.equal(withEngramEnv(toml, ENV), toml);
+  }
+});
+
+test('withEngramEnv rewrites an existing env table: its own keys replaced, a URL or socket dropped, the rest kept', () => {
+  const toml = [
+    '[mcp_servers.engram]', 'command = "engram"', '', '[mcp_servers."engram".env] # the real one', 'ENGRAM_URL = "http://127.0.0.1:7437"', 'KEEP = "yes"', 'ENGRAM_SOCKET = "x"',
+    ' ENGRAM_PORT="7437"', 'ENGRAM_DATA_DIR = "/real"', '', '[other]', 'ENGRAM_PORT = "7437"', '',
+  ].join('\n');
+  const expected = ['[mcp_servers.engram]', 'command = "engram"', '', '[mcp_servers."engram".env] # the real one', ...OURS, 'KEEP = "yes"', '', '[other]', 'ENGRAM_PORT = "7437"', ''];
+  assert.equal(withEngramEnv(toml, ENV), expected.join('\n'));
+});
+
+test('withEngramEnv keeps the line endings of the file and appends one table, whatever the file ends with', () => {
+  const appended = ['', '[mcp_servers.engram.env]', ...OURS, ''];
+  assert.equal(withEngramEnv('[mcp_servers.engram]\r\ncommand = "engram"\r\n', ENV), ['[mcp_servers.engram]', 'command = "engram"', ...appended].join('\r\n'));
+  assert.equal(withEngramEnv('[mcp_servers.engram]\ncommand = "engram"\n\n\n', ENV), ['[mcp_servers.engram]', 'command = "engram"', ...appended].join('\n'));
+  assert.equal(withEngramEnv('[ mcp_servers . engram ]\ncommand = "engram"', ENV), ['[ mcp_servers . engram ]', 'command = "engram"', ...appended].join('\n'));
+});
+
+test('withEngramEnv refuses the real engram port, and every shape of server it cannot rewrite', () => {
+  assert.throws(() => withEngramEnv('[mcp_servers.engram]\n', { dataDir: ENV.dataDir, port: 7437 }), /7437/);
+  for (const toml of [
+    '[mcp_servers.engram]\nenv = { ENGRAM_PORT = "7437" }\n',
+    '[mcp_servers.engram]\nenv.ENGRAM_PORT = "7437"\n',
+    '[mcp_servers]\nengram = { command = "engram" }\n',
+    '[mcp_servers]\nengram.command = "engram"\n',
+    'mcp_servers.engram.command = "engram"\n',
+    'mcp_servers = { engram = { command = "engram" } }\n',
+    '[mcp_servers]\n"engram".env.ENGRAM_PORT = "7437"\n',
+  ]) assert.throws(() => withEngramEnv(toml, ENV), /cannot point at a trial/, toml);
+});
+
+// ---- the login ---------------------------------------------------------------------------------------
+
+test('copyLogin puts a byte-identical copy of the login in the trial\'s CODEX_HOME and leaves the real one untouched', () => {
+  const realHome = makeRealHome();
+  const authFile = path.join(realHome, '.codex', 'auth.json');
+  const bytes = Buffer.from([0xef, 0xbb, 0xbf, 0x7b, 0x22, 0x00, 0xff, 0x0d, 0x0a, 0x7d]);
+  fs.writeFileSync(authFile, bytes);
+  const before = hashTree(realHome);
+  const home = path.join(tmp('trial'), 'home');
+  const target = copyLogin({ authFile, home });
+  assert.equal(target, path.join(codexHomeOf(home), 'auth.json'));
+  assert.deepEqual(fs.readFileSync(target), bytes, 'bytes, not text: nothing is decoded on the way');
+  assert.deepEqual(hashTree(realHome), before);
+  removeLogin({ authFile, home });
+  assert.ok(!fs.existsSync(target));
+  removeLogin({ authFile, home });
+  assert.deepEqual(hashTree(realHome), before, 'removing the copy never removes the real one');
+});
+
+test('a missing login is an error that names `codex login`, and nothing is created for it', () => {
+  const realHome = makeRealHome();
+  const authFile = path.join(realHome, '.codex', 'auth.json');
+  fs.rmSync(authFile);
+  const home = path.join(tmp('trial'), 'home');
+  assert.throws(() => copyLogin({ authFile, home }), /no Codex login at .*run `codex login`/);
+  assert.throws(() => assertLogin(authFile), /codex login/);
+  assert.ok(!fs.existsSync(home));
+  assert.throws(() => assertLogin(path.join(realHome, '.codex')), /codex login/, 'a directory is not a login');
+  assert.throws(() => assertLogin('auth.json'), /absolute/);
+});
+
+test('the real home is never taken for a trial home: its login is neither overwritten nor removed', () => {
+  const realHome = makeRealHome();
+  const authFile = path.join(realHome, '.codex', 'auth.json');
+  assert.throws(() => copyLogin({ authFile, home: realHome }), /never runs on the real one/);
+  assert.throws(() => removeLogin({ authFile, home: realHome }), /never runs on the real one/);
+  assert.equal(fs.readFileSync(authFile, 'utf8'), LOGIN);
+});
