@@ -21,16 +21,19 @@ import { assertTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const requireAbsolute = (label, value) => {
+export const requireAbsolute = (label, value) => {
   if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error(`the ${label} must be an absolute path, got ${JSON.stringify(value)}`);
 };
 
 /** What the template's marker file says it is. `removeTemplate` and `seedHome` trust nothing without it, so
  * a mistyped directory is never emptied or seeded from. */
 export const TEMPLATE_KIND = 'js-harness-eval-home-template';
+// The template of another agent's home (`codex-home.mjs`) has a kind and a name of its own, so neither is
+// ever seeded from, or removed as, the other. This is the one this module builds.
+const CLAUDE_TEMPLATE = { kind: TEMPLATE_KIND, label: 'js-harness eval home template' };
 const MARKER = 'template.json';
 // The template keeps its copy of the home in a subdirectory, next to the marker.
-const PAYLOAD = 'home';
+export const PAYLOAD = 'home';
 
 // What is taken from `<real home>/.claude/`. Plugin state is separate: its paths are rewritten.
 const CLAUDE_ITEMS = ['settings.json', 'CLAUDE.md', 'skills', 'agents', 'commands', 'output-styles', 'hooks'];
@@ -86,14 +89,14 @@ const writeJson = (file, json) => {
   fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
 };
 
-const isDirectory = (target) => fs.statSync(target, { throwIfNoEntry: false })?.isDirectory() === true;
+export const isDirectory = (target) => fs.statSync(target, { throwIfNoEntry: false })?.isDirectory() === true;
 
 /** Copies `source` to `target`, file by file, never creating a link. A link in `source` is followed when
  * `ctx.followLinks` (its target's content is copied and its place listed in `ctx.warnings`; a dangling one
  * is skipped and listed), and an error otherwise. A directory already being copied higher up the walk
  * (reached again through a link) is a cycle: an error, not an endless copy. Special files (sockets, pipes)
  * are skipped. `label` is the path shown in messages, relative to the item's root, never absolute. */
-function copyEntry(source, target, ctx, label) {
+export function copyEntry(source, target, ctx, label) {
   let from = source;
   let stat = fs.lstatSync(source);
   if (stat.isSymbolicLink()) {
@@ -121,7 +124,7 @@ function copyEntry(source, target, ctx, label) {
 }
 
 /** The files below `root` as `{ path, size }`, `/`-separated and sorted. */
-function inventory(root) {
+export function inventory(root) {
   const files = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -135,7 +138,7 @@ function inventory(root) {
 }
 
 /** How many times `text` (JSON or plain) names `realHome`, in either slash form or JSON-escaped. */
-function countRealHome(text, realHome) {
+export function countRealHome(text, realHome) {
   const needle = fold(slashes(realHome).replace(/\/+$/, ''));
   return fold(slashes(text)).split(needle).length - 1;
 }
@@ -159,6 +162,13 @@ export function buildTemplate({ realHome, templateDir, copyFile }) {
   if (!isDirectory(realHome)) throw new Error(`the real home ${realHome} is not a directory`);
   const claude = path.join(realHome, '.claude');
   if (!isDirectory(claude)) throw new Error(`the real home ${realHome} has no .claude directory`);
+  return buildInto({ realHome, templateDir }, () => writeTemplate({ realHome, templateDir, claude, copyFile }));
+}
+
+/** Runs `write()`, which fills `templateDir` from `realHome`, under the guards every template shares: the
+ * directory is outside the real home, does not contain it, and is empty or missing; and a `write` that
+ * throws leaves nothing of itself behind. Returns what `write` returns. */
+export function buildInto({ realHome, templateDir }, write) {
   const resolvedHome = resolveReal(realHome);
   const resolvedTemplate = resolveReal(templateDir);
   if (isWithin(resolvedHome, resolvedTemplate)) {
@@ -180,7 +190,7 @@ export function buildTemplate({ realHome, templateDir, copyFile }) {
   while (!exists(path.dirname(firstCreated)) && path.dirname(firstCreated) !== firstCreated) firstCreated = path.dirname(firstCreated);
   const created = !exists(templateDir);
   try {
-    return writeTemplate({ realHome, templateDir, claude, copyFile });
+    return write();
   } catch (err) {
     const remove = (target) => fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     try {
@@ -231,30 +241,39 @@ function writeTemplate({ realHome, templateDir, claude, copyFile }) {
     if (references > 0) warnings.push(`settings.json: names the real home in ${references} place(s); the sandbox does not rewrite them`);
   }
 
-  const files = inventory(payload);
+  return sealTemplate(templateDir, { kind: TEMPLATE_KIND, warnings });
+}
+
+/** Writes the marker that makes `templateDir` a template of `kind`, last, once its payload is complete: the
+ * inventory of the payload, its size and the `warnings`, then whatever `extra` the kind keeps for its own
+ * seeding. Returns the summary a build reports. */
+export function sealTemplate(templateDir, { kind, warnings, ...extra }) {
+  const files = inventory(path.join(templateDir, PAYLOAD));
   const bytes = files.reduce((total, file) => total + file.size, 0);
-  fs.writeFileSync(path.join(templateDir, MARKER), `${JSON.stringify({ kind: TEMPLATE_KIND, version: 1, builtAt: new Date().toISOString(), files, bytes, warnings }, null, 2)}\n`);
+  fs.writeFileSync(path.join(templateDir, MARKER), `${JSON.stringify({ kind, version: 1, builtAt: new Date().toISOString(), files, bytes, warnings, ...extra }, null, 2)}\n`);
   return { templateDir, files: files.length, bytes, warnings };
 }
 
-/** The marker of the template in `templateDir`; an error when the directory is not one. */
-function readTemplate(templateDir) {
+/** The marker of the template in `templateDir`; an error when the directory is not one of `kind`, which
+ * `label` names in the message. */
+export function readTemplate(templateDir, { kind, label } = CLAUDE_TEMPLATE) {
   const marker = path.join(templateDir, MARKER);
   let info;
   try {
     info = JSON.parse(fs.readFileSync(marker, 'utf8'));
   } catch {
-    throw new Error(`${templateDir} is not a js-harness eval home template: there is no readable ${MARKER} in it`);
+    throw new Error(`${templateDir} is not a ${label}: there is no readable ${MARKER} in it`);
   }
-  if (!isObject(info) || info.kind !== TEMPLATE_KIND) throw new Error(`${templateDir} is not a js-harness eval home template: ${MARKER} has another kind`);
+  if (!isObject(info) || info.kind !== kind) throw new Error(`${templateDir} is not a ${label}: ${MARKER} has another kind`);
   return info;
 }
 
 /** Removes a template. A directory that is not one (no marker) is refused and left alone, so a wrong
- * argument can never delete anything else; a missing one is not an error, so cleanup can run twice. */
-export function removeTemplate(templateDir) {
+ * argument can never delete anything else; a missing one is not an error, so cleanup can run twice.
+ * `template` is the kind to expect, this module's own by default. */
+export function removeTemplate(templateDir, template = CLAUDE_TEMPLATE) {
   if (!exists(templateDir)) return;
-  readTemplate(templateDir);
+  readTemplate(templateDir, template);
   fs.rmSync(templateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 

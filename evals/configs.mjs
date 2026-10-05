@@ -129,14 +129,17 @@ function homeDriveAndPath(home) {
  *
  * `engramPort` is required and has no default, because the engram plugin's hooks fall back to port 7437 when
  * they find none, and that is where this machine's real engram server answers. `ENGRAM_URL` and `ENGRAM_SOCKET`
- * are not in the allowlist, so an inherited one is removed and the hooks can only reach `ENGRAM_PORT`. */
-export function sandboxEnv({ home, engramPort, inherited = process.env, platform = process.platform }) {
+ * are not in the allowlist, so an inherited one is removed and the hooks can only reach `ENGRAM_PORT`.
+ *
+ * `allowlist`, `switches` and `paths` are Claude Code's by default. Another agent's sandbox (`codex-configs.mjs`)
+ * passes its own allowlist and switches, and in `paths` the variables that point at its own home. */
+export function sandboxEnv({ home, engramPort, inherited = process.env, platform = process.platform, allowlist = SANDBOX_ALLOWLIST, switches = SANDBOX_SWITCHES, paths = {} }) {
   if (typeof home !== 'string' || home === '') throw new Error('sandboxEnv needs the trial home directory');
   if (!path.isAbsolute(home)) throw new Error(`sandboxEnv needs an absolute home, got ${JSON.stringify(home)}: a child resolves a relative path against its own cwd, the graded workspace`);
   assertTrialPort(engramPort);
   const fold = (name) => (platform === 'win32' ? name.toLowerCase() : name);
-  const allowed = new Set(SANDBOX_ALLOWLIST.map(fold));
-  const set = { ...sandboxPaths(home), ENGRAM_PORT: String(engramPort), ...(platform === 'win32' ? homeDriveAndPath(home) : {}), ...SANDBOX_SWITCHES };
+  const allowed = new Set(allowlist.map(fold));
+  const set = { ...sandboxPaths(home), ...paths, ENGRAM_PORT: String(engramPort), ...(platform === 'win32' ? homeDriveAndPath(home) : {}), ...switches };
   const managed = new Set(Object.keys(set).map(fold));
   const removed = Object.fromEntries(Object.keys(inherited).filter((name) => !allowed.has(fold(name)) && !managed.has(fold(name))).map((name) => [name, null]));
   return { ...removed, ...set };
@@ -195,12 +198,10 @@ export function prepareSandbox({ home, workspace, engramPort, env: extra = {} })
  * the only flag that varies with the trial. Neither arm uses `--bare`: it skips OAuth, so a trial would
  * come back "Not logged in".
  *
- * Every trial gets an engram port of its own (see `sandboxEnv`): `prepare` allocates it, returns it as the
- * trial's prepared state (`{ engramPort }`, which the runner hands to `env` and `cleanup`), and `cleanup` kills
- * whatever listens on it, because the engram server a hook starts is detached and nothing else would end it.
- * Both arms get it, so they differ only in the layers under test. `allocatePort`, `releasePort` and `killPort`
- * are injectable, for tests that must not touch real ports or processes. */
-function buildConfig(name, { command, model, permissionMode, allocatePort = allocateTrialPort, releasePort = releaseTrialPort, killPort = killByPort } = {}, extraArgs, seed) {
+ * Every trial gets an engram port of its own (see `sandboxEnv` and `sandboxLifecycle`). Both arms get it, so
+ * they differ only in the layers under test. `allocatePort`, `releasePort` and `killPort` are injectable, for
+ * tests that must not touch real ports or processes. */
+function buildConfig(name, { command, model, permissionMode, allocatePort, releasePort, killPort } = {}, extraArgs, seed) {
   if (!isNonEmptyString(command)) throw new Error(`${name} config: "command" is required, the absolute path of the claude binary`);
   if (!path.isAbsolute(command)) throw new Error(`${name} config: "command" must be an absolute path, got ${JSON.stringify(command)}: no PATH lookup is made`);
   if (!isNonEmptyString(model)) throw new Error(`${name} config: "model" is required and has no default`);
@@ -213,6 +214,17 @@ function buildConfig(name, { command, model, permissionMode, allocatePort = allo
       return ['--print', '--output-format', 'json', '--model', model, '--effort', effort, '--permission-mode', permissionMode, ...extraArgs];
     },
     env: ({ home, prepared }) => sandboxEnv({ home, engramPort: prepared?.engramPort }),
+    ...sandboxLifecycle({ allocatePort, releasePort, killPort }, seed),
+  };
+}
+
+/** The `prepare` and `cleanup` of a sandboxed trial, whatever agent runs in it. `prepare` allocates the trial's
+ * engram port and returns it as the trial's prepared state (`{ engramPort }`, which the runner hands to `env` and
+ * `cleanup`); `cleanup` kills whatever listens on it, because the engram server a hook starts is detached and
+ * nothing else would end it. `seed({ home, workspace, engramPort })`, optional and async, is what an arm adds
+ * to its home and workspace after the shared preparation. */
+export function sandboxLifecycle({ allocatePort = allocateTrialPort, releasePort = releaseTrialPort, killPort = killByPort } = {}, seed) {
+  return {
     // The port first, then the shared preparation, then whatever this arm adds to its home and workspace. A
     // step that fails gives the port back: the trial never starts, so nothing else would.
     prepare: async ({ home, workspace }) => {

@@ -8,9 +8,10 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import {
-  checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
+  assertReading, checkFixtureLinks, childEnv, classifyAgentFailure, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
+import { parseCodexOutput, readClaudeOutput, readCodexOutput } from './agent-output.mjs';
 import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -1921,4 +1922,203 @@ test('a workspace that will not delete is swept again and its removal retried', 
   // A directory removed while a dying process still has its handle is listed for a moment longer.
   assert.ok(await waitUntil(() => entriesOf(workRoot).length === 0), `the retry removed it, but  is still there`);
   assert.deepEqual(logs, []);
+});
+
+// ---- the reader a config carries -------------------------------------------------------------------
+
+/** A reader that returns `reading` whatever the run, and keeps the runs it was handed in `seen`. */
+function stubReader(reading) {
+  const seen = [];
+  const usage = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null };
+  return { seen, reader: (run) => (seen.push(run), { stop: null, parsed: true, failed: false, usage, ...reading }) };
+}
+
+test('a trial reads its agent\'s output through the reader its config carries, and records the usage that reader gives', async () => {
+  const usage = { inputTokens: 7, outputTokens: 3, turns: null, usage: [{ any: 'shape' }], costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: 2 };
+  const { seen, reader } = stubReader({ usage });
+  const { options } = trialEnv('noop', { configExtra: { reader } });
+  const { record } = await runTrial(options);
+  assert.equal(seen.length, 1, 'the run is read once');
+  assert.equal(JSON.parse(seen[0].stdout).result, 'did nothing', 'the reader gets what the agent printed');
+  assert.equal(seen[0].exitCode, 0);
+  assert.equal(seen[0].timedOut, false);
+  for (const [name, value] of Object.entries(usage)) assert.deepEqual(record[name], value, name);
+  assert.equal(record.error, null);
+  assert.equal(record.score, 2 / 3);
+});
+
+test('what the reader says decides the trial: a stop records nothing, unparsed and failed are recorded errors', async () => {
+  const stopped = trialEnv('noop', { configExtra: { reader: stubReader({ stop: { kind: 'cap', message: 'out of quota' } }).reader } });
+  assert.deepEqual(await runTrial(stopped.options), { status: 'stopped', reason: 'cap', message: 'out of quota' });
+  assert.deepEqual(entriesOf(stopped.workRoot), []);
+
+  const unparsed = await runTrial(trialEnv('noop', { configExtra: { reader: stubReader({ parsed: false }).reader } }).options);
+  assert.equal(unparsed.record.error, 'agent-output-unparsable');
+  const failed = await runTrial(trialEnv('noop', { configExtra: { reader: stubReader({ failed: true }).reader } }).options);
+  assert.equal(failed.record.error, 'agent-error');
+  assert.equal(failed.record.score, 2 / 3, 'and it is still graded');
+  // What the process did comes before what it printed, as for Claude Code.
+  const exited = await runTrial(trialEnv('exit', { configExtra: { reader: stubReader({ failed: true }).reader } }).options);
+  assert.equal(exited.record.error, 'agent-exit-3');
+});
+
+test('a config whose reader is not a function is refused before anything is made or run', async () => {
+  const { options, workRoot, countFile } = trialEnv('noop', { configExtra: { reader: 'codex' } });
+  await assert.rejects(runTrial(options), /config fake: "reader" must be a function/);
+  assert.deepEqual(entriesOf(workRoot), []);
+  assert.equal(fs.existsSync(countFile), false, 'no agent ran');
+});
+
+const NO_USAGE = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null };
+const READING = { stop: null, parsed: true, failed: false, usage: NO_USAGE };
+
+test('assertReading takes a reading of the documented shape, with whatever more its usage counts', () => {
+  assert.equal(assertReading(READING, 'fake'), READING, 'and hands it back');
+  const stop = { kind: 'cap', message: '' };
+  const usage = { ...NO_USAGE, inputTokens: 0, outputTokens: 3.5, usage: [{ any: 'shape' }], modelUsage: { m: {} }, cachedInputTokens: 2, anything: 'else' };
+  assert.doesNotThrow(() => assertReading({ stop, parsed: false, failed: true, usage }, 'fake'));
+  // What each reader of this repository returns, for output it can read and for output it cannot.
+  const claude = JSON.stringify({ type: 'result', is_error: false, result: 'ok', num_turns: 2, usage: { input_tokens: 1, output_tokens: 1 }, total_cost_usd: 0.1 });
+  const codex = [{ type: 'thread.started', thread_id: 't' }, { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } }].map((event) => JSON.stringify(event)).join('\n');
+  for (const stdout of [claude, codex, 'this is not json']) {
+    const run = { stdout, stderr: '', exitCode: 0, timedOut: false };
+    assert.doesNotThrow(() => assertReading(readCodexOutput(run), 'codex'));
+    assert.doesNotThrow(() => assertReading(readClaudeOutput(run), 'claude'));
+  }
+});
+
+test('assertReading refuses a reading of the wrong shape, naming the key that is missing or mistyped', () => {
+  const without = (object, key) => Object.fromEntries(Object.entries(object).filter(([name]) => name !== key));
+  const cases = [
+    [null, 'its reader returned no reading: an object is expected, got null'],
+    [undefined, 'its reader returned no reading: an object is expected, got undefined'],
+    ['cap', 'its reader returned no reading: an object is expected, got "cap"'],
+    [[], 'its reader returned no reading: an object is expected, got []'],
+    [without(READING, 'stop'), 'its reader returned a reading of the wrong shape: "stop" must be null or an object with a kind and a message, got undefined'],
+    [{ ...READING, stop: 'cap' }, 'its reader returned a reading of the wrong shape: "stop" must be null or an object with a kind and a message, got "cap"'],
+    [{ ...READING, stop: { kind: '', message: 'out' } }, 'its reader returned a reading of the wrong shape: "stop.kind" must be a non-empty string, got ""'],
+    [{ ...READING, stop: { kind: 'cap' } }, 'its reader returned a reading of the wrong shape: "stop.message" must be a string, got undefined'],
+    [without(READING, 'parsed'), 'its reader returned a reading of the wrong shape: "parsed" must be true or false, got undefined'],
+    [{ ...READING, failed: 'no' }, 'its reader returned a reading of the wrong shape: "failed" must be true or false, got "no"'],
+    [{ ...READING, usage: null }, 'its reader returned a reading of the wrong shape: "usage" must be an object, got null'],
+    [{ ...READING, usage: [] }, 'its reader returned a reading of the wrong shape: "usage" must be an object, got []'],
+    [{ ...READING, usage: without(NO_USAGE, 'turns') }, 'its reader returned a reading of the wrong shape: "usage.turns" is missing'],
+    [{ ...READING, usage: without(NO_USAGE, 'modelUsage') }, 'its reader returned a reading of the wrong shape: "usage.modelUsage" is missing'],
+    [{ ...READING, usage: { ...NO_USAGE, inputTokens: '7' } }, 'its reader returned a reading of the wrong shape: "usage.inputTokens" must be a number or null, got "7"'],
+    [{ ...READING, usage: { ...NO_USAGE, costUsd: Number.NaN } }, 'its reader returned a reading of the wrong shape: "usage.costUsd" must be a number or null, got NaN'],
+    // The first one found is the one named.
+    [{ stop: null, usage: {} }, 'its reader returned a reading of the wrong shape: "parsed" must be true or false, got undefined'],
+  ];
+  for (const [reading, message] of cases) assert.throws(() => assertReading(reading, 'fake'), (err) => err.message === `config fake: ${message}`, message);
+});
+
+test('assertReading lets no key of the usage take the place of a field the runner fills itself', () => {
+  // Every field of a record that does not come from the usage: a usage key of the same name would replace
+  // a graded field, or be replaced by one, and either way the record would not say what was measured.
+  for (const key of ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt']) {
+    assert.throws(
+      () => assertReading({ ...READING, usage: { ...NO_USAGE, [key]: null } }, 'fake'),
+      (err) => err.message === `config fake: its reader returned a reading of the wrong shape: "usage.${key}" is a field of the record the runner fills itself, and a usage count must not replace it`,
+      key,
+    );
+  }
+});
+
+test('a trial whose reader returns the wrong shape, or a usage that would replace a graded field, is refused: the raw output is kept and nothing is recorded', async () => {
+  const shapeless = trialEnv('noop', { configExtra: { reader: () => ({ stop: null, failed: false, usage: NO_USAGE }) } });
+  await assert.rejects(runTrial(shapeless.options), /config fake: its reader returned a reading of the wrong shape: "parsed" must be true or false, got undefined/);
+  assert.match(fs.readFileSync(path.join(shapeless.runsDir, 'sample__fake__medium__1.stdout.log'), 'utf8'), /did nothing/, 'what the agent printed is kept: the run was paid for');
+  assert.deepEqual(entriesOf(shapeless.workRoot), [], 'and the trial is cleaned up');
+
+  // Spread into the record as it was, this usage would have turned a 2/3 into a perfect score.
+  const greedy = trialEnv('noop', { configExtra: { reader: stubReader({ usage: { ...NO_USAGE, score: 1, passed: 3 } }).reader } });
+  await assert.rejects(runTrial(greedy.options), /config fake: its reader returned a reading of the wrong shape: "usage\.score" is a field of the record the runner fills itself/);
+  assert.deepEqual(entriesOf(greedy.workRoot), []);
+});
+
+// ---- a Codex-shaped agent, end to end ----------------------------------------------------------------
+
+/** A trial of the fake agent in one of its Codex modes, read by Codex's reader: the output side of what a
+ * Codex config will be. */
+const codexTrial = (mode, options = {}) => trialEnv(mode, { ...options, configExtra: { reader: readCodexOutput, ...options.configExtra } });
+const CODEX_USAGE = { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 50, reasoning_output_tokens: 20 };
+
+test('a solved Codex trial scores 1 and records its tokens, the cached input counted once, with no cost', async () => {
+  const { options, runsDir } = codexTrial('codex-solve');
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  const { record } = outcome;
+  assert.deepEqual(
+    { ...record, wallMs: typeof record.wallMs, startedAt: typeof record.startedAt },
+    {
+      task: 'sample', config: 'fake', effort: 'medium', repeat: 1,
+      score: 1, passed: 3, total: 3,
+      inputTokens: 1000, outputTokens: 50, turns: null,
+      usage: [CODEX_USAGE],
+      costUsd: null, modelUsage: null, subagents: null,
+      // The fake agent's usage is the documented one, without the cache-write count the real CLI adds.
+      cachedInputTokens: 800, cacheWriteInputTokens: null, reasoningOutputTokens: 20,
+      wallMs: 'number', cliVersion: '9.9.9 (Fake Agent)', error: null, startedAt: 'string',
+    },
+  );
+  const stdout = fs.readFileSync(path.join(runsDir, 'sample__fake__medium__1.stdout.log'), 'utf8');
+  assert.equal(parseCodexOutput(stdout).result, 'done', 'the raw event stream is kept, and its last agent message is the answer');
+});
+
+test('the reader, not the runner, says what output means: the same Codex run is unparsable to a config without one', async () => {
+  const read = await runTrial(codexTrial('codex-noop').options);
+  assert.equal(read.record.error, null);
+  assert.equal(read.record.inputTokens, 1000);
+  assert.equal(read.record.score, 2 / 3);
+  const unread = await runTrial(trialEnv('codex-noop').options);
+  assert.equal(unread.record.error, 'agent-output-unparsable');
+  assert.equal(unread.record.inputTokens, null);
+});
+
+for (const [mode, reason, message] of [
+  ['codex-cap', 'cap', "You've hit your usage limit. Try again later."],
+  ['codex-auth', 'auth', 'Error: Not logged in. Run `codex login` first.'],
+]) {
+  test(`a Codex ${reason} failure stops the trial without a record and cleans the workspace`, async () => {
+    const { options, workRoot, runsDir } = codexTrial(mode);
+    assert.deepEqual(await runTrial(options), { status: 'stopped', reason, message });
+    assert.deepEqual(entriesOf(workRoot), []);
+    assert.ok(fs.existsSync(path.join(runsDir, 'sample__fake__medium__1.stdout.log')), 'the raw output is kept for diagnosis');
+  });
+}
+
+test('a Codex turn that fails for another reason is graded and recorded with its error, its tokens unknown', async () => {
+  const outcome = await runTrial(codexTrial('codex-failed').options);
+  assert.equal(outcome.status, 'recorded');
+  assert.equal(outcome.record.error, 'agent-exit-1');
+  assert.equal(outcome.record.score, 2 / 3);
+  assert.equal(outcome.record.inputTokens, null, 'a failed turn reports no usage');
+  assert.equal(outcome.record.usage, null);
+});
+
+test('a Codex run that exits 0 without completing a turn is recorded as agent-error and graded', async () => {
+  const { options, runsDir } = codexTrial('codex-incomplete');
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.equal(outcome.record.error, 'agent-error');
+  assert.equal(outcome.record.score, 2 / 3);
+  const printed = parseCodexOutput(fs.readFileSync(path.join(runsDir, 'sample__fake__medium__1.stdout.log'), 'utf8'));
+  assert.deepEqual({ threadId: printed.threadId, turns: printed.turns, turnFailed: printed.turnFailed }, { threadId: 'fake-thread', turns: [], turnFailed: false }, 'a started thread, and no turn that ended');
+});
+
+test('a suite against a Codex-shaped agent that hits the cap stops and leaves the results file without it', async () => {
+  const workRoot = tmp('work');
+  const options = {
+    tasks: [loadTask(SAMPLE)],
+    configs: [fakeConfig('codex-cap', {}, { reader: readCodexOutput })],
+    efforts: ['medium'],
+    repeats: 3,
+    resultsPath: path.join(tmp('results'), 'results.jsonl'),
+    runsDir: tmp('runs'),
+    workRoot,
+  };
+  const result = await runSuite(options);
+  assert.deepEqual(result, { status: 'stopped', reason: 'cap', message: "You've hit your usage limit. Try again later.", completed: 0 });
+  assert.deepEqual(readResults(options.resultsPath), []);
+  assert.deepEqual(entriesOf(workRoot), []);
 });
