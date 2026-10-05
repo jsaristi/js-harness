@@ -89,6 +89,14 @@ Slices: A = T1–T3, B = T4–T5, C = T6–T8. Review boundary starts at the bra
 when the branch was cut, `77acc71` since it was fast-forwarded to `main` on 2026-10-04 with
 nothing committed.
 
+Slice A is pull request #33 against `main`, opened on 2026-10-05 at Sebastián's request:
+`ea0a860`, `1f63fd0`, `57d8aec`, `4b2fa50`, `22dd665`, `fcf15ef`, `a4a72ee`, `9c5ef12`, `41509d3`,
+`40fa138` and the commit that records this. It is 5,222 changed lines against the forecast of
+about 950 for the slice (2,378 tests, 555 documents, 2,289 code, of which 1,019 are the probe):
+the probe needed its own arm driver and report, and three review rounds added their corrections
+here. A `size:exception` is his to accept. The reviewed boundary is `41509d3`. Slice B starts
+from `main` once #33 is merged.
+
 ## Tasks
 ### Slice A — the agent seam
 - [x] T1 The runner reads an agent's output through a parser the config carries: Claude's is
@@ -424,7 +432,7 @@ nothing committed.
   belongs.
 
 ## Next step
-Slice A is whole: T1, T2 and T3 with their corrections, six code commits, all reviewed. Its pull
-request against `main` is Sebastián's call (stacked-to-main). Then T4, `evals/suite.mjs --agent
-codex`, opens slice B; it decides what the suite does with a trial `assertReading` rejects and
+Slice A is whole: T1, T2 and T3 with their corrections, six code commits, all reviewed, open as
+pull request #33; merging it is Sebastián's call. After the merge the branch restarts from
+`main` and T4, `evals/suite.mjs --agent codex`, opens slice B; it decides what the suite does with a trial `assertReading` rejects and
 whether a trial's setup download is measured apart from its wall time.
