@@ -2,7 +2,8 @@
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
-`feat/remote-account` (slice 3, PR #30, cut from slice 2)
+`feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (this
+record and T7's, cut from `main`)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -152,7 +153,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   delegated writer)
 - [x] T5 TUI: `remote` in the project section of the menu (route: delegated writer)
 - [x] T6 Roadmap: the phase and its steps, the Commands row (route: inline)
-- [ ] T7 Live check on this machine, split from T6 because it needs Sebastián: `remote stop`
+- [x] T7 Live check on this machine, split from T6 because it needs Sebastián: `remote stop`
   and `remote start` load the reviewed code and end the sessions opened through the server,
   then a session opened from the iOS app runs in `D:\js-harness`, and `remote stop` leaves no
   process of it. The other live check is done: `doctor` shows the account check `ok` here
@@ -487,6 +488,29 @@ the chain strategy is asked once, before the commit that crosses the budget.
   commit, `879f990`, covered by a Codex record; 12 files, 557 insertions and 47 deletions
   when opened, its diff against `main` holding only T4, T6 and this document). It waits for
   his go-ahead. The commit of this entry is pushed to the same PR.
+- 2026-10-04: PR #30 merged on Sebastián's go-ahead (`7d3741b` on `main`), at `8bc87fa`. The
+  three slices are on `main`, so the roadmap's `Reviewed and merged (three slices)` step is
+  checked. This entry is the first commit of `docs/remote-live-check`, cut from `7d3741b`;
+  the record of T7 goes on the same branch, and the branch is one PR against `main`.
+  The first gate of that commit was refused: `evals\isolation-probe.test.mjs` failed as a
+  file, 1.5 s in, with no test named; alone it passes 122/122 and the same commit retried
+  passed (`37b2b90`). See Follow-ups.
+- 2026-10-04: T7 done, on Sebastián's word, from `docs/remote-live-check` (`main`'s code).
+  `remote stop` answered `stopped` and exited 0 on the server that had run T2's code since
+  2026-10-03: its tree held 17 processes, one session among them (`capacity: 1/32`), and
+  none was left, each checked by pid and creation time; no state file and no lock
+  remained. `remote start` answered `started` (supervisor pid 18896) and fifteen seconds
+  later `remote status` said `running`, `server: connected`, `capacity: 0/32`. He opened
+  sessions from the iOS app in the `js-harness` environment: `remote status` showed
+  `capacity: 2/32` and two `claude.exe` under the server, and the session he asked
+  answered that it ran in `D:\js-harness` on the branch `docs/remote-live-check`, which is
+  what this checkout held. The final `remote stop` exited 0: 19 processes in the tree,
+  none left, `remote status` said `not running`. The server was started again
+  (supervisor pid 7564, `connected`, `capacity: 0/32`) and is left running. `doctor
+  --offline` shows `claude-account  n/a       ok`. The login launcher is off.
+- 2026-10-04: decided by Sebastián after T7: the login launcher stays off on this machine.
+  After a restart of the PC the server is started by hand (`js-harness remote start` in
+  `D:\js-harness`). The feature is closed with the PR of `docs/remote-live-check`.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -584,6 +608,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   comes from the system and the Node version, where a thrown read error with a chosen code
   would prove the same; no test has an identifier with spaces around it, so removing the
   trim would fail nothing.
+- `evals/isolation-probe.test.mjs` failed once inside the full suite (2026-10-04, the gate
+  of `37b2b90`'s first attempt): the file itself failed 1.5 s in, with no test named, while
+  no other gate ran and `core.bare` stayed `false`. Alone it passes (122/122 in 184 s) and
+  the retried gate passed. The cause is not known; the gate's last lines do not show it,
+  so the next time the commit's whole output has to be kept.
 - Left open by T4. `DIMENSIONS` is still written three times (`bin/doctor.mjs`,
   `bin/lib/digest.mjs`, `bin/tui.mjs`); only the gap states were made one. The account row
   is `unknown` on a machine without the desktop app (Linux, or a PC that uses only the
@@ -602,25 +631,24 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-State on 2026-10-04: every task is written, committed and reviewed except T7, the live check,
-which needs him. PRs #27, #28 and #29 are merged (`main` at `0d430af`). The third slice is
-PR #30 (`feat/remote-account`, cut from `7fda4ce`: T4 with T6 `879f990`, and the commits
-of this record), against `main`, waiting for his go-ahead to merge. Each code commit was
-approved by gentle-ai and lies in a Codex record. The server for `D:\js-harness` is running, started with `js-harness remote start`
-(detached; `remote status` shows it, `remote stop` ends it). It still runs T2's code:
-`remote stop` then `remote start` loads the fixes, and ends the sessions opened through it,
-so it waits for his word. The login launcher is off on this machine and stays off until he
-asks. In order:
+Closed on 2026-10-04: every task is done and nothing is left. PRs #27, #28, #29 and #30
+are merged, the live check passed, and this record reaches `main` through the PR of
+`docs/remote-live-check`, the last of the feature. Each code commit was approved by
+gentle-ai and lies in a Codex record. What a later session needs to know:
 
-1. PR #30, the third slice, is merged on his go-ahead (`gh pr merge 30 --merge`, pull
-   `main`). The roadmap's `Reviewed and merged (three slices)` step is then checked on a
-   branch cut from `main`, since nothing is committed on `main` directly; it can ride on
-   the commit that closes T7.
-2. T7, when he says so: `js-harness remote stop` and `remote start` in `D:\js-harness` from
-   the merged code, he opens a session from the iOS app and says it runs there, then
-   `remote stop` must leave no process of it (`remote status` says `not running`); check
-   T7 and the roadmap's live-check step. Whether the login launcher is turned on on this
-   machine is his call, asked then.
+- The server for `D:\js-harness` is running the merged code, started with `js-harness
+  remote start` (detached; `remote status` shows it, `remote stop` ends it, and with it
+  the sessions opened through it). It does not survive a restart of the PC: the login
+  launcher is off on this machine, by his decision. Should he change his mind,
+  `js-harness remote start --at-login` writes `js-harness-remote-<id>.cmd` in the Startup
+  folder and creates the machine manifest that records it, and `remote stop --at-login`
+  or `uninstall` removes both; ask him first.
+- A session opened from the phone through the server works in `D:\js-harness` itself
+  (`--spawn same-dir`), the same folder as a desktop session there: two sessions that
+  write at once share one working tree and one branch.
+- T7's first `remote stop` ended the session that was writing F6 in the linked worktree
+  `D:\js-harness-worktrees\codex-parity`. Its work is on disk there, not committed; the
+  roadmap's Next says what to do before a commit in that worktree.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three
