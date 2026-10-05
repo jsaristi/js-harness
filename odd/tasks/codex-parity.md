@@ -133,7 +133,9 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
 
 ### Slice B — suite and report
 - [ ] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
-  engram), results under `evals/results/codex/`, resume
+  engram), results under `evals/results/codex/`, resume (route: delegated writer, strict TDD —
+  trigger: 2+ non-trivial files) — written and verified, unchecked until its commit and its
+  reviews are recorded (Progress, 2026-10-05)
 - [ ] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
   against Codex table
 
@@ -402,8 +404,59 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
     millisecond) and two SUGGESTIONs (no test reads a Claude result with subagents and model
     usage through `assertReading`; an infinite count is reported as `null`).
   - `check --push`: 6 code commits, all covered by a Codex review record (two of them skips).
+- 2026-10-05, slice B opened in a new session; T4 written and verified (route: delegated writer,
+  strict TDD; trigger: 2+ non-trivial files). No real `codex` or `claude` binary was run and no
+  real login was read: every test uses the fake agent.
+  - The command line: `node evals/suite.mjs --agent codex --codex <real binary> --configs
+    <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all> --name <run>
+    [--work-root <dir>]`, and `[--agent codex] --summary --name <run>`.
+  - Decided here, the two questions the last Next step left to T4. A reading `assertReading`
+    refuses is a defect of the reader and not a measurement: `runSuite` records no trial for it
+    and stops with `reason: 'reader'` (exit 1), the raw output stays where the runner keeps it,
+    and the same command repeats exactly that trial; the rule holds for both agents
+    (`ReadingError`, `evals/runner.mjs`). And a trial's setup download is not measured apart: it
+    happens inside the agent process, nothing in a record separates it from `wallMs`, so T5's
+    wall-time comparison says so.
+  - Decided here, the rest. `--agent` is optional and absent means `claude`, the parser's one
+    default, so F5's recorded command lines and every existing assertion keep their meaning; for
+    the same reason a Claude document carries no `agent` key and a Codex one carries
+    `agent: 'codex'`. With `--agent codex`, `--claude` and `--permission-mode` are refused (the
+    arms are fixed to `--dangerously-bypass-approvals-and-sandbox`, which is what the document
+    records as `permissionMode`), and `--codex` without it is refused. Efforts are exactly
+    `medium` and `high`: the repository holds no evidence of Codex's full list and the real
+    binary may not be run to ask. The login is checked for existence and age before the template
+    is built and before any trial; a refusal exits 2 with what to do. The Codex version is read
+    before the run in a throwaway home under the work root, under the sandbox's environment, so
+    a resume against a run whose agent, model or stack differ is refused before anything is
+    built. The stack is `{ codex, gentleAi, engram }`.
+  - Observed, one file at a time: `node --test evals/suite.test.mjs` 68/68 (43 before; rerun by
+    the parent, 60.6 s); `evals/runner.test.mjs` 153 pass, 1 skipped (149 and 1 before);
+    `evals/codex-configs.test.mjs` 19/19; `evals/report.test.mjs` 40/40; `contract check` on this
+    document exits 0. RED first: 21 of 68 suite tests failed on `unknown argument --agent`, and a
+    refused reading rejected the whole suite before the fix. Assertion lines went from 182 to 313
+    in `suite.test.mjs` and from 515 to 528 in `runner.test.mjs`, none changed or removed. The
+    follow-up test of a Claude result with subagents and per-model usage through `assertReading`
+    is in.
+  - Size: 770 added, 57 removed (516 of the added lines are tests), against a forecast of about
+    250 for the suite: the six Codex modes and the reader stop are run through `suiteMain` for
+    both agents. The two test files add about 85 s to the gate.
+  - For T5: `evals/report.mjs` does not recurse (`loadRuns` reads the `*.json` files directly in
+    its directory, `evals/report.mjs:193`), so F5's gate cannot read `evals/results/codex/`. A
+    Codex record carries `costUsd`, `modelUsage`, `turns` and `subagents` as `null`; its tokens
+    are `inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `reasoningOutputTokens` and
+    `outputTokens`, and `usage` is an array.
+  - Unverified until T6's real trials: that `codex --version` answers in a home with no login
+    and no config (if not, `stack.codex` is recorded as `null`); whether Codex refuses or ignores
+    an unknown effort; the wording of a cap or a login failure.
 
 ## Follow-ups
+- A reader that throws, instead of returning a reading of the wrong shape, still ends the run as
+  `the suite failed` (exit 1, nothing recorded, raw output kept) and not as the `reader` stop
+  (T4). Both readers here return; make it one stop if a third reader is written.
+- A Claude run named `codex` would keep its raw logs in `evals/runs/codex/`, beside the Codex
+  runs' directories (T4). Not refused; no recorded run has that name.
+- The login's age is checked once per run, before the first trial. A run longer than the margin
+  the check leaves is not guarded: T6 and T7 are started with a login refreshed that day.
 - The config scan refuses a single-line value that holds a triple quote inside a string or a
   comment (Codex P2 on T2r, `evals/codex-home.mjs:218`). Make the delimiter check respect string
   and comment context when a real config trips it; until then the build stops and names the line.
@@ -434,6 +487,6 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
   belongs.
 
 ## Next step
-Slice A is merged (#33). T4, `evals/suite.mjs --agent codex`, opens slice B on the branch
-restarted from `main`; it decides what the suite does with a trial `assertReading` rejects and
-whether a trial's setup download is measured apart from its wall time.
+Slice A is merged (#33). T4 is written; its commit and its two reviews (gentle-ai, then Codex
+over the same range from `a53309c`) are next, then T5: the report's agent dimension, the
+estimated list cost of a Codex trial and the Claude against Codex table.

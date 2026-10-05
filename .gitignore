@@ -5,3 +5,4 @@ pnpm-lock.yaml
 package-lock.json
 evals/runs/
 evals/results/*.tmp
+evals/results/codex/*.tmp

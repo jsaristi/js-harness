@@ -449,7 +449,11 @@ const USAGE_KEYS = { inputTokens: true, outputTokens: true, turns: true, usage: 
  * what the runner measured. */
 const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt'];
 
-/** Throws unless `reading`, what the reader of config `configName` returned, has the shape `agent-output.mjs`
+/** What `assertReading` throws. A class of its own because a suite treats it apart from every other error
+ * (`runSuite`): it is the one failure known to come after a paid session and to be the reader's own. */
+export class ReadingError extends Error {}
+
+/** Throws a `ReadingError` unless `reading`, what the reader of config `configName` returned, has the shape `agent-output.mjs`
  * documents; returns it. The message names the first key that is missing or mistyped. Why it is checked: a
  * reading is used as it comes, so a reader that forgot `parsed` would have every trial recorded as
  * unparsable, and one that returned no `stop` would never stop a suite on the cap, both without a word.
@@ -460,9 +464,9 @@ const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 
  * has always had and a reader that collides is fixed where it is written. */
 export function assertReading(reading, configName) {
   const show = (value) => (value === undefined || Number.isNaN(value) ? String(value) : JSON.stringify(value));
-  if (!isObject(reading)) throw new Error(`config ${configName}: its reader returned no reading: an object is expected, got ${show(reading)}`);
+  if (!isObject(reading)) throw new ReadingError(`config ${configName}: its reader returned no reading: an object is expected, got ${show(reading)}`);
   const refuse = (problem) => {
-    throw new Error(`config ${configName}: its reader returned a reading of the wrong shape: ${problem}`);
+    throw new ReadingError(`config ${configName}: its reader returned a reading of the wrong shape: ${problem}`);
   };
   const { stop, usage } = reading;
   if (stop !== null) {
@@ -532,7 +536,8 @@ export function removeDir(dir, label, log, sweepAgain) {
  *
  * What the agent printed is read once, by the config's reader (`readerOf`): whether the run was such a stop,
  * the usage counts of the record, and whether the agent's own output is an error. A reading of the wrong
- * shape rejects the trial (`assertReading`), after the raw output was kept.
+ * shape rejects the trial with a `ReadingError` (`assertReading`), after the raw output was kept; a suite
+ * turns that rejection into a stop of its own (`runSuite`).
  *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
@@ -772,7 +777,11 @@ const fileStore = (resultsPath) => ({ read: () => readResults(resultsPath), appe
  * as soon as it is graded, so an interruption loses at most the trial in flight. Resolves to
  * `{ status: 'complete', completed, skipped }`, or `{ status: 'stopped', reason, message, completed }`
  * at the first usage-cap, authentication, agent-spawn or grader-spawn stop, with nothing recorded for
- * that trial. `signal` (an `AbortSignal`) is the interrupt: it is handed to every trial, and once it aborts no
+ * that trial. A trial whose reading is refused (`ReadingError`) is such a stop too, with `reason` `reader`:
+ * until the output of a session that was paid for can be read it is a defect of the reader, not a
+ * measurement, so no record is written (one would be skipped on resume for good), the raw output stays where
+ * `runTrial` wrote it, and running the same call again, once the reader is fixed, repeats exactly that trial.
+ * Anything else a trial throws still rejects the suite. `signal` (an `AbortSignal`) is the interrupt: it is handed to every trial, and once it aborts no
  * trial starts and the suite resolves to `{ status: 'interrupted', completed }`, after the running trial has
  * stopped and cleaned up; that trial records nothing.
  *
@@ -823,7 +832,15 @@ export async function runSuite({
       continue;
     }
     if (signal?.aborted) return { status: 'interrupted', completed };
-    const outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, signal, log });
+    let outcome;
+    try {
+      outcome = await run({ task, config, effort, repeat, readVersion: cachedVersion, workRoot, runsDir, graderTimeoutMs, signal, log });
+    } catch (err) {
+      if (!(err instanceof ReadingError)) throw err;
+      // The message names the trial, because nothing else will: its record is the one thing that is not written.
+      const message = `${err.message} (trial ${task.id}, ${config.name}, ${effort}, repeat ${repeat}: nothing is recorded for it, and what the agent printed is kept with the raw logs)`;
+      return { status: 'stopped', reason: 'reader', message, completed };
+    }
     if (outcome.status === 'interrupted') return { status: 'interrupted', completed };
     if (outcome.status === 'stopped') {
       return { status: 'stopped', reason: outcome.reason, message: outcome.message, completed };

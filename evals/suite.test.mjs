@@ -5,10 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
+import { readClaudeOutput, readCodexOutput } from './agent-output.mjs';
+import { CODEX_TEMPLATE_KIND, DEFAULT_MAX_LOGIN_AGE_HOURS } from './codex-home.mjs';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import { killByPath, planTrials, resolveAgent, runTrial, trialKey } from './runner.mjs';
 import {
-  EVAL_MODEL, TOKEN_VARIABLE, USAGE, UsageError, diffRun, formatSummary, parseArgs, readStack, suiteMain, summarizeResults,
+  CODEX_EVAL_MODEL, CODEX_PERMISSION_MODE, EVAL_MODEL, TOKEN_VARIABLE, USAGE, UsageError, diffRun, formatSummary, parseArgs, readCodexStack, readStack, suiteMain, summarizeResults,
 } from './suite.mjs';
 import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
@@ -732,3 +734,433 @@ test('an interrupt during a real trial against a hanging fake agent leaves nothi
   assert.equal(fs.existsSync(path.join(m.runsDir, 'screen')), false, 'no log of it either');
   assert.ok(await waitUntil(() => pids.every((pid) => !isAlive(pid)), 5000), 'and they stay dead');
 });
+
+// ---- the same suite on the Codex CLI ----------------------------------------------------------------------------------
+// As above, nothing here starts a real CLI or calls a model: `--codex` names a stand-in file, the login is a file made
+// up for the test in the scratch directory, and the trials are the stand-in `runTrial` or the fake agent.
+
+const CODEX = path.join(scratch, 'bin', 'codex.exe');
+const CODEX_FULL = { '--agent': 'codex', '--codex': CODEX, '--configs': 'minimal,current', '--efforts': 'medium,high', '--repeats': '3', '--tasks': 'all', '--name': 'ab-run' };
+const flagsOf = (flags) => Object.entries(flags).filter(([, value]) => value !== undefined).flatMap(([flag, value]) => [flag, value]);
+const codexArgv = (changes = {}) => flagsOf({ ...CODEX_FULL, ...changes });
+const parseCodex = (changes) => parseArgs(codexArgv(changes), { taskIds: TASKS });
+const usageError = (pattern) => (error) => error instanceof UsageError && pattern.test(error.message);
+
+test('--agent has one default, claude: a command line without it means what it meant before a second agent existed', () => {
+  assert.deepEqual(parseArgs(['--agent', 'claude', ...argv()], { taskIds: TASKS }), parse(), 'naming the default changes nothing');
+  assert.equal('agent' in parse(), false, 'and the default is not written into what is parsed');
+  assert.deepEqual(parseArgs(['--agent', 'claude', '--summary', '--name', 'screen'], { taskIds: TASKS }), { mode: 'summary', name: 'screen' });
+  for (const agent of ['gemini', 'Codex', 'claude,codex']) assert.throws(() => parse({ '--agent': agent }), usageError(/--agent .*claude, codex/), agent);
+  assert.throws(() => parseArgs([...argv(), '--codex', CODEX], { taskIds: TASKS }), usageError(/--codex .*--agent codex/), 'the Codex binary is not taken by a Claude run');
+});
+
+test('a full --agent codex command parses into the binary, the arms, the efforts, the repeats, the tasks and the name, and has no permission mode', () => {
+  assert.deepEqual(parseCodex(), {
+    mode: 'run', agent: 'codex', codex: CODEX, configs: ['minimal', 'current'], efforts: ['medium', 'high'], repeats: 3, tasks: TASKS, name: 'ab-run', workRoot: null,
+  });
+  assert.equal(parseCodex({ '--work-root': path.join(scratch, 'work'), '--efforts': 'high' }).workRoot, path.join(scratch, 'work'));
+  for (const flag of Object.keys(CODEX_FULL).filter((name) => name !== '--agent')) {
+    assert.throws(() => parseCodex({ [flag]: undefined }), usageError(new RegExp(`${flag} is required`)), flag);
+  }
+  assert.throws(() => parseCodex({ '--claude': CLAUDE }), usageError(/--claude .*--codex/), 'the other agent\'s binary is refused');
+  assert.throws(() => parseCodex({ '--permission-mode': 'bypassPermissions' }), usageError(/--permission-mode .*--dangerously-bypass-approvals-and-sandbox/), 'the Codex arms have one fixed mode');
+});
+
+test('--codex is an absolute path to the real binary, never a shim, and a Codex run takes the efforts of the F6 matrix only', () => {
+  for (const codex of ['codex', 'bin/codex', 'C:\\x\\codex.cmd', path.join(scratch, 'codex.BAT'), path.join(scratch, 'codex.ps1')]) {
+    assert.throws(() => parseCodex({ '--codex': codex }), usageError(/--codex/), codex);
+  }
+  assert.deepEqual(parseCodex({ '--efforts': 'high,medium' }).efforts, ['high', 'medium']);
+  for (const effort of ['low', 'xhigh', 'max', 'minimal']) assert.throws(() => parseCodex({ '--efforts': `medium,${effort}` }), usageError(new RegExp(`${effort}.*medium, high`)), effort);
+  assert.deepEqual(parse({ '--efforts': 'low,xhigh,max' }).efforts, ['low', 'xhigh', 'max'], 'the efforts of a Claude run are the ones they were');
+});
+
+test('--summary takes --agent too, so a recorded Codex run can be read', () => {
+  assert.deepEqual(parseArgs(['--agent', 'codex', '--summary', '--name', 'screen'], { taskIds: TASKS }), { mode: 'summary', agent: 'codex', name: 'screen' });
+  assert.throws(() => parseArgs(['--agent', 'codex', '--summary', '--name', 'screen', '--codex', CODEX], { taskIds: TASKS }), usageError(/--summary .*--codex/));
+});
+
+const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '2.4.0', engram: '2.1.0' };
+const CODEX_RUN = { agent: 'codex', model: 'gpt-6.1-sol', permissionMode: 'dangerously-bypass-approvals-and-sandbox', stack: CODEX_STACK };
+
+test('the model and the permission mode of a Codex run are what the feature document names', () => {
+  assert.equal(CODEX_EVAL_MODEL, 'gpt-6.1-sol');
+  assert.equal(CODEX_PERMISSION_MODE, 'dangerously-bypass-approvals-and-sandbox');
+});
+
+test('a resumed Codex run that differs in the agent, the model or a version is named change by change', () => {
+  assert.deepEqual(diffRun(CODEX_RUN, { ...CODEX_RUN, stack: { ...CODEX_STACK } }), []);
+  assert.deepEqual(diffRun(CODEX_RUN, { ...CODEX_RUN, model: 'gpt-other', stack: { ...CODEX_STACK, codex: 'codex-cli 0.160.0', engram: null } }), [
+    { field: 'codex', recorded: 'codex-cli 0.159.1', current: 'codex-cli 0.160.0' },
+    { field: 'engram', recorded: '2.1.0', current: null },
+    { field: 'model', recorded: 'gpt-6.1-sol', current: 'gpt-other' },
+  ]);
+  // A document that names no agent is a Claude run: every one F5 recorded.
+  assert.deepEqual(diffRun(RUN, CODEX_RUN).find((change) => change.field === 'agent'), { field: 'agent', recorded: 'claude', current: 'codex' });
+  assert.deepEqual(diffRun(CODEX_RUN, RUN).find((change) => change.field === 'agent'), { field: 'agent', recorded: 'codex', current: 'claude' });
+  assert.deepEqual(diffRun(RUN, { ...RUN, agent: 'claude' }), [], 'and naming it changes nothing');
+});
+
+test('the Codex stack is the CLI asked under a sandbox environment in a throwaway home of the work root, with gentle-ai and engram as for Claude Code', async () => {
+  const tools = stackMachine();
+  const workRoot = path.join(tmp('stack-work'), 'not-there-yet');
+  const probes = [];
+  const released = [];
+  const stack = await readCodexStack({
+    codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux',
+    probeCodex: (command, env) => {
+      probes.push({ command, env, there: [env.HOME, env.CODEX_HOME, env.TEMP].map((dir) => fs.statSync(dir).isDirectory()), login: fs.existsSync(path.join(env.CODEX_HOME, 'auth.json')) });
+      return 'codex-cli 0.159.1';
+    },
+    allocatePort: async () => 41000, releasePort: (port) => released.push(port),
+  });
+  assert.deepEqual(stack, CODEX_STACK);
+  assert.deepEqual(tools.calls.map(([command]) => command), ['gentle-ai', 'engram'], 'no other tool is asked');
+  assert.equal(probes.length, 1);
+  const [{ command, env, there, login }] = probes;
+  assert.equal(command, CODEX);
+  assert.equal(path.dirname(env.HOME), workRoot, 'the home is a directory of the work root, never the real one');
+  assert.deepEqual([env.USERPROFILE, env.CODEX_HOME, env.ENGRAM_PORT], [env.HOME, path.join(env.HOME, '.codex'), '41000'], 'the environment a trial gets');
+  assert.deepEqual(there, [true, true, true], 'what Codex writes when it is asked its version has somewhere to go');
+  assert.equal(login, false, 'and no login is put there for it');
+  assert.deepEqual(fs.readdirSync(workRoot), [], 'the throwaway home is removed');
+  assert.deepEqual(released, [41000]);
+});
+
+test('a Codex version that cannot be read is null, and the throwaway home and its port are given back whatever the probe does', async () => {
+  const tools = stackMachine({ gentleAi: null, engram: 'no version here' });
+  const workRoot = tmp('stack-work');
+  const released = [];
+  const ports = { allocatePort: async () => 41001, releasePort: (port) => released.push(port) };
+  assert.deepEqual(await readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => null, ...ports }), { codex: null, gentleAi: null, engram: null });
+  await assert.rejects(readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => { throw new Error('the probe exploded'); }, ...ports }), /the probe exploded/);
+  assert.deepEqual(fs.readdirSync(workRoot), []);
+  assert.deepEqual(released, [41001, 41001]);
+  // The default probe is the binary's own first line of --version, here node's.
+  const real = await readCodexStack({ codex: process.execPath, workRoot, spawn: stackMachine().spawn, platform: 'linux' });
+  assert.equal(real.codex, `v${process.versions.node}`);
+  assert.deepEqual(fs.readdirSync(workRoot), []);
+});
+
+const NOW = new Date('2026-10-02T12:00:00.000Z');
+const HOUR = 3_600_000;
+// Made up for these tests: no login of anything.
+const FAKE_LOGIN = 'FAKE-CODEX-LOGIN-never-in-a-stream-or-a-template-0123456789';
+
+/** A fake machine whose real home also holds a Codex setup: a config, global instructions and a login last written
+ * `loginAgeHours` before the clock the suite is given (`null`: no login at all). */
+function codexMachine({ loginAgeHours = 24, config = 'model = "gpt-6.1-sol"\n' } = {}) {
+  const m = machine();
+  const codexHome = path.join(m.realHome, '.codex');
+  write(path.join(codexHome, 'config.toml'), config);
+  write(path.join(codexHome, 'AGENTS.md'), '# the global rules of Codex\n');
+  const authFile = path.join(codexHome, 'auth.json');
+  if (loginAgeHours !== null) {
+    write(authFile, JSON.stringify({ made_up: FAKE_LOGIN }));
+    const written = new Date(NOW.getTime() - loginAgeHours * HOUR);
+    fs.utimesSync(authFile, written, written);
+  }
+  const codex = path.join(m.base, 'bin', 'codex.exe');
+  write(codex, 'a stand-in binary');
+  return { ...m, codex, authFile };
+}
+
+/** The deps of a Codex run on `m`: the Codex stack is a stand-in, and reading Claude Code's is a failure. */
+const codexDeps = (m, extra = {}) => depsFor(m, {
+  readStack: () => { throw new Error('the stack of Claude Code was read for a Codex run'); },
+  readCodexStack: () => ({ ...CODEX_STACK }),
+  ...extra,
+});
+/** The argv of a Codex run of the machine's own tasks: the 8 trials of `PLAN`. */
+const codexRunArgv = (m, changes = {}) => codexArgv({ '--codex': m.codex, '--repeats': '1', '--name': 'screen', '--work-root': m.workRoot, ...changes });
+const codexResultsFile = (m, name = 'screen') => path.join(m.resultsDir, 'codex', `${name}.json`);
+const readCodexDoc = (m, name) => JSON.parse(fs.readFileSync(codexResultsFile(m, name), 'utf8'));
+
+test('a Codex run needs no token and keeps everything in a codex directory of its own: the results, the raw logs and what the run was', async () => {
+  const m = codexMachine();
+  const asked = [];
+  const { io, deps } = codexDeps(m, { readCodexStack: ({ codex, workRoot }) => { asked.push({ codex, workRoot }); return { ...CODEX_STACK }; } });
+  const saved = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = 'inherited-oauth-token';
+  try {
+    assert.equal(await suiteMain(codexRunArgv(m), ENV, deps), 0, io.err);
+    assert.deepEqual(fs.readdirSync(m.resultsDir), ['codex'], 'nothing is written beside the results of the Claude runs');
+    assert.deepEqual(fs.readdirSync(path.join(m.resultsDir, 'codex')), ['screen.json'], 'no temporary file is left');
+    const doc = readCodexDoc(m);
+    assert.deepEqual({ ...doc, trials: keysOf(doc.trials) }, {
+      format: 1, name: 'screen', createdAt: '2026-10-02T12:00:00.000Z', ...CODEX_RUN,
+      args: { codex: m.codex, configs: ['minimal', 'current'], efforts: ['medium', 'high'], repeats: 1, tasks: ['alpha', 'beta'], workRoot: m.workRoot },
+      trials: PLAN,
+    });
+    assert.deepEqual(deps.runTrial.asked, PLAN);
+    assert.deepEqual(asked, [{ codex: m.codex, workRoot: m.workRoot }], 'the version is asked once, of this binary, in the work root that was checked');
+    assert.ok(deps.runTrial.trials.every((trial) => trial.runsDir === path.join(m.runsDir, 'codex', 'screen')), 'the raw logs of a Codex run are under runs/codex/<name>/');
+    assert.ok(io.out.includes(`results: ${codexResultsFile(m)}`), 'the summary names the file');
+    assert.match(io.out, /Headroom screen/);
+
+    const configs = new Map(deps.runTrial.trials.map((trial) => [trial.config.name, trial.config]));
+    assert.deepEqual([...configs.keys()].sort(), ['current', 'minimal']);
+    const home = path.join(m.base, 'home');
+    const workspace = path.join(m.base, 'ws');
+    for (const [name, config] of configs) {
+      const agent = resolveAgent(config, { effort: 'high', home, workspace, prepared: { engramPort: 41000 } });
+      assert.equal(agent.command, m.codex, name);
+      assert.deepEqual(
+        agent.args.slice(0, 11),
+        ['exec', '--json', '--ephemeral', '--skip-git-repo-check', '-m', CODEX_EVAL_MODEL, '-c', 'model_reasoning_effort="high"', `--${CODEX_PERMISSION_MODE}`, '-C', workspace],
+        `${name}: the model, the effort and the one permission mode the results file records`,
+      );
+      assert.equal(agent.env.CODEX_HOME, path.join(home, '.codex'), `${name}: a CODEX_HOME of the trial's own`);
+      assert.equal(agent.env.CLAUDE_CODE_OAUTH_TOKEN, null, `${name}: no token of the other agent, neither the inherited one nor the eval's`);
+      assert.equal(config.reader, readCodexOutput, `${name}: read as Codex's output`);
+      assert.ok(!JSON.stringify([agent.args, agent.env]).includes(FAKE_TOKEN));
+    }
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    else process.env.CLAUDE_CODE_OAUTH_TOKEN = saved;
+  }
+});
+
+test('a wrong Codex command line prints the usage, which states it, and exits 2 before anything is created', async () => {
+  const m = codexMachine();
+  for (const [changes, pattern] of [[{ '--permission-mode': 'bypassPermissions' }, /--permission-mode/], [{ '--efforts': 'medium,xhigh' }, /xhigh/], [{ '--codex': undefined }, /--codex is required/]]) {
+    const { io, deps } = codexDeps(m);
+    assert.equal(await suiteMain(codexRunArgv(m, changes), {}, deps), 2, JSON.stringify(changes));
+    assert.match(io.err, pattern);
+    assert.ok(io.err.includes(USAGE), 'the usage is printed');
+    assert.deepEqual(deps.runTrial.asked, []);
+  }
+  const missing = codexDeps(m, { fileExists: () => false });
+  assert.equal(await suiteMain(codexRunArgv(m), {}, missing.deps), 2);
+  assert.match(missing.io.err, /--codex .* does not exist/);
+  nothingCreated(m);
+  assert.match(USAGE, /node evals\/suite\.mjs --agent codex --codex <path> --configs <minimal,current> --efforts <medium,high> --repeats <n>/);
+  assert.match(USAGE, /node evals\/suite\.mjs \[--agent codex\] --summary --name <run name>/);
+  assert.match(USAGE, /evals\/results\/codex\/<name>\.json/);
+});
+
+test('a Codex login that is missing, too old or dated in the future stops the run before anything is read, built or run, and says what to do', async () => {
+  for (const [label, loginAgeHours, pattern] of [
+    ['missing', null, /there is no Codex login at .*auth\.json: run `codex login` first/],
+    ['too old', DEFAULT_MAX_LOGIN_AGE_HOURS + 4, /last written 190\.0 hours ago, over the 186 hours allowed.*Use the real Codex once, so that it refreshes its own login, then run again/],
+    ['dated in the future', -5, /is dated 5\.0 hours in the future/],
+  ]) {
+    const m = codexMachine({ loginAgeHours });
+    const stacks = [];
+    const { io, deps } = codexDeps(m, { readCodexStack: () => { stacks.push('read'); return { ...CODEX_STACK }; } });
+    assert.equal(await suiteMain(codexRunArgv(m), {}, deps), 2, label);
+    assert.match(io.err, pattern, label);
+    assert.match(io.err, /no trial was started/i, label);
+    assert.ok(!io.err.includes(USAGE), `${label}: the command line was right, so the usage is not what to read`);
+    assert.equal(io.out, '');
+    assert.deepEqual([deps.runTrial.asked, stacks], [[], []], `${label}: nothing was run and no version was asked`);
+    nothingCreated(m);
+    assert.ok(!(io.err + io.out).includes(FAKE_LOGIN), `${label}: the login is never opened`);
+  }
+  // Under the limit it is used, and the run says how old it was.
+  const m = codexMachine({ loginAgeHours: DEFAULT_MAX_LOGIN_AGE_HOURS - 1 });
+  const { io, deps } = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'minimal' }), {}, deps), 0, io.err);
+  assert.match(io.err, /Codex login: last written 185\.0 hours ago \(a run refuses one over 186\)/);
+  assert.equal(fs.statSync(m.authFile).mtimeMs, NOW.getTime() - 185 * HOUR, 'and the real login is left as it was');
+});
+
+/** What the Codex template under `workRoot` looks like right now, one entry per template found. */
+const codexTemplates = (workRoot) => templatesIn(workRoot).map((name) => {
+  const dir = path.join(workRoot, name, 'template');
+  return {
+    kind: JSON.parse(fs.readFileSync(path.join(dir, 'template.json'), 'utf8')).kind,
+    instructions: fs.existsSync(path.join(dir, 'home', '.codex', 'AGENTS.md')),
+    login: fs.existsSync(path.join(dir, 'home', '.codex', 'auth.json')),
+  };
+});
+
+for (const [label, outcome, code] of [['a complete run', () => undefined, 0], ['a cap stop', stopped('cap'), 1], ['a thrown error', () => { throw new Error('the runner exploded'); }, 1]]) {
+  test(`the Codex home template is built once for the current arm, without the login, and removed after ${label}`, async () => {
+    const m = codexMachine();
+    const seen = [];
+    const { io, deps } = codexDeps(m, {
+      runTrial: fakeRun((trial, number) => {
+        seen.push(codexTemplates(m.workRoot));
+        return number === 1 ? outcome(trial, number) : undefined;
+      }),
+    });
+    assert.equal(await suiteMain(codexRunArgv(m), {}, deps), code, io.err);
+    assert.ok(seen.length > 0, 'a trial ran');
+    for (const templates of seen) assert.deepEqual(templates, [{ kind: CODEX_TEMPLATE_KIND, instructions: true, login: false }], 'exactly one template, of the Codex kind, while the suite ran');
+    assert.deepEqual(fs.readdirSync(m.workRoot), [], 'and afterwards nothing of the suite is left in the work root');
+  });
+}
+
+test('a minimal-only Codex run builds no template, and a Codex setup the template cannot be built from stops the suite with nothing left', async () => {
+  const m = codexMachine();
+  const during = [];
+  const { deps } = codexDeps(m, { runTrial: fakeRun(() => { during.push(templatesIn(m.workRoot)); }) });
+  assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'minimal' }), {}, deps), 0);
+  assert.ok(during.length > 0 && during.every((entries) => entries.length === 0));
+
+  // A value that does not end on its line is one the config scan refuses (`codex-home.mjs`).
+  const broken = codexMachine({ config: 'notify = [\n  "a-program",\n]\n' });
+  const failing = codexDeps(broken);
+  assert.equal(await suiteMain(codexRunArgv(broken), {}, failing.deps), 1);
+  assert.match(failing.io.err, /the suite failed: .*config\.toml line 1 /);
+  assert.deepEqual(failing.deps.runTrial.asked, []);
+  assert.deepEqual(templatesIn(broken.workRoot), []);
+  assert.equal(fs.existsSync(codexResultsFile(broken)), false, 'a run that never started records nothing');
+});
+
+test('a Codex run cut by a stop continues with the missing trials only, and one whose agent, model or stack changed is refused with the file left as it was', async () => {
+  const m = codexMachine();
+  const cut = codexDeps(m, { runTrial: fakeRun((trial, number) => (number === 4 ? stopped('cap')() : undefined)) });
+  assert.equal(await suiteMain(codexRunArgv(m), {}, cut.deps), 1);
+  assert.match(cut.io.err, /stopped: cap/);
+  assert.deepEqual(keysOf(readCodexDoc(m).trials), PLAN.slice(0, 3));
+  const before = fs.readFileSync(codexResultsFile(m), 'utf8');
+
+  const upgraded = codexDeps(m, { readCodexStack: () => ({ ...CODEX_STACK, codex: 'codex-cli 0.160.0', engram: null }) });
+  assert.equal(await suiteMain(codexRunArgv(m), {}, upgraded.deps), 1);
+  assert.match(upgraded.io.err, /codex: codex-cli 0\.159\.1 -> codex-cli 0\.160\.0/);
+  assert.match(upgraded.io.err, /engram: 2\.1\.0 -> unknown/);
+  assert.match(upgraded.io.err, /--name/, 'it says to use a new name for a new run');
+  assert.deepEqual(upgraded.deps.runTrial.asked, []);
+  assert.deepEqual(templatesIn(m.workRoot), [], 'no template was built for a run that is refused');
+  assert.equal(fs.readFileSync(codexResultsFile(m), 'utf8'), before, 'nothing was rewritten');
+
+  // A file under a Codex name that another model, or Claude Code, recorded: never continued as a Codex run.
+  const recorded = JSON.parse(before);
+  write(codexResultsFile(m, 'other-model'), JSON.stringify({ ...recorded, name: 'other-model', model: 'gpt-other' }));
+  const otherModel = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m, { '--name': 'other-model' }), {}, otherModel.deps), 1);
+  assert.match(otherModel.io.err, /model: gpt-other -> gpt-6\.1-sol/);
+  const { agent: _agent, ...unnamed } = recorded;
+  write(codexResultsFile(m, 'moved'), JSON.stringify({ ...unnamed, name: 'moved', model: EVAL_MODEL, permissionMode: 'bypassPermissions', stack: STACK }));
+  const moved = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m, { '--name': 'moved' }), {}, moved.deps), 1);
+  assert.match(moved.io.err, /agent: claude -> codex/);
+  assert.deepEqual([otherModel.deps.runTrial.asked, moved.deps.runTrial.asked], [[], []]);
+
+  const resumed = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m), {}, resumed.deps), 0, resumed.io.err);
+  assert.deepEqual(resumed.deps.runTrial.asked, PLAN.slice(3), 'a recorded trial is never repeated');
+  assert.deepEqual(keysOf(readCodexDoc(m).trials), PLAN);
+});
+
+test('--agent codex --summary prints a recorded Codex run and runs nothing, and neither agent\'s summary reads the other\'s runs', async () => {
+  const m = codexMachine();
+  const run = codexDeps(m);
+  assert.equal(await suiteMain(codexRunArgv(m), {}, run.deps), 0);
+  const before = fs.readFileSync(codexResultsFile(m), 'utf8');
+  // No login is needed to read a results file.
+  fs.rmSync(m.authFile);
+  const { io, deps } = codexDeps(m, { readCodexStack: () => { throw new Error('a summary asks no version'); } });
+  assert.equal(await suiteMain(['--agent', 'codex', '--summary', '--name', 'screen'], {}, deps), 0, io.err);
+  assert.match(io.out, /alpha\s+minimal\s+medium\s+1\s+0\.50/);
+  assert.deepEqual(deps.runTrial.asked, []);
+  assert.equal(fs.readFileSync(codexResultsFile(m), 'utf8'), before);
+
+  const claude = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--name', 'screen'], {}, claude.deps), 1, 'the Claude results hold no run of that name');
+  assert.ok(claude.io.err.includes(`no results named screen in ${m.resultsDir}`));
+  const missing = codexDeps(m);
+  assert.equal(await suiteMain(['--agent', 'codex', '--summary', '--name', 'never-run'], {}, missing.deps), 1);
+  assert.ok(missing.io.err.includes(`no results named never-run in ${path.join(m.resultsDir, 'codex')}`));
+});
+
+// ---- both agents, read by their own readers ---------------------------------------------------------------------------
+// The trials below are real ones (`runTrial` of the runner, the grader included) of the fake agent, read by the reader
+// the suite's own config carries: none for Claude Code, which the runner reads as it always has, and Codex's own.
+
+const HOSTS = {
+  claude: { machine, deps: depsFor, argv: runArgv, env: ENV, file: resultsFile, raw: (m, name) => path.join(m.runsDir, name) },
+  codex: { machine: codexMachine, deps: codexDeps, argv: codexRunArgv, env: {}, file: codexResultsFile, raw: (m, name) => path.join(m.runsDir, 'codex', name) },
+};
+const ONE_CELL = { '--tasks': 'alpha', '--configs': 'minimal', '--efforts': 'medium' };
+
+/** A `runTrial` that runs the trial for real with the agent swapped for the fake one in mode `modeOf(trial)` (the
+ * suite builds the argv of a real CLI), read by `readerFor(trial)`: by default whatever the suite's config carries. */
+function fakeAgentRun(modeOf, readerFor = (trial) => trial.config.reader) {
+  const run = (trial) => {
+    run.asked.push(trialKey({ task: trial.task.id, config: trial.config.name, effort: trial.effort, repeat: trial.repeat }));
+    run.readers.push(trial.config.reader);
+    return runTrial({
+      ...trial,
+      config: { name: trial.config.name, command: process.execPath, args: [FAKE_AGENT], env: { FAKE_AGENT_MODE: modeOf(trial) }, reader: readerFor(trial) },
+      readVersion: () => '9.9.9 (Fake Agent)',
+      sweep: () => ({ killed: [] }),
+    });
+  };
+  run.asked = [];
+  run.readers = [];
+  return run;
+}
+
+const CLAUDE_USAGE = { inputTokens: 60, outputTokens: 5, turns: 3, costUsd: 0.75, subagents: 2 };
+const CODEX_USAGE = { inputTokens: 1000, outputTokens: 50, turns: null, costUsd: null, subagents: null };
+const NO_USAGE = { inputTokens: null, outputTokens: null, turns: null, costUsd: null, subagents: null };
+const READ_AS = {
+  claude: {
+    reader: undefined,
+    recorded: [['solve', 1, null, CLAUDE_USAGE], ['noop', 2 / 3, null, CLAUDE_USAGE], ['agent-error', 2 / 3, 'agent-exit-1', { ...NO_USAGE, turns: 1 }], ['garbage', 2 / 3, 'agent-output-unparsable', NO_USAGE]],
+    stops: [['cap', 'cap', /monthly spend limit/], ['auth', 'auth', /Not logged in/]],
+  },
+  codex: {
+    reader: readCodexOutput,
+    recorded: [['codex-solve', 1, null, CODEX_USAGE], ['codex-noop', 2 / 3, null, CODEX_USAGE], ['codex-failed', 2 / 3, 'agent-exit-1', NO_USAGE], ['codex-incomplete', 2 / 3, 'agent-error', NO_USAGE]],
+    stops: [['codex-cap', 'cap', /hit your usage limit/], ['codex-auth', 'auth', /Not logged in\. Run `codex login` first/]],
+  },
+};
+
+for (const [agent, host] of Object.entries(HOSTS)) {
+  const { reader, recorded, stops } = READ_AS[agent];
+
+  test(`a ${agent} suite reads its trials with its own reader: solved, untouched, failed and unreadable sessions are graded and recorded`, async () => {
+    const m = host.machine();
+    const { io, deps } = host.deps(m, { runTrial: fakeAgentRun((trial) => recorded[trial.repeat - 1][0]) });
+    assert.equal(await suiteMain(host.argv(m, { ...ONE_CELL, '--repeats': String(recorded.length) }), host.env, deps), 0, io.err);
+    assert.ok(deps.runTrial.readers.length === recorded.length && deps.runTrial.readers.every((given) => given === reader), 'the reader of the suite\'s own config');
+    const doc = JSON.parse(fs.readFileSync(host.file(m), 'utf8'));
+    assert.deepEqual(
+      doc.trials.map((record) => [record.repeat, record.score, record.error, Object.fromEntries(Object.keys(NO_USAGE).map((name) => [name, record[name]]))]),
+      recorded.map(([, score, error, usage], index) => [index + 1, score, error, usage]),
+    );
+    assert.equal(fs.readdirSync(host.raw(m, 'screen')).filter((name) => name.endsWith('.stdout.log')).length, recorded.length, 'the raw output of every trial is kept under the run\'s name');
+  });
+
+  for (const [mode, reason, message] of stops) {
+    test(`a ${agent} suite stops at a ${reason} failure its reader recognizes (${mode}) and records nothing`, async () => {
+      const m = host.machine();
+      const { io, deps } = host.deps(m, { runTrial: fakeAgentRun(() => mode) });
+      assert.equal(await suiteMain(host.argv(m, { ...ONE_CELL, '--repeats': '2' }), host.env, deps), 1);
+      assert.match(io.err, new RegExp(`the suite stopped: ${reason} `));
+      assert.match(io.err, message);
+      assert.deepEqual(deps.runTrial.asked, ['alpha|minimal|medium|1'], 'the next trial is not started');
+      assert.equal(fs.existsSync(host.file(m)), false);
+    });
+  }
+
+  test(`a ${agent} suite stops at a trial whose reading the runner refuses, exits 1 and records nothing for it; the raw output is kept and the same command repeats exactly that trial`, async () => {
+    const m = host.machine();
+    let fixed = false;
+    // The reader of the suite's own config, which loses a key of its reading for the second trial until it is fixed.
+    const readerFor = (trial) => (run) => {
+      const reading = (trial.config.reader ?? readClaudeOutput)(run);
+      return trial.repeat === 2 && !fixed ? { stop: reading.stop, failed: reading.failed, usage: reading.usage } : reading;
+    };
+    const mode = () => recorded[1][0];
+    const command = host.argv(m, { ...ONE_CELL, '--repeats': '3' });
+    const first = host.deps(m, { runTrial: fakeAgentRun(mode, readerFor) });
+    assert.equal(await suiteMain(command, host.env, first.deps), 1);
+    assert.match(first.io.err, /the suite stopped: reader \(config minimal: its reader returned a reading of the wrong shape: "parsed" must be true or false, got undefined \(trial alpha, minimal, medium, repeat 2: nothing is recorded for it/);
+    assert.match(first.io.err, /1 trials are recorded in .*fix the cause and run the same command again/);
+    assert.deepEqual(first.deps.runTrial.asked, ['alpha|minimal|medium|1', 'alpha|minimal|medium|2'], 'the run stops there');
+    assert.deepEqual(keysOf(JSON.parse(fs.readFileSync(host.file(m), 'utf8')).trials), ['alpha|minimal|medium|1'], 'no trial is recorded for the reading that was refused');
+    assert.match(fs.readFileSync(path.join(host.raw(m, 'screen'), 'alpha__minimal__medium__2.stdout.log'), 'utf8'), /did nothing/, 'what the paid session printed is kept with the raw logs');
+    assert.ok(first.io.out.includes(`results: ${host.file(m)}`), 'the summary of what is recorded is still printed');
+
+    fixed = true;
+    const second = host.deps(m, { runTrial: fakeAgentRun(mode, readerFor) });
+    assert.equal(await suiteMain(command, host.env, second.deps), 0, second.io.err);
+    assert.deepEqual(second.deps.runTrial.asked, ['alpha|minimal|medium|2', 'alpha|minimal|medium|3'], 'exactly the refused trial, then the rest');
+    assert.deepEqual(keysOf(JSON.parse(fs.readFileSync(host.file(m), 'utf8')).trials), ['alpha|minimal|medium|1', 'alpha|minimal|medium|2', 'alpha|minimal|medium|3']);
+  });
+}
