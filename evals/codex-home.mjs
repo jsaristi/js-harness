@@ -66,12 +66,14 @@ export function removeLogin({ authFile, home }) {
 // ---- real paths in config files ------------------------------------------------------------------------
 
 // What is taken from `<real home>/.codex/`, as the real home held it on 2026-10-04: the config, the global
-// instructions, the hooks, the two files `config.toml` names for engram, and the skills. Two patterns add
-// the profiles `-p <name>` layers (`<name>.config.toml`) and the scripts a hook runs from the home itself.
+// instructions, the hooks, the two files `config.toml` names for engram, and the skills. One pattern adds
+// the scripts a hook runs from the home itself.
 // Left behind by not being listed: `auth.json`, every `*.sqlite*`, `sessions/`, `cache/`, `.tmp/`,
-// `.sandbox/`, `app-server-*`, `.codex-global-state.json*`, `*.bak`, and whatever Codex adds tomorrow.
+// `.sandbox/`, `app-server-*`, `.codex-global-state.json*`, `*.bak`, and whatever Codex adds tomorrow. Also
+// the profiles `-p <name>` layers over the config (`<name>.config.toml`): no trial passes `-p`, so they are
+// not part of what a trial loads, and a copy would go through neither `withoutDesktopApp` nor
+// `withEngramEnv`, which only `config.toml` gets. Whoever makes a trial use a profile has to edit it first.
 const CODEX_ITEMS = ['config.toml', 'AGENTS.md', 'hooks.json', 'engram-instructions.md', 'engram-compact-prompt.md', 'skills'];
-const PROFILE = /\.config\.toml$/;
 const HOOK_SCRIPT = /\.(ps1|sh)$/;
 // Of `plugins/` only the cache: it holds what a session loads of a plugin (its manifest, hooks, skills).
 // `plugins/.plugin-appserver` is the desktop app's own binaries (425 MB of the directory's 505 MB on this
@@ -133,17 +135,33 @@ const ENGRAM_ENV = [...ENGRAM_SERVER, 'env'];
 // would send it to a server or socket of someone else's, so a real entry's are dropped.
 const ENGRAM_KEYS = ['ENGRAM_DATA_DIR', 'ENGRAM_PORT', 'ENGRAM_URL', 'ENGRAM_SOCKET'];
 const KEY_PART = /\s*(?:([A-Za-z0-9_-]+)|"((?:[^"\\]|\\.)*)"|'([^']*)')\s*/y;
+const ESCAPES = { '"': '"', '\\': '\\', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
+
+/** The text a TOML basic string spells with `raw` between its quotes, or `null` when it holds an escape TOML
+ * does not define. A key is compared as TOML reads it, because `"eng\u0072am"` is `engram` to Codex. */
+function unescapeBasic(raw) {
+  let known = true;
+  const text = raw.replace(/\\(?:(["\\bfnrt])|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8})|([\s\S]))/g, (match, simple, short, long) => {
+    if (simple) return ESCAPES[simple];
+    const code = short || long ? Number.parseInt(short ?? long, 16) : -1;
+    if (code >= 0 && code <= 0x10ffff) return String.fromCodePoint(code);
+    known = false;
+    return '';
+  });
+  return known ? text : null;
+}
 
 /** The dotted TOML key of `line` that starts at `from` (`a.b`, `a."b c"`, `a . 'b'`), as `{ parts, end }`
- * with `end` the index after it, or `null` when no key starts there. */
+ * with `end` the index after it, or `null` when no key that can be read starts there. */
 function dottedKey(line, from) {
   const parts = [];
   let index = from;
   for (;;) {
     KEY_PART.lastIndex = index;
     const part = KEY_PART.exec(line);
-    if (!part) return null;
-    parts.push(part[1] ?? part[2] ?? part[3]);
+    const name = part && (part[1] ?? (part[2] === undefined ? part[3] : unescapeBasic(part[2])));
+    if (name === null || name === undefined) return null;
+    parts.push(name);
     index = KEY_PART.lastIndex;
     if (line[index] !== '.') return { parts, end: index };
     index += 1;
@@ -151,27 +169,54 @@ function dottedKey(line, from) {
 }
 
 const startsWith = (list, prefix) => prefix.every((part, index) => list[index] === part);
+const NOTHING_MORE = /^\s*(#.*)?\s*$/;
+
+/** Whether a TOML value that starts on this line also ends on it, for certain: every string closed, every
+ * bracket and brace paired, no multi-line string, and something there. Strings go first, then the comment,
+ * so a bracket or a quote inside either is not counted. */
+function endsOnItsLine(value) {
+  if (/"""|'''/.test(value)) return false;
+  const bare = value.trim().replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 's').replace(/#.*$/, '').trim();
+  if (bare === '' || /["']/.test(bare)) return false;
+  return bare.split('[').length === bare.split(']').length && bare.split('{').length === bare.split('}').length;
+}
 
 /** Classifies `lines`, the lines of a `config.toml` (with or without their line endings), for the edits
- * below. For each: `header`, the dotted key of the `[table]` or `[[array of tables]]` header it is (`[null]`
- * when it cannot be read), else `null`; `array`; `table`, the table the line is in, a header's own included
- * (`[null]` inside an array of tables or an unreadable header: some other table, of no interest here); and
- * `key`, `{ parts, rest }` for a `key = rest` line. The scan is line by line, so a multi-line string holding a
- * line that looks like a header would mislead it; a `config.toml` has none. */
+ * below. For each: `header`, the dotted key of the `[table]` or `[[array of tables]]` header it is, else
+ * `null`; `array`; `table`, the table the line is in, a header's own included (`[null]` inside an array of
+ * tables: some other table, of no interest here); and `key`, `{ parts, rest }` for a `key = rest` line.
+ *
+ * This scan is a safety filter, not a TOML parser: it keeps the desktop app and the real engram store out
+ * of a trial, so it FAILS CLOSED. A line is a blank, a comment, a header alone on its line, or a key whose
+ * value ends on the same line; anything else throws, naming the line. A value that runs over several lines
+ * is the case that matters: inside it nothing says what is a header and what is data, so a table could end
+ * early and the rest of it be written back, or a key be missed. It is refused wherever it is, because a
+ * scan that could tell which tables it may ignore would be the parser this is not. */
 function* scanToml(lines) {
+  const unreadable = (number, why) => new Error(`config.toml line ${number} ${why}. This harness edits the file as text, to keep the desktop app and the real engram store out of a trial, so it refuses what it cannot read for certain: write every table header alone on its line and every value on one line`);
   let table = [];
+  let number = 0;
   for (const text of lines) {
+    number += 1;
+    if (NOTHING_MORE.test(text)) {
+      yield { text, table, header: null, array: false, key: null };
+      continue;
+    }
     const lead = text.length - text.trimStart().length;
     if (text[lead] === '[') {
       const array = text[lead + 1] === '[';
-      const parsed = dottedKey(text, lead + (array ? 2 : 1));
-      const header = parsed && text[parsed.end] === ']' ? parsed.parts : [null];
-      table = array ? [null] : header;
-      yield { text, table, header, array, key: null };
+      const close = array ? ']]' : ']';
+      const parsed = dottedKey(text, lead + close.length);
+      if (!parsed || !text.startsWith(close, parsed.end) || !NOTHING_MORE.test(text.slice(parsed.end + close.length))) throw unreadable(number, 'starts with a bracket and is not a table header this scan can read');
+      table = array ? [null] : parsed.parts;
+      yield { text, table, header: parsed.parts, array, key: null };
       continue;
     }
     const parsed = dottedKey(text, lead);
-    yield { text, table, header: null, array: false, key: parsed && text[parsed.end] === '=' ? { parts: parsed.parts, rest: text.slice(parsed.end + 1) } : null };
+    if (!parsed || text[parsed.end] !== '=') throw unreadable(number, 'is neither a table header, a key with its value, a comment nor a blank line');
+    const rest = text.slice(parsed.end + 1);
+    if (!endsOnItsLine(rest)) throw unreadable(number, 'holds a value that does not end on that line');
+    yield { text, table, header: null, array: false, key: { parts: parsed.parts, rest } };
   }
 }
 
@@ -184,8 +229,10 @@ const unsupported =(how) => new Error(`config.toml declares the engram MCP serve
  * env of its own choosing rather than its whole one (UNVERIFIED, for the real trials), in which case the
  * trial's `ENGRAM_PORT` would not reach the server and it would fall back to 7437, the real one.
  *
- * The file is scanned line by line (`scanToml`): table headers and the key each line starts with. A server
- * declared any other way (an inline table, dotted keys, an inline `env`) is an error, never a guess. */
+ * The file is scanned line by line (`scanToml`, which refuses what it cannot read): table headers and the
+ * key each line starts with. A server declared any other way (an inline table, dotted keys, an inline `env`,
+ * an array of tables) is an error, never a guess; and so is an inline `mcp_servers` table whatever it
+ * holds, because the keys inside a value are not read. */
 export function withEngramEnv(toml, { dataDir, port }) {
   assertTrialPort(port);
   const eol = toml.includes('\r\n') ? '\r\n' : '\n';
@@ -193,9 +240,10 @@ export function withEngramEnv(toml, { dataDir, port }) {
   const out = [];
   let declared = false;
   let hasEnvTable = false;
-  for (const { text: line, table, header, key } of scanToml(toml.split(/\r?\n/))) {
+  for (const { text: line, table, header, array, key } of scanToml(toml.split(/\r?\n/))) {
     const inEnvTable = table.length === ENGRAM_ENV.length && startsWith(table, ENGRAM_ENV);
     if (header) {
+      if (array && startsWith(header, ENGRAM_SERVER)) throw unsupported('as an array of tables');
       out.push(line);
       if (startsWith(table, ENGRAM_SERVER)) declared = true;
       if (inEnvTable) {
@@ -209,7 +257,7 @@ export function withEngramEnv(toml, { dataDir, port }) {
       if (inEnvTable && key.parts.length === 1 && ENGRAM_KEYS.includes(key.parts[0])) continue;
       if (table.length === ENGRAM_SERVER.length && startsWith(table, ENGRAM_SERVER) && key.parts[0] === 'env') throw unsupported('with an inline or dotted env');
       if (!startsWith(table, ENGRAM_SERVER) && startsWith(full, ENGRAM_SERVER)) throw unsupported('through an inline table or dotted keys');
-      if (full.length === 1 && full[0] === ENGRAM_SERVER[0] && key.rest.includes(ENGRAM_SERVER[1])) throw unsupported('inside an inline mcp_servers table');
+      if (full.length === 1 && full[0] === ENGRAM_SERVER[0]) throw unsupported('or some other server inside an inline mcp_servers table');
     }
     out.push(line);
   }
@@ -240,18 +288,13 @@ const DESKTOP_TABLES = [...DESKTOP_APP.servers.map((name) => ['mcp_servers', nam
 const underDesktop = (parts) => DESKTOP_TABLES.some((prefix) => startsWith(parts, prefix));
 const cannotTakeOut = (how) => new Error(`config.toml ${how}, which this harness cannot take out of the copy whole, and a piece of the desktop app left in would reach the real one from a trial: write it as its own [table]`);
 
-/** Whether a TOML value that starts on this line also ends on it: no bracket left open, no multi-line string. */
-function endsOnItsLine(value) {
-  if (/"""|'''/.test(value)) return false;
-  const bare = value.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '');
-  return bare.split('[').length === bare.split(']').length && bare.split('{').length === bare.split('}').length;
-}
-
-/** The `config.toml` text `toml` without the pieces of `DESKTOP_APP`: each top-level key's line, and each
- * table from its header to the next header, sub-tables included. Every other byte is kept, line endings
- * too. A piece written any other way (an inline table, dotted keys, an array of tables, a value over several
- * lines) is an error, never left in; and so is any mention of a server or plugin that survives the
- * removal, a comment included, because a name still in the file is a piece this scan did not understand. */
+/** The `config.toml` text `toml` without the pieces of `DESKTOP_APP`: each top-level key's line (its value
+ * ends there, or `scanToml` has refused the file), and each table from its header to the next header,
+ * sub-tables included. Every other byte is kept, line endings too. A piece written any other way (an inline
+ * table, dotted keys, an array of tables) is an error, never left in; so is an inline `mcp_servers` or
+ * `plugins` table whatever it holds, because the keys inside a value are not read; and so is any mention of
+ * a server or plugin that survives the removal, a comment included, because a name still in the file is a
+ * piece this scan did not understand. */
 export function withoutDesktopApp(toml) {
   const out = [];
   for (const { text, table, header, array, key } of scanToml(toml.split(/(?<=\n)/))) {
@@ -263,11 +306,9 @@ export function withoutDesktopApp(toml) {
     if (underDesktop(table)) continue;
     if (key) {
       const full = [...table, ...key.parts];
-      if (full.length === 1 && DESKTOP_APP.keys.includes(full[0])) {
-        if (!endsOnItsLine(key.rest)) throw cannotTakeOut(`spreads the top-level key ${full[0]} over several lines`);
-        continue;
-      }
+      if (full.length === 1 && DESKTOP_APP.keys.includes(full[0])) continue;
       if (underDesktop(full)) throw cannotTakeOut(`declares ${full.slice(0, 2).join('.')} through an inline table or dotted keys`);
+      if (full.length === 1 && DESKTOP_TABLES.some(([first]) => first === full[0])) throw cannotTakeOut(`declares ${full[0]} as an inline table, where a piece could be`);
     }
     out.push(text);
   }
@@ -339,7 +380,7 @@ function writeCodexTemplate({ realHome, templateDir, copyFile }) {
   const copy = (from, to, what) => {
     if (exists(from)) copyEntry(from, to, { followLinks: true, active: new Set(), warnings, what, copyFile }, what);
   };
-  const names = fs.readdirSync(source).filter((name) => CODEX_ITEMS.includes(name) || PROFILE.test(name) || HOOK_SCRIPT.test(name)).sort();
+  const names = fs.readdirSync(source).filter((name) => CODEX_ITEMS.includes(name) || HOOK_SCRIPT.test(name)).sort();
   for (const name of names) copy(path.join(source, name), path.join(target, name), name);
   copyPluginCache(path.join(source, ...PLUGIN_CACHE), path.join(target, ...PLUGIN_CACHE), copy);
   // What gentle-ai's own hooks and commands read, as in the Claude template: both hosts share that file.

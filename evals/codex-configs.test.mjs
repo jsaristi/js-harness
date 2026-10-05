@@ -103,12 +103,16 @@ test('codexSandboxEnv needs the trial\'s engram port and never falls back to the
 const AUTH_FILE = path.join(tmp('login'), '.codex', 'auth.json');
 write(AUTH_FILE, LOGIN);
 const OPTIONS = { command: process.execPath, model: 'test-model', authFile: AUTH_FILE };
-const WORKSPACE = path.join(scratch, 'a workspace');
+// The name holds "auth" on purpose: what must never be an argument is the login's own path, not a word.
+const WORKSPACE = path.join(scratch, 'an authors workspace');
 const shared = (effort, workspace = WORKSPACE) => [
   'exec', '--json', '--ephemeral', '--skip-git-repo-check', '-m', 'test-model', '-c', `model_reasoning_effort="${effort}"`, '--dangerously-bypass-approvals-and-sandbox', '-C', workspace,
 ];
 const MINIMAL_ONLY = ['--ignore-user-config', '--ignore-rules'];
 const CURRENT_ONLY = ['--dangerously-bypass-hook-trust'];
+// Shims at a path that is absolute on whichever host runs the tests. A drive-letter path is relative on
+// POSIX, where the absolute-path check answers first and the shim check under test is never reached.
+const SHIMS = ['codex.cmd', 'codex.BAT', 'codex.ps1'].map((name) => path.join(path.parse(process.execPath).root, 'pnpm', 'bin', name));
 const BUILDERS = [['minimal', codexMinimalConfig, MINIMAL_ONLY], ['current', codexCurrentConfig, CURRENT_ONLY]];
 
 for (const [name, build, only] of BUILDERS) {
@@ -119,7 +123,8 @@ for (const [name, build, only] of BUILDERS) {
     assert.equal(config.reader, readCodexOutput, 'the output is read as codex exec --json prints it');
     assert.deepEqual(config.versionArgs, ['--version']);
     for (const effort of ['medium', 'high']) assert.deepEqual(config.args({ effort, workspace: WORKSPACE, home: HOME }), [...shared(effort), ...only]);
-    assert.ok(!config.args({ effort: 'high', workspace: WORKSPACE }).some((arg) => arg.includes('auth') || arg.includes(HOME)), 'neither the login nor the home is ever an argument');
+    const named = [AUTH_FILE, path.dirname(AUTH_FILE), HOME];
+    assert.ok(!config.args({ effort: 'high', workspace: WORKSPACE, home: HOME }).some((arg) => named.some((place) => arg.includes(place))), 'neither the login, its directory nor the home is ever an argument');
   });
 
   test(`${name}: leading arguments (a launcher script) come before everything, in the version probe too`, () => {
@@ -131,7 +136,7 @@ for (const [name, build, only] of BUILDERS) {
   test(`${name} refuses to build without a real command, a model or a login file, and to run without a usable effort`, () => {
     assert.throws(() => build({ model: 'm', authFile: AUTH_FILE }), /command/);
     assert.throws(() => build({ ...OPTIONS, command: 'codex' }), /absolute/);
-    assert.throws(() => build({ ...OPTIONS, command: 'C:\\pnpm\\bin\\codex.cmd' }), /shim/);
+    assert.throws(() => build({ ...OPTIONS, command: SHIMS[0] }), /shim/);
     assert.throws(() => build({ ...OPTIONS, commandArgs: 'codex.js' }), /commandArgs/);
     assert.throws(() => build({ ...OPTIONS, model: '' }), /model/);
     assert.throws(() => build({ command: process.execPath, model: 'm' }), /authFile/);
@@ -146,7 +151,10 @@ for (const [name, build, only] of BUILDERS) {
 
 test('assertAgentCommand takes an absolute path to a binary and refuses a shim, which cannot be spawned without a shell', () => {
   assert.doesNotThrow(() => assertAgentCommand(process.execPath));
-  for (const shim of ['C:\\Users\\x\\AppData\\Local\\pnpm\\bin\\codex.cmd', '/opt/bin/codex.BAT', 'C:\\bin\\codex.ps1']) assert.throws(() => assertAgentCommand(shim, '--codex'), /--codex .*shim/);
+  for (const shim of SHIMS) {
+    assert.ok(path.isAbsolute(shim), `${shim} would be refused for being relative, before the shim check`);
+    assert.throws(() => assertAgentCommand(shim, '--codex'), /--codex .*shim/);
+  }
   assert.throws(() => assertAgentCommand('codex', '--codex'), /--codex must be an absolute path/);
   assert.throws(() => assertAgentCommand(undefined, '--codex'), /--codex is required/);
 });
@@ -191,25 +199,41 @@ test('a missing login stops the trial before the agent starts, with an error tha
   assert.deepEqual(calls.released, [PORT, PORT], 'and the port is given back');
 });
 
+/** A prepared trial of the minimal arm on fake ports: its config, the context `cleanup` takes, where its
+ * login is, and what the port functions were asked. `overrides` replaces port functions. */
+async function preparedTrial(overrides = {}) {
+  const { calls, ...ports } = fakePorts();
+  const config = codexMinimalConfig({ ...OPTIONS, ...ports, ...overrides });
+  const context = { home: path.join(tmp('trial'), 'home'), workspace: tmp('workspace') };
+  context.prepared = await config.prepare(context);
+  const login = path.join(context.home, '.codex', 'auth.json');
+  assert.equal(fs.readFileSync(login, 'utf8'), LOGIN);
+  return { config, context, login, calls };
+}
+
 test('cleanup deletes the copy of the login itself, so a home that cannot be removed does not keep a credential', async () => {
-  for (const killPort of [() => ({ killed: [] }), () => { throw new Error('kill failed'); }]) {
-    const { calls, ...ports } = fakePorts();
-    const config = codexMinimalConfig({ ...OPTIONS, ...ports, killPort });
-    const home = path.join(tmp('trial'), 'home');
-    const workspace = tmp('workspace');
-    const prepared = await config.prepare({ home, workspace });
-    const login = path.join(home, '.codex', 'auth.json');
-    assert.equal(fs.readFileSync(login, 'utf8'), LOGIN);
-    try {
-      await config.cleanup({ home, workspace, prepared });
-    } catch (err) {
-      assert.match(err.message, /kill failed/);
-    }
-    assert.ok(!fs.existsSync(login), 'the copy is gone');
-    assert.ok(fs.existsSync(home), 'though the home itself is the runner\'s to remove');
-    assert.deepEqual(calls.released, [PORT]);
-    assert.equal(fs.readFileSync(AUTH_FILE, 'utf8'), LOGIN, 'and the real login is where it was');
-  }
+  const { config, context, login, calls } = await preparedTrial();
+  await config.cleanup(context);
+  assert.ok(!fs.existsSync(login), 'the copy is gone');
+  assert.ok(fs.existsSync(context.home), 'though the home itself is the runner\'s to remove');
+  assert.deepEqual(calls, { released: [PORT], killed: [PORT] });
+  assert.equal(fs.readFileSync(AUTH_FILE, 'utf8'), LOGIN, 'and the real login is where it was');
+});
+
+test('a port that cannot be cleared fails the cleanup, after the login is deleted and the port given back', async () => {
+  const { config, context, login, calls } = await preparedTrial({ killPort: () => { throw new Error('kill failed'); } });
+  await assert.rejects(config.cleanup(context), /kill failed/, 'the runner logs a cleanup that fails: it must hear of this one');
+  assert.ok(!fs.existsSync(login), 'the copy is gone');
+  assert.deepEqual(calls.released, [PORT]);
+});
+
+test('a login that cannot be deleted fails the cleanup, and the port is still cleared and given back', async () => {
+  const { config, context, login, calls } = await preparedTrial();
+  // A directory with something in it where the file was: `rmSync` without `recursive` refuses it.
+  fs.rmSync(login);
+  fs.mkdirSync(path.join(login, 'held'), { recursive: true });
+  await assert.rejects(config.cleanup(context), (err) => err.code === 'ERR_FS_EISDIR' || /directory/i.test(err.message));
+  assert.deepEqual(calls, { released: [PORT], killed: [PORT] }, 'the sandbox cleanup ran all the same');
 });
 
 // ---- end to end: what the agent actually received --------------------------------------------------

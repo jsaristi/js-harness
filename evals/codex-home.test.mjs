@@ -116,7 +116,7 @@ const hooksJson = (home) => `${JSON.stringify({
 /** What is copied, relative to the home, and what never is (each of those holds the sentinel, so a copy of
  * it anywhere is found by content as well as by name). */
 const COPIED = [
-  '.codex/config.toml', '.codex/AGENTS.md', '.codex/hooks.json', '.codex/engram-instructions.md', '.codex/engram-compact-prompt.md', '.codex/sdd-cheap.config.toml',
+  '.codex/config.toml', '.codex/AGENTS.md', '.codex/hooks.json', '.codex/engram-instructions.md', '.codex/engram-compact-prompt.md',
   '.codex/herdr-agent-state.ps1', '.codex/skills/demo/SKILL.md', '.codex/skills/.system/.codex-system-skills.marker',
   '.codex/plugins/cache/bundled/demo/1.0.0/.codex-plugin/plugin.json', '.codex/plugins/cache/bundled/demo/1.0.0/.mcp.json',
   '.codex/plugins/cache/bundled/demo/1.0.0/service.mjs', '.codex/plugins/cache/openai-bundled/code-review/1.0.0/plugin.json', '.gentle-ai/state.json',
@@ -129,6 +129,9 @@ const EXCLUDED = [
   '.codex/app-server-control/c.json', '.codex/app-server-daemon/d.json', '.codex/.codex-global-state.json', '.codex/.codex-global-state.json.bak', '.codex/config.toml.bak',
   '.codex/plugins/.plugin-appserver/codex.exe', '.codex/plugins/.remote-plugin-install-staging/x.json', '.codex/models_cache.json', '.codex/installation_id',
   '.codex/version.json', '.codex/stray.txt', '.engram/engram.db', '.gentle-ai/telemetry.json', 'notes.txt',
+  // The profiles `-p <name>` layers: no trial passes `-p`, and a copy would go through none of the edits
+  // `config.toml` gets, so it would carry the desktop app's pieces and the real engram into a trial home.
+  '.codex/sdd-cheap.config.toml', '.codex/sdd-strong.config.toml',
   // The desktop app's plugins, each with the MCP server it would declare.
   ...DESKTOP_DIRS.flatMap((dir) => [`${dir}/1.0.0/.mcp.json`, `${dir}/1.0.0/.codex-plugin/plugin.json`]), `${DESKTOP_DIRS[3]}/latest/.mcp.json`,
 ];
@@ -142,7 +145,6 @@ function makeRealHome({ config } = {}) {
   write(path.join(codex, 'hooks.json'), hooksJson(home));
   write(path.join(codex, 'engram-instructions.md'), 'memory protocol\n');
   write(path.join(codex, 'engram-compact-prompt.md'), 'compact prompt\n');
-  write(path.join(codex, 'sdd-cheap.config.toml'), 'model = "cheap-model"\n');
   write(path.join(codex, 'herdr-agent-state.ps1'), 'exit 0\n');
   write(path.join(codex, 'skills', 'demo', 'SKILL.md'), '# demo skill\n');
   write(path.join(codex, 'skills', '.system', '.codex-system-skills.marker'), 'marker\n');
@@ -224,7 +226,7 @@ test('the template holds no login, no state database, no session, cache or backu
   }
   // `plugins/cache` is the plugins themselves; the `cache` of the home is Codex's own and stays behind.
   assert.deepEqual(files.filter((rel) => rel.startsWith('home/.codex/cache/')), []);
-  assert.deepEqual(names.filter((name) => /sqlite|\.bak$|^\.codex-global-state/.test(name)), []);
+  assert.deepEqual(names.filter((name) => /sqlite|\.bak$|^\.codex-global-state|\.config\.toml$/.test(name)), [], 'no state, no backup, no profile');
   for (const rel of files) {
     const text = read(templateDir, rel);
     assert.ok(!text.includes(NEVER), `${rel} holds something that is never copied`);
@@ -351,7 +353,78 @@ test('withoutDesktopApp removes each table from its header to the next one, what
     ...kept.slice(8),
   ];
   for (const eol of ['\n', '\r\n']) assert.equal(withoutDesktopApp(toml.join(eol)), kept.join(eol));
-  for (const same of ['', 'model = "m"', kept.join('\n'), '[plugins]\n"demo@bundled" = { enabled = true }\n', 'plugins = { "demo@bundled" = { enabled = true } }\n']) assert.equal(withoutDesktopApp(same), same);
+  for (const same of ['', 'model = "m"', kept.join('\n'), '[plugins]\n"demo@bundled" = { enabled = true }\n', '[projects."D:\\\\js-harness"]\ntrust_level = "trusted"\n']) assert.equal(withoutDesktopApp(same), same);
+});
+
+// The scan that both edits share is a safety filter, so it fails closed: a line it cannot read with certainty
+// stops the build, with the line named, rather than being let through.
+
+test('a value that does not end on its line is refused with its line number: the scan could not tell where a table ends', () => {
+  // The finding this pins: a continuation line that starts with `[` was read as a header, which ended the
+  // desktop table early and wrote the rest of it back; and hid an inline engram env from the other edit.
+  const desktop = '[mcp_servers.node_repl]\nargs = [\n  ["a", "b"],\n]\ncommand = "x"\n\n[kept]\na = 1\n';
+  assert.throws(() => withoutDesktopApp(desktop), /config\.toml line 2 /);
+  const engram = '[mcp_servers.engram]\ncommand = "engram"\nargs = [\n  ["mcp"],\n]\nenv = { ENGRAM_PORT = "7437" }\n';
+  assert.throws(() => withEngramEnv(engram, ENV), /config\.toml line 3 /);
+  for (const edit of [withoutDesktopApp, (toml) => withEngramEnv(toml, ENV)]) {
+    for (const [toml, line] of [
+      ['[other]\nx = [\n  1,\n]\n', 2],
+      ['notify = [\n  "x.exe",\n  "turn-ended",\n]\n', 1],
+      ['a = 1\nnotify = """\nx"""\n', 2],
+      ["a = 1\nb = 2\nc = '''\nx'''\n", 3],
+      ['["a", "b"],\n', 1],
+      ['[table] trailing\n', 1],
+      ['[table\n', 1],
+      ['x = "unterminated\n', 1],
+      ["x = 'unterminated\n", 1],
+      ['x =\n', 1],
+      ['x = { a = 1\n', 1],
+      ['just some words\n', 1],
+      ['[mcp_servers.engram.env]\nENGRAM_URL = """\nhttp://127.0.0.1:7437\n"""\n', 2],
+    ]) assert.throws(() => edit(toml), new RegExp(`config\\.toml line ${line} `), toml);
+  }
+});
+
+test('a value that does end on its line is read, whatever brackets and quotes its strings and its comment hold', () => {
+  const toml = ['x = [ "a]", \'b[\', ["c"] ] # d [', 'y = { a = "}", b = \'{\' } # it\'s', 'z = "it\'s \\" [" # "', '  # a comment [', '', '[ table . "a b" ] # c', '[[array]]', 'k = 1', ''].join('\n');
+  assert.equal(withoutDesktopApp(toml), toml);
+  assert.equal(withEngramEnv(toml, ENV), toml);
+});
+
+test('a quoted key is read as TOML reads it: an escape cannot hide a desktop piece or the engram server', () => {
+  const kept = '[kept."a\\\\b"]\na = 1\n';
+  for (const hidden of [
+    '[mcp_servers."node\\u005frepl"]\ncommand = "x"\n\n',
+    '[plugins."brows\\u0065r@openai-bundled"]\nenabled = true\n\n',
+    '["mcp\\U0000005Fservers".node_repl.env]\nA = "1"\n\n',
+    '"not\\u0069fy" = [ "x.exe" ]\n',
+  ]) assert.equal(withoutDesktopApp(hidden + kept), kept, hidden);
+  assert.throws(() => withoutDesktopApp('[mcp_servers]\n"node\\u005frepl" = { command = "x" }\n'), /cannot take out/);
+  // An escape TOML does not define: the key cannot be read, so the line is refused.
+  assert.throws(() => withoutDesktopApp('a = 1\n[plugins."x\\q"]\n'), /config\.toml line 2 /);
+
+  const appended = ['', '[mcp_servers.engram.env]', ...OURS, ''].join('\n');
+  assert.equal(withEngramEnv('[mcp_servers."eng\\u0072am"]\ncommand = "engram"\n', ENV), `[mcp_servers."eng\\u0072am"]\ncommand = "engram"\n${appended}`);
+  const env = '[mcp_servers.engram]\ncommand = "engram"\n\n[mcp_servers.engram."en\\u0076"]\n"ENGRAM\\u005fURL" = "http://127.0.0.1:7437"\nKEEP = "yes"\n';
+  assert.equal(withEngramEnv(env, ENV), ['[mcp_servers.engram]', 'command = "engram"', '', '[mcp_servers.engram."en\\u0076"]', ...OURS, 'KEEP = "yes"', ''].join('\n'));
+  assert.throws(() => withEngramEnv('[mcp_servers]\n"eng\\u0072am" = { command = "engram" }\n', ENV), /cannot point at a trial/);
+});
+
+test('an inline table that could hold a piece is refused whatever it holds: its keys are not read', () => {
+  for (const toml of ['plugins = { "demo@bundled" = { enabled = true } }\n', 'mcp_servers = { other = { command = "x" } }\n', 'mcp_servers = { "node\\u005frepl" = { command = "x" } }\n']) {
+    assert.throws(() => withoutDesktopApp(toml), /cannot take out/, toml);
+  }
+  for (const toml of ['mcp_servers = { other = { command = "x" } }\n', 'mcp_servers = { "eng\\u0072am" = { command = "engram" } }\n', '[[mcp_servers.engram]]\ncommand = "engram"\n']) {
+    assert.throws(() => withEngramEnv(toml, ENV), /cannot point at a trial/, toml);
+  }
+});
+
+test('a config with a line the scan cannot read fails the build with the line named, and nothing is left behind', () => {
+  const config = '[mcp_servers.engram]\ncommand = "engram"\n\n[mcp_servers.engram.env]\nENGRAM_URL = """\nhttp://127.0.0.1:7437\n"""\n';
+  const realHome = makeRealHome({ config });
+  const parent = tmp('template');
+  assert.throws(() => buildCodexTemplate({ realHome, templateDir: path.join(parent, 'tpl') }), /config\.toml line 5 /);
+  assert.deepEqual(fs.readdirSync(parent), [], 'a failed build is rolled back');
 });
 
 test('withoutDesktopApp refuses every spelling it cannot take out whole, rather than leave a piece in', () => {
@@ -365,8 +438,6 @@ test('withoutDesktopApp refuses every spelling it cannot take out whole, rather 
     '[plugins]\n"chrome@openai-bundled" = { enabled = true }\n',
     '[plugins]\n"chrome@openai-bundled".enabled = true\n',
     'plugins."computer-use@openai-bundled".enabled = true\n',
-    'notify = [\n  "x.exe",\n  "turn-ended",\n]\n',
-    'notify = """\nx"""\n',
     '# see node_repl below\nmodel = "m"\n',
   ]) assert.throws(() => withoutDesktopApp(toml), /cannot take out/, toml);
 });
