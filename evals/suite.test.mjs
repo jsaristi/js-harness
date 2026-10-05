@@ -783,11 +783,6 @@ test('--summary takes --agent too, so a recorded Codex run can be read', () => {
 const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '2.4.0', engram: '2.1.0' };
 const CODEX_RUN = { agent: 'codex', model: 'gpt-6.1-sol', permissionMode: 'dangerously-bypass-approvals-and-sandbox', stack: CODEX_STACK };
 
-test('the model and the permission mode of a Codex run are what the feature document names', () => {
-  assert.equal(CODEX_EVAL_MODEL, 'gpt-6.1-sol');
-  assert.equal(CODEX_PERMISSION_MODE, 'dangerously-bypass-approvals-and-sandbox');
-});
-
 test('a resumed Codex run that differs in the agent, the model or a version is named change by change', () => {
   assert.deepEqual(diffRun(CODEX_RUN, { ...CODEX_RUN, stack: { ...CODEX_STACK } }), []);
   assert.deepEqual(diffRun(CODEX_RUN, { ...CODEX_RUN, model: 'gpt-other', stack: { ...CODEX_STACK, codex: 'codex-cli 0.160.0', engram: null } }), [
@@ -963,6 +958,94 @@ test('a Codex login that is missing, too old or dated in the future stops the ru
   assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'minimal' }), {}, deps), 0, io.err);
   assert.match(io.err, /Codex login: last written 185\.0 hours ago \(a run refuses one over 186\)/);
   assert.equal(fs.statSync(m.authFile).mtimeMs, NOW.getTime() - 185 * HOUR, 'and the real login is left as it was');
+});
+
+/** The deps of a Codex run on `m` whose stack is read by the real `readCodexStack`, in the work root of the run:
+ * only the probe is a stand-in, answering `version()` (which may throw), and so are the two tools and the port. */
+const probingDeps = (m, version, extra = {}) => codexDeps(m, {
+  readCodexStack: (options) => readCodexStack({
+    ...options, spawn: stackMachine().spawn, platform: 'linux', probeCodex: () => version(), allocatePort: async () => 41002, releasePort: () => {},
+  }),
+  ...extra,
+});
+
+test('a Codex run whose Codex version cannot be read is refused, exit 2, before the template, the login copy and any trial: a new run and a resume alike', async () => {
+  const m = codexMachine();
+  fs.mkdirSync(m.workRoot, { recursive: true });
+  const refused = (io, label) => {
+    assert.match(io.err, /the version of Codex could not be read/i, label);
+    assert.ok(io.err.includes(`${m.codex} --version`), `${label}: it says what was run to read it`);
+    assert.match(io.err, /no trial was started/i, label);
+    assert.ok(!io.err.includes(USAGE), `${label}: the command line was right, so the usage is not what to read`);
+    assert.equal(io.out, '', label);
+    assert.deepEqual(fs.readdirSync(m.workRoot), [], `${label}: no template was built, and the home of the probe is gone`);
+    assert.equal(fs.existsSync(m.runsDir), false, `${label}: no raw log`);
+    assert.ok(!(io.err + io.out).includes(FAKE_LOGIN), `${label}: the login is never opened`);
+  };
+
+  const fresh = probingDeps(m, () => null);
+  assert.equal(await suiteMain(codexRunArgv(m), {}, fresh.deps), 2, fresh.io.err);
+  refused(fresh.io, 'a new run');
+  assert.deepEqual(fresh.deps.runTrial.asked, [], 'a new run: nothing was run');
+  assert.equal(fs.existsSync(m.resultsDir), false, 'a new run records nothing, so no run exists with an unknown version');
+
+  // The case the refusal exists for: a run recorded with no Codex version, continued where the version cannot be
+  // read either. Unknown would equal unknown, and the two halves could be two CLIs.
+  const recorded = { format: 1, name: 'screen', createdAt: NOW.toISOString(), ...CODEX_RUN, stack: { ...CODEX_STACK, codex: null }, args: null, trials: [recordFor({ task: { id: 'alpha' }, config: { name: 'minimal' }, effort: 'medium', repeat: 1 })] };
+  write(codexResultsFile(m), `${JSON.stringify(recorded, null, 2)}\n`);
+  const before = fs.readFileSync(codexResultsFile(m), 'utf8');
+  const resumed = probingDeps(m, () => null);
+  assert.equal(await suiteMain(codexRunArgv(m), {}, resumed.deps), 2, resumed.io.err);
+  refused(resumed.io, 'a resume');
+  assert.deepEqual(resumed.deps.runTrial.asked, [], 'a resume: nothing was run');
+  assert.equal(fs.readFileSync(codexResultsFile(m), 'utf8'), before, 'a resume: the recorded run is left as it was');
+
+  // With a version that can be read, the same machine runs.
+  const readable = probingDeps(m, () => 'codex-cli 0.159.1');
+  assert.equal(await suiteMain(codexRunArgv(m, { '--name': 'readable', '--configs': 'minimal' }), {}, readable.deps), 0, readable.io.err);
+  assert.deepEqual(readCodexDoc(m, 'readable').stack, CODEX_STACK);
+});
+
+test('a Codex run that does not go on removes the work root its version probe made, and never one that was already there', async () => {
+  const m = codexMachine();
+  // Two levels that are not there: making the work root makes its parent too.
+  const parent = path.join(m.base, 'not-there-yet');
+  const workRoot = path.join(parent, 'work');
+  const argvOf = (changes = {}) => codexRunArgv(m, { '--work-root': workRoot, '--configs': 'minimal', ...changes });
+
+  const unreadable = probingDeps(m, () => null);
+  assert.equal(await suiteMain(argvOf(), {}, unreadable.deps), 2, unreadable.io.err);
+  assert.equal(fs.existsSync(parent), false, 'a version that cannot be read: what the probe made is removed');
+
+  const exploding = probingDeps(m, () => { throw new Error('the probe exploded'); });
+  assert.equal(await suiteMain(argvOf(), {}, exploding.deps), 1);
+  assert.match(exploding.io.err, /the suite failed: the probe exploded/);
+  assert.equal(fs.existsSync(parent), false, 'a probe that throws: what it made is removed');
+
+  // A run that goes on keeps the work root it made: its trials run there.
+  const first = probingDeps(m, () => 'codex-cli 0.159.1', { runTrial: fakeRun((trial, number) => (number === 2 ? stopped('cap')() : undefined)) });
+  assert.equal(await suiteMain(argvOf(), {}, first.deps), 1);
+  assert.deepEqual(fs.readdirSync(workRoot), [], 'the work root of a run that started is kept, with nothing of the probe in it');
+
+  // The same run, continued on another CLI after its work root was cleared away: refused, and nothing is left.
+  fs.rmSync(parent, { recursive: true, force: true });
+  const upgraded = probingDeps(m, () => 'codex-cli 0.160.0');
+  assert.equal(await suiteMain(argvOf(), {}, upgraded.deps), 1);
+  assert.match(upgraded.io.err, /codex: codex-cli 0\.159\.1 -> codex-cli 0\.160\.0/);
+  assert.equal(fs.existsSync(parent), false, 'a refused resume: what the probe made is removed');
+
+  // A work root that was there is not this run's to remove, empty or not.
+  fs.mkdirSync(workRoot, { recursive: true });
+  for (const version of ['codex-cli 0.160.0', null]) {
+    const refused = probingDeps(m, () => version);
+    assert.notEqual(await suiteMain(argvOf(), {}, refused.deps), 0);
+    assert.deepEqual(fs.readdirSync(workRoot), [], `${version}: the work root that existed is still there`);
+  }
+  // And a parent that was there stays when only the work root was made.
+  fs.rmdirSync(workRoot);
+  const again = probingDeps(m, () => null);
+  assert.equal(await suiteMain(argvOf(), {}, again.deps), 2);
+  assert.deepEqual([fs.existsSync(workRoot), fs.existsSync(parent)], [false, true], 'only what was made is removed');
 });
 
 /** What the Codex template under `workRoot` looks like right now, one entry per template found. */

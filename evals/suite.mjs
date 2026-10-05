@@ -295,7 +295,8 @@ const VERSION_HOME_PREFIX = 'js-harness-suite-codex-version-';
  * --version` WRITES into its `CODEX_HOME` (a `tmp/arg0` directory; `odd/tasks/codex-parity.md`, T3, where two probes
  * under the real environment replaced the real one's). The home gets the directories a trial's has, holds no login
  * and no configuration, and is removed whatever happens, with the port its environment names given back. So
- * `workRoot` must already have passed `assertWorkRoot`; it is made when it is not there. `spawn`, `platform`,
+ * `workRoot` must already have passed `assertWorkRoot`; it is made when it is not there, and it is the caller that
+ * knows whether the run goes on, so the caller removes it again when it does not (`suiteMain`). `spawn`, `platform`,
  * `probeCodex(command, env)`, `allocatePort`, `releasePort` and `log` are injectable. */
 export async function readCodexStack({
   codex, workRoot, spawn = spawnSync, platform = process.platform, probeCodex = (command, env) => probeVersion({ command }, env),
@@ -442,6 +443,13 @@ const TEMPLATE_PREFIX = 'js-harness-suite-template-';
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 const unknownVersion = (value) => (value === null ? 'unknown' : value);
 
+/** The directories that making `dir` would make, `dir` first and then each parent that is not there either. */
+const absentDirs = (dir) => {
+  const absent = [];
+  for (let at = dir; !fs.existsSync(at) && path.dirname(at) !== at; at = path.dirname(at)) absent.push(at);
+  return absent;
+};
+
 const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort() : []);
 
 /** The command. Resolves to the exit code: 0 for a run that finished (a trial that failed is a result, not a
@@ -465,7 +473,10 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * template, so it costs nothing), the login must be there and young enough (`assertLoginFresh`, by the `now` clock):
  * a refusal exits 2 like the Codex probe's, with the message that says what to do and without the usage, since the
  * command line was right. Its stack is `readCodexStack`'s (`deps.readCodexStack`), read in a throwaway home of the
- * work root, and its template is the Codex one, which never holds the login.
+ * work root, and its template is the Codex one, which never holds the login. A Codex version that cannot be read
+ * is the same kind of refusal, exit 2, for a new run and a continued one alike, before the template and any trial:
+ * the stack of a run is what a continued run is compared with, and an unknown version would equal an unknown one.
+ * A work root that reading the stack made is removed again whenever the run does not go on from there.
  *
  * A run stops, exit 1, at a trial whose reading the runner refuses (`runSuite`, the `reader` stop), whatever the
  * agent: nothing is recorded for that trial, its raw output is kept with the run's raw logs, and the same command
@@ -592,12 +603,48 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     checkWorkRoot(workRoot, { realHome });
     const tasks = args.tasks.map((id) => loadTask(path.join(tasksDir, id)));
     const existing = readResultsDocument(file);
-    const run = codex
-      ? { agent: args.agent, model: CODEX_EVAL_MODEL, permissionMode: CODEX_PERMISSION_MODE, stack: await codexStackOf({ codex: args.codex, workRoot, log: (message) => warn(`${message}\n`) }) }
-      : { model: EVAL_MODEL, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
+    // Reading the stack of a Codex run makes the work root when it is not there (`readCodexStack`), before this run
+    // is known to go on. So every way out that starts nothing gives back what that made: the directories that were
+    // absent, the work root first, and each only while it is empty (`rmdirSync` removes nothing else). A work root
+    // that was there, or that holds anything, is not this run's to remove.
+    const madeForStack = codex ? absentDirs(workRoot) : [];
+    const giveBackWorkRoot = () => {
+      for (const dir of madeForStack) {
+        try {
+          fs.rmdirSync(dir);
+        } catch {
+          return;
+        }
+      }
+    };
+    let run;
+    if (codex) {
+      let stack;
+      try {
+        stack = await codexStackOf({ codex: args.codex, workRoot, log: (message) => warn(`${message}\n`) });
+      } catch (err) {
+        giveBackWorkRoot();
+        throw err;
+      }
+      // A Codex run is never started, new or continued, on a version nobody could read: `diffRun` takes an unknown
+      // version to equal an unknown one, so such a run could be continued on another CLI and nothing would say so.
+      // Nothing is paid for yet here, so stopping costs nothing; it exits 2 like the login's refusal, and without
+      // the usage for the same reason.
+      if ((stack?.codex ?? null) === null) {
+        giveBackWorkRoot();
+        warn(`The version of Codex could not be read: \`${args.codex} --version\`, run under the environment of a trial in a throwaway home of ${workRoot}, `
+          + 'failed, timed out or printed nothing. A run records the version it is measured on and a continued run is compared with it, so one is not started without it. '
+          + 'Check that --codex names the real binary and that it answers --version, then run again.\nNo trial was started and no template was built.\n');
+        return 2;
+      }
+      run = { agent: args.agent, model: CODEX_EVAL_MODEL, permissionMode: CODEX_PERMISSION_MODE, stack };
+    } else {
+      run = { model: EVAL_MODEL, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
+    }
     if (existing) {
       const changes = diffRun(existing, run);
       if (changes.length > 0) {
+        giveBackWorkRoot();
         warn(`${file} was recorded on another stack, and versions must not change within a run, so it is not continued:\n`
           + `${changes.map((change) => `  ${change.field}: ${unknownVersion(change.recorded)} -> ${unknownVersion(change.current)}`).join('\n')}\n`
           + 'Restore the recorded versions, or start a new run with another --name.\n');
