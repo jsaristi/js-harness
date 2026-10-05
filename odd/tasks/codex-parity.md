@@ -99,6 +99,13 @@ branch was then restarted from `main` at that merge, keeping its name, so slice 
 start there and its review boundary is `b12d3cd`. The remote `feat/codex-parity` still points
 at the merged history until slice B is pushed, which needs `--force-with-lease`.
 
+Slice B is `e880546` (T4), `4376908` (T4r), `2ac64bb` (T5) and the commit that records this,
+none pushed. Before that last commit it is 1,705 changed lines against a forecast of about 550
+for the slice (897 in tests, 657 in code, the rest in this document): the suite and the report are each run end to
+end for both agents, and the review of T4 added its correction here. That is above the budget
+of about 400 lines, so its pull request needs Sebastián's `size:exception`, as #33 did, or a
+split into two (the suite: T4 and T4r; the report: T5), which the commits allow as they are.
+
 ## Tasks
 ### Slice A — the agent seam
 - [x] T1 The runner reads an agent's output through a parser the config carries: Claude's is
@@ -135,14 +142,13 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
 - [x] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
   engram), results under `evals/results/codex/`, resume (route: delegated writer, strict TDD —
   trigger: 2+ non-trivial files) — `e880546`, reviewed (Progress, 2026-10-05)
-- [ ] T4r T4's review findings, one correction: a Codex run whose Codex version cannot be read is
+- [x] T4r T4's review findings, one correction: a Codex run whose Codex version cannot be read is
   refused before anything is built or paid; a work root the version probe created is removed
   when the run does not go on; the test that compared two constants is removed (route: the T5
-  writer, same delegation, disjoint files) — written and verified, unchecked until its commit
-  and its reviews are recorded
-- [ ] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
+  writer, same delegation, disjoint files) — `4376908`, reviewed (Progress, 2026-10-05)
+- [x] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
   against Codex table (route: delegated writer, strict TDD — trigger: 2+ non-trivial files) —
-  written and verified, unchecked until its commit and its reviews are recorded
+  `2ac64bb`, reviewed (Progress, 2026-10-05)
 
 ### Slice C — runs and result
 - [ ] T6 Headroom run: 15 trials (`minimal`, `medium`), then the checkpoint with Sebastián
@@ -511,8 +517,29 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
     refused together with `--codex-results-dir`: the comparison sets two hosts on two models
     side by side and decides nothing. A single Codex report also prints the wall-time note.
   - Size: 702 added, 44 removed over the two units (384 of the added lines are tests).
+- 2026-10-05, T4r and T5 closed, which completes slice B: `4376908` and `2ac64bb`, each with a
+  green gate of about thirteen minutes and `core.bare` `false` afterwards.
+  - gentle-ai over `e880546..2ac64bb`: `medium`, review due (`slice_budget_reached`, 838 lines);
+    consent granted under the pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-01ecee89da37a727`, authority burned). One advisory finding, a
+    SUGGESTION taken as a follow-up: the comment above `giveBackWorkRoot` says every way out
+    that starts nothing gives the work root back, and the code does so on three exits
+    (`evals/suite.mjs:606-609`). Its example, the login refusal, does not apply: the login is
+    checked before the stack is read (`evals/suite.mjs:547`, against `:610`).
+  - Codex: `js-harness codex-review --base e880546`, recorded as `reviewed`
+    (`e880546..2ac64bb`): "No actionable defects were identified in the bounded read-only
+    audit. This verdict is provisional: the full delegated review was blocked by unavailable
+    sub-agent tools, and tests were not executed." So it is a weak review, for the reason
+    Follow-ups already gives.
+  - `check --push`: 3 code commits since `origin/main`, all covered by a Codex review record.
+  - Not run: the full `node --test "evals/**/*.test.mjs"` on its own; every gate ran `npm run
+    test`, which holds those files, and passed.
 
 ## Follow-ups
+- The comment above `giveBackWorkRoot` promises more than the code does (`evals/suite.mjs:606-609`,
+  gentle-ai SUGGESTION on T4r): it is given back on three exits, and the exits between the
+  resume check and the first trial were not traced one by one. With the next change to
+  `evals/suite.mjs`: give it back on every exit before the first trial, or say three.
 - A reader that throws, instead of returning a reading of the wrong shape, still ends the run as
   `the suite failed` (exit 1, nothing recorded, raw output kept) and not as the `reader` stop
   (T4). Both readers here return; make it one stop if a third reader is written.
@@ -554,7 +581,9 @@ at the merged history until slice B is pushed, which needs `--force-with-lease`.
   belongs.
 
 ## Next step
-Slice A is merged (#33). T4 is committed and reviewed (`e880546`). T4r and T5 are written: each
-gets its own commit, then gentle-ai over the range from `e880546` and Codex over each commit's
-range, which closes slice B. Slice C opens with T6, the first spend since the smoke trials: 15
-trials of `minimal` at `medium`, started with a login the real Codex refreshed that day.
+Slice A is merged (#33). Slice B is complete and reviewed on the branch, not pushed: its push
+(`--force-with-lease`) and its pull request, with the size decision in Delivery, are
+Sebastián's. Slice C opens with T6, the first spend since the smoke trials: 15 trials of
+`minimal` at `medium`. T6 is blocked until the real login is refreshed: its date is 2026-09-27
+and the suite refuses a login older than 186 h (Follow-ups); the review boundary for slice C is
+the commit that records this.
