@@ -96,10 +96,15 @@ nothing committed.
   `turn.completed`, cached input counted once, `turn.failed` and `error` classified as cap, auth
   or failure); the fake agent gains a Codex mode (route: delegated writer, strict TDD — trigger:
   2+ non-trivial files) — `1f63fd0`, reviewed (Progress, 2026-10-04)
-- [ ] T2 A Codex sandbox home and its two arms: `CODEX_HOME` inside the trial's home with a copy
+- [x] T2 A Codex sandbox home and its two arms: `CODEX_HOME` inside the trial's home with a copy
   of `auth.json`; `minimal` is an empty home with user config ignored; `current` is a frozen
   copy of the real `~/.codex` with its paths rewritten, plus `js-harness init`; the real binary
-  is resolved, never a `.cmd` shim (route: delegated writer, strict TDD)
+  is resolved, never a `.cmd` shim (route: delegated writer, strict TDD) — `4b2fa50`, reviewed
+  (Progress, 2026-10-04)
+- [x] T2r T2's review findings, one correction: the config scan fails closed (a multi-line array
+  inside a table, an escape in a quoted key and a multi-line env value are refused at build
+  instead of read wrong); profile layers are not copied; the shim, cleanup and login-path tests
+  hold on any host and prove what they claim (route: the T2 writer, resumed) — `22dd665`
 - [ ] T3 Isolation proof for Codex: the real `~/.codex`, engram and gentle-ai trees hashed before
   and after one real trial per arm, the report committed, and the real login verified afterwards
   (route: delegated writer for the probe, the two real trials run by the parent)
@@ -218,7 +223,92 @@ nothing committed.
   - The real `~/.codex/auth.json` still carries its 2026-09-27 date after that Codex run. Codex
     treats a login as stale after about eight days, so T3 checks the date again before it copies
     the file: a refresh that happens inside a copy is the risk Constraints names.
+- 2026-10-04, T2 written and verified, not committed: it waits on one decision of Sebastián's.
+  - Modules: `evals/codex-home.mjs` (the frozen template of the real `~/.codex`, the per-trial
+    seed, the login copy) and `evals/codex-configs.mjs` (`codexMinimalConfig`,
+    `codexCurrentConfig`, the env); `evals/configs.mjs` and `evals/home.mjs` only export or
+    generalize what both hosts share. Observed, one file at a time: `codex-configs.test.mjs`
+    17/17 and `codex-home.test.mjs` 21/21 (both rerun by the parent), `configs.test.mjs` 65/65,
+    `home.test.mjs` 37 pass and 1 skipped, `runner.test.mjs` 145 pass and 1 skipped,
+    `suite.test.mjs` 43/43; the real `auth.json` keeps its date and `core.bare` is `false`.
+  - The real binary behind the pnpm shim is `codex.exe` under
+    `@openai+codex@0.159.1-win32-x64\...\vendor\x86_64-pc-windows-msvc\bin`; T4's flag takes it.
+  - `plugins/` is 505 MB, of which 425 MB is the desktop app's `.plugin-appserver`, not copied;
+    `plugins/cache` (94.7 MB) is copied per trial in about 3.4 s.
+  - Open decision: only paths inside `.codex` are rewritten, so the copied `config.toml` still
+    names programs of the live desktop app: `notify = [codex-computer-use.exe, "turn-ended"]`
+    (line 2), `[mcp_servers.node_repl]` with the app's `node_repl.exe` (line 66), and the enabled
+    plugins `unified-computer-use`, `computer-use`, `browser`, `chrome` and `codex-app-tools`.
+    A trial of the current arm, which runs with approvals bypassed, could reach the live app
+    through a named pipe, and a hash of the real trees cannot see that. Precedent: Claude's
+    current arm ran without the claude.ai connector (`odd/tasks/evals.md:1181-1185`).
+  - Decided (Sebastián, 2026-10-04): the current arm leaves the desktop app's pieces out — the
+    `notify` program, the `node_repl` MCP server, and the plugins `unified-computer-use`,
+    `computer-use`, `browser`, `chrome` and `codex-app-tools` — and keeps the rest: the gentle-ai
+    block, hooks, skills, engram, codegraph, context7 and the other plugins. So the arm carries
+    fewer tools than his daily Codex, which the F6 result must say.
+- 2026-10-04, T2 committed as `4b2fa50` with that decision applied (gate green in about eleven
+  and a half minutes, `core.bare` still `false`). The template went from 94.7 MB and 1,795 files
+  to 49.7 MB and 634; a trial home seeds in about 1.25 s. On a scratch home with no login,
+  `codex mcp list` shows `code-review`, `codegraph`, `engram` and `context7`, and no `node_repl`,
+  `cua_repl` or `codex_app`.
+  - gentle-ai: assessed `medium`, review due (`slice_budget_reached`, 1,546 lines); consent
+    granted under the pre-grant; one lens, `review-reliability`; approved and acknowledged
+    (`review-3e695b5519f558ef`). Five advisory findings: a WARNING, the shim-refusal tests use
+    drive-letter paths and fail on a POSIX host (`evals/codex-configs.test.mjs:134`, `:147-149`);
+    and four SUGGESTIONs — a continuation line of a multi-line array is read as a table header,
+    so the rest of a removed table can be written back (`evals/codex-home.mjs:165-172`); the
+    cleanup test passes whether or not the error propagates, and no test makes the login's
+    removal fail (`evals/codex-configs.test.mjs:203-207`); an assertion on the substring `auth`
+    depends on the temp path (`:122`); profile layers are copied without the two passes
+    (`evals/codex-home.mjs:74`).
+  - Codex: `js-harness codex-review --base 57d8aec` first refused to run with this document
+    modified, so the document was stashed for the run and restored. It then gave three P2
+    findings and recorded nothing: "its successful commands showed 17 of 1249 changed lines"
+    (its `git diff` command exited 1 and it read the files another way). The findings: an escape
+    in a quoted key, `[mcp_servers."engram"]`, slips past both rewrites
+    (`evals/codex-home.mjs:144-146`); a multi-line engram env value is cut at its first line and
+    leaves invalid TOML (`:207-209`); and the same POSIX finding as gentle-ai's.
+  - All seven are T2r. The Codex review is rerun over `57d8aec..HEAD` once T2r is committed, so
+    one record covers both commits; if it again fails to show the diff, the skip is recorded
+    with `--unavailable` and its reason.
+  - Unverified until T3, beyond what T1 left: whether `--dangerously-bypass-hook-trust` runs the
+    hooks as they run for him; whether hooks and MCP servers inherit the trial's `ENGRAM_PORT`
+    and `CODEX_HOME`; what Codex writes outside `CODEX_HOME`; whether the two marketplace
+    sources (one dangling, one under the real `~/.cache`) trigger a re-sync; what the kept
+    `code-review` plugin's MCP server reaches; that `-c model_reasoning_effort="..."` arrives
+    intact at `codex.exe`.
+- 2026-10-04, T2r closed as `22dd665` (gate green in about eleven minutes, `core.bare` `false`).
+  All seven findings fixed; the scan now refuses every value that does not end on its line and
+  decodes quoted keys, since the real config holds one with an escape
+  (`[projects."D:\\js-harness"]`) that a blanket refusal would have tripped. The real
+  `config.toml` builds with no refusal and `codex mcp list` still shows the four servers.
+  - gentle-ai: assessed `medium`, review not due (`under_budget`, 268 lines), so it stays
+    pending in the slice until a later commit reaches the budget.
+  - Codex over `57d8aec..22dd665`: blocked, nothing recorded. Its text: "Review is blocked, not
+    evidence that the patch contains a defect. The diff exceeds the repository's mandatory
+    delegation budget, sub-agent tools are unavailable, and the separate read-only reviewer
+    failed with 'Access denied (os error 5)'". The explicit skip is recorded for that range with
+    this reason (`--unavailable`). This is a finding for F6 itself: the delegation rules of the
+    gentle-ai block in Codex's global `AGENTS.md` make `codex exec review` refuse a diff of this
+    size when it has no sub-agent tools.
+  - Codex over the correction alone, `4b2fa50..22dd665`: recorded as `reviewed`, one P2 — the
+    check for a value that ends on its line treats a triple quote anywhere in the value as a
+    multi-line delimiter, so valid single-line settings such as `model = "m" # """` are refused
+    (`evals/codex-home.mjs:218`). It refuses too much, never too little, and the real config
+    passes; taken as a follow-up, not a second correction.
+  - `check --push`: 3 code commits, all covered by a Codex review record.
+
+## Follow-ups
+- The config scan refuses a single-line value that holds a triple quote inside a string or a
+  comment (Codex P2 on T2r, `evals/codex-home.mjs:218`). Make the delimiter check respect string
+  and comment context when a real config trips it; until then the build stops and names the line.
+- The scan depends on Codex writing `config.toml` with one value per line. If an update starts
+  writing multi-line arrays, the current arm stops at template build, by design.
+- Codex could not review a range above about a thousand lines here, twice. A slice this size
+  needs commits small enough for it, or the skip that was recorded.
 
 ## Next step
-T2, with one writer; then T3's two real trials, which settle what T1 left assumed and what T1r
-needs.
+T3: the isolation proof and its two real trials, the first spend of this feature. Before the
+login is copied, the date of the real `~/.codex/auth.json` is read again; the trials settle what
+T1 and T2 left unverified and what T1r needs.
