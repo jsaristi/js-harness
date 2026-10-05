@@ -99,12 +99,15 @@ branch was then restarted from `main` at that merge, keeping its name, so slice 
 start there and its review boundary is `b12d3cd`. The remote `feat/codex-parity` still points
 at the merged history until slice B is pushed, which needs `--force-with-lease`.
 
-Slice B is `e880546` (T4), `4376908` (T4r), `2ac64bb` (T5) and the commit that records this,
-none pushed. Before that last commit it is 1,705 changed lines against a forecast of about 550
-for the slice (897 in tests, 657 in code, the rest in this document): the suite and the report are each run end to
-end for both agents, and the review of T4 added its correction here. That is above the budget
-of about 400 lines, so its pull request needs Sebastián's `size:exception`, as #33 did, or a
-split into two (the suite: T4 and T4r; the report: T5), which the commits allow as they are.
+Slice B is `e880546` (T4), `4376908` (T4r), `2ac64bb` (T5), `159810c` and the commit that
+records this. With `159810c` it is 1,740 changed lines against a forecast of about 550 for the
+slice (897 in tests, 657 in code, 186 in documents): the suite and the report are each run end
+to end for both agents, and the review of T4 added its correction here. That is above the
+budget of about 400 lines, and a split into two (the suite: T4 and T4r; the report: T5) was
+possible with the commits as they are. Sebastián chose one pull request with the
+`size:exception` on 2026-10-05: slice B is #34 against `main`, pushed with
+`--force-with-lease` (in fact a fast-forward, since the remote branch held only merged
+history). The commit that records this is pushed to the same pull request.
 
 ## Tasks
 ### Slice A — the agent seam
@@ -581,9 +584,9 @@ split into two (the suite: T4 and T4r; the report: T5), which the commits allow 
   belongs.
 
 ## Next step
-Slice A is merged (#33). Slice B is complete and reviewed on the branch, not pushed: its push
-(`--force-with-lease`) and its pull request, with the size decision in Delivery, are
-Sebastián's. Slice C opens with T6, the first spend since the smoke trials: 15 trials of
+Slice A is merged (#33). Slice B is pull request #34, open against `main`; its merge is
+Sebastián's. After it the branch is restarted from `main` again, as after #33. Slice C opens
+with T6, the first spend since the smoke trials: 15 trials of
 `minimal` at `medium`. T6 is blocked until the real login is refreshed: its date is 2026-09-27
 and the suite refuses a login older than 186 h (Follow-ups); the review boundary for slice C is
 the commit that records this.
