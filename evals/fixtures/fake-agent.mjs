@@ -6,6 +6,14 @@
 //   FAKE_AGENT_MODE    solve | noop | hang | hang-noisy | orphan | detached-quiet | orphan-by-path | cap | auth | cap-errors | auth-errors | exit | agent-error | soft-error | no-cost | garbage  (default noop)
 //                      codex-solve | codex-noop | codex-cap | codex-auth | codex-failed | codex-incomplete: the same
 //                      stand-in for `codex exec --json`, which prints an event per line instead (see `codexEvents`)
+//                      codex-probe: obeys the prompt of `codex-isolation-probe.mjs` as a real Codex is asked to
+//   FAKE_AGENT_PROBE_ACTS  for codex-probe, a comma-separated list of what it does besides, each the stand-in for
+//                      one thing the probe must see: engram (saves the memory in the trial's engram store), utf16
+//                      (writes its files as PowerShell 5.1 does), echo (repeats the nonce in its answer), refresh
+//                      (rewrites its own copy of the login), no-nonce (leaves the nonce file out), wrong-home
+//                      (its shell reports the real CODEX_HOME), login (changes the real login), leak (writes the
+//                      nonce, its thread id and a file named after the sandbox into the real home)
+//   FAKE_AGENT_REAL_HOME   for those acts, the fixture home that stands for the real one: never the machine's own
 //   FAKE_AGENT_REPORT  path; a JSON report of what the agent saw is written there before it acts: the
 //                      prompt, cwd, argv, the workspace entries and the whole environment it received
 //   FAKE_AGENT_COUNT_FILE  path; one line is appended per run (a `--version` probe is not a run)
@@ -16,6 +24,7 @@
 // The reported environment holds the value of every variable except those whose name looks like a
 // credential (TOKEN, KEY, SECRET, PASSWORD), which are replaced by a fixed marker: a real token in the
 // developer's environment must never reach a report or a log file, whatever a test inspects.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -244,6 +253,47 @@ switch (mode) {
     writeReport();
     console.log(codexEvents());
     break;
+  case 'codex-probe': {
+    // Everything it knows comes from the prompt, as for a real agent: the names on the "Names:" line and the
+    // nonce, the only 32 hex characters there. The sandbox is known by where it runs: `<sandbox>/workspace`.
+    writeReport();
+    const acts = new Set((process.env.FAKE_AGENT_PROBE_ACTS ?? '').split(',').filter(Boolean));
+    const nonce = /\b[0-9a-f]{32}\b/.exec(prompt)?.[0] ?? '';
+    const names = (/^Names: (.+)$/m.exec(prompt)?.[1] ?? '').split(',').map((name) => name.trim()).filter(Boolean);
+    const realHome = process.env.FAKE_AGENT_REAL_HOME;
+    const codexHome = process.env.CODEX_HOME;
+    const threadId = crypto.randomUUID();
+    // PowerShell 5.1 redirects into UTF-16LE with a byte order mark.
+    const encoded = (text) => (acts.has('utf16') ? Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]) : text);
+    const seen = (name) => (acts.has('wrong-home') && name === 'CODEX_HOME' ? path.join(realHome, '.codex') : process.env[name] ?? '');
+    fs.writeFileSync(path.join(cwd, 'probe-env.txt'), encoded(names.map((name) => `${name}=${seen(name)}\r\n`).join('')));
+    if (!acts.has('no-nonce')) fs.writeFileSync(path.join(cwd, 'probe-nonce.txt'), encoded(`${nonce}\r\n`));
+    // Something Codex itself leaves in its home, whatever the real one turns out to write there.
+    fs.writeFileSync(path.join(codexHome, 'version.json'), '{}\n');
+    const items = [{ type: 'command_execution', command: `write probe-env.txt and ${nonce}`, aggregated_output: '', exit_code: 0, status: 'completed' }];
+    if (acts.has('engram')) {
+      // The shape of an MCP tool call item is ASSUMED (`server`, `tool`), not observed from the real CLI.
+      fs.writeFileSync(path.join(process.env.ENGRAM_DATA_DIR, 'engram.db'), `a store\0memsave:${nonce}\0`);
+      items.push({ type: 'mcp_tool_call', server: 'engram', tool: 'mem_save', status: 'completed' });
+    }
+    if (acts.has('refresh')) fs.appendFileSync(path.join(codexHome, 'auth.json'), 'refreshed');
+    if (acts.has('login')) fs.appendFileSync(path.join(realHome, '.codex', 'auth.json'), 'refreshed');
+    if (acts.has('leak')) {
+      fs.writeFileSync(path.join(realHome, '.codex', 'history.jsonl'), `{"text":"${nonce}"}\n`);
+      fs.appendFileSync(path.join(realHome, '.engram', 'engram.db'), `\0session ${threadId}\0`);
+      fs.writeFileSync(path.join(realHome, '.gentle-ai', `${path.basename(path.dirname(cwd))}.json`), '{}\n');
+    }
+    const events = [
+      { type: 'thread.started', thread_id: threadId },
+      { type: 'turn.started' },
+      ...items.map((item, index) => ({ type: 'item.completed', item: { id: `item_${index}`, ...item } })),
+      { type: 'item.completed', item: { id: `item_${items.length}`, type: 'agent_message', text: acts.has('echo') ? `PROBE-DONE ${nonce}` : 'PROBE-DONE' } },
+      { type: 'turn.completed', usage: { input_tokens: 2000, cached_input_tokens: 1500, output_tokens: 80, reasoning_output_tokens: 30 } },
+    ];
+    console.error('fake codex: a line on stderr');
+    console.log(['Reading prompt from stdin...', ...events.map((event) => JSON.stringify(event))].join('\n'));
+    break;
+  }
   default:
     writeReport();
     console.log(success('did nothing'));

@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  CODEX_TEMPLATE_KIND, DESKTOP_APP, assertLogin, buildCodexTemplate, codexHomeOf, copyLogin, removeCodexTemplate, removeLogin, seedCodexHome, seedFromCodexTemplate,
-  withEngramEnv, withoutDesktopApp,
+  CODEX_TEMPLATE_KIND, DEFAULT_MAX_LOGIN_AGE_HOURS, DESKTOP_APP, LOGIN_REFRESH_AFTER_HOURS, assertLogin, assertLoginFresh, buildCodexTemplate, codexHomeOf, copyLogin,
+  removeCodexTemplate, removeLogin, seedCodexHome, seedFromCodexTemplate, withEngramEnv, withoutDesktopApp,
 } from './codex-home.mjs';
 import { buildTemplate, removeTemplate, seedHome } from './home.mjs';
 
@@ -631,4 +631,55 @@ test('the real home is never taken for a trial home: its login is neither overwr
   assert.throws(() => copyLogin({ authFile, home: realHome }), /never runs on the real one/);
   assert.throws(() => removeLogin({ authFile, home: realHome }), /never runs on the real one/);
   assert.equal(fs.readFileSync(authFile, 'utf8'), LOGIN);
+});
+
+// ---- the age of the login ----------------------------------------------------------------------------
+
+const HOUR = 3_600_000;
+/** A fake home whose login was last written `hours` before `now`. */
+function loginWrittenHoursAgo(hours, now) {
+  const authFile = path.join(makeRealHome(), '.codex', 'auth.json');
+  const written = new Date(now - hours * HOUR);
+  fs.utimesSync(authFile, written, written);
+  return authFile;
+}
+
+test('the limits say what is assumed of Codex: a refresh at eight days, and a margin of six hours before it', () => {
+  assert.equal(LOGIN_REFRESH_AFTER_HOURS, 192);
+  assert.equal(DEFAULT_MAX_LOGIN_AGE_HOURS, 186);
+});
+
+test('assertLoginFresh passes a login younger than the limit and returns its age, from the date of the file alone', () => {
+  const now = Date.now();
+  const authFile = loginWrittenHoursAgo(100, now);
+  // Not a JSON object any more: an age read from the content would throw or come out as something else.
+  fs.writeFileSync(authFile, 'not json at all');
+  fs.utimesSync(authFile, new Date(now - 100 * HOUR), new Date(now - 100 * HOUR));
+  const { ageHours } = assertLoginFresh(authFile, { now });
+  assert.ok(Math.abs(ageHours - 100) < 0.01, `${ageHours}`);
+  assert.equal(fs.readFileSync(authFile, 'utf8'), 'not json at all', 'and the file is as it was');
+  assert.doesNotThrow(() => assertLoginFresh(loginWrittenHoursAgo(185.9, now), { now }), 'just under the default limit');
+});
+
+test('a login past the limit is refused with its age, why a refresh inside a copy is the risk, and what to do', () => {
+  const now = Date.now();
+  const authFile = loginWrittenHoursAgo(187, now);
+  assert.throws(() => assertLoginFresh(authFile, { now }), (err) => {
+    assert.match(err.message, /187\.0 hours ago/, 'the age found');
+    assert.match(err.message, /186 hours/, 'the limit');
+    assert.match(err.message, /refreshes a ChatGPT login in place/);
+    assert.match(err.message, /copy may leave the real login invalid/);
+    assert.match(err.message, /Use the real Codex once.*then run again/);
+    return true;
+  });
+  assert.doesNotThrow(() => assertLoginFresh(authFile, { now, maxAgeHours: 190 }), 'the limit is the caller\'s to move');
+  assert.throws(() => assertLoginFresh(authFile, { now, maxAgeHours: 24 }), /over the 24 hours allowed/);
+});
+
+test('assertLoginFresh needs a login that is there and a limit that is a positive number', () => {
+  const realHome = makeRealHome();
+  const authFile = path.join(realHome, '.codex', 'auth.json');
+  for (const maxAgeHours of [0, -1, Number.NaN, '186']) assert.throws(() => assertLoginFresh(authFile, { maxAgeHours }), /positive number of hours/, String(maxAgeHours));
+  fs.rmSync(authFile);
+  assert.throws(() => assertLoginFresh(authFile), /no Codex login at .*run `codex login`/);
 });

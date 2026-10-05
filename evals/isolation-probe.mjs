@@ -742,7 +742,7 @@ export function defaultTrees({ realHome, localAppData, tempDir }) {
 // ---- looking inside the sandbox ---------------------------------------------------------------------------
 
 /** The relative paths of the files below `root` (never following a link), or none when it is missing. */
-function walkFiles(root) {
+export function walkFiles(root) {
   const files = [];
   const walk = (dir) => {
     let entries;
@@ -765,7 +765,7 @@ const exists = (target) => fs.lstatSync(target, { throwIfNoEntry: false }) !== u
 
 /** The top two levels of the sandbox home as `{ path, kind, files, bytes }` (counts are of everything
  * below), so the parent can see what a trial left in a home at a glance. */
-function summarizeTop(home) {
+export function summarizeTop(home) {
   const count = (dir) => walkFiles(dir).reduce((total, rel) => ({ files: total.files + 1, bytes: total.bytes + (fs.lstatSync(path.join(dir, ...rel.split('/')), { throwIfNoEntry: false })?.size ?? 0) }), { files: 0, bytes: 0 });
   const describe = (full, rel) => {
     const stat = fs.lstatSync(full);
@@ -785,7 +785,7 @@ function summarizeTop(home) {
 /** The first file below `store` (the sandbox's engram data directory) that holds each of `needles` (`{ label: text }`),
  * as `.engram/<relative path>`, or `null` for a label nothing holds. A file that cannot be read is skipped: the
  * answer is then "not found", which fails a control, never passes one. */
-async function findInStore(store, needles) {
+export async function findInStore(store, needles) {
   const hits = Object.fromEntries(Object.keys(needles).map((label) => [label, null]));
   const list = Object.entries(needles).map(([label, value]) => ({ label, values: [value] }));
   for (const rel of walkFiles(store)) {
@@ -946,12 +946,12 @@ function inspectEnv(toolResults, token) {
 
 // ---- the report -----------------------------------------------------------------------------------------
 
-const cap = (list, limit = 200) => ({ count: list.length, paths: list.slice(0, limit) });
+export const cap = (list, limit = 200) => ({ count: list.length, paths: list.slice(0, limit) });
 
 /** A diff as the report holds it: only the trees that changed, only the categories that have entries, each
  * list capped (a tree that appears can have thousands of files) with its full count. The key names of a
  * JSON file that changed (`keys`) are listed the same way: names, never values. */
-function reportDiff(diff) {
+export function reportDiff(diff) {
   const out = {};
   for (const [name, tree] of Object.entries(diff)) {
     if (!treeChanged(tree)) continue;
@@ -969,7 +969,7 @@ function reportDiff(diff) {
   return out;
 }
 
-const errorMessage = (err) => (err instanceof Error ? err.message : String(err));
+export const errorMessage = (err) => (err instanceof Error ? err.message : String(err));
 
 /** Whether the real global `CLAUDE.md` reached the model, from the fake API's log (booleans only). The two
  * arms must differ: the minimal arm is "the model and the built-in tools, nothing else", so it must carry
@@ -1370,17 +1370,17 @@ async function probeUnder(o, workRootCreated) {
 /** A function that replaces every secret in a text: the nonce, the dummy key and the real login token (the
  * agent has none, but the probe's own environment may, and a message that quotes an environment must not
  * carry it). */
-function makeScrubber(nonce) {
+export function makeScrubber(nonce) {
   const secrets = [[nonce, '<nonce>'], [DUMMY_API_KEY, '<dummy-api-key>'], [process.env.CLAUDE_CODE_OAUTH_TOKEN, '<login-token>']].filter(([value]) => typeof value === 'string' && value.length >= 8);
   return (text) => secrets.reduce((scrubbed, [value, label]) => scrubbed.split(value).join(label), text);
 }
 
 // ---- the summary and the command line -----------------------------------------------------------------------
 
-const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
-const megabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+export const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
+export const megabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 
-function diffLines(diff, indent) {
+export function diffLines(diff, indent) {
   const lines = [];
   for (const [tree, entry] of Object.entries(diff)) {
     const counts = ['added', 'removed', 'changed'].filter((category) => entry[category]).map((category) => `${category} ${entry[category].count}`);

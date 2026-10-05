@@ -36,6 +36,29 @@ export function assertLogin(authFile) {
   }
 }
 
+/** How old a ChatGPT login is when Codex refreshes it in place: about eight days. An ASSUMPTION about Codex,
+ * not read from the source of 0.159.1. What was observed here: the real `auth.json` kept its 2026-09-27 date
+ * through four real runs on 2026-10-04, so a login under eight days old is used as it is. */
+export const LOGIN_REFRESH_AFTER_HOURS = 192;
+/** The oldest login a run may copy: six hours short of that, the room a run needs to end before the refresh. */
+export const DEFAULT_MAX_LOGIN_AGE_HOURS = LOGIN_REFRESH_AFTER_HOURS - 6;
+
+/** Throws unless the login `authFile` was last written less than `maxAgeHours` before `now` (milliseconds);
+ * returns `{ ageHours }`. Why: once a login is that old Codex refreshes it, and a refresh made by a trial
+ * rewrites the trial's COPY and may leave the real login invalid, which a run must not risk for a
+ * measurement (`odd/tasks/codex-parity.md`, Constraints). The age is the file's date and nothing else: the
+ * login is never opened. That date is when the file was last written, ASSUMED to be its last refresh; a file
+ * restored or touched since then looks younger than its login is. */
+export function assertLoginFresh(authFile, { maxAgeHours = DEFAULT_MAX_LOGIN_AGE_HOURS, now = Date.now() } = {}) {
+  if (typeof maxAgeHours !== 'number' || !(maxAgeHours > 0)) throw new Error(`the oldest login allowed must be a positive number of hours, got ${JSON.stringify(maxAgeHours)}`);
+  assertLogin(authFile);
+  const ageHours = (now - fs.statSync(authFile).mtimeMs) / 3_600_000;
+  if (ageHours > maxAgeHours) {
+    throw new Error(`the Codex login at ${authFile} was last written ${ageHours.toFixed(1)} hours ago, over the ${maxAgeHours} hours allowed: Codex refreshes a ChatGPT login in place once it is about eight days (${LOGIN_REFRESH_AFTER_HOURS} hours) old, and a refresh made inside a trial's copy may leave the real login invalid. Use the real Codex once, so that it refreshes its own login, then run again`);
+  }
+  return { ageHours };
+}
+
 /** Where the login of the trial home `home` goes; an error when that is `authFile` itself, because a
  * "trial home" that is the real one would have its login overwritten here and deleted at cleanup. */
 function loginTarget({ authFile, home }) {
