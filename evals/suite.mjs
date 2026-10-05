@@ -6,6 +6,13 @@
 //     --tasks all --permission-mode <mode> --name <run name> [--work-root <dir>]
 //   node evals/suite.mjs --summary --name <run name>
 //
+// The same suite runs on the Codex CLI (`odd/tasks/codex-parity.md`, T4), which takes no permission mode and no
+// token, and keeps everything it writes in a `codex` directory of its own:
+//
+//   node evals/suite.mjs --agent codex --codex <path> --configs minimal,current --efforts medium,high --repeats 3 \
+//     --tasks all --name <run name> [--work-root <dir>]
+//   node evals/suite.mjs --agent codex --summary --name <run name>
+//
 // It wires what the other modules provide (`runSuite`, the two config builders, the home template, the work
 // root checks and the port cleanup) and adds what none of them owns: the login token, a results file that
 // names the stack it was measured on, and the headroom summary. The reasoning is in `odd/tasks/evals.md`
@@ -16,12 +23,38 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tools } from '../bin/lib/stack.mjs';
-import { SANDBOX_SWITCHES, currentConfig, defaultWorkRoot, assertWorkRoot, minimalConfig } from './configs.mjs';
+import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
+import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
+import { SANDBOX_SWITCHES, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
+import { allocatePort, releasePort } from './ports.mjs';
 import { loadTask, planTrials, probeVersion, removeDir, runSuite, runTrial as runRealTrial, trialKey } from './runner.mjs';
+
+/** The CLIs a run can measure. `--agent` names one, and it is the one argument that has a default: absent means
+ * `claude`, because every command line F5 recorded (`odd/tasks/evals.md`, the roadmap) was written before a second
+ * agent existed and must go on meaning what it meant, and reproducing a recorded number starts by typing it again.
+ * The same rule holds wherever a run is written down: the parsed arguments and a results document name their agent
+ * only when it is not Claude Code, so what F5 parsed and recorded has the shape it always had. */
+const AGENTS = ['claude', 'codex'];
+const agentOf = (run) => run?.agent ?? 'claude';
 
 /** The model both arms run on (`odd/tasks/evals.md`, Design): part of what the eval measures, so a constant. */
 export const EVAL_MODEL = 'claude-opus-5-5';
+
+/** The model both arms of a Codex run are measured on (`odd/tasks/codex-parity.md`, Constraints): a constant for
+ * the same reason. */
+export const CODEX_EVAL_MODEL = 'gpt-6.1-sol';
+
+/** What a Codex results file records as its permission mode: the flag both Codex arms are fixed to
+ * (`codex-configs.mjs`), the decided equivalent of the `bypassPermissions` the Claude arms ran under. It is not an
+ * argument, because no other value is measured; it is recorded so that a results file says what its trials were
+ * allowed, whichever agent ran them. */
+export const CODEX_PERMISSION_MODE = 'dangerously-bypass-approvals-and-sandbox';
+
+/** The directory, inside the results directory and inside the raw logs', that holds everything a Codex run
+ * writes. Never beside F5's files: its report reads every `*.json` of the results directory itself as one
+ * comparable set of runs (`report.mjs`, `loadRuns`), and refuses a set whose models or stacks differ. */
+const CODEX_DIR = 'codex';
 
 /** Where the login token of the eval run is read from: a variable of its own, so the global
  * `CLAUDE_CODE_OAUTH_TOKEN` that would log Sebastián's daily sessions in with a connector-less token is never needed. */
@@ -31,31 +64,66 @@ export const TOKEN_VARIABLE = 'JS_HARNESS_EVAL_OAUTH_TOKEN';
 // would make every trial fail at startup and be recorded as a measurement.
 const PERMISSION_MODES = ['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// The efforts a Codex run may name: the two of the F6 matrix (`odd/tasks/codex-parity.md`, Constraints), and that is
+// their only source. The values `model_reasoning_effort` takes for this model were NOT read from the installed CLI:
+// this list was written without running it (even `codex --version` writes into its `CODEX_HOME`), and the repository
+// holds no record of the full list, only that `medium`, `high` and `xhigh` were once given to a Codex model here
+// (`docs/ROADMAP.md`, the review row). The effort travels inside a `-c` override, so nothing in this repository shows
+// what Codex does with a value it does not know: widen the list from evidence of that, not from a guess.
+const CODEX_EFFORTS = ['medium', 'high'];
 const CONFIGS = ['minimal', 'current'];
 
 export const USAGE = [
   'Usage: node evals/suite.mjs --claude <path> --configs <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all>',
   '                            --permission-mode <mode> --name <run name> [--work-root <dir>]',
-  '       node evals/suite.mjs --summary --name <run name>',
+  '       node evals/suite.mjs --agent codex --codex <path> --configs <minimal,current> --efforts <medium,high> --repeats <n>',
+  '                            --tasks <ids|all> --name <run name> [--work-root <dir>]',
+  '       node evals/suite.mjs [--agent codex] --summary --name <run name>',
   '',
+  `  --agent <name>            ${AGENTS.join(', ')}: the CLI the run measures; claude when it is not given`,
   '  --claude <path>           the real claude binary, an absolute path (never a .cmd shim)',
+  '  --codex <path>            with --agent codex: the real codex binary (codex.exe), an absolute path, never the codex.cmd shim on PATH',
   `  --configs <list>          ${CONFIGS.join(', ')}`,
-  `  --efforts <list>          ${EFFORTS.join(', ')}`,
+  `  --efforts <list>          ${EFFORTS.join(', ')}; with --agent codex: ${CODEX_EFFORTS.join(', ')}`,
   '  --repeats <n>             trials per task, config and effort',
   '  --tasks <ids|all>         task ids from evals/tasks, comma separated, or all',
-  `  --permission-mode <mode>  ${PERMISSION_MODES.join(', ')}; no default, the same for both arms`,
-  '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/<name>/',
+  `  --permission-mode <mode>  ${PERMISSION_MODES.join(', ')}; no default, the same for both arms;`,
+  `                            not taken with --agent codex, whose arms always run with --${CODEX_PERMISSION_MODE}`,
+  '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/<name>/;',
+  `                            with --agent codex, to evals/results/${CODEX_DIR}/<name>.json and evals/runs/${CODEX_DIR}/<name>/`,
   '  --work-root <dir>         where trials run (default: js-harness-evals-work next to the repository)',
   '  --summary                 print the summary of a recorded run and run nothing',
   '',
   `The login token is read from the ${TOKEN_VARIABLE} environment variable (create it with \`claude setup-token\`).`,
+  `With --agent codex the model is ${CODEX_EVAL_MODEL} and no token is read: the login is the real ~/.codex/auth.json, copied into`,
+  `each trial's own home and never opened. A run refuses one last written over ${DEFAULT_MAX_LOGIN_AGE_HOURS} hours ago, because Codex would refresh it`,
+  'inside a trial: use the real Codex once, so that it refreshes its own login, then run again.',
   'Running the same command again continues the run: a recorded trial is never repeated.',
 ].join('\n');
 
 export class UsageError extends Error {}
 
-const VALUE_FLAGS = ['--claude', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name', '--work-root'];
-const REQUIRED_FLAGS = VALUE_FLAGS.filter((flag) => flag !== '--work-root');
+const VALUE_FLAGS = ['--agent', '--claude', '--codex', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name', '--work-root'];
+/** What the command line of each agent is made of: `binary`, the flag that names its real binary; `efforts`, the
+ * ones it may name; `required`, every flag a run needs (all but `--work-root`); and `refused`, the flags that are
+ * the other agent's, each with the rest of the sentence that says why. */
+const COMMAND_LINES = {
+  claude: {
+    binary: '--claude',
+    efforts: EFFORTS,
+    required: ['--claude', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name'],
+    refused: { '--codex': 'names the binary of a Codex run and is taken only with --agent codex' },
+  },
+  codex: {
+    binary: '--codex',
+    efforts: CODEX_EFFORTS,
+    required: ['--codex', '--configs', '--efforts', '--repeats', '--tasks', '--name'],
+    refused: {
+      '--claude': 'names the binary of a Claude Code run: with --agent codex the binary is --codex',
+      '--permission-mode': `is not taken with --agent codex: both Codex arms always run with --${CODEX_PERMISSION_MODE}`,
+    },
+  },
+};
 const NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/;
 
 function listOf(flag, value, allowed, what) {
@@ -73,7 +141,13 @@ function listOf(flag, value, allowed, what) {
  * or `{ mode: 'summary', name }`. Every argument but `--work-root` is required and nothing has a default: a
  * missing or unknown one is a `UsageError` raised before anything is created, because a run that guessed its
  * permission mode or its arms would record results that mean something else. `taskIds` are the ids a `--tasks`
- * value may name, found in `tasksDir`, which an empty `--tasks all` names in its error. */
+ * value may name, found in `tasksDir`, which an empty `--tasks all` names in its error.
+ *
+ * `--agent` is the exception to "nothing has a default" (see `AGENTS`). With `--agent codex` the result is
+ * `{ mode: 'run', agent: 'codex', codex, configs, efforts, repeats, tasks, name, workRoot }` or `{ mode: 'summary',
+ * agent: 'codex', name }`: the binary is `--codex`, the efforts are Codex's, and the flags that are Claude Code's
+ * (`--claude`, `--permission-mode`) are refused instead of ignored, since a flag that was typed and did nothing
+ * would let a run be taken for one it was not. */
 export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory' } = {}) {
   const given = new Map();
   let summary = false;
@@ -97,22 +171,37 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
     if (!NAME_PATTERN.test(name)) throw new UsageError(`--name ${JSON.stringify(name)} is not usable as a file name: use letters, digits, ".", "_" and "-", starting with a letter or digit`);
   };
 
+  const agent = given.get('--agent') ?? 'claude';
+  if (!AGENTS.includes(agent)) throw new UsageError(`--agent ${JSON.stringify(agent)} is not one of ${AGENTS.join(', ')}`);
+  const codex = agent === 'codex';
+
   if (summary) {
-    const others = [...given.keys()].filter((flag) => flag !== '--name');
-    if (others.length > 0) throw new UsageError(`--summary reads a recorded run and takes only --name, not ${others.join(', ')}`);
+    const others = [...given.keys()].filter((flag) => flag !== '--name' && flag !== '--agent');
+    if (others.length > 0) throw new UsageError(`--summary reads a recorded run and takes only --name and --agent, not ${others.join(', ')}`);
     if (!given.has('--name')) throw new UsageError('--name is required with --summary');
     checkName(given.get('--name'));
-    return { mode: 'summary', name: given.get('--name') };
+    return { mode: 'summary', ...(codex && { agent }), name: given.get('--name') };
   }
 
-  for (const flag of REQUIRED_FLAGS) if (!given.has(flag)) throw new UsageError(`${flag} is required`);
+  const line = COMMAND_LINES[agent];
+  for (const [flag, why] of Object.entries(line.refused)) if (given.has(flag)) throw new UsageError(`${flag} ${why}`);
+  for (const flag of line.required) if (!given.has(flag)) throw new UsageError(`${flag} is required${codex ? ' with --agent codex' : ''}`);
   const claude = given.get('--claude');
-  if (!path.isAbsolute(claude)) throw new UsageError(`--claude must be an absolute path, got ${JSON.stringify(claude)}: no PATH lookup is made`);
-  if (/\.(cmd|bat|ps1)$/i.test(claude)) throw new UsageError(`--claude ${claude} is a shim: agents are spawned without a shell, so point at the real binary`);
+  if (codex) {
+    // The check the Codex arms make of their command (`codex-configs.mjs`), made here so that it is a usage error.
+    try {
+      assertAgentCommand(given.get('--codex'), '--codex');
+    } catch (err) {
+      throw new UsageError(err.message);
+    }
+  } else {
+    if (!path.isAbsolute(claude)) throw new UsageError(`--claude must be an absolute path, got ${JSON.stringify(claude)}: no PATH lookup is made`);
+    if (/\.(cmd|bat|ps1)$/i.test(claude)) throw new UsageError(`--claude ${claude} is a shim: agents are spawned without a shell, so point at the real binary`);
+  }
   const repeats = given.get('--repeats');
   if (!/^[1-9]\d*$/.test(repeats)) throw new UsageError(`--repeats must be a positive integer, got ${JSON.stringify(repeats)}`);
   const permissionMode = given.get('--permission-mode');
-  if (!PERMISSION_MODES.includes(permissionMode)) throw new UsageError(`--permission-mode ${JSON.stringify(permissionMode)} is not one of ${PERMISSION_MODES.join(', ')}: one value, the same for both arms`);
+  if (!codex && !PERMISSION_MODES.includes(permissionMode)) throw new UsageError(`--permission-mode ${JSON.stringify(permissionMode)} is not one of ${PERMISSION_MODES.join(', ')}: one value, the same for both arms`);
   const tasksValue = given.get('--tasks');
   let tasks;
   if (tasksValue === 'all') {
@@ -125,31 +214,36 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   const workRoot = given.get('--work-root') ?? null;
   if (workRoot !== null && !path.isAbsolute(workRoot)) throw new UsageError(`--work-root must be an absolute path, got ${JSON.stringify(workRoot)}`);
   checkName(given.get('--name'));
-  return {
-    mode: 'run',
-    claude,
+  const cells = {
     configs: listOf('--configs', given.get('--configs'), CONFIGS, 'configs'),
-    efforts: listOf('--efforts', given.get('--efforts'), EFFORTS, 'efforts'),
+    efforts: listOf('--efforts', given.get('--efforts'), line.efforts, 'efforts'),
     repeats: Number(repeats),
     tasks,
-    permissionMode,
-    name: given.get('--name'),
-    workRoot,
   };
+  if (codex) return { mode: 'run', agent, codex: given.get('--codex'), ...cells, name: given.get('--name'), workRoot };
+  return { mode: 'run', claude, ...cells, permissionMode, name: given.get('--name'), workRoot };
 }
 
 // ---- what a run was --------------------------------------------------------------------------------------------------
 
-const STACK_FIELDS = [['claude', 'claude'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ['engramPlugin', 'engram plugin']];
+/** The versions a run of each agent records as its stack, as `[key in the document, name in a message]`. */
+const STACK_FIELDS = {
+  claude: [['claude', 'claude'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ['engramPlugin', 'engram plugin']],
+  codex: [['codex', 'codex'], ['gentleAi', 'gentle-ai'], ['engram', 'engram']],
+};
 
 /** What differs between the run a results file recorded (`recorded`) and the one about to continue it
  * (`current`), as `[{ field, recorded, current }]`, empty when nothing does. The versions of the stack, the
  * model and the permission mode must not change within a run (the feature document's rule): half the trials
  * on one CLI and half on another is not a measurement of either. `null`, an unreadable version, equals only
- * itself. */
+ * itself.
+ *
+ * The agent must not change either, and comes first. A run that names none is Claude Code's (see `AGENTS`), so a
+ * file F5 recorded is never continued as a Codex run. The stack compared is the one of the run about to continue. */
 export function diffRun(recorded, current) {
   const pairs = [
-    ...STACK_FIELDS.map(([key, field]) => [field, recorded.stack?.[key] ?? null, current.stack?.[key] ?? null]),
+    ['agent', agentOf(recorded), agentOf(current)],
+    ...STACK_FIELDS[agentOf(current)].map(([key, field]) => [field, recorded.stack?.[key] ?? null, current.stack?.[key] ?? null]),
     ['model', recorded.model ?? null, current.model ?? null],
     ['permission mode', recorded.permissionMode ?? null, current.permissionMode ?? null],
   ];
@@ -173,16 +267,58 @@ const readInstalledPlugin = (home, pluginId) => {
 export function readStack({
   claude, home, spawn = spawnSync, platform = process.platform, probeClaude = (command) => probeVersion({ command }, SANDBOX_SWITCHES),
 }) {
-  const installed = (id) => {
-    const { state, version } = tools.find((tool) => tool.id === id).installed({ spawn, platform });
-    return state === 'ok' ? version : null;
-  };
+  const installed = (id) => installedVersion(id, { spawn, platform });
   return {
     claude: probeClaude(claude) ?? null,
     gentleAi: installed('gentle-ai'),
     engram: installed('engram'),
     engramPlugin: readInstalledPlugin(home, 'engram@engram'),
   };
+}
+
+/** The version of the stack tool `id` as `doctor` reads it (`bin/lib/stack.mjs`), or `null`. */
+function installedVersion(id, { spawn, platform }) {
+  const { state, version } = tools.find((tool) => tool.id === id).installed({ spawn, platform });
+  return state === 'ok' ? version : null;
+}
+
+const VERSION_HOME_PREFIX = 'js-harness-suite-codex-version-';
+
+/** The stack a Codex run is measured on, `{ codex, gentleAi, engram }`, each `null` when it cannot be read (never a
+ * guess). gentle-ai and engram are asked as for Claude Code (`readStack`): they are the same programs under both
+ * hosts. There is no fourth field: the engram plugin's version is read from a record Claude Code keeps
+ * (`installed_plugins.json`), and Codex keeps none of that kind: what its home holds of a plugin is a directory of
+ * the plugin cache named by version (`codex-home.mjs`, `copyPluginCache`), which is not read here.
+ *
+ * Codex is asked for its own `--version` through the runner's `probeVersion`, under the environment a trial gets
+ * (`codexSandboxEnv`) in a throwaway home of its own under `workRoot`, and never under the real environment: `codex
+ * --version` WRITES into its `CODEX_HOME` (a `tmp/arg0` directory; `odd/tasks/codex-parity.md`, T3, where two probes
+ * under the real environment replaced the real one's). The home gets the directories a trial's has, holds no login
+ * and no configuration, and is removed whatever happens, with the port its environment names given back. So
+ * `workRoot` must already have passed `assertWorkRoot`; it is made when it is not there, and it is the caller that
+ * knows whether the run goes on, so the caller removes it again when it does not (`suiteMain`). `spawn`, `platform`,
+ * `probeCodex(command, env)`, `allocatePort`, `releasePort` and `log` are injectable. */
+export async function readCodexStack({
+  codex, workRoot, spawn = spawnSync, platform = process.platform, probeCodex = (command, env) => probeVersion({ command }, env),
+  allocatePort: allocate = allocatePort, releasePort: release = releasePort, log = () => {},
+}) {
+  fs.mkdirSync(workRoot, { recursive: true });
+  const home = fs.mkdtempSync(path.join(workRoot, VERSION_HOME_PREFIX));
+  let version;
+  try {
+    ensureSandboxDirs(home);
+    fs.mkdirSync(codexHomeOf(home), { recursive: true });
+    // A trial's environment names an engram port of its own, so this one does too; nothing listens on it.
+    const engramPort = await allocate();
+    try {
+      version = probeCodex(codex, codexSandboxEnv({ home, engramPort })) ?? null;
+    } finally {
+      release(engramPort);
+    }
+  } finally {
+    removeDir(home, 'home of the Codex version probe', log);
+  }
+  return { codex: version, gentleAi: installedVersion('gentle-ai', { spawn, platform }), engram: installedVersion('engram', { spawn, platform }) };
 }
 
 // ---- the headroom summary --------------------------------------------------------------------------------------------
@@ -307,6 +443,13 @@ const TEMPLATE_PREFIX = 'js-harness-suite-template-';
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 const unknownVersion = (value) => (value === null ? 'unknown' : value);
 
+/** The directories that making `dir` would make, `dir` first and then each parent that is not there either. */
+const absentDirs = (dir) => {
+  const absent = [];
+  for (let at = dir; !fs.existsSync(at) && path.dirname(at) !== at; at = path.dirname(at)) absent.push(at);
+  return absent;
+};
+
 const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort() : []);
 
 /** The command. Resolves to the exit code: 0 for a run that finished (a trial that failed is a result, not a
@@ -321,7 +464,23 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * build the home template (current arm only); run the trials, each recorded as it ends; and, whatever
  * happened, remove the template. An interrupt (SIGINT, SIGTERM or SIGHUP) aborts the running trial, which stops its agent
  * and cleans up before it returns; then the template is removed and the process ends with the signal's status
- * (`proc.exit`, so a test's stand-in sees it after all of that). The trial in flight records nothing. */
+ * (`proc.exit`, so a test's stand-in sees it after all of that). The trial in flight records nothing.
+ *
+ * A Codex run (`--agent codex`) is the same run with what is Codex's in place of what is Claude Code's. Its results
+ * and raw logs go to a `codex` directory inside `resultsDir` and `runsDir`, and its document names its agent. It
+ * reads no token: its login is the real `<home>/.codex/auth.json`, which every trial copies into its own home and
+ * nothing here opens. In place of the token check, and at the same point (before the work root, the stack and the
+ * template, so it costs nothing), the login must be there and young enough (`assertLoginFresh`, by the `now` clock):
+ * a refusal exits 2 like the Codex probe's, with the message that says what to do and without the usage, since the
+ * command line was right. Its stack is `readCodexStack`'s (`deps.readCodexStack`), read in a throwaway home of the
+ * work root, and its template is the Codex one, which never holds the login. A Codex version that cannot be read
+ * is the same kind of refusal, exit 2, for a new run and a continued one alike, before the template and any trial:
+ * the stack of a run is what a continued run is compared with, and an unknown version would equal an unknown one.
+ * A work root that reading the stack made is removed again whenever the run does not go on from there.
+ *
+ * A run stops, exit 1, at a trial whose reading the runner refuses (`runSuite`, the `reader` stop), whatever the
+ * agent: nothing is recorded for that trial, its raw output is kept with the run's raw logs, and the same command
+ * repeats exactly that trial. */
 export async function suiteMain(argv, env = process.env, deps = {}) {
   const {
     stdout = process.stdout, stderr = process.stderr,
@@ -330,6 +489,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     realHome = os.homedir(),
     checkWorkRoot = assertWorkRoot,
     readStack: stackOf = readStack,
+    readCodexStack: codexStackOf = readCodexStack,
     runTrial = runRealTrial,
     runInit,
     fileExists = fs.existsSync,
@@ -352,13 +512,17 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     warn(`${error.message}\n\n${USAGE}\n`);
     return 2;
   }
-  const file = path.join(resultsDir, `${args.name}.json`);
+  const codex = args.agent === 'codex';
+  // Where this run's results file and raw logs live: a Codex run's in a directory of their own (see `CODEX_DIR`).
+  const resultsHome = codex ? path.join(resultsDir, CODEX_DIR) : resultsDir;
+  const rawHome = codex ? path.join(runsDir, CODEX_DIR) : runsDir;
+  const file = path.join(resultsHome, `${args.name}.json`);
 
   if (args.mode === 'summary') {
     try {
       const doc = readResultsDocument(file);
       if (doc === null) {
-        warn(`no results named ${args.name} in ${resultsDir}\n`);
+        warn(`no results named ${args.name} in ${resultsHome}\n`);
         return 1;
       }
       say(formatSummary(summarizeResults(doc)));
@@ -369,15 +533,30 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     }
   }
 
-  if (!fileExists(args.claude)) {
-    warn(`--claude ${args.claude} does not exist\n\n${USAGE}\n`);
+  const binaryFlag = COMMAND_LINES[agentOf(args)].binary;
+  const binary = codex ? args.codex : args.claude;
+  if (!fileExists(binary)) {
+    warn(`${binaryFlag} ${binary} does not exist\n\n${USAGE}\n`);
     return 2;
   }
-  token = String(env[TOKEN_VARIABLE] ?? '').trim();
-  if (token === '') {
-    warn(`${TOKEN_VARIABLE} is not set, or is empty: create the eval's token with \`claude setup-token\` and keep it in that user environment variable. `
-      + 'A CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_* variable of this environment is deliberately not used, so no trial can run on a login that is not the eval\'s.\n');
-    return 1;
+  // The login of a Codex trial: the real file, which each trial copies into its own home (`codex-configs.mjs`).
+  const authFile = codex ? path.join(codexHomeOf(realHome), 'auth.json') : null;
+  if (codex) {
+    // Before anything is read, built or run: a login Codex would refresh inside a trial must cost nothing to find.
+    try {
+      const { ageHours } = assertLoginFresh(authFile, { now: now().getTime() });
+      warn(`Codex login: last written ${ageHours.toFixed(1)} hours ago (a run refuses one over ${DEFAULT_MAX_LOGIN_AGE_HOURS})\n`);
+    } catch (err) {
+      warn(`${err.message}\nNo trial was started and nothing was created.\n`);
+      return 2;
+    }
+  } else {
+    token = String(env[TOKEN_VARIABLE] ?? '').trim();
+    if (token === '') {
+      warn(`${TOKEN_VARIABLE} is not set, or is empty: create the eval's token with \`claude setup-token\` and keep it in that user environment variable. `
+        + 'A CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_* variable of this environment is deliberately not used, so no trial can run on a login that is not the eval\'s.\n');
+      return 1;
+    }
   }
 
   let templateParent = null;
@@ -392,7 +571,8 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     templateParent = null;
     const note = (message) => cleanupFailures.push(message);
     try {
-      removeTemplate(path.join(parent, 'template'));
+      // Each kind of template is removed by its own check of the marker, which refuses the other's.
+      (codex ? removeCodexTemplate : removeTemplate)(path.join(parent, 'template'));
     } catch (err) {
       note(`could not remove the home template: ${err.message}`);
     }
@@ -423,10 +603,48 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     checkWorkRoot(workRoot, { realHome });
     const tasks = args.tasks.map((id) => loadTask(path.join(tasksDir, id)));
     const existing = readResultsDocument(file);
-    const run = { model: EVAL_MODEL, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
+    // Reading the stack of a Codex run makes the work root when it is not there (`readCodexStack`), before this run
+    // is known to go on. So every way out that starts nothing gives back what that made: the directories that were
+    // absent, the work root first, and each only while it is empty (`rmdirSync` removes nothing else). A work root
+    // that was there, or that holds anything, is not this run's to remove.
+    const madeForStack = codex ? absentDirs(workRoot) : [];
+    const giveBackWorkRoot = () => {
+      for (const dir of madeForStack) {
+        try {
+          fs.rmdirSync(dir);
+        } catch {
+          return;
+        }
+      }
+    };
+    let run;
+    if (codex) {
+      let stack;
+      try {
+        stack = await codexStackOf({ codex: args.codex, workRoot, log: (message) => warn(`${message}\n`) });
+      } catch (err) {
+        giveBackWorkRoot();
+        throw err;
+      }
+      // A Codex run is never started, new or continued, on a version nobody could read: `diffRun` takes an unknown
+      // version to equal an unknown one, so such a run could be continued on another CLI and nothing would say so.
+      // Nothing is paid for yet here, so stopping costs nothing; it exits 2 like the login's refusal, and without
+      // the usage for the same reason.
+      if ((stack?.codex ?? null) === null) {
+        giveBackWorkRoot();
+        warn(`The version of Codex could not be read: \`${args.codex} --version\`, run under the environment of a trial in a throwaway home of ${workRoot}, `
+          + 'failed, timed out or printed nothing. A run records the version it is measured on and a continued run is compared with it, so one is not started without it. '
+          + 'Check that --codex names the real binary and that it answers --version, then run again.\nNo trial was started and no template was built.\n');
+        return 2;
+      }
+      run = { agent: args.agent, model: CODEX_EVAL_MODEL, permissionMode: CODEX_PERMISSION_MODE, stack };
+    } else {
+      run = { model: EVAL_MODEL, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
+    }
     if (existing) {
       const changes = diffRun(existing, run);
       if (changes.length > 0) {
+        giveBackWorkRoot();
         warn(`${file} was recorded on another stack, and versions must not change within a run, so it is not continued:\n`
           + `${changes.map((change) => `  ${change.field}: ${unknownVersion(change.recorded)} -> ${unknownVersion(change.current)}`).join('\n')}\n`
           + 'Restore the recorded versions, or start a new run with another --name.\n');
@@ -434,7 +652,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       }
     }
     doc = existing ?? { format: FORMAT, name: args.name, createdAt: now().toISOString(), ...run, args: null, trials: [] };
-    doc.args = { claude: args.claude, configs: args.configs, efforts: args.efforts, repeats: args.repeats, tasks: args.tasks, workRoot };
+    doc.args = { [agentOf(args)]: binary, configs: args.configs, efforts: args.efforts, repeats: args.repeats, tasks: args.tasks, workRoot };
 
     for (const signal of SIGNALS) proc.on(signal, onSignal);
     let seed;
@@ -442,15 +660,25 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       fs.mkdirSync(workRoot, { recursive: true });
       templateParent = fs.mkdtempSync(path.join(workRoot, TEMPLATE_PREFIX));
       const templateDir = path.join(templateParent, 'template');
-      const built = buildTemplate({ realHome, templateDir });
+      // Built once per run and copied into every trial's home, for either agent: Codex's is the frozen copy of the
+      // real `.codex`, which never holds the login (`codex-home.mjs`).
+      const built = (codex ? buildCodexTemplate : buildTemplate)({ realHome, templateDir });
       for (const warning of built.warnings) warn(`home template: ${warning}\n`);
-      seed = seedFromTemplate(templateDir, { runInit });
+      seed = (codex ? seedFromCodexTemplate : seedFromTemplate)(templateDir, { runInit });
     }
-    const options = { command: args.claude, model: EVAL_MODEL, permissionMode: args.permissionMode };
-    // The token goes into the trial's env here and nowhere else: the allowlist inherits CLAUDE_CODE_OAUTH_TOKEN
-    // from the launching environment, and this overrides whatever that holds.
-    const withToken = (config) => ({ ...config, env: (context) => ({ ...config.env(context), CLAUDE_CODE_OAUTH_TOKEN: token }) });
-    const configs = args.configs.map((name) => withToken(name === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options)));
+    let configs;
+    if (codex) {
+      // No credential rides a Codex trial's environment: each arm copies the login file into the trial's own home
+      // last, and deletes that copy first (`codex-configs.mjs`). The minimal arm has no seed.
+      const options = { command: args.codex, model: CODEX_EVAL_MODEL, authFile };
+      configs = args.configs.map((name) => (name === 'current' ? codexCurrentConfig({ ...options, seed }) : codexMinimalConfig(options)));
+    } else {
+      const options = { command: args.claude, model: EVAL_MODEL, permissionMode: args.permissionMode };
+      // The token goes into the trial's env here and nowhere else: the allowlist inherits CLAUDE_CODE_OAUTH_TOKEN
+      // from the launching environment, and this overrides whatever that holds.
+      const withToken = (config) => ({ ...config, env: (context) => ({ ...config.env(context), CLAUDE_CODE_OAUTH_TOKEN: token }) });
+      configs = args.configs.map((name) => withToken(name === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options)));
+    }
 
     const store = {
       read: () => doc.trials,
@@ -473,7 +701,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     // Raw logs are named by task, config, effort and repeat, so runs that share trials (the headroom screen and the
     // A/B run) would overwrite each other's in one directory: each run keeps its own, named like its results file.
     const result = await runSuite({
-      tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir: path.join(runsDir, args.name), workRoot,
+      tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir: path.join(rawHome, args.name), workRoot,
       runTrial: reporting, signal: interrupted.signal, log: (message) => warn(`${message}\n`),
     });
     if (result.status === 'interrupted') {

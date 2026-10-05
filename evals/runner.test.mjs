@@ -2122,3 +2122,86 @@ test('a suite against a Codex-shaped agent that hits the cap stops and leaves th
   assert.deepEqual(readResults(options.resultsPath), []);
   assert.deepEqual(entriesOf(workRoot), []);
 });
+
+// ---- a reading the runner refuses, in a suite -------------------------------------------------------
+
+/** A suite of the fake agent over the sample task, whose trials skip the sweep by path (about a second
+ * each, and nothing here is about it). `reader` reads every trial. */
+function readerSuite(reader, { mode = 'noop', repeats = 2, extra = {} } = {}) {
+  const workRoot = tmp('work');
+  const runsDir = tmp('runs');
+  const countFile = path.join(tmp('count'), 'count.txt');
+  const options = {
+    tasks: [loadTask(SAMPLE)],
+    configs: [fakeConfig(mode, { FAKE_AGENT_COUNT_FILE: countFile }, { reader, ...extra })],
+    efforts: ['medium'],
+    repeats,
+    resultsPath: path.join(tmp('results'), 'results.jsonl'),
+    runsDir,
+    workRoot,
+    runTrial: (trial) => runTrial({ ...trial, sweep: () => ({ killed: [] }) }),
+  };
+  const agentRuns = () => (fs.existsSync(countFile) ? fs.readFileSync(countFile, 'utf8').trim().split('\n').length : 0);
+  return { options, workRoot, runsDir, agentRuns };
+}
+
+for (const [label, good] of [['Claude Code', readClaudeOutput], ['Codex', readCodexOutput]]) {
+  test(`a suite read by ${label}'s reader stops at a trial whose reading is refused: no record for it, its raw output kept, and a resume repeats exactly that trial`, async () => {
+    // The reader is broken for the second trial only: the first is a recorded trial that must not run again.
+    let reads = 0;
+    let fixed = false;
+    const reader = (run) => {
+      reads += 1;
+      const reading = good(run);
+      return reads === 2 && !fixed ? { stop: reading.stop, failed: reading.failed, usage: reading.usage } : reading;
+    };
+    const { options, workRoot, runsDir, agentRuns } = readerSuite(reader, { mode: label === 'Codex' ? 'codex-noop' : 'noop', repeats: 3 });
+    const result = await runSuite(options);
+    assert.deepEqual(
+      result,
+      {
+        status: 'stopped',
+        reason: 'reader',
+        message: 'config fake: its reader returned a reading of the wrong shape: "parsed" must be true or false, got undefined (trial sample, fake, medium, repeat 2: nothing is recorded for it, and what the agent printed is kept with the raw logs)',
+        completed: 1,
+      },
+    );
+    assert.deepEqual(readResults(options.resultsPath).map(trialKey), ['sample|fake|medium|1'], 'the trial that was read is recorded, the refused one is not');
+    assert.match(fs.readFileSync(path.join(runsDir, 'sample__fake__medium__2.stdout.log'), 'utf8'), /did nothing/, 'what the paid session printed is kept');
+    assert.deepEqual(entriesOf(workRoot), [], 'and the trial is cleaned up');
+    assert.equal(agentRuns(), 2, 'the suite stopped there: the third trial did not run');
+
+    fixed = true;
+    assert.deepEqual(await runSuite(options), { status: 'complete', completed: 2, skipped: 1 });
+    assert.deepEqual(readResults(options.resultsPath).map(trialKey), ['sample|fake|medium|1', 'sample|fake|medium|2', 'sample|fake|medium|3']);
+    assert.equal(agentRuns(), 4, 'the refused trial ran again, the recorded one did not');
+  });
+}
+
+test('only a refused reading is such a stop: a trial that throws anything else still rejects the suite', async () => {
+  const thrown = readerSuite(readClaudeOutput);
+  await assert.rejects(runSuite({ ...thrown.options, runTrial: async () => { throw new Error('the trial exploded'); } }), /the trial exploded/);
+  // A config that carries something that is no reader is a defect of the config, found before any agent runs.
+  const unreadable = readerSuite('codex');
+  await assert.rejects(runSuite(unreadable.options), /config fake: "reader" must be a function/);
+  assert.equal(unreadable.agentRuns(), 0);
+});
+
+test('a Claude Code result with subagents and per-model usage is a reading the runner takes, with every count of the session', () => {
+  // The shape of a real result whose session spawned subagents on a helper model: `usage` is the main thread's,
+  // while the cost, `modelUsage` and `subagent_stats` cover the whole session.
+  const modelUsage = {
+    'claude-opus-5-5': { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 30, cacheCreationInputTokens: 20, costUSD: 0.5 },
+    'claude-haiku-5': { inputTokens: 4, outputTokens: 6, cacheReadInputTokens: 8, cacheCreationInputTokens: 2, costUSD: 0.25 },
+  };
+  const usage = { input_tokens: 10, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 5 };
+  const stdout = JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'done', num_turns: 7, usage, total_cost_usd: 0.75, modelUsage, subagent_stats: { spawned: 2 } });
+  const reading = assertReading(readClaudeOutput({ stdout, stderr: '', exitCode: 0, timedOut: false }), 'claude');
+  assert.deepEqual(reading, {
+    stop: null, parsed: true, failed: false,
+    usage: { inputTokens: 60, outputTokens: 5, turns: 7, usage, costUsd: 0.75, modelUsage, subagents: 2 },
+  });
+  // The same session as an array of messages, which newer CLIs print: the result is its last `result` element.
+  const listed = JSON.stringify([{ type: 'system', subtype: 'init' }, JSON.parse(stdout)]);
+  assert.deepEqual(assertReading(readClaudeOutput({ stdout: listed, stderr: '', exitCode: 0, timedOut: false }), 'claude'), reading);
+});

@@ -94,8 +94,20 @@ Slice A is pull request #33 against `main`, opened on 2026-10-05 at Sebastián's
 `40fa138` and the commit that records this. It is 5,222 changed lines against the forecast of
 about 950 for the slice (2,378 tests, 555 documents, 2,289 code, of which 1,019 are the probe):
 the probe needed its own arm driver and report, and three review rounds added their corrections
-here. A `size:exception` is his to accept. The reviewed boundary is `41509d3`. Slice B starts
-from `main` once #33 is merged.
+here. Sebastián accepted the `size:exception` and had #33 merged on 2026-10-05 (`b12d3cd`). The
+branch was then restarted from `main` at that merge, keeping its name, so slice B's commits
+start there and its review boundary is `b12d3cd`. The remote `feat/codex-parity` still points
+at the merged history until slice B is pushed, which needs `--force-with-lease`.
+
+Slice B is `e880546` (T4), `4376908` (T4r), `2ac64bb` (T5), `159810c` and the commit that
+records this. With `159810c` it is 1,740 changed lines against a forecast of about 550 for the
+slice (897 in tests, 657 in code, 186 in documents): the suite and the report are each run end
+to end for both agents, and the review of T4 added its correction here. That is above the
+budget of about 400 lines, and a split into two (the suite: T4 and T4r; the report: T5) was
+possible with the commits as they are. Sebastián chose one pull request with the
+`size:exception` on 2026-10-05: slice B is #34 against `main`, pushed with
+`--force-with-lease` (in fact a fast-forward, since the remote branch held only merged
+history). The commit that records this is pushed to the same pull request.
 
 ## Tasks
 ### Slice A — the agent seam
@@ -130,10 +142,16 @@ from `main` once #33 is merged.
   writer, same delegation, disjoint files) — `41509d3`, reviewed (Progress, 2026-10-05)
 
 ### Slice B — suite and report
-- [ ] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
-  engram), results under `evals/results/codex/`, resume
-- [ ] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
-  against Codex table
+- [x] T4 `evals/suite.mjs --agent codex`: model, efforts, stack fields (Codex version, gentle-ai,
+  engram), results under `evals/results/codex/`, resume (route: delegated writer, strict TDD —
+  trigger: 2+ non-trivial files) — `e880546`, reviewed (Progress, 2026-10-05)
+- [x] T4r T4's review findings, one correction: a Codex run whose Codex version cannot be read is
+  refused before anything is built or paid; a work root the version probe created is removed
+  when the run does not go on; the test that compared two constants is removed (route: the T5
+  writer, same delegation, disjoint files) — `4376908`, reviewed (Progress, 2026-10-05)
+- [x] T5 Report: an agent dimension, the estimated list cost of a Codex trial, and a Claude
+  against Codex table (route: delegated writer, strict TDD — trigger: 2+ non-trivial files) —
+  `2ac64bb`, reviewed (Progress, 2026-10-05)
 
 ### Slice C — runs and result
 - [ ] T6 Headroom run: 15 trials (`minimal`, `medium`), then the checkpoint with Sebastián
@@ -400,8 +418,138 @@ from `main` once #33 is merged.
     millisecond) and two SUGGESTIONs (no test reads a Claude result with subagents and model
     usage through `assertReading`; an infinite count is reported as `null`).
   - `check --push`: 6 code commits, all covered by a Codex review record (two of them skips).
+- 2026-10-05, slice B opened in a new session; T4 written and verified (route: delegated writer,
+  strict TDD; trigger: 2+ non-trivial files). No real `codex` or `claude` binary was run and no
+  real login was read: every test uses the fake agent.
+  - The command line: `node evals/suite.mjs --agent codex --codex <real binary> --configs
+    <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all> --name <run>
+    [--work-root <dir>]`, and `[--agent codex] --summary --name <run>`.
+  - Decided here, the two questions the last Next step left to T4. A reading `assertReading`
+    refuses is a defect of the reader and not a measurement: `runSuite` records no trial for it
+    and stops with `reason: 'reader'` (exit 1), the raw output stays where the runner keeps it,
+    and the same command repeats exactly that trial; the rule holds for both agents
+    (`ReadingError`, `evals/runner.mjs`). And a trial's setup download is not measured apart: it
+    happens inside the agent process, nothing in a record separates it from `wallMs`, so T5's
+    wall-time comparison says so.
+  - Decided here, the rest. `--agent` is optional and absent means `claude`, the parser's one
+    default, so F5's recorded command lines and every existing assertion keep their meaning; for
+    the same reason a Claude document carries no `agent` key and a Codex one carries
+    `agent: 'codex'`. With `--agent codex`, `--claude` and `--permission-mode` are refused (the
+    arms are fixed to `--dangerously-bypass-approvals-and-sandbox`, which is what the document
+    records as `permissionMode`), and `--codex` without it is refused. Efforts are exactly
+    `medium` and `high`: the repository holds no evidence of Codex's full list and the real
+    binary may not be run to ask. The login is checked for existence and age before the template
+    is built and before any trial; a refusal exits 2 with what to do. The Codex version is read
+    before the run in a throwaway home under the work root, under the sandbox's environment, so
+    a resume against a run whose agent, model or stack differ is refused before anything is
+    built. The stack is `{ codex, gentleAi, engram }`.
+  - Observed, one file at a time: `node --test evals/suite.test.mjs` 68/68 (43 before; rerun by
+    the parent, 60.6 s); `evals/runner.test.mjs` 153 pass, 1 skipped (149 and 1 before);
+    `evals/codex-configs.test.mjs` 19/19; `evals/report.test.mjs` 40/40; `contract check` on this
+    document exits 0. RED first: 21 of 68 suite tests failed on `unknown argument --agent`, and a
+    refused reading rejected the whole suite before the fix. Assertion lines went from 182 to 313
+    in `suite.test.mjs` and from 515 to 528 in `runner.test.mjs`, none changed or removed. The
+    follow-up test of a Claude result with subagents and per-model usage through `assertReading`
+    is in.
+  - Size: 770 added, 57 removed (516 of the added lines are tests), against a forecast of about
+    250 for the suite: the six Codex modes and the reader stop are run through `suiteMain` for
+    both agents. The two test files add about 85 s to the gate.
+  - For T5: `evals/report.mjs` does not recurse (`loadRuns` reads the `*.json` files directly in
+    its directory, `evals/report.mjs:193`), so F5's gate cannot read `evals/results/codex/`. A
+    Codex record carries `costUsd`, `modelUsage`, `turns` and `subagents` as `null`; its tokens
+    are `inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `reasoningOutputTokens` and
+    `outputTokens`, and `usage` is an array.
+  - Unverified until T6's real trials: that `codex --version` answers in a home with no login
+    and no config (if not, the run is refused before any trial, since T4r); whether Codex refuses
+    or ignores an unknown effort; the wording of a cap or a login failure.
+- 2026-10-05, T4 closed as `e880546` (gate green in about fourteen minutes, `core.bare` `false`
+  in the main checkout afterwards; `.gitignore` gained `evals/results/codex/*.tmp`, which the
+  existing pattern did not cover).
+  - gentle-ai over `a53309c..e880546`: `medium`, review due (`slice_budget_reached`, 889 lines);
+    consent granted under the pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-d614e9ad14e49939`, authority burned). Three advisory findings, all
+    taken as T4r: a WARNING, a Codex version probe that returns nothing was recorded as
+    `stack.codex = null` with no message, and since `null` equals `null` such a run could be
+    resumed on another Codex CLI unnoticed (`evals/suite.mjs:313`); and two SUGGESTIONs — the
+    version probe creates the work root before a resume is refused, so a refusal can leave an
+    empty one behind (`:304`), and a test compared two exported constants with the same
+    literals (`evals/suite.test.mjs:784-787`).
+  - Codex: `js-harness codex-review --base a53309c`, recorded as `reviewed`
+    (`a53309c..e880546`): "No actionable regressions were identified in the Codex suite
+    integration or reader-stop handling. The diff passes whitespace checks; functional tests
+    were inspected but not executed."
+  - That Codex run worked on the real login and did not refresh it: `~/.codex/auth.json` still
+    carries its date of 2026-09-27 21:45Z at 17:54Z on 2026-10-05, 188 h later, past the 186 h
+    the suite accepts. So a `codex exec` run is not the "ordinary use" that refreshes the login
+    (Follow-ups), and T6 cannot start until something does.
+- 2026-10-05, T4r and T5 written and verified: one delegation, two units on disjoint files.
+  - T4r (`evals/suite.mjs` 52 added and 5 removed, `evals/suite.test.mjs` 88 and 5): a Codex
+    run whose version cannot be read exits 2 before the template and any trial, with the
+    command that was tried in the message; the directories the probe had to create are removed
+    again, and only if empty, on that refusal, on a probe that throws and on a refused resume.
+    RED first for both (`0 !== 2`; "what the probe made is removed"). `node --test
+    evals/suite.test.mjs` 69/69.
+  - T5 (`evals/report.mjs` 266 added and 33 removed, `evals/report.test.mjs` 296 and 1; 104
+    assertion lines added, none changed): `node evals/report.mjs --results-dir
+    evals/results/codex` reports a Codex directory, and `node evals/report.mjs
+    --codex-results-dir evals/results/codex` prints the Claude against Codex table, one row per
+    task, config and effort with each host's score, tokens, cost and wall time; a cell recorded
+    on one side only reads `missing`. RED first against stub exports, 14 of 55 failed; then
+    55/55 (rerun by the parent).
+  - The agent of a document is its `agent` key and none means Claude; a directory that mixes
+    agents, or names an unknown one, is refused. A Claude report carries no agent, so F5's
+    output did not move: `node evals/report.mjs --require-complete --min-discriminating 3` exits
+    0 and its plain and `--json` output are byte-identical to the output before the change.
+  - The estimated list cost of a Codex trial, computed when the report runs and never written
+    into a record: `gpt-6.1-sol`, standard tier, requests of at most 272K input tokens, per 1M
+    tokens: input $2.00, cached input $0.10, cache writes $2.50, output $10.00
+    (`developers.openai.com/api/docs/pricing`, read 2026-10-05; above 272K the published rates
+    are $4.00, $0.20, $5.00 and $15.00). The uncached remainder is input minus cached minus
+    cache writes. A record sums usage per turn and a turn holds several requests, so the long
+    tier cannot be told from a record: the estimate is a lower bound in that respect, which the
+    report's note says. A model with no price has an unknown cost, said once.
+  - Assumed, for T6 to settle, and the estimate fails closed where a record contradicts it: that
+    cache writes are a part of `input_tokens` and reasoning a part of `output_tokens` (both were
+    0 in the two real sessions). A negative remainder, or more reasoning than output, makes that
+    trial's cost and tokens unknown and the report names the trial and the reason.
+  - The token column is input plus output on both hosts: Claude's is input, cache reads and
+    cache creation plus output, over every model in `modelUsage`, subagents included; Codex's is
+    `inputTokens` plus `outputTokens` summed over the session's turns. Whether Codex's per-turn
+    usage includes subagent work is not known.
+  - The verdict rule is unchanged and is fed the estimate for a Codex directory. The gates are
+    refused together with `--codex-results-dir`: the comparison sets two hosts on two models
+    side by side and decides nothing. A single Codex report also prints the wall-time note.
+  - Size: 702 added, 44 removed over the two units (384 of the added lines are tests).
+- 2026-10-05, T4r and T5 closed, which completes slice B: `4376908` and `2ac64bb`, each with a
+  green gate of about thirteen minutes and `core.bare` `false` afterwards.
+  - gentle-ai over `e880546..2ac64bb`: `medium`, review due (`slice_budget_reached`, 838 lines);
+    consent granted under the pre-grant; one lens, `review-reliability`; approved and
+    acknowledged (`review-01ecee89da37a727`, authority burned). One advisory finding, a
+    SUGGESTION taken as a follow-up: the comment above `giveBackWorkRoot` says every way out
+    that starts nothing gives the work root back, and the code does so on three exits
+    (`evals/suite.mjs:606-609`). Its example, the login refusal, does not apply: the login is
+    checked before the stack is read (`evals/suite.mjs:547`, against `:610`).
+  - Codex: `js-harness codex-review --base e880546`, recorded as `reviewed`
+    (`e880546..2ac64bb`): "No actionable defects were identified in the bounded read-only
+    audit. This verdict is provisional: the full delegated review was blocked by unavailable
+    sub-agent tools, and tests were not executed." So it is a weak review, for the reason
+    Follow-ups already gives.
+  - `check --push`: 3 code commits since `origin/main`, all covered by a Codex review record.
+  - Not run: the full `node --test "evals/**/*.test.mjs"` on its own; every gate ran `npm run
+    test`, which holds those files, and passed.
 
 ## Follow-ups
+- The comment above `giveBackWorkRoot` promises more than the code does (`evals/suite.mjs:606-609`,
+  gentle-ai SUGGESTION on T4r): it is given back on three exits, and the exits between the
+  resume check and the first trial were not traced one by one. With the next change to
+  `evals/suite.mjs`: give it back on every exit before the first trial, or say three.
+- A reader that throws, instead of returning a reading of the wrong shape, still ends the run as
+  `the suite failed` (exit 1, nothing recorded, raw output kept) and not as the `reader` stop
+  (T4). Both readers here return; make it one stop if a third reader is written.
+- A Claude run named `codex` would keep its raw logs in `evals/runs/codex/`, beside the Codex
+  runs' directories (T4). Not refused; no recorded run has that name.
+- The login's age is checked once per run, before the first trial. A run longer than the margin
+  the check leaves is not guarded: T6 and T7 are started with a login refreshed that day.
 - The config scan refuses a single-line value that holds a triple quote inside a string or a
   comment (Codex P2 on T2r, `evals/codex-home.mjs:218`). Make the delimiter check respect string
   and comment context when a real config trips it; until then the build stops and names the line.
@@ -413,9 +561,13 @@ from `main` once #33 is merged.
   and 59 MB more of the engram marketplace in the current arm. That time is inside a Codex
   trial's wall time and has no counterpart in a Claude trial, so T5's wall-time comparison must
   say so, or T4 must measure it apart.
-- The real login reaches the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
-  real Codex has refreshed its own login (any ordinary use of it does), never with a copy that
-  could be refreshed inside a trial.
+- The real login reached the age limit of 186 h on 2026-10-05 at about 15:45Z. T6 runs after the
+  real Codex has refreshed its own login, never with a copy that could be refreshed inside a
+  trial. What refreshes it is not known: the `codex exec review` of 2026-10-05, 188 h after the
+  file's date, worked and left the date as it was. Before T6: find what does (the interactive
+  CLI, the desktop app, or `codex login`), which is Sebastián's step since it is his login, and
+  check the date afterwards; or, if nothing refreshes a login that still works, decide with him
+  whether the age limit measures the right thing.
 
 - The probe ties a new engram process to a trial by its command line or its port, so one the
   trial started that takes both from its environment and does not listen (a stdio server) is
@@ -432,7 +584,9 @@ from `main` once #33 is merged.
   belongs.
 
 ## Next step
-Slice A is whole: T1, T2 and T3 with their corrections, six code commits, all reviewed, open as
-pull request #33; merging it is Sebastián's call. After the merge the branch restarts from
-`main` and T4, `evals/suite.mjs --agent codex`, opens slice B; it decides what the suite does with a trial `assertReading` rejects and
-whether a trial's setup download is measured apart from its wall time.
+Slice A is merged (#33). Slice B is pull request #34, open against `main`; its merge is
+Sebastián's. After it the branch is restarted from `main` again, as after #33. Slice C opens
+with T6, the first spend since the smoke trials: 15 trials of
+`minimal` at `medium`. T6 is blocked until the real login is refreshed: its date is 2026-09-27
+and the suite refuses a login older than 186 h (Follow-ups); the review boundary for slice C is
+the commit that records this.

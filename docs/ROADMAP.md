@@ -198,7 +198,14 @@ work) these tasks do not measure.
    Remote sessions, which he put before it that day, closed on 2026-10-04
    (`odd/tasks/remote-control.md`). The branch was brought up to `main` on 2026-10-04, so it
    holds the gate fix (`a3a1eb1`) without which a commit from a linked worktree can turn this
-   repository bare.
+   repository bare. Slice 1 of 3 merged on 2026-10-05 (#33): one isolated Codex trial per arm,
+   proven on the real binary, and the two smoke trials spent
+   (`evals/proofs/codex-isolation.md`). Slice 2, the suite and the report (T4, T5), is complete
+   and reviewed, and open as pull request #34 since 2026-10-05: `node evals/suite.mjs --agent codex`
+   runs the matrix, and `node evals/report.mjs --codex-results-dir evals/results/codex` sets the
+   two hosts side by side, with a Codex trial's cost estimated at the list price of its model.
+   The next spend is the 15 trials of T6, which wait on a refreshed Codex login: the real one
+   is dated 2026-09-27 and the suite refuses one older than 186 h.
 2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.
