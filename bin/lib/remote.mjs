@@ -7,7 +7,8 @@
 // registry by `readPersistentEnv`). The server exits after about ten minutes offline, so it is
 // restarted, with a capped backoff so a server that cannot run is not restarted in a tight loop (`nextDelay`).
 // And it is stopped as a tree, by pid and creation time, through `process-tree.mjs`: a bare-pid kill closed
-// unrelated programs on this machine.
+// unrelated programs on this machine. A fourth came from the first days of use: the server repaints its status
+// about once a second into the log, for as long as it runs, so the log is trimmed in place (`trimLog`).
 //
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
 // `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder.
@@ -214,6 +215,95 @@ export function logNote(logPath, text) {
   }
 }
 
+/** The size the log is trimmed past, and how much of its end is then kept: sixteen times the 64 KiB `remote
+ * status` reads (`LOG_TAIL_BYTES` in `bin/remote.mjs`). Nothing else bounds the file: the server repaints its whole
+ * status about once a second, and on 2026-10-06 the log of two days was 71 MB. */
+export const LOG_MAX_BYTES = 5 * 1024 * 1024;
+export const LOG_KEEP_BYTES = 1024 * 1024;
+/** How often the cap is checked while a server runs. A run lasts hours (one lasted 28), so the checks between
+ * runs are not enough; at the 1.5 MB an hour measured, a minute lets the log pass the cap by a few KiB. */
+export const LOG_CHECK_MS = 60 * 1000;
+/** How many times a trim looks for what was written while it moved the end, before it cuts all the same. */
+const CATCH_UP_PASSES = 8;
+
+/** The bytes `[from, to)` of `fd`. Throws when the file ends before `to`. */
+function readRange(io, fd, from, to) {
+  const buffer = Buffer.alloc(to - from);
+  for (let done = 0; done < buffer.length;) {
+    const read = io.readSync(fd, buffer, done, buffer.length - done, from + done);
+    if (read === 0) throw new Error('the log is shorter than it was');
+    done += read;
+  }
+  return buffer;
+}
+
+function writeAt(io, fd, buffer, position) {
+  for (let done = 0; done < buffer.length;) done += io.writeSync(fd, buffer, done, buffer.length - done, position + done);
+}
+
+/** Trims the log at `logPath` once it is larger than `maxBytes`. What is left is one `[js-harness remote] log
+ * trimmed: ...` line (not one `remote status` reads as the server going down) and then the end of the log: at
+ * most `keepBytes` of it, from the first line start in those bytes. That is after a `\n`, so never inside a
+ * line, a character of several bytes or an escape sequence; an end with no `\n` in it keeps nothing. Returns
+ * whether it trimmed. Best effort, like every write to the log: whatever fails (no log, one that cannot be
+ * opened, read, written or cut) returns `false` and throws nothing. `io` is `node:fs`, injectable.
+ *
+ * The file is trimmed in place: its end is copied over its start and the file is cut after the copy, never
+ * renamed or replaced. The server holds a handle of its own to this very file for a whole run (`runServer` hands
+ * it over as stdout), opened for appending, so each of its writes goes wherever the file ends at that moment:
+ * after the cut, right after the kept part. Measured on Windows 10 with a real process on 2026-10-06, by the
+ * test with the holding writer: no hole, every line whole, the same handle through two trims.
+ *
+ * What can be lost. Nothing stops the server from writing while this runs. What it appends after the end was
+ * read is looked for again and moved too, until a look finds nothing new (`CATCH_UP_PASSES` looks at most, so a
+ * server that writes faster than this copies cannot hold the supervisor here). A write that lands between the
+ * last of those looks and the cut, two system calls apart, is cut off with the rest: one write, and the server's
+ * next repaint says again what it said. A trim that dies midway (a write error, a supervisor killed) has cut
+ * nothing: the start of the file holds a copy of its end, the end is as it was, the file is still over the cap,
+ * and the next check trims it. */
+export function trimLog(logPath, { maxBytes = LOG_MAX_BYTES, keepBytes = LOG_KEEP_BYTES, io = fs } = {}) {
+  let fd;
+  try {
+    fd = io.openSync(logPath, 'r+');
+    const size = io.fstatSync(fd).size;
+    if (size <= maxBytes) return false;
+    const end = readRange(io, fd, Math.max(0, size - keepBytes), size);
+    const lineEnd = end.indexOf(0x0a);
+    const kept = end.subarray(lineEnd === -1 ? end.length : lineEnd + 1);
+    const note = `[js-harness remote] log trimmed: it passed ${maxBytes} bytes, and the ${size - kept.length} bytes before this line were dropped\n`;
+    const start = Buffer.concat([Buffer.from(note), kept]);
+    if (start.length >= size) return false; // a cap of a few bytes: the note would make the log longer
+    writeAt(io, fd, start, 0);
+    let length = start.length;
+    let moved = size;
+    for (let look = 0; look < CATCH_UP_PASSES; look++) {
+      const now = io.fstatSync(fd).size;
+      if (now <= moved) break;
+      const late = readRange(io, fd, moved, now);
+      writeAt(io, fd, late, length); // always behind what is still to be read: `length` stays below `moved`
+      length += late.length;
+      moved = now;
+    }
+    io.ftruncateSync(fd, length);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      if (fd !== undefined) io.closeSync(fd);
+    } catch {
+      // a handle that would not close costs nothing else
+    }
+  }
+}
+
+/** Runs `run` every `ms` until the function it returns is called. The timer never holds the process open. */
+function repeat(run, ms) {
+  const timer = setInterval(run, ms);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
 /** Starts the server: a `.cmd` shim as one command line through the shell (the quoting of `codex-review`), anything
  * else directly. */
 function launch(spawn, claude, args, options) {
@@ -271,16 +361,33 @@ function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform
  * `nextDelay(..., backoff)` and a restart. On abort the running server and what it started are killed, by
  * identity, with no restart, and it resolves; a kill that failed is logged and thrown. The log is best effort:
  * one that cannot be opened or written loses its lines, never the server, the backoff or a later write.
- * `spawn`, `sleep(ms, signal)`, `now`, `kill` (`killTree`) and `platform` are injectable. */
+ *
+ * The log has a cap, `logCap` (`{ maxBytes, keepBytes, checkMs }`, by default `LOG_MAX_BYTES`, `LOG_KEEP_BYTES`
+ * and `LOG_CHECK_MS`): `trimLog` is called before each run, when no server holds the log, and every `checkMs`
+ * while one runs, on a timer that starts with the run and is stopped when it ends, however it ends. A check that
+ * throws is dropped, and the next one is made.
+ * `spawn`, `sleep(ms, signal)`, `now`, `kill` (`killTree`), `platform`, `trim` (`trimLog`) and `every(run, ms)`,
+ * which returns what stops it, are injectable. */
 export async function supervise({
-  claude, args = [], cwd, env, logPath, signal, backoff = {},
+  claude, args = [], cwd, env, logPath, signal, backoff = {}, logCap = {},
   spawn = spawnChild, sleep = abortableSleep, now = Date.now, kill = killTree, platform = process.platform,
+  trim = trimLog, every = repeat,
 }) {
   if (signal?.aborted) return;
   const note = (text) => logNote(logPath, text);
+  const checkCap = () => {
+    try {
+      trim(logPath, logCap);
+    } catch {
+      // a check that fails loses that check, nothing else
+    }
+  };
   let delay;
   while (!signal?.aborted) {
-    const run = await runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform, signal });
+    checkCap();
+    const running = runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform, signal });
+    const stopChecking = every(checkCap, logCap.checkMs ?? LOG_CHECK_MS);
+    const run = await running.finally(stopChecking);
     if (run.killError) {
       note(`could not stop the server: ${run.killError.message}`);
       throw run.killError;

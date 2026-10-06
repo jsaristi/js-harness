@@ -132,8 +132,10 @@ export function readServerState(text) {
 
 const LOG_TAIL_BYTES = 64 * 1024;
 
-/** The last `LOG_TAIL_BYTES` of the log (it grows across restarts), or `''` when there is none. */
-function logTail(logPath) {
+/** The last `LOG_TAIL_BYTES` of the log, or `''` when there is none. The supervisor trims the log in place once
+ * it passes its cap (`trimLog`) and keeps sixteen times this much, with the server's latest repaint at its end,
+ * so a trimmed log reads as the whole one did. */
+export function logTail(logPath) {
   let fd;
   try {
     fd = fs.openSync(logPath, 'r');

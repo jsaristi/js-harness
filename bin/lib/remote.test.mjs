@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
-import { cleanServerEnv, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise } from './remote.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimLog } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -559,6 +560,294 @@ test('a .cmd shim is started through the shell as one command line, with its arg
   const log = readLog(logPath);
   assert.ok(log.includes('args=["remote-control","--name","my project","--spawn","same-dir"]'), log);
   assert.match(log, /session=none base=none/);
+});
+
+// ---- the cap on the log: trimmed in place, its end kept --------------------------------------------------------------
+
+/** A cap small enough for a test, in the proportions of the real one. */
+const SMALL_CAP = { maxBytes: 64 * 1024, keepBytes: 8 * 1024 };
+const TRIM_NOTE = /^\[js-harness remote\] log trimmed: /;
+/** A line as a server prints one, with characters of two and three bytes: a cut inside one would show. */
+const logLine = (tag, n) => `${tag} ${String(n).padStart(7, '0')} ${'·✔︎'.repeat(12)}\n`;
+const logLines = (tag, count) => Array.from({ length: count }, (_, i) => logLine(tag, i + 1)).join('');
+const LINE_BYTES = Buffer.byteLength(logLine('x', 1)) - 1;
+/** 700 of those lines: over the small cap. */
+const OVER_THE_CAP = logLines('before', 700);
+
+/** A trimmed log as `{ note, kept }`: its first line, which says that it was trimmed, and the rest. */
+function trimmedParts(text) {
+  const end = text.indexOf('\n');
+  assert.match(text.slice(0, end), TRIM_NOTE, text.slice(0, 200));
+  return { note: text.slice(0, end), kept: text.slice(end + 1) };
+}
+
+test('trimLog leaves a log at or under the cap alone, and cuts one over it down to its end, from a line start', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  assert.equal(trimLog(logPath, SMALL_CAP), false, 'no log, nothing to trim');
+  const atTheCap = `${'x'.repeat(SMALL_CAP.maxBytes - 1)}\n`;
+  fs.writeFileSync(logPath, atTheCap);
+  assert.equal(trimLog(logPath, SMALL_CAP), false, 'it is trimmed once it passes the cap, not at it');
+  assert.equal(readLog(logPath), atTheCap);
+
+  fs.writeFileSync(logPath, OVER_THE_CAP);
+  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  const { note, kept } = trimmedParts(readLog(logPath));
+  assert.ok(OVER_THE_CAP.endsWith(kept), 'what is kept is the end of the log, byte for byte');
+  assert.match(kept, /^before \d{7} /, 'from a line start: not inside a line, nor inside a character');
+  const keptBytes = Buffer.byteLength(kept);
+  assert.ok(keptBytes <= SMALL_CAP.keepBytes && keptBytes > SMALL_CAP.keepBytes - LINE_BYTES - 1, `every whole line that fits is kept: ${keptBytes}`);
+  assert.ok(note.includes(`${Buffer.byteLength(OVER_THE_CAP) - keptBytes} bytes`), `the note says how much went: ${note}`);
+  assert.equal(trimLog(logPath, SMALL_CAP), false, 'and it is under the cap again');
+});
+
+test('trimLog keeps nothing of an end that has no line start in it: what is kept never starts inside a line', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  fs.writeFileSync(logPath, `${logLines('before', 10)}${'x'.repeat(SMALL_CAP.maxBytes)}`);
+  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  assert.equal(trimmedParts(readLog(logPath)).kept, '');
+});
+
+/** A process that holds the handle it was given as its stdout, as the server does for a whole run, and writes to
+ * it when told: each line of its stdin is `<tag> <count>`, answered on stderr once those lines are written. */
+const HOLDING_WRITER = [
+  "const fs = require('node:fs');",
+  "require('node:readline').createInterface({ input: process.stdin }).on('line', (order) => {",
+  "  const [tag, count] = order.split(' ');",
+  "  for (let n = 1; n <= Number(count); n++) fs.writeSync(1, tag + ' ' + String(n).padStart(7, '0') + ' ' + '·✔︎'.repeat(12) + '\\n');",
+  "  process.stderr.write('wrote ' + tag + '\\n');",
+  '});',
+].join('\n');
+
+test('a log is trimmed in place under a process that holds its append handle: what that process writes afterwards lands after the kept part', { timeout: 60000 }, async () => {
+  const dir = tempDir();
+  const logPath = path.join(dir, 'remote.log');
+  // The handle is made and handed over the way `runServer` does it: opened for appending, inherited as stdout.
+  const out = fs.openSync(logPath, 'a');
+  const child = reaper.child(spawnChild(process.execPath, [fakeServer(dir, HOLDING_WRITER)], { stdio: ['pipe', out, 'pipe'], windowsHide: true }));
+  fs.closeSync(out);
+  const write = (tag, count) => new Promise((resolve, reject) => {
+    const answered = (chunk) => {
+      if (!String(chunk).includes(`wrote ${tag}`)) return;
+      child.stderr.off('data', answered);
+      resolve();
+    };
+    child.stderr.on('data', answered);
+    child.once('exit', () => reject(new Error(`the writer exited before it wrote ${tag}`)));
+    child.stdin.write(`${tag} ${count}\n`);
+  });
+
+  await write('before', 700);
+  assert.equal(readLog(logPath), OVER_THE_CAP);
+  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  const trimmed = readLog(logPath);
+  const { kept } = trimmedParts(trimmed);
+  assert.ok(OVER_THE_CAP.endsWith(kept) && /^before \d{7} /.test(kept), 'the end of the log, from a line start');
+  assert.ok(Buffer.byteLength(trimmed) < SMALL_CAP.keepBytes + 200, `the file is small: ${Buffer.byteLength(trimmed)} bytes`);
+
+  // The same handle, never reopened: were its writes to go where the file used to end, the file would be as
+  // large as before, with a hole of NUL bytes after the kept part.
+  await write('after', 50);
+  assert.equal(readLog(logPath), trimmed + logLines('after', 50), 'every later line is there, whole, right after the kept part');
+
+  // And a later trim finds the same handle still appending.
+  await write('again', 700);
+  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  await write('last', 3);
+  const final = readLog(logPath);
+  assert.ok(logLines('again', 700).endsWith(trimmedParts(final).kept.slice(0, -logLines('last', 3).length)), final.slice(0, 300));
+  assert.ok(final.endsWith(logLine('again', 700) + logLines('last', 3)));
+  assert.ok(Buffer.byteLength(final) < SMALL_CAP.keepBytes + 200 + 3 * (LINE_BYTES + 1));
+  child.stdin.end();
+});
+
+test('what the server writes while the end of the log is being moved is kept; only a write between the last look and the cut is lost', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  const server = fs.openSync(logPath, 'a'); // the server's own handle
+  try {
+    fs.writeFileSync(logPath, OVER_THE_CAP);
+    let writes = 0;
+    const duringTheMove = {
+      ...fs,
+      writeSync: (...args) => {
+        const written = fs.writeSync(...args);
+        writes += 1;
+        if (writes === 1) fs.writeSync(server, logLine('during', 1));
+        return written;
+      },
+    };
+    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: duringTheMove }), true);
+    assert.ok(readLog(logPath).endsWith(logLine('before', 700) + logLine('during', 1)), 'a line written after the end was read is moved with it');
+    assert.ok(writes > 1);
+
+    fs.writeFileSync(logPath, OVER_THE_CAP);
+    const beforeTheCut = {
+      ...fs,
+      ftruncateSync: (...args) => {
+        fs.writeSync(server, logLine('lost', 1));
+        return fs.ftruncateSync(...args);
+      },
+    };
+    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: beforeTheCut }), true);
+    fs.writeSync(server, logLine('after', 1));
+    const log = readLog(logPath);
+    assert.doesNotMatch(log, /lost/, 'that one write is gone');
+    assert.ok(log.endsWith(logLine('before', 700) + logLine('after', 1)), 'and nothing else: the lines around it are whole and in order');
+  } finally {
+    fs.closeSync(server);
+  }
+});
+
+test('a trim that fails loses nothing but the trim: it never throws, the end of the log is as it was, and the next note and the next trim go through', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  const whole = Buffer.from(OVER_THE_CAP);
+  const end = (buffer) => buffer.subarray(buffer.length - SMALL_CAP.keepBytes);
+  for (const failing of ['openSync', 'fstatSync', 'readSync', 'writeSync', 'ftruncateSync']) {
+    fs.writeFileSync(logPath, whole);
+    let closed = 0;
+    const io = {
+      ...fs,
+      closeSync: (fd) => {
+        closed += 1;
+        fs.closeSync(fd);
+      },
+      [failing]: (...args) => {
+        // A write that fails midway: half of it is in the file.
+        if (failing === 'writeSync') fs.writeSync(args[0], args[1], args[2], Math.floor(args[3] / 2), args[4]);
+        throw Object.assign(new Error(`EIO: i/o error, ${failing}`), { code: 'EIO' });
+      },
+    };
+    assert.equal(trimLog(logPath, { ...SMALL_CAP, io }), false, failing);
+    assert.equal(closed, failing === 'openSync' ? 0 : 1, `${failing}: the handle it opened is closed`);
+    const left = fs.readFileSync(logPath);
+    assert.equal(left.length, whole.length, `${failing}: nothing was cut`);
+    assert.ok(end(left).equals(end(whole)), `${failing}: the end of the log, which status reads, is untouched`);
+
+    logNote(logPath, `after ${failing}`);
+    assert.ok(readLog(logPath).endsWith(`[js-harness remote] after ${failing}\n`), `${failing}: the next note is written`);
+    assert.equal(trimLog(logPath, SMALL_CAP), true, `${failing}: and the next trim is made`);
+    assert.ok(trimmedParts(readLog(logPath)).kept.endsWith(`[js-harness remote] after ${failing}\n`));
+  }
+  fs.writeFileSync(logPath, whole);
+  const closeFails = { ...fs, closeSync: (fd) => { fs.closeSync(fd); throw new Error('EIO: i/o error, close'); } };
+  assert.equal(trimLog(logPath, { ...SMALL_CAP, io: closeFails }), true, 'a close that fails after the cut does not throw either');
+});
+
+/** A fake of the timer the cap is checked on: `started` holds every one with whether it was stopped. Each ticks
+ * once as soon as it starts, which is a check made while that run's server is up. */
+function fakeTimer() {
+  const started = [];
+  const every = (run, ms) => {
+    const timer = { ms, stopped: false, goingBefore: started.filter((other) => !other.stopped).length };
+    started.push(timer);
+    run();
+    return () => { timer.stopped = true; };
+  };
+  return { every, started };
+}
+
+test('supervise checks the cap before each run and on a timer during it; a check that throws ends nothing, and no timer outlives its run', async () => {
+  const dir = tempDir();
+  const logPath = path.join(dir, 'remote.log');
+  const controller = new AbortController();
+  const delays = [];
+  const checks = [];
+  const timer = fakeTimer();
+  const { spawn, children } = trackedSpawn();
+  await supervise({
+    claude: { path: process.execPath, shell: false },
+    args: [fakeServer(dir, QUICK_FAKE)],
+    cwd: dir,
+    env: cleanServerEnv(process.env),
+    logPath,
+    spawn,
+    sleep: async (ms) => {
+      delays.push(ms);
+      if (delays.length === 2) controller.abort();
+    },
+    logCap: { maxBytes: 1000, keepBytes: 100 },
+    trim: (file, cap) => {
+      checks.push({ file, cap, running: children.filter((child) => child.exitCode === null).length });
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+    },
+    every: timer.every,
+    signal: controller.signal,
+  });
+  assert.deepEqual(checks.map(({ running }) => running), [0, 1, 0, 1], 'before each run, and on the timer while its server is up');
+  assert.ok(checks.every(({ file, cap }) => file === logPath && cap.maxBytes === 1000 && cap.keepBytes === 100), 'on that log, with the cap it was given');
+  assert.deepEqual(timer.started.map(({ ms, stopped, goingBefore }) => ({ ms, stopped, goingBefore })), [
+    { ms: LOG_CHECK_MS, stopped: true, goingBefore: 0 },
+    { ms: LOG_CHECK_MS, stopped: true, goingBefore: 0 },
+  ], 'one timer a run, stopped when the run ends');
+  assert.equal(children.length, 2, 'the server was restarted all the same');
+  assert.deepEqual(delays, [5000, 10000], 'with the backoff');
+  const log = readLog(logPath);
+  assert.equal(count(log, 'Connected'), 2, log);
+  assert.equal(count(log, /\[js-harness remote\] server exited \(code 1\)/.source), 2, log);
+  assert.match(log, /\[js-harness remote\] stopped/);
+});
+
+/** A fake that stays up and never stops printing: numbered lines, one write each, as fast as its timer fires. */
+const CHATTY_FAKE = [
+  "const fs = require('node:fs');",
+  'let n = 0;',
+  "setInterval(() => { for (let i = 0; i < 40; i++) fs.writeSync(1, 'frame ' + String(++n).padStart(7, '0') + ' ' + '·✔︎'.repeat(12) + '\\n'); }, 2);",
+].join('\n');
+
+test('a server that never exits has its log trimmed while it runs, on the real timer, and keeps writing whole lines after each trim', { timeout: 60000 }, async () => {
+  const dir = tempDir();
+  const logPath = path.join(dir, 'remote.log');
+  const controller = new AbortController();
+  const { spawn, children } = trackedSpawn();
+  const running = supervise({
+    claude: { path: process.execPath, shell: false },
+    args: [fakeServer(dir, CHATTY_FAKE)],
+    cwd: dir,
+    env: cleanServerEnv(process.env),
+    logPath,
+    spawn,
+    kill: (child) => { child.kill('SIGKILL'); }, // through its handle: it started nothing
+    sleep: () => assert.fail('the server never exits, so nothing waits for a restart'),
+    logCap: { ...SMALL_CAP, checkMs: 20 },
+    signal: controller.signal,
+  });
+  // Five times the cap written, and a log that is under it: trimmed several times over, by the timer alone.
+  const written = () => Number(/frame (\d{7}) [^\n]*\n$/.exec(readLog(logPath))?.[1] ?? 0) * (LINE_BYTES + 1);
+  const capped = () => written() > 5 * SMALL_CAP.maxBytes && fs.statSync(logPath).size <= SMALL_CAP.maxBytes && TRIM_NOTE.test(readLog(logPath));
+  try {
+    assert.ok(await waitUntil(capped, 30000), `the log was not kept under the cap: ${fs.statSync(logPath).size} bytes of the ${written()} written`);
+  } finally {
+    controller.abort();
+    await running;
+  }
+  assert.equal(children.length, 1, 'one run: every trim was made while that server held the log');
+  const log = readLog(logPath);
+  assert.doesNotMatch(log, /\0/, 'no hole: the server\'s writes went to the new end of the file');
+  const lines = trimmedParts(log).kept.split('\n');
+  assert.deepEqual(lines.splice(-2), ['[js-harness remote] stopped', '']);
+  // A write that fell between a trim's last look and its cut is missing, so the numbers may skip: never go back.
+  const frames = lines.map((line) => /^frame (\d{7}) (?:·✔︎){12}$/.exec(line)?.[1]);
+  const broken = frames.findIndex((frame, i) => frame === undefined || (i > 0 && frame <= frames[i - 1]));
+  assert.equal(broken, -1, `a line is torn or out of order: ${JSON.stringify(lines.slice(Math.max(0, broken - 1), broken + 2))}`);
+});
+
+test('a supervisor stopped while its server runs exits by itself: the timer of the cap does not hold the process open', { timeout: 120000 }, () => {
+  const dir = tempDir();
+  const logPath = path.join(dir, 'remote.log');
+  const script = path.join(dir, 'supervisor.mjs');
+  // The server gives up by itself after a while, so a run of this script that dies leaves nothing behind for long.
+  fs.writeFileSync(script, [
+    "import fs from 'node:fs';",
+    `import { supervise } from ${JSON.stringify(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs')).href)};`,
+    'const [logPath, cwd] = process.argv.slice(2);',
+    'const controller = new AbortController();',
+    "const up = setInterval(() => { if (fs.existsSync(logPath) && fs.readFileSync(logPath, 'utf8').includes('Connected')) { clearInterval(up); controller.abort(); } }, 20);",
+    "await supervise({ claude: { path: process.execPath, shell: false }, args: ['-e', 'console.log(\"Connected\"); setTimeout(() => {}, 30000)'], cwd, env: process.env, logPath, logCap: { checkMs: 5 }, signal: controller.signal });",
+    "console.log('supervise returned');",
+  ].join('\n'));
+  const result = spawnChildSync(process.execPath, [script, logPath, dir], { encoding: 'utf8', windowsHide: true, timeout: 60000 });
+  assert.equal(result.status, 0, `it did not exit by itself (signal ${result.signal}): ${result.stderr}`);
+  assert.match(result.stdout, /supervise returned/);
+  assert.match(readLog(logPath), /\[js-harness remote\] stopped/);
 });
 
 // ---- the login launcher: a batch file that starts the server again ---------------------------------------------------
