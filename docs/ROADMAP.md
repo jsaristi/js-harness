@@ -221,6 +221,12 @@ work) these tasks do not measure.
    the same family: two full gates at once are not safe on this host.
 4. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
    taken at any time.
+5. Codex review, lean and measured, opened on 2026-10-06 while F6 is paused
+   (`odd/tasks/codex-review-lean.md`, branch `feat/codex-review-lean`, in the linked worktree
+   `D:\js-harness-worktrees\codex-review-lean`): `js-harness codex-review` measures every
+   attempt and runs in a session that loads only what a review needs, on `gpt-6.1-sol` at
+   `medium` (Sebastián, 2026-10-06). The Review and Effort rows above still describe what runs
+   today; they change when the comparison of the two configurations decides the switch.
 
 ## Stack doctor notes
 
