@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
 
 function skillContent(version) {
@@ -301,31 +302,50 @@ function writeManifest(home, manifest) {
  *    `(not installed)`;
  *  - `install` and `sync` do what they do with no manifest (write every component, set the version) and carry
  *    `optional` forward;
- *  - `uninstall` finds no component and no entry to remove, removes the optional files and then the manifest;
- *  - `remote` (`bin/remote.mjs`) reads only `optional`.
- * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-04). */
+ *  - `uninstall` finds no component and no entry to remove, removes the optional files and the scheduled tasks
+ *    (`recordScheduledTask`, kept the same way in `tasks`) and then the manifest;
+ *  - `remote` (`bin/remote.mjs`) reads only `optional` and `tasks`, and keeps the file's bytes while `start
+ *    --at-login` works, to put them back when it fails halfway.
+ * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-06). */
 export function recordOptionalFile(home, file, content) {
-  const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
   const record = { path: file, sha256: sha256(content) };
-  const optional = [...(manifest.optional ?? [])];
-  const at = optional.findIndex((entry) => entry.path === file);
-  if (at === -1) optional.push(record);
-  else optional[at] = record;
-  writeManifest(home, { ...manifest, optional });
-  return record;
+  return keepRecord(home, 'optional', record, (entry) => entry.path === file);
 }
 
 /** Forgets the record of `file`, never touching the file itself; `false` when there was none. An empty `optional`
  * is dropped, so the manifest reads as it did before the first record, and a manifest left with nothing in it
  * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. */
 export function forgetOptionalFile(home, file) {
+  return forgetRecord(home, 'optional', (entry) => entry.path === file);
+}
+
+/** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
+const ON_REQUEST = ['optional', 'tasks'];
+
+/** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
+ * (with a `null` version: nothing is installed) when there is none. Returns the record. */
+function keepRecord(home, key, record, matches) {
+  const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
+  const records = [...(manifest[key] ?? [])];
+  const at = records.findIndex(matches);
+  if (at === -1) records.push(record);
+  else records[at] = record;
+  writeManifest(home, { ...manifest, [key]: records });
+  return record;
+}
+
+/** Takes the records `matches` finds out of the array `key`; `false` when there was none. An array left empty is
+ * dropped, and a manifest that then records nothing at all (no version, no file, no entry, and nothing in any
+ * array of `ON_REQUEST`) is removed, with its folder when that is empty. */
+function forgetRecord(home, key, matches) {
   const manifest = readManifest(home);
-  if (!manifest?.optional?.some((entry) => entry.path === file)) return false;
-  const { optional, ...rest } = manifest;
-  const left = optional.filter((entry) => entry.path !== file);
-  const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0;
+  if (!manifest?.[key]?.some(matches)) return false;
+  const left = manifest[key].filter((entry) => !matches(entry));
+  const { [key]: dropped, ...rest } = manifest;
+  const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0
+    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0);
   if (left.length > 0) {
-    writeManifest(home, { ...rest, optional: left });
+    writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
@@ -333,6 +353,136 @@ export function forgetOptionalFile(home, file) {
     writeManifest(home, rest);
   }
   return true;
+}
+
+// ---- scheduled tasks --------------------------------------------------------------------------------------------------
+
+/** Windows does not tell two task names apart by the case of their letters. */
+const sameTaskName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+/** Whether two tasks run the same thing: the program and its arguments, to the letter. `null` (a task that does
+ * not run one command) is the same as nothing. */
+export const sameTaskAction = (a, b) => Boolean(a && b) && a.command === b.command && a.arguments === b.arguments;
+
+/** Scheduled tasks: a task js-harness registers with Windows only when asked (the watchdog of `remote start
+ * --at-login`), kept in the manifest's `tasks` array as `{ name, command, arguments }`, apart from `optional`: a
+ * task is not a file, and there are no bytes to hash. It is recorded by the command it runs because that is all
+ * that can be compared later: `schtasks /Query /XML` gives a task back reordered, with defaults and the user's id
+ * added (measured on 2026-10-06), so the document that registered it is never seen again.
+ *
+ * Like an optional file, no component declares one: `install` and `sync` carry the array forward as it is and
+ * run nothing, a manifest that holds only such records has a `null` version and reads as not installed, and
+ * `uninstall` deletes each task that still runs the recorded command (`removeScheduledTask`). Replaces any record
+ * of that name. */
+export function recordScheduledTask(home, task) {
+  const record = { name: task.name, command: task.command, arguments: task.arguments };
+  return keepRecord(home, 'tasks', record, (entry) => sameTaskName(entry.name, task.name));
+}
+
+/** Forgets the record of the task `name`, never touching the task itself; `false` when there was none. What is
+ * left of the manifest is what `forgetOptionalFile` leaves: no empty `tasks`, and no manifest that records nothing. */
+export function forgetScheduledTask(home, name) {
+  return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name));
+}
+
+/** `<SystemRoot>\System32`, from the `SystemRoot` (or `windir`) of `env` and nothing else, or `null` when `env`
+ * does not give an absolute one: where Windows keeps `schtasks.exe` and `conhost.exe`. */
+export function windowsSystem32(env) {
+  const names = Object.keys(env);
+  const key = names.find((name) => /^systemroot$/i.test(name)) ?? names.find((name) => /^windir$/i.test(name));
+  const root = key === undefined ? '' : String(env[key]).trim();
+  return path.win32.isAbsolute(root) ? path.win32.join(root, 'System32') : null;
+}
+
+/** Whether this process is a test: a file run by `node --test` (which sets `NODE_TEST_CONTEXT` for it), or a
+ * test file run directly. */
+const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
+
+/** What `schtasks.exe` printed, as text: UTF-16 when it starts with that mark or reads as it, else one character
+ * a byte. Only ASCII is ever compared, and that is the same either way. */
+function printed(stdout) {
+  if (!Buffer.isBuffer(stdout)) return String(stdout ?? '');
+  if (stdout.length >= 2 && stdout[0] === 0xff && stdout[1] === 0xfe) return stdout.subarray(2).toString('utf16le');
+  return stdout.length >= 2 && stdout[1] === 0 ? stdout.toString('utf16le') : stdout.toString('latin1');
+}
+
+/** Runs `schtasks.exe` with `args` and returns `{ status, stdout }`: the seam everything that registers, reads
+ * or deletes a scheduled task goes through. The program is the one in the `System32` of the `SystemRoot` of `env`
+ * (the environment the command was given), run with no shell; it is never looked for on `PATH`. Throws when `env`
+ * names no such folder, and when the program could not run. Its messages come in the system's language, so
+ * callers read the exit code and the XML and CSV it prints, never its words.
+ *
+ * It registers and deletes tasks on the machine it runs on, so a test never runs the real one: with no
+ * `spawnSync` injected this refuses in a test process, whatever the environment says. */
+export function runSchtasks(args, { env = process.env, spawnSync: sync } = {}) {
+  const system32 = windowsSystem32(env);
+  if (!system32) throw new Error('SystemRoot is not set to an absolute folder in the environment, so schtasks.exe cannot be found: it is never looked for on PATH');
+  if (sync === undefined && underTest()) throw new Error('the real schtasks.exe is never run from a test: this one has to hand in a fake');
+  // The list of every task of a machine runs to tens of kilobytes; the default limit of 1 MB is not far enough.
+  const result = (sync ?? spawnChildSync)(path.win32.join(system32, 'schtasks.exe'), args, { windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 });
+  if (result.error) throw new Error(`schtasks.exe could not run: ${result.error.message}`);
+  return { status: result.status, stdout: printed(result.stdout) };
+}
+
+const XML_NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const xmlValue = (text) => text.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (whole, name) => {
+  if (name[0] !== '#') return XML_NAMED[name] ?? whole;
+  return String.fromCodePoint(/^#x/i.test(name) ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10));
+});
+
+/** What the task of the definition `xml` (what `schtasks /Query /TN <name> /XML` prints) runs: `{ command,
+ * arguments }`, the two as they were registered, or `null` when it does not run exactly one command (no action,
+ * several, or one of another kind): such a task is not one js-harness registered. */
+export function scheduledTaskAction(xml) {
+  const actions = /<Actions\b[^>]*>(.*?)<\/Actions>/s.exec(String(xml))?.[1];
+  if (actions === undefined) return null;
+  const commands = actions.match(/<Exec\b[^>]*>.*?<\/Exec>/gs) ?? [];
+  if (commands.length !== 1 || actions.replace(commands[0], '').trim() !== '') return null;
+  const value = (tag) => new RegExp(`<${tag}>(.*?)</${tag}>`, 's').exec(commands[0])?.[1];
+  const command = value('Command');
+  return command === undefined ? null : { command: xmlValue(command), arguments: xmlValue(value('Arguments') ?? '') };
+}
+
+/** Whether a task named `name` is registered (at the root of the task folders, where js-harness puts its own),
+ * and what it runs: `{ found: 'absent' }`, `{ found: 'present', action }` (see `scheduledTaskAction`), or
+ * `{ found: 'unknown', why }`. It only looks.
+ *
+ * `absent` has to be proven, because it is what lets a caller forget a record or register a task: the list of
+ * every task ran (exit 0) and no row of it has that name. Asking for the task by name would not do: `schtasks`
+ * fails the same way for a task that is not there and for a look that went wrong, and says which only in the
+ * system's language. So the name is read from the list, where it is a literal, and only a task that is listed is
+ * then asked for. Whatever else happens (the list failed, the task is listed and cannot be read, `schtasks`
+ * could not run) is `unknown`. */
+export function lookAtScheduledTask(name, schtasks) {
+  try {
+    const list = schtasks(['/Query', '/FO', 'CSV']);
+    if (list.status !== 0) return { found: 'unknown', why: `the scheduled tasks could not be listed (schtasks /Query /FO CSV exited ${list.status})` };
+    const listed = String(list.stdout).split(/\r?\n/).some((row) => sameTaskName(/^"((?:[^"]|"")*)"/.exec(row)?.[1] ?? '', `\\${name}`));
+    if (!listed) return { found: 'absent' };
+    const read = schtasks(['/Query', '/TN', name, '/XML']);
+    if (read.status !== 0) return { found: 'unknown', why: `the task ${name} is listed and could not be read (schtasks /Query /TN ${name} /XML exited ${read.status})` };
+    return { found: 'present', action: scheduledTaskAction(read.stdout) };
+  } catch (err) {
+    return { found: 'unknown', why: err.message };
+  }
+}
+
+/** Deletes the task of the record `task` while it still runs the recorded command. Returns `{ status }`:
+ * `removed`; `absent` when no such task is registered (its record is all there was); or `kept`, with `reason`:
+ * `edited` (it runs something else now, so it is the user's), `unknown` (it could not be looked at, and nothing
+ * is deleted on a guess) or `unremovable` (the delete failed), the last two with `why`. `look` is what
+ * `lookAtScheduledTask` answered, when the caller already asked. */
+export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(task.name, schtasks)) {
+  if (look.found === 'unknown') return { status: 'kept', reason: 'unknown', why: look.why };
+  if (look.found === 'absent') return { status: 'absent' };
+  if (!sameTaskAction(look.action, task)) return { status: 'kept', reason: 'edited' };
+  try {
+    const deleted = schtasks(['/Delete', '/TN', task.name, '/F']);
+    if (deleted.status !== 0) return { status: 'kept', reason: 'unremovable', why: `schtasks /Delete /TN ${task.name} /F exited ${deleted.status}` };
+  } catch (err) {
+    return { status: 'kept', reason: 'unremovable', why: err.message };
+  }
+  return { status: 'removed' };
 }
 
 /** Removes `dir` and any now-empty parent up to (but not including) `home`. */
@@ -381,8 +531,10 @@ export function install(home, version, deps = {}) {
     }
   }
   const entries = installEntries(home, previous);
-  // Optional files are carried forward as recorded (see `recordOptionalFile`): nothing here writes or drops one.
-  const manifest = { version, files, entries, ...(previous?.optional ? { optional: previous.optional } : {}) };
+  // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
+  // `recordScheduledTask`): nothing here writes, registers or drops one.
+  const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
+  const manifest = { version, files, entries, ...carried };
   writeManifest(home, manifest);
   return manifest;
 }
@@ -435,11 +587,18 @@ export function sync(home, version, deps = {}) {
  * The last two are not the user's doing, and the manifest that named the file is gone when this returns, so
  * the caller has to say that the file is left for the human to remove. `deps.removeFile` (default `fs.rmSync`)
  * is the seam that removes a component or an optional file, so a test can make a removal fail without relying
- * on file permissions (the same reason as `install`'s `deps.writeFile`). */
+ * on file permissions (the same reason as `install`'s `deps.writeFile`).
+ *
+ * A recorded scheduled task is deleted only while it still runs the recorded command (`removeScheduledTask`):
+ * `tasksRemoved` names those, and `tasksKept` says why each other one that is still registered was left, as
+ * `{ name, reason, why }`: `edited`, or `unknown` or `unremovable` with `why`. A task that is already gone just
+ * loses its record. `deps.schtasks` (default `runSchtasks`, which refuses in a test) is the seam, and it is run
+ * only for a manifest that records a task. As with an optional file, the manifest that named a kept task is gone
+ * when this returns, so the caller has to say what is left to do. */
 export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const manifest = readManifest(home);
-  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] };
+  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] };
 
   const removed = [];
   const kept = [];
@@ -480,11 +639,19 @@ export function uninstall(home, deps = {}) {
     else if (result.status === 'kept') entriesKept.push(entry.path);
   }
 
+  const tasksRemoved = [];
+  const tasksKept = [];
+  for (const task of manifest.tasks ?? []) {
+    const result = removeScheduledTask(task, deps.schtasks ?? runSchtasks);
+    if (result.status === 'removed') tasksRemoved.push(task.name);
+    else if (result.status === 'kept') tasksKept.push({ name: task.name, reason: result.reason, ...(result.why ? { why: result.why } : {}) });
+  }
+
   fs.rmSync(cachePath(home), { force: true });
   fs.rmSync(manifestPath(home), { force: true });
   removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept };
 }
 
 /** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing

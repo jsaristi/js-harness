@@ -11,7 +11,8 @@
 // about once a second into the log, for as long as it runs, so the log is trimmed in place (`trimLog`).
 //
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
-// `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder.
+// `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder, and
+// `watchdogTask` and `watchdogTaskXml` are the scheduled task it registers beside it, which runs the same command.
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -88,8 +89,8 @@ export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}
  * the program it starts, and control characters, a line end among them. */
 const UNSAFE_IN_BATCH = /[&|<>^%"!\x00-\x1f\x7f]/;
 
-/** The values a launcher holds, each with what it is called when it is refused. `loginLauncher` checks these and
- * builds the file from what it checked, so no value reaches the file unchecked or is refused without a name. */
+/** The values a launcher holds, each with what it is called when it is refused. `startCommandLine` checks these and
+ * builds the command from what it checked, so no value reaches the file unchecked or is refused without a name. */
 const LAUNCHER_LABELS = {
   node: 'the node executable',
   script: 'this install of js-harness',
@@ -110,6 +111,20 @@ const LAUNCHER_LABELS = {
  * letter beyond ASCII is not found under code page 850, 437 or 1252, and is found once a `chcp 65001` line has
  * run before it. That line is written only when the command needs it: the console is the launcher's own. */
 export function loginLauncher(options) {
+  const command = startCommandLine(options);
+  return [
+    '@echo off',
+    'rem Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.',
+    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
+    command,
+    '',
+  ].join('\r\n');
+}
+
+/** The one command line the launcher and the watchdog task both run: `"<node>" <script> start --cwd <root> --name
+ * <name> ...`, then `more`. It is built from the values it checked, each of `LAUNCHER_LABELS`, and throws, naming
+ * the value, when one holds what cmd.exe would act on. */
+function startCommandLine(options, more = []) {
   const checked = {};
   for (const [key, label] of Object.entries(LAUNCHER_LABELS)) {
     const value = options[key];
@@ -125,15 +140,93 @@ export function loginLauncher(options) {
     ...(permissionMode ? ['--permission-mode', permissionMode] : []),
     ...(spawnMode ? ['--spawn', spawnMode] : []),
     ...(home ? ['--home', home] : []),
+    ...more,
   ];
   // The command is quoted whatever it holds: cmd.exe splits a bare command name at `,`, `;` and `=`.
   const quoted = quoteWindowsArg(node);
-  const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, args);
+  return windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, args);
+}
+
+/** What a scheduled task cannot carry, beyond what the launcher already refuses (a `%`, which Task Scheduler
+ * expands as a variable, and a quote among it): `$(`, which Task Scheduler replaces as a parameter (`$(Arg0)`),
+ * and anything beyond printable ASCII. Measured on Windows 10 19044 on 2026-10-06 with a throwaway task:
+ * `schtasks /Create /XML` stores a letter beyond ASCII correctly (from UTF-8 with or without a mark, and from
+ * UTF-16), but `schtasks /Query /TN <name> /XML` writes its XML in the console's code page, whatever its
+ * `encoding="UTF-16"` declaration says: the `ñ` of `C:\Año ñandú\node.exe` came back as the byte `a4` under code
+ * pages 850 and 437, `f1` under 1252 and `c3 b1` under 65001. So such a value reads back differently from one
+ * console to the next and cannot be compared with what was recorded: the task could never be told from one
+ * edited by hand, and would never be removed. An ASCII command and its arguments read back to the letter. */
+const UNSAFE_IN_TASK = /\$\(|[^\x20-\x7e]/;
+
+/** What the watchdog task runs, as Task Scheduler holds it: `{ command, arguments }`. The command is `conhost`
+ * (the full path of `conhost.exe`), which with `--headless` runs a console program with no window, as a task that
+ * fires every five minutes must; the arguments are the launcher's own command line (the same values, checked the
+ * same way) and `--watchdog`, so the task starts the server only when it is not running and was not stopped on
+ * purpose. Throws, naming the value, when one cannot be carried: a task that runs something else every five
+ * minutes is worse than none. The error has `onlyTheTask` when the launcher can hold what the task cannot (the
+ * launcher's own check passed), so `start --at-login` can still write the launcher, as it did before there was a
+ * task. */
+export function watchdogTask({ conhost, ...options } = {}) {
+  if (typeof conhost !== 'string' || conhost.trim() === '') throw new Error('the scheduled task needs the path of conhost.exe to run its command with no window');
+  const line = startCommandLine(options, ['--watchdog']);
+  for (const [key, label] of Object.entries({ ...LAUNCHER_LABELS, conhost: 'the path of conhost.exe' })) {
+    const value = key === 'conhost' ? conhost : options[key];
+    const found = value === undefined ? null : (UNSAFE_IN_BATCH.exec(value) ?? UNSAFE_IN_TASK.exec(value));
+    if (found) {
+      const message = `the scheduled task cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and a task takes only printable ASCII, with no & | < > ^ % " ! and no $(, which Task Scheduler replaces`;
+      throw Object.assign(new Error(message), { onlyTheTask: true });
+    }
+  }
+  return { command: conhost, arguments: `--headless ${line}` };
+}
+
+const XML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+const xmlText = (text) => String(text).replace(/[&<>"']/g, (char) => XML_ENTITIES[char]);
+
+/** The definition `schtasks /Create /XML` registers for `action` (`{ command, arguments }`, see `watchdogTask`):
+ * a task of the user who registers it, run only while they are logged on and with no elevation (`InteractiveToken`,
+ * `LeastPrivilege`: what lets `schtasks` register it without being an administrator), every five minutes from a
+ * date in the past and with no end, on battery too, one instance at a time, each given two minutes (`remote start`
+ * returns in seconds, and the supervisor it leaves is detached and outlives the task). Measured on Windows 10
+ * 19044 on 2026-10-06: `schtasks` takes this document as a UTF-8 file with no XML declaration. It is a function
+ * of the action alone, so a task known only by its record can be registered again exactly. */
+export function watchdogTaskXml(action) {
   return [
-    '@echo off',
-    'rem Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.',
-    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
-    command,
+    '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+    '  <RegistrationInfo>',
+    '    <Description>Starts the Claude remote-control server of one project again when it is not running, every five minutes. Registered by js-harness remote start --at-login; js-harness remote stop --at-login deletes it.</Description>',
+    '  </RegistrationInfo>',
+    '  <Triggers>',
+    '    <TimeTrigger>',
+    '      <Repetition>',
+    '        <Interval>PT5M</Interval>',
+    '        <StopAtDurationEnd>false</StopAtDurationEnd>',
+    '      </Repetition>',
+    '      <StartBoundary>2026-01-01T00:00:00</StartBoundary>',
+    '      <Enabled>true</Enabled>',
+    '    </TimeTrigger>',
+    '  </Triggers>',
+    '  <Principals>',
+    '    <Principal id="Author">',
+    '      <LogonType>InteractiveToken</LogonType>',
+    '      <RunLevel>LeastPrivilege</RunLevel>',
+    '    </Principal>',
+    '  </Principals>',
+    '  <Settings>',
+    '    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>',
+    '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>',
+    '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>',
+    '    <StartWhenAvailable>true</StartWhenAvailable>',
+    '    <ExecutionTimeLimit>PT2M</ExecutionTimeLimit>',
+    '    <Enabled>true</Enabled>',
+    '  </Settings>',
+    '  <Actions Context="Author">',
+    '    <Exec>',
+    `      <Command>${xmlText(action.command)}</Command>`,
+    `      <Arguments>${xmlText(action.arguments)}</Arguments>`,
+    '    </Exec>',
+    '  </Actions>',
+    '</Task>',
     '',
   ].join('\r\n');
 }

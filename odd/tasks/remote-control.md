@@ -129,7 +129,22 @@ the chain strategy is asked once, before the commit that crosses the budget.
   messages come in the system's language, so only exit codes and that XML are read; and
   `conhost.exe --headless <command>` runs a console program with no window, which a task
   that fires every five minutes needs (the launcher's window at login is seen once a day).
-  Tests never run the real `schtasks`: it is an injected seam.
+  Tests never run the real `schtasks`: it is an injected seam. A second probe the same day
+  answered what the watchdog depends on: Task Scheduler runs a task inside a job, and Node
+  does not take a detached child out of it, so the supervisor a task starts could have died
+  with the task. It does not: a throwaway task whose action spawned a detached child and
+  exited ended `Listo` with result 0, and the child went on for more than two minutes, past
+  the task's one-minute execution limit and past the task's deletion (14 heartbeats, ten
+  seconds apart).
+- A task holds only printable ASCII. A third probe on 2026-10-06 measured why: `schtasks
+  /Query /XML` writes its XML in the console's code page, whatever encoding it declares (the
+  `ñ` of one argument came back as `a4` under code pages 850 and 437, `f1` under 1252 and
+  `c3 b1` under 65001), so a value beyond ASCII cannot be compared with what was recorded,
+  and a task that cannot be compared can never be told from one edited by hand. Where a path
+  has such a letter, `--at-login` does what it did before T9, the launcher alone, and says
+  that the watchdog was not registered and why. The same probe: `schtasks /Create /XML`
+  takes the document as UTF-8 with or without a mark and as UTF-16, and a query by name of a
+  task that is not there exits 1.
 - A plain `stop` stays stopped (decided by Sebastián on 2026-10-06, before T9): without this
   the watchdog would bring the server back within five minutes of a `stop` he meant. `stop`
   leaves a marker beside the state file; the task runs `remote start --watchdog`, which starts
@@ -207,7 +222,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   writes is tested; a keep size that would overlap the end it is read from is refused or
   clamped (gentle-ai `R3-silent-trim-failure`, `R3-catch-up-bound-unproved`,
   `R3-keep-overlap-unguarded`) (route: delegated writer)
-- [ ] T9 Watchdog: `start --at-login` registers the per-user scheduled task and records it in
+- [x] T9 Watchdog: `start --at-login` registers the per-user scheduled task and records it in
   the machine manifest, `stop --at-login` and `uninstall` delete it only while it runs the
   recorded command, `status` reports it, and a registration that fails leaves the launcher
   and the record as they were (route: delegated writer; trigger: `bin/remote.mjs`,
@@ -633,6 +648,57 @@ the chain strategy is asked once, before the commit that crosses the budget.
   that keeps failing at the cut still rewrites up to the keep size at the start of the file
   on every check; what the server appends during a trim can land over the old end when it is
   more than the gap, which the comment says and nothing guards.
+- 2026-10-06: T8r is `4bb62bb`; the gate passed. gentle-ai assessed `9de8b1e..4bb62bb` as
+  medium risk, 269 lines, not due (`under_budget`): it waits in the slice with T9.
+- 2026-10-06: T9 written by a delegated writer, test first, in four layers.
+  The text: `watchdogTask` and `watchdogTaskXml` in `bin/lib/remote.mjs`, built on the
+  launcher's own checked command line. For `D:\js-harness` the task is
+  `js-harness-remote-js-harness-86aa68a6ffce`, its command `C:\WINDOWS\System32\conhost.exe`
+  and its arguments `--headless "C:\nvm4w\nodejs\node.exe" D:\js-harness\bin\remote.mjs start
+  --cwd D:\js-harness --name js-harness --watchdog`.
+  The record: a top-level `tasks` array of `{ name, command, arguments }` in the machine
+  manifest, with `recordScheduledTask` and `forgetScheduledTask`; `install` and `sync` carry
+  it forward and `uninstall` answers `tasksRemoved` and `tasksKept`, which `bin/install.mjs`
+  prints with advice for a kept one.
+  The seam: `runSchtasks` in `bin/lib/manifest.mjs` finds `schtasks.exe` only from the
+  `SystemRoot` of the environment it is given and refuses in a test process unless a runner
+  is injected; the test worlds always inject a fake and point `SystemRoot` at a folder that
+  is not there. That a task is absent is proven from the list of every task
+  (`schtasks /Query /FO CSV`, about a second here), never from an exit code, and only a
+  listed task is asked for by name; anything else is `unknown`, and nothing is deleted,
+  forgotten or registered on `unknown`.
+  The command: `start --at-login` registers the task after the launcher, reads it back and
+  compares, and on any failure puts the launcher, its record and the manifest back as they
+  were; `stop --at-login` deletes it only while it runs the recorded command; `status` has a
+  `watchdog task` line. Every `stop` that ends with the server down leaves
+  `<id>.stopped` beside the state file, with `--at-login` too; `start --watchdog` starts
+  nothing and exits 0 while it is there, and exits 0 with one line when the server already
+  runs; every other `start` removes it. `status` says `stopped on purpose`.
+  Corrected before the commit, on the third probe in Design: the first version refused
+  `--at-login` for a path beyond ASCII, where the launcher alone had worked. Now such a start
+  writes the launcher as before, registers no task and says so; a task recorded by an earlier
+  start is deleted first, or the start refuses when that one was edited or cannot be read.
+  RED, by layer: `does not provide an export named 'watchdogTask'`; `... named
+  'forgetScheduledTask'`; 26 of 40 at the command (`Cannot read properties of undefined
+  (reading 'xml')` among them); 4 for `uninstall` and the usage; 3 for the correction (`the
+  watchdog task is not on: the scheduled task cannot hold the project folder "…año"`). Ten
+  mutations each fail their test, among them a start that keeps the marker, a watchdog that
+  ignores it, no read-back, no restore, a failed list read as absent, an edited task
+  deleted. The guard against the real `schtasks` is asserted and was not mutated: removing
+  it would run the real program. GREEN: `node --test bin/lib/remote.test.mjs` 48 of 48,
+  `node --test bin/remote.test.mjs` 106 of 106 (run again by the parent), and 246 of 246 for
+  `bin/lib/manifest.test.mjs bin/install.test.mjs bin/update.test.mjs bin/tui.test.mjs
+  bin/js-harness.test.mjs`. After every run `schtasks /Query /FO CSV` listed no task with
+  `js-harness` in its name. 1,993 added lines in twelve files against the 400 heuristic:
+  about 730 of code in four layers, the rest tests, with one fake `schtasks` copied into
+  three test files because a shared one would be a file outside the task's surface.
+  Left open. Only a real task proves the whole chain with this code (task, `conhost` by its
+  full path, `node`, the detached supervisor); the pieces were probed with throwaway tasks,
+  the chain is the live check below. `schtasks /Create /F` leaving the earlier task when it
+  fails is assumed. `uninstall` still deletes the manifest after it kept a task it could not
+  look at, as it does for a launcher. A missing `SystemRoot` refuses `--at-login` even where
+  the task would have been skipped. `status` asks `schtasks` for the whole list, which adds
+  about a second to it. The production guard looks at whether the process is a test.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
