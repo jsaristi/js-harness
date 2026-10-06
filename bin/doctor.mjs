@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `doctor`: reports each stack tool's installed, configured and up-to-date state, and each gap's
 // own fix command, then whether the Claude CLI and the desktop app are signed into the same account
+// and whether the remote server of every recorded login launcher is running
 // (`checks` in bin/lib/stack.mjs). Local probes are read-only and synchronous; `upToDate` adds
 // one round of latest-version lookups (bin/lib/latest.mjs) behind a 6h cache (bin/lib/cache.mjs) —
 // see odd/tasks/stack-doctor.md. Exit code is always 0 for a normal report: this is a report, not
@@ -59,7 +60,7 @@ function headerRow() {
 }
 
 /** Every `{ dimension, state, fix }` gap on one row: a dimension in one of `GAP_STATES` (`missing`,
- * `outdated`, `stale`, `mismatch`; the list is digest.mjs's, shared with the hook's digest and the
+ * `outdated`, `stale`, `mismatch`, `down`; the list is digest.mjs's, shared with the hook's digest and the
  * TUI); `unknown` and `n/a` are not actionable the same way. A gap with no fix command defined is
  * still a gap — `fix` is `null` — so `gaps` always agrees with the row states and the hook's digest. */
 function rowGaps(row) {
@@ -72,10 +73,11 @@ function rowGaps(row) {
 }
 
 /** context7 hosted has no version of its own to compare against npm, so it is never `outdated` —
- * always `n/a`. So is a row with nothing to install (`installed` is `n/a`: a check, such as the
- * Claude account one, not a tool): it has no version at all. Every other tool compares its installed
- * version against the fetched/cached latest, and is `unknown` whenever either side is missing or
- * unparseable (never `n/a`, since every other tool does have a latest-version source). */
+ * always `n/a`. So is a row with nothing to install (`installed` is `n/a`: a check, the Claude
+ * account one or the remote server one, not a tool): it has no version at all. Every other tool
+ * compares its installed version against the fetched/cached latest, and is `unknown` whenever
+ * either side is missing or unparseable (never `n/a`, since every other tool does have a
+ * latest-version source). */
 function computeUpToDate(row, latestVersion) {
   if (row.installed === 'n/a') return 'n/a';
   if (row.id === 'context7' && row.version === 'hosted') return 'n/a';

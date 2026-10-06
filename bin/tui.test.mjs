@@ -20,8 +20,9 @@ import {
   buildCommands,
 } from './tui.mjs';
 import { installMain } from './install.mjs';
-import { manifestPath, recordScheduledTask } from './lib/manifest.mjs';
+import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
+import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 import { spawnSync } from 'node:child_process';
 
 // T5: the menu depends on where the TUI opens, and these tests run real `git`: keep it off the host's
@@ -320,8 +321,18 @@ test('worstState reports accounts that differ as a gap as severe as a missing to
   assert.equal(worstState(makeDoctorRow({ claude: 'missing', codex: 'mismatch' })), 'missing claude');
 });
 
+test('worstState reports a launcher whose server is down as a gap as severe as a missing tool', () => {
+  const server = { id: 'remote-server', version: null, installed: 'n/a', claude: 'down', codex: 'n/a', project: 'n/a', upToDate: 'n/a' };
+  assert.equal(worstState(server), 'down claude');
+  assert.deepEqual(summarizeStackRow(server), { id: 'remote-server', version: 'n/a', state: 'down claude' });
+  assert.equal(worstState({ ...server, claude: 'unknown' }), 'unknown claude');
+  // No launcher recorded: there is nothing to be down.
+  assert.equal(worstState({ ...server, claude: 'n/a' }), 'ok');
+  assert.equal(worstState(makeDoctorRow({ installed: 'unknown', claude: 'down' })), 'down claude', 'it outranks unknown');
+});
+
 test('every state doctor and the session digest count as a gap outranks unknown in the stack block', () => {
-  assert.ok(GAP_STATES.has('mismatch') && GAP_STATES.has('missing'));
+  assert.ok(GAP_STATES.has('mismatch') && GAP_STATES.has('missing') && GAP_STATES.has('down'));
   for (const state of GAP_STATES) {
     assert.equal(worstState(makeDoctorRow({ installed: 'unknown', codex: state })), `${state} codex`, state);
   }
@@ -389,9 +400,10 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server'],
     );
-    assert.deepEqual(stack.at(-1), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
+    assert.deepEqual(stack.at(-2), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
+    assert.deepEqual(stack.at(-1), { id: 'remote-server', version: 'n/a', state: 'ok' }, 'an empty home records no launcher, so no server is down');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -409,11 +421,41 @@ test('computeStackState shows accounts that differ as a mismatch in the stack bl
 
     const stack = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
 
-    assert.deepEqual(stack.at(-1), { id: 'claude-account', version: 'n/a', state: 'mismatch claude' });
+    assert.deepEqual(stack.find((row) => row.id === 'claude-account'), { id: 'claude-account', version: 'n/a', state: 'mismatch claude' });
     const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack };
     const text = render(state).join('\n');
     assert.match(text, /claude-account\s+n\/a\s+mismatch claude/);
     assert.equal(text.includes(cli) || text.includes(app), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('computeStackState shows a recorded launcher whose server is not running as down in the stack block, and ok once it runs', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-stack-'));
+  // The launcher of a project that is only named, in a folder of the test's: the manifest records where it is.
+  const root = 'D:\\work\\proj';
+  const launcher = path.join(home, 'Startup', launcherFileName(remoteId(root, 'win32')));
+  const content = loginLauncher({ node: 'C:\\node\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root, name: 'proj' });
+  // The process snapshot is the one thing answered: it lists the supervisor the state file will name.
+  const spawn = (cmd) => (cmd === 'powershell'
+    ? { status: 0, stdout: '4\t0\t1\tSystem\r\n4242\t4\t1759700000000\tnode.exe\r\n', stderr: '' }
+    : { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+  try {
+    fs.mkdirSync(path.dirname(launcher), { recursive: true });
+    fs.writeFileSync(launcher, content);
+    recordOptionalFile(home, launcher, content);
+
+    const down = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
+    assert.deepEqual(down.at(-1), { id: 'remote-server', version: 'n/a', state: 'down claude' });
+    const text = render({ ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), stack: down }).join('\n');
+    assert.match(text, /remote-server\s+n\/a\s+down claude/);
+
+    const { statePath } = remoteFiles(home, remoteId(root, 'win32'));
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({ pid: 4242, startedAt: 1759700000000 }));
+    const running = await computeStackState({ home, cwd: home, spawn, platform: 'win32' });
+    assert.deepEqual(running.at(-1), { id: 'remote-server', version: 'n/a', state: 'ok' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

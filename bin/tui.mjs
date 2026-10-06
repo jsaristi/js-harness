@@ -101,7 +101,8 @@ export function withLocation(state, location) {
 
 /** How bad a cell is: a gap outranks `unknown`, which outranks a healthy or not-applicable cell. What a gap
  * is comes from the one list doctor and the session digest use (`GAP_STATES`), so every gap state, `mismatch`
- * (the Claude accounts differ) included, is as severe here as `missing`. */
+ * (the Claude accounts differ) and `down` (a login launcher's remote server is not running) included, is as
+ * severe here as `missing`. */
 function severityOf(state) {
   if (GAP_STATES.has(state)) return 2;
   return state === 'unknown' ? 1 : 0;

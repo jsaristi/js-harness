@@ -3,13 +3,17 @@
 // odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
 // The Codex plugin row (`codex-plugin`, T6) keeps the column meanings: `claude` is the plugin
 // enabled, `codex` is "the Codex side is ready", i.e. logged in. `checks` holds what doctor reports
-// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`.
+// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`, and
+// the remote server check, whose `claude` cell is `ok`, `down`, `unknown` or `n/a`.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { readManifest } from './manifest.mjs';
+import { takeSnapshot } from './process-tree.mjs';
+import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -422,11 +426,91 @@ function claudeAccountState({ home, platform = process.platform }) {
   return cli === app ? 'ok' : 'mismatch';
 }
 
+/** The login launchers the machine manifest under `home` records (`remote start --at-login` records each as an
+ * optional file, by its absolute path), each with the server it starts: `{ args, files, state }`, the options of
+ * the launcher's own `start` line (`launcherStart`), and the files and state file, under `home`, of the project
+ * its `--cwd` names. A launcher that cannot be read, or whose start line does not read back whole, is
+ * `{ found: 'unknown' }`: which server it starts, and how, is then not known. One whose file is gone is left
+ * out, since nothing starts that server at login. Throws when the manifest cannot be read. */
+function recordedLaunchers(home, platform) {
+  const recorded = (readManifest(home)?.optional ?? []).map((entry) => entry?.path).filter(isLoginLauncher);
+  return recorded.flatMap((file) => {
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch (err) {
+      return err.code === 'ENOENT' ? [] : [{ found: 'unknown' }];
+    }
+    const start = launcherStart(text);
+    if (start === null) return [{ found: 'unknown' }];
+    const files = remoteFiles(home, remoteId(start.root, platform));
+    return [{ args: start.args, files, state: readState(files.statePath) }];
+  });
+}
+
+/** Whether the server of every recorded login launcher is running: with the launcher on, a server that is down
+ * is seen nowhere else until the phone finds no session (on 2026-10-05 one stayed down twelve hours). Running is
+ * decided as `remote status` decides it (`locate`): by the state file under `home` and the identity, pid and
+ * creation time, of the process it names, never by a pid alone. The manifest, the launchers and the state files
+ * all come from `home`, never from the environment, so a fixture home sees nothing of this machine's.
+ *
+ * `claude` is `n/a` with no launcher recorded, `down` when at least one server is not running (the gap, whatever
+ * the others are), else `unknown` when one could not be told (a manifest, launcher or state file that cannot be
+ * read, a look at the processes that failed), else `ok`. The `down` list beside it is internal, like the Codex
+ * plugin's `codexCli`: the servers that are down, each `{ args, stopped }`, `stopped` when the marker of a
+ * `remote stop` is there, which is why the watchdog left that one down.
+ *
+ * `doctor` runs at every session start, so the processes are looked at only when some state file names one, once
+ * for all of them, and that one snapshot (PowerShell, most of a second) is bounded like every other probe. */
+function remoteServerState({ home, platform = process.platform, spawn = spawnSync }) {
+  let servers;
+  try {
+    servers = recordedLaunchers(home, platform);
+  } catch {
+    return { claude: 'unknown', codex: 'n/a' };
+  }
+  if (servers.length === 0) return { claude: 'n/a', codex: 'n/a' };
+
+  const pids = servers.filter(({ state }) => state && !state.unreadable).map(({ state }) => state.pid);
+  let processes;
+  let failure;
+  if (pids.length > 0) {
+    const bounded = (file, args, options) => spawn(file, args, { ...options, timeout: PROBE_TIMEOUT_MS });
+    try {
+      processes = lookUpProcesses(pids, () => takeSnapshot({ spawnSync: bounded }));
+    } catch (err) {
+      failure = err ?? new Error('the processes could not be listed');
+    }
+  }
+  // The one look, or its failure, answers for every recorded supervisor.
+  const identify = () => {
+    if (failure) throw failure;
+    return processes;
+  };
+  const found = servers.map((server) => ({ ...server, found: server.found ?? locate(server.state, identify).found }));
+  const down = found.filter((server) => server.found === 'gone');
+  const claude = down.length > 0 ? 'down' : found.some((server) => server.found === 'unknown') ? 'unknown' : 'ok';
+  return { claude, codex: 'n/a', down: down.map(({ args, files }) => ({ args, stopped: fs.existsSync(files.stoppedPath) })) };
+}
+
+/** The fix of the remote server check: for each server that is down, the command that starts it again as its
+ * launcher does, with the options of the launcher's own line (a bare `start --cwd` would bring it back under the
+ * folder's name, the user's own modes and another home), and why the watchdog did not when it was stopped on
+ * purpose. One command as it is, several as a list; a server named twice (a launcher recorded under two
+ * spellings of its path) is named once. */
+function remoteServerFix(down = []) {
+  const commands = [...new Set(down.map(({ args, stopped }) =>
+    `${remoteStartCommand(args)}${stopped ? ' (stopped on purpose with js-harness remote stop, so the watchdog leaves it down)' : ''}`))];
+  if (commands.length === 0) return {};
+  return { claude: commands.length === 1 ? commands[0] : commands };
+}
+
 /** Checks that are not tools, in the tools' own shape so `probeTool` and every reader of a doctor row take
  * them as they are: nothing to install (`installed` is `n/a`, with no version, so nothing to be up to date
  * with either) and one cell that carries the state. They are kept apart from `tools`, which other modules
  * read as the list of tools. The account check's gap is `mismatch`; its fix is the human's to run, since
- * nothing here signs in or out. */
+ * nothing here signs in or out. The remote server check's gap is `down`, in the `claude` cell too (the server is
+ * Claude Code's; Codex has none); its fix is there only while a server is down, since it names that server. */
 export const checks = [
   {
     id: 'claude-account',
@@ -434,6 +518,13 @@ export const checks = [
     configured: (deps) => ({ claude: claudeAccountState(deps), codex: 'n/a' }),
     project: () => 'n/a',
     fix: () => ({ claude: 'claude auth login' }),
+  },
+  {
+    id: 'remote-server',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: (deps) => remoteServerState(deps),
+    project: () => 'n/a',
+    fix: (_deps, configured) => remoteServerFix(configured?.down),
   },
 ];
 

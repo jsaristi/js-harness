@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './remote.mjs';
+import {
+  LOG_CHECK_MS, cleanServerEnv, isLoginLauncher, launcherFileName, launcherStart, locate, logNote, loginLauncher, lookUpProcesses, nextDelay, readPersistentEnv,
+  readState, remoteFiles, remoteStartCommand, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml,
+} from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -1067,6 +1070,138 @@ test('a generated launcher run by a real cmd.exe hands the script its arguments 
   } else {
     t.diagnostic('the console did not switch to code page 850 here, so the need for the chcp line was not re-measured');
   }
+});
+
+// ---- what `doctor` reads of a launcher and of the server it starts ---------------------------------------------------
+
+test('launcherStart reads back the project folder and every option of every launcher loginLauncher writes, in its order', () => {
+  const roots = ['D:\\work\\proj', 'D:\\my work\\proj', 'D:\\año\\mi proyecto', 'D:\\', 'D:\\my work\\', 'D:\\a,b=c;d\\proj'];
+  for (const root of roots) {
+    assert.deepEqual(launcherStart(loginLauncher({ ...LAUNCHER, root })), { root, args: ['--cwd', root, '--name', 'proj'] }, root);
+    const full = loginLauncher({ ...LAUNCHER, root, name: 'my phone', permissionMode: 'acceptEdits', spawnMode: 'worktree', home: 'D:\\other home\\' });
+    assert.deepEqual(
+      launcherStart(full),
+      { root, args: ['--cwd', root, '--name', 'my phone', '--permission-mode', 'acceptEdits', '--spawn', 'worktree', '--home', 'D:\\other home\\'] },
+      `${root}, with every option`,
+    );
+  }
+  // Only what follows `start` is the server's: a node and a script with spaces are not.
+  const spaced = loginLauncher({ ...LAUNCHER, node: 'C:\\my node\\node.exe', script: 'D:\\my harness\\bin\\remote.mjs', spawnMode: 'session' });
+  assert.deepEqual(launcherStart(spaced), { root: LAUNCHER.root, args: ['--cwd', LAUNCHER.root, '--name', 'proj', '--spawn', 'session'] });
+  // A server named like the subcommand: the first `start` is the subcommand, the other a value.
+  assert.deepEqual(launcherStart(loginLauncher({ ...LAUNCHER, name: 'start' })).args, ['--cwd', LAUNCHER.root, '--name', 'start']);
+});
+
+test('launcherStart leaves out the two flags that are not the server\'s: how a start is run, not what it starts', () => {
+  const line = (rest) => `@echo off\r\n"C:\\node.exe" D:\\js-harness\\bin\\remote.mjs start ${rest}\r\n`;
+  const expected = { root: 'D:\\work\\proj', args: ['--cwd', 'D:\\work\\proj', '--name', 'proj'] };
+  assert.deepEqual(launcherStart(line('--cwd D:\\work\\proj --name proj --watchdog')), expected);
+  assert.deepEqual(launcherStart(line('--at-login --cwd D:\\work\\proj --name proj')), expected);
+});
+
+test('launcherStart is null for a file whose start command cannot be read back whole: nothing is guessed from a comment or half a command', () => {
+  const line = (rest) => `@echo off\r\n"C:\\node.exe" D:\\js-harness\\bin\\remote.mjs ${rest}\r\n`;
+  const texts = {
+    'an empty file': '',
+    'only what a launcher says of itself': '@echo off\r\nrem Starts the server. js-harness remote stop --at-login removes it.\r\n',
+    'a comment that names a folder': '@echo off\r\nrem node remote.mjs start --cwd D:\\work\\proj\r\n',
+    'a --cwd with no folder after it': line('start --cwd'),
+    'a --cwd with an empty folder': line('start --cwd "" --name x'),
+    'a command that is not a start': line('status --cwd D:\\work\\proj'),
+    'another batch file': '@echo off\r\nnotepad.exe\r\n',
+    'a start with no folder': line('start --name proj'),
+    'a name with no value': line('start --cwd D:\\work\\proj --name'),
+    'a name whose value is the next flag': line('start --cwd D:\\work\\proj --name --spawn worktree'),
+    'a name whose value is a flag that takes none': line('start --cwd D:\\work\\proj --name --watchdog'),
+    'a flag start does not take': line('start --cwd D:\\work\\proj --name proj --verbose'),
+    'a flag start does not take, with a value': line('start --cwd D:\\work\\proj --port 80'),
+    'a word that belongs to no flag': line('start --cwd D:\\work\\proj extra'),
+    'a flag given twice': line('start --cwd D:\\work\\proj --name a --name b'),
+    'a quote that never closes': line('start --cwd "D:\\my work --name proj'),
+    'a quote in the middle of a value': line('start --cwd D:\\wo"rk --name proj'),
+    'a whole command, then a quote that never closes': line('start --cwd D:\\work\\proj --name proj "and more'),
+    'a whole command, then a word glued to a quote': line('start --cwd D:\\work\\proj --name "proj"x'),
+    'a flag glued to its quoted value, which a command line reads as one word': line('start --cwd D:\\work\\proj --name"proj"'),
+  };
+  for (const [what, text] of Object.entries(texts)) assert.equal(launcherStart(text), null, what);
+});
+
+test('isLoginLauncher knows a launcher by its file name, in any folder and with either separator', () => {
+  const name = launcherFileName('proj-0123456789ab');
+  assert.equal(name, 'js-harness-remote-proj-0123456789ab.cmd');
+  assert.equal(isLoginLauncher(`C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\${name}`), true);
+  assert.equal(isLoginLauncher(`/tmp/startup/${name}`), true);
+  assert.equal(isLoginLauncher(name.toUpperCase()), true, 'Windows does not tell the letter case of a file name');
+  for (const other of ['C:\\Startup\\other.cmd', `C:\\Startup\\${name}.bak`, 'C:\\js-harness-remote-x.cmd\\notes.txt', 'C:\\Startup\\js-harness-remote-.cmd', '', undefined, null, 7]) {
+    assert.equal(isLoginLauncher(other), false, String(other));
+  }
+});
+
+test('remoteFiles names what one project keeps under the home, all beside its state file', () => {
+  const dir = path.join('D:\\home', '.js-harness', 'remote');
+  assert.deepEqual(remoteFiles('D:\\home', 'proj-0123456789ab'), {
+    statePath: path.join(dir, 'proj-0123456789ab.json'),
+    logPath: path.join(dir, 'proj-0123456789ab.log'),
+    lockPath: path.join(dir, 'proj-0123456789ab.lock'),
+    stoppedPath: path.join(dir, 'proj-0123456789ab.stopped'),
+    taskXmlPath: path.join(dir, 'proj-0123456789ab.task.xml'),
+  });
+});
+
+test('remoteStartCommand is the start a launcher runs, as a person types it: its options in order, each quoted only when it has to be', () => {
+  assert.equal(remoteStartCommand(['--cwd', 'D:\\work\\proj', '--name', 'proj']), 'js-harness remote start --cwd D:\\work\\proj --name proj');
+  assert.equal(
+    remoteStartCommand(['--cwd', 'D:\\my work\\proj', '--name', 'my phone', '--permission-mode', 'acceptEdits', '--spawn', 'worktree', '--home', 'D:\\other home']),
+    'js-harness remote start --cwd "D:\\my work\\proj" --name "my phone" --permission-mode acceptEdits --spawn worktree --home "D:\\other home"',
+  );
+  assert.equal(remoteStartCommand(['--cwd', 'D:\\my work\\']), 'js-harness remote start --cwd "D:\\my work\\\\"', 'a last backslash would otherwise take the closing quote with it');
+  // A value no command line carries safely is still shown, quoted: this is a line of a report, and never throws.
+  assert.equal(remoteStartCommand(['--cwd', 'D:\\a&b']), 'js-harness remote start --cwd "D:\\a&b"');
+  // What the launcher's own line holds after `start` is what comes back, value for value.
+  const full = { ...LAUNCHER, root: 'D:\\my work\\proj', name: 'my phone', permissionMode: 'acceptEdits', spawnMode: 'worktree', home: 'D:\\other home' };
+  const written = launcherLines(loginLauncher(full)).at(-1);
+  assert.ok(written.endsWith(remoteStartCommand(launcherStart(loginLauncher(full)).args).slice('js-harness remote '.length)), written);
+});
+
+test('locate tells a recorded supervisor by pid and creation time, and answers unknown for whatever it cannot prove', () => {
+  const state = { pid: 4242, startedAt: 1_700_000_000_000 };
+  const rows = (...entries) => () => entries;
+  assert.deepEqual(locate(null, () => assert.fail('nothing is recorded, so nothing is looked up')), { found: 'gone' });
+  assert.equal(locate(state, rows({ pid: 4242, createdAt: state.startedAt })).found, 'running');
+  assert.equal(locate(state, rows()).found, 'gone', 'no process has the pid');
+  assert.equal(locate(state, rows({ pid: 4242, createdAt: state.startedAt + 5000 })).found, 'gone', 'the pid went to another process');
+  assert.equal(locate(state, rows({ pid: 4242, createdAt: null })).found, 'unknown', 'a process has the pid, and nothing says which it is');
+  const unreadable = locate({ unreadable: 'it could not be read (EISDIR)' }, () => assert.fail('an unusable record names no pid to look up'));
+  assert.equal(unreadable.found, 'unknown');
+  assert.match(unreadable.why, /EISDIR/);
+  const failed = locate(state, () => {
+    throw new Error('powershell is gone');
+  });
+  assert.equal(failed.found, 'unknown');
+  assert.match(failed.why, /powershell is gone/);
+});
+
+test('readState gives the record of a supervisor, null for no file, and says why a file that is there cannot be used', () => {
+  const dir = tempDir();
+  const file = path.join(dir, 'proj.json');
+  assert.equal(readState(file), null);
+  fs.writeFileSync(file, JSON.stringify({ pid: 4242, startedAt: 1_700_000_000_000, name: 'proj' }));
+  assert.deepEqual(readState(file), { pid: 4242, startedAt: 1_700_000_000_000, name: 'proj' });
+  for (const text of ['{ nope', 'null', JSON.stringify({ pid: '4242', startedAt: 1 }), JSON.stringify({ pid: 4242 })]) {
+    fs.writeFileSync(file, text);
+    assert.equal(typeof readState(file).unreadable, 'string', text);
+  }
+  assert.equal(typeof readState(dir).unreadable, 'string', 'a folder where the file should be');
+});
+
+test('lookUpProcesses keeps the rows of the pids asked for, from one look', () => {
+  let looks = 0;
+  const look = () => {
+    looks++;
+    return [{ pid: 4, ppid: 0, createdAt: 1, name: 'System' }, { pid: 4242, ppid: 4, createdAt: 77, name: 'node.exe' }, { pid: 4343, ppid: 4, createdAt: null, name: 'x.exe' }];
+  };
+  assert.deepEqual(lookUpProcesses([4242, 4343, 9999], look), [{ pid: 4242, createdAt: 77 }, { pid: 4343, createdAt: null }]);
+  assert.equal(looks, 1);
 });
 
 // ---- the watchdog: a scheduled task that runs the launcher's command every five minutes --------------------------------

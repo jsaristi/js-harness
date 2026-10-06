@@ -240,7 +240,7 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `R2-wanted-hides-side-effect`, `R2-duplicate-task-name-compare`,
   `R2-watchdog-loop-mostly-dead-batch-check`, `R3-rollback-failure-branches-unproved`)
   (route: delegated writer)
-- [ ] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
+- [x] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
   with its fix command, through Fix, the digest and the TUI (route: delegated writer;
   trigger: `bin/lib/stack.mjs`, `bin/doctor.mjs`, `bin/lib/digest.mjs`, `bin/tui.mjs`)
 - [ ] T11 Roadmap and this record: the three fixes, and what is left for Sebastián (the
@@ -754,11 +754,61 @@ the chain strategy is asked once, before the commit that crosses the budget.
   notes are trimmed only when a server next runs (under 100 KB a day of failing turns); a
   failure before the project is known leaves no note; a missing `SystemRoot` or an unusable
   `conhost` path still refuses `--at-login` where the launcher alone would do.
+- 2026-10-06: T9r is `b75cf9f`; the gate passed. gentle-ai assessed `7214308..b75cf9f` as
+  medium risk, 504 lines, due by the slice budget, and its one lens, reliability, approved it
+  (lineage `review-363fefea88fe990b`, acknowledged) with one WARNING and two SUGGESTIONs, all
+  three about tests that are missing: `putRecordBack` is reached only through tests that run
+  on Windows, and one of its four branches by none (`R3-put-record-back-no-portable-test`); no
+  test has a watchdog note that cannot be written (`R3-watchdog-note-write-unguarded`); the
+  task's check of its values rests on `startCommandLine` having refused every key, proved only
+  for the project folder (`R3-launcher-batch-check-relies-on-untested-keys`). They go with
+  T11, as tests. Reviewed boundary for gentle-ai: `b75cf9f`.
+- 2026-10-06: T10 written by a delegated writer, test first. The row `remote-server` follows
+  `claude-account` in `bin/lib/stack.mjs`, with its state in the `claude` cell as that row has
+  it: `ok`, `down` (a gap), `unknown`, `n/a`. For every `js-harness-remote-<id>.cmd` the
+  manifest of the given home records, the launcher is read as recorded, its own `start` line
+  is parsed back (`launcherStart` in `bin/lib/remote.mjs`), and the server is located as
+  `remote status` does, from the state file and the process's identity; one snapshot of the
+  processes serves every launcher and is taken only when a state file names a process. One
+  server down makes the row `down`, whatever the others are. The fix is the launcher's own
+  command, `js-harness remote start --cwd <folder> --name <name>` and whatever else the
+  launcher carries, never `--at-login` or `--watchdog`, one for each server that is down;
+  one stopped on purpose says so. A launcher whose line does not read back whole is
+  `unknown`, not a guess. The digest and the TUI needed only `down` among the gap states.
+  `remoteId`, `readState`, `lookUpProcesses`, `whereabouts` and `locate` moved from
+  `bin/remote.mjs` to `bin/lib/remote.mjs`, so that `bin/lib/stack.mjs` imports no command
+  module. That import closed a cycle (`stack`, `lib/remote`, `codex-review`, `lib/codex-reviews`,
+  `lib/project`, `stack`) which held only because nothing crossed it at load, so the parent
+  moved `quoteWindowsArg` and `windowsCommandLine` to `bin/lib/windows-args.mjs`;
+  `bin/codex-review.mjs` exports them as before, and no module of `bin/lib` imports from
+  `bin` now (`rg -n "from '\.\./" bin/lib` finds nothing outside the tests). The parent also
+  added the row to the list of ids in `bin/js-harness.test.mjs:201`, outside the writer's
+  surface, which the new row had broken.
+  RED: `does not provide an export named 'isLoginLauncher'`; nine in `stack.test.mjs` (the
+  two lists of ids, and `Cannot read properties of undefined (reading 'installed')`); eight
+  in the digest, the TUI, `doctor` and the hook (`actual: 'ok'`, expected `'down claude'`; no
+  `Fix:` section); nine more for the options of the fix (actual `…--cwd D:\work\proj`,
+  expected `… --name phone --permission-mode acceptEdits --spawn worktree --home
+  D:\homes\alt`). Twenty mutations fail their tests, among them identity by pid alone, a
+  look-up with no pid named, the marker ignored, `unknown` outranking `down`. GREEN, run by
+  the parent after the move: 517 of 517 for `node --test bin/codex-review.test.mjs
+  bin/lib/remote.test.mjs bin/remote.test.mjs bin/js-harness.test.mjs bin/doctor.test.mjs
+  bin/doctor-hook.test.mjs bin/lib/stack.test.mjs bin/lib/digest.test.mjs bin/tui.test.mjs`.
+  Live, read-only, once: `node bin/js-harness.mjs doctor --offline` on this machine shows
+  `remote-server  n/a  ok  n/a  n/a  n/a` and no Fix line; the server is up.
+  What it costs: with a launcher recorded and a process named, `doctor` takes about 0.8 s
+  more (median of seven runs on a fixture home, 739 ms before and 1,548 ms after), nearly all
+  of it PowerShell starting and `Get-CimInstance Win32_Process`; asking for one pid was no
+  faster. With no launcher recorded it costs nothing. `doctor --hook` runs at every session
+  start, so this machine pays it there.
+  Left open: a recorded launcher whose file is gone is skipped, not `unknown`; the TUI's
+  refresh after each command pays the snapshot too; `bin/lib/windows-args.mjs` has no test
+  file of its own, its two functions are tested through `bin/codex-review.test.mjs`.
 
 ## Follow-ups
-- `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
-  `bin/codex-review.mjs`, so a lib module depends on a command module; moving the two into
-  `bin/lib` is a small refactor outside T1's surface.
+- `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
+  `bin/codex-review.mjs`, so a lib module depended on a command module. Done with T10
+  (2026-10-06): the two are in `bin/lib/windows-args.mjs`.
 - A name with `& | < > ^ %` makes the `.cmd` quoting throw, which `supervise` would log and
   retry forever: T2 rejects such a name before starting.
 - T1 review suggestions (gentle-ai, advisory): `nextDelay` accepts a `minMs` above `maxMs`; the
