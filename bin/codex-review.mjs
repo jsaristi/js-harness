@@ -7,8 +7,18 @@
 // ran is evidence. What Codex saw is: the changed lines of `git diff <base> HEAD`, computed here, must
 // all appear in the output of the commands that succeeded in its JSONL event stream (design and
 // probes: odd/tasks/codex-exec-review.md).
+//
+// Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
+// above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
+// is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
+// were interrupted, with its outcome, the range, the codex-cli version, the wall time and what Codex's
+// events say it spent (tokens, turns, items by type, commands). A reviewed record names its run line by
+// id; a run line is a measurement and never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
+import { randomUUID as newUUID } from 'node:crypto';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
+import { sessionReading } from './lib/codex-usage.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
@@ -210,10 +220,13 @@ function launchCodex(spawnFn, platform, argv, options) {
     : spawnFn('codex', argv, options);
 }
 
-/** Whether `codex --version` answers, through the launch path and environment of the review: a
- * missing CLI is told apart here, so a bad `-c`, a broken config or a failed login is never
- * reported as one. */
-function codexRuns(spawn, platform, env) {
+// A version as `codex --version` prints it after the name: `0.160.0`, or `0.161.0-alpha.2`.
+const CLI_VERSION = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?/;
+
+/** The version `codex --version` answers with (`0.160.0`), through the launch path and environment
+ * of the review, or `null` when it does not answer with one: a missing CLI is told apart here, so a
+ * bad `-c`, a broken config or a failed login is never reported as one. */
+function codexVersion(spawn, platform, env) {
   try {
     const result = launchCodex(spawn, platform, ['--version'], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -221,9 +234,10 @@ function codexRuns(spawn, platform, env) {
       timeout: PROBE_TIMEOUT_MS,
       env,
     });
-    return Boolean(result) && !result.error && result.status === 0 && /\d+\.\d+\.\d+/.test(result.stdout ?? '');
+    if (!result || result.error || result.status !== 0) return null;
+    return CLI_VERSION.exec(result.stdout ?? '')?.[0] ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -318,15 +332,34 @@ function progressLine(line, log) {
   }
 }
 
+const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** A count for a person: grouped by thousands, and `unknown` for one Codex did not report. */
+const spoken = (count) => (count === null ? 'unknown' : thousands(count));
+
+/** The reading of a session (`sessionReading`) and its wall time as one line: the tokens, the
+ * seconds and the items by type, the most frequent first. */
+function spentLine(reading, durationMs) {
+  const { inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens } = reading.usage;
+  const items = Object.entries(reading.items)
+    .sort(([a, countA], [b, countB]) => countB - countA || (a < b ? -1 : 1))
+    .map(([type, count]) => `${thousands(count)} ${type}`)
+    .join(', ');
+  return (
+    `Codex used ${spoken(inputTokens)} input tokens (${spoken(cachedInputTokens)} cached) and ${spoken(outputTokens)} output ` +
+    `(${spoken(reasoningOutputTokens)} reasoning) in ${Math.round(durationMs / 1000)} s: ${items || 'no items'}.`
+  );
+}
+
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
- * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now`, `platform`, `log`, `error` and
- * `write` (the review passed through to the user)
+ * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now`, `randomUUID` (the id of the run
+ * line), `platform`, `log`, `error` and `write` (the review passed through to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
-  const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process } = deps;
+  const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -355,6 +388,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   }
 
   let outcome = 'unavailable';
+  // The id of the run line of a reviewed attempt, for its record; a skip launches nothing and has none.
+  let runId;
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
@@ -386,11 +421,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const expected = patchKeys(patch);
     const codexEnv = childEnv(env, platform);
-    if (!codexRuns(spawn, platform, codexEnv)) {
+    const cli = codexVersion(spawn, platform, codexEnv);
+    if (!cli) {
       error(NO_CODEX);
       return 1;
     }
     log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
+    // From here on Codex is launched, so every way out leaves one line in the run log.
+    const startedAt = now();
     // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
     // stays live.
     const result = await runReview(spawnAsync, kill, platform, codexArgs(from), {
@@ -398,9 +436,42 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       stdio: ['ignore', 'pipe', 'inherit'],
       env: codexEnv,
     }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
-    const evidence = reviewEvidence(parseEvents(result.stdout), expected);
+    const durationMs = now().getTime() - startedAt.getTime();
+    const events = parseEvents(result.stdout);
+    const evidence = reviewEvidence(events, expected);
+    const reading = sessionReading(events);
+    /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
+     * could not be written: the measurement is lost and said so, and the attempt ends as it would. */
+    const logRun = (runOutcome, reason) => {
+      const run = {
+        schema: CODEX_REVIEW_RUN_SCHEMA,
+        id: randomUUID(),
+        startedAt: startedAt.toISOString(),
+        durationMs,
+        base,
+        from,
+        head,
+        outcome: runOutcome,
+        ...(reason === undefined ? {} : { reason }),
+        cli,
+        // The user's Codex config sets both until this command sets them itself (T3 in
+        // odd/tasks/codex-review-lean.md), and Codex's events do not name them.
+        model: null,
+        effort: null,
+        ...reading,
+        coverage: evidence.coverage,
+      };
+      try {
+        appendCodexReviewRun(root, run, { spawn });
+        return run.id;
+      } catch (err) {
+        error(`Could not write the run log, so what this attempt measured was not kept: ${err.message}`);
+        return undefined;
+      }
+    };
     for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
     if (evidence.review) write(`${evidence.review}\n`);
+    log(spentLine(reading, durationMs));
     if (result.status !== 0 || !evidence.completed) {
       const reason = result.error?.code === 'ENOBUFS'
         ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
@@ -411,6 +482,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
       const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
       const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
+      logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
       error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
       return typeof result.status === 'number' && result.status !== 0 ? result.status : 1;
     }
@@ -421,10 +493,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           : `its successful commands showed ${seen} of ${total} changed lines of ${base.slice(0, 7)}..HEAD`;
       const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
       const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
+      logRun('not-inspected', why);
       error(`Codex's turn completed, but ${why}; nothing was recorded.${missing}${ran}\n${WAYS_ON}`);
       return 1;
     }
     outcome = 'reviewed';
+    runId = logRun('reviewed');
   }
 
   const record = {
@@ -434,6 +508,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     reviewedAt: now().toISOString(),
     outcome,
     ...(outcome === 'unavailable' ? { reason: args.unavailable } : {}),
+    // The run line this review was measured in; absent when that line could not be written.
+    ...(runId === undefined ? {} : { run: runId }),
   };
   let file;
   try {

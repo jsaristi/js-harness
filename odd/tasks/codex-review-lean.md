@@ -97,12 +97,12 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 
 ## Tasks
 ### Slice A — measure
-- [ ] T1 A reader of what a review session spent, in `bin/lib/`: from Codex's JSONL, tokens
-  (input, cached, output, reasoning) summed over every `turn.completed`, the count of requests,
+- [x] T1 A reader of what a review session spent, in `bin/lib/`: from Codex's JSONL, tokens
+  (input, cached, output, reasoning) summed over every `turn.completed`, the count of turns,
   and the items by type (shell commands, MCP calls, sub-agent calls, messages) — route:
   delegated writer (the reader and its test; `evals/agent-output.mjs` is the reference, `bin/`
   cannot import it)
-- [ ] T2 Every attempt of `codex-review` leaves a line in a run log beside the review record:
+- [x] T2 Every attempt of `codex-review` leaves a line in a run log beside the review record:
   outcome (reviewed, not inspected, failed, timed out, interrupted), the reading of T1, wall
   time, codex-cli version, model and effort (`null` while the user's config sets them), and the
   review record names its run — route: same writer
@@ -111,7 +111,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 - [ ] T3 `codex-review --session lean`: `--ignore-user-config`, `-m gpt-6.1-sol`,
   `-c model_reasoning_effort="medium"`, read-only sandbox, no approvals, with the exact argv
   under test; `current` stays the default — route: delegated writer
-- [ ] T4 What a session still loads from the Codex home under `--ignore-user-config` (the global
+- [x] T4 What a session still loads from the Codex home under `--ignore-user-config` (the global
   `AGENTS.md`, `hooks.json`, skills, plugin caches), and every way to leave the global
   `AGENTS.md` out, read from the installed CLI's help and Codex's source and written here with
   its sources; no model call — route: one read-only explorer
@@ -180,14 +180,85 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   holds `cached_input_tokens` as a part, and `reasoning_output_tokens` is kept apart since
   whether it is inside `output_tokens` is not known.
 
+## What Codex loads, and what `exec review` accepts (T4, 2026-10-06)
+Read from `openai/codex` at the tag `rust-v0.160.0` (paths under `codex-rs/`) by a read-only
+explorer, three claims read again by the parent (`login/src/auth/storage.rs:206-223`,
+`exec/src/cli.rs:283-305`, `exec/src/lib.rs:884-889`). No model was called and `auth.json` was
+not opened. "Read" below means the code path was read, not that a run showed it.
+
+- `--ignore-user-config` swaps the user layer for an empty table whose path is still
+  `$CODEX_HOME/config.toml` (`config/src/loader/mod.rs:511-518`). So what is a key of
+  `config.toml` goes: `[mcp_servers.*]`, `[plugins]`, `model_instructions_file`, the model and
+  the effort. What is found through the home's folder stays:
+  - the global `AGENTS.override.md` or `AGENTS.md`, read with no gate and no size cap
+    (`codex-home/src/instructions/mod.rs:43-79`, `core/src/thread_manager.rs:1824-1832`);
+  - `$CODEX_HOME/skills`, and `~/.agents/skills`, which is under the OS home and not the Codex
+    home (`ext/skills/src/host_roots.rs:95-113`), so a home of the review's own does not leave
+    it out;
+  - execpolicy `.rules`, unless `--ignore-rules` (`core/src/exec_policy.rs:669-682`);
+  - `hooks.json` is read (`hooks/src/engine/discovery.rs:129-148`), and a handler runs only if
+    trusted, with the trust hashes in the ignored `config.toml`, so none should run: inferred,
+    and `--disable hooks` makes it certain;
+  - the built-in `codex_apps` MCP server while the `apps` feature is on
+    (`core/src/mcp.rs:353-363`); `--disable apps` and `--disable plugins` remove it and the
+    plugins (`core-plugins/src/manager.rs:813-815`).
+- No `-c` key, environment variable or flag leaves the global `AGENTS.md` out with the real home
+  in place. `project_doc_max_bytes=0` does the opposite: it bounds the project's file only
+  (`core/src/agents_md.rs:68,133`). The one way is a `CODEX_HOME` of the review's own, which
+  must exist already (`utils/home-dir/src/lib.rs:13-50`); the project's `AGENTS.md` is still
+  read there, since it is skipped only when the project is marked untrusted
+  (`core/src/agents_md.rs:64`).
+- The login in such a home. The store is the file `<home>/auth.json` by default
+  (`login/src/auth/storage.rs:154-155`) and this machine's `config.toml` has no
+  `cli_auth_credentials_store` key. No supported way shares a login between two homes: the
+  keyring entry is keyed by a hash of the home's path (`storage.rs:238-248`),
+  `CODEX_ACCESS_TOKEN` takes no ChatGPT login (`login/src/auth/manager.rs:1536-1557`), and
+  `CODEX_API_KEY` is API billing. A refresh rewrites the tokens (`manager.rs:1599-1621`) by
+  truncating and writing the same path, not by renaming a new file over it
+  (`storage.rs:206-223`); it happens when the access token is within 5 minutes of its expiry or
+  the last refresh is older than 8 days (`manager.rs:203-204,3014-3025`). The client has a
+  message for the server's `refresh_token_reused` (`manager.rs:207,1687`), so a refresh from a
+  copy leaving the original invalid is likely, and not shown.
+- `exec review` and a prompt. `--base` conflicts with the positional prompt
+  (`exec/src/cli.rs:283-305`). A prompt alone is a custom target: the user message is the prompt
+  as written, with no range (`prompts/src/review_request.rs:91-97`), while a `--base` review
+  gets a fixed sentence with the merge-base and `git diff <sha>` (`review_request.rs:62-70`).
+  Codex's rubric applies to either, since it replaces the base instructions whatever the target
+  (`core/src/tasks/review.rs:119-120`).
+- `--output-schema` does nothing in a review: the review branch never loads it
+  (`exec/src/lib.rs:884-889`) and core passes no schema (`core/src/tasks/review.rs:137`). The
+  rubric already asks the model for findings with title, body, priority, confidence and a file
+  with a line range (`prompts/templates/review/rubric.md:67-94`); `exec --json` then gives them
+  as one `agent_message` of rendered text, a line `- <title> — <path>:<start>-<end>` per
+  finding with the priority as a `[P1]` tag in the title
+  (`protocol/src/review_format.rs:23-82`). The confidence and the overall verdict are dropped.
+- Model and effort. `-m` applies, since `review_model` would win and neither exec nor the real
+  config sets it (`core/src/session/review.rs:14-17`, `exec/src/lib.rs:573`); the effort
+  carries over from the session (`session/review.rs:49-69`); that
+  `-c model_reasoning_effort` reaches it is inferred.
+- Both `AGENTS.md` files reach a review as one user message (`core/src/codex_delegate.rs:76`,
+  `core/src/context/user_instructions.rs:15-34`).
+
+What this changes, and waits on Sebastián:
+- The lean session needs a home of its own, so the login question is his (Ask me before): a
+  copy of `auth.json` per run, or a hard link to it. Neither is documented by Codex.
+- `--output-schema` and a prompt beside `--base` cannot both hold over `exec review`. The
+  nearest that keeps his three decisions is a custom-target review: the versioned prompt names
+  the range and carries the intent, Codex's rubric still applies, and the findings by file,
+  line and severity are read from the rubric's own rendered format. The flag is dropped
+  because the CLI ignores it there. T6 and T7 are written for that once he agrees.
+- Skills in `~/.agents/skills` are outside any Codex home: `-c skills.include_instructions=false`
+  is the key read at `core/src/config/mod.rs:4010-4014`, its effect inferred. T5's first run
+  shows whether they still reach the session.
+
 ## Open questions, each with the task that answers it
-- Does `--ignore-user-config` also leave out `hooks.json`, skills and plugin caches of the home?
-  (T4)
-- Can the global `AGENTS.md` be left out with the real home in place, or only with a home of
-  the review's own? (T4; if the second, the `auth.json` question goes to Sebastián before T5)
-- Does `exec review` accept a prompt together with `--base`, and does `--output-schema` shape a
-  review's answer? If not, the own prompt has to name the range itself, and whether Codex's
-  rubric still applies is the thing to prove. (T6)
+- Answered by T4 (section above): `--ignore-user-config` leaves the global `AGENTS.md`, the
+  skills and the rules in; only a home of the review's own leaves the global `AGENTS.md` out;
+  `exec review` takes a prompt or `--base`, not both, and ignores `--output-schema`.
+- Does a refresh of the login inside a copy leave the real one invalid? Not shown, and not to
+  be tried on his login. (T5 is designed so that it never has to be.)
+- Do the skills of `~/.agents/skills`, a hook or the apps server still reach a lean session?
+  (T5, read from its first real run)
 - With the orchestrator block gone, does Codex still refuse a range above about a thousand
   lines? T9's bound is set from a measured run, not from that number. (T12)
 
@@ -195,10 +266,44 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 - 2026-10-06: Sebastián opened the feature and fixed its decisions and order (Constraints).
   Worktree and branch created from `main` at `3915b88`; this document written from the evidence
   of F6's Progress of the same day, `bin/codex-review.mjs` and `odd/tasks/codex-exec-review.md`.
-  No model called.
+  No model called. Committed as `7deddfc` (gate green, `core.bare` `false`, the worktree
+  clean); gentle-ai assessed `3915b88..7deddfc` as `passive`, review not due, so the reviewed
+  boundary is `7deddfc`.
+- 2026-10-06: T4 by a read-only explorer (route: delegated, as planned), its three load-bearing
+  claims read again by the parent at the tag. Findings in "What Codex loads, and what
+  `exec review` accepts". Two of them reach Sebastián's decisions and are put to him, one at a
+  time: the login of a home of the review's own, then `--output-schema`. T1's wording is
+  corrected by the same reading: Codex's JSONL reports usage per turn, not the number of
+  requests in it, so the reader counts turns.
+- 2026-10-06: T1 and T2 by the delegated writer, with nothing staged by it and no model called.
+  T1: `sessionReading(events)` in `bin/lib/codex-usage.mjs` gives the four token counts summed
+  over the turns (`null` for one Codex never reported, so it is told apart from zero), the
+  turns, the items by type and the commands with how many failed. T2: every attempt that
+  launches Codex appends a line to `<git common dir>/js-harness/codex-review-runs.jsonl`
+  (`bin/lib/codex-review-runs.mjs`, schema `js-harness.codex-review-run/v1`): outcome
+  (`reviewed`, `not-inspected`, `failed`, `timed-out`, `interrupted`) with its reason, the
+  range, the cli version read from the `--version` probe, wall time, the reading of T1 and the
+  coverage; `model` and `effort` are `null` until T3. The review record names its run, and a
+  line of one summary is printed. Nothing before the launch writes a run line, nor does
+  `--unavailable`. RED: T1 13 tests, 11 failing on assertions against a stub; the run-log
+  module failed to load; the command 91 tests, 21 failing. GREEN: 13/13, 24/24, 91/91. The
+  writer's verification over the five test files: 171 tests, 171 pass, 117 s. Parent: read the
+  diff of the command, and ran the three library files again, 37 of 37.
+  - Chosen by the writer and kept: a run line that cannot be written is a warning, and the
+    record then omits `run`; the `reviewed` run line is written before the review record, so
+    a record that then fails to write leaves a measured run with no record, which
+    `check --push` never reads; the append and read plumbing is shared from
+    `bin/lib/codex-reviews.mjs`, whose own tests pass unedited.
 
 ## Follow-ups
-None yet.
+- `bin/codex-review.test.mjs` takes just over 120 s here, about 1.3 s a test, since each one
+  spawns real git; a foreground limit of 120 s cuts it off, so it is run with a longer one.
+- The reason logged for a timeout or an overflow quotes the built-in bounds even when a test
+  injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1, then T2 (slice A): the usage reader and the run log, neither of which calls the model.
+Slice A is written (T1, T2) and T4 is read. Waiting on Sebastián: how the login reaches a home
+of the review's own (a copy per run, or a hard link), which T5 needs; then what becomes of
+`--output-schema`, which T6 needs. T3, the `--session lean` argv, waits on neither. Slice A
+holds code, so before a push it needs gentle-ai's assessment and a Codex review of its range,
+which draws on the cap and is asked first.

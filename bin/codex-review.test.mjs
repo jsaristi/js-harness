@@ -9,6 +9,7 @@ import { PassThrough } from 'node:stream';
 import {
   childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { codexReviewRunsPath, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex.
@@ -136,15 +137,18 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
   return { spawn, spawnAsync, killTree, calls, probes, killed, lifetimes };
 }
 
-/** Runs the command with output captured; `now` is fixed so the record is comparable, and the
- * platform is fixed to linux unless a test says otherwise. `shown` is what the review passed
- * through to the user, `out` what the command itself logged. */
+const RUN_ID = '00000000-0000-4000-8000-000000000001';
+
+/** Runs the command with output captured; `now` and the run's id are fixed so the record is
+ * comparable, and the platform is fixed to linux unless a test says otherwise. `shown` is what the
+ * review passed through to the user, `out` what the command itself logged. */
 async function run(argv, extra = {}, env = {}) {
   const out = [];
   const err = [];
   const shown = [];
   const code = await codexReviewMain(argv, env, {
     now: () => new Date('2026-09-29T12:00:00.000Z'),
+    randomUUID: () => RUN_ID,
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
@@ -160,9 +164,34 @@ const reviewedRecord = (base, head) => ({
   head,
   reviewedAt: '2026-09-29T12:00:00.000Z',
   outcome: 'reviewed',
+  run: RUN_ID,
+});
+
+/** An explicit skip: it launched nothing, so it names no run. */
+const skippedRecord = (base, head, reason) => ({
+  schema: 'js-harness.codex-review/v1',
+  base,
+  head,
+  reviewedAt: '2026-09-29T12:00:00.000Z',
+  outcome: 'unavailable',
+  reason,
 });
 
 const wrote = (root) => fs.existsSync(codexReviewsPath(root));
+const loggedRun = (root) => fs.existsSync(codexReviewRunsPath(root));
+
+/** The one run line of `root`'s log. */
+function onlyRun(root) {
+  const runs = readCodexReviewRuns(root);
+  assert.equal(runs.length, 1, `${runs.length} run lines`);
+  return runs[0];
+}
+
+/** A clock that answers each call with the next of `times`, then keeps giving the last. */
+function clock(...times) {
+  let calls = 0;
+  return () => new Date(times[Math.min(calls++, times.length - 1)]);
+}
 
 // --- the run ---
 
@@ -584,6 +613,10 @@ test('a base that moved past the fork point: Codex reviews from the merge-base, 
   assert.ok(args.includes(`--base ${fork}`), `codex reviews from the merge-base: ${args}`);
   const [record] = readCodexReviews(root);
   assert.equal(record.base, movedBase, 'the record keeps the base it was asked for');
+  const logged = onlyRun(root);
+  assert.equal(logged.base, movedBase, 'the run line keeps the base it was asked for');
+  assert.equal(logged.from, fork, 'and says where Codex reviewed from');
+  assert.equal(logged.head, head);
 });
 
 test('Ctrl-C during the review kills the tree first, so Codex is not left running; nothing is written', async () => {
@@ -703,7 +736,7 @@ test('--unavailable records the skip with its reason and spawns no Codex', async
   assert.equal(result.code, 0);
   assert.ok(spawned.length > 0 && spawned.every((command) => command === 'git'));
   assert.equal(fake.calls.length, 0);
-  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), outcome: 'unavailable', reason: 'model rejected' }]);
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')]);
   assert.match(result.out, /unavailable/i);
 });
 
@@ -763,6 +796,270 @@ test('--home is still accepted, though nothing reads it any more', async () => {
   const { root, base } = makeRepo();
   const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', tmp('js-harness-codex-review-home-')], fakeCodex(reviewed(root, base)));
   assert.equal(result.code, 0);
+});
+
+// --- the run log: every attempt that launched Codex leaves one measured line ---
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// The usage of the one review of this repository that was measured in full (2026-09-30).
+const spent = { type: 'turn.completed', usage: { input_tokens: 297479, cached_input_tokens: 240640, output_tokens: 2396, reasoning_output_tokens: 703 } };
+
+test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, what it spent and how long it took', async () => {
+  const { root, base, head } = makeRepo();
+  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:01:47.000Z');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now });
+  assert.equal(result.code, 0);
+  const expected = {
+    schema: 'js-harness.codex-review-run/v1',
+    id: RUN_ID,
+    startedAt: '2026-09-29T12:00:00.000Z',
+    durationMs: 107000,
+    base,
+    from: base,
+    head,
+    outcome: 'reviewed',
+    cli: '0.159.1',
+    model: null,
+    effort: null,
+    usage: { inputTokens: 1, cachedInputTokens: null, outputTokens: 1, reasoningOutputTokens: null },
+    turns: 1,
+    items: { agent_message: 1, command_execution: 1 },
+    commands: { total: 1, failed: 0 },
+    coverage: { seen: 2, total: 2 },
+  };
+  const logged = onlyRun(root);
+  assert.deepEqual(logged, expected);
+  assert.deepEqual(Object.keys(logged), Object.keys(expected), 'the fields come in a fixed order');
+  // The record is written after the run ended, and names the run by its id.
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), reviewedAt: '2026-09-29T12:01:47.000Z' }]);
+});
+
+test('the run log is a second file in the folder of the review record, and a run line is not a record', async () => {
+  const { root, base } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(path.basename(codexReviewRunsPath(root)), 'codex-review-runs.jsonl');
+  assert.equal(path.dirname(codexReviewRunsPath(root)), path.dirname(codexReviewsPath(root)));
+  assert.equal(readCodexReviews(root).length, 1);
+  assert.equal(readCodexReviewRuns(root).length, 1);
+  assert.equal(git(root, 'status', '--porcelain'), '', 'neither file joins the working tree');
+});
+
+test('without an injected id each run gets a UUID of its own, and the record names the one of its run', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, randomUUID: undefined });
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, randomUUID: undefined });
+  const ids = readCodexReviewRuns(root).map((line) => line.id);
+  assert.equal(ids.length, 2);
+  for (const id of ids) assert.match(id, UUID);
+  assert.notEqual(ids[0], ids[1]);
+  assert.deepEqual(readCodexReviews(root).map((record) => record.run), ids);
+});
+
+test('the run line holds the usage summed over the turns and every item by type, known or not', async () => {
+  const { root, base } = makeRepo();
+  const other = { type: 'item.completed', item: { id: 'x', type: 'mcp_tool_call', server: 's', tool: 't' } };
+  const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
+  const fake = fakeCodex(jsonl(thread, turn, reasoning, cmd('git status', 128), spent, turn, other, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), spent));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 0);
+  const logged = onlyRun(root);
+  assert.deepEqual(logged.usage, { inputTokens: 594958, cachedInputTokens: 481280, outputTokens: 4792, reasoningOutputTokens: 1406 });
+  assert.equal(logged.turns, 2);
+  assert.deepEqual(logged.items, { agent_message: 1, command_execution: 2, mcp_tool_call: 1, reasoning: 2 });
+  assert.deepEqual(logged.commands, { total: 2, failed: 1 });
+});
+
+test('`cli` is the version `codex --version` printed', async () => {
+  for (const [stdout, version] of [['codex-cli 0.160.0\n', '0.160.0'], ['codex-cli 0.161.0-alpha.2\r\n', '0.161.0-alpha.2'], ['0.158.3', '0.158.3']]) {
+    const { root, base } = makeRepo();
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base), {}, { status: 0, stdout }));
+    assert.equal(result.code, 0);
+    assert.equal(onlyRun(root).cli, version);
+  }
+});
+
+test('a turn that completed without meeting the evidence rule is logged as not inspected, with the reason the error gives', async () => {
+  const blank = () => makeRepoWith({ 'b.txt': 'a\nb\n' }, { 'b.txt': 'a\n\nb\n' });
+  const cases = [
+    [makeRepo, () => reviewedWith(cmd('git status')), /^its successful commands showed 0 of 2 changed lines of [0-9a-f]{7}\.\.HEAD$/, { seen: 0, total: 2 }],
+    [makeRepo, (root, base) => jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), done), /^it ended without a review message$/, { seen: 2, total: 2 }],
+    [blank, () => reviewedWith(cmd('git status', 1)), /^it ran no successful command$/, { seen: 0, total: 0 }],
+  ];
+  for (const [repo, stdout, reason, coverage] of cases) {
+    const { root, base } = repo();
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(stdout(root, base)));
+    assert.equal(result.code, 1);
+    const logged = onlyRun(root);
+    assert.equal(logged.outcome, 'not-inspected');
+    assert.match(logged.reason, reason);
+    assert.ok(result.err.includes(logged.reason), 'the same words as the error');
+    assert.deepEqual(logged.coverage, coverage);
+    assert.equal(logged.turns, 1);
+    assert.equal(wrote(root), false, 'a run line is not a review record');
+  }
+});
+
+test('an attempt that did not complete is logged as failed, with the reason the error gives and the exit code unchanged', async () => {
+  const boom = { error: new Error('boom') };
+  const cases = [
+    [(root, base) => fakeCodex(reviewed(root, base), { status: 7 }), 'it exited 7', 7],
+    [() => fakeCodex('', { status: null, signal: 'SIGTERM' }), 'it exited on SIGTERM', 1],
+    [(root, base) => fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), { type: 'turn.failed', error: { message: 'model rejected' } })), 'the turn failed', 1],
+    [(root, base) => fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS))), 'the turn never completed', 1],
+    [() => fakeCodex('', boom), 'could not start it: boom', 1],
+    [() => ({ ...fakeCodex(['x'.repeat(20), 'y'.repeat(20)]), maxBuffer: 30 }), 'its output exceeded 64 MiB', 1],
+  ];
+  for (const [fake, reason, code] of cases) {
+    const { root, base } = makeRepo();
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], fake(root, base));
+    assert.equal(result.code, code, reason);
+    const logged = onlyRun(root);
+    assert.equal(logged.outcome, 'failed', reason);
+    assert.equal(logged.reason, reason);
+    assert.ok(result.err.includes(`did not complete (${reason})`), 'the same words as the error');
+    assert.equal(wrote(root), false, 'a failed attempt is never a review record');
+  }
+});
+
+test('a failed attempt still holds what Codex spent before it failed', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent), { status: 7 });
+  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:00:09.500Z');
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, now });
+  const logged = onlyRun(root);
+  assert.equal(logged.usage.inputTokens, 297479);
+  assert.equal(logged.usage.reasoningOutputTokens, 703);
+  assert.deepEqual(logged.items, { agent_message: 1, command_execution: 1 });
+  assert.deepEqual(logged.coverage, { seen: 2, total: 2 });
+  assert.equal(logged.durationMs, 9500);
+  assert.deepEqual([logged.base, logged.from, logged.head, logged.cli], [base, base, head, '0.159.1']);
+});
+
+test('an attempt that never started has a run line with nothing measured: null counts, not zeros', async () => {
+  const { root } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
+  const logged = onlyRun(root);
+  assert.deepEqual(logged.usage, { inputTokens: null, cachedInputTokens: null, outputTokens: null, reasoningOutputTokens: null });
+  assert.equal(logged.turns, 0);
+  assert.deepEqual(logged.items, {});
+  assert.deepEqual(logged.commands, { total: 0, failed: 0 });
+  assert.deepEqual(logged.coverage, { seen: 0, total: 2 });
+});
+
+test('a review stopped at the timeout is logged as timed out', async () => {
+  const { root } = makeRepo();
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex('', { hang: true }), timeoutMs: 30 });
+  assert.equal(result.code, 1);
+  const logged = onlyRun(root);
+  assert.equal(logged.outcome, 'timed-out');
+  assert.equal(logged.reason, 'it ran past 30 minutes and was stopped');
+  assert.equal(wrote(root), false);
+});
+
+test('a review stopped by Ctrl-C is logged as interrupted', async () => {
+  const { root } = makeRepo();
+  const fake = fakeCodex('', { hang: true });
+  const signals = new EventEmitter();
+  const pending = run(['--base', 'HEAD~1', '--cwd', root], { ...fake, signals });
+  while (fake.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  signals.emit('SIGINT');
+  const result = await pending;
+  assert.equal(result.code, 1);
+  const logged = onlyRun(root);
+  assert.equal(logged.outcome, 'interrupted');
+  assert.equal(logged.reason, 'it was interrupted and stopped');
+  assert.equal(wrote(root), false);
+});
+
+test('every attempt adds its own line, and only the reviewed one adds a record', async () => {
+  const { root, base } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => line.outcome), ['failed', 'not-inspected', 'reviewed']);
+  assert.deepEqual(readCodexReviews(root).map((record) => record.outcome), ['reviewed']);
+});
+
+test('what launches no Codex leaves no run line: a skip, a refusal, a missing CLI', async () => {
+  const { root, base, head } = makeRepo();
+  const skipped = await run(['--base', 'HEAD~1', '--unavailable', 'model rejected', '--cwd', root], fakeCodex(''));
+  assert.equal(skipped.code, 0);
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')], 'the skip is recorded as before, with no run');
+
+  const unknown = await run(['--base', 'no-such-rev', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(unknown.code, 1);
+
+  const missing = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base), {}, { status: 1, stdout: '' }));
+  assert.match(missing.err, /npm i -g @openai\/codex/);
+
+  const fake = fakeCodex(reviewed(root, base));
+  const noDiff = (command, args, opts) =>
+    command === 'git' && args[0] === 'diff' ? { status: 128, stdout: '', stderr: 'fatal: bad object' } : fake.spawn(command, args, opts);
+  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawn: noDiff })).code, 1);
+
+  fs.writeFileSync(path.join(root, 'f.txt'), 'dirty', 'utf8');
+  const dirty = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.match(dirty.err, /commit or stash/i);
+
+  assert.equal(loggedRun(root), false);
+  assert.doesNotMatch([skipped, unknown, missing, dirty].map((result) => result.out).join('\n'), /Codex used/);
+});
+
+/** Puts a folder where the run log goes, so that the append fails. */
+function blockRunLog(root) {
+  fs.mkdirSync(codexReviewRunsPath(root), { recursive: true });
+}
+
+test('a run log that cannot be written is a warning: the reviewed attempt still writes its record, naming no run', async () => {
+  const { root, base, head } = makeRepo();
+  blockRunLog(root);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(result.code, 0);
+  assert.match(result.err, /Could not write the run log/);
+  const { run: _run, ...withoutRun } = reviewedRecord(base, head);
+  assert.deepEqual(readCodexReviews(root), [withoutRun]);
+  assert.match(result.out, /Recorded the Codex review/);
+});
+
+test('a run log that cannot be written does not change how a failed attempt ends', async () => {
+  const { root, base } = makeRepo();
+  blockRunLog(root);
+  const failed = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
+  assert.equal(failed.code, 7);
+  assert.match(failed.err, /Could not write the run log/);
+  assert.match(failed.err, /did not complete.*exited 7/is);
+  const unseen = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
+  assert.equal(unseen.code, 1);
+  assert.match(unseen.err, /Could not write the run log/);
+  assert.match(unseen.err, /showed 0 of 2 changed lines/);
+  assert.equal(wrote(root), false);
+});
+
+test('after the run one line says what Codex spent: tokens, wall time and the items, most frequent first', async () => {
+  const { root, base } = makeRepo();
+  const statuses = Array.from({ length: 5 }, () => cmd('git status'));
+  const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), spent));
+  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:01:47.000Z');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, now });
+  assert.equal(result.code, 0);
+  const lines = result.out.split('\n');
+  const at = lines.indexOf('Codex used 297,479 input tokens (240,640 cached) and 2,396 output (703 reasoning) in 107 s: 6 command_execution, 1 agent_message.');
+  assert.notEqual(at, -1, result.out);
+  assert.ok(at > lines.findIndex((line) => /exit 0 {2}/.test(line)), 'after the commands');
+  assert.ok(at < lines.findIndex((line) => /^Recorded/.test(line)), 'before the record');
+});
+
+test('the summary says `unknown` for a count Codex did not report, and is printed for a failed attempt too', async () => {
+  const { root, base } = makeRepo();
+  const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
+  const partial = fakeCodex(jsonl(thread, turn, reasoning, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), { type: 'turn.completed', usage: { input_tokens: 1200, output_tokens: 0 } }));
+  const reviewedRun = await run(['--base', 'HEAD~1', '--cwd', root], partial);
+  assert.ok(reviewedRun.out.includes('Codex used 1,200 input tokens (unknown cached) and 0 output (unknown reasoning) in 0 s: 2 reasoning, 1 agent_message, 1 command_execution.'), reviewedRun.out);
+
+  const failed = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
+  assert.equal(failed.code, 1);
+  assert.ok(failed.out.includes('Codex used unknown input tokens (unknown cached) and unknown output (unknown reasoning) in 0 s: no items.'), failed.out);
 });
 
 // --- the evidence rule ---
