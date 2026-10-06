@@ -880,11 +880,15 @@ the chain strategy is asked once, before the commit that crosses the budget.
   is his to ask for.
 - 2026-10-06: the record of that merge went in as `jsaristi/js-harness#38` (`4fc13d4`). On his
   word the session that wrote this feature then deleted the four remote branches, the four
-  local ones and the worktree `D:\js-harness-worktrees\remote-watchdog`. Of that folder three
-  files are left, the CodeGraph index (`.codegraph\codegraph.db` and its two companions, 22
-  MB), held open by CodeGraph's server for `D:\js-harness` (pid 11032, started 2026-10-05
-  19:21 local, its parent gone, a child of it holding this repository's own index). It was
-  not killed: sessions that are open may be using it. The folder goes once that process ends.
+  local ones and the worktree `D:\js-harness-worktrees\remote-watchdog`. Three files of that
+  folder stayed locked, the CodeGraph index (`.codegraph\codegraph.db` and its two
+  companions, 22 MB), held open by CodeGraph's server for `D:\js-harness` (pid 11032, started
+  2026-10-05 19:21 local, its parent gone, a child of it holding this repository's own
+  index). On his word that session killed the process at 18:36 UTC and removed the folder,
+  which no longer exists. `codegraph status` still answers for `D:\js-harness` afterwards.
+  An earlier version of this entry, written by another session in the same minutes, said the
+  process had been left alone: two sessions were acting on one machine, and the record of
+  one was already false when its gate ended.
 - 2026-10-06, 18:29 UTC: the live activation, by the session of F6 Codex parity, on his word
   ("Listo me avisas", after being told twice that the stop ends the sessions open through
   the server). That session's own process hangs from the desktop app and not from the
@@ -1068,8 +1072,8 @@ large to review whole. What is left is Sebastián's to ask for, in this order:
 
 What a later session needs to know:
 
-- The feature's code is on `main` and its branches and worktree are deleted; of
-  `D:\js-harness-worktrees\remote-watchdog` only a locked CodeGraph index is left (Progress).
+- The feature's code is on `main`, and its branches, its worktree and the folder
+  `D:\js-harness-worktrees\remote-watchdog` are gone (Progress).
   Never touch `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for
   `D:\js-harness` without asking.
 - One scheduled task of js-harness is registered on this machine since 2026-10-06,
