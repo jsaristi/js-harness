@@ -4,7 +4,8 @@ Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tas
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
 `feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
 its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
-linked worktree `D:\js-harness-worktrees\remote-watchdog`)
+linked worktree `D:\js-harness-worktrees\remote-watchdog`; its three slices are
+`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37))
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -240,10 +241,10 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `R2-wanted-hides-side-effect`, `R2-duplicate-task-name-compare`,
   `R2-watchdog-loop-mostly-dead-batch-check`, `R3-rollback-failure-branches-unproved`)
   (route: delegated writer)
-- [ ] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
+- [x] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
   with its fix command, through Fix, the digest and the TUI (route: delegated writer;
   trigger: `bin/lib/stack.mjs`, `bin/doctor.mjs`, `bin/lib/digest.mjs`, `bin/tui.mjs`)
-- [ ] T11 Roadmap and this record: the three fixes, and what is left for Sebastián (the
+- [x] T11 Roadmap and this record: the three fixes, and what is left for Sebastián (the
   running supervisor is the old code until the server is restarted, and the watchdog is
   registered on this machine by `remote start --at-login` run from `D:\js-harness` once this
   branch is on its `main`) (route: inline)
@@ -754,11 +755,121 @@ the chain strategy is asked once, before the commit that crosses the budget.
   notes are trimmed only when a server next runs (under 100 KB a day of failing turns); a
   failure before the project is known leaves no note; a missing `SystemRoot` or an unusable
   `conhost` path still refuses `--at-login` where the launcher alone would do.
+- 2026-10-06: T9r is `b75cf9f`; the gate passed. gentle-ai assessed `7214308..b75cf9f` as
+  medium risk, 504 lines, due by the slice budget, and its one lens, reliability, approved it
+  (lineage `review-363fefea88fe990b`, acknowledged) with one WARNING and two SUGGESTIONs, all
+  three about tests that are missing: `putRecordBack` is reached only through tests that run
+  on Windows, and one of its four branches by none (`R3-put-record-back-no-portable-test`); no
+  test has a watchdog note that cannot be written (`R3-watchdog-note-write-unguarded`); the
+  task's check of its values rests on `startCommandLine` having refused every key, proved only
+  for the project folder (`R3-launcher-batch-check-relies-on-untested-keys`). They go with
+  T11, as tests. Reviewed boundary for gentle-ai: `b75cf9f`.
+- 2026-10-06: T10 written by a delegated writer, test first. The row `remote-server` follows
+  `claude-account` in `bin/lib/stack.mjs`, with its state in the `claude` cell as that row has
+  it: `ok`, `down` (a gap), `unknown`, `n/a`. For every `js-harness-remote-<id>.cmd` the
+  manifest of the given home records, the launcher is read as recorded, its own `start` line
+  is parsed back (`launcherStart` in `bin/lib/remote.mjs`), and the server is located as
+  `remote status` does, from the state file and the process's identity; one snapshot of the
+  processes serves every launcher and is taken only when a state file names a process. One
+  server down makes the row `down`, whatever the others are. The fix is the launcher's own
+  command, `js-harness remote start --cwd <folder> --name <name>` and whatever else the
+  launcher carries, never `--at-login` or `--watchdog`, one for each server that is down;
+  one stopped on purpose says so. A launcher whose line does not read back whole is
+  `unknown`, not a guess. The digest and the TUI needed only `down` among the gap states.
+  `remoteId`, `readState`, `lookUpProcesses`, `whereabouts` and `locate` moved from
+  `bin/remote.mjs` to `bin/lib/remote.mjs`, so that `bin/lib/stack.mjs` imports no command
+  module. That import closed a cycle (`stack`, `lib/remote`, `codex-review`, `lib/codex-reviews`,
+  `lib/project`, `stack`) which held only because nothing crossed it at load, so the parent
+  moved `quoteWindowsArg` and `windowsCommandLine` to `bin/lib/windows-args.mjs`;
+  `bin/codex-review.mjs` exports them as before, and no module of `bin/lib` imports from
+  `bin` now (`rg -n "from '\.\./" bin/lib` finds nothing outside the tests). The parent also
+  added the row to the list of ids in `bin/js-harness.test.mjs:201`, outside the writer's
+  surface, which the new row had broken.
+  RED: `does not provide an export named 'isLoginLauncher'`; nine in `stack.test.mjs` (the
+  two lists of ids, and `Cannot read properties of undefined (reading 'installed')`); eight
+  in the digest, the TUI, `doctor` and the hook (`actual: 'ok'`, expected `'down claude'`; no
+  `Fix:` section); nine more for the options of the fix (actual `…--cwd D:\work\proj`,
+  expected `… --name phone --permission-mode acceptEdits --spawn worktree --home
+  D:\homes\alt`). Twenty mutations fail their tests, among them identity by pid alone, a
+  look-up with no pid named, the marker ignored, `unknown` outranking `down`. GREEN, run by
+  the parent after the move: 517 of 517 for `node --test bin/codex-review.test.mjs
+  bin/lib/remote.test.mjs bin/remote.test.mjs bin/js-harness.test.mjs bin/doctor.test.mjs
+  bin/doctor-hook.test.mjs bin/lib/stack.test.mjs bin/lib/digest.test.mjs bin/tui.test.mjs`.
+  Live, read-only, once: `node bin/js-harness.mjs doctor --offline` on this machine shows
+  `remote-server  n/a  ok  n/a  n/a  n/a` and no Fix line; the server is up.
+  What it costs: with a launcher recorded and a process named, `doctor` takes about 0.8 s
+  more (median of seven runs on a fixture home, 739 ms before and 1,548 ms after), nearly all
+  of it PowerShell starting and `Get-CimInstance Win32_Process`; asking for one pid was no
+  faster. With no launcher recorded it costs nothing. `doctor --hook` runs at every session
+  start, so this machine pays it there.
+  Left open: a recorded launcher whose file is gone is skipped, not `unknown`; the TUI's
+  refresh after each command pays the snapshot too; `bin/lib/windows-args.mjs` has no test
+  file of its own, its two functions are tested through `bin/codex-review.test.mjs`.
+- 2026-10-06: T10 is `3d5be01`; the gate passed. gentle-ai assessed `b75cf9f..3d5be01` as
+  medium risk, 1,070 lines, due by the slice budget, and its one lens, reliability, approved
+  it (lineage `review-ba9862847f928210`, acknowledged) with two SUGGESTIONs, neither taken:
+  see Follow-ups. Reviewed boundary for gentle-ai: `3d5be01`.
+- 2026-10-06: T11, inline, with the three tests the review of T9r asked for, written by a
+  delegated writer with no change to the code under them. `putOptionalRecordBack` and
+  `putTaskRecordBack` have four tests in `bin/lib/manifest.test.mjs` that run on any host,
+  one for each branch, and another project's record is as it was after each. A watchdog turn
+  whose note cannot be written (the log's path is a folder, or its folder is a file) still
+  answers its exit code and throws nothing. `watchdogTask` refuses a batch character in each
+  of the seven values a launcher holds, fourteen characters each, and none of those refusals
+  reads as one the launcher could carry. Every one was made to fail by a mutation of the line
+  it protects, restored after: `if (!record) return false` (`false !== true`), a rewrite that
+  still answers `false` (the bytes differ), `logNote` replaced by a bare append (`EISDIR`),
+  `^` dropped from `UNSAFE_IN_BATCH`, `home` skipped by `startCommandLine`. GREEN:
+  `node --test bin/lib/manifest.test.mjs` 70 of 70 (run again by the parent),
+  `node --test bin/lib/remote.test.mjs bin/remote.test.mjs` 169 of 169. The roadmap has the
+  reopening in the phase's row, three steps under Remote sessions and an entry in Next.
+- 2026-10-06: T11 is `935d505`; the gate passed, and gentle-ai assessed `3d5be01..935d505` as
+  medium risk, 267 lines, not due (`under_budget`).
+- 2026-10-06: the Codex record of the branch, decided by Sebastián range by range. Codex ran
+  seven times that day and two runs were recorded.
+  `9c9ed8e..9de8b1e` (T8): reviewed, nothing to act on.
+  `9de8b1e..7214308` (T8r, T9): a skip he chose, recorded from a detached worktree at
+  `7214308`, because `codex-review` records up to the `HEAD` it runs in. Two runs, 885 and
+  1,650 of 1,949 lines shown, three P2s between them, all fixed in T9r.
+  `7214308..b75cf9f` (T9r): reviewed from the same worktree moved to `b75cf9f`; "Static review
+  identified no actionable regressions introduced by this patch".
+  `b75cf9f..3d5be01` (T10): a skip he chose. One run showed 517 of 893 lines, found no defect
+  in them and stopped, saying the review "exceeded the repository's inline evidence budget,
+  and required delegation tools are unavailable": a rule of Codex's global instructions,
+  which `codex exec review` loads and cannot satisfy, as the follow-up of 2026-10-04 already
+  said. This is what stopped the runs over T9 as well.
+  `3d5be01..935d505` (T11): a skip he chose. Two runs reviewed the tests, found no defect,
+  and both showed 141 of 230 lines, never the diff of `docs/ROADMAP.md`; why is not known.
+  `node bin/check.mjs --push --remote origin --head 935d505` then answered `PASS codex-review
+  6 code commits since origin/main, all covered by a Codex review record`. The detached
+  worktree is removed. So of this branch's code, Codex reviewed T8 and T9r whole; T8r and T9
+  in part, twice; 517 of T10's 893 lines; and T11's tests. A separate task was proposed to him to make
+  `codex-review` able to finish a review of an ordinary commit.
+- 2026-10-06: the record of Codex is `1af821c`, a commit of documents only; the gate passed
+  and the push check passed again at that head.
+- 2026-10-06: delivery, decided by Sebastián: three pull requests stacked to `main`, cut at
+  commits the gate had already passed, with no history rewritten. The pre-push hook passed
+  for the three branches.
+  `jsaristi/js-harness#35`, `fix/remote-log-cap` to `main`: `9c9ed8e..4bb62bb`, the commits
+  `9de8b1e` and `4bb62bb` (T8, T8r), 786 changed lines: 479 of tests, 147 of this document,
+  160 of code.
+  `jsaristi/js-harness#36`, `feat/remote-watchdog-task` to `fix/remote-log-cap`:
+  `4bb62bb..b75cf9f`, the commits `7214308` and `b75cf9f` (T9, T9r), 2,501 changed lines:
+  1,430 of tests, 125 of this document, 946 of code.
+  `jsaristi/js-harness#37`, `fix/remote-watchdog` to `feat/remote-watchdog-task`:
+  `b75cf9f..` the head of the branch, the commits `3d5be01`, `935d505`, `1af821c` and this
+  record (T10, T11), 1,361 changed lines before this record: 787 of tests, 173 of documents,
+  401 of code.
+  Each is above the 400-line budget and says so as a size exception; the second cannot be
+  cut, T9 being one commit. They merge in that order, each on his word: when one merges and
+  its branch is deleted, the next is retargeted to `main` and shows only its own slice. The
+  repository has no CI: GitHub reports no check for any of the three, and all three are
+  mergeable.
 
 ## Follow-ups
-- `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
-  `bin/codex-review.mjs`, so a lib module depends on a command module; moving the two into
-  `bin/lib` is a small refactor outside T1's surface.
+- `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
+  `bin/codex-review.mjs`, so a lib module depended on a command module. Done with T10
+  (2026-10-06): the two are in `bin/lib/windows-args.mjs`.
 - A name with `& | < > ^ %` makes the `.cmd` quoting throw, which `supervise` would log and
   retry forever: T2 rejects such a name before starting.
 - T1 review suggestions (gentle-ai, advisory): `nextDelay` accepts a `minMs` above `maxMs`; the
@@ -862,6 +973,29 @@ the chain strategy is asked once, before the commit that crosses the budget.
   CLI), where there is nothing to compare.
 - Left open by T3s. `uninstall` still deletes the manifest after it kept a file it could
   not remove: the file is reported and the command fails, but it is not retried.
+- T10 review suggestions (gentle-ai, advisory), not taken. The row finds the state under the
+  home `doctor` was given, while the launcher's own `--home` is only repeated in the fix: if
+  the two differ, a server that runs is reported as down, and no test says which home wins
+  (`R3-launcher-home-not-used-for-state`). A recorded launcher whose file was deleted by hand
+  is skipped, so a home with only that one reads `n/a` and nothing says that no launcher
+  starts that server any more (`R3-missing-launcher-file-reads-as-na`).
+- Left open by T11's tests. If the function a command reports errors through throws itself,
+  the watchdog's note is skipped and `remoteMain` rejects; covering it needs a change to the
+  code. The test of a note that cannot be written is skipped off Windows, like every test of
+  `remoteMain` in that file.
+- The reviews do not fit a slice the size of T9. gentle-ai refused `9de8b1e..7214308` whole
+  (2,476 lines, `lens_context_budget_exceeded`) and Codex's recorder refused two runs over it
+  that showed 885 and 1,650 of 1,949 changed lines. A task forecast above about 1,500 lines
+  should be cut into commits a review can hold before it is written, not after. For Codex
+  the limit measured that day is lower: about 500 lines went through, 893 did not, because
+  Codex stops at the evidence budget of its global instructions.
+- `codex-review` cannot be told which commit a range ends at: it records up to `HEAD`. A
+  range that ends before it needs a detached worktree at that commit and `--cwd`, which is
+  how 2026-10-06's ranges were recorded. A `--head` would say it in one flag.
+- `doctor` takes about 0.8 s more on a machine with a login launcher recorded, at every
+  session start, for the one process snapshot that tells a process by its creation time.
+  Looking at the pid alone would cost nothing and could call a server up when another
+  program has taken its pid.
 - Left open by T3. At login the `.cmd` shows a console window for an instant, and a start
   that fails there is seen by nobody: its output goes to that window. The record matches by
   exact path string, so an `APPDATA` spelled in another letter case makes a second record
@@ -874,24 +1008,36 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-T8, then T9, T10 and T11, in that order, each closed by its own commit on
-`fix/remote-watchdog`, reviewed by gentle-ai and then by Codex. What a later session needs to
-know:
+T8 to T11 are written, and each code commit is approved by gentle-ai except T8r, which was
+under the budget and waited for a slice that proved too large to review whole. What is left
+is Sebastián's to ask for, in this order:
+
+- Done on 2026-10-06: the Codex record covers every code commit, three ranges of it by a
+  skip he chose (see Progress), and the push check passes. A commit added to this branch
+  after `935d505` needs its own record if it changes code.
+- The merge of the three pull requests, in order and each on his word: #35, then #36, then
+  #37 (see Progress for what each holds). After each merge the next one's base is checked to
+  be `main` and its diff to hold only its own slice.
+- Then, in `D:\js-harness` brought up to `main` (it was 19 commits behind on 2026-10-06):
+  `js-harness remote stop` and `js-harness remote start --at-login`. The stop ends the
+  sessions open through the server, so it is his to time; without it the running supervisor
+  keeps the old code and the log stays uncapped. The start registers the watchdog task, and
+  that first real task is the proof of the whole chain (task, `conhost`, `node`, a detached
+  supervisor), which throwaway tasks proved only in pieces. `remote status` then shows
+  `watchdog task: on`, and `doctor` the row `remote-server`.
+
+What a later session needs to know:
 
 - Work in `D:\js-harness-worktrees\remote-watchdog`. Never touch
   `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for `D:\js-harness`
-  without asking: Sebastián's open sessions run through that server.
-- The server for `D:\js-harness` runs the code of that checkout as it was when the
-  supervisor started. The log cap takes effect only once that server is restarted on the new
-  code, and the watchdog only once `remote start --at-login` is run there: both after this
-  branch is merged and that checkout is updated, and both are his to ask for.
+  without asking.
+- No scheduled task of js-harness is registered on this machine: the three probes used
+  throwaway tasks, each deleted, and no test can reach the real `schtasks`.
 - The login launcher is on on this machine: a `.cmd` in the Startup folder, recorded in
   `~/.js-harness/manifest.json`, pinned to `C:\nvm4w\nodejs\node.exe` and to
-  `D:\js-harness\bin\remote.mjs`.
+  `D:\js-harness\bin\remote.mjs`. The watchdog task will pin the same two paths.
 - A session opened from the phone through the server works in `D:\js-harness` itself
   (`--spawn same-dir`), the same folder as a desktop session there.
-- Delivery: the chain strategy he chose for this feature stands, stacked to `main`; the
-  slices are drawn when the pull requests are opened, which is his decision.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three

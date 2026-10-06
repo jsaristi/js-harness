@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, resolveLatestVersions } from './doctor.mjs';
 import { readCache, writeCache } from './lib/cache.mjs';
+import { recordOptionalFile } from './lib/manifest.mjs';
+import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 
 // T2 introduces a real default `fetch` for latest-version lookups. Every test below that does not
 // specifically exercise the network path injects this instead, so the suite never depends on
@@ -126,7 +128,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
   }
 });
 
-test('doctorMain --json prints a parseable array with the six tool ids, then the account check, and upToDate unknown (or n/a where there is no version to compare)', async () => {
+test('doctorMain --json prints a parseable array with the six tool ids, then the two checks, and upToDate unknown (or n/a where there is no version to compare)', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
@@ -139,13 +141,13 @@ test('doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
-      // except hosted context7 and the account check, which have no version of their own to compare
+      // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead.
-      assert.equal(row.upToDate, ['context7', 'claude-account'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'claude-account', 'remote-server'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -442,8 +444,9 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-1), accountLine('ok'), output);
-    assert.equal(lines.length, 8, 'the header, the six tools and the account check');
+    assert.equal(lines.at(-2), accountLine('ok'), output);
+    assert.equal(lines.at(-1), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.length, 9, 'the header, the six tools and the two checks');
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -537,6 +540,120 @@ test('the account check has no latest version: it is never looked up, and never 
     assert.deepEqual(urls, []);
     assert.equal(readCache(home).latest.checkedAt, checkedAt);
     assert.equal(JSON.parse(output).find((r) => r.id === 'claude-account').upToDate, 'n/a');
+    assert.equal(JSON.parse(output).find((r) => r.id === 'remote-server').upToDate, 'n/a', 'nor has the remote server check');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- the remote server check: a recorded login launcher whose server is not running is a gap ---
+
+const remoteLine = (state) =>
+  'remote-server'.padEnd(16) + 'n/a'.padEnd(10) + state.padEnd(10) + 'n/a'.padEnd(10) + 'n/a'.padEnd(10) + 'n/a';
+const SUPERVISOR = { pid: 4242, startedAt: 1_759_700_000_000 };
+/** Project folders are only named: the check reads the launcher and the state file, never the project. */
+const PROJ = 'D:\\work\\proj';
+const SPACED_PROJ = 'D:\\my work\\other proj';
+
+/** What `remote start --at-login` leaves under `home` for the project at `root`: the launcher (in a folder of the
+ * test's, recorded by its path in the machine manifest), the state file when `state` is given, and the marker of
+ * a `remote stop` when `stopped`. */
+function seedLauncher(home, root, { state, stopped = false } = {}) {
+  const id = remoteId(root, 'win32');
+  const launcher = path.join(home, 'Startup', launcherFileName(id));
+  const content = loginLauncher({ node: 'C:\\node\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root, name: 'proj' });
+  fs.mkdirSync(path.dirname(launcher), { recursive: true });
+  fs.writeFileSync(launcher, content);
+  recordOptionalFile(home, launcher, content);
+  const files = remoteFiles(home, id);
+  if (state) writeJson(files.statePath, state);
+  if (stopped) {
+    fs.mkdirSync(path.dirname(files.stoppedPath), { recursive: true });
+    fs.writeFileSync(files.stoppedPath, 'stopped on purpose\n');
+  }
+}
+
+test('doctorMain reports a recorded launcher whose server is down as a gap whose fix starts it, in the table, under Fix and in --json', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    seedLauncher(home, PROJ);
+
+    const text = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.equal(text.code, 0);
+    assert.equal(text.output.split('\n').filter(Boolean).at(8), remoteLine('down'), text.output);
+    assert.match(text.output, /\nFix:\n  remote-server \(claude\): js-harness remote start --cwd D:\\work\\proj --name proj\n$/, 'the only gap of this home');
+
+    const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, deps);
+    assert.deepEqual(JSON.parse(json.output).at(-1), {
+      id: 'remote-server',
+      version: null,
+      installed: 'n/a',
+      claude: 'down',
+      codex: 'n/a',
+      project: 'n/a',
+      upToDate: 'n/a',
+      fix: { claude: 'js-harness remote start --cwd D:\\work\\proj --name proj' },
+      gaps: [{ dimension: 'claude', state: 'down', fix: 'js-harness remote start --cwd D:\\work\\proj --name proj' }],
+    });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain lists one start command for each server that is down, and says which was stopped on purpose', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    seedLauncher(home, PROJ, { stopped: true });
+    seedLauncher(home, SPACED_PROJ);
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+
+    assert.ok(output.split('\n').includes(remoteLine('down')), output);
+    assert.ok(
+      output.endsWith(
+        '\nFix:\n  remote-server (claude):\n' +
+          '    js-harness remote start --cwd D:\\work\\proj --name proj (stopped on purpose with js-harness remote stop, so the watchdog leaves it down)\n' +
+          '    js-harness remote start --cwd "D:\\my work\\other proj" --name proj\n',
+      ),
+      output,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the remote server check ok while the recorded supervisor runs, and unknown, with no fix, when the processes cannot be listed', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    seedLauncher(home, PROJ, { state: SUPERVISOR });
+    const listing = (processes) => (cmd, args, opts) => (cmd === 'powershell'
+      ? { status: 0, stdout: `4\t0\t1\tSystem\r\n${processes.map(([pid, createdAt]) => `${pid}\t4\t${createdAt}\tnode.exe\r\n`).join('')}`, stderr: '' }
+      : deps.spawn(cmd, args, opts));
+    const argv = ['--home', home, '--cwd', project];
+
+    const running = await runDoctor(argv, {}, { ...deps, spawn: listing([[SUPERVISOR.pid, SUPERVISOR.startedAt]]) });
+    assert.ok(running.output.split('\n').includes(remoteLine('ok')), running.output);
+    assert.doesNotMatch(running.output, /\nFix:/);
+
+    // The same pid, created at another time, is another program: the supervisor is gone.
+    const reused = await runDoctor(argv, {}, { ...deps, spawn: listing([[SUPERVISOR.pid, SUPERVISOR.startedAt + 60_000]]) });
+    assert.ok(reused.output.split('\n').includes(remoteLine('down')), reused.output);
+
+    // The fixture's own spawn knows no PowerShell: the look fails, and nothing is claimed.
+    const unlisted = await runDoctor(argv, {}, deps);
+    assert.ok(unlisted.output.split('\n').includes(remoteLine('unknown')), unlisted.output);
+    assert.doesNotMatch(unlisted.output, /\nFix:/, 'unknown is not a gap');
+    const json = await runDoctor([...argv, '--json'], {}, deps);
+    assert.deepEqual(JSON.parse(json.output).at(-1).gaps, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

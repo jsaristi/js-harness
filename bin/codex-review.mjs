@@ -10,6 +10,7 @@
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
 const USAGE = 'Usage: js-harness codex-review --base <rev> [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
@@ -80,19 +81,9 @@ export function childEnv(env, platform) {
   return out;
 }
 
-/** One argument of a Windows command line run through `cmd.exe /s /c`, quoted for the C runtime that
- * parses it: double quotes, backslashes before a quote doubled, the quote escaped. Throws on what
- * cmd.exe itself would act on; none of Codex's arguments contain any of it. */
-export function quoteWindowsArg(arg) {
-  if (/[&|<>^%\r\n]/.test(arg)) throw new Error(`Cannot pass ${JSON.stringify(arg)} through cmd.exe safely.`);
-  if (/^[\w.,:=@+/\\-]+$/.test(arg)) return arg;
-  return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
-}
-
-/** `command` and its arguments as the one line `cmd.exe` gets. */
-export function windowsCommandLine(command, args) {
-  return [command, ...args.map(quoteWindowsArg)].join(' ');
-}
+// How an argument is quoted for `cmd.exe`, and the line the arguments make: none of Codex's arguments holds what
+// `quoteWindowsArg` refuses. Exported from here as before, for this command's tests.
+export { quoteWindowsArg, windowsCommandLine };
 
 /** One line of a diff or of a command's output, comparable across shells: PowerShell 5.1 re-encodes
  * non-ASCII text, so only printable ASCII is kept (which also drops `\r` and tabs), and trailing

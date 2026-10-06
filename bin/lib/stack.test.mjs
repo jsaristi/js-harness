@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tools, checks, resolveProjectRoot, probeTool, probeStack } from './stack.mjs';
+import { recordOptionalFile } from './manifest.mjs';
+import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './remote.mjs';
 
 function makeTmpHome(prefix = 'js-harness-stack-home-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -1289,7 +1291,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex-plugin', 'claude-account', 'remote-server'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1332,9 +1334,9 @@ function accountState(seed, platform = 'win32') {
   }
 }
 
-test('checks carries the Claude account check, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['claude-account']);
-  assert.equal(tools.some((tool) => tool.id === 'claude-account'), false);
+test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
+  assert.deepEqual(checks.map((check) => check.id), ['claude-account', 'remote-server']);
+  assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
 });
 
 test('claude-account is ok when the CLI and the desktop app name the same account, on Windows and on macOS', () => {
@@ -1422,4 +1424,222 @@ test('the claude-account row has only a claude cell, the sign-in command as its 
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// --- the remote server check: the server of every recorded login launcher is running ---
+
+const REMOTE_CHECK = checks.find((check) => check.id === 'remote-server');
+const STARTED_AT = 1_759_700_000_000;
+/** Project folders are only ever named here, never opened: the check reads the launcher, not the project. */
+const PROJ = 'D:\\work\\proj';
+const OTHER_PROJ = 'D:\\my work\\other proj';
+
+/** What `remote start --at-login` leaves for the project at `root`, under `home`: the launcher, in a folder of the
+ * test's own (the machine manifest names it by its absolute path, which is all the check finds it by), and its
+ * record. `state` is the state file's content (an object, or text as it is; none when omitted) and `stopped`
+ * leaves the marker of a `remote stop`. Returns the paths. */
+function seedLauncher(home, root, { state, stopped = false, text, options } = {}) {
+  const files = remoteFiles(home, remoteId(root, 'win32'));
+  const launcher = path.join(home, 'Startup', launcherFileName(remoteId(root, 'win32')));
+  const content = text ?? loginLauncher({ node: 'C:\\node\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root, name: 'proj', ...options });
+  fs.mkdirSync(path.dirname(launcher), { recursive: true });
+  fs.writeFileSync(launcher, content);
+  recordOptionalFile(home, launcher, content);
+  fs.mkdirSync(path.dirname(files.statePath), { recursive: true });
+  if (state !== undefined) fs.writeFileSync(files.statePath, typeof state === 'string' ? state : JSON.stringify(state));
+  if (stopped) fs.writeFileSync(files.stoppedPath, 'stopped on purpose\n');
+  return { ...files, launcher };
+}
+
+/** A spawn that knows one program, the process snapshot: PowerShell lists `System` and then `processes`
+ * (`[pid, createdAt]`, `null` for a creation time Windows does not give), in the rows `takeSnapshot` reads.
+ * Every look's options land in `looks`. Anything else run is a failure: the check runs nothing but that. */
+function fakeProcesses(processes, looks = []) {
+  return (cmd, _args, options) => {
+    assert.equal(cmd, 'powershell', 'the remote server check runs nothing but the process snapshot');
+    looks.push(options);
+    const rows = [[4, 1], ...processes].map(([pid, createdAt]) => `${pid}\t0\t${createdAt ?? ''}\tnode.exe`);
+    return { status: 0, stdout: `${rows.join('\r\n')}\r\n`, stderr: '' };
+  };
+}
+
+/** The check's row for a home seeded by `seed`, with `spawn` as the only way to look at the processes. Without
+ * one, nothing may be run at all: no recorded state file names a process, so there is none to look up. */
+function remoteRow(seed, spawn) {
+  const home = makeTmpHome('js-harness-stack-remote-');
+  const ran = [];
+  const runsNothing = (cmd) => {
+    ran.push(cmd);
+    return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
+  };
+  try {
+    seed(home);
+    const row = probeTool(REMOTE_CHECK, { home, project: home, spawn: spawn ?? runsNothing, platform: 'win32' });
+    assert.deepEqual(ran, [], 'nothing is run when no recorded state file names a process');
+    return row;
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('remote-server is n/a, and looks at no process, when the machine manifest records no login launcher', () => {
+  const cases = {
+    // This machine may have a launcher of its own recorded: a temp home never sees it, nor its state.
+    'an empty home': () => {},
+    'a manifest with no optional file': (home) => writeJson(path.join(home, '.js-harness', 'manifest.json'), { version: '1.0.0', files: [], entries: [] }),
+    'an optional file that is not a launcher': (home) => recordOptionalFile(home, path.join(home, 'Startup', 'notes.cmd'), 'x'),
+    'a launcher whose file is gone: nothing starts that server at login': (home) => fs.rmSync(seedLauncher(home, PROJ).launcher),
+  };
+  for (const [what, seed] of Object.entries(cases)) {
+    assert.deepEqual(
+      remoteRow(seed),
+      { id: 'remote-server', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'unknown', fix: {} },
+      what,
+    );
+  }
+});
+
+test('remote-server is ok when every recorded launcher\'s server runs, told by pid and creation time from one look', () => {
+  const looks = [];
+  const row = remoteRow((home) => {
+    seedLauncher(home, PROJ, { state: { pid: 4242, startedAt: STARTED_AT } });
+    seedLauncher(home, OTHER_PROJ, { state: { pid: 4343, startedAt: STARTED_AT + 9 } });
+  }, fakeProcesses([[4242, STARTED_AT], [4343, STARTED_AT + 9]], looks));
+  assert.equal(row.claude, 'ok');
+  assert.deepEqual(row.fix, {});
+  assert.equal(looks.length, 1, 'one snapshot serves every launcher');
+  assert.equal(looks[0].timeout, 5000, 'bounded like every other probe: doctor runs at each session start');
+});
+
+test('remote-server is down, a gap whose fix starts that server, when a recorded launcher\'s server is not running', () => {
+  const fix = { claude: 'js-harness remote start --cwd D:\\work\\proj --name proj' };
+  // Nothing recorded: no supervisor was started, or a stop removed its record. No process is looked up for that.
+  assert.deepEqual(
+    remoteRow((home) => seedLauncher(home, PROJ)),
+    { id: 'remote-server', version: null, installed: 'n/a', claude: 'down', codex: 'n/a', project: 'n/a', upToDate: 'unknown', fix },
+  );
+  const recorded = (home) => seedLauncher(home, PROJ, { state: { pid: 4242, startedAt: STARTED_AT } });
+  // The supervisor died: nothing has its pid.
+  assert.deepEqual(remoteRow(recorded, fakeProcesses([])).fix, fix);
+  assert.equal(remoteRow(recorded, fakeProcesses([])).claude, 'down');
+  // Its pid went to another program: a pid alone is never taken for the supervisor.
+  assert.equal(remoteRow(recorded, fakeProcesses([[4242, STARTED_AT + 60_000]])).claude, 'down');
+});
+
+test('remote-server reads the state file under the home it is given, for the folder the launcher itself names', () => {
+  const home = makeTmpHome('js-harness-stack-remote-');
+  const elsewhere = makeTmpHome('js-harness-stack-remote-');
+  try {
+    // The launcher starts OTHER_PROJ, whatever its file is called; a record for PROJ, and one under another home, are not its server's.
+    const { launcher } = seedLauncher(home, PROJ, { state: { pid: 4242, startedAt: STARTED_AT }, text: loginLauncher({ node: 'C:\\node\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root: OTHER_PROJ, name: 'other' }) });
+    const other = remoteFiles(elsewhere, remoteId(OTHER_PROJ, 'win32'));
+    writeJson(other.statePath, { pid: 4242, startedAt: STARTED_AT });
+    const deps = { home, project: home, spawn: fakeProcesses([[4242, STARTED_AT]]), platform: 'win32' };
+    assert.equal(probeTool(REMOTE_CHECK, deps).claude, 'down');
+    assert.deepEqual(probeTool(REMOTE_CHECK, deps).fix, { claude: 'js-harness remote start --cwd "D:\\my work\\other proj" --name other' }, 'the folder is quoted where a command line needs it');
+
+    fs.copyFileSync(other.statePath, remoteFiles(home, remoteId(OTHER_PROJ, 'win32')).statePath);
+    assert.equal(probeTool(REMOTE_CHECK, deps).claude, 'ok');
+    assert.ok(fs.existsSync(launcher));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test('remote-server says a server was stopped on purpose, which is why the watchdog left it down, and names every server that is down', () => {
+  const stoppedFix = 'js-harness remote start --cwd D:\\work\\proj --name proj (stopped on purpose with js-harness remote stop, so the watchdog leaves it down)';
+  assert.deepEqual(remoteRow((home) => seedLauncher(home, PROJ, { stopped: true })).fix, { claude: stoppedFix });
+  // The marker of a stop says nothing of a server that runs: a start removes it, and a stale one is not a gap.
+  const running = remoteRow((home) => seedLauncher(home, PROJ, { state: { pid: 4242, startedAt: STARTED_AT }, stopped: true }), fakeProcesses([[4242, STARTED_AT]]));
+  assert.equal(running.claude, 'ok');
+
+  const several = remoteRow((home) => {
+    seedLauncher(home, PROJ, { stopped: true });
+    seedLauncher(home, OTHER_PROJ, { state: { pid: 4343, startedAt: STARTED_AT } });
+    seedLauncher(home, 'D:\\work\\third', { state: { pid: 4242, startedAt: STARTED_AT } });
+  }, fakeProcesses([[4242, STARTED_AT]]));
+  assert.equal(several.claude, 'down');
+  assert.deepEqual(several.fix, { claude: [stoppedFix, 'js-harness remote start --cwd "D:\\my work\\other proj" --name proj'] }, 'one command for each server that is down, none for the one that runs');
+});
+
+test('remote-server\'s fix starts the server as its launcher does: every option of the launcher\'s own line, in its order', () => {
+  const fixOf = (root, options) => remoteRow((home) => seedLauncher(home, root, { options })).fix.claude;
+  // A name that is not the folder's, a permission mode, a spawn mode and a home: a bare `start --cwd` would bring
+  // the server back under the folder's name and the user's own modes, its state under another home.
+  assert.equal(
+    fixOf(PROJ, { name: 'phone', permissionMode: 'acceptEdits', spawnMode: 'worktree', home: 'D:\\homes\\alt' }),
+    'js-harness remote start --cwd D:\\work\\proj --name phone --permission-mode acceptEdits --spawn worktree --home D:\\homes\\alt',
+  );
+  assert.equal(fixOf(PROJ, { name: 'phone' }), 'js-harness remote start --cwd D:\\work\\proj --name phone', 'only what the launcher holds: no option is made up');
+  assert.equal(
+    fixOf(OTHER_PROJ, { name: 'my phone', home: 'D:\\other home' }),
+    'js-harness remote start --cwd "D:\\my work\\other proj" --name "my phone" --home "D:\\other home"',
+    'a value with a space is quoted, as the launcher quotes it',
+  );
+  for (const command of [fixOf(PROJ, { name: 'phone', spawnMode: 'session' }), fixOf(PROJ, { name: 'phone' })]) {
+    assert.doesNotMatch(command, /--at-login|--watchdog/);
+  }
+});
+
+test('remote-server is unknown, with no fix, for a launcher whose start line cannot be read back whole: a fix is never a guess', () => {
+  const line = (rest) => `@echo off\r\n"C:\\node\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd D:\\work\\proj ${rest}\r\n`;
+  // Each of these servers is down (no state file): with a line read whole it would be a gap with a command.
+  assert.equal(remoteRow((home) => seedLauncher(home, PROJ, { text: line('--name proj') })).claude, 'down');
+  for (const rest of ['--name proj --verbose', '--name', '--name proj extra', '--name "my phone']) {
+    const row = remoteRow((home) => seedLauncher(home, PROJ, { text: line(rest) }));
+    assert.equal(row.claude, 'unknown', rest);
+    assert.deepEqual(row.fix, {}, rest);
+  }
+  // The flag the scheduled task adds says how the start is run, not which server: it is read, and left out.
+  assert.equal(remoteRow((home) => seedLauncher(home, PROJ, { text: line('--name proj --watchdog') })).fix.claude, 'js-harness remote start --cwd D:\\work\\proj --name proj');
+});
+
+test('remote-server names a server once when its launcher is recorded under two spellings of its path', () => {
+  const row = remoteRow((home) => {
+    const { launcher } = seedLauncher(home, PROJ);
+    // The record matches by the exact path string, so another spelling of one path is a second record.
+    recordOptionalFile(home, `${path.dirname(launcher)}${path.sep}.${path.sep}${path.basename(launcher)}`, 'x');
+  });
+  assert.equal(row.claude, 'down');
+  assert.deepEqual(row.fix, { claude: 'js-harness remote start --cwd D:\\work\\proj --name proj' });
+});
+
+test('remote-server is unknown, never a gap, when it cannot tell whether a recorded launcher\'s server runs', () => {
+  const recorded = (home) => seedLauncher(home, PROJ, { state: { pid: 4242, startedAt: STARTED_AT } });
+  const cases = {
+    'the manifest is not JSON': [(home) => {
+      fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), '{ nope');
+    }],
+    'the launcher cannot be read (a folder is there)': [(home) => {
+      const { launcher } = seedLauncher(home, PROJ);
+      fs.rmSync(launcher);
+      fs.mkdirSync(launcher);
+    }],
+    'the launcher starts no server this can read': [(home) => seedLauncher(home, PROJ, { text: '@echo off\r\nnotepad.exe\r\n' })],
+    'the state file is not a record of a supervisor': [(home) => seedLauncher(home, PROJ, { state: '{ nope' })],
+    'the processes could not be listed': [recorded, fakeSpawnMissing()],
+    'the snapshot was killed after its timeout': [recorded, () => ({ status: null, signal: 'SIGTERM', error: Object.assign(new Error('spawnSync powershell ETIMEDOUT'), { code: 'ETIMEDOUT' }), stdout: '', stderr: '' })],
+    'the look-up itself throws': [recorded, () => {
+      throw new Error('spawn failed');
+    }],
+    'a process has the pid and no creation time': [recorded, fakeProcesses([[4242, null]])],
+  };
+  for (const [what, [seed, spawn]] of Object.entries(cases)) {
+    const row = remoteRow(seed, spawn);
+    assert.equal(row.claude, 'unknown', what);
+    assert.deepEqual(row.fix, {}, what);
+  }
+});
+
+test('remote-server: one server down is the gap whatever the others are, and one that cannot be told hides no running one as ok', () => {
+  const mixed = (others) => remoteRow((home) => {
+    seedLauncher(home, PROJ, { state: '{ nope' });
+    others(home);
+  }, fakeProcesses([[4242, STARTED_AT]]));
+  assert.equal(mixed((home) => seedLauncher(home, OTHER_PROJ, { state: { pid: 4242, startedAt: STARTED_AT } })).claude, 'unknown');
+  const down = mixed((home) => seedLauncher(home, OTHER_PROJ));
+  assert.equal(down.claude, 'down');
+  assert.deepEqual(down.fix, { claude: 'js-harness remote start --cwd "D:\\my work\\other proj" --name proj' }, 'only the server known to be down has a command');
 });

@@ -15,19 +15,21 @@
 // `uninstall` remove exactly those. A `stop` leaves a marker beside the state file, and the watchdog (`start
 // --watchdog`) starts nothing while it is there: a server stopped on purpose stays stopped until the next start.
 import { spawn as spawnChild } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { quoteWindowsArg, windowsCommandLine } from './codex-review.mjs';
+import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import {
   forgetOptionalFile, forgetScheduledTask, lookAtScheduledTask, putOptionalRecordBack, putTaskRecordBack, readManifest, recordOptionalFile,
   recordScheduledTask, removeScheduledTask, runSchtasks, sameTaskAction, sameTaskName, scheduledTaskAction, sha256, windowsSystem32,
 } from './lib/manifest.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { killProcesses, killTree, selectDescendants, takeSnapshot } from './lib/process-tree.mjs';
-import { SPAWN_MODES, cleanServerEnv, logNote, loginLauncher, readPersistentEnv, resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
+import {
+  SPAWN_MODES, cleanServerEnv, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, readPersistentEnv, readState, remoteFiles, remoteId,
+  resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
+} from './lib/remote.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
@@ -92,15 +94,8 @@ function parseArgs(argv, env) {
   };
 }
 
-/** A stable, filename-safe id for the project at `root`: its folder name, then a short hash of the absolute path,
- * so two projects never share one. Both are case-folded on Windows, where `D:/a` from git and `d:\A` are one folder. */
-export function remoteId(root, platform = process.platform) {
-  const paths = platform === 'win32' ? path.win32 : path.posix;
-  const resolved = paths.resolve(root);
-  const absolute = platform === 'win32' ? resolved.toLowerCase() : resolved;
-  const slug = paths.basename(absolute).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
-  return `${slug}-${createHash('sha256').update(absolute).digest('hex').slice(0, 12)}`;
-}
+// The project's id is `remoteId` of `lib/remote.mjs`, exported from here too, where it always was.
+export { remoteId };
 
 // ---- the server's log ------------------------------------------------------------------------------------------------
 
@@ -170,58 +165,8 @@ export function logTail(logPath) {
 
 // ---- the state file and the process it names -------------------------------------------------------------------------
 
-/** The recorded supervisor, or `null` when there is no state file; `{ unreadable: why }` when there is one this
- * command cannot use. A file that is there was written for a supervisor, and not being able to read it does not
- * prove that supervisor exited: only a missing file says nothing was recorded. */
-function readState(file) {
-  let text;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch (err) {
-    if (err.code === 'ENOENT') return null;
-    return { unreadable: `it could not be read (${err.message})` };
-  }
-  try {
-    const state = JSON.parse(text);
-    if (Number.isInteger(state?.pid) && Number.isInteger(state?.startedAt)) return state;
-    return { unreadable: 'it is not a record of a supervisor: it names no pid and creation time' };
-  } catch (err) {
-    return { unreadable: `it is not a record of a supervisor (${err.message})` };
-  }
-}
-
-/** The rows one snapshot has for `pids`: `[{ pid, createdAt }]`, `createdAt` `null` for a process whose creation
- * time Windows does not give: it runs, and nothing says which process it is. A pid with no row is not running.
- * Throws when the snapshot could not be taken. */
-function lookUpProcesses(pids, look = takeSnapshot) {
-  const wanted = new Set(pids);
-  return look().filter((entry) => wanted.has(entry.pid)).map(({ pid, createdAt }) => ({ pid, createdAt }));
-}
-
-/** What became of the process `state` records, from one look: `running` when its pid is still the process
- * created at the recorded time; `gone` when nothing has that pid, or what has it was created at another time (a
- * pid alone proves nothing on Windows, which hands it to the next process quickly); `unknown` when a process has
- * the pid and its creation time cannot be read, so it may be the recorded one. Throws when the look failed. */
-function whereabouts(state, identify) {
-  const entry = identify([state.pid]).find(({ pid }) => pid === state.pid);
-  if (!entry) return 'gone';
-  if (entry.createdAt === state.startedAt) return 'running';
-  return Number.isInteger(entry.createdAt) ? 'gone' : 'unknown';
-}
-
-/** `whereabouts` for every subcommand, as `{ found, why }`: no state file means nothing was recorded (`gone`); a
- * state file that cannot be used, and a look that failed, count as `unknown`, and `why` then says what could not
- * be told. Only `gone` lets a subcommand act as if nothing were running. */
-function locate(state, identify) {
-  if (!state) return { found: 'gone' };
-  if (state.unreadable) return { found: 'unknown', why: `its state file is there and ${state.unreadable}, so a supervisor may be running that nothing else names` };
-  try {
-    const found = whereabouts(state, identify);
-    return { found, why: found === 'unknown' ? `a process has pid ${state.pid} and its creation time could not be read, so it may be the recorded supervisor or another program` : undefined };
-  } catch (err) {
-    return { found: 'unknown', why: `the processes could not be listed (${err.message}), so the supervisor recorded as pid ${state.pid} may still be running` };
-  }
-}
+// `readState`, `lookUpProcesses`, `whereabouts` and `locate` are those of `lib/remote.mjs`: `doctor` reads the same
+// record and decides by the same identity whether a launcher's server runs.
 
 /** How every answer of `unknown` ends. Running the command again does not help with a record that stays unknown
  * (a reused pid whose creation time cannot be read, a file that cannot be parsed), and the harness does not
@@ -452,7 +397,7 @@ function launcherLocation(env, id) {
   const appData = key === undefined ? '' : String(env[key]).trim();
   if (appData === '') return { why: 'APPDATA is not set, so the Windows Startup folder cannot be found' };
   const dir = path.resolve(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-  return { dir, file: path.join(dir, `js-harness-remote-${id}.cmd`) };
+  return { dir, file: path.join(dir, launcherFileName(id)) };
 }
 
 /** What is at the launcher's path and what the machine manifest records for it: `{ bytes, record, ours }`.
@@ -1205,11 +1150,7 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
 
   const root = path.normalize(topLevel); // git prints `D:/a`; the state file, the log and the cwd use `D:\a`
   const id = remoteId(root, platform);
-  const dir = path.join(opts.home, '.js-harness', 'remote');
-  const files = {
-    statePath: path.join(dir, `${id}.json`), logPath: path.join(dir, `${id}.log`), lockPath: path.join(dir, `${id}.lock`),
-    stoppedPath: path.join(dir, `${id}.stopped`), taskXmlPath: path.join(dir, `${id}.task.xml`),
-  };
+  const files = remoteFiles(opts.home, id);
   const context = { env, deps: resolved, log, error, root, id, home: opts.home, files, identify: resolved.identifyProcesses };
   if (!opts.watchdog) return runCommand(opts, context);
   // The watchdog's turn has nobody watching: the task runs it with no window, and what it prints goes nowhere.

@@ -13,11 +13,15 @@
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
 // `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder, and
 // `watchdogTask` and `watchdogTaskXml` are the scheduled task it registers beside it, which runs the same command.
+//
+// The last section is what `remote` and `doctor` both read, and so lives here and not in the command: a project's
+// id and files under the home, the record of its supervisor, and whether the process it names still runs.
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { quoteWindowsArg, windowsCommandLine } from '../codex-review.mjs';
-import { killTree } from './process-tree.mjs';
+import { killTree, takeSnapshot } from './process-tree.mjs';
+import { quoteWindowsArg, windowsCommandLine } from './windows-args.mjs';
 
 /** Whether a variable of that name may be one a Claude session injected into what it starts. */
 const tiesToSession = (name) => /^claude/i.test(name) || /^anthropic_base_url$/i.test(name);
@@ -145,6 +149,82 @@ function startCommandLine(options, more = []) {
   // The command is quoted whatever it holds: cmd.exe splits a bare command name at `,`, `;` and `=`.
   const quoted = quoteWindowsArg(node);
   return windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, args);
+}
+
+/** The file name of the login launcher of the project `id`, in the Startup folder. */
+export const launcherFileName = (id) => `js-harness-remote-${id}.cmd`;
+
+/** Whether `file` is, by its name, a login launcher: what tells one from any other optional file the machine
+ * manifest records. The folder is not looked at, and either separator ends it. */
+export function isLoginLauncher(file) {
+  return typeof file === 'string' && /^js-harness-remote-.+\.cmd$/i.test(file.split(/[\\/]/).at(-1));
+}
+
+/** The arguments of one line as `startCommandLine` writes them: bare, or between double quotes, where the
+ * backslashes before the closing quote were doubled (`quoteWindowsArg`). No value of a launcher holds a quote
+ * (`UNSAFE_IN_BATCH`), so there is no escaped one to read back; `null` for a line that is not such arguments from
+ * end to end (a quote that never closes, or one inside a word), since half a line read is a line guessed. */
+function launcherArgs(line) {
+  const word = /\s*(?:"([^"]*)"|([^\s"]+))(?=\s|$)/y;
+  const args = [];
+  let end = 0;
+  for (let match = word.exec(line); match; match = word.exec(line)) {
+    args.push(match[2] ?? match[1].replace(/\\+$/, (run) => run.slice(run.length / 2)));
+    end = word.lastIndex;
+  }
+  return line.slice(end).trim() === '' ? args : null;
+}
+
+/** The flags of `start` that take a value: every one a launcher's line can hold (`startCommandLine`). */
+const START_VALUE_FLAGS = ['--cwd', '--name', '--permission-mode', '--spawn', '--home'];
+/** Its two that take none. They say how a start is run (by the scheduled task; writing the launcher itself), not
+ * which server it starts, so they are read and left out. */
+const START_BARE_FLAGS = ['--at-login', '--watchdog'];
+
+/** `words` as the options of one `start`, `['--cwd', root, '--name', name, ...]` in their order, or `null` when
+ * they are not that from end to end: a flag `start` does not take, a flag twice, a value that is missing, empty
+ * or itself a flag, a word that belongs to no flag, or no `--cwd`. */
+function startOptions(words) {
+  const args = [];
+  for (let i = 0; i < words.length; i++) {
+    const flag = words[i];
+    if (START_BARE_FLAGS.includes(flag)) continue;
+    const value = words[++i];
+    if (!START_VALUE_FLAGS.includes(flag) || args.includes(flag) || !value || value.startsWith('--')) return null;
+    args.push(flag, value);
+  }
+  return args.includes('--cwd') ? args : null;
+}
+
+/** The server the launcher with this `text` starts, read back from its own `start` command as `loginLauncher`
+ * wrote it: `{ root, args }`, the project folder (its `--cwd`) and every option of that line with its value, in
+ * the line's order, so the same server can be started again by hand. `null` when no line of it is a `start`
+ * that reads back whole (`startOptions`): nothing is made of half a command. A comment is not read, so nothing
+ * is taken from what a launcher says of itself. */
+export function launcherStart(text) {
+  for (const line of String(text).split(/\r?\n/)) {
+    if (/^\s*@?rem\b/i.test(line)) continue;
+    const words = launcherArgs(line) ?? [];
+    // The subcommand is the first `start` of the line; a later one is a value (a server named `start`).
+    const at = words.indexOf('start');
+    const args = at === -1 ? null : startOptions(words.slice(at + 1));
+    if (args) return { root: args[args.indexOf('--cwd') + 1], args };
+  }
+  return null;
+}
+
+/** The command that starts a server with the options `args` (those of `launcherStart`), as a report shows it for
+ * a person to run: each value quoted as the launcher quotes it. Never throws: a value that no command line
+ * carries safely (the launcher refuses to hold one) is shown between quotes all the same. */
+export function remoteStartCommand(args) {
+  const shown = args.map((arg) => {
+    try {
+      return quoteWindowsArg(arg);
+    } catch {
+      return `"${arg}"`;
+    }
+  });
+  return ['js-harness remote start', ...shown].join(' ');
 }
 
 /** What a scheduled task cannot carry, beyond what the launcher already refuses (a `%`, which Task Scheduler
@@ -422,7 +502,7 @@ function repeat(run, ms) {
   return () => clearInterval(timer);
 }
 
-/** Starts the server: a `.cmd` shim as one command line through the shell (the quoting of `codex-review`), anything
+/** Starts the server: a `.cmd` shim as one command line through the shell (the quoting of `windows-args.mjs`), anything
  * else directly. */
 function launch(spawn, claude, args, options) {
   return claude.shell
@@ -528,4 +608,79 @@ export async function supervise({
     await sleep(delay, signal);
   }
   note('stopped');
+}
+
+// ---- a project's files, the state file and the process it names ------------------------------------------------------
+
+/** A stable, filename-safe id for the project at `root`: its folder name, then a short hash of the absolute path,
+ * so two projects never share one. Both are case-folded on Windows, where `D:/a` from git and `d:\A` are one folder. */
+export function remoteId(root, platform = process.platform) {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  const resolved = paths.resolve(root);
+  const absolute = platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const slug = paths.basename(absolute).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
+  return `${slug}-${createHash('sha256').update(absolute).digest('hex').slice(0, 12)}`;
+}
+
+/** What the project `id` keeps under `home`, all in one folder: the record of its supervisor, the server's log,
+ * the lock of a start or a stop, the marker a stop leaves, and the file a scheduled task is registered from. */
+export function remoteFiles(home, id) {
+  const dir = path.join(home, '.js-harness', 'remote');
+  return {
+    statePath: path.join(dir, `${id}.json`), logPath: path.join(dir, `${id}.log`), lockPath: path.join(dir, `${id}.lock`),
+    stoppedPath: path.join(dir, `${id}.stopped`), taskXmlPath: path.join(dir, `${id}.task.xml`),
+  };
+}
+
+/** The recorded supervisor, or `null` when there is no state file; `{ unreadable: why }` when there is one this
+ * command cannot use. A file that is there was written for a supervisor, and not being able to read it does not
+ * prove that supervisor exited: only a missing file says nothing was recorded. */
+export function readState(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    return { unreadable: `it could not be read (${err.message})` };
+  }
+  try {
+    const state = JSON.parse(text);
+    if (Number.isInteger(state?.pid) && Number.isInteger(state?.startedAt)) return state;
+    return { unreadable: 'it is not a record of a supervisor: it names no pid and creation time' };
+  } catch (err) {
+    return { unreadable: `it is not a record of a supervisor (${err.message})` };
+  }
+}
+
+/** The rows one snapshot has for `pids`: `[{ pid, createdAt }]`, `createdAt` `null` for a process whose creation
+ * time Windows does not give: it runs, and nothing says which process it is. A pid with no row is not running.
+ * Throws when the snapshot could not be taken. */
+export function lookUpProcesses(pids, look = takeSnapshot) {
+  const wanted = new Set(pids);
+  return look().filter((entry) => wanted.has(entry.pid)).map(({ pid, createdAt }) => ({ pid, createdAt }));
+}
+
+/** What became of the process `state` records, from one look: `running` when its pid is still the process
+ * created at the recorded time; `gone` when nothing has that pid, or what has it was created at another time (a
+ * pid alone proves nothing on Windows, which hands it to the next process quickly); `unknown` when a process has
+ * the pid and its creation time cannot be read, so it may be the recorded one. Throws when the look failed. */
+export function whereabouts(state, identify) {
+  const entry = identify([state.pid]).find(({ pid }) => pid === state.pid);
+  if (!entry) return 'gone';
+  if (entry.createdAt === state.startedAt) return 'running';
+  return Number.isInteger(entry.createdAt) ? 'gone' : 'unknown';
+}
+
+/** `whereabouts` for every subcommand, and for `doctor`, as `{ found, why }`: no state file means nothing was
+ * recorded (`gone`); a state file that cannot be used, and a look that failed, count as `unknown`, and `why` then
+ * says what could not be told. Only `gone` lets a subcommand act as if nothing were running. */
+export function locate(state, identify) {
+  if (!state) return { found: 'gone' };
+  if (state.unreadable) return { found: 'unknown', why: `its state file is there and ${state.unreadable}, so a supervisor may be running that nothing else names` };
+  try {
+    const found = whereabouts(state, identify);
+    return { found, why: found === 'unknown' ? `a process has pid ${state.pid} and its creation time could not be read, so it may be the recorded supervisor or another program` : undefined };
+  } catch (err) {
+    return { found: 'unknown', why: `the processes could not be listed (${err.message}), so the supervisor recorded as pid ${state.pid} may still be running` };
+  }
 }

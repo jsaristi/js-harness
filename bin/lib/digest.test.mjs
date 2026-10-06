@@ -35,8 +35,17 @@ test('gapList counts a mismatch cell as a gap, so the session hook notifies when
   assert.notEqual(gapDigest([account]), gapDigest([{ ...account, claude: 'ok' }]));
 });
 
+test('gapList counts a down cell as a gap, so the session hook notifies when a launcher\'s server is not running, and again once it is back', () => {
+  const server = { id: 'remote-server', installed: 'n/a', claude: 'down', codex: 'n/a', project: 'n/a', upToDate: 'n/a' };
+  assert.deepEqual(gapList([server]), [{ id: 'remote-server', dimension: 'claude', state: 'down' }]);
+  for (const state of ['ok', 'unknown', 'n/a']) {
+    assert.deepEqual(gapList([{ ...server, claude: state }]), [], state);
+    assert.notEqual(gapDigest([server]), gapDigest([{ ...server, claude: state }]), state);
+  }
+});
+
 test('GAP_STATES is the one list of what counts as a gap: every state in it is one, in every dimension', () => {
-  assert.deepEqual([...GAP_STATES].sort(), ['mismatch', 'missing', 'outdated', 'stale']);
+  assert.deepEqual([...GAP_STATES].sort(), ['down', 'mismatch', 'missing', 'outdated', 'stale']);
   for (const state of GAP_STATES) {
     for (const dimension of ['installed', 'claude', 'codex', 'project', 'upToDate']) {
       assert.deepEqual(gapList([row({ id: 'x', [dimension]: state })]), [{ id: 'x', dimension, state }]);

@@ -2364,6 +2364,36 @@ test('a watchdog turn that cannot start the server says why in the project\'s lo
   assert.equal(logOf(home, root), '');
 });
 
+test('a watchdog turn whose note cannot be written still ends with its exit code and throws nothing: the log is best effort, and the reason was said', { skip: WINDOWS_ONLY }, async () => {
+  const argv = (root, home) => ['start', '--cwd', root, '--home', home, '--name', 'proj', '--watchdog'];
+  /** Two ways the log cannot be opened, each with why the turn fails and what shows that nothing was written. */
+  const blocked = {
+    // The start gets as far as looking for the CLI, which is not there; only the note has nowhere to go.
+    'the log path is a folder': {
+      block: ({ home, root }) => fs.mkdirSync(logPathOf(home, root), { recursive: true }),
+      reason: /claude.*PATH/,
+      untouched: ({ home, root }) => assert.deepEqual(fs.readdirSync(logPathOf(home, root)), []),
+    },
+    // Nothing can be written where the state is kept: the start fails on its lock, and the note fails after it.
+    'the folder of the log is a file': {
+      block: ({ home }) => { fs.mkdirSync(path.dirname(stateDir(home)), { recursive: true }); fs.writeFileSync(stateDir(home), ''); },
+      reason: /^js-harness remote start: /,
+      untouched: ({ home }) => assert.equal(fs.readFileSync(stateDir(home), 'utf8'), ''),
+    },
+  };
+  for (const [what, { block, reason, untouched }] of Object.entries(blocked)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const world = fakeWorld({ claude: null });
+    block({ home, root });
+    // A turn that threw here would reject, and fail the test: the task would end with node's own exit code and trace.
+    assert.equal(await remoteMain(argv(root, home), {}, world.deps), 1, what);
+    assert.match(world.err(), reason, what);
+    assert.equal(world.spawned.length, 0, what);
+    untouched({ home, root });
+  }
+});
+
 // ---- a plain stop stays stopped: the marker, and start --watchdog ------------------------------------------------------
 
 test('a stop leaves a marker beside the state file: start --watchdog then starts nothing and exits 0, and any other start removes it and starts', { skip: WINDOWS_ONLY }, async () => {

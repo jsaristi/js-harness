@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { doctorMain } from './doctor.mjs';
 import { readCache } from './lib/cache.mjs';
+import { recordOptionalFile } from './lib/manifest.mjs';
+import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-doctor-hook-home-'));
@@ -220,6 +222,56 @@ test('doctor --hook notifies once when the CLI and the desktop app are signed in
     const third = await runHook(argv, {}, deps);
     assert.equal(third.stdout, '');
     assert.equal(readCache(home).notified, '');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The remote server check: a recorded login launcher whose server is not running is a gap like any other.
+
+test('doctor --hook notifies once when a recorded launcher\'s server is down, and stores the empty digest once it runs again', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home, project);
+    // What `remote start --at-login` leaves: the launcher, recorded by its path, here for a project that is only named.
+    const root = 'D:\\work\\proj';
+    const launcher = path.join(home, 'Startup', launcherFileName(remoteId(root, 'win32')));
+    const content = loginLauncher({ node: 'C:\\node\\node.exe', script: 'D:\\js-harness\\bin\\remote.mjs', root, name: 'proj' });
+    fs.mkdirSync(path.dirname(launcher), { recursive: true });
+    fs.writeFileSync(launcher, content);
+    recordOptionalFile(home, launcher, content);
+    const fetchImpl = async (url) => ({
+      ok: true,
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+    });
+    // The process snapshot lists the supervisor the state file will name; every other program is the healthy one.
+    const snapshots = [];
+    const healthy = healthySpawn(project);
+    const spawn = (cmd, args, opts) => {
+      if (cmd !== 'powershell') return healthy(cmd, args, opts);
+      snapshots.push(args);
+      return { status: 0, stdout: '4\t0\t1\tSystem\r\n4242\t4\t1759700000000\tnode.exe\r\n', stderr: '' };
+    };
+    const deps = { spawn, fetch: fetchImpl, platform: 'win32' };
+    const argv = ['--hook', '--home', home, '--cwd', project];
+
+    const first = await runHook(argv, {}, deps);
+    assert.equal(first.code, 0);
+    assert.equal(first.stderr, '');
+    assert.deepEqual(JSON.parse(first.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor' });
+    assert.equal(snapshots.length, 0, 'with no state file there is no process to look up: a session start pays nothing for it');
+
+    const second = await runHook(argv, {}, deps);
+    assert.equal(second.stdout, '', 'the same gap is not notified twice');
+
+    // `remote start` ran: the state file names a supervisor that the snapshot shows, by pid and creation time.
+    writeJson(remoteFiles(home, remoteId(root, 'win32')).statePath, { pid: 4242, startedAt: 1759700000000 });
+    const third = await runHook(argv, {}, deps);
+    assert.equal(third.stdout, '');
+    assert.equal(readCache(home).notified, '');
+    assert.equal(snapshots.length, 1, 'one look, for the one recorded supervisor');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
