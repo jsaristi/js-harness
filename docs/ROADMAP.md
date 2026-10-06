@@ -156,7 +156,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Reviewed and merged (three slices)
 - [x] Log cap, watchdog task and the `doctor` row for a server that is down
 - [x] The watchdog branch reviewed and merged
-- [ ] Live on this machine: the server restarted on the new code, and `remote start --at-login` registering the watchdog
+- [x] Live on this machine: the server restarted on the new code, and `remote start --at-login` registering the watchdog
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -211,10 +211,11 @@ work) these tasks do not measure.
    is dated 2026-09-27 and the suite refuses one older than 186 h.
 2. Remote sessions, reopened on 2026-10-06 (`odd/tasks/remote-control.md`, branch
    merged to `main` on 2026-10-06 as #35, #36 and #37): the log cap, the watchdog task and the
-   `doctor` row are written, reviewed and merged. Left, Sebastián's to ask for: in `D:\js-harness` brought up
-   to `main`, a restart of the server so the log cap applies (it ends the sessions open through
-   it) and `js-harness remote start --at-login` so the watchdog is registered. That first real
-   task is also the proof of the whole chain, which throwaway tasks proved only in pieces.
+   `doctor` row are written, reviewed and merged, and live on this machine since 2026-10-06
+   18:29 UTC, on Sebastián's word: `D:\js-harness` was brought up to `main`, the server was
+   restarted on the new code and `js-harness remote start --at-login` registered the watchdog
+   task. The log went from 79 MB to 1.1 MB, and the task has run every five minutes since with
+   result 0 and the server up. Not yet seen: the task bringing back a server that died.
 3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.

@@ -3,11 +3,13 @@
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
 `feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
-its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
-linked worktree `D:\js-harness-worktrees\remote-watchdog`; its three slices are
-`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37),
-all three merged), `docs/remote-watchdog-merged` (the record of those merges, cut from `main` at
-`af90570`)
+its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`; its
+three slices are `fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the
+branch itself (PR #37), all three merged), `docs/remote-watchdog-merged` (the record of those
+merges, PR #38, merged), `docs/remote-watchdog-live` (the record of the live activation, cut
+from `main` at `4fc13d4`). The four branches of the watchdog and their worktree
+`D:\js-harness-worktrees\remote-watchdog` were deleted on 2026-10-06, on the remote and
+locally, once merged.
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -878,6 +880,42 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `77acc71`, the running server still has the old code, and `schtasks /Query /FO CSV` names
   no task with `js-harness` in it. The three remote branches are still there; deleting them
   is his to ask for.
+- 2026-10-06: the record of that merge went in as `jsaristi/js-harness#38` (`4fc13d4`). On his
+  word the session that wrote this feature then deleted the four remote branches, the four
+  local ones and the worktree `D:\js-harness-worktrees\remote-watchdog`. Three files of that
+  folder stayed locked, the CodeGraph index (`.codegraph\codegraph.db` and its two
+  companions, 22 MB), held open by CodeGraph's server for `D:\js-harness` (pid 11032, started
+  2026-10-05 19:21 local, its parent gone, a child of it holding this repository's own
+  index). On his word that session killed the process at 18:36 UTC and removed the folder,
+  which no longer exists. `codegraph status` still answers for `D:\js-harness` afterwards.
+  An earlier version of this entry, written by another session in the same minutes, said the
+  process had been left alone: two sessions were acting on one machine, and the record of
+  one was already false when its gate ended.
+- 2026-10-06, 18:29 UTC: the live activation, by the session of F6 Codex parity, on his word
+  ("Listo me avisas", after being told twice that the stop ends the sessions open through
+  the server). That session's own process hangs from the desktop app and not from the
+  supervisor, read from its parent chain, so the stop could not end it.
+  - Waited for the gate of the commit behind #38 to end; then `git pull --ff-only origin
+    main` in `D:\js-harness`, from `77acc71` to `4fc13d4`, the tree clean before and after.
+  - `node bin/js-harness.mjs remote stop` (13:29:16 local): `remote: stopped for
+    D:\js-harness`. `node bin/js-harness.mjs remote start --at-login --name js-harness`
+    (13:29:22): `login launcher: on`, `watchdog task: on
+    (js-harness-remote-js-harness-86aa68a6ffce)`, `remote: started "js-harness"` (supervisor
+    pid 19144). Six seconds without a server.
+  - Read afterwards: `remote status` says `running`, `server: connected`, `capacity: 1/32`
+    (the session that was open through the server came back by itself) and `watchdog task:
+    on`; `doctor` shows `remote-server` and `claude-account` as `ok`; the log went from 79 MB
+    to 1.1 MB; `schtasks /Query /TN js-harness-remote-js-harness-86aa68a6ffce /FO LIST /V`
+    shows the task ready, repeating every five minutes, running `conhost.exe --headless
+    "C:\nvm4w\nodejs\node.exe" D:\js-harness\bin\remote.mjs start --cwd D:\js-harness --name
+    js-harness`, and after its runs of 13:30 and 13:35 its last result is 0 with the server
+    still up. So the real task runs the whole chain and leaves a running server alone.
+  - Not seen: the task bringing back a server that died. Killing the supervisor to see it
+    would end the session open through it, so it waits for the next time the desktop app
+    restarts, or for his word.
+  - `remote status` answers for the project of the directory it runs in: run from a linked
+    worktree it says `not running` and `watchdog task: off`, which is true of that worktree
+    and reads as an alarm. It is run from `D:\js-harness`, or with `--cwd`.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
@@ -1030,23 +1068,19 @@ large to review whole. What is left is Sebastián's to ask for, in this order:
   after `935d505` needs its own record if it changes code.
 - Done on 2026-10-06: the three pull requests are merged, #35, then #36, then #37 (see
   Progress).
-- The live activation, in `D:\js-harness` brought up to `main` (it is at `77acc71`, behind
-  `af90570`):
-  `js-harness remote stop` and `js-harness remote start --at-login`. The stop ends the
-  sessions open through the server, so it is his to time; without it the running supervisor
-  keeps the old code and the log stays uncapped. The start registers the watchdog task, and
-  that first real task is the proof of the whole chain (task, `conhost`, `node`, a detached
-  supervisor), which throwaway tasks proved only in pieces. `remote status` then shows
-  `watchdog task: on`, and `doctor` the row `remote-server`.
+- Done on 2026-10-06, 18:29 UTC: the live activation (see Progress). `D:\js-harness` is at
+  `main`, the supervisor runs the new code, the log is capped and the watchdog task is
+  registered and has run. What is left to see is the task bringing back a server that died.
 
 What a later session needs to know:
 
-- The feature's code is on `main`; `D:\js-harness-worktrees\remote-watchdog` holds only the
-  branch of this record. The activation runs from `D:\js-harness`. Never touch
-  `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for `D:\js-harness`
-  without asking.
-- No scheduled task of js-harness is registered on this machine: the three probes used
-  throwaway tasks, each deleted, and no test can reach the real `schtasks`.
+- The feature's code is on `main`, and its branches, its worktree and the folder
+  `D:\js-harness-worktrees\remote-watchdog` are gone (Progress).
+  Never touch `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for
+  `D:\js-harness` without asking.
+- One scheduled task of js-harness is registered on this machine since 2026-10-06,
+  `js-harness-remote-js-harness-86aa68a6ffce`; `js-harness remote stop --at-login` removes it
+  with the launcher. No test can reach the real `schtasks`.
 - The login launcher is on on this machine: a `.cmd` in the Startup folder, recorded in
   `~/.js-harness/manifest.json`, pinned to `C:\nvm4w\nodejs\node.exe` and to
   `D:\js-harness\bin\remote.mjs`. The watchdog task will pin the same two paths.
