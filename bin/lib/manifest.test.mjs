@@ -17,6 +17,8 @@ import {
   installedVersion,
   recordScheduledTask,
   forgetScheduledTask,
+  putOptionalRecordBack,
+  putTaskRecordBack,
   scheduledTaskAction,
   lookAtScheduledTask,
   runSchtasks,
@@ -1214,6 +1216,120 @@ test('forgetScheduledTask leaves an installed manifest exactly as it was before 
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// --- putting one record back: how `remote start --at-login` takes back its own two records when it fails halfway ---
+
+/** `putOptionalRecordBack` and `putTaskRecordBack` over `home`, each with the array it keeps its record in (`key`),
+ * what records its thing as it was before the command (`asBefore`) and as the command left it (`asAfter`), what
+ * forgets it (`forget`), and the call itself (`put`). The task is put back under its name in another case than
+ * the one it was recorded in: Windows does not tell the two apart. */
+const PUT_BACK = {
+  putOptionalRecordBack: (home, file = path.join(home, 'Startup', 'js-harness-remote-x.cmd')) => ({
+    key: 'optional',
+    asBefore: () => recordOptionalFile(home, file, 'the launcher before'),
+    asAfter: () => recordOptionalFile(home, file, 'the launcher after'),
+    forget: () => forgetOptionalFile(home, file),
+    put: (record) => putOptionalRecordBack(home, file, record),
+  }),
+  putTaskRecordBack: (home) => ({
+    key: 'tasks',
+    asBefore: () => recordScheduledTask(home, TASK),
+    asAfter: () => recordScheduledTask(home, { ...TASK, arguments: `${TASK.arguments} --spawn worktree` }),
+    forget: () => forgetScheduledTask(home, TASK.name),
+    put: (record) => putTaskRecordBack(home, TASK.name.toUpperCase(), record),
+  }),
+};
+
+/** Runs `body` once for each of the two, over a home of its own; `what` names the one that failed. */
+function eachPutBack(body) {
+  for (const [what, over] of Object.entries(PUT_BACK)) {
+    const home = makeTmpHome();
+    try {
+      body({ what, home, ...over(home) });
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+}
+
+/** What another project's `start --at-login` records meanwhile: a launcher and a task of its own, one in each array. */
+function theyRecord(home) {
+  recordOptionalFile(home, path.join(home, 'Startup', 'js-harness-remote-theirs.cmd'), 'their launcher');
+  recordScheduledTask(home, { ...OTHER_TASK, name: 'js-harness-remote-theirs' });
+}
+
+test('putting back a record there was none of forgets the one that is there now, and only that one; with none there it changes nothing', () => {
+  eachPutBack(({ what, home, key, asAfter, put }) => {
+    assert.equal(put(undefined), false, `${what}: none before, none now`);
+    assert.deepEqual(fs.readdirSync(home), [], `${what}: no manifest is created to forget from`);
+
+    // The only record of the machine: the manifest goes with it, as when it is forgotten.
+    asAfter();
+    assert.equal(put(undefined), true, what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, `${what}: a manifest that records nothing is not left behind`);
+
+    // Beside an install and what another project recorded meanwhile: all of that is as it was.
+    install(home, '0.1.0');
+    theyRecord(home);
+    const before = fs.readFileSync(manifestPath(home), 'utf8');
+    asAfter();
+    assert.equal(readManifest(home)[key].length, 2, what);
+    assert.equal(put(undefined), true, what);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before, `${what}: only its own record went`);
+    assert.equal(put(undefined), false, `${what}: and there is none left to forget`);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before, what);
+  });
+});
+
+test('putting back a record that is already what it was writes nothing: the manifest is not written again', () => {
+  eachPutBack(({ what, home, asBefore, put }) => {
+    install(home, '0.1.0');
+    const was = asBefore();
+    theyRecord(home);
+    // On one line and dated long ago: any write would give the file back its two-space layout and today's date.
+    const file = manifestPath(home);
+    const longAgo = new Date('2020-01-01T00:00:00Z');
+    fs.writeFileSync(file, JSON.stringify(readManifest(home)));
+    fs.utimesSync(file, longAgo, longAgo);
+    const seen = () => ({ bytes: fs.readFileSync(file, 'utf8'), mtimeMs: fs.statSync(file).mtimeMs });
+    const before = seen();
+
+    assert.equal(put({ ...was }), false, `${what}: equal by what it holds, not by being the same object`);
+    assert.deepEqual(seen(), before, what);
+  });
+});
+
+test('putting back a record that differs from what is there now replaces it where it is, and leaves what another project recorded meanwhile', () => {
+  eachPutBack(({ what, home, key, asBefore, asAfter, put }) => {
+    install(home, '0.1.0');
+    const was = asBefore();
+    theyRecord(home);
+    const before = readManifest(home);
+    const left = asAfter();
+    assert.notDeepEqual(left, was, what);
+    assert.deepEqual(readManifest(home)[key][0], left, what);
+
+    assert.equal(put(was), true, what);
+    assert.deepEqual(readManifest(home), before, `${what}: its own record is the earlier one again, in its place, and nothing else changed`);
+  });
+});
+
+test('putting back a record that is missing now adds it again, beside what another project recorded meanwhile, and creates the manifest when there is none', () => {
+  eachPutBack(({ what, home, key, asBefore, forget, put }) => {
+    const was = asBefore();
+    assert.equal(forget(), true, what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, what);
+    assert.equal(put(was), true, `${what}: with no manifest`);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], [key]: [was] }, what);
+
+    forget();
+    install(home, '0.1.0');
+    theyRecord(home);
+    const before = readManifest(home);
+    assert.equal(put(was), true, `${what}: beside theirs`);
+    assert.deepEqual(readManifest(home), { ...before, [key]: [...before[key], was] }, `${what}: theirs are as they were, and its own is back`);
+  });
 });
 
 test('scheduledTaskAction reads the command and its arguments out of what schtasks prints back, whatever the order and the defaults around them', () => {

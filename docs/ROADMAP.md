@@ -80,7 +80,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 | F3 Task contract | The contract template in [origin.md](origin.md#task-contract-template) + a validator that rejects a contract without a done-when command + fit with the ODD feature doc and `/goal` | Done, reviewed, merged to `main` 2026-09-30 via `jsaristi/js-harness#16` (`odd/tasks/task-contract.md`); its follow-ups are carried in the feature document |
 | F4 Sensors | Tests, lint/LSP diagnostics, budget and RDD-by-risk wired to pre-commit and `check` | Done, reviewed, merged to `main` 2026-09-30 in two slices via `jsaristi/js-harness#17` (sensors) and `jsaristi/js-harness#18` (the review row and a sensor timeout that kills the process tree) (`odd/tasks/sensors.md`); its follow-ups are carried in the feature document |
 | F5 Evals that discriminate | Tasks hard enough to separate configs (0 of 32 did at the start); A/B minimal vs current config at medium and high | Done, reviewed, merged to `main` 2026-10-03 in four slices via `jsaristi/js-harness#20` (runner, sandbox, isolation proof), `jsaristi/js-harness#21` (the five tasks), `jsaristi/js-harness#22` (engram isolation, safe process-tree kills, the suite entry) and `jsaristi/js-harness#23` (runs, report, result) (`odd/tasks/evals.md`): the minimal config matches the current one on score and costs about half; see [F5 result](#f5-result). Its follow-ups are carried in the feature document |
-| Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process |
+| Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed; not merged, and not yet live on this machine |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | — |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | — |
 
@@ -154,6 +154,9 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] `doctor` account check
 - [x] Live check on this machine: a session opened from the phone after `remote stop` and `remote start`
 - [x] Reviewed and merged (three slices)
+- [x] Log cap, watchdog task and the `doctor` row for a server that is down
+- [ ] The watchdog branch reviewed and merged
+- [ ] Live on this machine: the server restarted on the new code, and `remote start --at-login` registering the watchdog
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -206,10 +209,17 @@ work) these tasks do not measure.
    two hosts side by side, with a Codex trial's cost estimated at the list price of its model.
    The next spend is the 15 trials of T6, which wait on a refreshed Codex login: the real one
    is dated 2026-09-27 and the suite refuses one older than 186 h.
-2. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
+2. Remote sessions, reopened on 2026-10-06 (`odd/tasks/remote-control.md`, branch
+   `fix/remote-watchdog`, in the linked worktree `D:\js-harness-worktrees\remote-watchdog`):
+   the log cap, the watchdog task and the `doctor` row are written and reviewed. Left, all
+   Sebastián's to ask for: the pull request and its merge; then, in `D:\js-harness` brought up
+   to `main`, a restart of the server so the log cap applies (it ends the sessions open through
+   it) and `js-harness remote start --at-login` so the watchdog is registered. That first real
+   task is also the proof of the whole chain, which throwaway tasks proved only in pieces.
+3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.
-3. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
+4. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
    taken at any time.
 
 ## Stack doctor notes

@@ -1261,6 +1261,36 @@ test('watchdogTask refuses, naming it, a value a scheduled task cannot carry: wh
   assert.throws(() => watchdogTask(LAUNCHER), /conhost\.exe/, 'and it is never registered with no program to run');
 });
 
+test('watchdogTask refuses what a batch file acts on in every value the launcher holds, with the launcher\'s own refusal: never marked onlyTheTask', () => {
+  // Each value the launcher holds, with what it is called when it is refused.
+  const held = {
+    node: 'the node executable',
+    script: 'this install of js-harness',
+    root: 'the project folder',
+    name: 'the server name',
+    permissionMode: 'the permission mode',
+    spawnMode: 'the spawn mode',
+    home: 'the home',
+  };
+  // What cmd.exe acts on: its operators, a variable, a quote, and control characters. The task's own check knows
+  // none of the first eight, and would mark a control character as one only the task refuses.
+  const unsafeInBatch = ['&', '|', '<', '>', '^', '%', '"', '!', '\x00', '\t', '\n', '\r', '\x1f', '\x7f'];
+  for (const [key, label] of Object.entries(held)) {
+    for (const bad of unsafeInBatch) {
+      const value = `C:\\a${bad}b`;
+      const what = `${key} with ${JSON.stringify(bad)}`;
+      let refusal;
+      assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, [key]: value }), (err) => {
+        refusal = err;
+        return true;
+      }, what);
+      assert.ok(refusal.message.startsWith(`the login launcher cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(bad)}`), `${what}: ${refusal.message}`);
+      assert.equal('onlyTheTask' in refusal, false, `${what}: start --at-login would write a launcher that cannot hold it`);
+      assert.throws(() => loginLauncher({ ...LAUNCHER, [key]: value }), { message: refusal.message }, `${what}: the launcher refuses it too, in the same words`);
+    }
+  }
+});
+
 test('watchdogTaskXml is a per-user task that needs no elevation, fires every five minutes for good, and runs that one command', () => {
   const action = watchdogTask({ ...LAUNCHER, conhost: CONHOST });
   const xml = watchdogTaskXml(action);
