@@ -4,7 +4,8 @@ Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tas
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
 `feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
 its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
-linked worktree `D:\js-harness-worktrees\remote-watchdog`)
+linked worktree `D:\js-harness-worktrees\remote-watchdog`; its three slices are
+`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37))
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -844,6 +845,26 @@ the chain strategy is asked once, before the commit that crosses the budget.
   worktree is removed. So of this branch's code, Codex reviewed T8 and T9r whole; T8r and T9
   in part, twice; 517 of T10's 893 lines; and T11's tests. A separate task was proposed to him to make
   `codex-review` able to finish a review of an ordinary commit.
+- 2026-10-06: the record of Codex is `1af821c`, a commit of documents only; the gate passed
+  and the push check passed again at that head.
+- 2026-10-06: delivery, decided by Sebastián: three pull requests stacked to `main`, cut at
+  commits the gate had already passed, with no history rewritten. The pre-push hook passed
+  for the three branches.
+  `jsaristi/js-harness#35`, `fix/remote-log-cap` to `main`: `9c9ed8e..4bb62bb`, the commits
+  `9de8b1e` and `4bb62bb` (T8, T8r), 786 changed lines: 479 of tests, 147 of this document,
+  160 of code.
+  `jsaristi/js-harness#36`, `feat/remote-watchdog-task` to `fix/remote-log-cap`:
+  `4bb62bb..b75cf9f`, the commits `7214308` and `b75cf9f` (T9, T9r), 2,501 changed lines:
+  1,430 of tests, 125 of this document, 946 of code.
+  `jsaristi/js-harness#37`, `fix/remote-watchdog` to `feat/remote-watchdog-task`:
+  `b75cf9f..` the head of the branch, the commits `3d5be01`, `935d505`, `1af821c` and this
+  record (T10, T11), 1,361 changed lines before this record: 787 of tests, 173 of documents,
+  401 of code.
+  Each is above the 400-line budget and says so as a size exception; the second cannot be
+  cut, T9 being one commit. They merge in that order, each on his word: when one merges and
+  its branch is deleted, the next is retargeted to `main` and shows only its own slice. The
+  repository has no CI: GitHub reports no check for any of the three, and all three are
+  mergeable.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
@@ -994,9 +1015,9 @@ is Sebastián's to ask for, in this order:
 - Done on 2026-10-06: the Codex record covers every code commit, three ranges of it by a
   skip he chose (see Progress), and the push check passes. A commit added to this branch
   after `935d505` needs its own record if it changes code.
-- The pull request of `fix/remote-watchdog` and its merge. The chain strategy he chose for
-  this feature stands, stacked to `main`; this branch is about 4,200 changed lines under `bin` in
-  six commits, so how it is sliced is asked when the pull request is.
+- The merge of the three pull requests, in order and each on his word: #35, then #36, then
+  #37 (see Progress for what each holds). After each merge the next one's base is checked to
+  be `main` and its diff to hold only its own slice.
 - Then, in `D:\js-harness` brought up to `main` (it was 19 commits behind on 2026-10-06):
   `js-harness remote stop` and `js-harness remote start --at-login`. The stop ends the
   sessions open through the server, so it is his to time; without it the running supervisor
