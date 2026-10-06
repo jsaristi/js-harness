@@ -20,7 +20,7 @@ import {
   buildCommands,
 } from './tui.mjs';
 import { installMain } from './install.mjs';
-import { manifestPath } from './lib/manifest.mjs';
+import { manifestPath, recordScheduledTask } from './lib/manifest.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -526,6 +526,31 @@ test('buildCommands uninstall undoes the machine install even when run inside a 
     process.chdir(originalCwd);
     console.log = originalLog;
     fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The menu's uninstall hands the engine no `schtasks`, so the engine's own default applies, and it refuses to run
+// the real program from a test before it even looks at the environment, on any host. A recorded watchdog task is
+// therefore kept and reported here, never deleted from this machine by a test.
+test('buildCommands uninstall cannot reach the real schtasks from a test: a recorded task is reported as left, and the rest is undone', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-task-home-'));
+  const original = { log: console.log, error: console.error };
+  const errors = [];
+  try {
+    console.log = () => {};
+    console.error = (line) => errors.push(String(line));
+    await installMain(['--home', home]);
+    const task = { name: 'js-harness-remote-x', command: 'conhost.exe', arguments: '--headless node remote.mjs start --watchdog' };
+    recordScheduledTask(home, task);
+
+    const code = await buildCommands({ home }).uninstall();
+
+    assert.equal(code, 1, 'a task left behind is not a clean uninstall');
+    assert.match(errors.join('\n'), /^could not look for scheduled task js-harness-remote-x \(the real schtasks\.exe is never run from a test/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(manifestPath(home), 'utf8')), { version: null, files: [], entries: [], tasks: [task] }, 'the install is undone, and the task that may still fire stays recorded');
+  } finally {
+    Object.assign(console, original);
     fs.rmSync(home, { recursive: true, force: true });
   }
 });

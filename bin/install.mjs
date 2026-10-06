@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { install, sync, uninstall } from './lib/manifest.mjs';
+import { install, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -278,7 +278,8 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * machine install exactly as before T3. `--global` skips the project check entirely rather than
  * running it and discarding the result — `--cwd` (project-only) is a usage error alongside it, so
  * there is nothing project-scoped left to even attempt. `deps` reaches both engines: `spawn`/`rm` for
- * `uninstallProject`, `removeFile` for the machine one — each ignores what it does not use. */
+ * `uninstallProject`, `removeFile` and `schtasks` (or `spawnSync`, what the real `schtasks.exe` is run through)
+ * for the machine one — each ignores what it does not use. */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
   let parsed;
   try {
@@ -306,7 +307,9 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   }
 
   const home = parsed.home;
-  const result = uninstall(home, deps);
+  // A recorded scheduled task is looked for and deleted through `schtasks.exe`, found from the environment this
+  // command was given and nowhere else (`runSchtasks`); it is run only when the manifest records a task.
+  const result = uninstall(home, { ...deps, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
   // named it is gone by now: it goes to stderr with the error code and what is left to do.
@@ -324,14 +327,32 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
+  // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
+  // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
+  // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.
+  for (const name of result.tasksRemoved) console.log(`removed scheduled task ${name}`);
+  const tasksNotUndone = result.tasksKept.filter((task) => task.reason !== 'edited');
+  for (const task of result.tasksKept) {
+    if (task.reason === 'edited') {
+      console.log(`kept scheduled task ${task.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${task.name} /F deletes it`);
+      continue;
+    }
+    const verb = task.reason === 'unremovable' ? 'delete' : 'look for';
+    console.error(
+      `could not ${verb} scheduled task ${task.name} (${task.why}): it may still be registered, firing every five minutes, so it is still recorded: run js-harness uninstall --global again, or js-harness remote stop --at-login in its project; ` +
+        `schtasks /Query /TN ${task.name} shows whether it is, and schtasks /Delete /TN ${task.name} /F deletes it`,
+    );
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
     result.entriesRemoved.length === 0 &&
-    result.entriesKept.length === 0
+    result.entriesKept.length === 0 &&
+    result.tasksRemoved.length === 0 &&
+    result.tasksKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
-  // A file left behind that nothing records is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 ? 1 : 0;
+  // A file left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
+  return notUndone.size > 0 || tasksNotUndone.length > 0 ? 1 : 0;
 }

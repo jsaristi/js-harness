@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { install, recordOptionalFile } from './lib/manifest.mjs';
+import { install, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
 import { resolveLatest, resolveSpec, statusMain, updateMain, upgradeMain } from './update.mjs';
@@ -165,6 +165,30 @@ test('upgradeMain says not installed, not null, when the manifest it finds only 
     assert.equal(code, 1);
     assert.match(lines.join('\n'), /reports \(not installed\), not 0\.9\.0/);
   } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+// The same manifest once `remote start --at-login` has also recorded its watchdog task, or with that record alone.
+test('statusMain and upgradeMain say not installed for a manifest that only records a scheduled task', async () => {
+  const home = makeTmpDir('js-harness-status-home-task-');
+  const source = makeTmpDir('js-harness-upgrade-src-task-');
+  const lines = [];
+  const original = { log: console.log, error: console.error };
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    recordScheduledTask(home, { name: 'js-harness-remote-x', command: 'conhost.exe', arguments: '--headless node remote.mjs start --watchdog' });
+    console.log = (line) => lines.push(String(line));
+    console.error = (line) => lines.push(String(line));
+    await statusMain(['--global', '--home', home], {}, fakeSpawnOk(currentVersion()));
+    const code = await upgradeMain(['--source', source, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }));
+    assert.equal(code, 1);
+    assert.match(lines.join('\n'), /manifest version: \(not installed\)/);
+    assert.match(lines.join('\n'), /reports \(not installed\), not 0\.9\.0/);
+    assert.doesNotMatch(lines.join('\n'), /null/);
+  } finally {
+    Object.assign(console, original);
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(source, { recursive: true, force: true });
   }

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
-import { manifestPath, readManifest, recordOptionalFile } from './lib/manifest.mjs';
+import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { initProject } from './lib/project.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -339,6 +339,134 @@ test('uninstallMain says an optional file it could not remove was left, with the
     assert.doesNotMatch(outLines.join('\n'), /modified by you|nothing installed/);
     assert.ok(fs.existsSync(locked.path));
     assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- scheduled tasks (the watchdog of `remote start --at-login`): recorded by name and by the command they run ---
+
+const TASK = { name: 'js-harness-remote-x', command: 'C:\\Windows\\System32\\conhost.exe', arguments: '--headless node remote.mjs start --cwd D:\\proj --name proj --watchdog' };
+
+/** A stand-in for `schtasks.exe` over `tasks` (name to `{ command, arguments }`): it lists them, prints one back
+ * and deletes one, or exits `failing[verb]` instead (`list`, `read`, `delete`). No test here runs the real one. */
+function fakeSchtasks(tasks, failing = {}) {
+  const store = new Map(Object.entries(tasks));
+  const deleted = [];
+  const run = (args) => {
+    const name = args[args.indexOf('/TN') + 1];
+    const verb = args[0] === '/Query' ? (args.includes('/XML') ? 'read' : 'list') : args[0].slice(1).toLowerCase();
+    if (failing[verb] !== undefined) return { status: failing[verb], stdout: '' };
+    if (verb === 'list') return { status: 0, stdout: [...store.keys()].map((task) => `"\\${task}","N/A","Ready"`).join('\r\n') };
+    if (verb === 'read') {
+      const task = store.get(name);
+      return task ? { status: 0, stdout: `<Task><Actions Context="Author"><Exec><Command>${task.command}</Command><Arguments>${task.arguments}</Arguments></Exec></Actions></Task>` } : { status: 1, stdout: '' };
+    }
+    if (verb === 'delete' && store.delete(name)) {
+      deleted.push(name);
+      return { status: 0, stdout: '' };
+    }
+    throw new Error(`the fake schtasks does not know ${args.join(' ')}`);
+  };
+  return { run, store, deleted };
+}
+
+test('installMain and syncMain keep the record of a scheduled task, and run no schtasks', async () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    const schtasks = () => { throw new Error('schtasks must not be run by install or sync'); };
+    const installed = await captureConsole(() => installMain(['--home', home], {}, { schtasks }));
+    assert.equal(installed.code, 0);
+    assert.equal(readManifest(home).version, currentVersion());
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+    const synced = await captureConsole(() => syncMain(['--global', '--home', home], {}, { schtasks }));
+    assert.equal(synced.code, 0);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain deletes a recorded task that still runs the recorded command, and keeps one that was edited, saying how to delete it', async () => {
+  const home = makeTmpHome();
+  try {
+    const edited = { ...TASK, name: 'js-harness-remote-y' };
+    const gone = { ...TASK, name: 'js-harness-remote-z' };
+    for (const task of [TASK, edited, gone]) recordScheduledTask(home, task);
+    const tasks = fakeSchtasks({ [TASK.name]: TASK, [edited.name]: { ...edited, arguments: '--headless calc.exe' } });
+
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { schtasks: tasks.run }));
+
+    assert.equal(code, 0, errLines.join('\n'));
+    assert.deepEqual(errLines, []);
+    assert.deepEqual(outLines, [
+      `removed scheduled task ${TASK.name}`,
+      `kept scheduled task ${edited.name} (modified by you): it is no longer recorded, and schtasks /Delete /TN ${edited.name} /F deletes it`,
+    ], 'a home with only a task is not "nothing", and a task that is already gone is not reported');
+    assert.deepEqual(tasks.deleted, [TASK.name]);
+    assert.equal(tasks.store.has(edited.name), true);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says a task it could not look at or delete was left, with how to look and how to delete it by hand, and fails', async () => {
+  const cases = {
+    'the tasks cannot be listed': [{ list: 1 }, /^could not look for scheduled task js-harness-remote-x \(.*could not be listed/],
+    'the delete fails': [{ delete: 5 }, /^could not delete scheduled task js-harness-remote-x \(schtasks \/Delete \/TN js-harness-remote-x \/F exited 5\)/],
+  };
+  for (const [what, [failing, message]] of Object.entries(cases)) {
+    const home = makeTmpHome();
+    try {
+      recordScheduledTask(home, TASK);
+      const tasks = fakeSchtasks({ [TASK.name]: TASK }, failing);
+      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { schtasks: tasks.run }));
+      assert.equal(code, 1, `${what}: a task left behind is not a clean uninstall`);
+      assert.equal(errLines.length, 1, errLines.join('\n'));
+      assert.match(errLines[0], message, what);
+      assert.match(errLines[0], /it is still recorded/, what);
+      assert.match(errLines[0], /js-harness uninstall --global.*again/, `${what}: it says the uninstall can be run again`);
+      assert.match(errLines[0], /js-harness remote stop --at-login/, what);
+      assert.ok(errLines[0].includes(`schtasks /Query /TN ${TASK.name}`), errLines[0]);
+      assert.ok(errLines[0].includes(`schtasks /Delete /TN ${TASK.name} /F`), errLines[0]);
+      assert.doesNotMatch(outLines.join('\n'), /modified by you|nothing installed/, what);
+      assert.equal(tasks.store.has(TASK.name), true, what);
+      assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, `${what}: the record of the task that still fires is kept`);
+
+      // Run again once schtasks answers: the task is deleted, and nothing is left.
+      for (const verb of Object.keys(failing)) delete failing[verb];
+      const again = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { schtasks: tasks.run }));
+      assert.deepEqual({ code: again.code, out: again.outLines, err: again.errLines }, { code: 0, out: [`removed scheduled task ${TASK.name}`], err: [] }, what);
+      assert.equal(fs.existsSync(manifestPath(home)), false, what);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('uninstallMain finds schtasks from the environment it is given and nowhere else, and never runs the real one from a test', async () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    // The program it would run is the one of the SystemRoot it was handed: seen through a spawnSync that runs nothing.
+    const ran = [];
+    const spawnSync = (file, args) => {
+      ran.push([file, ...args]);
+      return { status: 1, stdout: '' };
+    };
+    const given = await captureConsole(() => uninstallMain(['--global', '--home', home], { SystemRoot: 'Q:\\Given' }, { spawnSync }));
+    assert.equal(given.code, 1);
+    assert.deepEqual(ran, [['Q:\\Given\\System32\\schtasks.exe', '/Query', '/FO', 'CSV']]);
+
+    // With nothing injected it refuses, whatever the environment says: one that names no Windows folder, and one
+    // whose folder holds no schtasks.exe (so that nothing real could run even without the refusal).
+    for (const env of [{}, { SystemRoot: path.join(os.tmpdir(), 'js-harness-no-such-windows') }]) {
+      const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], env));
+      assert.equal(code, 1);
+      assert.match(errLines.join('\n'), /^could not look for scheduled task js-harness-remote-x \(the real schtasks\.exe is never run from a test/);
+    }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

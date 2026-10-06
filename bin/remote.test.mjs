@@ -7,9 +7,9 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { logTail, readServerState, remoteId, remoteMain } from './remote.mjs';
-import { forgetOptionalFile, manifestPath, readManifest, recordOptionalFile, sha256, uninstall } from './lib/manifest.mjs';
+import { forgetOptionalFile, forgetScheduledTask, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, sha256, uninstall } from './lib/manifest.mjs';
 import { identifyProcesses } from './lib/process-tree.mjs';
-import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimFailureNote, trimLog } from './lib/remote.mjs';
+import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -59,11 +59,70 @@ const OWN_CREATED = CREATED + 3_600_000;
 /** The node executable that runs the command, in the fake world: what a login launcher is told to run. */
 const NODE = 'C:\\Program Files\\nodejs\\node.exe';
 
+const xmlEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const xmlUnescape = (text) => text.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** A stand-in for `schtasks.exe` over a store of tasks, name to `{ command, arguments }`, the one of
+ * `bin/lib/manifest.test.mjs` (a test file cannot import another, and a shared one is not this task's to add):
+ * it lists the tasks among Windows's own, prints one back as `schtasks /Query /XML` does (declared UTF-16,
+ * reordered, with defaults and the user's id added: never the document that registered it), registers one from
+ * the XML file it is handed, keeping that document in `registered`, deletes one, and exits 1 for a task that is
+ * not there. `fail[verb]` (`list`, `read`, `create`, `delete`) is the exit code that verb then ends with, having
+ * done nothing, or an error it throws, or a function that says which for each run of that verb. Every `fakeWorld`
+ * has one, so no test here runs the real program. */
+function fakeSchtasks(tasks = {}) {
+  const store = new Map(Object.entries(tasks).map(([name, action]) => [name, { command: action.command, arguments: action.arguments }]));
+  const calls = [];
+  const registered = [];
+  const fail = {};
+  const verbOf = (args) => (args[0] === '/Query' ? (args.includes('/XML') ? 'read' : 'list') : args[0].slice(1).toLowerCase());
+  const run = (args) => {
+    calls.push(args);
+    const value = (flag) => args[args.indexOf(flag) + 1];
+    const verb = verbOf(args);
+    // A function is asked each time with how many times that verb has been run, this one included: `(nth) =>
+    // (nth === 3 ? 1 : undefined)` fails the third.
+    const failure = typeof fail[verb] === 'function' ? fail[verb](calls.filter((earlier) => verbOf(earlier) === verb).length) : fail[verb];
+    if (failure instanceof Error) throw failure;
+    if (failure !== undefined) return { status: failure, stdout: '' };
+    // Windows finds a task by its name whatever the case of its letters.
+    const name = [...store.keys()].find((task) => task.toLowerCase() === value('/TN')?.toLowerCase()) ?? value('/TN');
+    if (verb === 'list') {
+      const rows = ['"TaskName","Next Run Time","Status"', '"\\Microsoft\\Windows\\Defrag\\ScheduledDefrag","N/A","Ready"', ...[...store.keys()].map((task) => `"\\${task}","06/10/2026 12:05:00","Ready"`)];
+      return { status: 0, stdout: `${rows.join('\r\n')}\r\n` };
+    }
+    if (verb === 'read') {
+      if (!store.has(name)) return { status: 1, stdout: '' };
+      const { command, arguments: given } = store.get(name);
+      return { status: 0, stdout: [
+        '<?xml version="1.0" encoding="UTF-16"?>',
+        '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+        `  <RegistrationInfo><Description>a task</Description><URI>\\${name}</URI></RegistrationInfo>`,
+        '  <Principals><Principal id="Author"><UserId>S-1-5-21-1-2-3-1001</UserId><LogonType>InteractiveToken</LogonType></Principal></Principals>',
+        '  <Settings><IdleSettings><Duration>PT10M</Duration></IdleSettings><Enabled>true</Enabled></Settings>',
+        '  <Triggers><TimeTrigger><StartBoundary>2026-01-01T00:00:00</StartBoundary></TimeTrigger></Triggers>',
+        `  <Actions Context="Author"><Exec><Command>${xmlEscape(command)}</Command><Arguments>${xmlEscape(given)}</Arguments></Exec></Actions>`,
+        '</Task>', '',
+      ].join('\r\n') };
+    }
+    if (verb === 'delete') return store.delete(name) ? { status: 0, stdout: '' } : { status: 1, stdout: '' };
+    if (verb === 'create') {
+      if (store.has(name) && !args.includes('/F')) return { status: 1, stdout: '' };
+      const xml = fs.readFileSync(value('/XML'), 'utf8');
+      registered.push({ name, xml, file: value('/XML') });
+      store.set(name, { command: xmlUnescape(/<Command>(.*?)<\/Command>/s.exec(xml)[1]), arguments: xmlUnescape(/<Arguments>(.*?)<\/Arguments>/s.exec(xml)[1]) });
+      return { status: 0, stdout: '' };
+    }
+    throw new Error(`the fake schtasks does not know ${args.join(' ')}`);
+  };
+  return { run, store, calls, registered, fail, mutations: () => calls.filter((args) => args[0] !== '/Query') };
+}
+
 /** Everything `remoteMain` reaches outside itself, faked: `alive` maps a pid to its creation time (`null` for one
  * Windows does not give) and holds the command's own process, the one launch gets pid 4242 and then runs
  * `hooks.onSpawn`, a kill ends a process only when it names it by pid and creation time, and stopping the launch
- * ends it. */
-function fakeWorld({ alive = new Map(), claude = { path: 'C:\\bin\\claude.exe', shell: false }, platform = 'win32', kill, stopSpawned } = {}) {
+ * ends it. `tasks` is the machine's scheduled tasks (`fakeSchtasks`), empty unless handed over. */
+function fakeWorld({ alive = new Map(), claude = { path: 'C:\\bin\\claude.exe', shell: false }, platform = 'win32', kill, stopSpawned, tasks = fakeSchtasks() } = {}) {
   if (!alive.has(process.pid)) alive.set(process.pid, OWN_CREATED);
   const hooks = {};
   const spawned = [];
@@ -95,11 +154,12 @@ function fakeWorld({ alive = new Map(), claude = { path: 'C:\\bin\\claude.exe', 
       stopped.push({ child, lifetime });
       alive.delete(child.pid);
     }),
+    schtasks: (args) => tasks.run(args),
     log: (line) => out.push(String(line)),
     error: (line) => err.push(String(line)),
   };
   return {
-    deps, hooks, spawned, killed, stopped, alive,
+    deps, hooks, spawned, killed, stopped, alive, tasks,
     out: () => out.join('\n'),
     err: () => err.join('\n'),
     resolved: () => resolved,
@@ -110,6 +170,8 @@ const stateDir = (home) => path.join(home, '.js-harness', 'remote');
 const statePath = (home, root) => path.join(stateDir(home), `${remoteId(root)}.json`);
 const logPathOf = (home, root) => path.join(stateDir(home), `${remoteId(root)}.log`);
 const lockPathOf = (home, root) => path.join(stateDir(home), `${remoteId(root)}.lock`);
+/** The marker a stop leaves: while it is there the watchdog starts nothing. */
+const stoppedPathOf = (home, root) => path.join(stateDir(home), `${remoteId(root)}.stopped`);
 function writeState(home, root, state) {
   fs.mkdirSync(stateDir(home), { recursive: true });
   fs.writeFileSync(statePath(home, root), JSON.stringify({ root, name: path.basename(root), logPath: logPathOf(home, root), startedAtIso: new Date(state.startedAt).toISOString(), ...state }));
@@ -1310,18 +1372,29 @@ test('the lock never outlives stop: it is released when stop succeeds, finds not
 
 // ---- the login launcher: --at-login ------------------------------------------------------------------------------------
 
-/** A stand-in for `%APPDATA%`, with the Startup folder Windows keeps there unless told otherwise. No test here
- * may reach the real one: every command below gets this as its `APPDATA`. */
+/** A stand-in for `%APPDATA%`, with the Startup folder Windows keeps there unless told otherwise, and for
+ * `%SystemRoot%`: a folder that does not exist, so it holds no `schtasks.exe` to run. No test here may reach the
+ * real ones: every command below gets these as its `APPDATA` and its `SystemRoot`. */
 function makeAppData({ startup = true } = {}) {
-  const appData = path.join(tempDir('js-harness-remote-appdata-'), 'Roaming');
+  const base = tempDir('js-harness-remote-appdata-');
+  const appData = path.join(base, 'Roaming');
   const startupDir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
   fs.mkdirSync(startup ? startupDir : appData, { recursive: true });
-  return { env: { APPDATA: appData }, startupDir };
+  return { env: { APPDATA: appData, SystemRoot: path.join(base, 'Windows') }, startupDir };
 }
 const launcherOf = (startupDir, root) => path.join(startupDir, `js-harness-remote-${remoteId(root)}.cmd`);
 const launcherRecord = (file) => ({ path: file, sha256: sha256(fs.readFileSync(file)) });
-/** What the manifest of a home where js-harness was never installed holds once it records optional files. */
-const onlyOptional = (...records) => ({ version: null, files: [], entries: [], optional: records });
+const taskNameOf = (root) => `js-harness-remote-${remoteId(root)}`;
+/** What the machine manifest records for the watchdog task of `root`: its name and the command it runs, which is
+ * the launcher's with `--watchdog`, through the `conhost.exe` of the `SystemRoot` the command was given. */
+const taskRecord = (env, root, options = {}) => ({
+  name: taskNameOf(root),
+  ...watchdogTask({ node: NODE, script: SELF, root, name: path.basename(root), ...options, conhost: path.win32.join(env.SystemRoot, 'System32', 'conhost.exe') }),
+});
+const actionOf = ({ command, arguments: given }) => ({ command, arguments: given });
+/** What the manifest of a home where js-harness was never installed holds once `--at-login` is on for a project. */
+const onlyAtLogin = (launcher, task) => ({ version: null, files: [], entries: [], optional: [launcher], tasks: [task] });
+const bytesOf = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
 
 test('start --at-login writes the launcher in the Startup folder, records it in the machine manifest, then starts the server', { skip: WINDOWS_ONLY }, async () => {
   const root = makeProject('proj');
@@ -1329,14 +1402,14 @@ test('start --at-login writes the launcher in the Startup folder, records it in 
   const { env, startupDir } = makeAppData();
   const world = fakeWorld();
   world.hooks.onSpawn = () => {
-    assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(launcherOf(startupDir, root))), 'the launcher is written and recorded before the server is started');
+    assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(launcherOf(startupDir, root)), taskRecord(env, root, { home })), 'the launcher and the task are there and recorded before the server is started');
   };
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
 
   const file = launcherOf(startupDir, root);
   assert.deepEqual(fs.readdirSync(startupDir), [path.basename(file)], 'one file, named after the project');
   assert.equal(fs.readFileSync(file, 'utf8'), loginLauncher({ node: NODE, script: SELF, root, name: 'proj', home }));
-  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+  assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(file), taskRecord(env, root, { home })));
   assert.equal(world.spawned.length, 1, 'then the ordinary start');
   assert.equal(world.spawned[0].args.includes('--at-login'), false, 'the supervisor is started as ever');
   assert.equal(readState(home, root).pid, 4242);
@@ -1427,10 +1500,12 @@ test('start --at-login with the launcher already there and the server already ru
   const file = launcherOf(startupDir, root);
   const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)), state: fs.readFileSync(statePath(home, root)) };
 
-  const again = fakeWorld({ alive: first.alive });
+  const again = fakeWorld({ alive: first.alive, tasks: first.tasks });
   assert.equal(await remoteMain(argv, env, again.deps), 0, again.err());
   assert.equal(again.err(), '', 'with --at-login a server that already runs is not an error');
   assert.equal(again.spawned.length, 0);
+  assert.equal(first.tasks.mutations().length, 1, 'the task that is already registered and recorded is not registered again');
+  assert.ok(again.out().includes(`watchdog task: on (${taskNameOf(root)})`), again.out());
   assert.ok(again.out().includes(`login launcher: on (${file})`), again.out());
   assert.match(again.out(), /already running/);
   assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)), state: fs.readFileSync(statePath(home, root)) }, before);
@@ -1443,6 +1518,7 @@ test('start --at-login with the launcher already there and the server already ru
   assert.equal(world.spawned.length, 1);
   assert.equal(fs.existsSync(launcherOf(startupDir, plain)), true);
   assert.equal(readManifest(home).optional.length, 2, 'one record per project');
+  assert.deepEqual(readManifest(home).tasks.map((task) => task.name), [taskNameOf(root), taskNameOf(plain)], 'and one task per project');
 });
 
 test('start --at-login replaces a launcher of its own from an earlier start with other options, and updates the record', { skip: WINDOWS_ONLY }, async () => {
@@ -1458,7 +1534,8 @@ test('start --at-login replaces a launcher of its own from an earlier start with
   assert.equal(await start('--name', 'two'), 0, world.err());
   assert.notEqual(fs.readFileSync(file, 'utf8'), first);
   assert.equal(fs.readFileSync(file, 'utf8'), loginLauncher({ node: NODE, script: SELF, root, name: 'two', home }));
-  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)), 'still one record, of what is there now');
+  assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(file), taskRecord(env, root, { name: 'two', home })), 'still one record of each, of what is there now');
+  assert.deepEqual(world.tasks.store.get(taskNameOf(root)), actionOf(taskRecord(env, root, { name: 'two', home })), 'the task of the earlier start was replaced too: it was still the one recorded');
 });
 
 test('the launcher comes first: a start that then fails leaves it written and recorded, and says both', { skip: WINDOWS_ONLY }, async () => {
@@ -1468,8 +1545,9 @@ test('the launcher comes first: a start that then fails leaves it written and re
   const world = fakeWorld({ claude: null });
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
   const file = launcherOf(startupDir, root);
-  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+  assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(file), taskRecord(env, root, { home })));
   assert.ok(world.out().includes(`login launcher: on (${file})`), world.out());
+  assert.ok(world.out().includes(`watchdog task: on (${taskNameOf(root)})`), world.out());
   assert.match(world.err(), /claude/);
   assert.equal(world.spawned.length, 0);
 });
@@ -1513,7 +1591,7 @@ test('start --at-login adopts a launcher with the very content it would write th
   fs.writeFileSync(file, loginLauncher({ node: NODE, script: SELF, root, name: 'proj', home })); // a start that died before recording it
   const world = fakeWorld();
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
-  assert.deepEqual(readManifest(home), onlyOptional(launcherRecord(file)));
+  assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(file), taskRecord(env, root, { home })));
 });
 
 test('start --at-login leaves no launcher that no record names: when recording fails, the file it wrote is removed again', { skip: WINDOWS_ONLY }, async () => {
@@ -1541,7 +1619,7 @@ test('start --at-login that cannot record the launcher it replaced puts the earl
   const file = launcherOf(startupDir, root);
   const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) };
 
-  const failing = fakeWorld();
+  const failing = fakeWorld({ tasks: world.tasks });
   const seen = [];
   const recordOptionalFile = () => {
     seen.push(fs.readFileSync(file, 'utf8'));
@@ -1553,8 +1631,10 @@ test('start --at-login that cannot record the launcher it replaced puts the earl
   assert.match(failing.err(), /EACCES/);
   assert.match(failing.err(), /earlier launcher was put back/);
   assert.equal(failing.spawned.length, 0);
-  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, fakeWorld().deps), 0, 'and it is still removed exactly');
+  assert.equal(world.tasks.mutations().length, 1, 'the task of the earlier start was not touched: the launcher failed before it');
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, fakeWorld({ tasks: world.tasks }).deps), 0, 'and it is still removed exactly');
   assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(world.tasks.store.size, 0);
 });
 
 test('start --at-login says so, naming the file, when the earlier launcher cannot be put back either', { skip: WINDOWS_ONLY }, async () => {
@@ -1567,7 +1647,7 @@ test('start --at-login says so, naming the file, when the earlier launcher canno
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
   const file = launcherOf(startupDir, root);
 
-  const failing = fakeWorld();
+  const failing = fakeWorld({ tasks: world.tasks });
   const recordOptionalFile = () => {
     // A folder takes the launcher's place, so nothing can be written there any more.
     fs.rmSync(file);
@@ -1615,11 +1695,15 @@ test('stop --at-login removes the launcher and its record, then stops the server
   assert.deepEqual(world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], 'then the ordinary stop');
   assert.equal(fs.existsSync(statePath(home, root)), false);
   assert.ok(world.out().includes(`login launcher: off (removed ${file})`), world.out());
+  assert.ok(world.out().includes(`watchdog task: off (deleted ${taskNameOf(root)})`), world.out());
+  assert.equal(world.tasks.store.size, 0, 'the task is deleted with the launcher');
+  assert.deepEqual(world.tasks.mutations().at(-1), ['/Delete', '/TN', taskNameOf(root), '/F']);
   assert.match(world.out(), /remote: stopped/);
 
-  // With no server running it is not an error either, and a launcher that is not there is not one.
+  // With no server running it is not an error either, and a launcher or a task that is not there is not one.
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
   assert.equal(world.err(), '');
+  assert.match(world.out(), /watchdog task: off \(there was none\)/);
 });
 
 test('a plain stop leaves the launcher and its record alone', { skip: WINDOWS_ONLY }, async () => {
@@ -1629,11 +1713,13 @@ test('a plain stop leaves the launcher and its record alone', { skip: WINDOWS_ON
   const world = fakeWorld();
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
   const file = launcherOf(startupDir, root);
-  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) };
+  const before = { launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)), calls: world.tasks.calls.length };
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
-  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) }, before);
-  assert.doesNotMatch(world.out(), /login launcher: off/);
+  assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.readFileSync(manifestPath(home)) }, { launcher: before.launcher, manifest: before.manifest });
+  assert.doesNotMatch(world.out(), /login launcher: off|watchdog task: off/);
   assert.match(world.out(), /remote: stopped/);
+  assert.equal(world.tasks.store.has(taskNameOf(root)), true, 'the task stays registered');
+  assert.equal(world.tasks.calls.length, before.calls, 'a plain stop does not even look at the scheduled tasks');
 });
 
 test('stop --at-login keeps a launcher that is not as js-harness wrote it, says so, still stops the server, and fails', { skip: WINDOWS_ONLY }, async () => {
@@ -1649,10 +1735,11 @@ test('stop --at-login keeps a launcher that is not as js-harness wrote it, says 
     assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
     const file = launcherOf(startupDir, root);
     arrange({ home, file });
-    const before = { launcher: fs.readFileSync(file), manifest: fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null };
+    const before = { launcher: fs.readFileSync(file), records: readManifest(home).optional };
 
     assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
-    assert.deepEqual({ launcher: fs.readFileSync(file), manifest: fs.existsSync(manifestPath(home)) ? fs.readFileSync(manifestPath(home), 'utf8') : null }, before, `${what}: kept, with what the manifest said`);
+    assert.deepEqual({ launcher: fs.readFileSync(file), records: readManifest(home)?.optional }, before, `${what}: kept, with what the manifest said of it`);
+    assert.equal(world.tasks.store.size, 0, `${what}: the task, which is still as it was registered, is deleted all the same`);
     assert.ok(world.err().includes(file), world.err());
     assert.match(world.err(), /kept/, what);
     assert.deepEqual(world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], `${what}: the server is stopped all the same`);
@@ -1706,15 +1793,19 @@ test('stop --at-login that cannot find the Startup folder still stops the server
   assert.equal(fs.existsSync(statePath(home, root)), false);
 });
 
-test('uninstall removes the launcher start --at-login wrote, and leaves the Startup folder', { skip: WINDOWS_ONLY }, async () => {
+test('uninstall removes the launcher start --at-login wrote and deletes the task it registered, and leaves the Startup folder', { skip: WINDOWS_ONLY }, async () => {
   const root = makeProject('proj');
   const home = tempDir();
   const { env, startupDir } = makeAppData();
   const world = fakeWorld();
   assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
   const file = launcherOf(startupDir, root);
-  assert.deepEqual(uninstall(home).removed, [file]);
+  const result = uninstall(home, { schtasks: world.tasks.run });
+  assert.deepEqual(result.removed, [file]);
+  assert.deepEqual({ tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept }, { tasksRemoved: [taskNameOf(root)], tasksKept: [] });
   assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(world.tasks.store.size, 0);
+  assert.equal(fs.existsSync(manifestPath(home)), false);
 });
 
 test('status says whether the login launcher is on for this repository, and exits as it did', { skip: WINDOWS_ONLY }, async () => {
@@ -1756,6 +1847,693 @@ test('--at-login is a switch of start and stop only, and the usage line says wha
   assert.match(world.err(), /unknown flag: --at-login/);
   assert.match(world.err(), /start and stop also take \[--at-login\]/);
   assert.match(world.err(), /Startup folder/);
+});
+
+// ---- the watchdog: the scheduled task --at-login registers beside the launcher -----------------------------------------
+
+/** One project with `--at-login` on: the launcher written, the task registered, both recorded, the server started. */
+async function atLoginOn(more = []) {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain([...argv, ...more], env, world.deps), 0, world.err());
+  return { root, home, env, startupDir, world, argv, file: launcherOf(startupDir, root), task: taskNameOf(root) };
+}
+/** The launcher and the machine manifest, byte for byte (`null` for one that is not there). */
+const whatIsThere = ({ home, file }) => ({ launcher: bytesOf(file), manifest: bytesOf(manifestPath(home)) });
+const CANNOT_RECORD = () => { throw new Error('EACCES: permission denied, open manifest.json'); };
+
+test('start --at-login registers the watchdog task from an XML file it then removes: the launcher\'s command with --watchdog, every five minutes', { skip: WINDOWS_ONLY }, async () => {
+  const { root, home, env, world, task } = await atLoginOn();
+  const record = taskRecord(env, root, { home });
+  assert.equal(record.command, path.win32.join(env.SystemRoot, 'System32', 'conhost.exe'), 'conhost.exe by its full path, from the SystemRoot the command was given');
+  assert.match(record.arguments, /^--headless .* start --cwd .* --name proj .*--watchdog$/);
+  assert.doesNotMatch(record.arguments, /--at-login/);
+
+  const [{ xml, file: xmlFile }] = world.tasks.registered;
+  assert.deepEqual(world.tasks.mutations(), [['/Create', '/TN', task, '/XML', xmlFile, '/F']], 'one task, by name, and nothing else changed');
+  assert.equal(xml, watchdogTaskXml(record));
+  assert.equal(path.dirname(xmlFile), stateDir(home), 'the XML is written under the home, never in a shared temp folder');
+  assert.equal(fs.existsSync(xmlFile), false, 'and removed once schtasks has read it');
+  assert.deepEqual(world.tasks.store.get(task), actionOf(record));
+  assert.deepEqual(readManifest(home).tasks, [record], 'recorded by name and by the command it runs');
+  assert.ok(world.out().includes(`watchdog task: on (${task})`), world.out());
+});
+
+test('start --at-login refuses before anything is written when the task cannot be registered as it must be, or looked for', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'SystemRoot is not set': { environment: (env) => ({ APPDATA: env.APPDATA }), message: /SystemRoot/ },
+    'the tasks cannot be listed': { arrange: (tasks) => { tasks.fail.list = 1; }, message: /could not be listed/, byHand: true },
+    'schtasks cannot run': { arrange: (tasks) => { tasks.fail.list = new Error('schtasks.exe could not run: spawnSync ENOENT'); }, message: /could not run/, byHand: true },
+  };
+  for (const [what, { environment = (env) => env, project = 'proj', arrange = () => {}, message, byHand }] of Object.entries(cases)) {
+    const root = makeProject(project);
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld();
+    arrange(world.tasks);
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], environment(env), world.deps), 1, what);
+    assert.match(world.err(), message, what);
+    assert.match(world.err(), /Nothing was started/, what);
+    if (byHand) assert.ok(world.err().includes(`schtasks /Query /TN ${taskNameOf(root)}`), `${what}: it says how to look by hand: ${world.err()}`);
+    assert.deepEqual(fs.readdirSync(startupDir), [], `${what}: no launcher`);
+    assert.equal(fs.existsSync(manifestPath(home)), false, `${what}: nothing is recorded`);
+    assert.deepEqual(world.tasks.mutations(), [], `${what}: nothing is registered`);
+    assert.equal(world.spawned.length, 0, what);
+  }
+});
+
+/** Schtasks that must not be run at all. */
+const NO_SCHTASKS = () => { throw new Error('schtasks must not be run here'); };
+const watchdogLines = (world) => world.out().split('\n').filter((line) => line.startsWith('watchdog task: '));
+
+test('start --at-login with a value only the launcher can hold does what it did before the watchdog: the launcher on, the server started, no task, and one line that says why', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'the project folder': { project: 'año', argv: [], held: (root) => root, label: /the project folder/ },
+    'the server name': { project: 'proj', argv: ['--name', 'café'], held: () => 'café', label: /the server name/ },
+  };
+  for (const [what, { project, argv, held, label }] of Object.entries(cases)) {
+    const root = makeProject(project);
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login', ...argv], env, { ...world.deps, schtasks: NO_SCHTASKS }), 0, `${what}: ${world.err()}`);
+    const file = launcherOf(startupDir, root);
+    assert.equal(world.err(), '', what);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [launcherRecord(file)] }, `${what}: the launcher is recorded, and no task is`);
+    assert.match(fs.readFileSync(file, 'utf8'), /chcp 65001/, `${what}: the launcher carries the value, as before`);
+    assert.equal(world.spawned.length, 1, `${what}: the server is started`);
+    assert.ok(world.out().includes(`login launcher: on (${file})`), world.out());
+    const [line, ...more] = watchdogLines(world);
+    assert.deepEqual(more, [], `${what}: one line`);
+    assert.match(line, /^watchdog task: off, not registered: the scheduled task cannot hold/, what);
+    assert.match(line, label, what);
+    assert.ok(line.includes(JSON.stringify(held(root))), `${what}: it names the value: ${line}`);
+    assert.match(line, /the login launcher still starts the server at every login/, what);
+
+    // Status shows the launcher on and the watchdog off; stop --at-login has no task and no record to deal with.
+    const told = fakeWorld({ alive: world.alive });
+    assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], env, told.deps), 0);
+    assert.ok(told.out().includes(`login launcher: on (${file})`), told.out());
+    assert.deepEqual(watchdogLines(told), ['watchdog task: off']);
+    const stopping = fakeWorld({ alive: world.alive });
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, stopping.deps), 0, stopping.err());
+    assert.deepEqual(watchdogLines(stopping), ['watchdog task: off (there was none)']);
+    assert.deepEqual(stopping.tasks.mutations(), [], what);
+    assert.deepEqual(fs.readdirSync(startupDir), [], what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, what);
+  }
+
+  // The exit code is the start's own, and uninstall undoes it without ever running schtasks: nothing records a task.
+  const root = makeProject('año');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld({ claude: null });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.match(world.err(), /claude/);
+  assert.deepEqual(world.tasks.calls, [], 'decided before anything is written: schtasks is not even asked');
+  const result = uninstall(home, { schtasks: NO_SCHTASKS });
+  assert.deepEqual({ removed: result.removed, tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept }, { removed: [launcherOf(startupDir, root)], tasksRemoved: [], tasksKept: [] });
+});
+
+test('a task recorded by an earlier start is not left running the earlier options when the new ones cannot be carried: it is deleted and forgotten, or the start refuses', { skip: WINDOWS_ONLY }, async () => {
+  const on = await atLoginOn();
+  assert.equal(await remoteMain([...on.argv, '--name', 'café'], on.env, on.world.deps), 0, on.world.err());
+  assert.equal(on.world.tasks.store.size, 0, 'the earlier task, still as it was registered, is deleted');
+  assert.deepEqual(readManifest(on.home), { version: null, files: [], entries: [], optional: [launcherRecord(on.file)] }, 'and its record forgotten');
+  assert.match(fs.readFileSync(on.file, 'utf8'), /--name "café"/, 'the launcher is the new one');
+  assert.match(watchdogLines(on.world).at(-1), /^watchdog task: off, not registered: .*"café".*the task registered earlier, which ran the earlier options, was deleted/);
+
+  // What cannot be retired safely refuses the whole start, before anything is written.
+  const refusals = {
+    'it was edited since': [(tasks, task) => tasks.store.set(task, { command: 'calc.exe', arguments: '' }), /changed since js-harness registered it/],
+    'it cannot be looked at': [(tasks) => { tasks.fail.list = 1; }, /could not be listed/],
+    'it cannot be deleted': [(tasks) => { tasks.fail.delete = 5; }, /could not be deleted .*exited 5/],
+  };
+  for (const [what, [arrange, message]] of Object.entries(refusals)) {
+    const earlier = await atLoginOn();
+    arrange(earlier.world.tasks, earlier.task);
+    const before = { ...whatIsThere(earlier), task: earlier.world.tasks.store.get(earlier.task) };
+    assert.equal(await remoteMain([...earlier.argv, '--name', 'café'], earlier.env, earlier.world.deps), 1, what);
+    assert.match(earlier.world.err(), message, what);
+    assert.match(earlier.world.err(), /Nothing was started/, what);
+    assert.deepEqual({ ...whatIsThere(earlier), task: earlier.world.tasks.store.get(earlier.task) }, before, `${what}: the launcher, the manifest and the task are as they were`);
+  }
+});
+
+test('start --at-login refuses a task of that name that is not its own, and leaves it and everything else untouched', { skip: WINDOWS_ONLY }, async () => {
+  const theirs = { command: 'calc.exe', arguments: '' };
+  const cases = {
+    'no record names it': () => {},
+    'it is recorded, and was changed since': ({ home, root }) => recordScheduledTask(home, { name: taskNameOf(root), command: 'conhost.exe', arguments: 'what js-harness registered' }),
+  };
+  for (const [what, arrange] of Object.entries(cases)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld({ tasks: fakeSchtasks({ [taskNameOf(root)]: theirs }) });
+    arrange({ home, root });
+    const manifest = bytesOf(manifestPath(home));
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.deepEqual(world.tasks.store.get(taskNameOf(root)), theirs, what);
+    assert.deepEqual(world.tasks.mutations(), [], what);
+    assert.ok(world.err().includes(`schtasks /Delete /TN ${taskNameOf(root)} /F`), `${what}: it says how to remove it by hand: ${world.err()}`);
+    assert.match(world.err(), /Nothing was started/, what);
+    assert.deepEqual(fs.readdirSync(startupDir), [], `${what}: no launcher is written beside a task that is not ours`);
+    assert.equal(bytesOf(manifestPath(home)), manifest, `${what}: the manifest is as it was`);
+    assert.equal(world.spawned.length, 0, what);
+  }
+});
+
+test('start --at-login adopts a task that already runs the very command it would register and that no record names', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env } = makeAppData();
+  const record = taskRecord(env, root, { home });
+  const world = fakeWorld({ tasks: fakeSchtasks({ [record.name]: record }) }); // a start that died before recording it
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.deepEqual(world.tasks.mutations(), [], 'it is not registered a second time');
+  assert.deepEqual(readManifest(home).tasks, [record]);
+});
+
+test('all or nothing: when the task cannot be registered, start --at-login fails and the launcher, its record and the manifest are as they were', { skip: WINDOWS_ONLY }, async () => {
+  // Nothing was on before: the launcher this command wrote is removed again, with the manifest it made.
+  for (const failure of [1, new Error('schtasks.exe could not run: spawnSync EPERM')]) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const world = fakeWorld();
+    world.tasks.fail.create = failure;
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+    assert.match(world.err(), /the watchdog task is not on/);
+    assert.match(world.err(), failure === 1 ? /exited 1/ : /EPERM/);
+    assert.match(world.err(), /as they were before this command/);
+    assert.match(world.err(), /Nothing was started/);
+    assert.deepEqual(fs.readdirSync(startupDir), [], 'the launcher this command wrote is gone again');
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'with its record, and the manifest that held it');
+    assert.equal(fs.readdirSync(stateDir(home)).some((name) => name.endsWith('.xml')), false, 'and no XML file is left');
+    assert.equal(world.tasks.store.size, 0);
+    assert.equal(world.spawned.length, 0);
+    assert.doesNotMatch(world.out(), /login launcher: on|watchdog task: on/, 'it never said either was on');
+  }
+
+  // It was already on, with other options: the launcher that was on stays on, with its record, and so does its task.
+  const on = await atLoginOn(['--name', 'one']);
+  const before = { ...whatIsThere(on), task: on.world.tasks.store.get(on.task) };
+  on.world.tasks.fail.create = 1;
+  assert.equal(await remoteMain([...on.argv, '--name', 'two'], on.env, on.world.deps), 1);
+  assert.deepEqual({ ...whatIsThere(on), task: on.world.tasks.store.get(on.task) }, before);
+  assert.match(on.world.err(), /as they were before this command/);
+  assert.equal(on.world.spawned.length, 1, 'only the first start launched anything');
+});
+
+test('a task that cannot be recorded is not left registered: it is deleted again, or the earlier one registered again from its record', { skip: WINDOWS_ONLY }, async () => {
+  // First time: the task this command registered is deleted again, and the launcher goes with it.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, { ...world.deps, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.deepEqual(world.tasks.mutations().map((args) => args[0]), ['/Create', '/Delete']);
+  assert.equal(world.tasks.store.size, 0, 'a task that no record names would outlive every uninstall');
+  assert.match(world.err(), /EACCES/);
+  assert.match(world.err(), /deleted again/);
+  assert.match(world.err(), /Nothing was started/);
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(fs.existsSync(manifestPath(home)), false);
+  assert.equal(world.spawned.length, 0);
+
+  // Replacing its own: the earlier task is registered again from what its record says, and the rest is as it was.
+  const on = await atLoginOn(['--name', 'one']);
+  const before = { ...whatIsThere(on), task: on.world.tasks.store.get(on.task) };
+  assert.equal(await remoteMain([...on.argv, '--name', 'two'], on.env, { ...on.world.deps, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.deepEqual({ ...whatIsThere(on), task: on.world.tasks.store.get(on.task) }, before);
+  assert.deepEqual(on.world.tasks.mutations().map((args) => args[0]), ['/Create', '/Create', '/Create'], 'registered, replaced, put back');
+  assert.match(on.world.err(), /earlier task was registered again/);
+
+  // And when it cannot be deleted again either, it says which task is left with no record, and how to delete it.
+  const stuck = { root: makeProject('proj'), home: tempDir(), ...makeAppData(), world: fakeWorld() };
+  stuck.world.tasks.fail.delete = 5;
+  assert.equal(await remoteMain(['start', '--cwd', stuck.root, '--home', stuck.home, '--at-login'], stuck.env, { ...stuck.world.deps, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.equal(stuck.world.tasks.store.has(taskNameOf(stuck.root)), true);
+  assert.match(stuck.world.err(), /could not be deleted again .*exited 5/);
+  assert.match(stuck.world.err(), /no record names/);
+  assert.ok(stuck.world.err().includes(`schtasks /Delete /TN ${taskNameOf(stuck.root)} /F`), stuck.world.err());
+});
+
+test('a task that does not read back as it was registered is not kept: nothing could tell it later from one edited by hand', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  const run = world.tasks.run;
+  // A Task Scheduler that changes what it is handed (here, a second space) between the registration and the look.
+  world.tasks.run = (args) => {
+    const result = run(args);
+    const stored = world.tasks.store.get(args[2]);
+    if (args[0] === '/Create') world.tasks.store.set(args[2], { ...stored, arguments: stored.arguments.replace('--headless ', '--headless  ') });
+    return result;
+  };
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.match(world.err(), /does not read back as it was registered/);
+  assert.match(world.err(), /deleted again/);
+  assert.equal(world.tasks.store.size, 0);
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(fs.existsSync(manifestPath(home)), false);
+  assert.equal(world.spawned.length, 0);
+});
+
+test('stop --at-login keeps a task that is not as js-harness registered it, says so, still stops the server, and fails', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'it was edited since': ({ world, task }) => world.tasks.store.set(task, { command: 'calc.exe', arguments: '' }),
+    'no record names it': ({ home, task }) => forgetScheduledTask(home, task),
+  };
+  for (const [what, arrange] of Object.entries(cases)) {
+    const on = await atLoginOn();
+    arrange(on);
+    const before = { task: on.world.tasks.store.get(on.task), records: readManifest(on.home).tasks };
+    assert.equal(await remoteMain(['stop', '--cwd', on.root, '--home', on.home, '--at-login'], on.env, on.world.deps), 1, what);
+    assert.deepEqual({ task: on.world.tasks.store.get(on.task), records: readManifest(on.home)?.tasks }, before, `${what}: kept, with what the manifest said of it`);
+    assert.equal(on.world.tasks.mutations().length, 1, `${what}: nothing was asked of schtasks but to look, after the registration`);
+    assert.ok(on.world.err().includes(on.task), on.world.err());
+    assert.match(on.world.err(), /kept/, what);
+    assert.ok(on.world.err().includes(`schtasks /Delete /TN ${on.task} /F`), `${what}: it says how to delete it by hand`);
+    assert.deepEqual(fs.readdirSync(on.startupDir), [], `${what}: the launcher, which is as it was written, is removed all the same`);
+    assert.deepEqual(on.world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], `${what}: the server is stopped all the same`);
+  }
+});
+
+test('stop --at-login deletes nothing and forgets nothing when it could not look at the task, or could not delete it', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'the tasks cannot be listed': { fail: { list: 1 }, message: /could not be looked for.*could not be listed/, byHand: true },
+    'the task is listed and cannot be read': { fail: { read: 1 }, message: /could not be looked for.*could not be read/, byHand: true },
+    'schtasks cannot run': { fail: { list: new Error('schtasks.exe could not run: spawnSync ENOENT') }, message: /could not be looked for.*could not run/, byHand: true },
+    'the delete fails': { fail: { delete: 5 }, message: /could not be deleted .*exited 5/ },
+  };
+  for (const [what, { fail, message, byHand }] of Object.entries(cases)) {
+    const on = await atLoginOn();
+    const records = readManifest(on.home).tasks;
+    Object.assign(on.world.tasks.fail, fail);
+    assert.equal(await remoteMain(['stop', '--cwd', on.root, '--home', on.home, '--at-login'], on.env, on.world.deps), 1, what);
+    assert.match(on.world.err(), message, what);
+    if (byHand) assert.ok(on.world.err().includes(`schtasks /Query /TN ${on.task}`), `${what}: it says how to look by hand: ${on.world.err()}`);
+    assert.equal(on.world.tasks.store.has(on.task), true, `${what}: the task is still registered`);
+    assert.deepEqual(readManifest(on.home).tasks, records, `${what}: and still recorded, so nothing is left that no record names`);
+    assert.deepEqual(on.world.killed, [{ pid: 4242, createdAt: CREATED + 5 }], `${what}: the server is stopped all the same`);
+
+    // Once schtasks answers again, the same command finishes the job.
+    for (const verb of Object.keys(fail)) delete on.world.tasks.fail[verb];
+    assert.equal(await remoteMain(['stop', '--cwd', on.root, '--home', on.home, '--at-login'], on.env, on.world.deps), 0, what);
+    assert.equal(on.world.tasks.store.size, 0, what);
+    assert.equal(fs.existsSync(manifestPath(on.home)), false, what);
+  }
+});
+
+test('stop --at-login deletes the task before its record: a record that cannot be removed is said, never a task left that no record names', { skip: WINDOWS_ONLY }, async () => {
+  const on = await atLoginOn();
+  const seen = [];
+  const cannotForget = () => {
+    seen.push(on.world.tasks.store.has(on.task));
+    throw new Error('EACCES: permission denied, open manifest.json');
+  };
+  assert.equal(await remoteMain(['stop', '--cwd', on.root, '--home', on.home, '--at-login'], on.env, { ...on.world.deps, forgetScheduledTask: cannotForget }), 1);
+  assert.deepEqual(seen, [false], 'the task was gone when its record was to be forgotten');
+  assert.match(on.world.err(), /was deleted, but its record .* could not be removed \(EACCES/);
+  assert.match(on.world.err(), /js-harness remote stop --at-login again/);
+
+  // The record that is left names a task that is gone: the next stop --at-login forgets it.
+  assert.equal(await remoteMain(['stop', '--cwd', on.root, '--home', on.home, '--at-login'], on.env, on.world.deps), 0);
+  assert.match(on.world.out(), /watchdog task: off \(the task was already gone, and its record was removed\)/);
+  assert.equal(fs.existsSync(manifestPath(on.home)), false);
+});
+
+test('status says whether the watchdog task is on for this repository, after the launcher line, and exits as it did', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env } = makeAppData();
+  const tasks = fakeSchtasks();
+  const task = taskNameOf(root);
+  const status = async () => {
+    const world = fakeWorld({ tasks });
+    const code = await remoteMain(['status', '--cwd', root, '--home', home], env, world.deps);
+    const lines = world.out().split('\n');
+    return { code, line: lines.find((line) => line.startsWith('watchdog task: ')), after: lines[lines.findIndex((line) => line.startsWith('watchdog task: ')) - 1] };
+  };
+
+  assert.deepEqual(await status(), { code: 0, line: 'watchdog task: off', after: 'login launcher: off' });
+
+  const world = fakeWorld({ tasks });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.equal((await status()).line, `watchdog task: on (${task})`);
+
+  const registered = tasks.store.get(task);
+  tasks.store.set(task, { command: 'calc.exe', arguments: '' });
+  assert.equal((await status()).line, `watchdog task: on (${task}, changed since js-harness registered it)`);
+
+  const record = readManifest(home).tasks[0];
+  forgetScheduledTask(home, task);
+  assert.equal((await status()).line, `watchdog task: off (a task js-harness did not record is registered as ${task})`, 'on means the task is there and recorded');
+
+  recordScheduledTask(home, record);
+  tasks.store.clear();
+  assert.equal((await status()).line, `watchdog task: off (recorded, but the task is gone: ${task})`);
+
+  // When it cannot look it says so and how to look by hand, and the exit code is the server's, as with the launcher.
+  tasks.store.set(task, registered);
+  tasks.fail.list = 1;
+  const unknown = await status();
+  assert.equal(unknown.code, 0);
+  assert.match(unknown.line, /^watchdog task: unknown \(.*could not be listed/);
+  assert.ok(unknown.line.includes(`schtasks /Query /TN ${task}`), unknown.line);
+  assert.equal(tasks.mutations().length, 1, 'status only ever looks: the one change is the registration above');
+});
+
+test('with no schtasks injected a command cannot reach the real one from a test: status cannot look, and start --at-login writes nothing', { skip: WINDOWS_ONLY }, async () => {
+  // Never the real SystemRoot here: were the refusal ever removed, the one handed over holds no schtasks.exe to run.
+  const { env, startupDir } = makeAppData();
+  for (const [what, environment] of Object.entries({ 'a SystemRoot that holds no schtasks.exe': env, 'no SystemRoot': { APPDATA: env.APPDATA } })) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const world = fakeWorld();
+    const { schtasks, ...deps } = world.deps;
+    assert.equal(typeof schtasks, 'function', 'every fake world has a fake, and this test takes it away');
+    assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], environment, deps), 0, what);
+    assert.match(world.out(), /^watchdog task: unknown \(the real schtasks\.exe is never run from a test/m, what);
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], environment, deps), 1, what);
+    assert.match(world.err(), environment === env ? /never run from a test/ : /SystemRoot is not set/, what);
+    assert.deepEqual(fs.readdirSync(startupDir), [], what);
+    assert.equal(fs.existsSync(manifestPath(home)), false, what);
+    assert.equal(world.spawned.length, 0, what);
+  }
+});
+
+// ---- what the reviews of the watchdog found ----------------------------------------------------------------------------
+
+test('an XML file that cannot be removed after the registration is said, and never leaves a task that is neither recorded nor taken back', { skip: WINDOWS_ONLY }, async () => {
+  const xmlStuck = (file, ...rest) => {
+    if (String(file).endsWith('.task.xml')) throw Object.assign(new Error(`EPERM: operation not permitted, unlink '${file}'`), { code: 'EPERM' });
+    fs.rmSync(file, ...rest);
+  };
+  // The task is registered: it is recorded all the same, and the file that is left is named.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, { ...world.deps, removeFile: xmlStuck }), 0, world.err());
+  assert.deepEqual(readManifest(home).tasks, [taskRecord(env, root, { home })], 'a registered task is recorded whatever became of the file');
+  assert.match(world.err(), /could not be removed \(EPERM/);
+  assert.ok(world.err().includes(world.tasks.registered[0].file), world.err());
+  assert.match(world.err(), /by hand/);
+  assert.equal(world.spawned.length, 1, 'and the start goes on');
+
+  // The task cannot be recorded: it is taken back all the same, and the launcher with it.
+  const other = { root: makeProject('proj'), home: tempDir(), ...makeAppData(), world: fakeWorld() };
+  assert.equal(await remoteMain(['start', '--cwd', other.root, '--home', other.home, '--at-login'], other.env, { ...other.world.deps, removeFile: xmlStuck, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.equal(other.world.tasks.store.size, 0, 'no task is left that no record names');
+  assert.match(other.world.err(), /deleted again/);
+  assert.deepEqual(fs.readdirSync(other.startupDir), []);
+  assert.equal(fs.existsSync(manifestPath(other.home)), false);
+});
+
+test('a failed registration takes back only this project\'s own records: what another project recorded in the machine manifest meanwhile stays', { skip: WINDOWS_ONLY }, async () => {
+  const theirLauncher = 'C:\\elsewhere\\Startup\\js-harness-remote-theirs.cmd';
+  const theirTask = { name: 'js-harness-remote-theirs', command: 'conhost.exe', arguments: '--headless node remote.mjs start --cwd D:\\theirs --watchdog' };
+  const theirs = { optional: { path: theirLauncher, sha256: sha256('their launcher') }, task: theirTask };
+  /** A registration that fails, while another project's `start --at-login` writes its own records. */
+  const failWhileTheyRecord = (world, home) => {
+    world.tasks.run = (args) => {
+      if (args[0] !== '/Create') return fakeSchtasks(Object.fromEntries(world.tasks.store)).run(args);
+      recordOptionalFile(home, theirLauncher, 'their launcher');
+      recordScheduledTask(home, theirTask);
+      return { status: 1, stdout: '' };
+    };
+  };
+
+  // Nothing of this project's was there before: its launcher and its record go, theirs stay.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  failWhileTheyRecord(world, home);
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [theirs.optional], tasks: [theirs.task] });
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.match(world.err(), /its records in the machine manifest are as they were before this command/);
+
+  // It was already on: its own records are what they were, and theirs are still beside them.
+  const on = await atLoginOn(['--name', 'one']);
+  const before = { launcher: bytesOf(on.file), manifest: readManifest(on.home) };
+  failWhileTheyRecord(on.world, on.home);
+  assert.equal(await remoteMain([...on.argv, '--name', 'two'], on.env, on.world.deps), 1);
+  assert.equal(bytesOf(on.file), before.launcher);
+  assert.deepEqual(readManifest(on.home), { ...before.manifest, optional: [...before.manifest.optional, theirs.optional], tasks: [...before.manifest.tasks, theirs.task] });
+});
+
+test('when what was taken back could not be put back, the command says exactly what is left', { skip: WINDOWS_ONLY }, async () => {
+  // The earlier task cannot be registered again: the task now runs the new command under the earlier record.
+  const replaced = await atLoginOn(['--name', 'one']);
+  replaced.world.tasks.fail.create = (nth) => (nth === 3 ? 1 : undefined);
+  assert.equal(await remoteMain([...replaced.argv, '--name', 'two'], replaced.env, { ...replaced.world.deps, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.match(replaced.world.err(), /the earlier task could not be registered again \(.*exited 1\)/);
+  assert.ok(replaced.world.err().includes(`schtasks /Delete /TN ${replaced.task} /F`), replaced.world.err());
+  assert.deepEqual(replaced.world.tasks.store.get(replaced.task), actionOf(taskRecord(replaced.env, replaced.root, { name: 'two', home: replaced.home })));
+
+  // The launcher cannot be put back: a folder took its place while the registration failed.
+  const blocked = await atLoginOn(['--name', 'one']);
+  blocked.world.tasks.run = (args) => {
+    if (args[0] !== '/Create') return fakeSchtasks(Object.fromEntries(blocked.world.tasks.store)).run(args);
+    fs.rmSync(blocked.file);
+    fs.mkdirSync(blocked.file);
+    return { status: 1, stdout: '' };
+  };
+  assert.equal(await remoteMain([...blocked.argv, '--name', 'two'], blocked.env, blocked.world.deps), 1);
+  assert.match(blocked.world.err(), /could not be put back/);
+  assert.ok(blocked.world.err().includes(blocked.file), blocked.world.err());
+  assert.doesNotMatch(blocked.world.err(), /are as they were before this command/);
+
+  // A start whose options no task carries deleted the earlier task and cannot forget its record: said, with the way out.
+  const retired = await atLoginOn();
+  const before = bytesOf(retired.file);
+  const cannotForget = () => { throw new Error('EACCES: permission denied, open manifest.json'); };
+  assert.equal(await remoteMain([...retired.argv, '--name', 'café'], retired.env, { ...retired.world.deps, forgetScheduledTask: cannotForget }), 1);
+  assert.match(retired.world.err(), /was deleted, but its record in the machine manifest could not be removed \(EACCES/);
+  assert.match(retired.world.err(), /js-harness remote stop --at-login forgets it/);
+  assert.equal(retired.world.tasks.store.size, 0);
+  assert.equal(bytesOf(retired.file), before, 'the launcher is the earlier one again');
+  assert.equal(readManifest(retired.home).tasks.length, 1, 'and the record of the task that is gone is still there to be forgotten');
+});
+
+test('a watchdog turn that cannot start the server says why in the project\'s log, where the next status finds it; one with nothing to do writes nothing', { skip: WINDOWS_ONLY }, async () => {
+  const argv = (root, home) => ['start', '--cwd', root, '--home', home, '--name', 'proj', '--watchdog'];
+  const logOf = (home, root) => (fs.existsSync(logPathOf(home, root)) ? fs.readFileSync(logPathOf(home, root), 'utf8') : '');
+  const failures = {
+    'claude is not on PATH': { claude: null, reason: /claude.*PATH/ },
+    'the recorded process cannot be told apart': { arrange: ({ home, root, world }) => { writeState(home, root, { pid: 777, startedAt: CREATED }); world.alive.set(777, null); }, reason: /cannot tell whether the remote server is already running/ },
+    'the state file is unusable': { arrange: ({ home, root }) => { fs.mkdirSync(stateDir(home), { recursive: true }); fs.writeFileSync(statePath(home, root), '{ not json'); }, reason: /state file/ },
+    'the lock is held': { arrange: ({ home, root, world }) => { fs.mkdirSync(stateDir(home), { recursive: true }); fs.writeFileSync(lockPathOf(home, root), `${JSON.stringify({ pid: 555, createdAt: CREATED })}\n`); world.alive.set(555, CREATED); }, reason: /in progress/ },
+  };
+  for (const [what, { claude = { path: 'C:\\bin\\claude.exe', shell: false }, arrange = () => {}, reason }] of Object.entries(failures)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const world = fakeWorld({ claude });
+    arrange({ home, root, world });
+    assert.equal(await remoteMain(argv(root, home), {}, world.deps), 1, what);
+    const lines = logOf(home, root).split('\n').filter(Boolean);
+    assert.equal(lines.length, 1, `${what}: one line: ${lines.join(' | ')}`);
+    assert.match(lines[0], /^\[js-harness remote\] watchdog: the server was not started: /, what);
+    assert.match(lines[0], reason, what);
+    assert.equal(world.spawned.length, 0, what);
+    // The note is the watchdog's, not the server's: a status that reads this log does not take it for the server going down.
+    assert.equal(readServerState(`· Connected · proj · main\n${logOf(home, root)}`).connection, 'connected', what);
+  }
+
+  // Its two normal cases, and a start that is not the watchdog's, leave the log alone.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const world = fakeWorld({ claude: null });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 0);
+  assert.equal(await remoteMain(argv(root, home), {}, world.deps), 0, 'stopped on purpose');
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  fs.rmSync(stoppedPathOf(home, root));
+  assert.equal(await remoteMain(argv(root, home), {}, fakeWorld({ alive: new Map([[777, CREATED]]) }).deps), 0, 'running');
+  assert.equal(logOf(home, root), '');
+});
+
+// ---- a plain stop stays stopped: the marker, and start --watchdog ------------------------------------------------------
+
+test('a stop leaves a marker beside the state file: start --watchdog then starts nothing and exits 0, and any other start removes it and starts', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const argv = (...more) => ['start', '--cwd', root, '--home', home, ...more];
+  const world = fakeWorld();
+  assert.equal(await remoteMain(argv(), {}, world.deps), 0, world.err());
+  assert.equal(fs.existsSync(stoppedPathOf(home, root)), false, 'a server that runs has no marker');
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 0, world.err());
+  assert.equal(fs.existsSync(stoppedPathOf(home, root)), true);
+
+  // The watchdog fires every five minutes: each time it finds the marker, says why it starts nothing, and exits 0.
+  for (let fired = 0; fired < 2; fired++) {
+    const watchdog = fakeWorld();
+    assert.equal(await remoteMain(argv('--name', 'proj', '--watchdog'), {}, watchdog.deps), 0, watchdog.err());
+    assert.equal(watchdog.spawned.length, 0);
+    assert.equal(watchdog.resolved(), 0, 'the CLI is not even looked for');
+    assert.equal(watchdog.err(), '');
+    assert.match(watchdog.out(), /stopped on purpose/);
+    assert.equal(watchdog.tasks.calls.length, 0, 'and it never runs schtasks');
+  }
+  assert.equal(fs.existsSync(stoppedPathOf(home, root)), true, 'the watchdog leaves the marker');
+  assert.equal(fs.existsSync(statePath(home, root)), false);
+
+  const told = fakeWorld();
+  assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], {}, told.deps), 0);
+  assert.match(told.out(), /^remote: not running \(stopped on purpose/m, 'status says why the watchdog is not bringing it back');
+
+  // His own start, or the login launcher's, which is this same plain start.
+  const again = fakeWorld();
+  assert.equal(await remoteMain(argv('--name', 'proj'), {}, again.deps), 0, again.err());
+  assert.equal(again.spawned.length, 1);
+  assert.equal(fs.existsSync(stoppedPathOf(home, root)), false, 'so the watchdog covers it again');
+  const after = fakeWorld({ alive: again.alive });
+  assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], {}, after.deps), 0);
+  assert.doesNotMatch(after.out(), /stopped on purpose/);
+});
+
+test('stop leaves the marker whenever it ends with the server down, and never when it could not stop it', { skip: WINDOWS_ONLY }, async () => {
+  // Nothing was running: no record at all, or a stale one.
+  for (const stale of [false, true]) {
+    const root = makeProject();
+    const home = tempDir();
+    if (stale) writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 0, world.err());
+    assert.equal(fs.existsSync(stoppedPathOf(home, root)), true, `nothing running, ${stale ? 'a stale record' : 'no record'}: he asked for a server that stays down`);
+  }
+  const failures = {
+    ...UNPROVED,
+    'the supervisor survives the kill': (world) => { world.deps.kill = () => {}; },
+  };
+  for (const [what, arrange] of Object.entries(failures)) {
+    const root = makeProject();
+    const home = tempDir();
+    writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+    arrange(world);
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1, what);
+    assert.equal(fs.existsSync(stoppedPathOf(home, root)), false, `${what}: a server that may still run is not marked as stopped`);
+  }
+});
+
+test('start --watchdog with no marker starts a server that is not running, leaves one that runs alone with one quiet line, and starts nothing when it cannot tell', { skip: WINDOWS_ONLY }, async () => {
+  const argv = (root, home) => ['start', '--cwd', root, '--home', home, '--name', 'proj', '--watchdog'];
+  // The supervisor died (a stale record), or was never started: the watchdog starts it, as a plain start would.
+  for (const stale of [true, false]) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    if (stale) writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld();
+    assert.equal(await remoteMain(argv(root, home), {}, world.deps), 0, world.err());
+    assert.equal(world.spawned.length, 1);
+    assert.equal(world.spawned[0].args.includes('--watchdog'), false, 'the supervisor is started as ever');
+    assert.equal(readState(home, root).pid, 4242);
+    assert.equal(world.tasks.calls.length, 0, 'it never runs schtasks');
+
+    // Five minutes later the server runs: its normal case, exit 0 and one line, nothing on stderr.
+    const next = fakeWorld({ alive: world.alive });
+    assert.equal(await remoteMain(argv(root, home), {}, next.deps), 0);
+    assert.equal(next.err(), '');
+    assert.equal(next.spawned.length, 0);
+    assert.deepEqual(next.out().split('\n').length, 1, next.out());
+    assert.match(next.out(), /^remote: running for .*the watchdog has nothing to do/);
+  }
+  for (const [what, arrange] of Object.entries(UNPROVED)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    writeState(home, root, { pid: 777, startedAt: CREATED });
+    const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+    arrange(world);
+    assert.equal(await remoteMain(argv(root, home), {}, world.deps), 1, what);
+    assert.match(world.err(), /cannot tell/, what);
+    assert.equal(world.spawned.length, 0, what);
+    assert.equal(readState(home, root).pid, 777, `${what}: the record is kept`);
+  }
+});
+
+test('the marker has one rule: every stop that ends with the server down leaves it, with --at-login too, and every start but the watchdog\'s removes it once its own input is accepted', { skip: WINDOWS_ONLY }, async () => {
+  const on = await atLoginOn();
+  const marker = stoppedPathOf(on.home, on.root);
+  const stop = (...more) => remoteMain(['stop', '--cwd', on.root, '--home', on.home, ...more], on.env, fakeWorld({ alive: on.world.alive, tasks: on.world.tasks }).deps);
+
+  // With the task deleted nothing reads the marker, and only a start turns --at-login on again, which removes it.
+  assert.equal(await stop('--at-login'), 0);
+  assert.equal(fs.existsSync(marker), true, 'stop --at-login leaves it like any stop');
+  const back = fakeWorld({ tasks: on.world.tasks });
+  assert.equal(await remoteMain(on.argv, on.env, back.deps), 0, back.err());
+  assert.equal(fs.existsSync(marker), false);
+  assert.equal(back.spawned.length, 1);
+  on.world.alive.set(4242, CREATED + 5);
+
+  // A start that then fails for lack of the CLI has removed it all the same: he asked for a running server, and
+  // from then on the watchdog may bring it up.
+  assert.equal(await stop(), 0);
+  assert.equal(fs.existsSync(marker), true);
+  const noCli = fakeWorld({ claude: null, tasks: on.world.tasks });
+  assert.equal(await remoteMain(['start', '--cwd', on.root, '--home', on.home], on.env, noCli.deps), 1);
+  assert.equal(fs.existsSync(marker), false);
+
+  // A start refused on its own input changes nothing.
+  assert.equal(await stop(), 0);
+  assert.equal(await remoteMain(['start', '--cwd', on.root, '--home', on.home, '--name', 'a&b'], on.env, fakeWorld().deps), 2);
+  assert.equal(fs.existsSync(marker), true);
+});
+
+test('a marker that cannot be written fails the stop, and one that cannot be removed fails the start before anything is started, each saying so', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const marker = stoppedPathOf(home, root);
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  fs.mkdirSync(path.join(marker, 'in the way'), { recursive: true }); // a folder where the file goes
+  const world = fakeWorld({ alive: new Map([[777, CREATED]]) });
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.deepEqual(world.killed, [{ pid: 777, createdAt: CREATED }], 'the server is stopped');
+  assert.match(world.out(), /remote: stopped/);
+  assert.ok(world.err().includes(marker), world.err());
+  assert.match(world.err(), /watchdog/);
+
+  const starting = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, starting.deps), 1);
+  assert.ok(starting.err().includes(marker), starting.err());
+  assert.match(starting.err(), /Nothing was started/);
+  assert.match(starting.err(), /by hand/);
+  assert.equal(starting.spawned.length, 0);
+});
+
+test('--watchdog is a switch of start only, cannot be combined with --at-login, and the usage line says what it does', async () => {
+  const root = makeProject();
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const cases = [
+    [['stop', '--cwd', root, '--home', home, '--watchdog'], /unknown flag: --watchdog/],
+    [['status', '--cwd', root, '--home', home, '--watchdog'], /unknown flag: --watchdog/],
+    [['start', '--cwd', root, '--home', home, '--watchdog', '--at-login'], /--watchdog cannot be combined with --at-login/],
+    [['start', '--cwd', root, '--home', home, '--at-login', '--watchdog'], /--watchdog cannot be combined with --at-login/],
+  ];
+  for (const [argv, message] of cases) {
+    const world = fakeWorld();
+    assert.equal(await remoteMain(argv, env, world.deps), 2, JSON.stringify(argv));
+    assert.match(world.err(), message, JSON.stringify(argv));
+    assert.match(world.err(), /start also takes .*\[--watchdog\]/);
+    assert.match(world.err(), /scheduled task/);
+    assert.match(world.err(), /stays stopped/);
+    assert.equal(world.spawned.length, 0);
+    assert.equal(world.tasks.calls.length, 0);
+  }
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(fs.existsSync(stateDir(home)), false, 'and nothing is written');
 });
 
 // ---- the hidden supervisor: what it hands the server -------------------------------------------------------------------
@@ -1862,6 +2640,7 @@ test('end to end: start runs a real detached supervisor, status sees it connecte
   const err = [];
   const deps = {
     spawn: supervisorSpawn({ CLAUDE_CODE_GIT_BASH_PATH: 'C:\\persistent\\bash.exe' }),
+    schtasks: fakeSchtasks().run, // `status` looks for the watchdog task, and this test hands the command the real environment
     log: (line) => out.push(String(line)),
     error: (line) => err.push(String(line)),
   };
@@ -1916,6 +2695,7 @@ test('with real processes: a detached supervisor whose identity start cannot rea
     resolveClaude: () => ({ path: process.execPath, shell: false }),
     // The command can look itself up, for its lock; the look for the supervisor it launched fails.
     identifyProcesses: (pids) => (pids.every((pid) => pid === process.pid) ? [{ pid: process.pid, createdAt: OWN_CREATED }] : SNAPSHOT_FAILED()),
+    schtasks: fakeSchtasks().run,
     log: () => {},
     error: (line) => err.push(String(line)),
   };

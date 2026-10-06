@@ -240,7 +240,9 @@ test('--help lists remote, and remote without a subcommand exits 2 with its usag
 
 test('--help says what --at-login does to remote start and stop, and so does the usage of remote', () => {
   assert.match(run(['--help']).stdout, /^ {2}remote\s+.*start --at-login.*login.*stop --at-login/m);
+  assert.match(run(['--help']).stdout, /^ {2}remote\s+.*start --at-login.*within five minutes.*stop --at-login undoes both/m, 'the watchdog is part of what --at-login turns on');
   assert.match(run(['remote']).stderr, /start and stop also take \[--at-login\]/);
+  assert.match(run(['remote']).stderr, /start also takes .*\[--watchdog\]/);
 });
 
 // A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.

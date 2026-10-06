@@ -15,6 +15,11 @@ import {
   recordOptionalFile,
   forgetOptionalFile,
   installedVersion,
+  recordScheduledTask,
+  forgetScheduledTask,
+  scheduledTaskAction,
+  lookAtScheduledTask,
+  runSchtasks,
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 
@@ -141,7 +146,7 @@ test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
+    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -966,7 +971,7 @@ test('uninstall over a manifest that only records optional files removes them an
     fs.mkdirSync(path.dirname(others), { recursive: true });
     fs.writeFileSync(others, '{"hooks":{}}');
 
-    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [] });
+    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] });
     assert.equal(fs.existsSync(manifestPath(home)), false);
     assert.equal(fs.readFileSync(others, 'utf8'), '{"hooks":{}}', 'no component or hook entry was recorded, so none is looked for');
   } finally {
@@ -1044,6 +1049,321 @@ test('forgetOptionalFile with no record, or no manifest, changes nothing', () =>
     const before = fs.readFileSync(manifestPath(home), 'utf8');
     assert.equal(forgetOptionalFile(home, path.join(home, 'nothing.cmd')), false);
     assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- scheduled tasks: registered with Windows on request (the watchdog of `remote start --at-login`) ---
+
+const TASK = {
+  name: 'js-harness-remote-x',
+  command: 'C:\\Windows\\System32\\conhost.exe',
+  arguments: '--headless "C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd D:\\work\\proj --name proj --watchdog',
+};
+const OTHER_TASK = { ...TASK, name: 'js-harness-remote-y', arguments: `${TASK.arguments} --spawn worktree` };
+
+const xmlEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const xmlUnescape = (text) => text.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** What `schtasks /Query /TN <name> /XML` prints for a task whose action is `{ command, arguments }`: not the
+ * document that registered it. Measured on 2026-10-06: declared as UTF-16, reordered (the actions last, the
+ * triggers after the settings), with defaults and the user's id added. */
+function queriedXml(name, action) {
+  return [
+    '<?xml version="1.0" encoding="UTF-16"?>',
+    '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+    `  <RegistrationInfo><Description>a task</Description><URI>\\${name}</URI></RegistrationInfo>`,
+    '  <Principals><Principal id="Author"><UserId>S-1-5-21-1-2-3-1001</UserId><LogonType>InteractiveToken</LogonType></Principal></Principals>',
+    '  <Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><IdleSettings><Duration>PT10M</Duration><StopOnIdleEnd>true</StopOnIdleEnd></IdleSettings><Enabled>true</Enabled></Settings>',
+    '  <Triggers><TimeTrigger><StartBoundary>2026-01-01T00:00:00</StartBoundary><Repetition><Interval>PT5M</Interval></Repetition></TimeTrigger></Triggers>',
+    `  <Actions Context="Author"><Exec><Command>${xmlEscape(action.command)}</Command><Arguments>${xmlEscape(action.arguments)}</Arguments></Exec></Actions>`,
+    '</Task>',
+    '',
+  ].join('\r\n');
+}
+
+/** A stand-in for `schtasks.exe` over a store of tasks, name to `{ command, arguments }`: it lists them among
+ * Windows's own, prints one back as `queriedXml`, registers one from the XML file it is handed, deletes one, and
+ * exits 1 for a task that is not there. `fail[verb]` (`list`, `read`, `create`, `delete`) is the exit code that
+ * verb then ends with, having done nothing, or an error it throws. No test here may run the real program. */
+function fakeSchtasks(tasks = {}) {
+  const store = new Map(Object.entries(tasks).map(([name, action]) => [name, { command: action.command, arguments: action.arguments }]));
+  const calls = [];
+  const fail = {};
+  const run = (args) => {
+    calls.push(args);
+    const value = (flag) => args[args.indexOf(flag) + 1];
+    const verb = args[0] === '/Query' ? (args.includes('/XML') ? 'read' : 'list') : args[0].slice(1).toLowerCase();
+    if (fail[verb] instanceof Error) throw fail[verb];
+    if (fail[verb] !== undefined) return { status: fail[verb], stdout: '' };
+    // Windows finds a task by its name whatever the case of its letters.
+    const name = [...store.keys()].find((task) => task.toLowerCase() === value('/TN')?.toLowerCase()) ?? value('/TN');
+    if (verb === 'list') {
+      const rows = ['"TaskName","Next Run Time","Status"', '"\\Microsoft\\Windows\\Defrag\\ScheduledDefrag","N/A","Ready"', ...[...store.keys()].map((task) => `"\\${task}","06/10/2026 12:05:00","Ready"`)];
+      return { status: 0, stdout: `${rows.join('\r\n')}\r\n` };
+    }
+    if (verb === 'read') return store.has(name) ? { status: 0, stdout: queriedXml(name, store.get(name)) } : { status: 1, stdout: '' };
+    if (verb === 'delete') return store.delete(name) ? { status: 0, stdout: '' } : { status: 1, stdout: '' };
+    if (verb === 'create') {
+      if (store.has(name) && !args.includes('/F')) return { status: 1, stdout: '' };
+      const xml = fs.readFileSync(value('/XML'), 'utf8');
+      store.set(name, { command: xmlUnescape(/<Command>(.*?)<\/Command>/s.exec(xml)[1]), arguments: xmlUnescape(/<Arguments>(.*?)<\/Arguments>/s.exec(xml)[1]) });
+      return { status: 0, stdout: '' };
+    }
+    throw new Error(`the fake schtasks does not know ${args.join(' ')}`);
+  };
+  return { run, store, calls, fail, mutations: () => calls.filter((args) => args[0] !== '/Query') };
+}
+
+const NEVER_RUN = () => { throw new Error('schtasks must not be run here'); };
+
+test('recordScheduledTask keeps a task by name and by the command it runs, in an array of its own, and creates a manifest that says nothing is installed', () => {
+  const home = makeTmpHome();
+  try {
+    const record = recordScheduledTask(home, { ...TASK, somethingElse: 'not recorded' });
+    assert.deepEqual(record, TASK);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, 'a task is not a file: it is not in `optional`');
+    assert.equal(installedVersion(home), null, 'and a manifest that only records a task still reads as not installed');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('recordScheduledTask adds to an installed manifest without touching the rest, one record per name', () => {
+  const home = makeTmpHome();
+  try {
+    const installed = install(home, '0.1.0');
+    const { file, content } = makeOptionalFile(home);
+    const launcher = recordOptionalFile(home, file, content);
+    recordScheduledTask(home, TASK);
+    assert.deepEqual(readManifest(home), { ...installed, optional: [launcher], tasks: [TASK] });
+
+    recordScheduledTask(home, { ...TASK, name: TASK.name.toUpperCase(), arguments: 'other arguments' });
+    recordScheduledTask(home, OTHER_TASK);
+    assert.deepEqual(readManifest(home).tasks, [{ ...TASK, name: TASK.name.toUpperCase(), arguments: 'other arguments' }, OTHER_TASK], 'Windows does not tell two task names apart by case');
+    assert.deepEqual(readManifest(home).optional, [launcher]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('install and sync carry the scheduled tasks forward untouched, run nothing, and add no field when there is none', () => {
+  const home = makeTmpHome();
+  const clean = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    const installed = install(home, '0.1.0', { schtasks: NEVER_RUN });
+    assert.equal(installed.version, '0.1.0');
+    assert.deepEqual(installed.tasks, [TASK]);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+    assert.equal(installed.files.length, install(clean, '0.1.0').files.length, 'over a manifest that only records a task, install does what it does with none');
+
+    const synced = sync(home, '0.2.0', { schtasks: NEVER_RUN });
+    assert.deepEqual(synced.tasks, [TASK], 'sync prunes what no component declares, and a task is not one of those');
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+
+    assert.equal(Object.hasOwn(readManifest(clean), 'tasks'), false);
+    assert.equal(Object.hasOwn(sync(clean, '0.2.0'), 'tasks'), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(clean, { recursive: true, force: true });
+  }
+});
+
+test('forgetScheduledTask removes the record, and the manifest with it only when nothing else is recorded: the last of the tasks and of the optional files', () => {
+  const home = makeTmpHome();
+  try {
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    recordScheduledTask(home, TASK);
+    recordScheduledTask(home, OTHER_TASK);
+
+    assert.equal(forgetScheduledTask(home, OTHER_TASK.name), true);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+    assert.equal(forgetScheduledTask(home, TASK.name.toUpperCase()), true, 'by name, whatever its case');
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [{ path: file, sha256: sha256(content) }] }, 'the optional file is still recorded, with no empty `tasks` left');
+
+    // The other way round: the last optional record goes while a task is still recorded.
+    recordScheduledTask(home, TASK);
+    assert.equal(forgetOptionalFile(home, file), true);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, 'forgetting the last optional file must not take the record of a task with it');
+
+    assert.equal(forgetScheduledTask(home, TASK.name), true);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'a manifest that records nothing is not left behind');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nor its folder, when empty');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('forgetScheduledTask leaves an installed manifest exactly as it was before the record, and changes nothing with no record or no manifest', () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(forgetScheduledTask(home, TASK.name), false);
+    assert.deepEqual(fs.readdirSync(home), [], 'no manifest is created to forget from');
+
+    install(home, '0.1.0');
+    const before = fs.readFileSync(manifestPath(home), 'utf8');
+    assert.equal(forgetScheduledTask(home, TASK.name), false);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
+    recordScheduledTask(home, TASK);
+    assert.notEqual(fs.readFileSync(manifestPath(home), 'utf8'), before);
+    assert.equal(forgetScheduledTask(home, TASK.name), true);
+    assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('scheduledTaskAction reads the command and its arguments out of what schtasks prints back, whatever the order and the defaults around them', () => {
+  const tricky = { command: 'C:\\R&D\\conhost.exe', arguments: '--headless "C:\\a b\\node.exe" x <y> & z' };
+  assert.deepEqual(scheduledTaskAction(queriedXml('t', TASK)), { command: TASK.command, arguments: TASK.arguments });
+  assert.deepEqual(scheduledTaskAction(queriedXml('t', tricky)), tricky, 'what XML escapes is read back as it was');
+  assert.deepEqual(scheduledTaskAction('<Task><Actions><Exec><Command>a&#x26;b&#38;c</Command></Exec></Actions></Task>'), { command: 'a&b&c', arguments: '' }, 'no arguments is an empty string, and a numbered character is read');
+  const exec = '<Exec><Command>a.exe</Command><Arguments>b</Arguments></Exec>';
+  const notOurs = {
+    'no action': '<Task><Actions Context="Author"></Actions></Task>',
+    'two actions': `<Task><Actions Context="Author">${exec}${exec}</Actions></Task>`,
+    'an action that is not a command': `<Task><Actions>${exec}<ComHandler><ClassId>{0}</ClassId></ComHandler></Actions></Task>`,
+    'a command with no program': '<Task><Actions><Exec><Arguments>b</Arguments></Exec></Actions></Task>',
+    'no document': '',
+  };
+  for (const [what, xml] of Object.entries(notOurs)) assert.equal(scheduledTaskAction(xml), null, what);
+});
+
+test('lookAtScheduledTask says absent only when the list of tasks ran and does not hold the name, and never changes anything', () => {
+  const tasks = fakeSchtasks({ [TASK.name]: TASK, [`${TASK.name}y`]: OTHER_TASK });
+  assert.deepEqual(lookAtScheduledTask(TASK.name, tasks.run), { found: 'present', action: { command: TASK.command, arguments: TASK.arguments } });
+  assert.deepEqual(lookAtScheduledTask(TASK.name.toUpperCase(), tasks.run).found, 'present', 'by name, whatever its case');
+  assert.deepEqual(lookAtScheduledTask('js-harness-remote', tasks.run), { found: 'absent' }, 'the start of another name is not that name');
+  assert.deepEqual(lookAtScheduledTask('ScheduledDefrag', tasks.run), { found: 'absent' }, 'a task of that name in a folder is another task');
+  assert.deepEqual(tasks.calls.at(-1), ['/Query', '/FO', 'CSV'], 'a task that is not listed is not asked for by name: that exit code says nothing');
+  assert.deepEqual(tasks.mutations(), []);
+});
+
+test('lookAtScheduledTask answers unknown, with why, whenever it could not look: nothing then proves the task absent', () => {
+  const cases = {
+    'the list fails': [(tasks) => { tasks.fail.list = 1; }, /could not be listed .*exited 1/],
+    'the task is listed and cannot be read': [(tasks) => { tasks.fail.read = 1; }, /listed and could not be read .*exited 1/],
+    'schtasks cannot run': [(tasks) => { tasks.fail.list = new Error('schtasks.exe could not run: spawnSync ENOENT'); }, /could not run/],
+  };
+  for (const [what, [arrange, why]] of Object.entries(cases)) {
+    const tasks = fakeSchtasks({ [TASK.name]: TASK });
+    arrange(tasks);
+    const look = lookAtScheduledTask(TASK.name, tasks.run);
+    assert.equal(look.found, 'unknown', what);
+    assert.match(look.why, why, what);
+    assert.deepEqual(tasks.mutations(), [], what);
+  }
+  // Present, but not a task that runs one command: there is no action to compare.
+  const odd = fakeSchtasks();
+  odd.run = (args) => (args.includes('/XML') ? { status: 0, stdout: '<Task><Actions></Actions></Task>' } : { status: 0, stdout: `"\\${TASK.name}","N/A","Ready"\r\n` });
+  assert.deepEqual(lookAtScheduledTask(TASK.name, odd.run), { found: 'present', action: null });
+});
+
+test('runSchtasks runs the schtasks.exe of the SystemRoot it is given, never one found on PATH, and gives back the exit code and what was printed', () => {
+  const ran = [];
+  const spawnSync = (file, args, options) => {
+    ran.push({ file, args, options });
+    return { status: 3, stdout: Buffer.from('caf\xe9\r\n', 'latin1'), stderr: Buffer.alloc(0) };
+  };
+  assert.deepEqual(runSchtasks(['/Query', '/FO', 'CSV'], { env: { systemroot: 'D:\\Win' }, spawnSync }), { status: 3, stdout: 'caf\xe9\r\n' });
+  assert.equal(ran[0].file, 'D:\\Win\\System32\\schtasks.exe');
+  assert.deepEqual(ran[0].args, ['/Query', '/FO', 'CSV']);
+  assert.equal(ran[0].options.shell, undefined, 'no shell: the arguments are handed over as they are');
+  assert.equal(ran[0].options.windowsHide, true);
+
+  const utf16 = () => ({ status: 0, stdout: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('<Task>ñ</Task>', 'utf16le')]) });
+  assert.equal(runSchtasks(['/Query'], { env: { SystemRoot: 'C:\\Windows' }, spawnSync: utf16 }).stdout, '<Task>ñ</Task>', 'UTF-16 with its mark is read as UTF-16');
+
+  for (const env of [{}, { SystemRoot: '' }, { SystemRoot: 'Windows' }, { PATH: 'C:\\Windows\\System32' }]) {
+    assert.throws(() => runSchtasks(['/Query'], { env, spawnSync }), /SystemRoot/, JSON.stringify(env));
+  }
+  assert.equal(ran.length, 1, 'and nothing was run without it');
+  const failed = () => ({ error: new Error('spawnSync schtasks.exe ENOENT'), status: null });
+  assert.throws(() => runSchtasks(['/Query'], { env: { SystemRoot: 'C:\\Windows' }, spawnSync: failed }), /could not run.*ENOENT/);
+});
+
+/** A `SystemRoot` that holds no `schtasks.exe`: whatever is run from it does not start. */
+const NO_WINDOWS = path.join(os.tmpdir(), 'js-harness-no-such-windows');
+
+test('the real schtasks.exe is never run from a test: with nothing injected runSchtasks refuses before it looks at the environment, on any host', () => {
+  // The environments handed over hold no schtasks.exe, so were this guard removed no real program would run: the
+  // call would fail to find or to start one, with another message. And what is asked is only a read.
+  const readOnly = ['/Query', '/TN', 'js-harness-no-such-task', '/XML'];
+  for (const env of [{ SystemRoot: NO_WINDOWS }, {}, { PATH: process.env.PATH ?? '' }]) {
+    assert.throws(() => runSchtasks(readOnly, { env }), /never run from a test/, JSON.stringify(Object.keys(env)));
+  }
+});
+
+test('uninstall deletes a recorded task only while it still runs the recorded command, and says why it kept any other', () => {
+  const home = makeTmpHome();
+  try {
+    const edited = { ...TASK, name: 'js-harness-remote-edited' };
+    const gone = { ...TASK, name: 'js-harness-remote-gone' };
+    const locked = { ...TASK, name: 'js-harness-remote-locked' };
+    for (const task of [TASK, edited, gone, locked]) recordScheduledTask(home, task);
+    const tasks = fakeSchtasks({ [TASK.name]: TASK, [edited.name]: { ...edited, arguments: '--headless calc.exe' }, [locked.name]: locked, 'not-recorded': TASK });
+    const run = (args) => (args[0] === '/Delete' && args.includes(locked.name) ? { status: 5, stdout: '' } : tasks.run(args));
+
+    const result = uninstall(home, { schtasks: run });
+
+    assert.deepEqual(result.tasksRemoved, [TASK.name]);
+    assert.deepEqual(result.tasksKept, [
+      { name: edited.name, reason: 'edited' },
+      { name: locked.name, reason: 'unremovable', why: `schtasks /Delete /TN ${locked.name} /F exited 5` },
+    ], 'a task that is already gone just loses its record');
+    assert.deepEqual([...tasks.store.keys()].sort(), [edited.name, locked.name, 'not-recorded'].sort(), 'only the task that still ran the recorded command is deleted');
+    assert.deepEqual(tasks.mutations(), [['/Delete', '/TN', TASK.name, '/F']], 'and nothing else was asked of schtasks but to look');
+    assert.deepEqual({ removed: result.removed, kept: result.kept }, { removed: [], kept: [] }, 'a task is not one of the files');
+
+    // The task that could not be deleted is still registered and still fires, so its record stays, alone, in a
+    // manifest that reads as not installed: the uninstall can be run again. The edited one is the user's now.
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [locked] });
+    assert.equal(installedVersion(home), null);
+    const again = uninstall(home, { schtasks: tasks.run });
+    assert.deepEqual({ tasksRemoved: again.tasksRemoved, tasksKept: again.tasksKept }, { tasksRemoved: [locked.name], tasksKept: [] });
+    assert.equal(tasks.store.has(locked.name), false);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'and then nothing is left');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall never deletes a task it could not look at, and with no seam injected it cannot reach the real schtasks from a test', () => {
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    const tasks = fakeSchtasks({ [TASK.name]: TASK });
+    tasks.fail.list = 1;
+    const result = uninstall(home, { schtasks: tasks.run });
+    assert.deepEqual(result.tasksRemoved, []);
+    assert.equal(result.tasksKept.length, 1);
+    assert.deepEqual({ name: result.tasksKept[0].name, reason: result.tasksKept[0].reason }, { name: TASK.name, reason: 'unknown' });
+    assert.match(result.tasksKept[0].why, /could not be listed/);
+    assert.deepEqual(tasks.mutations(), []);
+    assert.equal(tasks.store.has(TASK.name), true);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, 'still recorded: a second uninstall, or stop --at-login, can look again');
+
+    const unguarded = uninstall(home);
+    assert.equal(unguarded.tasksKept[0].reason, 'unknown');
+    assert.match(unguarded.tasksKept[0].why, /never run from a test/);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall runs schtasks only for a manifest that records a task', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const { file, content } = makeOptionalFile(home);
+    recordOptionalFile(home, file, content);
+    const result = uninstall(home, { schtasks: NEVER_RUN });
+    assert.deepEqual({ tasksRemoved: result.tasksRemoved, tasksKept: result.tasksKept }, { tasksRemoved: [], tasksKept: [] });
+    assert.ok(result.removed.includes(file));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

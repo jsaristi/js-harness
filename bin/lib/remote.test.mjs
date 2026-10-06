@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog } from './remote.mjs';
+import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -1067,4 +1067,87 @@ test('a generated launcher run by a real cmd.exe hands the script its arguments 
   } else {
     t.diagnostic('the console did not switch to code page 850 here, so the need for the chcp line was not re-measured');
   }
+});
+
+// ---- the watchdog: a scheduled task that runs the launcher's command every five minutes --------------------------------
+
+const CONHOST = 'C:\\Windows\\System32\\conhost.exe';
+
+test('watchdogTask runs the very command of the launcher plus --watchdog, through conhost --headless so no window opens', () => {
+  const action = watchdogTask({ ...LAUNCHER, conhost: CONHOST });
+  assert.deepEqual(action, {
+    command: CONHOST,
+    arguments: '--headless "C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd D:\\work\\proj --name proj --watchdog',
+  });
+  assert.equal(action.arguments, `--headless ${launcherLines(loginLauncher(LAUNCHER)).at(-1)} --watchdog`, 'what the launcher runs, and one flag');
+  assert.doesNotMatch(action.arguments, /--at-login/, 'the task starts the server, it does not register itself again');
+});
+
+test('watchdogTask passes the options the server was started with, as the launcher does', () => {
+  const options = { ...LAUNCHER, root: 'D:\\my work\\proj', name: 'my phone', permissionMode: 'acceptEdits', spawnMode: 'worktree', home: 'D:\\other home' };
+  assert.equal(
+    watchdogTask({ ...options, conhost: CONHOST }).arguments,
+    '--headless "C:\\Program Files\\nodejs\\node.exe" D:\\js-harness\\bin\\remote.mjs start --cwd "D:\\my work\\proj" --name "my phone" --permission-mode acceptEdits --spawn worktree --home "D:\\other home" --watchdog',
+  );
+});
+
+test('watchdogTask refuses, naming it, a value a scheduled task cannot carry: what the launcher refuses, a letter beyond ASCII, and $(', () => {
+  const fields = { node: /node executable/, script: /install of js-harness/, root: /project folder/, name: /server name/, home: /home/, permissionMode: /permission mode/, spawnMode: /spawn mode/, conhost: /conhost\.exe/ };
+  for (const [field, label] of Object.entries(fields)) {
+    for (const bad of ['%', '"', '&', '\n', 'ñ', '\u00a0', '$(Arg0)']) {
+      const value = `C:\\a${bad}b`;
+      assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, [field]: value }), (err) => {
+        assert.match(err.message, label, `${field} with ${JSON.stringify(bad)}: ${err.message}`);
+        assert.ok(err.message.includes(JSON.stringify(value)), err.message);
+        return true;
+      });
+    }
+  }
+  // What only the task refuses says so, in words and in `onlyTheTask`: the launcher takes a letter beyond ASCII,
+  // and has a line for it, so whoever asked for both can still have the launcher.
+  const refusal = (options) => {
+    try {
+      watchdogTask({ ...LAUNCHER, conhost: CONHOST, ...options });
+    } catch (err) {
+      return err;
+    }
+    return assert.fail('it did not refuse');
+  };
+  for (const held of ['D:\\año\\proj', 'D:\\a\u00a0b', 'D:\\$(Arg0)']) assert.equal(refusal({ root: held }).onlyTheTask, true, held);
+  for (const refused of ['D:\\a%b', 'D:\\a"b', 'D:\\a&b', 'D:\\a\nb']) assert.equal(refusal({ root: refused }).onlyTheTask, undefined, `the launcher refuses ${JSON.stringify(refused)} too`);
+  // The path of conhost.exe is the task's alone: the launcher never holds it, so it is not a value it could carry.
+  for (const conhost of ['C:\\Wíndows\\System32\\conhost.exe', 'C:\\R&D\\System32\\conhost.exe', 'C:\\a%b\\conhost.exe']) {
+    assert.match(refusal({ conhost }).message, /the scheduled task cannot hold the path of conhost\.exe/, conhost);
+    assert.equal(refusal({ conhost }).onlyTheTask, undefined, conhost);
+  }
+  assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, root: 'D:\\año\\proj' }), /the scheduled task cannot hold the project folder .*ASCII/);
+  assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, name: 'a$(b' }), /the scheduled task cannot hold the server name .*Task Scheduler/);
+  assert.doesNotThrow(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, name: 'costs $5 (five)' }), 'a $ alone is carried as it is');
+  assert.throws(() => watchdogTask(LAUNCHER), /conhost\.exe/, 'and it is never registered with no program to run');
+});
+
+test('watchdogTaskXml is a per-user task that needs no elevation, fires every five minutes for good, and runs that one command', () => {
+  const action = watchdogTask({ ...LAUNCHER, conhost: CONHOST });
+  const xml = watchdogTaskXml(action);
+  assert.match(xml, /^<Task version="1\.2" xmlns="http:\/\/schemas\.microsoft\.com\/windows\/2004\/02\/mit\/task">/, 'no XML declaration: schtasks takes the file as UTF-8 without one');
+  assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
+  assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
+  assert.match(xml, /<Repetition>\s*<Interval>PT5M<\/Interval>\s*<StopAtDurationEnd>false<\/StopAtDurationEnd>\s*<\/Repetition>/);
+  assert.doesNotMatch(xml, /<Duration>/, 'no duration: it repeats for as long as the task exists');
+  assert.equal(xml.match(/<Enabled>true<\/Enabled>/g).length, 2, 'the trigger and the task are both enabled');
+  assert.match(xml, /<MultipleInstancesPolicy>IgnoreNew<\/MultipleInstancesPolicy>/);
+  assert.match(xml, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
+  assert.match(xml, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
+  assert.equal(xml.match(/<Exec>/g).length, 1);
+  assert.ok(xml.includes(`<Command>${CONHOST}</Command>`), xml);
+  assert.ok(xml.includes('<Arguments>--headless &quot;C:\\Program Files\\nodejs\\node.exe&quot; D:\\js-harness\\bin\\remote.mjs start --cwd D:\\work\\proj --name proj --watchdog</Arguments>'), xml);
+  assert.match(xml, /<Description>[^<]*js-harness remote stop --at-login[^<]*<\/Description>/, 'whoever finds it in Task Scheduler is told how it is removed');
+  assert.match(xml, /^[\x20-\x7e\r\n]*$/, 'all ASCII');
+  assert.equal(watchdogTaskXml(action), watchdogTaskXml({ ...action }), 'the same action gives the same document');
+});
+
+test('watchdogTaskXml escapes what XML acts on, so a recorded action is put back as it was', () => {
+  const xml = watchdogTaskXml({ command: 'C:\\R&D\\<x>.exe', arguments: `--say "it's" & more` });
+  assert.ok(xml.includes('<Command>C:\\R&amp;D\\&lt;x&gt;.exe</Command>'), xml);
+  assert.ok(xml.includes('<Arguments>--say &quot;it&apos;s&quot; &amp; more</Arguments>'), xml);
 });
