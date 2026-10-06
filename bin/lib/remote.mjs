@@ -244,9 +244,13 @@ function writeAt(io, fd, buffer, position) {
 /** Trims the log at `logPath` once it is larger than `maxBytes`. What is left is one `[js-harness remote] log
  * trimmed: ...` line (not one `remote status` reads as the server going down) and then the end of the log: at
  * most `keepBytes` of it, from the first line start in those bytes. That is after a `\n`, so never inside a
- * line, a character of several bytes or an escape sequence; an end with no `\n` in it keeps nothing. Returns
- * whether it trimmed. Best effort, like every write to the log: whatever fails (no log, one that cannot be
- * opened, read, written or cut) returns `false` and throws nothing. `io` is `node:fs`, injectable.
+ * line, a character of several bytes or an escape sequence; an end with no `\n` in it keeps nothing.
+ *
+ * Returns `{ trimmed }` and never throws: best effort, like every write to the log. `{ trimmed: false }` alone is
+ * a log with nothing to trim: none at all, one at or under the cap, or one so short that the line above would not
+ * make it shorter. A trim that failed (a log that cannot be opened, measured, read, written or cut) comes back
+ * with what failed, `{ trimmed: false, error }`: that log is not being kept under its cap, and the caller has to
+ * be able to say so (`supervise` does). `io` is `node:fs`, injectable.
  *
  * The file is trimmed in place: its end is copied over its start and the file is cut after the copy, never
  * renamed or replaced. The server holds a handle of its own to this very file for a whole run (`runServer` hands
@@ -260,19 +264,25 @@ function writeAt(io, fd, buffer, position) {
  * last of those looks and the cut, two system calls apart, is cut off with the rest: one write, and the server's
  * next repaint says again what it said. A trim that dies midway (a write error, a supervisor killed) has cut
  * nothing: the start of the file holds a copy of its end, the end is as it was, the file is still over the cap,
- * and the next check trims it. */
+ * and the next check trims it. The end is as it was because the copy stops before the part it was read from, and
+ * that is a rule here, not a matter of the numbers handed in: no more is kept than half of what the line leaves
+ * of the log (line + 2 × kept ≤ size), so a `keepBytes` of half the log or more keeps a little under half. Only
+ * what the server appends during the trim is written past that copy, and it reaches the old end only when more
+ * arrives in those moments than the room in between; the start holds all of the old end by then. */
 export function trimLog(logPath, { maxBytes = LOG_MAX_BYTES, keepBytes = LOG_KEEP_BYTES, io = fs } = {}) {
+  const note = (dropped) => Buffer.from(`[js-harness remote] log trimmed: it passed ${maxBytes} bytes, and the ${dropped} bytes before this line were dropped\n`);
   let fd;
   try {
     fd = io.openSync(logPath, 'r+');
     const size = io.fstatSync(fd).size;
-    if (size <= maxBytes) return false;
-    const end = readRange(io, fd, Math.max(0, size - keepBytes), size);
+    if (size <= maxBytes) return { trimmed: false };
+    // The rule that leaves the end as it was: line + 2 × kept ≤ size. No line is longer than the whole log's.
+    const keep = Math.max(0, Math.min(keepBytes, Math.floor((size - note(size).length) / 2)));
+    const end = readRange(io, fd, size - keep, size);
     const lineEnd = end.indexOf(0x0a);
     const kept = end.subarray(lineEnd === -1 ? end.length : lineEnd + 1);
-    const note = `[js-harness remote] log trimmed: it passed ${maxBytes} bytes, and the ${size - kept.length} bytes before this line were dropped\n`;
-    const start = Buffer.concat([Buffer.from(note), kept]);
-    if (start.length >= size) return false; // a cap of a few bytes: the note would make the log longer
+    const start = Buffer.concat([note(size - kept.length), kept]);
+    if (start.length >= size) return { trimmed: false }; // a cap of a few bytes: the line would not make the log shorter
     writeAt(io, fd, start, 0);
     let length = start.length;
     let moved = size;
@@ -285,9 +295,10 @@ export function trimLog(logPath, { maxBytes = LOG_MAX_BYTES, keepBytes = LOG_KEE
       moved = now;
     }
     io.ftruncateSync(fd, length);
-    return true;
-  } catch {
-    return false;
+    return { trimmed: true };
+  } catch (error) {
+    // No log is nothing to trim. Anything else is a log that may be over its cap and was not trimmed.
+    return fd === undefined && error?.code === 'ENOENT' ? { trimmed: false } : { trimmed: false, error };
   } finally {
     try {
       if (fd !== undefined) io.closeSync(fd);
@@ -295,6 +306,16 @@ export function trimLog(logPath, { maxBytes = LOG_MAX_BYTES, keepBytes = LOG_KEE
       // a handle that would not close costs nothing else
     }
   }
+}
+
+/** How many checks of the cap fail in a row between two lines that say so (see `supervise`): at a check a minute,
+ * a line an hour. */
+const TRIM_FAILURE_NOTE_EVERY = 60;
+
+/** What the log is told when a check of its cap failed, the `failures`-th in a row: `log not trimmed: ...`, with
+ * what failed. Like `log trimmed`, not a line `remote status` reads as the server going down. */
+export function trimFailureNote(error, failures = 1) {
+  return `log not trimmed${failures > 1 ? `, ${failures} checks in a row` : ''}: ${error?.message ?? error}`;
 }
 
 /** Runs `run` every `ms` until the function it returns is called. The timer never holds the process open. */
@@ -365,7 +386,14 @@ function runServer({ claude, args, cwd, env, logPath, spawn, kill, now, platform
  * The log has a cap, `logCap` (`{ maxBytes, keepBytes, checkMs }`, by default `LOG_MAX_BYTES`, `LOG_KEEP_BYTES`
  * and `LOG_CHECK_MS`): `trimLog` is called before each run, when no server holds the log, and every `checkMs`
  * while one runs, on a timer that starts with the run and is stopped when it ends, however it ends. A check that
- * throws is dropped, and the next one is made.
+ * fails, by what it returns or by throwing, ends nothing, and the next one is made. But a log that is not trimmed
+ * grows as it did before there was a cap, so the log is told: `log not trimmed: ...` (`trimFailureNote`) for the
+ * first check that fails, and again for every `TRIM_FAILURE_NOTE_EVERY`-th that fails after it with none going
+ * through in between. One line for each failed check would be a line a minute into the very log that cannot be
+ * cut; one line ever would be megabytes back by the time someone reads the end of a log that kept growing. A
+ * check that goes through ends the count, so a failure after it is said at once: a trim that fails every other
+ * time leaves a line every two checks, in a log that is being trimmed. Best effort like every note: the log may
+ * be the very thing that cannot be written.
  * `spawn`, `sleep(ms, signal)`, `now`, `kill` (`killTree`), `platform`, `trim` (`trimLog`) and `every(run, ms)`,
  * which returns what stops it, are injectable. */
 export async function supervise({
@@ -375,12 +403,16 @@ export async function supervise({
 }) {
   if (signal?.aborted) return;
   const note = (text) => logNote(logPath, text);
+  let failedChecks = 0; // in a row
   const checkCap = () => {
+    let failure;
     try {
-      trim(logPath, logCap);
-    } catch {
-      // a check that fails loses that check, nothing else
+      failure = trim(logPath, logCap)?.error;
+    } catch (error) {
+      failure = error ?? new Error('unknown error');
     }
+    failedChecks = failure === undefined ? 0 : failedChecks + 1;
+    if (failedChecks % TRIM_FAILURE_NOTE_EVERY === 1) note(trimFailureNote(failure, failedChecks));
   };
   let delay;
   while (!signal?.aborted) {

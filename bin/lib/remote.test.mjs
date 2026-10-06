@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimLog } from './remote.mjs';
+import { LOG_CHECK_MS, cleanServerEnv, logNote, loginLauncher, nextDelay, readPersistentEnv, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
 
 // ---- cleanServerEnv: what the server must not inherit ----------------------------------------------------------------
@@ -583,27 +583,27 @@ function trimmedParts(text) {
 
 test('trimLog leaves a log at or under the cap alone, and cuts one over it down to its end, from a line start', () => {
   const logPath = path.join(tempDir(), 'remote.log');
-  assert.equal(trimLog(logPath, SMALL_CAP), false, 'no log, nothing to trim');
+  assert.deepEqual(trimLog(logPath, SMALL_CAP), { trimmed: false }, 'no log, nothing to trim, and nothing that failed');
   const atTheCap = `${'x'.repeat(SMALL_CAP.maxBytes - 1)}\n`;
   fs.writeFileSync(logPath, atTheCap);
-  assert.equal(trimLog(logPath, SMALL_CAP), false, 'it is trimmed once it passes the cap, not at it');
+  assert.deepEqual(trimLog(logPath, SMALL_CAP), { trimmed: false }, 'it is trimmed once it passes the cap, not at it');
   assert.equal(readLog(logPath), atTheCap);
 
   fs.writeFileSync(logPath, OVER_THE_CAP);
-  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  assert.deepEqual(trimLog(logPath, SMALL_CAP), { trimmed: true });
   const { note, kept } = trimmedParts(readLog(logPath));
   assert.ok(OVER_THE_CAP.endsWith(kept), 'what is kept is the end of the log, byte for byte');
   assert.match(kept, /^before \d{7} /, 'from a line start: not inside a line, nor inside a character');
   const keptBytes = Buffer.byteLength(kept);
   assert.ok(keptBytes <= SMALL_CAP.keepBytes && keptBytes > SMALL_CAP.keepBytes - LINE_BYTES - 1, `every whole line that fits is kept: ${keptBytes}`);
   assert.ok(note.includes(`${Buffer.byteLength(OVER_THE_CAP) - keptBytes} bytes`), `the note says how much went: ${note}`);
-  assert.equal(trimLog(logPath, SMALL_CAP), false, 'and it is under the cap again');
+  assert.deepEqual(trimLog(logPath, SMALL_CAP), { trimmed: false }, 'and it is under the cap again');
 });
 
 test('trimLog keeps nothing of an end that has no line start in it: what is kept never starts inside a line', () => {
   const logPath = path.join(tempDir(), 'remote.log');
   fs.writeFileSync(logPath, `${logLines('before', 10)}${'x'.repeat(SMALL_CAP.maxBytes)}`);
-  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  assert.equal(trimLog(logPath, SMALL_CAP).trimmed, true);
   assert.equal(trimmedParts(readLog(logPath)).kept, '');
 });
 
@@ -638,7 +638,7 @@ test('a log is trimmed in place under a process that holds its append handle: wh
 
   await write('before', 700);
   assert.equal(readLog(logPath), OVER_THE_CAP);
-  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  assert.equal(trimLog(logPath, SMALL_CAP).trimmed, true);
   const trimmed = readLog(logPath);
   const { kept } = trimmedParts(trimmed);
   assert.ok(OVER_THE_CAP.endsWith(kept) && /^before \d{7} /.test(kept), 'the end of the log, from a line start');
@@ -651,7 +651,7 @@ test('a log is trimmed in place under a process that holds its append handle: wh
 
   // And a later trim finds the same handle still appending.
   await write('again', 700);
-  assert.equal(trimLog(logPath, SMALL_CAP), true);
+  assert.equal(trimLog(logPath, SMALL_CAP).trimmed, true);
   await write('last', 3);
   const final = readLog(logPath);
   assert.ok(logLines('again', 700).endsWith(trimmedParts(final).kept.slice(0, -logLines('last', 3).length)), final.slice(0, 300));
@@ -675,7 +675,7 @@ test('what the server writes while the end of the log is being moved is kept; on
         return written;
       },
     };
-    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: duringTheMove }), true);
+    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: duringTheMove }).trimmed, true);
     assert.ok(readLog(logPath).endsWith(logLine('before', 700) + logLine('during', 1)), 'a line written after the end was read is moved with it');
     assert.ok(writes > 1);
 
@@ -687,7 +687,7 @@ test('what the server writes while the end of the log is being moved is kept; on
         return fs.ftruncateSync(...args);
       },
     };
-    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: beforeTheCut }), true);
+    assert.equal(trimLog(logPath, { ...SMALL_CAP, io: beforeTheCut }).trimmed, true);
     fs.writeSync(server, logLine('after', 1));
     const log = readLog(logPath);
     assert.doesNotMatch(log, /lost/, 'that one write is gone');
@@ -716,7 +716,9 @@ test('a trim that fails loses nothing but the trim: it never throws, the end of 
         throw Object.assign(new Error(`EIO: i/o error, ${failing}`), { code: 'EIO' });
       },
     };
-    assert.equal(trimLog(logPath, { ...SMALL_CAP, io }), false, failing);
+    const result = trimLog(logPath, { ...SMALL_CAP, io });
+    assert.equal(result.trimmed, false, failing);
+    assert.equal(result.error?.message, `EIO: i/o error, ${failing}`, `${failing}: what failed comes back, so this is told from a log with nothing to trim`);
     assert.equal(closed, failing === 'openSync' ? 0 : 1, `${failing}: the handle it opened is closed`);
     const left = fs.readFileSync(logPath);
     assert.equal(left.length, whole.length, `${failing}: nothing was cut`);
@@ -724,12 +726,88 @@ test('a trim that fails loses nothing but the trim: it never throws, the end of 
 
     logNote(logPath, `after ${failing}`);
     assert.ok(readLog(logPath).endsWith(`[js-harness remote] after ${failing}\n`), `${failing}: the next note is written`);
-    assert.equal(trimLog(logPath, SMALL_CAP), true, `${failing}: and the next trim is made`);
+    assert.equal(trimLog(logPath, SMALL_CAP).trimmed, true, `${failing}: and the next trim is made`);
     assert.ok(trimmedParts(readLog(logPath)).kept.endsWith(`[js-harness remote] after ${failing}\n`));
   }
   fs.writeFileSync(logPath, whole);
   const closeFails = { ...fs, closeSync: (fd) => { fs.closeSync(fd); throw new Error('EIO: i/o error, close'); } };
-  assert.equal(trimLog(logPath, { ...SMALL_CAP, io: closeFails }), true, 'a close that fails after the cut does not throw either');
+  assert.equal(trimLog(logPath, { ...SMALL_CAP, io: closeFails }).trimmed, true, 'a close that fails after the cut does not throw either');
+});
+
+test('a server that writes during every copy does not hold a trim: after a handful of looks the log is cut, and only what came after the last look is lost', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  const server = fs.openSync(logPath, 'a'); // the server's own handle
+  try {
+    fs.writeFileSync(logPath, OVER_THE_CAP);
+    let appended = 0;
+    let looks = 0;
+    const neverQuiet = {
+      ...fs,
+      fstatSync: (...args) => {
+        looks += 1;
+        return fs.fstatSync(...args);
+      },
+      writeSync: (...args) => {
+        const written = fs.writeSync(...args);
+        // Not for ever: a trim with no bound of its own would hang this test, where it has to fail it.
+        if (appended < 1000) fs.writeSync(server, logLine('during', ++appended));
+        return written;
+      },
+    };
+    assert.deepEqual(trimLog(logPath, { ...SMALL_CAP, io: neverQuiet }), { trimmed: true });
+    // One look for the size, then one for each copy; `CATCH_UP_PASSES` says how many, this only that they are few.
+    assert.ok(looks <= 16, `the trim looked ${looks} times at a log that never stopped growing`);
+    assert.equal(appended, looks, 'a line was written during the first copy and during each one after a look');
+    const log = readLog(logPath);
+    assert.ok(Buffer.byteLength(log) < SMALL_CAP.maxBytes, `and the log was cut: ${Buffer.byteLength(log)} bytes`);
+    assert.ok(log.endsWith(logLine('before', 700) + logLines('during', appended - 1)), 'every line a look found was moved, whole and in order; the one written after the last look is gone');
+  } finally {
+    fs.closeSync(server);
+  }
+});
+
+test('trimLog never keeps more than fits before the part it keeps, whatever it is asked to keep: a trim that dies at the cut has left the end as it was', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  const whole = Buffer.from(OVER_THE_CAP);
+  // Three quarters of the log, its cap, all of it, and more than there is.
+  for (const keepBytes of [Math.floor(whole.length * 0.75), SMALL_CAP.maxBytes, whole.length, 10 * whole.length]) {
+    const cap = { maxBytes: SMALL_CAP.maxBytes, keepBytes };
+    fs.writeFileSync(logPath, whole);
+    assert.deepEqual(trimLog(logPath, cap), { trimmed: true }, `keepBytes ${keepBytes}: the log is trimmed all the same`);
+    const trimmed = fs.readFileSync(logPath);
+    const { note, kept } = trimmedParts(trimmed.toString());
+    const keptBytes = Buffer.byteLength(kept);
+    assert.ok(OVER_THE_CAP.endsWith(kept) && /^before \d{7} /.test(kept), `keepBytes ${keepBytes}: the end of the log, from a line start`);
+    assert.ok(trimmed.length <= whole.length - keptBytes, `keepBytes ${keepBytes}: what is written at the start (${trimmed.length} bytes) ends before the ${keptBytes} it was read from`);
+    assert.ok(keptBytes > (whole.length - Buffer.byteLength(note) - 16) / 2 - (LINE_BYTES + 1), `keepBytes ${keepBytes}: and all that fits that way is kept: ${keptBytes}`);
+
+    // The same trim, dying at the cut: every byte was copied by then, and none of them over the end.
+    fs.writeFileSync(logPath, whole);
+    const noCut = { ...fs, ftruncateSync: () => { throw new Error('EIO: i/o error, ftruncate'); } };
+    assert.equal(trimLog(logPath, { ...cap, io: noCut }).error?.message, 'EIO: i/o error, ftruncate');
+    const left = fs.readFileSync(logPath);
+    assert.ok(left.subarray(0, trimmed.length).equals(trimmed), `keepBytes ${keepBytes}: the start holds the copy`);
+    assert.ok(left.subarray(trimmed.length).equals(whole.subarray(trimmed.length)), `keepBytes ${keepBytes}: everything after the copy is as it was`);
+    assert.ok(left.subarray(whole.length - keptBytes).equals(Buffer.from(kept)), `keepBytes ${keepBytes}: all of the end that was to be kept among it`);
+  }
+});
+
+test('trimLog leaves alone a log that the line it leaves would not make shorter: a cap of a few bytes', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  const tiny = { maxBytes: 10, keepBytes: 4 };
+  const short = 'a few bytes\nover the cap\n';
+  fs.writeFileSync(logPath, short);
+  assert.deepEqual(trimLog(logPath, tiny), { trimmed: false }, 'over the cap, but nothing to gain: not trimmed, and not a failure');
+  assert.equal(readLog(logPath), short);
+
+  // Longer than that line, it is trimmed. Then the line is all there is, and it is not replaced check after check.
+  fs.writeFileSync(logPath, short.repeat(20));
+  assert.deepEqual(trimLog(logPath, tiny), { trimmed: true });
+  trimLog(logPath, tiny); // the line says how many bytes went, and may get a digit shorter once
+  const left = readLog(logPath);
+  assert.match(left, /^\[js-harness remote\] log trimmed: [^\n]*\n$/);
+  assert.deepEqual(trimLog(logPath, tiny), { trimmed: false });
+  assert.equal(readLog(logPath), left);
 });
 
 /** A fake of the timer the cap is checked on: `started` holds every one with whether it was stopped. Each ticks
@@ -783,6 +861,52 @@ test('supervise checks the cap before each run and on a timer during it; a check
   const log = readLog(logPath);
   assert.equal(count(log, 'Connected'), 2, log);
   assert.equal(count(log, /\[js-harness remote\] server exited \(code 1\)/.source), 2, log);
+  assert.match(log, /\[js-harness remote\] stopped/);
+});
+
+test('supervise says in the log that the cap could not be kept: when a check first fails, once every sixty that fail after it, and again when one fails after one that went through', async () => {
+  const dir = tempDir();
+  const logPath = path.join(dir, 'remote.log');
+  const controller = new AbortController();
+  const busy = () => ({ trimmed: false, error: Object.assign(new Error('EBUSY: resource busy or locked, ftruncate'), { code: 'EBUSY' }) });
+  // What the first checks find, the one before the run and then the timer's. Every later one finds the log busy.
+  const first = [
+    () => ({ trimmed: false }), // 1: under the cap, nothing to say
+    busy, //                       2: the first that fails
+    busy, //                       3
+    () => { throw new Error('EIO: i/o error, read'); }, // 4: a trim that throws has failed like the others
+    () => ({ trimmed: true }), //  5: one that went through
+  ]; //                            6: fails again, the first of 120 in a row; the 61st of them is check 66
+  const CHECKS = first.length + 120;
+  let checks = 0;
+  const { spawn, children } = trackedSpawn();
+  await supervise({
+    claude: { path: process.execPath, shell: false },
+    args: [fakeServer(dir, QUICK_FAKE)],
+    cwd: dir,
+    env: cleanServerEnv(process.env),
+    logPath,
+    spawn,
+    sleep: async () => controller.abort(),
+    trim: () => (first[checks++] ?? busy)(),
+    every: (run) => {
+      while (checks < CHECKS) run();
+      return () => {};
+    },
+    signal: controller.signal,
+  });
+  assert.equal(checks, CHECKS);
+  const log = readLog(logPath);
+  const said = log.split('\n').filter((line) => line.includes('not trimmed'));
+  assert.deepEqual(said, [
+    '[js-harness remote] log not trimmed: EBUSY: resource busy or locked, ftruncate',
+    '[js-harness remote] log not trimmed: EBUSY: resource busy or locked, ftruncate',
+    '[js-harness remote] log not trimmed, 61 checks in a row: EBUSY: resource busy or locked, ftruncate',
+  ], `${CHECKS} checks, ${CHECKS - 2} of them failed: three lines, not one for each`);
+  assert.deepEqual(said.slice(0, 2).map((line) => line.slice('[js-harness remote] '.length)), Array(2).fill(trimFailureNote(new Error('EBUSY: resource busy or locked, ftruncate'))));
+  assert.equal(children.length, 1, 'and the server ran through it all');
+  assert.equal(count(log, 'Connected'), 1, log);
+  assert.match(log, /\[js-harness remote\] server exited \(code 1\)/);
   assert.match(log, /\[js-harness remote\] stopped/);
 });
 

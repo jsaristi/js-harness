@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { logTail, readServerState, remoteId, remoteMain } from './remote.mjs';
 import { forgetOptionalFile, manifestPath, readManifest, recordOptionalFile, sha256, uninstall } from './lib/manifest.mjs';
 import { identifyProcesses } from './lib/process-tree.mjs';
-import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimLog } from './lib/remote.mjs';
+import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimFailureNote, trimLog } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -772,7 +772,7 @@ test('status reads a trimmed log as it read the whole one: the same connection, 
 
   fs.writeFileSync(logPath, whole);
   assert.deepEqual(readServerState(logTail(logPath)), state);
-  assert.equal(trimLog(logPath), true, 'the log is over the cap');
+  assert.equal(trimLog(logPath).trimmed, true, 'the log is over the cap');
   const trimmed = fs.readFileSync(logPath, 'utf8');
   assert.match(noteOf(trimmed), /^\[js-harness remote\] log trimmed: /);
   assert.ok(whole.endsWith(trimmed.slice(noteOf(trimmed).length + 1)), 'what is left is the end of the log');
@@ -782,12 +782,25 @@ test('status reads a trimmed log as it read the whole one: the same connection, 
 
   // With less kept than status reads, the line the trim leaves is in what status reads.
   fs.writeFileSync(logPath, whole);
-  assert.equal(trimLog(logPath, { keepBytes: 2048 }), true);
+  assert.equal(trimLog(logPath, { keepBytes: 2048 }).trimmed, true);
   const small = fs.readFileSync(logPath, 'utf8');
   assert.equal(logTail(logPath), small, 'all of it is read, the note with it');
   assert.deepEqual(readServerState(logTail(logPath)), state);
   assert.equal(readServerState(`${statusFrame()}${noteOf(small)}\n`).connection, 'connected', 'last in the log, that line does not say the server went down');
   assert.deepEqual(readServerState(`${noteOf(small)}\n`), { connection: 'unknown', capacity: null, environmentUrl: null }, 'and alone it says nothing of the server');
+});
+
+test('status does not read a log that could not be trimmed as a server that went down, whatever the error says', () => {
+  const line = (...args) => `[js-harness remote] ${trimFailureNote(...args)}\n`;
+  const busy = new Error('EBUSY: resource busy or locked, ftruncate');
+  // The first line of a failure, the one that repeats it, and an error whose own words are a connection state.
+  for (const note of [line(busy), line(busy, 61), line(new Error('ENOTCONN: socket is not connected, open')), line(new Error('the share is offline'))]) {
+    assert.match(note, /^\[js-harness remote\] log not trimmed/);
+    assert.equal(readServerState(`${statusFrame()}${note}`).connection, 'connected', `last in the log, it does not say the server went down: ${note}`);
+    assert.deepEqual(readServerState(note), { connection: 'unknown', capacity: null, environmentUrl: null }, `and alone it says nothing of the server: ${note}`);
+    const exited = `${statusFrame()}${note}[js-harness remote] server exited (code 1) after 600s; restarting in 5s\n`;
+    assert.equal(readServerState(exited).connection, 'not connected', 'a line that does say so is still read');
+  }
 });
 
 test('status reports a running supervisor with what its log says', { skip: WINDOWS_ONLY }, async () => {

@@ -202,6 +202,11 @@ the chain strategy is asked once, before the commit that crosses the budget.
   handle keeps writing after the kept part; `status` reads a trimmed log; a trim that fails
   never ends the supervisor (route: delegated writer; trigger: `bin/lib/remote.mjs`,
   `bin/remote.mjs` and their two test files)
+- [x] T8r T8 review findings: a trim that fails on a log over the cap leaves a note, rate
+  limited, instead of the same silence as a log under it; the bound on the looks for late
+  writes is tested; a keep size that would overlap the end it is read from is refused or
+  clamped (gentle-ai `R3-silent-trim-failure`, `R3-catch-up-bound-unproved`,
+  `R3-keep-overlap-unguarded`) (route: delegated writer)
 - [ ] T9 Watchdog: `start --at-login` registers the per-user scheduled task and records it in
   the machine manifest, `stop --at-login` and `uninstall` delete it only while it runs the
   recorded command, `status` reports it, and a registration that fails leaves the launcher
@@ -604,6 +609,30 @@ the chain strategy is asked once, before the commit that crosses the budget.
   instant of a trim can say `unknown` once; a `keepBytes` at or above `maxBytes` is not
   refused; an end with no line break in the kept window keeps only the note; nothing ran off
   Windows, and the real `claude.exe` was not part of any test.
+- 2026-10-06: T8 is `9de8b1e`; the gate passed (`PASS tests`). gentle-ai assessed
+  `9c9ed8e..9de8b1e` as medium risk, 581 lines, due by the slice budget, and its one lens,
+  reliability, approved it (lineage `review-72a42be0e8102f15`, acknowledged) with one WARNING
+  and two SUGGESTIONs, all three taken as T8r. Codex reviewed the same range and found
+  nothing to act on ("No actionable regressions were identified in the log-trimming
+  implementation, timer lifecycle, or status-reading integration"; it did not rerun the
+  tests); the review is recorded. Reviewed boundary: `9de8b1e`.
+- 2026-10-06: T8r written by a delegated writer, test first. `trimLog` now returns
+  `{ trimmed }`, with `error` when it failed (a log that is not there is not a failure), and
+  `supervise` writes `log not trimmed: <error>` on the first failed check and on every
+  sixtieth one in a row after it, about once an hour, starting over after a check that
+  works. That note could quote an error such as `socket is not connected`, and
+  `readServerState` took connection words from every line, so it now reads them only from
+  the server's own lines. The keep size is clamped so that the note and twice what is kept
+  fit in the file: what is written at the start always ends before the end it was read
+  from. RED: `[]` where three notes were expected; `'not connected'` for a note with
+  `ENOTCONN: socket is not connected`; `keepBytes 58800: what is written at the start (58794
+  bytes) ends before the 58688 it was read from`. Proved by mutation, having passed as
+  written: the bound on the looks (`look < 100000` fails with `the trim looked 1002 times`)
+  and the guard `start.length >= size`. GREEN: `node --test bin/lib/remote.test.mjs` 43 of
+  43 (run again by the parent), `node --test bin/remote.test.mjs` 86 of 86. Left open: a trim
+  that keeps failing at the cut still rewrites up to the keep size at the start of the file
+  on every check; what the server appends during a trim can land over the old end when it is
+  more than the gap, which the comment says and nothing guards.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
