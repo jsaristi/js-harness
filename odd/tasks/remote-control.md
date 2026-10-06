@@ -822,6 +822,28 @@ the chain strategy is asked once, before the commit that crosses the budget.
   `node --test bin/lib/manifest.test.mjs` 70 of 70 (run again by the parent),
   `node --test bin/lib/remote.test.mjs bin/remote.test.mjs` 169 of 169. The roadmap has the
   reopening in the phase's row, three steps under Remote sessions and an entry in Next.
+- 2026-10-06: T11 is `935d505`; the gate passed, and gentle-ai assessed `3d5be01..935d505` as
+  medium risk, 267 lines, not due (`under_budget`).
+- 2026-10-06: the Codex record of the branch, decided by Sebastián range by range. Codex ran
+  seven times that day and two runs were recorded.
+  `9c9ed8e..9de8b1e` (T8): reviewed, nothing to act on.
+  `9de8b1e..7214308` (T8r, T9): a skip he chose, recorded from a detached worktree at
+  `7214308`, because `codex-review` records up to the `HEAD` it runs in. Two runs, 885 and
+  1,650 of 1,949 lines shown, three P2s between them, all fixed in T9r.
+  `7214308..b75cf9f` (T9r): reviewed from the same worktree moved to `b75cf9f`; "Static review
+  identified no actionable regressions introduced by this patch".
+  `b75cf9f..3d5be01` (T10): a skip he chose. One run showed 517 of 893 lines, found no defect
+  in them and stopped, saying the review "exceeded the repository's inline evidence budget,
+  and required delegation tools are unavailable": a rule of Codex's global instructions,
+  which `codex exec review` loads and cannot satisfy, as the follow-up of 2026-10-04 already
+  said. This is what stopped the runs over T9 as well.
+  `3d5be01..935d505` (T11): a skip he chose. Two runs reviewed the tests, found no defect,
+  and both showed 141 of 230 lines, never the diff of `docs/ROADMAP.md`; why is not known.
+  `node bin/check.mjs --push --remote origin --head 935d505` then answered `PASS codex-review
+  6 code commits since origin/main, all covered by a Codex review record`. The detached
+  worktree is removed. So of this branch's code, Codex reviewed T8 and T9r whole; T8r and T9
+  in part, twice; 517 of T10's 893 lines; and T11's tests. A separate task was proposed to him to make
+  `codex-review` able to finish a review of an ordinary commit.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
@@ -943,7 +965,12 @@ the chain strategy is asked once, before the commit that crosses the budget.
 - The reviews do not fit a slice the size of T9. gentle-ai refused `9de8b1e..7214308` whole
   (2,476 lines, `lens_context_budget_exceeded`) and Codex's recorder refused two runs over it
   that showed 885 and 1,650 of 1,949 changed lines. A task forecast above about 1,500 lines
-  should be cut into commits a review can hold before it is written, not after.
+  should be cut into commits a review can hold before it is written, not after. For Codex
+  the limit measured that day is lower: about 500 lines went through, 893 did not, because
+  Codex stops at the evidence budget of its global instructions.
+- `codex-review` cannot be told which commit a range ends at: it records up to `HEAD`. A
+  range that ends before it needs a detached worktree at that commit and `--cwd`, which is
+  how 2026-10-06's ranges were recorded. A `--head` would say it in one flag.
 - `doctor` takes about 0.8 s more on a machine with a login launcher recorded, at every
   session start, for the one process snapshot that tells a process by its creation time.
   Looking at the pid alone would cost nothing and could call a server up when another
@@ -964,12 +991,9 @@ T8 to T11 are written, and each code commit is approved by gentle-ai except T8r,
 under the budget and waited for a slice that proved too large to review whole. What is left
 is Sebastián's to ask for, in this order:
 
-- The Codex record for `9de8b1e..7214308` (T8r and T9). Two runs found the same three P2s,
-  all fixed in T9r, and neither was recorded, because neither showed every changed line. He
-  was asked on 2026-10-06 whether to record an explicit skip with that reason and have Codex
-  review what follows whole, or to rewrite T9 into commits small enough to review; the
-  pre-push hook refuses the branch until a record covers every code commit. Codex's record
-  ends at `9de8b1e`; nothing after it is recorded yet, T9r and T10 included.
+- Done on 2026-10-06: the Codex record covers every code commit, three ranges of it by a
+  skip he chose (see Progress), and the push check passes. A commit added to this branch
+  after `935d505` needs its own record if it changes code.
 - The pull request of `fix/remote-watchdog` and its merge. The chain strategy he chose for
   this feature stands, stacked to `main`; this branch is about 4,200 changed lines under `bin` in
   six commits, so how it is sliced is asked when the pull request is.
