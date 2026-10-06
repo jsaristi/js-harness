@@ -3,11 +3,13 @@
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
 `feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
-its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
-linked worktree `D:\js-harness-worktrees\remote-watchdog`; its three slices are
-`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37),
-all three merged), `docs/remote-watchdog-merged` (the record of those merges, cut from `main` at
-`af90570`)
+its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`; its
+three slices are `fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the
+branch itself (PR #37), all three merged), `docs/remote-watchdog-merged` (the record of those
+merges, PR #38, merged), `docs/remote-watchdog-live` (the record of the live activation, cut
+from `main` at `4fc13d4`). The four branches of the watchdog and their worktree
+`D:\js-harness-worktrees\remote-watchdog` were deleted on 2026-10-06, on the remote and
+locally, once merged.
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
