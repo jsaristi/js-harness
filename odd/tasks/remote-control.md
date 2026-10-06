@@ -5,7 +5,9 @@ Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tas
 `feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
 its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
 linked worktree `D:\js-harness-worktrees\remote-watchdog`; its three slices are
-`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37))
+`fix/remote-log-cap` (PR #35), `feat/remote-watchdog-task` (PR #36) and the branch itself (PR #37),
+all three merged), `docs/remote-watchdog-merged` (the record of those merges, cut from `main` at
+`af90570`)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -865,6 +867,17 @@ the chain strategy is asked once, before the commit that crosses the budget.
   its branch is deleted, the next is retargeted to `main` and shows only its own slice. The
   repository has no CI: GitHub reports no check for any of the three, and all three are
   mergeable.
+- 2026-10-06: the three pull requests are merged, in order and each on his word, with a merge
+  commit and no history rewritten: `jsaristi/js-harness#35` as `311c330` (17:29 UTC),
+  `jsaristi/js-harness#36` as `5523463` (18:05 UTC) and `jsaristi/js-harness#37` as `af90570`
+  (18:06 UTC). The slice branches were not deleted, so GitHub retargeted nothing by itself:
+  after each merge the next pull request was pointed at `main` by hand and its diff read
+  again, and it held only its own slice (#36: 2,349 added and 152 deleted; #37: 1,248 added
+  and 137 deleted). `git diff 8a865a3 af90570` is empty: `main` holds exactly what the branch
+  held, the tree the gate passed. Nothing changed on the machine: `D:\js-harness` is still at
+  `77acc71`, the running server still has the old code, and `schtasks /Query /FO CSV` names
+  no task with `js-harness` in it. The three remote branches are still there; deleting them
+  is his to ask for.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
@@ -1008,17 +1021,17 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-T8 to T11 are written, and each code commit is approved by gentle-ai except T8r, which was
-under the budget and waited for a slice that proved too large to review whole. What is left
-is Sebastián's to ask for, in this order:
+T8 to T11 are written and merged to `main` (`af90570`). Each code commit is approved by
+gentle-ai except T8r, which was under the budget and waited for a slice that proved too
+large to review whole. What is left is Sebastián's to ask for, in this order:
 
 - Done on 2026-10-06: the Codex record covers every code commit, three ranges of it by a
   skip he chose (see Progress), and the push check passes. A commit added to this branch
   after `935d505` needs its own record if it changes code.
-- The merge of the three pull requests, in order and each on his word: #35, then #36, then
-  #37 (see Progress for what each holds). After each merge the next one's base is checked to
-  be `main` and its diff to hold only its own slice.
-- Then, in `D:\js-harness` brought up to `main` (it was 19 commits behind on 2026-10-06):
+- Done on 2026-10-06: the three pull requests are merged, #35, then #36, then #37 (see
+  Progress).
+- The live activation, in `D:\js-harness` brought up to `main` (it is at `77acc71`, behind
+  `af90570`):
   `js-harness remote stop` and `js-harness remote start --at-login`. The stop ends the
   sessions open through the server, so it is his to time; without it the running supervisor
   keeps the old code and the log stays uncapped. The start registers the watchdog task, and
@@ -1028,7 +1041,8 @@ is Sebastián's to ask for, in this order:
 
 What a later session needs to know:
 
-- Work in `D:\js-harness-worktrees\remote-watchdog`. Never touch
+- The feature's code is on `main`; `D:\js-harness-worktrees\remote-watchdog` holds only the
+  branch of this record. The activation runs from `D:\js-harness`. Never touch
   `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for `D:\js-harness`
   without asking.
 - No scheduled task of js-harness is registered on this machine: the three probes used
