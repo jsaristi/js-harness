@@ -1285,11 +1285,16 @@ test('runSchtasks runs the schtasks.exe of the SystemRoot it is given, never one
   assert.throws(() => runSchtasks(['/Query'], { env: { SystemRoot: 'C:\\Windows' }, spawnSync: failed }), /could not run.*ENOENT/);
 });
 
-test('the real schtasks.exe is never run from a test: with nothing injected runSchtasks refuses, whatever the environment', () => {
-  // Were this guard removed, what would run is a read of a task that does not exist: nothing is changed either way.
+/** A `SystemRoot` that holds no `schtasks.exe`: whatever is run from it does not start. */
+const NO_WINDOWS = path.join(os.tmpdir(), 'js-harness-no-such-windows');
+
+test('the real schtasks.exe is never run from a test: with nothing injected runSchtasks refuses before it looks at the environment, on any host', () => {
+  // The environments handed over hold no schtasks.exe, so were this guard removed no real program would run: the
+  // call would fail to find or to start one, with another message. And what is asked is only a read.
   const readOnly = ['/Query', '/TN', 'js-harness-no-such-task', '/XML'];
-  assert.throws(() => runSchtasks(readOnly), /never run from a test/);
-  assert.throws(() => runSchtasks(readOnly, { env: { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' } }), /never run from a test/);
+  for (const env of [{ SystemRoot: NO_WINDOWS }, {}, { PATH: process.env.PATH ?? '' }]) {
+    assert.throws(() => runSchtasks(readOnly, { env }), /never run from a test/, JSON.stringify(Object.keys(env)));
+  }
 });
 
 test('uninstall deletes a recorded task only while it still runs the recorded command, and says why it kept any other', () => {
@@ -1312,7 +1317,15 @@ test('uninstall deletes a recorded task only while it still runs the recorded co
     assert.deepEqual([...tasks.store.keys()].sort(), [edited.name, locked.name, 'not-recorded'].sort(), 'only the task that still ran the recorded command is deleted');
     assert.deepEqual(tasks.mutations(), [['/Delete', '/TN', TASK.name, '/F']], 'and nothing else was asked of schtasks but to look');
     assert.deepEqual({ removed: result.removed, kept: result.kept }, { removed: [], kept: [] }, 'a task is not one of the files');
-    assert.equal(fs.existsSync(manifestPath(home)), false);
+
+    // The task that could not be deleted is still registered and still fires, so its record stays, alone, in a
+    // manifest that reads as not installed: the uninstall can be run again. The edited one is the user's now.
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [locked] });
+    assert.equal(installedVersion(home), null);
+    const again = uninstall(home, { schtasks: tasks.run });
+    assert.deepEqual({ tasksRemoved: again.tasksRemoved, tasksKept: again.tasksKept }, { tasksRemoved: [locked.name], tasksKept: [] });
+    assert.equal(tasks.store.has(locked.name), false);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'and then nothing is left');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1331,11 +1344,12 @@ test('uninstall never deletes a task it could not look at, and with no seam inje
     assert.match(result.tasksKept[0].why, /could not be listed/);
     assert.deepEqual(tasks.mutations(), []);
     assert.equal(tasks.store.has(TASK.name), true);
+    assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, 'still recorded: a second uninstall, or stop --at-login, can look again');
 
-    recordScheduledTask(home, TASK);
     const unguarded = uninstall(home);
     assert.equal(unguarded.tasksKept[0].reason, 'unknown');
     assert.match(unguarded.tasksKept[0].why, /never run from a test/);
+    assert.deepEqual(readManifest(home).tasks, [TASK]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

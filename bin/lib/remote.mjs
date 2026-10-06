@@ -163,19 +163,23 @@ const UNSAFE_IN_TASK = /\$\(|[^\x20-\x7e]/;
  * fires every five minutes must; the arguments are the launcher's own command line (the same values, checked the
  * same way) and `--watchdog`, so the task starts the server only when it is not running and was not stopped on
  * purpose. Throws, naming the value, when one cannot be carried: a task that runs something else every five
- * minutes is worse than none. The error has `onlyTheTask` when the launcher can hold what the task cannot (the
- * launcher's own check passed), so `start --at-login` can still write the launcher, as it did before there was a
- * task. */
+ * minutes is worse than none. The launcher's values have passed the launcher's own check by then
+ * (`startCommandLine` throws first on what a batch file acts on), so one refused here is one the launcher holds
+ * and the task cannot: that error has `onlyTheTask`, and `start --at-login` still writes the launcher, as it did
+ * before there was a task. `conhost` is no value of the launcher's: it is checked for both, and its error has no
+ * such mark, since with no usable `conhost.exe` there is nothing to fall back from. */
 export function watchdogTask({ conhost, ...options } = {}) {
   if (typeof conhost !== 'string' || conhost.trim() === '') throw new Error('the scheduled task needs the path of conhost.exe to run its command with no window');
   const line = startCommandLine(options, ['--watchdog']);
-  for (const [key, label] of Object.entries({ ...LAUNCHER_LABELS, conhost: 'the path of conhost.exe' })) {
-    const value = key === 'conhost' ? conhost : options[key];
-    const found = value === undefined ? null : (UNSAFE_IN_BATCH.exec(value) ?? UNSAFE_IN_TASK.exec(value));
-    if (found) {
-      const message = `the scheduled task cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and a task takes only printable ASCII, with no & | < > ^ % " ! and no $(, which Task Scheduler replaces`;
-      throw Object.assign(new Error(message), { onlyTheTask: true });
-    }
+  const refuse = (label, value, found, mark) => {
+    const message = `the scheduled task cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and a task takes only printable ASCII, with no & | < > ^ % " ! and no $(, which Task Scheduler replaces`;
+    throw Object.assign(new Error(message), mark);
+  };
+  const inConhost = UNSAFE_IN_BATCH.exec(conhost) ?? UNSAFE_IN_TASK.exec(conhost);
+  if (inConhost) refuse('the path of conhost.exe', conhost, inConhost, {});
+  for (const [key, label] of Object.entries(LAUNCHER_LABELS)) {
+    const found = options[key] === undefined ? null : UNSAFE_IN_TASK.exec(options[key]);
+    if (found) refuse(label, options[key], found, { onlyTheTask: true });
   }
   return { command: conhost, arguments: `--headless ${line}` };
 }

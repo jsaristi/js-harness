@@ -22,8 +22,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { quoteWindowsArg, windowsCommandLine } from './codex-review.mjs';
 import {
-  forgetOptionalFile, forgetScheduledTask, lookAtScheduledTask, manifestPath, readManifest, recordOptionalFile, recordScheduledTask,
-  removeScheduledTask, runSchtasks, sameTaskAction, scheduledTaskAction, sha256, windowsSystem32,
+  forgetOptionalFile, forgetScheduledTask, lookAtScheduledTask, putOptionalRecordBack, putTaskRecordBack, readManifest, recordOptionalFile,
+  recordScheduledTask, removeScheduledTask, runSchtasks, sameTaskAction, sameTaskName, scheduledTaskAction, sha256, windowsSystem32,
 } from './lib/manifest.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { killProcesses, killTree, selectDescendants, takeSnapshot } from './lib/process-tree.mjs';
@@ -612,7 +612,7 @@ const taskName = (id) => `js-harness-remote-${id}`;
  * since the answer is then not known. */
 function recordedTask(home, name) {
   try {
-    return readManifest(home)?.tasks?.find((entry) => String(entry.name).toLowerCase() === name.toLowerCase());
+    return readManifest(home)?.tasks?.find((entry) => sameTaskName(entry.name, name));
   } catch (err) {
     throw new Error(`the machine manifest under ${home} could not be read (${err.message})`);
   }
@@ -675,18 +675,25 @@ function planTask(options, { env, deps, id, home }) {
  * as a task edited by hand, which nothing here ever deletes. Taking it back means deleting the task this command
  * created, or, where it replaced an earlier one of its own, registering that one again from its record
  * (`watchdogTaskXml` is a function of the recorded command alone). */
-function registerTask({ name, action, record, present, same }, { deps, home, files }) {
+function registerTask({ name, action, record, present, same }, { deps, error, home, files }) {
   if (same && sameTaskAction(record, action)) return undefined;
   const create = (what) => {
+    let failed;
     try {
       fs.writeFileSync(files.taskXmlPath, watchdogTaskXml(what));
       const created = deps.schtasks(['/Create', '/TN', name, '/XML', files.taskXmlPath, '/F']);
-      return created.status === 0 ? undefined : `schtasks /Create /TN ${name} /XML <file> /F exited ${created.status}`;
+      if (created.status !== 0) failed = `schtasks /Create /TN ${name} /XML <file> /F exited ${created.status}`;
     } catch (err) {
-      return err.message;
-    } finally {
-      fs.rmSync(files.taskXmlPath, { force: true });
+      failed = err.message;
     }
+    // The file has been read by now, or never will be. A removal that fails is said and decides nothing: thrown
+    // from here, it would leave a task that was just registered neither recorded nor taken back.
+    try {
+      deps.removeFile(files.taskXmlPath);
+    } catch (err) {
+      if (err.code !== 'ENOENT') error(`the file the scheduled task was registered from could not be removed (${err.message}); nothing reads it again: remove it by hand: ${files.taskXmlPath}`);
+    }
+    return failed;
   };
   const takeBack = () => {
     if (present) {
@@ -747,24 +754,27 @@ function retireTask({ name, record, look }, { deps, home }) {
   return undefined;
 }
 
-/** What is at each of `paths` now, to be put back exactly: returns `restore()`, which rewrites what changed,
- * removes what was not there, and returns what it could not put back (nothing, when all is as it was). */
-function remember(paths) {
-  const before = paths.map((file) => {
+/** Puts back what a `start --at-login` that failed halfway changed: the launcher file, byte for byte as
+ * `planLauncher` found it (removed, when there was none), and this project's two records in the machine manifest,
+ * as the plans found them. Only those two records: the manifest is every project's, and has no lock, so it is
+ * never written back whole, and what another project's command recorded meanwhile stays. Returns what could not
+ * be put back (nothing, when all is as it was). */
+function takeBackAtLogin(launcher, task, home) {
+  const { bytes, record } = launcher.found;
+  const steps = [
+    [launcher.file, () => {
+      if (bytes === null) fs.rmSync(launcher.file, { force: true });
+      else if (!(fs.existsSync(launcher.file) && fs.readFileSync(launcher.file).equals(bytes))) fs.writeFileSync(launcher.file, bytes);
+    }],
+    [`the record of ${launcher.file} in the machine manifest`, () => putOptionalRecordBack(home, launcher.file, record)],
+    [`the record of the task ${task.name} in the machine manifest`, () => putTaskRecordBack(home, task.name, task.record)],
+  ];
+  return steps.flatMap(([what, put]) => {
     try {
-      return [file, fs.readFileSync(file)];
-    } catch (err) {
-      if (err.code === 'ENOENT') return [file, null];
-      throw err;
-    }
-  });
-  return () => before.flatMap(([file, bytes]) => {
-    try {
-      if (bytes === null) fs.rmSync(file, { force: true });
-      else if (!(fs.existsSync(file) && fs.readFileSync(file).equals(bytes))) fs.writeFileSync(file, bytes);
+      put();
       return [];
     } catch (err) {
-      return [`${file} (${err.message})`];
+      return [`${what} (${err.message})`];
     }
   });
 }
@@ -775,10 +785,9 @@ function remember(paths) {
  *
  * All or nothing: a launcher with no watchdog is the gap this task closes, and it would say `on` while a
  * supervisor killed from outside stays down until the next login. So when the task cannot be registered or
- * recorded, the launcher file and the machine manifest are put back byte for byte as they were before this
- * command (`remember`): a launcher that was already on stays on with its record, and one this command wrote is
- * removed again with it. The manifest has no lock of its own (as the optional records already), so a record
- * another command wrote in those instants is put back with the rest.
+ * recorded, the launcher file and this project's records are put back as they were before this command
+ * (`takeBackAtLogin`): a launcher that was already on stays on with its record, and one this command wrote is
+ * removed again with it.
  *
  * That is for a task that fails. One that cannot be registered at all, because a value is beyond what a task
  * carries, is known before anything is written (`planTask` answers `skip`): the launcher is then written alone,
@@ -796,13 +805,6 @@ function enableAtLogin(opts, name, context) {
     error(`the watchdog task is not on: ${task.refusal}. Nothing was written or registered. Nothing was started.`);
     return false;
   }
-  let restore;
-  try {
-    restore = remember([launcher.file, manifestPath(home)]);
-  } catch (err) {
-    error(`the login launcher was not written: what is there now could not be read, to be put back should the rest fail (${err.message}). Nothing was started.`);
-    return false;
-  }
   const unwritten = writeLauncher(launcher, context);
   if (unwritten) {
     error(`the login launcher was not written: ${unwritten}. Nothing was started.`);
@@ -810,9 +812,9 @@ function enableAtLogin(opts, name, context) {
   }
   const unregistered = task.skip ? retireTask(task, context) : registerTask(task, context);
   if (unregistered) {
-    const left = restore();
+    const left = takeBackAtLogin(launcher, task, home);
     const state = left.length === 0
-      ? 'The login launcher and the machine manifest are as they were before this command'
+      ? 'The login launcher and its records in the machine manifest are as they were before this command'
       : `What was there before this command could not be put back: ${left.join('; ')}`;
     error(`the watchdog task is not on: ${unregistered}. ${state}. Nothing was started.`);
     return false;
@@ -983,9 +985,10 @@ async function start(opts, context) {
     log(`remote: stopped on purpose for ${path.normalize(root)}, so the watchdog starts nothing; js-harness remote start starts it again`);
     return 0;
   }
-  /** His own start, or the login launcher's: the server is wanted again, so the marker goes. `false` after saying
-   * why it could not: a marker left behind would keep the watchdog from a server he believes is covered. */
-  const wanted = () => {
+  /** Removes the marker a stop left, for his own start or the login launcher's: the server is wanted again. The
+   * watchdog's start removes nothing. `false` after saying why the marker could not go: left behind, it would
+   * keep the watchdog from a server he believes is covered. */
+  const dropStoppedMarker = () => {
     if (opts.watchdog) return true;
     const left = clearStopped(files);
     if (left) error(`the marker a stop left could not be removed (${left}), and while it is there the watchdog starts nothing: remove it by hand, then run this again: ${files.stoppedPath}. Nothing was started.`);
@@ -999,7 +1002,7 @@ async function start(opts, context) {
       log(`remote: running for ${path.normalize(root)} (supervisor pid ${state.pid}): the watchdog has nothing to do`);
       return 0;
     }
-    if (!wanted()) return 1;
+    if (!dropStoppedMarker()) return 1;
     const running = () => reportStatus({ found: 'running', state, name: state.name ?? path.basename(root), root, logPath: state.logPath ?? files.logPath }, log);
     if (opts.atLogin) {
       log(`remote: already running for ${path.normalize(root)}, and left as it is: the launcher's options apply from the next login`);
@@ -1015,7 +1018,7 @@ async function start(opts, context) {
     return 1;
   }
   if (unusableName) return refuseName();
-  if (!wanted()) return 1;
+  if (!dropStoppedMarker()) return 1;
   const found = deps.resolveClaude({ env });
   if (!found) {
     error("Claude Code's CLI (claude) is not on PATH: install Claude Code, or add the folder that holds claude.exe (or claude.cmd) to PATH, then run this again.");
@@ -1208,6 +1211,28 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     stoppedPath: path.join(dir, `${id}.stopped`), taskXmlPath: path.join(dir, `${id}.task.xml`),
   };
   const context = { env, deps: resolved, log, error, root, id, home: opts.home, files, identify: resolved.identifyProcesses };
+  if (!opts.watchdog) return runCommand(opts, context);
+  // The watchdog's turn has nobody watching: the task runs it with no window, and what it prints goes nowhere.
+  // So a turn that ends without a server (it could not tell whether one runs, the CLI is gone, another command
+  // holds the lock) leaves its reason in the project's log, where `remote status` points and where the last run
+  // is read. A turn that finds the server running, or stopped on purpose, exits 0 and writes nothing. The line
+  // is not one `readServerState` takes for the server going down (`SUPERVISOR_DOWN`): the server may be up.
+  // One line of a few hundred bytes every five minutes, for as long as the turns fail: under 100 KB a day, in a
+  // log the supervisor caps at 5 MB whenever a server runs (`trimLog`), which is not trimmed from here, since
+  // two processes trimming one file is not something `trimLog` was written for.
+  const reasons = [];
+  const noted = (text) => {
+    reasons.push(text);
+    error(text);
+  };
+  const code = await runCommand(opts, { ...context, error: noted });
+  if (code !== 0) logNote(files.logPath, `watchdog: the server was not started: ${reasons.join(' ').replace(/\s+/g, ' ').trim() || `exit ${code}`}`);
+  return code;
+}
+
+/** What `remoteMain` runs once it knows the project: `status` as it is, `start` and `stop` under the lock. */
+async function runCommand(opts, context) {
+  const { deps: resolved, error, files, root } = context;
   try {
     if (opts.subcommand === 'status') return status({ ...context, state: readState(files.statePath) });
     const starting = opts.subcommand === 'start';

@@ -1115,6 +1115,11 @@ test('watchdogTask refuses, naming it, a value a scheduled task cannot carry: wh
   };
   for (const held of ['D:\\año\\proj', 'D:\\a\u00a0b', 'D:\\$(Arg0)']) assert.equal(refusal({ root: held }).onlyTheTask, true, held);
   for (const refused of ['D:\\a%b', 'D:\\a"b', 'D:\\a&b', 'D:\\a\nb']) assert.equal(refusal({ root: refused }).onlyTheTask, undefined, `the launcher refuses ${JSON.stringify(refused)} too`);
+  // The path of conhost.exe is the task's alone: the launcher never holds it, so it is not a value it could carry.
+  for (const conhost of ['C:\\Wíndows\\System32\\conhost.exe', 'C:\\R&D\\System32\\conhost.exe', 'C:\\a%b\\conhost.exe']) {
+    assert.match(refusal({ conhost }).message, /the scheduled task cannot hold the path of conhost\.exe/, conhost);
+    assert.equal(refusal({ conhost }).onlyTheTask, undefined, conhost);
+  }
   assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, root: 'D:\\año\\proj' }), /the scheduled task cannot hold the project folder .*ASCII/);
   assert.throws(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, name: 'a$(b' }), /the scheduled task cannot hold the server name .*Task Scheduler/);
   assert.doesNotThrow(() => watchdogTask({ ...LAUNCHER, conhost: CONHOST, name: 'costs $5 (five)' }), 'a $ alone is carried as it is');

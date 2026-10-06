@@ -304,8 +304,8 @@ function writeManifest(home, manifest) {
  *    `optional` forward;
  *  - `uninstall` finds no component and no entry to remove, removes the optional files and the scheduled tasks
  *    (`recordScheduledTask`, kept the same way in `tasks`) and then the manifest;
- *  - `remote` (`bin/remote.mjs`) reads only `optional` and `tasks`, and keeps the file's bytes while `start
- *    --at-login` works, to put them back when it fails halfway.
+ *  - `remote` (`bin/remote.mjs`) reads only `optional` and `tasks`, and when `start --at-login` fails halfway
+ *    puts back its own two records and nothing else (`putOptionalRecordBack`, `putTaskRecordBack`).
  * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-06). */
 export function recordOptionalFile(home, file, content) {
   const record = { path: file, sha256: sha256(content) };
@@ -358,7 +358,7 @@ function forgetRecord(home, key, matches) {
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
 
 /** Windows does not tell two task names apart by the case of their letters. */
-const sameTaskName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+export const sameTaskName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 /** Whether two tasks run the same thing: the program and its arguments, to the letter. `null` (a task that does
  * not run one command) is the same as nothing. */
@@ -384,6 +384,22 @@ export function recordScheduledTask(home, task) {
 export function forgetScheduledTask(home, name) {
   return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name));
 }
+
+/** Puts one record back as it was, for a command that takes back what it did: `record` (what the manifest held
+ * for it before) is written again in place of what is there now, or, when there was none, what is there now is
+ * forgotten. Only that one record is touched, in the manifest as it is at this moment: whatever another command
+ * recorded meanwhile, for another project, stays. A record that is already as it was is not written again. */
+function putRecordBack(home, key, matches, record) {
+  const now = readManifest(home)?.[key]?.find(matches);
+  if (!record) return now ? forgetRecord(home, key, matches) : false;
+  if (now && deepEqual(now, record)) return false;
+  keepRecord(home, key, record, matches);
+  return true;
+}
+
+/** `putRecordBack` for the optional file at `file`, and for the scheduled task `name`. */
+export const putOptionalRecordBack = (home, file, record) => putRecordBack(home, 'optional', (entry) => entry.path === file, record);
+export const putTaskRecordBack = (home, name, record) => putRecordBack(home, 'tasks', (entry) => sameTaskName(entry.name, name), record);
 
 /** `<SystemRoot>\System32`, from the `SystemRoot` (or `windir`) of `env` and nothing else, or `null` when `env`
  * does not give an absolute one: where Windows keeps `schtasks.exe` and `conhost.exe`. */
@@ -413,13 +429,16 @@ function printed(stdout) {
  * callers read the exit code and the XML and CSV it prints, never its words.
  *
  * It registers and deletes tasks on the machine it runs on, so a test never runs the real one: with no
- * `spawnSync` injected this refuses in a test process, whatever the environment says. */
+ * `spawnSync` injected this refuses in a test process, and that comes first, before the environment is looked
+ * at, so the refusal is the same on every host. */
 export function runSchtasks(args, { env = process.env, spawnSync: sync } = {}) {
+  if (sync === undefined && underTest()) throw new Error('the real schtasks.exe is never run from a test: this one has to hand in a fake');
   const system32 = windowsSystem32(env);
   if (!system32) throw new Error('SystemRoot is not set to an absolute folder in the environment, so schtasks.exe cannot be found: it is never looked for on PATH');
-  if (sync === undefined && underTest()) throw new Error('the real schtasks.exe is never run from a test: this one has to hand in a fake');
-  // The list of every task of a machine runs to tens of kilobytes; the default limit of 1 MB is not far enough.
-  const result = (sync ?? spawnChildSync)(path.win32.join(system32, 'schtasks.exe'), args, { windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 });
+  // Half a minute at most: the command that waits holds its project's lock meanwhile. The list of every task, the
+  // longest answer, took about a second and 23 KB on a machine with 217 of them (2026-10-06), far under the 1 MB
+  // of output `spawnSync` takes by default, so that limit is left as it is.
+  const result = (sync ?? spawnChildSync)(path.win32.join(system32, 'schtasks.exe'), args, { windowsHide: true, timeout: 30000 });
   if (result.error) throw new Error(`schtasks.exe could not run: ${result.error.message}`);
   return { status: result.status, stdout: printed(result.stdout) };
 }
@@ -593,8 +612,13 @@ export function sync(home, version, deps = {}) {
  * `tasksRemoved` names those, and `tasksKept` says why each other one that is still registered was left, as
  * `{ name, reason, why }`: `edited`, or `unknown` or `unremovable` with `why`. A task that is already gone just
  * loses its record. `deps.schtasks` (default `runSchtasks`, which refuses in a test) is the seam, and it is run
- * only for a manifest that records a task. As with an optional file, the manifest that named a kept task is gone
- * when this returns, so the caller has to say what is left to do. */
+ * only for a manifest that records a task.
+ *
+ * A task kept as `edited` is the user's now, and its record goes with the rest. One kept as `unknown` or
+ * `unremovable` is not: it is still registered, or may be, and it fires every five minutes and starts the server
+ * again. So its record stays, alone, in a manifest with a `null` version (which reads as not installed, as the one
+ * `recordScheduledTask` creates), and `uninstall`, or `remote stop --at-login`, can be run again. An optional file
+ * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const manifest = readManifest(home);
@@ -641,15 +665,21 @@ export function uninstall(home, deps = {}) {
 
   const tasksRemoved = [];
   const tasksKept = [];
+  const stillRecorded = [];
   for (const task of manifest.tasks ?? []) {
     const result = removeScheduledTask(task, deps.schtasks ?? runSchtasks);
     if (result.status === 'removed') tasksRemoved.push(task.name);
     else if (result.status === 'kept') tasksKept.push({ name: task.name, reason: result.reason, ...(result.why ? { why: result.why } : {}) });
+    if (result.status === 'kept' && result.reason !== 'edited') stillRecorded.push(task);
   }
 
   fs.rmSync(cachePath(home), { force: true });
-  fs.rmSync(manifestPath(home), { force: true });
-  removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+  if (stillRecorded.length > 0) {
+    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
+  } else {
+    fs.rmSync(manifestPath(home), { force: true });
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+  }
 
   return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept };
 }

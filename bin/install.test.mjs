@@ -423,14 +423,22 @@ test('uninstallMain says a task it could not look at or delete was left, with ho
       recordScheduledTask(home, TASK);
       const tasks = fakeSchtasks({ [TASK.name]: TASK }, failing);
       const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { schtasks: tasks.run }));
-      assert.equal(code, 1, `${what}: a task left behind and unrecorded is not a clean uninstall`);
+      assert.equal(code, 1, `${what}: a task left behind is not a clean uninstall`);
       assert.equal(errLines.length, 1, errLines.join('\n'));
       assert.match(errLines[0], message, what);
-      assert.match(errLines[0], /no longer recorded/, what);
+      assert.match(errLines[0], /it is still recorded/, what);
+      assert.match(errLines[0], /js-harness uninstall --global.*again/, `${what}: it says the uninstall can be run again`);
+      assert.match(errLines[0], /js-harness remote stop --at-login/, what);
       assert.ok(errLines[0].includes(`schtasks /Query /TN ${TASK.name}`), errLines[0]);
       assert.ok(errLines[0].includes(`schtasks /Delete /TN ${TASK.name} /F`), errLines[0]);
       assert.doesNotMatch(outLines.join('\n'), /modified by you|nothing installed/, what);
       assert.equal(tasks.store.has(TASK.name), true, what);
+      assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], tasks: [TASK] }, `${what}: the record of the task that still fires is kept`);
+
+      // Run again once schtasks answers: the task is deleted, and nothing is left.
+      for (const verb of Object.keys(failing)) delete failing[verb];
+      const again = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { schtasks: tasks.run }));
+      assert.deepEqual({ code: again.code, out: again.outLines, err: again.errLines }, { code: 0, out: [`removed scheduled task ${TASK.name}`], err: [] }, what);
       assert.equal(fs.existsSync(manifestPath(home)), false, what);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
@@ -439,21 +447,28 @@ test('uninstallMain says a task it could not look at or delete was left, with ho
 });
 
 test('uninstallMain finds schtasks from the environment it is given and nowhere else, and never runs the real one from a test', async () => {
-  const environments = {
-    'no SystemRoot': [{}, /SystemRoot is not set/],
-    'the real environment': [process.env, /never run from a test/],
-  };
-  for (const [what, [env, message]] of Object.entries(environments)) {
-    const home = makeTmpHome();
-    try {
-      recordScheduledTask(home, TASK);
+  const home = makeTmpHome();
+  try {
+    recordScheduledTask(home, TASK);
+    // The program it would run is the one of the SystemRoot it was handed: seen through a spawnSync that runs nothing.
+    const ran = [];
+    const spawnSync = (file, args) => {
+      ran.push([file, ...args]);
+      return { status: 1, stdout: '' };
+    };
+    const given = await captureConsole(() => uninstallMain(['--global', '--home', home], { SystemRoot: 'Q:\\Given' }, { spawnSync }));
+    assert.equal(given.code, 1);
+    assert.deepEqual(ran, [['Q:\\Given\\System32\\schtasks.exe', '/Query', '/FO', 'CSV']]);
+
+    // With nothing injected it refuses, whatever the environment says: one that names no Windows folder, and one
+    // whose folder holds no schtasks.exe (so that nothing real could run even without the refusal).
+    for (const env of [{}, { SystemRoot: path.join(os.tmpdir(), 'js-harness-no-such-windows') }]) {
       const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], env));
-      assert.equal(code, 1, what);
-      assert.match(errLines.join('\n'), /^could not look for scheduled task js-harness-remote-x/, what);
-      assert.match(errLines.join('\n'), message, what);
-    } finally {
-      fs.rmSync(home, { recursive: true, force: true });
+      assert.equal(code, 1);
+      assert.match(errLines.join('\n'), /^could not look for scheduled task js-harness-remote-x \(the real schtasks\.exe is never run from a test/);
     }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
 

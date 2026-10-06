@@ -227,6 +227,19 @@ the chain strategy is asked once, before the commit that crosses the budget.
   recorded command, `status` reports it, and a registration that fails leaves the launcher
   and the record as they were (route: delegated writer; trigger: `bin/remote.mjs`,
   `bin/lib/remote.mjs`, `bin/lib/manifest.mjs` and their tests)
+- [x] T9r T9 review findings: a temporary file that cannot be removed never gets past the
+  rollback of a registration; a rollback touches only this project's records, never the whole
+  manifest; `uninstall` keeps the record of a task it could not look at or delete, so it can
+  be run again; a watchdog turn that cannot start the server leaves a note in the log; the
+  guard against the real `schtasks` comes before the look for `SystemRoot`, so the tests hold
+  off Windows; four names and comments say what is true; the failure branches of the rollback
+  are tested (Codex P2, P2, P2; gentle-ai `R1-manifest-restore-drops-concurrent-records`,
+  `R4-restore-clobbers-concurrent-manifest-writes`, `R4-uninstall-not-retryable-for-kept-task`,
+  `R4-watchdog-failures-leave-no-trace`, `R3-real-env-tests-windows-only`,
+  `R3-production-test-guard`, `R2-maxbuffer-comment-contradicts-constant`,
+  `R2-wanted-hides-side-effect`, `R2-duplicate-task-name-compare`,
+  `R2-watchdog-loop-mostly-dead-batch-check`, `R3-rollback-failure-branches-unproved`)
+  (route: delegated writer)
 - [ ] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
   with its fix command, through Fix, the digest and the TUI (route: delegated writer;
   trigger: `bin/lib/stack.mjs`, `bin/doctor.mjs`, `bin/lib/digest.mjs`, `bin/tui.mjs`)
@@ -699,6 +712,48 @@ the chain strategy is asked once, before the commit that crosses the budget.
   look at, as it does for a launcher. A missing `SystemRoot` refuses `--at-login` even where
   the task would have been skipped. `status` asks `schtasks` for the whole list, which adds
   about a second to it. The production guard looks at whether the process is a test.
+- 2026-10-06: T9 is `7214308`; the gate passed, and no task was registered by it. gentle-ai
+  assessed `9de8b1e..7214308` (T8r and T9) as high risk, 2,476 lines, and refused to start:
+  `lens_context_budget_exceeded`, no authority created. T9 alone, `4bb62bb..7214308`, fits:
+  four lenses, approved (lineage `review-f630172a97b420b1`, acknowledged) with seven WARNINGs
+  and five SUGGESTIONs, all advisory. Taken as T9r, all but one: the words "five minutes" stay
+  where they are, in prose. So T8r, `9de8b1e..4bb62bb`, has no gentle-ai review of its own: it
+  was under the budget, waiting for a slice that turned out too large to review whole.
+  Codex reviewed `9de8b1e..7214308` twice and neither run was recorded, because its commands
+  showed 885 and then 1,650 of the 1,949 changed lines (the rest in `bin/install.test.mjs` the
+  first time, in `bin/remote.test.mjs` the second). Both runs found the same two P2s, the
+  second a third: the cleanup of the temporary XML can throw past the rollback
+  (`bin/remote.mjs:687-688`), the rollback restores the whole shared manifest (`:761-764`),
+  and new assertions depend on `SystemRoot` being set (`bin/lib/manifest.test.mjs:1291`,
+  `bin/tui.test.mjs:549`). All three are in T9r. What covers this range for Codex is asked of
+  Sebastián: it is a spend decision. Reviewed boundary for gentle-ai: `7214308`.
+- 2026-10-06: T9r written by T9's writer, test first. The temporary XML is removed in a try
+  of its own, and a failure prints the file left behind and throws nothing, so a registered
+  task is always recorded or taken back (RED: `/could not be removed \(EPERM/` did not match).
+  A failed registration now restores the launcher's bytes and puts back only this project's
+  two records against the manifest as it is then (`putRecordBack` in `bin/lib/manifest.mjs`),
+  so what another project recorded meanwhile stays (RED: the other project's records were
+  lost). `uninstall` keeps the record of a task it could not look at or delete in a manifest
+  with a `null` version, and `bin/install.mjs` says to run it again; a task edited by hand
+  still loses its record (RED: five tests). A `start --watchdog` that ends non-zero appends
+  `watchdog: the server was not started: ...` to the project's log, one line a turn, and
+  `status` does not read it as the server going down (RED: no line). The guard against the
+  real `schtasks` now comes before the look for `SystemRoot`. `wanted` is
+  `dropStoppedMarker`; `sameTaskName` has one definition; the `maxBuffer` override, which
+  its comment did not justify, is gone; `conhost` is checked apart and its refusal no longer
+  reads as one the launcher could carry. The failure branches of the rollback have a test,
+  with a fake that fails the Nth create; it passed as written and each of its three branches
+  was mutated; the branch for a launcher or manifest that could not be read went with the
+  snapshot. The guard was mutated at last, with every synchronous spawn blocked by a preload:
+  the test fails with `schtasks.exe could not run`, and the one program attempted was under a
+  temp folder that does not exist. GREEN: `node --test bin/lib/remote.test.mjs` 48 of 48,
+  `node --test bin/remote.test.mjs` 110 of 110, and 246 of 246 for the manifest, install,
+  update, TUI and usage tests (run again by the parent); no task with `js-harness` in its
+  name is registered. 340 added lines in nine files.
+  Left open: that the tests hold on Linux and macOS is reasoned, not run; the watchdog's
+  notes are trimmed only when a server next runs (under 100 KB a day of failing turns); a
+  failure before the project is known leaves no note; a missing `SystemRoot` or an unusable
+  `conhost` path still refuses `--at-login` where the launcher alone would do.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from

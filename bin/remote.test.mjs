@@ -68,18 +68,23 @@ const xmlUnescape = (text) => text.replace(/&quot;/g, '"').replace(/&apos;/g, "'
  * reordered, with defaults and the user's id added: never the document that registered it), registers one from
  * the XML file it is handed, keeping that document in `registered`, deletes one, and exits 1 for a task that is
  * not there. `fail[verb]` (`list`, `read`, `create`, `delete`) is the exit code that verb then ends with, having
- * done nothing, or an error it throws. Every `fakeWorld` has one, so no test here runs the real program. */
+ * done nothing, or an error it throws, or a function that says which for each run of that verb. Every `fakeWorld`
+ * has one, so no test here runs the real program. */
 function fakeSchtasks(tasks = {}) {
   const store = new Map(Object.entries(tasks).map(([name, action]) => [name, { command: action.command, arguments: action.arguments }]));
   const calls = [];
   const registered = [];
   const fail = {};
+  const verbOf = (args) => (args[0] === '/Query' ? (args.includes('/XML') ? 'read' : 'list') : args[0].slice(1).toLowerCase());
   const run = (args) => {
     calls.push(args);
     const value = (flag) => args[args.indexOf(flag) + 1];
-    const verb = args[0] === '/Query' ? (args.includes('/XML') ? 'read' : 'list') : args[0].slice(1).toLowerCase();
-    if (fail[verb] instanceof Error) throw fail[verb];
-    if (fail[verb] !== undefined) return { status: fail[verb], stdout: '' };
+    const verb = verbOf(args);
+    // A function is asked each time with how many times that verb has been run, this one included: `(nth) =>
+    // (nth === 3 ? 1 : undefined)` fails the third.
+    const failure = typeof fail[verb] === 'function' ? fail[verb](calls.filter((earlier) => verbOf(earlier) === verb).length) : fail[verb];
+    if (failure instanceof Error) throw failure;
+    if (failure !== undefined) return { status: failure, stdout: '' };
     // Windows finds a task by its name whatever the case of its letters.
     const name = [...store.keys()].find((task) => task.toLowerCase() === value('/TN')?.toLowerCase()) ?? value('/TN');
     if (verb === 'list') {
@@ -2206,26 +2211,157 @@ test('status says whether the watchdog task is on for this repository, after the
   assert.equal(tasks.mutations().length, 1, 'status only ever looks: the one change is the registration above');
 });
 
-test('with no schtasks injected a command cannot reach the real one from a test, whatever SystemRoot says: status cannot look, and start --at-login writes nothing', { skip: WINDOWS_ONLY }, async () => {
-  const stand = makeAppData();
-  const environments = {
-    'a SystemRoot that holds no schtasks.exe': stand.env,
-    'the real SystemRoot': { ...stand.env, SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' },
-  };
-  for (const [what, env] of Object.entries(environments)) {
+test('with no schtasks injected a command cannot reach the real one from a test: status cannot look, and start --at-login writes nothing', { skip: WINDOWS_ONLY }, async () => {
+  // Never the real SystemRoot here: were the refusal ever removed, the one handed over holds no schtasks.exe to run.
+  const { env, startupDir } = makeAppData();
+  for (const [what, environment] of Object.entries({ 'a SystemRoot that holds no schtasks.exe': env, 'no SystemRoot': { APPDATA: env.APPDATA } })) {
     const root = makeProject('proj');
     const home = tempDir();
     const world = fakeWorld();
     const { schtasks, ...deps } = world.deps;
     assert.equal(typeof schtasks, 'function', 'every fake world has a fake, and this test takes it away');
-    assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], env, deps), 0, what);
+    assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], environment, deps), 0, what);
     assert.match(world.out(), /^watchdog task: unknown \(the real schtasks\.exe is never run from a test/m, what);
-    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, deps), 1, what);
-    assert.match(world.err(), /never run from a test/, what);
-    assert.deepEqual(fs.readdirSync(stand.startupDir), [], what);
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], environment, deps), 1, what);
+    assert.match(world.err(), environment === env ? /never run from a test/ : /SystemRoot is not set/, what);
+    assert.deepEqual(fs.readdirSync(startupDir), [], what);
     assert.equal(fs.existsSync(manifestPath(home)), false, what);
     assert.equal(world.spawned.length, 0, what);
   }
+});
+
+// ---- what the reviews of the watchdog found ----------------------------------------------------------------------------
+
+test('an XML file that cannot be removed after the registration is said, and never leaves a task that is neither recorded nor taken back', { skip: WINDOWS_ONLY }, async () => {
+  const xmlStuck = (file, ...rest) => {
+    if (String(file).endsWith('.task.xml')) throw Object.assign(new Error(`EPERM: operation not permitted, unlink '${file}'`), { code: 'EPERM' });
+    fs.rmSync(file, ...rest);
+  };
+  // The task is registered: it is recorded all the same, and the file that is left is named.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env } = makeAppData();
+  const world = fakeWorld();
+  const argv = ['start', '--cwd', root, '--home', home, '--at-login'];
+  assert.equal(await remoteMain(argv, env, { ...world.deps, removeFile: xmlStuck }), 0, world.err());
+  assert.deepEqual(readManifest(home).tasks, [taskRecord(env, root, { home })], 'a registered task is recorded whatever became of the file');
+  assert.match(world.err(), /could not be removed \(EPERM/);
+  assert.ok(world.err().includes(world.tasks.registered[0].file), world.err());
+  assert.match(world.err(), /by hand/);
+  assert.equal(world.spawned.length, 1, 'and the start goes on');
+
+  // The task cannot be recorded: it is taken back all the same, and the launcher with it.
+  const other = { root: makeProject('proj'), home: tempDir(), ...makeAppData(), world: fakeWorld() };
+  assert.equal(await remoteMain(['start', '--cwd', other.root, '--home', other.home, '--at-login'], other.env, { ...other.world.deps, removeFile: xmlStuck, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.equal(other.world.tasks.store.size, 0, 'no task is left that no record names');
+  assert.match(other.world.err(), /deleted again/);
+  assert.deepEqual(fs.readdirSync(other.startupDir), []);
+  assert.equal(fs.existsSync(manifestPath(other.home)), false);
+});
+
+test('a failed registration takes back only this project\'s own records: what another project recorded in the machine manifest meanwhile stays', { skip: WINDOWS_ONLY }, async () => {
+  const theirLauncher = 'C:\\elsewhere\\Startup\\js-harness-remote-theirs.cmd';
+  const theirTask = { name: 'js-harness-remote-theirs', command: 'conhost.exe', arguments: '--headless node remote.mjs start --cwd D:\\theirs --watchdog' };
+  const theirs = { optional: { path: theirLauncher, sha256: sha256('their launcher') }, task: theirTask };
+  /** A registration that fails, while another project's `start --at-login` writes its own records. */
+  const failWhileTheyRecord = (world, home) => {
+    world.tasks.run = (args) => {
+      if (args[0] !== '/Create') return fakeSchtasks(Object.fromEntries(world.tasks.store)).run(args);
+      recordOptionalFile(home, theirLauncher, 'their launcher');
+      recordScheduledTask(home, theirTask);
+      return { status: 1, stdout: '' };
+    };
+  };
+
+  // Nothing of this project's was there before: its launcher and its record go, theirs stay.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const world = fakeWorld();
+  failWhileTheyRecord(world, home);
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [theirs.optional], tasks: [theirs.task] });
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.match(world.err(), /its records in the machine manifest are as they were before this command/);
+
+  // It was already on: its own records are what they were, and theirs are still beside them.
+  const on = await atLoginOn(['--name', 'one']);
+  const before = { launcher: bytesOf(on.file), manifest: readManifest(on.home) };
+  failWhileTheyRecord(on.world, on.home);
+  assert.equal(await remoteMain([...on.argv, '--name', 'two'], on.env, on.world.deps), 1);
+  assert.equal(bytesOf(on.file), before.launcher);
+  assert.deepEqual(readManifest(on.home), { ...before.manifest, optional: [...before.manifest.optional, theirs.optional], tasks: [...before.manifest.tasks, theirs.task] });
+});
+
+test('when what was taken back could not be put back, the command says exactly what is left', { skip: WINDOWS_ONLY }, async () => {
+  // The earlier task cannot be registered again: the task now runs the new command under the earlier record.
+  const replaced = await atLoginOn(['--name', 'one']);
+  replaced.world.tasks.fail.create = (nth) => (nth === 3 ? 1 : undefined);
+  assert.equal(await remoteMain([...replaced.argv, '--name', 'two'], replaced.env, { ...replaced.world.deps, recordScheduledTask: CANNOT_RECORD }), 1);
+  assert.match(replaced.world.err(), /the earlier task could not be registered again \(.*exited 1\)/);
+  assert.ok(replaced.world.err().includes(`schtasks /Delete /TN ${replaced.task} /F`), replaced.world.err());
+  assert.deepEqual(replaced.world.tasks.store.get(replaced.task), actionOf(taskRecord(replaced.env, replaced.root, { name: 'two', home: replaced.home })));
+
+  // The launcher cannot be put back: a folder took its place while the registration failed.
+  const blocked = await atLoginOn(['--name', 'one']);
+  blocked.world.tasks.run = (args) => {
+    if (args[0] !== '/Create') return fakeSchtasks(Object.fromEntries(blocked.world.tasks.store)).run(args);
+    fs.rmSync(blocked.file);
+    fs.mkdirSync(blocked.file);
+    return { status: 1, stdout: '' };
+  };
+  assert.equal(await remoteMain([...blocked.argv, '--name', 'two'], blocked.env, blocked.world.deps), 1);
+  assert.match(blocked.world.err(), /could not be put back/);
+  assert.ok(blocked.world.err().includes(blocked.file), blocked.world.err());
+  assert.doesNotMatch(blocked.world.err(), /are as they were before this command/);
+
+  // A start whose options no task carries deleted the earlier task and cannot forget its record: said, with the way out.
+  const retired = await atLoginOn();
+  const before = bytesOf(retired.file);
+  const cannotForget = () => { throw new Error('EACCES: permission denied, open manifest.json'); };
+  assert.equal(await remoteMain([...retired.argv, '--name', 'café'], retired.env, { ...retired.world.deps, forgetScheduledTask: cannotForget }), 1);
+  assert.match(retired.world.err(), /was deleted, but its record in the machine manifest could not be removed \(EACCES/);
+  assert.match(retired.world.err(), /js-harness remote stop --at-login forgets it/);
+  assert.equal(retired.world.tasks.store.size, 0);
+  assert.equal(bytesOf(retired.file), before, 'the launcher is the earlier one again');
+  assert.equal(readManifest(retired.home).tasks.length, 1, 'and the record of the task that is gone is still there to be forgotten');
+});
+
+test('a watchdog turn that cannot start the server says why in the project\'s log, where the next status finds it; one with nothing to do writes nothing', { skip: WINDOWS_ONLY }, async () => {
+  const argv = (root, home) => ['start', '--cwd', root, '--home', home, '--name', 'proj', '--watchdog'];
+  const logOf = (home, root) => (fs.existsSync(logPathOf(home, root)) ? fs.readFileSync(logPathOf(home, root), 'utf8') : '');
+  const failures = {
+    'claude is not on PATH': { claude: null, reason: /claude.*PATH/ },
+    'the recorded process cannot be told apart': { arrange: ({ home, root, world }) => { writeState(home, root, { pid: 777, startedAt: CREATED }); world.alive.set(777, null); }, reason: /cannot tell whether the remote server is already running/ },
+    'the state file is unusable': { arrange: ({ home, root }) => { fs.mkdirSync(stateDir(home), { recursive: true }); fs.writeFileSync(statePath(home, root), '{ not json'); }, reason: /state file/ },
+    'the lock is held': { arrange: ({ home, root, world }) => { fs.mkdirSync(stateDir(home), { recursive: true }); fs.writeFileSync(lockPathOf(home, root), `${JSON.stringify({ pid: 555, createdAt: CREATED })}\n`); world.alive.set(555, CREATED); }, reason: /in progress/ },
+  };
+  for (const [what, { claude = { path: 'C:\\bin\\claude.exe', shell: false }, arrange = () => {}, reason }] of Object.entries(failures)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const world = fakeWorld({ claude });
+    arrange({ home, root, world });
+    assert.equal(await remoteMain(argv(root, home), {}, world.deps), 1, what);
+    const lines = logOf(home, root).split('\n').filter(Boolean);
+    assert.equal(lines.length, 1, `${what}: one line: ${lines.join(' | ')}`);
+    assert.match(lines[0], /^\[js-harness remote\] watchdog: the server was not started: /, what);
+    assert.match(lines[0], reason, what);
+    assert.equal(world.spawned.length, 0, what);
+    // The note is the watchdog's, not the server's: a status that reads this log does not take it for the server going down.
+    assert.equal(readServerState(`· Connected · proj · main\n${logOf(home, root)}`).connection, 'connected', what);
+  }
+
+  // Its two normal cases, and a start that is not the watchdog's, leave the log alone.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const world = fakeWorld({ claude: null });
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home], {}, world.deps), 1);
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 0);
+  assert.equal(await remoteMain(argv(root, home), {}, world.deps), 0, 'stopped on purpose');
+  writeState(home, root, { pid: 777, startedAt: CREATED });
+  fs.rmSync(stoppedPathOf(home, root));
+  assert.equal(await remoteMain(argv(root, home), {}, fakeWorld({ alive: new Map([[777, CREATED]]) }).deps), 0, 'running');
+  assert.equal(logOf(home, root), '');
 });
 
 // ---- a plain stop stays stopped: the marker, and start --watchdog ------------------------------------------------------
