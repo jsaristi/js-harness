@@ -2,8 +2,9 @@
 
 Locator: `odd/tasks/remote-control.md` · Engram mirror: `odd/remote-control/tasks` · Branches: `feat/remote-control`
 (slice 1, PR #28, merged), `feat/remote-at-login` (slice 2, PR #29, merged, cut from it),
-`feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (this
-record and T7's, cut from `main`)
+`feat/remote-account` (slice 3, PR #30, merged, cut from slice 2), `docs/remote-live-check` (T7 and
+its record, merged), `fix/remote-watchdog` (T8–T11, cut from `origin/main` at `9c9ed8e`, in the
+linked worktree `D:\js-harness-worktrees\remote-watchdog`)
 
 ## Goal
 From the Claude mobile app, Sebastián can start a new Claude Code session that runs on this PC in
@@ -103,6 +104,44 @@ the chain strategy is asked once, before the commit that crosses the budget.
   the environment, so a test with a temp home cannot read the real account. On any other
   platform the state is `unknown`. Measured on this machine without printing either value:
   both identifiers are present and equal.
+- Reopened on 2026-10-06 for three gaps the first days of use showed (evidence: engram
+  `remote-control/watchdog-and-log-evidence`). The supervisor was killed from outside on
+  2026-10-05 at 19:20 with no `stopped` line, and nothing started it again for about twelve
+  hours, because the login launcher runs only at login; and the log reached 71 MB in two days,
+  144,420 repaints of the server's status frame.
+- The log has a cap. The supervisor trims it once it passes 5 MB and keeps its end, cut at a
+  line start, checking while a server runs and not only between runs (one run lasted 28
+  hours). The server holds its own append handle for a whole run, so the file is trimmed in
+  place, never renamed. What is kept is far more than the 64 KiB `status` reads, and every
+  repaint carries the connection state, the capacity and the environment address (measured on
+  the live log: 144,420 frames, 144,420 addresses), so `status` reads a trimmed log as it
+  read the whole one. A trim that fails loses nothing but the trim.
+- `--at-login` also means a watchdog. Beside the launcher, `start --at-login` registers a
+  per-user Windows scheduled task, `js-harness-remote-<id>`, that every five minutes runs the
+  same `remote start` the launcher runs; `stop --at-login` and `uninstall` delete it, and
+  `status` says whether it is there. Approved by Sebastián on 2026-10-06 as a write outside
+  the repository. It is recorded in the machine manifest, by name and by the command it runs,
+  and removed only while the task still runs that command: one edited by hand is kept and
+  reported, as an edited launcher is. Probed on this machine on 2026-10-06 with a disabled
+  throwaway task, since deleted: `schtasks /Create /XML` registers a per-user task with no
+  elevation; `schtasks /Query /XML` gives the definition back reordered and with defaults
+  added, so the comparison reads `Command` and `Arguments`, never the whole document; its
+  messages come in the system's language, so only exit codes and that XML are read; and
+  `conhost.exe --headless <command>` runs a console program with no window, which a task
+  that fires every five minutes needs (the launcher's window at login is seen once a day).
+  Tests never run the real `schtasks`: it is an injected seam.
+- A plain `stop` stays stopped (decided by Sebastián on 2026-10-06, before T9): without this
+  the watchdog would bring the server back within five minutes of a `stop` he meant. `stop`
+  leaves a marker beside the state file; the task runs `remote start --watchdog`, which starts
+  nothing and exits 0 while the marker is there; any other `start`, his own or the login
+  launcher's, removes the marker and starts. So the watchdog covers a supervisor that died,
+  never one he stopped, and a server left stopped with the launcher on is what the `doctor`
+  row reports.
+- `doctor` gains a row, `remote-server`: for every login launcher the machine manifest
+  records, whether the server it starts is running, read from the launcher's own `--cwd` and
+  the state file by process identity. A launcher that is on with its server down is a gap in
+  Fix, the digest and the TUI, and its fix is the `js-harness remote start --cwd <path>` that
+  brings it back. With no launcher recorded the row is `n/a`.
 
 ## Tasks
 - [x] T1 Supervisor: runs the server in a clean environment, logs it, restarts it with a capped
@@ -158,6 +197,28 @@ the chain strategy is asked once, before the commit that crosses the budget.
   then a session opened from the iOS app runs in `D:\js-harness`, and `remote stop` leaves no
   process of it. The other live check is done: `doctor` shows the account check `ok` here
   (route: inline)
+- [x] T8 Log cap: the supervisor trims the log in place once it passes 5 MB and keeps its end
+  from a line start, during a run as well as between runs; a server that holds its append
+  handle keeps writing after the kept part; `status` reads a trimmed log; a trim that fails
+  never ends the supervisor (route: delegated writer; trigger: `bin/lib/remote.mjs`,
+  `bin/remote.mjs` and their two test files)
+- [x] T8r T8 review findings: a trim that fails on a log over the cap leaves a note, rate
+  limited, instead of the same silence as a log under it; the bound on the looks for late
+  writes is tested; a keep size that would overlap the end it is read from is refused or
+  clamped (gentle-ai `R3-silent-trim-failure`, `R3-catch-up-bound-unproved`,
+  `R3-keep-overlap-unguarded`) (route: delegated writer)
+- [ ] T9 Watchdog: `start --at-login` registers the per-user scheduled task and records it in
+  the machine manifest, `stop --at-login` and `uninstall` delete it only while it runs the
+  recorded command, `status` reports it, and a registration that fails leaves the launcher
+  and the record as they were (route: delegated writer; trigger: `bin/remote.mjs`,
+  `bin/lib/remote.mjs`, `bin/lib/manifest.mjs` and their tests)
+- [ ] T10 `doctor` row `remote-server`: a recorded launcher whose server is down is a gap
+  with its fix command, through Fix, the digest and the TUI (route: delegated writer;
+  trigger: `bin/lib/stack.mjs`, `bin/doctor.mjs`, `bin/lib/digest.mjs`, `bin/tui.mjs`)
+- [ ] T11 Roadmap and this record: the three fixes, and what is left for Sebastián (the
+  running supervisor is the old code until the server is restarted, and the watchdog is
+  registered on this machine by `remote start --at-login` run from `D:\js-harness` once this
+  branch is on its `main`) (route: inline)
 
 ## Progress
 - 2026-10-03: plan written from the session's measurements and a read-only map of the code
@@ -523,6 +584,55 @@ the chain strategy is asked once, before the commit that crosses the budget.
   so whether the server comes up after a restart of the PC is unproved until one happens.
   To undo it: `js-harness remote stop --at-login` (which also stops the server) or
   `uninstall`; both remove the launcher, and the manifest goes with its last record.
+- 2026-10-06: reopened as T8–T11 on `fix/remote-watchdog`. The branch was cut from
+  `origin/main` (`9c9ed8e`), not from the local `main` of `D:\js-harness`, which was 19
+  commits behind it (`77acc71`). Nothing on this machine was changed: the server of
+  `D:\js-harness` keeps running its old code, and `remote stop` is not run, because
+  Sebastián has sessions open through it. The two probes the design rests on are in Design.
+- 2026-10-06: T8 written by a delegated writer, test first. `trimLog` in `bin/lib/remote.mjs`
+  trims past `LOG_MAX_BYTES` (5 MiB) and keeps at most `LOG_KEEP_BYTES` (1 MiB) from the first
+  line start, under one `[js-harness remote] log trimmed: ...` line that `status` does not read
+  as the server going down; `supervise` checks before each run and every `LOG_CHECK_MS` (a
+  minute) while one runs, on a timer that never holds the process open. The file is trimmed
+  through one handle, its end copied over its start and then cut; what the server appends
+  meanwhile is moved too, and only a write between the last look and the cut is lost. RED: `does
+  not provide an export named 'LOG_CHECK_MS'`, then 7 of 39 against stubs (`false !== true` in
+  the five `trimLog` tests, `actual: [] expected: [0, 1, 0, 1]` for the checks of `supervise`,
+  `the log was never trimmed: 8573640 bytes` with the real timer). Two tests had no RED of
+  their own and were checked by mutation: a leaked timer fails with `it did not exit by itself
+  (signal SIGTERM)`, and `log trimmed` added to `SUPERVISOR_DOWN` fails the status test with
+  `'not connected' !== 'connected'`. GREEN: `node --test bin/lib/remote.test.mjs` 39 of 39
+  (run again by the parent), `node --test bin/remote.test.mjs` 85 of 85. Measured by the test
+  with a real process on Windows 10: a child that holds its append handle keeps writing right
+  after the kept part through two trims, with no hole. 454 added lines in the four files, above
+  the 400 heuristic because of the real-process tests. Left open: a `status` that reads at the
+  instant of a trim can say `unknown` once; a `keepBytes` at or above `maxBytes` is not
+  refused; an end with no line break in the kept window keeps only the note; nothing ran off
+  Windows, and the real `claude.exe` was not part of any test.
+- 2026-10-06: T8 is `9de8b1e`; the gate passed (`PASS tests`). gentle-ai assessed
+  `9c9ed8e..9de8b1e` as medium risk, 581 lines, due by the slice budget, and its one lens,
+  reliability, approved it (lineage `review-72a42be0e8102f15`, acknowledged) with one WARNING
+  and two SUGGESTIONs, all three taken as T8r. Codex reviewed the same range and found
+  nothing to act on ("No actionable regressions were identified in the log-trimming
+  implementation, timer lifecycle, or status-reading integration"; it did not rerun the
+  tests); the review is recorded. Reviewed boundary: `9de8b1e`.
+- 2026-10-06: T8r written by a delegated writer, test first. `trimLog` now returns
+  `{ trimmed }`, with `error` when it failed (a log that is not there is not a failure), and
+  `supervise` writes `log not trimmed: <error>` on the first failed check and on every
+  sixtieth one in a row after it, about once an hour, starting over after a check that
+  works. That note could quote an error such as `socket is not connected`, and
+  `readServerState` took connection words from every line, so it now reads them only from
+  the server's own lines. The keep size is clamped so that the note and twice what is kept
+  fit in the file: what is written at the start always ends before the end it was read
+  from. RED: `[]` where three notes were expected; `'not connected'` for a note with
+  `ENOTCONN: socket is not connected`; `keepBytes 58800: what is written at the start (58794
+  bytes) ends before the 58688 it was read from`. Proved by mutation, having passed as
+  written: the bound on the looks (`look < 100000` fails with `the trim looked 1002 times`)
+  and the guard `start.length >= size`. GREEN: `node --test bin/lib/remote.test.mjs` 43 of
+  43 (run again by the parent), `node --test bin/remote.test.mjs` 86 of 86. Left open: a trim
+  that keeps failing at the cut still rewrites up to the keep size at the start of the file
+  on every check; what the server appends during a trim can land over the old end when it is
+  more than the gap, which the comment says and nothing guards.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imports `quoteWindowsArg` and `windowsCommandLine` from
@@ -643,25 +753,24 @@ the chain strategy is asked once, before the commit that crosses the budget.
   session did not inherit is not added to the server's environment.
 
 ## Next step
-Closed on 2026-10-04: every task is done and nothing is left. PRs #27, #28, #29 and #30
-are merged, the live check passed, and this record reaches `main` through the PR of
-`docs/remote-live-check`, the last of the feature. Each code commit was approved by
-gentle-ai and lies in a Codex record. What a later session needs to know:
+T8, then T9, T10 and T11, in that order, each closed by its own commit on
+`fix/remote-watchdog`, reviewed by gentle-ai and then by Codex. What a later session needs to
+know:
 
-- The server for `D:\js-harness` is running the merged code, started with `js-harness
-  remote start` (detached; `remote status` shows it, `remote stop` ends it, and with it
-  the sessions opened through it). The login launcher is on on this machine, by his
-  decision: a `.cmd` in the Startup folder, recorded in `~/.js-harness/manifest.json`,
-  starts the server at login. It has not been through a real login yet; after the next
-  restart of the PC, `remote status` says whether it worked. It pins the paths of node
-  (`C:\nvm4w\nodejs\node.exe`) and of this checkout, so moving either breaks it.
-  `remote stop --at-login` or `uninstall` removes the launcher and its record.
+- Work in `D:\js-harness-worktrees\remote-watchdog`. Never touch
+  `D:\js-harness-worktrees\codex-parity`, and never run `remote stop` for `D:\js-harness`
+  without asking: Sebastián's open sessions run through that server.
+- The server for `D:\js-harness` runs the code of that checkout as it was when the
+  supervisor started. The log cap takes effect only once that server is restarted on the new
+  code, and the watchdog only once `remote start --at-login` is run there: both after this
+  branch is merged and that checkout is updated, and both are his to ask for.
+- The login launcher is on on this machine: a `.cmd` in the Startup folder, recorded in
+  `~/.js-harness/manifest.json`, pinned to `C:\nvm4w\nodejs\node.exe` and to
+  `D:\js-harness\bin\remote.mjs`.
 - A session opened from the phone through the server works in `D:\js-harness` itself
-  (`--spawn same-dir`), the same folder as a desktop session there: two sessions that
-  write at once share one working tree and one branch.
-- T7's first `remote stop` ended the session that was writing F6 in the linked worktree
-  `D:\js-harness-worktrees\codex-parity`. Its work is on disk there, not committed; the
-  roadmap's Next says what to do before a commit in that worktree.
+  (`--spawn same-dir`), the same folder as a desktop session there.
+- Delivery: the chain strategy he chose for this feature stands, stacked to `main`; the
+  slices are drawn when the pull requests are opened, which is his decision.
 
 Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `main`
 (branch `fix/gate-git-env`, cut from `main`); this feature goes stacked to `main` in three

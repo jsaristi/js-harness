@@ -6,10 +6,10 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readServerState, remoteId, remoteMain } from './remote.mjs';
+import { logTail, readServerState, remoteId, remoteMain } from './remote.mjs';
 import { forgetOptionalFile, manifestPath, readManifest, recordOptionalFile, sha256, uninstall } from './lib/manifest.mjs';
 import { identifyProcesses } from './lib/process-tree.mjs';
-import { loginLauncher } from './lib/remote.mjs';
+import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, trimFailureNote, trimLog } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -741,6 +741,66 @@ test('readServerState reads the last connection state, capacity and address, thr
   assert.equal(readServerState(reconnecting).connection, 'not connected');
   const back = `${exited}·✔︎· Connected · js-harness · main\n`;
   assert.equal(readServerState(back).connection, 'connected');
+});
+
+/** One repaint of the server's status, as the live log holds about one a second (its shape read from that log on
+ * 2026-10-06; the address and the session are invented): the cursor goes back up over the last one, erases it,
+ * and the whole status is printed again, the session as an OSC 8 link. */
+const statusFrame = ({ capacity = '1/32', environment = 'env_01EXAMPLE' } = {}) => [
+  `${ESC}[8A${ESC}[J·✔︎· Connected · js-harness · main`,
+  `    Capacity: ${capacity} · New sessions will be created in the current directory`,
+  `    ${ESC}]8;;https://claude.ai/code/session_01EXAMPLE?from=cli\u0007js-harness${ESC}]8;;\u0007`,
+  '',
+  `Continue coding in the Claude mobile app or https://claude.ai/code?environment=${environment}`,
+  'Or ask Claude to work in this folder from your projects on claude.ai',
+  'space to show QR code · w to toggle spawn mode',
+  '',
+].join('\n');
+
+test('status reads a trimmed log as it read the whole one: the same connection, capacity and address', () => {
+  const logPath = path.join(tempDir(), 'remote.log');
+  // A server that exited, then hours of repaints of the next one, the last of them with a session in use.
+  const idle = statusFrame({ capacity: '0/32' });
+  const whole = [
+    statusFrame({ capacity: '0/32', environment: 'env_01EARLIER' }),
+    '[js-harness remote] server exited (code 1) after 600s; restarting in 5s\n',
+    idle.repeat(Math.ceil(LOG_MAX_BYTES / Buffer.byteLength(idle))),
+    statusFrame().repeat(3),
+  ].join('');
+  const state = { connection: 'connected', capacity: '1/32', environmentUrl: 'https://claude.ai/code?environment=env_01EXAMPLE' };
+  const noteOf = (text) => text.slice(0, text.indexOf('\n'));
+
+  fs.writeFileSync(logPath, whole);
+  assert.deepEqual(readServerState(logTail(logPath)), state);
+  assert.equal(trimLog(logPath).trimmed, true, 'the log is over the cap');
+  const trimmed = fs.readFileSync(logPath, 'utf8');
+  assert.match(noteOf(trimmed), /^\[js-harness remote\] log trimmed: /);
+  assert.ok(whole.endsWith(trimmed.slice(noteOf(trimmed).length + 1)), 'what is left is the end of the log');
+  const size = Buffer.byteLength(trimmed);
+  assert.ok(size <= LOG_KEEP_BYTES + 200 && size > 8 * 64 * 1024, `far more is kept than the 64 KiB status reads: ${size} bytes`);
+  assert.deepEqual(readServerState(logTail(logPath)), state);
+
+  // With less kept than status reads, the line the trim leaves is in what status reads.
+  fs.writeFileSync(logPath, whole);
+  assert.equal(trimLog(logPath, { keepBytes: 2048 }).trimmed, true);
+  const small = fs.readFileSync(logPath, 'utf8');
+  assert.equal(logTail(logPath), small, 'all of it is read, the note with it');
+  assert.deepEqual(readServerState(logTail(logPath)), state);
+  assert.equal(readServerState(`${statusFrame()}${noteOf(small)}\n`).connection, 'connected', 'last in the log, that line does not say the server went down');
+  assert.deepEqual(readServerState(`${noteOf(small)}\n`), { connection: 'unknown', capacity: null, environmentUrl: null }, 'and alone it says nothing of the server');
+});
+
+test('status does not read a log that could not be trimmed as a server that went down, whatever the error says', () => {
+  const line = (...args) => `[js-harness remote] ${trimFailureNote(...args)}\n`;
+  const busy = new Error('EBUSY: resource busy or locked, ftruncate');
+  // The first line of a failure, the one that repeats it, and an error whose own words are a connection state.
+  for (const note of [line(busy), line(busy, 61), line(new Error('ENOTCONN: socket is not connected, open')), line(new Error('the share is offline'))]) {
+    assert.match(note, /^\[js-harness remote\] log not trimmed/);
+    assert.equal(readServerState(`${statusFrame()}${note}`).connection, 'connected', `last in the log, it does not say the server went down: ${note}`);
+    assert.deepEqual(readServerState(note), { connection: 'unknown', capacity: null, environmentUrl: null }, `and alone it says nothing of the server: ${note}`);
+    const exited = `${statusFrame()}${note}[js-harness remote] server exited (code 1) after 600s; restarting in 5s\n`;
+    assert.equal(readServerState(exited).connection, 'not connected', 'a line that does say so is still read');
+  }
 });
 
 test('status reports a running supervisor with what its log says', { skip: WINDOWS_ONLY }, async () => {

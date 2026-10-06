@@ -101,6 +101,7 @@ function plainLines(text) {
   return String(text).replace(OSC, '').replace(CSI, '').replace(OTHER_ESCAPE, '').split(/\r\n|\r|\n/).map((line) => line.replace(CONTROL, '').trim());
 }
 
+const SUPERVISOR_LINE = /^\[js-harness remote\] /;
 const SUPERVISOR_DOWN = /^\[js-harness remote\] (server exited|server could not start|stopped|could not stop)/;
 const CONNECTION = /\b(Connected|Connecting|Reconnecting|Disconnected|Offline)\b/i;
 const ENVIRONMENT_URL = /https:\/\/claude\.ai\/code\?environment=[^\s"'<>)]+/;
@@ -108,7 +109,9 @@ const ENVIRONMENT_URL = /https:\/\/claude\.ai\/code\?environment=[^\s"'<>)]+/;
 /** What the last lines of the server's log say: `connection` is `connected` when the latest connection state the
  * server printed is `Connected` and no supervisor line says the server went down after it, `not connected` for
  * any other latest state, `unknown` when there is none; `capacity` is the latest `N/M`; `environmentUrl` the
- * latest address the phone opens. Escape sequences are stripped first: the real server redraws its status. */
+ * latest address the phone opens. Escape sequences are stripped first: the real server redraws its status. Any
+ * other line of the supervisor's says nothing of the connection, whatever it quotes: `log not trimmed: ...` ends
+ * in a system error, and one of those reads `socket is not connected`. */
 export function readServerState(text) {
   const lines = plainLines(text);
   let connection = 'unknown';
@@ -118,7 +121,7 @@ export function readServerState(text) {
     const line = lines[i];
     if (connection === 'unknown') {
       if (SUPERVISOR_DOWN.test(line)) connection = 'not connected';
-      else {
+      else if (!SUPERVISOR_LINE.test(line)) {
         const match = CONNECTION.exec(line);
         if (match) connection = match[1] === 'Connected' ? 'connected' : 'not connected';
       }
@@ -132,8 +135,10 @@ export function readServerState(text) {
 
 const LOG_TAIL_BYTES = 64 * 1024;
 
-/** The last `LOG_TAIL_BYTES` of the log (it grows across restarts), or `''` when there is none. */
-function logTail(logPath) {
+/** The last `LOG_TAIL_BYTES` of the log, or `''` when there is none. The supervisor trims the log in place once
+ * it passes its cap (`trimLog`) and keeps sixteen times this much, with the server's latest repaint at its end,
+ * so a trimmed log reads as the whole one did. */
+export function logTail(logPath) {
   let fd;
   try {
     fd = fs.openSync(logPath, 'r');
