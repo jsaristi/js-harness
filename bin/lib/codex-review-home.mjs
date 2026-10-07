@@ -21,17 +21,25 @@
 // (`leanHomesDir`), the harness's machine state dir: AGENTS.md requires that whatever the harness writes
 // outside the repository can be undone exactly, and deleting that one folder does it. Each run removes
 // its own folder (`dispose`), and a run that was killed leaves one that the next run removes
-// (`sweepStaleLeanHomes`). Removing a hard link removes one name, never the file: the real `auth.json`
-// stays, with its bytes.
+// (`sweepStaleLeanHomes`). A run asked to keep its folder (`dispose({ keep: true })`) removes the login's
+// name from it and leaves the rest, which the same sweep removes later. Removing a hard link removes one
+// name, never the file: the real `auth.json` stays, with its bytes.
 import fs from 'node:fs';
 import path from 'node:path';
 
 const AUTH = 'auth.json';
 
 /** The Codex home the user's login lives in: `CODEX_HOME` when it is set and not empty, as Codex itself
- * reads it, else `.codex` under the OS home `homedir`. */
-export function realCodexHome(env, homedir) {
-  return env.CODEX_HOME ? env.CODEX_HOME : path.join(homedir, '.codex');
+ * reads it, else `.codex` under the OS home `homedir`. On Windows (`platform` is `win32`) the name of a
+ * variable has no case, and `env` may be a plain object that does not fold it as `process.env` does, so
+ * the name is looked for in any case and the first that is set and not empty is taken; elsewhere the name
+ * is `CODEX_HOME` exactly, since `Codex_Home` is another variable there. */
+export function realCodexHome(env, homedir, platform = process.platform) {
+  const set = (value) => typeof value === 'string' && value !== '';
+  const named = platform === 'win32'
+    ? Object.keys(env).filter((key) => /^codex_home$/i.test(key)).map((key) => env[key]).find(set)
+    : env.CODEX_HOME;
+  return set(named) ? named : path.join(homedir, '.codex');
 }
 
 /** The folder the lean homes are made in, one per run: `<home>/.js-harness/codex-review-homes`. */
@@ -46,15 +54,16 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  * entry that is also the user's login goes by a call that removes exactly one name, never by the
  * recursive removal, whose handling of an entry it cannot delete is the runtime's and not this module's.
  * When the name cannot be removed the folder is left as it is, for the next run's sweep or a person.
+ * With `keep` the folder is left on purpose and only the name goes, so a kept folder never holds a login.
  * Returns `null`, or what failed as a sentence; never throws. */
-function removeLeanHome(home, rm = fs.rmSync) {
+function removeLeanHome(home, rm = fs.rmSync, { keep = false } = {}) {
   try {
     try {
       fs.unlinkSync(path.join(home, AUTH));
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;
     }
-    rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    if (!keep) rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     return null;
   } catch (err) {
     return `could not remove ${home} (${err.code ?? err.message}); delete that folder by hand, which removes one name of the Codex login and never the login`;
@@ -71,6 +80,10 @@ function identity(file) {
  * absolute path as `home` and `dispose()`, which removes it: `null` when nothing is left to say, else a
  * sentence (the folder could not be removed, or the lean name had become another file, so what Codex
  * wrote there did not reach the real login). `dispose` is idempotent and never throws.
+ *
+ * `dispose({ keep: true })` removes the login's second name and leaves the rest of the folder, for a
+ * person to read what the session wrote (its rollout files). The login's name goes either way. A kept
+ * folder is still under `leanHomesDir`, so a later `dispose()` or the sweep of a later run removes it.
  *
  * Throws, with nothing left behind, when `id` is not a plain folder name, when the folder is already
  * there, when the real home holds no `auth.json` (Codex is not logged in), when the link cannot be made
@@ -115,7 +128,7 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
     throw err;
   }
 
-  const dispose = () => {
+  const dispose = ({ keep = false } = {}) => {
     let replaced = null;
     try {
       const now = identity(leanAuth);
@@ -125,7 +138,7 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
     } catch {
       // The name cannot be read: removing it below says what is wrong, if anything is.
     }
-    return removeLeanHome(home, rm) ?? replaced;
+    return removeLeanHome(home, rm, { keep }) ?? replaced;
   };
   return { home, dispose };
 }

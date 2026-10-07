@@ -14,6 +14,17 @@
 // none: they were all run in the `current` session, the only one there was, and a reader takes a missing
 // `session` as `current` (`runSession`), never as unknown. `durationMs` is `null` when the wall time of
 // the attempt could not be measured; it is never a guess.
+//
+// What an attempt spent. `usage` holds the four token counts, each `null` when it is not known, and
+// `usageSource` says where they were read: `rollout`, the rollout files of the lean session's own Codex
+// home, or `null` when no count was read, which is every `current` attempt (ephemeral, in the user's home,
+// which the command never reads). With them come `requests` (the token counts those files held, taken as
+// requests to the model), `firstRequestInputTokens` (the input of the session's first request: what it
+// loads before it has run anything) and `threads` (the rollout files that held a count), each `null` when
+// unknown. A line with NO `usageSource` field was written before it existed: its `usage` is what Codex's
+// `turn.completed` events reported, which for `exec review` on codex-cli 0.160.0 is zeros by construction
+// and not a measurement (`rolloutReading` in ./codex-usage.mjs has the source). Read such a `usage` as
+// unknown, not as a review that cost nothing.
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';

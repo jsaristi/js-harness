@@ -253,6 +253,46 @@ What this changes, and waits on Sebastián:
   is the key read at `core/src/config/mod.rs:4010-4014`, its effect inferred. T5's first run
   shows whether they still reach the session.
 
+## Why the first lean review ran no command and reported no tokens (2026-10-07)
+Read from the same tag by a read-only explorer after the run of 05:34Z, two claims read again
+by the parent (`core/src/exec_policy.rs:787-814`, `core/src/codex_delegate.rs:306-322`). No
+model was called.
+
+- The refusal. On Windows a shell command that no rule matches is forbidden when approvals are
+  `never`, the profile restricts the file system (read-only does) and no Windows sandbox is
+  set: `windows_managed_fs_restrictions_without_sandbox_backend`, `AskForApproval::Never =>
+  Decision::Forbidden` (`core/src/exec_policy.rs:789-806`); with a sandbox the same function
+  allows it (`:810-813`). The sandbox is the key `windows.sandbox`, one of `elevated`,
+  `unelevated`, `mxc` (`config/src/types.rs:164-176`), which his `config.toml` sets to
+  `unelevated` and the lean session did not load. `unelevated` needs no administrator and no
+  setup; it writes `cap_sid` and `.sandbox/` into the home
+  (`windows-sandbox-rs/src/cap.rs:35-36`, `spawn_prep.rs:108-109`). In read-only mode it adds
+  no access entry to the workspace or to the home, only to the NUL device
+  (`spawn_prep.rs:289-342`), so the linked `auth.json` keeps its access list. `--ignore-rules`
+  changes nothing here: there are no built-in allow rules (`exec_policy.rs:662-716`).
+- The zeros. `exec` fills `turn.completed.usage` from the last token update of the primary
+  thread and prints zeros when none came (`exec/src/event_processor_with_jsonl_output.rs:118-127`).
+  A review runs in a sub-agent whose `TokenCount` events are dropped before they reach the
+  parent (`core/src/codex_delegate.rs:311-319`), and the parent makes no request of its own
+  (`core/src/tasks/review.rs:76-91`). So `exec review --json` reports no tokens in any
+  session, by construction. The review of 2026-09-30 that F6's evidence cites was read from a
+  database of a run that was not ephemeral, not from this stream.
+- Where the tokens are. With `--ephemeral` nowhere on disk (`core/src/session/session.rs:1008-1009`,
+  `:1112-1113`), and the sub-agent inherits it (`core/src/tasks/review.rs:105-106`). Without it
+  each thread writes `sessions/YYYY/MM/DD/rollout-<timestamp>-<thread id>.jsonl`
+  (`rollout/src/rollout_file_name.rs:67`) with `token_count` lines whose `info` holds
+  `total_token_usage` and `last_token_usage` (`protocol/src/protocol.rs:2241-2282`,
+  `rollout/src/policy.rs:113-119`). That the sub-agent gets a file of its own is read from
+  code and not yet seen.
+
+What follows from it:
+- The lean session sets `windows.sandbox` itself on Windows and drops `--ephemeral`: its home
+  is thrown away after the run, so the tokens are read from its rollout files before that.
+- The `current` session cannot be measured as it runs today, ephemeral in his real home.
+  Measuring it for the comparison of T12 means either a run that is not ephemeral, which
+  leaves session files in his `~/.codex` and has this command read them, or a home that
+  copies his configuration. That is his decision, put to him before T12.
+
 ## Open questions, each with the task that answers it
 - Answered by T4 (section above): `--ignore-user-config` leaves the global `AGENTS.md`, the
   skills and the rules in; only a home of the review's own leaves the global `AGENTS.md` out;
@@ -421,9 +461,36 @@ What this changes, and waits on Sebastián:
     place the command looks. What this attempt drew from the cap is not known.
   - Both are being read from Codex's source by a read-only explorer before another call to
     the model is asked for.
+- 2026-10-07: that run recorded as `4c8af4b` (gate green, `passive`). The explorer's reading
+  is in "Why the first lean review ran no command and reported no tokens".
+- 2026-10-07: the correction, by a new writer, no model called and no real home touched.
+  - The lean argv sets `-c windows.sandbox="unelevated"` on Windows and nothing elsewhere,
+    and no longer passes `--ephemeral`; `current` is unchanged to the token. Both lean lists
+    are pinned, and the Windows command line.
+  - The tokens come from the lean home's rollout files, read after Codex exits and before the
+    home is removed (`rolloutReading` in `bin/lib/codex-usage.mjs`): per count the sum over
+    threads of each thread's last total, the requests (the `token_count` lines that hold a
+    count, an inferred reading), the input of the first request and the threads. The run line
+    gains `requests`, `firstRequestInputTokens`, `threads` and `usageSource`
+    (`rollout` or `null`). The command no longer takes tokens from Codex's JSONL: under
+    `current` every count is `null` and the summary says the tokens are not known, where it
+    printed zeros.
+  - `--keep-home`, lean only: the run removes the login's name from its home and keeps the
+    rest, so the rollout files of a first run can be read by a person; the sweep removes the
+    folder later.
+  - The four findings of the review of `e531c1f`: an empty `--home` or `JS_HARNESS_HOME`
+    counts as unset; `CODEX_HOME` is found in any case on Windows; the proof writes its report
+    when the second reading throws; its usage says the wrapped command must be an executable.
+  - RED: the usage reader 11 of 24 failing, the command 24 of 134, the home module 4 of 22,
+    the proof 3 of 21. GREEN, the writer's verification over seven test files: 271 of 271,
+    223 s. Parent: printed the three argv lists from the module, ran four of the files again
+    (81 of 81), saw `--keep-home` without `--session lean` exit 2, read the home module's diff.
+  - Left open by the writer, settled by the first kept home: `requests` may count a line
+    Codex writes when only the rate limits change. The shape of a rollout line is read from
+    source and has not been seen in a real file.
 
 ## Follow-ups
-- From gentle-ai's review of `e531c1f`, with the next change to these files:
+- Closed on 2026-10-07 with the correction above, from gentle-ai's review of `e531c1f`:
   - R3-empty-state-home-resolves-to-cwd (WARNING, `bin/codex-review.mjs:544`): an empty
     `JS_HARNESS_HOME` or `--home` is not taken as unset, so the lean home and its link to the
     login would be made under the working directory.
@@ -460,10 +527,10 @@ What this changes, and waits on Sebastián:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T4 are done and T5 is written. Its proof of the login passed; its review did not run,
-since the lean session has no Windows sandbox, and reported no tokens. Next: the explorer's
-reading of both from Codex's source, then the fix, then Sebastián's go-ahead for one more
-lean review of `338386a..e3aad48` from the temporary worktree, which is kept for it. Of the
+T1 to T4 are done and T5 is written and corrected: the lean session sets its own Windows
+sandbox and reads its tokens from its rollout files. Next: Sebastián's go-ahead for one more
+lean review of `338386a..e3aad48` from the temporary worktree, kept for it, with
+`--keep-home` and inside the proof of the login. Of the
 two reviews he approved one is spent; the `current` one over the slice is not run at 2,832
 lines without asking him again. T5 is checked off when a lean review reads its diff. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
 `7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai

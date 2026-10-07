@@ -16,18 +16,28 @@
 // comparison of the two decides the default (odd/tasks/codex-review-lean.md).
 //
 // The lean session's home is a folder made for the one run, `<home>/.js-harness/codex-review-homes/<run
-// id>/`, handed to Codex as `CODEX_HOME` and removed when the run ends, however it ends. It holds one
-// thing: the login, as a hard link to the real `auth.json`, never a copy, so a refresh of the login inside
-// the review is a refresh of the real one (`bin/lib/codex-review-home.mjs` has the reasons and how to undo
-// it). `<home>` is `--home`, else `JS_HARNESS_HOME`, else the OS home; the real Codex home is `CODEX_HOME`,
-// else `.codex` under the OS home. `current` makes no folder and sets no `CODEX_HOME`.
+// id>/`, handed to Codex as `CODEX_HOME` and removed when the run ends, however it ends. It is made with
+// one thing in it: the login, as a hard link to the real `auth.json`, never a copy, so a refresh of the
+// login inside the review is a refresh of the real one (`bin/lib/codex-review-home.mjs` has the reasons and
+// how to undo it). `<home>` is `--home`, else `JS_HARNESS_HOME`, else the OS home, an empty one counting as
+// unset; the real Codex home is `CODEX_HOME`, else `.codex` under the OS home. `current` makes no folder
+// and sets no `CODEX_HOME`. `--keep-home`, for the lean session alone, leaves the folder after the run
+// without the login and prints its path, so a person can read what the session wrote there.
+//
+// What a review spent is read from that home. `codex exec review --json` reports a `usage` of zeros,
+// whatever the review spent (see `rolloutReading` in `bin/lib/codex-usage.mjs`), and the tokens are on disk
+// only for a session that is not `--ephemeral`, in the rollout files of its home. So the lean session is
+// not ephemeral, and its rollout files are read after Codex ends and before the home goes. The `current`
+// session is ephemeral in the user's own home, which this command never reads: its tokens are not known,
+// and the run line says so with `null`, never with a zero.
 //
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
-// were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time and what Codex's
-// events say it spent (tokens, turns, items by type, commands). A reviewed record names its run line by
-// id; a run line is a measurement and never evidence of a review, so `check --push` does not read it.
+// were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time, what
+// the rollout files say it spent (tokens, requests, threads) and what Codex's events say it did (turns,
+// items by type, commands). A reviewed record names its run line by id; a run line is a measurement and
+// never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import os from 'node:os';
@@ -36,15 +46,16 @@ import { performance } from 'node:perf_hooks';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
-import { sessionReading } from './lib/codex-usage.mjs';
+import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. Only the lean session keeps anything
-// there, the Codex home of its run; under `current` the flag is read and nothing uses it.
+// there, the Codex home of its run; under `current` the flag is read and nothing uses it. `--keep-home`
+// leaves that home after the run, so it needs the session that has one.
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--unavailable <reason>] [--cwd <path>] [--home <path>]';
+  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]';
 
 // The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
 const SESSIONS = ['current', 'lean'];
@@ -70,7 +81,9 @@ function parseArgs(argv) {
   const home = get('--home');
   const session = get('--session') ?? SESSIONS[0];
   if (!SESSIONS.includes(session)) throw new ArgError('--session must be `current` or `lean`');
-  return { base, unavailable, session, home, cwd: get('--cwd') ?? process.cwd() };
+  const keepHome = argv.includes('--keep-home');
+  if (keepHome && session !== 'lean') throw new ArgError('--keep-home needs --session lean: only the lean session has a Codex home of its own to keep');
+  return { base, unavailable, session, home, keepHome, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -104,10 +117,18 @@ const CURRENT_CONFIG = [
 export const LEAN_MODEL = 'gpt-6.1-sol';
 export const LEAN_EFFORT = 'medium';
 
+// The Windows sandbox of the lean session. The command's own choice, as the model and the effort are, and
+// the one the user's config names: it needs no administrator, no setup step and, for a read-only session,
+// no change to the access lists of the workspace or of the home. It writes `cap_sid` and `.sandbox/` into
+// `CODEX_HOME`, which is the lean home and goes with it.
+const LEAN_WINDOWS_SANDBOX = 'unelevated';
+
 // The `lean` session: what a review needs and nothing else. Why each flag is here, with the lines of
 // Codex's source it was read from, is the section "What Codex loads, and what `exec review` accepts
-// (T4, 2026-10-06)" of odd/tasks/codex-review-lean.md.
-const LEAN_FLAGS = [
+// (T4, 2026-10-06)" of odd/tasks/codex-review-lean.md. It is not `--ephemeral`: its home is thrown away
+// after the run, and only a session that is not ephemeral writes there the rollout files the tokens are
+// read from.
+const leanFlags = (platform) => [
   // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
   // instructions file, and the user's model and effort. Auth still uses the home.
   '--ignore-user-config',
@@ -122,6 +143,11 @@ const LEAN_FLAGS = [
   '-m', LEAN_MODEL,
   '-c', `model_reasoning_effort="${LEAN_EFFORT}"`,
   ...SANDBOX_CONFIG.flatMap((setting) => ['-c', setting]),
+  // On Windows alone. With approvals at `never`, a read-only sandbox and NO Windows sandbox configured,
+  // Codex forbids every shell command, "rejected: blocked by policy" (`core/src/exec_policy.rs:789-806` at
+  // rust-v0.160.0), so the review cannot read the diff. The user's `[windows] sandbox` is a key of the
+  // config this session ignores, so the session names one itself.
+  ...(platform === 'win32' ? ['-c', `windows.sandbox="${LEAN_WINDOWS_SANDBOX}"`] : []),
   // Leaves out the instructions of the skills in `$CODEX_HOME/skills` and `~/.agents/skills`. INFERRED
   // from source (the key is read; its effect was not seen in a run): T5's first real run confirms it.
   '-c', 'skills.include_instructions=false',
@@ -129,11 +155,12 @@ const LEAN_FLAGS = [
 
 /** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. `session` is
  * `current`, today's configuration on top of the user's Codex config and the default, or `lean`, the
- * one that loads only what a review needs. The global `AGENTS.md` is in neither list: no flag leaves
- * it out, only a home of the review's own, which `codexReviewMain` sets for `lean` in the environment
- * (`leanEnv`). */
-export function codexArgs(base, session = 'current') {
-  if (session === 'lean') return ['exec', 'review', '--json', '--ephemeral', ...LEAN_FLAGS, '--base', base];
+ * one that loads only what a review needs. `platform` is where Codex runs: the lean list has one more
+ * setting on `win32`, and the current one is the same everywhere. The global `AGENTS.md` is in neither
+ * list: no flag leaves it out, only a home of the review's own, which `codexReviewMain` sets for `lean`
+ * in the environment (`leanEnv`). */
+export function codexArgs(base, session = 'current', platform = process.platform) {
+  if (session === 'lean') return ['exec', 'review', '--json', ...leanFlags(platform), '--base', base];
   if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
   return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
 }
@@ -428,18 +455,28 @@ function elapsedMs(from, to) {
   return Number.isFinite(from) && Number.isFinite(to) ? Math.max(0, Math.round(to - from)) : null;
 }
 
-/** The reading of a session (`sessionReading`) and its wall time as one line: the tokens, the
- * seconds (`unknown` when the wall time was not measured) and the items by type, the most frequent
- * first. */
-function spentLine(reading, durationMs) {
-  const { inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens } = reading.usage;
-  const items = Object.entries(reading.items)
+/** Whether a reading of rollout files (`rolloutReading`) holds any count at all. */
+const tokensKnown = (spent) => Object.values(spent.usage).some((count) => count !== null);
+
+/** What an attempt spent and did, as one line: the tokens and the requests of `spent` (a
+ * `rolloutReading`), the seconds (`unknown` when the wall time was not measured) and `items` by type, the
+ * most frequent first. When no token is known the line says that, and why, instead of a row of zeros or
+ * of `unknown`: the `current` session is ephemeral, so Codex writes its tokens nowhere, and a `lean` one
+ * left no count in its home. */
+function spentLine(spent, items, durationMs, lean) {
+  const seconds = durationMs === null ? 'unknown' : Math.round(durationMs / 1000);
+  const did = Object.entries(items)
     .sort(([a, countA], [b, countB]) => countB - countA || (a < b ? -1 : 1))
     .map(([type, count]) => `${thousands(count)} ${type}`)
-    .join(', ');
+    .join(', ') || 'no items';
+  if (!tokensKnown(spent)) {
+    const why = lean ? 'its Codex home held no token count' : 'an ephemeral review reports none';
+    return `Codex ran for ${seconds} s; its tokens are not known for this session (${why}): ${did}.`;
+  }
+  const { inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens } = spent.usage;
   return (
     `Codex used ${spoken(inputTokens)} input tokens (${spoken(cachedInputTokens)} cached) and ${spoken(outputTokens)} output ` +
-    `(${spoken(reasoningOutputTokens)} reasoning) in ${durationMs === null ? 'unknown' : Math.round(durationMs / 1000)} s: ${items || 'no items'}.`
+    `(${spoken(reasoningOutputTokens)} reasoning) in ${seconds} s over ${spoken(spent.requests)} request${spent.requests === 1 ? '' : 's'}: ${did}.`
   );
 }
 
@@ -541,10 +578,13 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         return 1;
       }
       try {
-        const homes = leanHomesDir(path.resolve(args.home ?? env.JS_HARNESS_HOME ?? homedir()));
-        // What a killed run left. Twice the timeout: no review that is still running is that old.
+        // `||`, not `??`: an empty `--home` or `JS_HARNESS_HOME` is unset, and the next source is asked.
+        // Resolved as it is, an empty path is the working directory, and the lean home, with its link to
+        // the login, would be made there.
+        const homes = leanHomesDir(path.resolve(args.home || env.JS_HARNESS_HOME || homedir()));
+        // What a killed run left, or a kept one. Twice the timeout: no review that is still running is that old.
         sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
-        leanHome = createLeanHome({ realHome: realCodexHome(env, homedir()), parent: homes, id: leanRunId });
+        leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId });
       } catch (err) {
         error(`${err.message}\nThe lean review was not started and nothing was recorded.`);
         return 1;
@@ -557,13 +597,20 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     let launchedAt;
     let endedAt;
     let result;
+    // What the session spent. Not what Codex's own events say: `exec review --json` reports a `usage` of
+    // zeros in `turn.completed` by construction, since the review runs in a sub-agent whose token counts
+    // are dropped before they reach the parent thread (`core/src/codex_delegate.rs:311-319` at
+    // rust-v0.160.0). The counts are in the rollout files of the session's home, read below for `lean`.
+    // `current` is ephemeral, which writes none, in the user's own home, which this command never reads:
+    // nothing is known of it, and that stays `null`.
+    let spent = noRolloutReading();
     try {
       log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})` : ''}; this can take several minutes.`);
       startedAt = now();
       launchedAt = readClock(monotonicNow);
       // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
       // stays live.
-      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session), {
+      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform), {
         cwd: root,
         stdio: ['ignore', 'pipe', 'inherit'],
         env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
@@ -571,13 +618,26 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       endedAt = readClock(monotonicNow);
     } finally {
       // The lean home goes on every way out, whatever the review came to: Codex has ended or was
-      // killed. What could not be cleaned is a warning and never changes how the attempt ends.
-      const left = leanHome?.dispose();
-      if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
+      // killed. Its rollout files are read first, since they go with it. What could not be cleaned is a
+      // warning and never changes how the attempt ends.
+      if (leanHome) {
+        spent = rolloutReading(leanHome.home);
+        const left = leanHome.dispose({ keep: args.keepHome });
+        if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
+        // The path comes last, so that it can be copied whole. Kept is not for ever: the folder is still
+        // where the sweep of a later lean review looks, and that removes it like one a killed run left.
+        if (args.keepHome) {
+          log(
+            `The lean Codex home of this run was kept${left ? '' : ', without the login'}, for its rollout files under \`sessions\` (what the session sent and spent); ` +
+              `the next lean review removes it once it is ${Math.ceil((2 * timeoutMs) / 60000)} minutes old, and it can be deleted by hand at any time: ${leanHome.home}`,
+          );
+        }
+      }
     }
     const durationMs = elapsedMs(launchedAt, endedAt);
     const events = parseEvents(result.stdout);
     const evidence = reviewEvidence(events, expected);
+    // The turns, the items and the commands of the session. Its `usage` is left out on purpose: see `spent`.
     const reading = sessionReading(events);
     /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
      * could not be built or written: the measurement is lost and said so, and the attempt ends as it
@@ -602,7 +662,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           // config sets them and Codex's events do not name them, so they are `null`, not a guess.
           model: lean ? LEAN_MODEL : null,
           effort: lean ? LEAN_EFFORT : null,
-          ...reading,
+          // The four counts, each `null` when it is not known, and where they were read from: `rollout`,
+          // or `null` when none was. A line written before `usageSource` existed took its `usage` from
+          // Codex's events (`bin/lib/codex-review-runs.mjs`).
+          usage: spent.usage,
+          usageSource: tokensKnown(spent) ? 'rollout' : null,
+          requests: spent.requests,
+          firstRequestInputTokens: spent.firstRequestInputTokens,
+          threads: spent.threads,
+          turns: reading.turns,
+          items: reading.items,
+          commands: reading.commands,
           coverage: evidence.coverage,
         };
         appendCodexReviewRun(root, run, { spawn });
@@ -614,7 +684,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     };
     for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
     if (evidence.review) write(`${evidence.review}\n`);
-    log(spentLine(reading, durationMs));
+    log(spentLine(spent, reading.items, durationMs, lean));
     if (result.status !== 0 || !evidence.completed) {
       const reason = result.error?.code === 'ENOBUFS'
         ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`

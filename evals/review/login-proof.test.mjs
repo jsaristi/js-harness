@@ -249,6 +249,46 @@ test('a command that cannot be started is exit 1, and the report says so', () =>
   assert.match(fs.readFileSync(out, 'utf8'), /could not be started/);
 });
 
+test('a home that cannot be read after the command still gets its report, which says so and why: exit 1', () => {
+  const { home, root, out } = fakeHome();
+  // The command exits 0 and takes the home away, so the second reading has nothing to list.
+  const move = "require('node:fs').renameSync(process.argv[1], process.argv[2])";
+  const result = prove(['--real-home', home, '--out', out, '--', ...node(move, home, path.join(root, 'moved'))]);
+  assert.equal(result.code, 1);
+  const written = fs.readFileSync(out, 'utf8');
+  assert.equal(result.out.trim(), written.trim(), 'what is printed is what is written');
+  assert.match(written, /Exit code: 0/);
+  assert.match(written, /could not be read after the command/);
+  assert.match(written, /ENOENT/, 'and why');
+  assert.match(written, /Verdict: FAIL/);
+  assert.doesNotMatch(written, /PASS/);
+  assert.match(written, /2 entries before/);
+  assert.ok(written.includes('2026-10-06T12:00:00.000Z'));
+  assert.equal(holdsNoBytes(written), true);
+});
+
+test('report: without a second reading there is no verdict but FAIL, and what was read before is still told', () => {
+  const { home } = fakeHome();
+  const before = snapshot(home);
+  const text = report({ date: '2026-10-06T12:00:00.000Z', realHome: home, command: ['node', 'x.mjs'], exitCode: 0, before, after: null, comparison: null, afterError: 'EACCES: permission denied, scandir' });
+  assert.match(text, /could not be read after the command \(EACCES: permission denied, scandir\)/);
+  assert.match(text, /Verdict: FAIL/);
+  assert.match(text, /Names \(hard links\) before: 1/);
+  assert.match(text, /2 entries before; not read after/);
+  assert.equal(holdsNoBytes(text), true);
+  assert.equal(text.includes(before.auth.sha256), false);
+});
+
+test('the usage says the command must be a real executable, since no shell starts it: not a `.cmd` shim', () => {
+  const { home, out } = fakeHome();
+  const result = prove(['--real-home', home, '--out', out]);
+  assert.equal(result.code, 2);
+  assert.match(result.err, /no shell/);
+  assert.match(result.err, /real executable/);
+  assert.match(result.err, /`node <script>`/);
+  assert.match(result.err, /`\.cmd` shim/);
+});
+
 test('--real-home is required and has no default; without it, --out or a command, nothing runs: exit 2 with usage', () => {
   const { home, root, out } = fakeHome();
   const marker = path.join(root, 'ran');

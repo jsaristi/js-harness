@@ -839,15 +839,17 @@ test('--home is accepted under the current session, which keeps nothing there', 
 
 // --- the session: today's configuration, or the lean one beside it ---
 
-/** The lean argv, token by token: what `--session lean` hands Codex for a review from `base`. */
-const leanArgv = (base) => [
-  'exec', 'review', '--json', '--ephemeral',
+/** The lean argv, token by token: what `--session lean` hands Codex for a review from `base`. It is not
+ * `--ephemeral`, and on Windows alone it names the sandbox its commands run in. */
+const leanArgv = (base, platform = 'linux') => [
+  'exec', 'review', '--json',
   '--ignore-user-config', '--ignore-rules',
   '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
   '-m', 'gpt-6.1-sol',
   '-c', 'model_reasoning_effort="medium"',
   '-c', 'sandbox_mode=read-only',
   '-c', 'approval_policy=never',
+  ...(platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : []),
   '-c', 'skills.include_instructions=false',
   '--base', base,
 ];
@@ -870,9 +872,45 @@ test('codexArgs: `current` is the default and today\'s argv to the token; `lean`
   const base = 'a'.repeat(40);
   assert.deepEqual(codexArgs(base), currentArgv(base));
   assert.deepEqual(codexArgs(base, 'current'), currentArgv(base));
-  assert.deepEqual(codexArgs(base, 'lean'), leanArgv(base));
-  assert.ok(!codexArgs(base, 'lean').some((token) => token.includes('openai-bundled')), 'plugins are off wholesale, not one by one');
+  for (const platform of ['win32', 'linux', 'darwin']) assert.deepEqual(codexArgs(base, 'current', platform), currentArgv(base), platform);
+  assert.deepEqual(codexArgs(base, 'lean', 'linux'), leanArgv(base));
+  assert.ok(!codexArgs(base, 'lean', 'linux').some((token) => token.includes('openai-bundled')), 'plugins are off wholesale, not one by one');
   assert.throws(() => codexArgs(base, 'other'), /session/);
+});
+
+test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () => {
+  const base = 'a'.repeat(40);
+  const lean = [
+    'exec', 'review', '--json',
+    '--ignore-user-config', '--ignore-rules',
+    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
+    '-m', 'gpt-6.1-sol',
+    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'sandbox_mode=read-only',
+    '-c', 'approval_policy=never',
+    '-c', 'skills.include_instructions=false',
+    '--base', base,
+  ];
+  assert.deepEqual(codexArgs(base, 'lean', 'linux'), lean);
+  assert.deepEqual(codexArgs(base, 'lean', 'darwin'), lean);
+  // On Windows a read-only session that asks nobody refuses every shell command unless it has a sandbox
+  // to run them in, and the lean session ignores the config file that names the user's.
+  assert.deepEqual(codexArgs(base, 'lean', 'win32'), [
+    'exec', 'review', '--json',
+    '--ignore-user-config', '--ignore-rules',
+    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
+    '-m', 'gpt-6.1-sol',
+    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'sandbox_mode=read-only',
+    '-c', 'approval_policy=never',
+    '-c', 'windows.sandbox="unelevated"',
+    '-c', 'skills.include_instructions=false',
+    '--base', base,
+  ]);
+  // Its home is thrown away after the run, and only a session that is not ephemeral writes its tokens there.
+  for (const platform of ['win32', 'linux']) assert.equal(codexArgs(base, 'lean', platform).includes('--ephemeral'), false, platform);
+  assert.equal(codexArgs(base, 'current', 'win32').includes('--ephemeral'), true, 'the current session is as it was');
+  assert.equal(codexArgs(base, 'current', 'win32').some((token) => token.includes('windows.sandbox')), false);
 });
 
 test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment but for its home', async () => {
@@ -920,20 +958,31 @@ test('a session that is neither `current` nor `lean` exits 2 with usage and does
 
 test('on Windows the lean argv goes through the shell as one quoted line: no token is refused', async () => {
   const { root, base } = makeRepo();
-  assert.doesNotThrow(() => leanArgv(base).map(quoteWindowsArg));
+  assert.doesNotThrow(() => leanArgv(base, 'win32').map(quoteWindowsArg));
   const fake = fakeCodex(reviewed(root, base));
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32' });
   assert.equal(result.code, 0, result.err);
   const { command, args, opts } = fake.calls[0];
   assert.equal(opts.shell, true);
   assert.deepEqual(args, []);
-  assert.equal(command, windowsCommandLine('codex', leanArgv(base)));
+  assert.equal(command, windowsCommandLine('codex', leanArgv(base, 'win32')));
   assert.equal(
     command,
-    'codex exec review --json --ephemeral --ignore-user-config --ignore-rules --disable plugins --disable apps --disable hooks ' +
+    'codex exec review --json --ignore-user-config --ignore-rules --disable plugins --disable apps --disable hooks ' +
       '-m gpt-6.1-sol -c "model_reasoning_effort=\\"medium\\"" -c sandbox_mode=read-only -c approval_policy=never ' +
-      `-c skills.include_instructions=false --base ${base}`,
+      `-c "windows.sandbox=\\"unelevated\\"" -c skills.include_instructions=false --base ${base}`,
   );
+});
+
+test('off Windows the lean argv names no Windows sandbox, whatever the host the tests run on', async () => {
+  const { root, base } = makeRepo();
+  for (const platform of ['linux', 'darwin']) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform });
+    assert.equal(result.code, 0, result.err);
+    assert.deepEqual(fake.calls[0].args, leanArgv(base, platform), platform);
+    assert.equal(fake.calls[0].args.some((token) => token.includes('windows')), false, platform);
+  }
 });
 
 test('the run line says which session ran: `lean` with its model and effort, `current` with neither', async () => {
@@ -1054,12 +1103,43 @@ test('a CODEX_HOME the user set is where the login is taken from, and the child 
   assert.equal(fs.statSync(path.join(elsewhere, 'auth.json')).nlink, 1);
 });
 
-test('on Windows a CODEX_HOME spelled in another case is replaced, not left beside the lean one', async () => {
+/** An OS home `mine` with a login in its `.codex`, and a second Codex home `elsewhere` with a login of its
+ * own, both under one temporary folder so that a link from either can be made. */
+function twoLogins() {
+  const mine = fakeHome();
+  const elsewhere = path.join(mine.home, 'elsewhere', 'codex');
+  fs.mkdirSync(elsewhere, { recursive: true });
+  const other = path.join(elsewhere, 'auth.json');
+  fs.writeFileSync(other, 'FIXTURE login of another Codex home\n', 'utf8');
+  return { mine, elsewhere, other };
+}
+
+test('on Windows a CODEX_HOME spelled in another case is the home whose login is linked, and it is replaced, not left beside the lean one', async () => {
   const { root, base } = makeRepo();
-  const fake = fakeCodex(reviewed(root, base));
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32' }, { Codex_Home: 'C:\\Users\\x\\.codex', SystemRoot: 'C:\\Windows' });
+  const { mine, elsewhere, other } = twoLogins();
+  let links;
+  const fake = watching(fakeCodex(reviewed(root, base)), () => {
+    links = { named: fs.statSync(other).nlink, default: fs.statSync(mine.auth).nlink };
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32', homedir: mine.homedir }, { Codex_Home: elsewhere, SystemRoot: 'C:\\Windows' });
   assert.equal(result.code, 0, result.err);
-  assert.deepEqual(fake.calls[0].opts.env, { SystemRoot: 'C:\\Windows', CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
+  assert.deepEqual(links, { named: 2, default: 1 }, 'the login of the home the variable names, not the one under the OS home');
+  assert.deepEqual(fake.calls[0].opts.env, { SystemRoot: 'C:\\Windows', CODEX_HOME: path.join(mine.homes, RUN_ID) });
+  assert.equal(fs.statSync(other).nlink, 1);
+});
+
+test('off Windows a variable spelled in another case is another variable: the login comes from the OS home, and the child keeps it', async () => {
+  const { root, base } = makeRepo();
+  const { mine, elsewhere, other } = twoLogins();
+  let links;
+  const fake = watching(fakeCodex(reviewed(root, base)), () => {
+    links = { named: fs.statSync(other).nlink, default: fs.statSync(mine.auth).nlink };
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir }, { Codex_Home: elsewhere });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(links, { named: 1, default: 2 });
+  assert.deepEqual(fake.calls[0].opts.env, { Codex_Home: elsewhere, CODEX_HOME: path.join(mine.homes, RUN_ID) });
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
 });
 
 test('where the lean homes go: --home, else JS_HARNESS_HOME, else the OS home; the login always comes from the real Codex home', async () => {
@@ -1082,6 +1162,37 @@ test('where the lean homes go: --home, else JS_HARNESS_HOME, else the OS home; t
     assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID));
     assert.equal(links, 2, 'the login of the real Codex home, wherever the state dir is');
     assert.deepEqual(listed(leanHomesDir(expected)), []);
+  }
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('an empty --home or JS_HARNESS_HOME counts as unset: the next source is used, and nothing is made under the working directory', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const envHome = tmp('js-harness-codex-review-state-');
+  // An empty path resolves to the working directory. This one is a temporary folder on the volume of the
+  // fake login, so that a home made there by mistake would be made, and seen, and not stopped by `EXDEV`.
+  // This file's tests run one at a time in a process of their own, so the change is seen by no other.
+  const cwd = process.cwd();
+  const workdir = tmp('js-harness-codex-review-workdir-');
+  process.chdir(workdir);
+  try {
+    const cases = [
+      [['--home', ''], {}, mine.home],
+      [[], { JS_HARNESS_HOME: '' }, mine.home],
+      [['--home', ''], { JS_HARNESS_HOME: '' }, mine.home],
+      [['--home', ''], { JS_HARNESS_HOME: envHome }, envHome],
+    ];
+    for (const [flags, env, expected] of cases) {
+      const fake = fakeCodex(reviewed(root, base));
+      const result = await run(['--base', 'HEAD~1', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+      const name = JSON.stringify([flags, env]);
+      assert.equal(result.code, 0, `${name}: ${result.err}`);
+      assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID), name);
+      assert.deepEqual(listed(workdir), [], `${name}: nothing under the working directory`);
+    }
+  } finally {
+    process.chdir(cwd);
   }
   assert.equal(fs.statSync(mine.auth).nlink, 1);
 });
@@ -1173,7 +1284,7 @@ test('a lean home that cannot be made launches nothing: exit 1 with the reason, 
   assert.match(result.err, /not logged in/);
   assert.match(result.err, /codex login/);
   assert.match(result.err, /not started/);
-  assert.doesNotMatch(result.out, /Codex is reviewing|Codex used/);
+  assert.doesNotMatch(result.out, /Codex is reviewing|Codex used|Codex ran/);
   assert.equal(fake.calls.length, 0);
   assert.equal(wrote(root), false);
   assert.equal(loggedRun(root), false);
@@ -1260,11 +1371,145 @@ test('before a lean review the homes a killed run left are removed: older than t
   assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
 });
 
+// --- `--keep-home`: the lean home stays after the run, without the login, for a person to read ---
+
+test('--keep-home leaves the lean home with what Codex wrote in it and without the login, and says where it is', async () => {
+  const { root, base, head } = makeRepo();
+  const mine = fakeHome();
+  const realId = fileId(mine.auth);
+  let linksDuring;
+  const fake = watching(fakeCodex(reviewed(root, base)), (home) => {
+    codexWrites(home);
+    linksDuring = fs.statSync(mine.auth).nlink;
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--keep-home', '--cwd', root], { ...fake, homedir: mine.homedir });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(result.err, '');
+  assert.equal(linksDuring, 2);
+  const kept = path.join(mine.homes, RUN_ID);
+  // The login: one name again, the file it was, with its bytes. The folder holds no login at all.
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+  assert.equal(fileId(mine.auth), realId);
+  assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
+  assert.deepEqual(listed(kept).sort(), ['sessions', 'version.json']);
+  assert.equal(fs.readFileSync(path.join(kept, 'sessions', '2026', '10', 'rollout.jsonl'), 'utf8'), '{}\n');
+  // One line names the folder and says that it does not stay for ever.
+  const line = result.out.split('\n').find((text) => text.includes(kept));
+  assert.ok(line, result.out);
+  assert.match(line, /kept/);
+  assert.match(line, /without the login/);
+  assert.match(line, /rollout/);
+  assert.match(line, /next lean review removes/);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('--keep-home keeps the home of an attempt that failed too, and the tokens are still read from it', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const fake = spending(fakeCodex(reviewed(root, base), { status: 7 }), parentThread, reviewThread);
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--keep-home', '--cwd', root], { ...fake, homedir: mine.homedir });
+  assert.equal(result.code, 7);
+  const kept = path.join(mine.homes, RUN_ID);
+  assert.deepEqual(listed(kept), ['sessions']);
+  assert.ok(result.out.includes(kept), result.out);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+  assert.deepEqual(onlyRun(root).usage, REVIEW_SPENT);
+});
+
+test('a kept lean home is removed by a later lean review once it is older than twice the timeout', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const at = Date.parse('2026-09-29T12:00:00.000Z');
+  const minute = 60 * 1000;
+  const first = await run(['--base', 'HEAD~1', '--session', 'lean', '--keep-home', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), codexWrites), homedir: mine.homedir, randomUUID: () => 'kept-run', timeoutMs: 10 * minute });
+  assert.equal(first.code, 0, first.err);
+  assert.match(first.out, /once it is 20 minutes old/);
+  const kept = path.join(mine.homes, 'kept-run');
+  assert.equal(fs.existsSync(kept), true);
+  fs.utimesSync(kept, new Date(at - 21 * minute), new Date(at - 21 * minute));
+  const second = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir, timeoutMs: 10 * minute });
+  assert.equal(second.code, 0, second.err);
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('without --keep-home nothing is said about a kept home, and none is kept', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), codexWrites), homedir: mine.homedir });
+  assert.equal(result.code, 0, result.err);
+  assert.doesNotMatch(result.out, /kept/);
+  assert.deepEqual(listed(mine.homes), []);
+});
+
+test('--keep-home without --session lean is a usage error: exit 2, and nothing runs', async () => {
+  const { root, base } = makeRepo();
+  for (const flags of [['--keep-home'], ['--session', 'current', '--keep-home'], ['--keep-home', '--unavailable', 'model rejected']]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 2, flags.join(' '));
+    assert.match(result.err, /--keep-home needs --session lean/);
+    assert.match(result.err, /Usage: js-harness codex-review .*\[--keep-home\]/);
+    assert.equal(fake.calls.length, 0);
+    assert.equal(fake.probes.length, 0);
+  }
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+});
+
 // --- the run log: every attempt that launched Codex leaves one measured line ---
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-// The usage of the one review of this repository that was measured in full (2026-09-30).
+// The usage of the one review of this repository that was measured in full (2026-09-30), as a
+// `turn.completed` carried it then. Codex 0.160.0 reports zeros there for a review, by construction, so
+// the command no longer keeps what this event says: the tokens come from the rollout files of a lean home.
 const spent = { type: 'turn.completed', usage: { input_tokens: 297479, cached_input_tokens: 240640, output_tokens: 2396, reasoning_output_tokens: 703 } };
+// What `exec review --json` reports on 0.160.0, whatever the review spent.
+const zeros = { type: 'turn.completed', usage: { input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, reasoning_output_tokens: 0 } };
+const UNKNOWN_USAGE = { inputTokens: null, cachedInputTokens: null, outputTokens: null, reasoningOutputTokens: null };
+
+/** The counts of one token usage, in Codex's own names. */
+const usageOf = (input, cached, output, reasoning) => ({
+  input_tokens: input,
+  cached_input_tokens: cached,
+  cache_write_input_tokens: 0,
+  output_tokens: output,
+  reasoning_output_tokens: reasoning,
+  total_tokens: input + output,
+});
+
+/** One `token_count` line of a rollout file, as Codex writes one when a response of the model ends: the
+ * thread's running `total` and the `last` response's own counts. */
+const tokenCount = (total, last = total) => ({
+  type: 'event_msg',
+  payload: { type: 'token_count', info: { total_token_usage: total, last_token_usage: last, model_context_window: 272000 }, rate_limits: null },
+});
+
+/** Writes the rollout files of `threads` (each a list of lines) into the Codex home `home`, where a
+ * session that is not ephemeral leaves them. */
+function writeRollouts(home, ...threads) {
+  const dir = path.join(home, 'sessions', '2026', '10', '07');
+  fs.mkdirSync(dir, { recursive: true });
+  threads.forEach((lines, index) => fs.writeFileSync(path.join(dir, `rollout-2026-10-07T05-34-0${index}-thread-${index}.jsonl`), jsonl(...lines), 'utf8'));
+}
+
+/** `fake`, whose Codex writes the rollout files of `threads` into its home when it is launched. */
+const spending = (fake, ...threads) => watching(fake, (home) => writeRollouts(home, ...threads));
+
+// A review as its two threads leave it: the parent, which asks the model nothing, and the review's
+// sub-agent, which made seven requests. The last count is the thread's total.
+const parentThread = [{ type: 'session_meta', payload: { id: 'parent' } }, { type: 'event_msg', payload: { type: 'token_count', info: null, rate_limits: null } }];
+const reviewThread = [
+  { type: 'session_meta', payload: { id: 'review' } },
+  tokenCount(usageOf(18200, 0, 210, 90)),
+  tokenCount(usageOf(40100, 18176, 480, 150), usageOf(21900, 18176, 270, 60)),
+  tokenCount(usageOf(71350, 40064, 820, 260), usageOf(31250, 21888, 340, 110)),
+  tokenCount(usageOf(114800, 71296, 1090, 330), usageOf(43450, 31232, 270, 70)),
+  tokenCount(usageOf(166300, 114688, 1400, 420), usageOf(51500, 43392, 310, 90)),
+  tokenCount(usageOf(227000, 166272, 1800, 540), usageOf(60700, 51584, 400, 120)),
+  tokenCount(usageOf(297479, 240640, 2396, 703), usageOf(70479, 74368, 596, 163)),
+];
+const REVIEW_SPENT = { inputTokens: 297479, cachedInputTokens: 240640, outputTokens: 2396, reasoningOutputTokens: 703 };
 
 test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, what it spent and how long it took', async () => {
   const { root, base, head } = makeRepo();
@@ -1287,7 +1532,12 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
     session: 'current',
     model: null,
     effort: null,
-    usage: { inputTokens: 1, cachedInputTokens: null, outputTokens: 1, reasoningOutputTokens: null },
+    // An ephemeral session in the user's own home: what it spent is written nowhere this command reads.
+    usage: UNKNOWN_USAGE,
+    usageSource: null,
+    requests: null,
+    firstRequestInputTokens: null,
+    threads: null,
     turns: 1,
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
@@ -1298,6 +1548,106 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
   assert.deepEqual(Object.keys(logged), Object.keys(expected), 'the fields come in a fixed order');
   // The record is written after the run ended, and names the run by its id.
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), reviewedAt: '2026-09-29T12:02:00.000Z' }]);
+});
+
+test('a lean attempt\'s run line holds what its rollout files say it spent: the tokens, the requests, the first request and the threads', async () => {
+  const { root, base, head } = makeRepo();
+  const mine = fakeHome();
+  // Codex's own events report zeros for a review, and they are not what is kept.
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), parentThread, reviewThread);
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir, monotonicNow: ticking(5000.4, 112000.2) });
+  assert.equal(result.code, 0, result.err);
+  const expected = {
+    schema: 'js-harness.codex-review-run/v1',
+    id: RUN_ID,
+    startedAt: '2026-09-29T12:00:00.000Z',
+    durationMs: 107000,
+    base,
+    from: base,
+    head,
+    outcome: 'reviewed',
+    cli: '0.159.1',
+    session: 'lean',
+    model: 'gpt-6.1-sol',
+    effort: 'medium',
+    usage: REVIEW_SPENT,
+    usageSource: 'rollout',
+    requests: 7,
+    firstRequestInputTokens: 18200,
+    threads: 1,
+    turns: 1,
+    items: { agent_message: 1, command_execution: 1 },
+    commands: { total: 1, failed: 0 },
+    coverage: { seen: 2, total: 2 },
+  };
+  const logged = onlyRun(root);
+  assert.deepEqual(logged, expected);
+  assert.deepEqual(Object.keys(logged), Object.keys(expected), 'the fields come in a fixed order');
+  // They were read before the home went: nothing of it is left.
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('the counts of several threads are added up, and a lean home with no rollout file says nothing is known', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const second = [tokenCount(usageOf(1000, 512, 40, 10)), tokenCount(usageOf(2521, 1360, 104, 97), usageOf(1521, 848, 64, 87))];
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), reviewThread, second), homedir: mine.homedir });
+  const summed = onlyRun(root);
+  assert.deepEqual(summed.usage, { inputTokens: 300000, cachedInputTokens: 242000, outputTokens: 2500, reasoningOutputTokens: 800 });
+  assert.deepEqual([summed.usageSource, summed.requests, summed.firstRequestInputTokens, summed.threads], ['rollout', 9, 18200, 2]);
+
+  // Codex wrote no rollout file (an older CLI, another layout): unknown, said as `null`, and never zeros.
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), homedir: mine.homedir });
+  const unknown = readCodexReviewRuns(root)[1];
+  assert.deepEqual(unknown.usage, UNKNOWN_USAGE);
+  assert.deepEqual([unknown.usageSource, unknown.requests, unknown.firstRequestInputTokens, unknown.threads], [null, null, null, null]);
+  assert.equal(unknown.outcome, 'reviewed', 'what was not measured does not change how the review ends');
+
+  // A rollout file with no count in it: the file was read, so no request and no thread, and still no token.
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), parentThread), homedir: mine.homedir });
+  const empty = readCodexReviewRuns(root)[2];
+  assert.deepEqual(empty.usage, UNKNOWN_USAGE);
+  assert.deepEqual([empty.usageSource, empty.requests, empty.firstRequestInputTokens, empty.threads], [null, 0, null, 0]);
+});
+
+test('the tokens are read on every way out that launched Codex, before its home is removed', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const endings = [
+    ['reviewed', fakeCodex(reviewed(root, base)), {}],
+    ['failed', fakeCodex(jsonl(thread, turn, { type: 'turn.failed', error: { message: 'model overloaded' } })), {}],
+    ['failed', fakeCodex(reviewed(root, base), { status: 7 }), {}],
+    ['not-inspected', fakeCodex(reviewedWith(cmd('git status'))), {}],
+    ['timed-out', fakeCodex('', { hang: true }), { timeoutMs: 30 }],
+    ['failed', fakeCodex(['x'.repeat(20), 'y'.repeat(20)]), { maxBuffer: 30 }],
+  ];
+  for (const [outcome, fake, extra] of endings) {
+    await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fake, parentThread, reviewThread), ...extra, homedir: mine.homedir });
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.equal(logged.outcome, outcome);
+    assert.deepEqual(logged.usage, REVIEW_SPENT, outcome);
+    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], ['rollout', 7, 18200, 1], outcome);
+    assert.deepEqual(listed(mine.homes), [], outcome);
+  }
+  assert.equal(readCodexReviewRuns(root).length, endings.length);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('the current session reads no rollout file: not of the home the user named, nor of the one under the OS home', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const named = path.join(mine.home, 'named-codex-home');
+  // Both hold rollout files with counts, as a real home does, of sessions that are not this review.
+  writeRollouts(mine.codexHome, reviewThread);
+  writeRollouts(named, reviewThread);
+  for (const env of [{}, { CODEX_HOME: named }]) {
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent)), homedir: mine.homedir }, env);
+    assert.equal(result.code, 0, result.err);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual(logged.usage, UNKNOWN_USAGE);
+    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null]);
+  }
 });
 
 test('the run log is a second file in the folder of the review record, and a run line is not a record', async () => {
@@ -1322,15 +1672,21 @@ test('without an injected id each run gets a UUID of its own, and the record nam
   assert.deepEqual(readCodexReviews(root).map((record) => record.run), ids);
 });
 
-test('the run line holds the usage summed over the turns and every item by type, known or not', async () => {
+test('the run line holds the turns and every item by type, known or not; the usage of Codex\'s events is not kept, under either session', async () => {
   const { root, base } = makeRepo();
   const other = { type: 'item.completed', item: { id: 'x', type: 'mcp_tool_call', server: 's', tool: 't' } };
   const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
-  const fake = fakeCodex(jsonl(thread, turn, reasoning, cmd('git status', 128), spent, turn, other, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), spent));
-  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  const events = jsonl(thread, turn, reasoning, cmd('git status', 128), spent, turn, other, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), spent);
+  // Under `lean` too, with no rollout file to read: a `usage` in the events is never taken instead.
+  const lean = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(events));
+  assert.equal(lean.code, 0, lean.err);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(events));
   assert.equal(result.code, 0);
-  const logged = onlyRun(root);
-  assert.deepEqual(logged.usage, { inputTokens: 594958, cachedInputTokens: 481280, outputTokens: 4792, reasoningOutputTokens: 1406 });
+  const [leanRun, logged] = readCodexReviewRuns(root);
+  for (const line of [leanRun, logged]) {
+    assert.deepEqual(line.usage, UNKNOWN_USAGE);
+    assert.equal(line.usageSource, null);
+  }
   assert.equal(logged.turns, 2);
   assert.deepEqual(logged.items, { agent_message: 1, command_execution: 2, mcp_tool_call: 1, reasoning: 2 });
   assert.deepEqual(logged.commands, { total: 2, failed: 1 });
@@ -1390,11 +1746,13 @@ test('an attempt that did not complete is logged as failed, with the reason the 
 
 test('a failed attempt still holds what Codex spent before it failed', async () => {
   const { root, base, head } = makeRepo();
-  const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent), { status: 7 });
-  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, monotonicNow: ticking(100, 9600) });
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), { status: 7 }), parentThread, reviewThread);
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, monotonicNow: ticking(100, 9600) });
   const logged = onlyRun(root);
+  assert.equal(logged.outcome, 'failed');
   assert.equal(logged.usage.inputTokens, 297479);
   assert.equal(logged.usage.reasoningOutputTokens, 703);
+  assert.equal(logged.requests, 7);
   assert.deepEqual(logged.items, { agent_message: 1, command_execution: 1 });
   assert.deepEqual(logged.coverage, { seen: 2, total: 2 });
   assert.equal(logged.durationMs, 9500);
@@ -1403,13 +1761,17 @@ test('a failed attempt still holds what Codex spent before it failed', async () 
 
 test('an attempt that never started has a run line with nothing measured: null counts, not zeros', async () => {
   const { root } = makeRepo();
-  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
-  const logged = onlyRun(root);
-  assert.deepEqual(logged.usage, { inputTokens: null, cachedInputTokens: null, outputTokens: null, reasoningOutputTokens: null });
-  assert.equal(logged.turns, 0);
-  assert.deepEqual(logged.items, {});
-  assert.deepEqual(logged.commands, { total: 0, failed: 0 });
-  assert.deepEqual(logged.coverage, { seen: 0, total: 2 });
+  for (const session of ['current', 'lean']) {
+    await run(['--base', 'HEAD~1', '--session', session, '--cwd', root], fakeCodex('', { error: new Error('boom') }));
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.equal(logged.session, session);
+    assert.deepEqual(logged.usage, UNKNOWN_USAGE, session);
+    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null], session);
+    assert.equal(logged.turns, 0);
+    assert.deepEqual(logged.items, {});
+    assert.deepEqual(logged.commands, { total: 0, failed: 0 });
+    assert.deepEqual(logged.coverage, { seen: 0, total: 2 });
+  }
 });
 
 test('a review stopped at the timeout is logged as timed out', async () => {
@@ -1468,7 +1830,7 @@ test('what launches no Codex leaves no run line: a skip, a refusal, a missing CL
   assert.match(dirty.err, /commit or stash/i);
 
   assert.equal(loggedRun(root), false);
-  assert.doesNotMatch([skipped, unknown, missing, dirty].map((result) => result.out).join('\n'), /Codex used/);
+  assert.doesNotMatch([skipped, unknown, missing, dirty].map((result) => result.out).join('\n'), /Codex used|Codex ran/);
 });
 
 test('the wall time is measured on the monotonic clock: a wall clock that steps during the review changes nothing', async () => {
@@ -1480,7 +1842,7 @@ test('the wall time is measured on the monotonic clock: a wall clock that steps 
   const logged = onlyRun(root);
   assert.equal(logged.startedAt, '2026-09-29T12:00:00.000Z');
   assert.equal(logged.durationMs, 2501, 'whole milliseconds, rounded');
-  assert.match(result.out, / in 3 s: /);
+  assert.match(result.out, /^Codex ran for 3 s; /m);
 });
 
 test('the wall time is never below zero', async () => {
@@ -1495,7 +1857,7 @@ test('a monotonic clock that gives no finite number leaves the wall time unknown
   for (const monotonicNow of broken) {
     const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow });
     assert.equal(result.code, 0, result.err);
-    assert.match(result.out, / in unknown s: /);
+    assert.match(result.out, /^Codex ran for unknown s; /m);
     assert.doesNotMatch(result.out, /NaN|Infinity/);
   }
   const runs = readCodexReviewRuns(root);
@@ -1609,29 +1971,52 @@ test('a run log that cannot be written does not change how a failed attempt ends
   assert.equal(wrote(root), false);
 });
 
-test('after the run one line says what Codex spent: tokens, wall time and the items, most frequent first', async () => {
+test('after a lean run one line says what Codex spent: tokens, wall time, requests and the items, most frequent first', async () => {
   const { root, base } = makeRepo();
   const statuses = Array.from({ length: 5 }, () => cmd('git status'));
-  const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), spent));
-  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, monotonicNow: ticking(0, 107000) });
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), zeros)), parentThread, reviewThread);
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, monotonicNow: ticking(0, 107000) });
   assert.equal(result.code, 0);
   const lines = result.out.split('\n');
-  const at = lines.indexOf('Codex used 297,479 input tokens (240,640 cached) and 2,396 output (703 reasoning) in 107 s: 6 command_execution, 1 agent_message.');
+  const at = lines.indexOf('Codex used 297,479 input tokens (240,640 cached) and 2,396 output (703 reasoning) in 107 s over 7 requests: 6 command_execution, 1 agent_message.');
   assert.notEqual(at, -1, result.out);
   assert.ok(at > lines.findIndex((line) => /exit 0 {2}/.test(line)), 'after the commands');
   assert.ok(at < lines.findIndex((line) => /^Recorded/.test(line)), 'before the record');
 });
 
-test('the summary says `unknown` for a count Codex did not report, and is printed for a failed attempt too', async () => {
+test('the summary says `unknown` for a count the rollout files did not report, and one request is one `request`', async () => {
   const { root, base } = makeRepo();
   const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
-  const partial = fakeCodex(jsonl(thread, turn, reasoning, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), { type: 'turn.completed', usage: { input_tokens: 1200, output_tokens: 0 } }));
-  const reviewedRun = await run(['--base', 'HEAD~1', '--cwd', root], partial);
-  assert.ok(reviewedRun.out.includes('Codex used 1,200 input tokens (unknown cached) and 0 output (unknown reasoning) in 0 s: 2 reasoning, 1 agent_message, 1 command_execution.'), reviewedRun.out);
+  const partial = spending(fakeCodex(jsonl(thread, turn, reasoning, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), zeros)), [tokenCount({ input_tokens: 1200, output_tokens: 0 })]);
+  const reviewedRun = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], partial);
+  assert.ok(reviewedRun.out.includes('Codex used 1,200 input tokens (unknown cached) and 0 output (unknown reasoning) in 0 s over 1 request: 2 reasoning, 1 agent_message, 1 command_execution.'), reviewedRun.out);
+  // A wall time that was not measured is said in this line as in the other.
+  const untimed = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), reviewThread), monotonicNow: () => Number.NaN });
+  assert.match(untimed.out, /\(703 reasoning\) in unknown s over 7 requests: /);
+});
 
+test('when the tokens are not known the summary says so plainly, with no zeros and no row of `unknown`', async () => {
+  const { root, base } = makeRepo();
+  // The current session: ephemeral, so Codex writes its tokens nowhere, whatever its events carry.
+  for (const completed of [zeros, spent, done]) {
+    const current = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), completed)), monotonicNow: ticking(0, 18000) });
+    assert.equal(current.code, 0);
+    const lines = current.out.split('\n');
+    const at = lines.indexOf('Codex ran for 18 s; its tokens are not known for this session (an ephemeral review reports none): 1 agent_message, 1 command_execution.');
+    assert.notEqual(at, -1, current.out);
+    assert.ok(at > lines.findIndex((line) => /exit 0 {2}/.test(line)), 'after the commands');
+    assert.ok(at < lines.findIndex((line) => /^Recorded/.test(line)), 'before the record');
+    assert.doesNotMatch(current.out, /Codex used|unknown| 0 input| 0 output/);
+  }
+  // It is printed for a failed attempt too.
   const failed = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
   assert.equal(failed.code, 1);
-  assert.ok(failed.out.includes('Codex used unknown input tokens (unknown cached) and unknown output (unknown reasoning) in 0 s: no items.'), failed.out);
+  assert.ok(failed.out.includes('Codex ran for 0 s; its tokens are not known for this session (an ephemeral review reports none): no items.'), failed.out);
+  // The lean session is not ephemeral, so its reason is another: its home held nothing to read.
+  const lean = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(lean.code, 0, lean.err);
+  assert.ok(lean.out.includes('Codex ran for 0 s; its tokens are not known for this session (its Codex home held no token count): 1 agent_message, 1 command_execution.'), lean.out);
+  assert.doesNotMatch(lean.out, /Codex used|ephemeral/);
 });
 
 // --- the evidence rule ---

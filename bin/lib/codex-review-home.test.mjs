@@ -54,6 +54,22 @@ test('realCodexHome: `CODEX_HOME` when it is set and not empty, else `.codex` un
   assert.equal(realCodexHome({ CODEX_HOME: '' }, path.join('h', 'me')), path.join('h', 'me', '.codex'));
 });
 
+test('realCodexHome: on Windows the name is found whatever its case, the first that is not empty; elsewhere only as `CODEX_HOME`', () => {
+  const me = path.join('h', 'me');
+  const fallback = path.join(me, '.codex');
+  const [one, two] = [path.join('x', 'one'), path.join('x', 'two')];
+  // A plain object, as an injected environment is: `process.env` folds the case on Windows, this does not.
+  assert.equal(realCodexHome({ Codex_Home: one }, me, 'win32'), one);
+  assert.equal(realCodexHome({ codex_home: one }, me, 'win32'), one);
+  assert.equal(realCodexHome({ CODEX_HOME: one }, me, 'win32'), one);
+  assert.equal(realCodexHome({ codex_home: '', Codex_Home: one, CODEX_HOME: two }, me, 'win32'), one);
+  assert.equal(realCodexHome({ Codex_Home: '', OTHER_CODEX_HOME: one, CODEX_HOME_2: one }, me, 'win32'), fallback);
+  for (const platform of ['linux', 'darwin']) {
+    assert.equal(realCodexHome({ Codex_Home: one }, me, platform), fallback, platform);
+    assert.equal(realCodexHome({ Codex_Home: one, CODEX_HOME: two }, me, platform), two, platform);
+  }
+});
+
 test('leanHomesDir: one folder of the harness\'s machine state dir', () => {
   assert.equal(leanHomesDir(path.join('h', 'me')), path.join('h', 'me', '.js-harness', 'codex-review-homes'));
 });
@@ -176,6 +192,56 @@ test('dispose is idempotent', () => {
   const lean = createLeanHome({ realHome, parent, id: 'run-1' });
   assert.equal(lean.dispose(), null);
   assert.equal(lean.dispose(), null);
+  assert.equal(links(realAuth), 1);
+});
+
+test('dispose({ keep: true }) removes the login\'s second name and nothing else: the folder and what Codex wrote in it stay', () => {
+  const { realHome, realAuth, parent } = homes();
+  const before = identity(realAuth);
+  const lean = createLeanHome({ realHome, parent, id: 'run-1' });
+  codexWrites(lean.home);
+  assert.equal(links(realAuth), 2);
+  assert.equal(lean.dispose({ keep: true }), null);
+  // The login: its own name alone again, the file it was, with its bytes.
+  assert.equal(links(realAuth), 1);
+  assert.equal(identity(realAuth), before);
+  assert.equal(read(realAuth), LOGIN);
+  // The lean home: there, without the login.
+  assert.deepEqual(fs.readdirSync(lean.home).sort(), ['log', 'sessions', 'version.json']);
+  assert.equal(read(path.join(lean.home, 'sessions', '2026', '10', 'rollout.jsonl')), '{}\n');
+  assert.equal(read(path.join(lean.home, 'log', 'codex-tui.log')), 'line\n');
+  assert.equal(lean.dispose({ keep: true }), null, 'kept twice is kept');
+  assert.equal(fs.existsSync(lean.home), true);
+  // A kept folder is not kept for ever: a plain dispose removes it, and so does the sweep once it is old.
+  assert.equal(lean.dispose(), null);
+  assert.equal(fs.existsSync(lean.home), false);
+  assert.equal(links(realAuth), 1);
+});
+
+test('a kept lean home is removed by the sweep like one a killed run left', () => {
+  const { realHome, realAuth, parent } = homes();
+  const now = Date.parse('2026-10-07T12:00:00.000Z');
+  const lean = createLeanHome({ realHome, parent, id: 'kept' });
+  codexWrites(lean.home);
+  assert.equal(lean.dispose({ keep: true }), null);
+  aged(lean.home, now - 2000);
+  assert.equal(sweepStaleLeanHomes(parent, { olderThanMs: 1000, now }), 1);
+  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(links(realAuth), 1);
+  assert.equal(read(realAuth), LOGIN);
+});
+
+test('dispose({ keep: true }) says when the lean name had become another file, and still removes that name alone', () => {
+  const { realHome, realAuth, parent } = homes();
+  const lean = createLeanHome({ realHome, parent, id: 'run-1' });
+  const leanAuth = path.join(lean.home, 'auth.json');
+  fs.writeFileSync(`${leanAuth}.tmp`, 'FIXTURE login written to a new file\n', 'utf8');
+  fs.renameSync(`${leanAuth}.tmp`, leanAuth);
+  codexWrites(lean.home);
+  assert.match(lean.dispose({ keep: true }), /another file/);
+  assert.equal(fs.existsSync(leanAuth), false, 'a kept folder never holds a login, the real one or another');
+  assert.equal(fs.existsSync(path.join(lean.home, 'version.json')), true);
+  assert.equal(read(realAuth), LOGIN);
   assert.equal(links(realAuth), 1);
 });
 

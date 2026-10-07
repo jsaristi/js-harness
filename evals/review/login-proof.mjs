@@ -13,6 +13,8 @@
 //
 // It calls no model and runs nothing of its own: it takes a snapshot, runs the command it is given (with
 // no shell, its output passed through), takes the snapshot again and writes a short Markdown report.
+// No shell means the command's first word must be a real executable, `node <script>` for one: a `.cmd`
+// shim, which is what `codex` and `npm` are on Windows, cannot be started that way.
 //
 // What it reads. Of `auth.json`: what a stat says and a SHA-256, to tell changed bytes from unchanged; the
 // bytes are never returned, printed or stored, and the report does not even hold that digest. Of every
@@ -28,7 +30,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const USAGE = 'Usage: node evals/review/login-proof.mjs --real-home <path> --out <file.md> -- <command…>';
+// The second line is there because the failure it prevents is silent in its cause: Node refuses to start
+// a `.cmd` or `.bat` file without a shell, so `-- codex …` on Windows only reports that the command could
+// not be started.
+const USAGE =
+  'Usage: node evals/review/login-proof.mjs --real-home <path> --out <file.md> -- <command…>\n' +
+  'The command is started with no shell, so its first word must be a real executable (`node <script>`, for one), not a `.cmd` shim.';
 
 const AUTH = 'auth.json';
 
@@ -153,11 +160,18 @@ export function compare(before, after) {
 const dateOf = (ms) => new Date(ms).toISOString();
 const spelled = (command) => command.map((word) => (/^[^\s"`]+$/.test(word) ? word : JSON.stringify(word))).join(' ');
 
+const FOOTER =
+  'A file is compared by size, date and SHA-256 (by size and date alone above 64 MiB or when it cannot be read); ' +
+  'a folder by the count of its direct entries and its date, not by what is in it. No byte of any file is in this report.';
+
 /** The Markdown report of one proof: the date, the command and its exit code (`exitCode` is `null`, with
  * `startError`, when it could not be started), the verdict on the login, and every other top-level
- * change. It holds names, sizes, counts and dates; no byte of any file, and not the login's digest. */
-export function report({ date, realHome, command, exitCode, startError, before, after, comparison }) {
-  const { auth, changes } = comparison;
+ * change. It holds names, sizes, counts and dates; no byte of any file, and not the login's digest.
+ *
+ * When the home could not be read after the command, `after` and `comparison` are `null` and
+ * `afterError` says why: the report then tells what was read before, that nothing is known after, and
+ * FAIL, since the proof is exactly the second reading. */
+export function report({ date, realHome, command, exitCode, startError, before, after, comparison, afterError }) {
   const lines = [
     '# Login proof: a real Codex home around one command',
     '',
@@ -169,6 +183,24 @@ export function report({ date, realHome, command, exitCode, startError, before, 
     '## auth.json',
     '',
   ];
+  if (!after || !comparison) {
+    lines.push(
+      `- The home could not be read after the command (${afterError ?? 'no reason given'}), so nothing is known about the login after it.`,
+      before.auth.exists
+        ? `- Names (hard links) before: ${before.auth.nlink}; size before: ${before.auth.size} bytes, last written ${dateOf(before.auth.mtimeMs)}`
+        : '- Before: missing',
+      '- Verdict: FAIL, the home could not be read after the command, and the proof is that second reading.',
+      '',
+      '## Everything else at the top level of the home',
+      '',
+      `${Object.keys(before.entries).length} entries before; not read after the command.`,
+      '',
+      FOOTER,
+      '',
+    );
+    return lines.join('\n');
+  }
+  const { auth, changes } = comparison;
   if (!auth.existed || !auth.exists) {
     lines.push(`- Before: ${auth.existed ? 'there' : 'missing'}; after: ${auth.exists ? 'there' : 'missing'}`);
   } else {
@@ -188,12 +220,7 @@ export function report({ date, realHome, command, exitCode, startError, before, 
   lines.push(`${Object.keys(before.entries).length} entries before, ${Object.keys(after.entries).length} after.`, '');
   if (changes.length === 0) lines.push('Nothing else changed.');
   else lines.push(...changes.map((change) => `- \`${change.path}\`: ${change.what}`));
-  lines.push(
-    '',
-    'A file is compared by size, date and SHA-256 (by size and date alone above 64 MiB or when it cannot be read); ' +
-      'a folder by the count of its direct entries and its date, not by what is in it. No byte of any file is in this report.',
-    '',
-  );
+  lines.push('', FOOTER, '');
   return lines.join('\n');
 }
 
@@ -219,9 +246,10 @@ function parseArgs(argv) {
 }
 
 /** Runs the proof and returns the exit code: the wrapped command's, or 1 when the login is not the same
- * file after as before, when it has another number of names, when the command could not be started or
- * when the report could not be written; 2 with usage, and nothing run, on a bad command line. `deps`
- * (all optional) injects `spawn`, `log`, `error` and `now`. */
+ * file after as before, when it has another number of names, when the home could not be read after the
+ * command, when the command could not be started or when the report could not be written; 2 with usage,
+ * and nothing run, on a bad command line. `deps` (all optional) injects `spawn`, `log`, `error` and
+ * `now`. */
 export function loginProofMain(argv = process.argv.slice(2), deps = {}) {
   const { spawn = spawnSync, log = console.log, error = console.error, now = () => new Date() } = deps;
   let args;
@@ -236,11 +264,19 @@ export function loginProofMain(argv = process.argv.slice(2), deps = {}) {
   const before = snapshot(realHome);
   // No shell: the words reach the command as they are, and its output goes straight through.
   const ran = spawn(command[0], command.slice(1), { stdio: 'inherit' });
-  const after = snapshot(realHome);
+  // The command has run, so from here a report is owed whatever happens: a second reading that throws
+  // (the home moved, or no longer listable) is told in it, instead of leaving the run unobserved.
+  let after = null;
+  let afterError;
+  try {
+    after = snapshot(realHome);
+  } catch (err) {
+    afterError = err?.message ?? String(err);
+  }
   const exitCode = !ran.error && typeof ran.status === 'number' ? ran.status : null;
   const startError = ran.error ? (ran.error.code ?? ran.error.message) : ran.signal ? `ended on ${ran.signal}` : undefined;
-  const comparison = compare(before, after);
-  const text = report({ date: now().toISOString(), realHome, command, exitCode, startError, before, after, comparison });
+  const comparison = after ? compare(before, after) : null;
+  const text = report({ date: now().toISOString(), realHome, command, exitCode, startError, before, after, comparison, afterError });
   log(text);
   let written = true;
   try {
@@ -250,7 +286,7 @@ export function loginProofMain(argv = process.argv.slice(2), deps = {}) {
     written = false;
     error(`Could not write the report to ${out}: ${err.message}`);
   }
-  if (!comparison.auth.ok || !written) return 1;
+  if (!comparison?.auth.ok || !written) return 1;
   return exitCode ?? 1;
 }
 
