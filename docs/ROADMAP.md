@@ -158,6 +158,17 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] The watchdog branch reviewed and merged
 - [x] Live on this machine: the server restarted on the new code, and `remote start --at-login` registering the watchdog
 
+### Session board
+- [x] A session's transcript read into facts: title, last entry, background work with its recorded end, state, tail of the last reply
+- [x] Machine facts: worktrees with their unpushed counts, running gates, open pull requests, each unavailable with its reason
+- [x] `sessions` and `sessions --json`, read-only, in the dispatcher's help
+- [x] Accepted review follow-ups on the library
+- [ ] A subagent that is sent a follow-up reads as running again
+- [ ] Live check on this machine with two or more sessions open, and the memories point to the command
+- [ ] `sessions --watch` returns when the board changes and costs nothing while it does not
+- [ ] The orchestrator ships as a skill the installer writes and removes through the manifest
+- [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
+
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
 - [ ] Differences measured and written down

@@ -9,6 +9,7 @@ import { progressMain } from './progress.mjs';
 import { contractMain } from './contract.mjs';
 import { codexReviewMain } from './codex-review.mjs';
 import { remoteMain } from './remote.mjs';
+import { sessionsMain } from './sessions.mjs';
 import { tuiMain } from './tui.mjs';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +30,7 @@ Commands:
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
+  sessions    Show the project's recent Claude Code sessions (state, background work still open, tail of the last reply), with the worktrees, running gates and open pull requests. Read-only; --json gives the same data.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;
@@ -47,6 +49,7 @@ const commands = {
   contract: contractMain,
   'codex-review': codexReviewMain,
   remote: remoteMain,
+  sessions: sessionsMain,
 };
 
 async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui = tuiMain } = {}) {
