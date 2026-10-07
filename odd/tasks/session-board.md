@@ -954,9 +954,15 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   watch itself already keeps this session at `background`; a session with no watch would be
   shown as `background` by such a leftover when it is in fact waiting. For T7, with the other
   gaps.
+- 2026-10-07, 15:17 local, decided by Sebastián ("Esperá a codex-review-lean"): this branch waits.
+  No skip is recorded and nothing is pushed; once the feature `codex-review-lean` is merged, the
+  Codex review of this branch's code commits runs with the lean review, on his word because it
+  spends quota. Until then the branch stays as it is and the parent only keeps the board. That
+  feature stood at 10 of 15 tasks when he answered.
 
 ## Next step
-Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
+Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged. Then, each
+on his word, in this order: the Codex review of the code commits with the lean review,
 the push and the pull requests (two slices stacked to `main`, see Delivery), the merge, the
 global install brought up to `main`, and `js-harness install`. T7 closes with an orchestrator
 session opened with the skill's opening prompt and one real stretch supervised by it, recorded
