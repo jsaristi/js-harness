@@ -590,19 +590,32 @@ function sessionChanges(before, after, self) {
 
 const gatePlace = (gate) => `in ${gate.worktree?.unavailable ? 'an unknown worktree' : gate.worktree} (pid ${gate.pid})`;
 
+/** The gates of `board` a watch compares, or `null` when it cannot tell which they are (the gates or the
+ * worktrees could not be listed). A gate whose command line names a folder that is none of the board's
+ * worktrees is left out: the test suite of a running gate starts `bin/check.mjs` in temporary folders, and
+ * those start and end all through it. One started by a relative path names no folder and stays in:
+ * `npm run check` is one. */
+function watchedGates(board) {
+  if (!board.gates.available || !board.worktrees.available) return null;
+  const trees = new Set(board.worktrees.items.map((tree) => comparable(tree.path)));
+  return board.gates.items.filter((gate) => gate.worktree?.unavailable || trees.has(comparable(String(gate.worktree))));
+}
+
 function gateChanges(before, after) {
-  if (!before.gates.available || !after.gates.available) return []; // a listing that failed is not a gate that ended
-  const earlier = byKey(before.gates.items, 'pid');
-  const now = byKey(after.gates.items, 'pid');
+  const was = watchedGates(before);
+  const is = watchedGates(after);
+  if (was === null || is === null) return []; // a listing that failed is not a gate that ended
+  const earlier = byKey(was, 'pid');
+  const now = byKey(is, 'pid');
   const lines = [];
-  for (const gate of after.gates.items) {
+  for (const gate of is) {
     if (earlier.has(gate.pid)) continue;
     // Two gates at once is what the board exists to catch: they share the machine and one of them is
     // probably a mistake.
-    const other = after.gates.items.find((item) => item.pid !== gate.pid);
+    const other = is.find((item) => item.pid !== gate.pid);
     lines.push(`gate started ${gatePlace(gate)}${other ? ` while another runs ${gatePlace(other)}` : ''}`);
   }
-  for (const gate of before.gates.items) if (!now.has(gate.pid)) lines.push(`gate ended ${gatePlace(gate)}`);
+  for (const gate of was) if (!now.has(gate.pid)) lines.push(`gate ended ${gatePlace(gate)}`);
   return lines;
 }
 
@@ -664,7 +677,8 @@ function planChanges(before, after) {
  *
  * - a session that appears, one that starts waiting (from any other state) or that waits again after
  *   another turn, one that passes the context limit, one that leaves the window;
- * - a gate that starts (said apart when another one is running) or ends;
+ * - a gate that starts (said apart when another one is running) or ends, among the gates of the board's
+ *   worktrees (`watchedGates`);
  * - a pull request that opens or is no longer open;
  * - a feature plan that appears, stops differing from `origin/main`, or whose done or total count,
  *   pending tasks or next step changed.
@@ -695,7 +709,9 @@ export function watchBaseline(older, newer) {
   return {
     ...newer,
     sessions: newer.sessions.map((session) => (session.unavailable ? (sessions.get(session.id) ?? session) : session)),
-    gates: kept(newer.gates, older.gates),
+    // Which gates are compared depends on the worktrees (`watchedGates`): a look that could not list them
+    // compared none, so its gates are not yet what the next look is compared with.
+    gates: newer.worktrees.available ? kept(newer.gates, older.gates) : older.gates,
     pullRequests: kept(newer.pullRequests, older.pullRequests),
     worktrees: newer.worktrees.available ? { ...newer.worktrees, items: newer.worktrees.items.map((tree) => (tree.plans === undefined ? tree : { ...tree, plans: plansOf(tree) })) } : older.worktrees,
   };
@@ -801,8 +817,30 @@ function planLines(plans) {
   });
 }
 
+/** How many lines of the relief file the board prints: enough to see what the orchestrator noted last,
+ * and whoever needs the rest reads the file. */
+export const RELIEF_LINES = 5;
+
+/** The text of an orchestrator's relief file as the board shows it: how many lines it holds and the last
+ * `count` of them. It is one dated line per event, so a blank line is not one. */
+export function reliefTail(text, count = RELIEF_LINES) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
+  return { lineCount: lines.length, lines: lines.slice(lines.length - Math.min(count, lines.length)) };
+}
+
+/** The `Relief` section: the file's path with its last lines, or that there is none yet (and where the
+ * first line would create it), or why it could not be read. */
+function reliefLines(relief) {
+  if (relief.unavailable) return ['Relief', `  ${relief.path}  unavailable: ${relief.unavailable}`, ''];
+  if (!relief.exists) return ['Relief', `  no relief file yet: the first line an orchestrator appends creates ${relief.path}`, ''];
+  const shown = relief.lines.length;
+  const count = relief.lineCount === 0 ? 'empty' : `${relief.lineCount} line${relief.lineCount === 1 ? '' : 's'}${shown < relief.lineCount ? `, the last ${shown}` : ''}:`;
+  return ['Relief', `  ${relief.path}  ${count}`, ...relief.lines.map((line) => `  | ${clipped(line)}`), ''];
+}
+
 /** The board as lines of text: the sessions (in the order given, most recent first), then worktrees,
- * running gates and open pull requests, and a last line that says what the board cannot see. */
+ * running gates, open pull requests and the orchestrator's relief file, and a last line that says what
+ * the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
   const sizes = contextSizes(board);
@@ -820,6 +858,7 @@ export function renderBoard(board, { now }) {
       return `  pid ${gate.pid}  ${worktree}  ${started}  ${gate.commandLine}`;
     }),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
+    ...(board.relief ? reliefLines(board.relief) : []),
     NOT_VISIBLE,
   );
   return lines;

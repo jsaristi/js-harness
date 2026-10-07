@@ -29,8 +29,9 @@ const jsonl = (...entries) => entries.map((item) => (typeof item === 'string' ? 
 function makeMachine() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-sessions-'));
   const root = path.join(dir, 'proj');
-  const machine = { dir, root, worktree: path.join(dir, 'proj-worktrees', 'board'), home: path.join(dir, 'claude-home'), tmp: path.join(dir, 'tmp'), slug: projectSlug(root) };
+  const machine = { dir, root, worktree: path.join(dir, 'proj-worktrees', 'board'), home: path.join(dir, 'claude-home'), userHome: path.join(dir, 'user-home'), tmp: path.join(dir, 'tmp'), slug: projectSlug(root) };
   machine.projectDir = path.join(machine.home, 'projects', machine.slug);
+  machine.relief = path.join(machine.userHome, '.js-harness', 'relief', `${machine.slug}.md`);
   fs.mkdirSync(machine.projectDir, { recursive: true });
   return machine;
 }
@@ -117,6 +118,7 @@ async function runSessions(machine, argv, deps = {}) {
     stderr: (line) => err.push(line),
     now: () => NOW,
     env: {}, // never this machine's: CLAUDE_CODE_SESSION_ID is set in every shell a session opens
+    homedir: () => machine.userHome, // nor this machine's home: the relief file is looked for under it
     run: fakeRun(machine).run,
     listProcesses: () => [],
     ...deps,
@@ -156,6 +158,8 @@ const USAGE_ERRORS = [
   // T5b: the window is a whole number of tokens above zero; the limit is that, or a percentage of the window up to 100.
   ['--context-window'], ['--context-window', '0'], ['--context-window', '1.5'], ['--context-window', 'big'], ['--context-window', '50%'],
   ['--context-limit', '0%'], ['--context-limit', '101%'], ['--context-limit', '100.5%'], ['--context-limit', '%'], ['--context-limit', '73%%'], ['--context-limit', '-5%'], ['--context-limit', '7 %'],
+  // T6: the relief file is a path like the others.
+  ['--relief'], ['--relief', ''], ['--relief', '--json'],
 ];
 
 for (const argv of USAGE_ERRORS) {
@@ -519,6 +523,8 @@ test('the text board prints each session with its state, its open work and the t
     at('  none running'),
     at('Pull requests'),
     at('  #41  feat: session board  (feat/board)'),
+    at('Relief'),
+    at(`  no relief file yet: the first line an orchestrator appends creates ${machine.relief}`),
     at(NOT_VISIBLE),
   ];
   assert.deepEqual(order, [...order].sort((x, y) => x - y), 'the lines come in that order');
@@ -644,6 +650,74 @@ test('--watch exits 1 when the sessions folder is gone at a later look', withMac
   assert.equal(code, 1);
   assert.deepEqual(lines, ['']);
   assert.match(stderr, /^js-harness sessions: no sessions folder for /);
+}));
+
+// --- the relief file of the orchestrator ---
+
+const RELIEF_NOTES = Array.from({ length: 7 }, (_, n) => `2026-01-01 10:0${n} note ${n}`);
+
+test('the board carries the relief file of the project: under JS_HARNESS_HOME or the home folder, named by the project slug', withMachine(async (machine) => {
+  writeSessions(machine);
+  const none = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(none.relief, { path: machine.relief, exists: false });
+  assert.equal(fs.existsSync(machine.userHome), false, 'looking for the file creates nothing');
+
+  writeAt(machine.relief, `${RELIEF_NOTES.join('\n')}\n`, 30);
+  const some = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual(some.relief, { path: machine.relief, exists: true, lineCount: 7, lines: RELIEF_NOTES.slice(2) });
+  const text = (await runSessions(machine, [])).stdout.split('\n');
+  assert.deepEqual(text.slice(text.indexOf('Relief'), text.indexOf('Relief') + 3), ['Relief', `  ${machine.relief}  7 lines, the last 5:`, '  | 2026-01-01 10:02 note 2']);
+
+  // JS_HARNESS_HOME is the harness home wherever the user's is, as for `install` and `remote`.
+  const other = path.join(machine.dir, 'harness-home');
+  const moved = JSON.parse((await runSessions(machine, ['--json'], { env: { JS_HARNESS_HOME: other } })).stdout);
+  assert.deepEqual(moved.relief, { path: path.join(other, '.js-harness', 'relief', `${machine.slug}.md`), exists: false });
+}));
+
+test('--relief names the file, and one that cannot be read is unavailable with its reason while the board is still printed', withMachine(async (machine) => {
+  writeSessions(machine);
+  const file = path.join(machine.dir, 'notes', 'relief.md');
+  writeAt(file, 'one line\n', 30);
+  const named = await runSessions(machine, ['--json', '--relief', file]);
+  assert.deepEqual(JSON.parse(named.stdout).relief, { path: file, exists: true, lineCount: 1, lines: ['one line'] });
+
+  // A folder where the file should be: reading it fails with something other than "not there".
+  const folder = await runSessions(machine, ['--relief', path.dirname(file)]);
+  assert.equal(folder.code, 0);
+  const lines = folder.stdout.split('\n');
+  const said = lines[lines.indexOf('Relief') + 1];
+  assert.ok(said.startsWith(`  ${path.dirname(file)}  unavailable: `) && !said.endsWith(': '), said);
+  assert.equal(lines.at(-1), NOT_VISIBLE);
+}));
+
+test('--watch does not return for a line appended to the relief file, and prints the file as it is when it does return', withMachine(async (machine) => {
+  writeSessions(machine);
+  startsWorking(machine);
+  writeAt(machine.relief, 'first note\n', 30);
+  const notes = () => fs.appendFileSync(machine.relief, 'second note\n');
+  const quiet = await watch(machine, ['--interval', '5', '--timeout', '10'], [notes]);
+  assert.deepEqual(quiet.lines, ['sessions --watch: nothing changed in 10s']);
+
+  const woken = await watch(machine, ['--interval', '5', '--timeout', '60'], [() => finishes(machine)]);
+  assert.equal(woken.lines[1], `  ${D_WAITS}`);
+  assert.deepEqual(woken.lines.slice(woken.lines.indexOf('Relief') + 1, woken.lines.indexOf('Relief') + 4), [`  ${machine.relief}  2 lines:`, '  | first note', '  | second note']);
+}));
+
+// --- gates outside the worktrees ---
+
+// Seen live on 2026-10-06: the test suite of a running gate starts `check.mjs` in temporary folders, and a
+// watch returned for one of them ending.
+test('--watch does not return for a gate that starts and ends in a folder that is no worktree, and the board still lists it', withMachine(async (machine) => {
+  writeSessions(machine);
+  const stray = { pid: 32036, createdAt: NOW, commandLine: 'node "C:/Temp/js-harness-pre-push-x/bin/check.mjs" --push' };
+  const real = { pid: 4242, createdAt: NOW, commandLine: `node "${slashes(machine.worktree)}/bin/check.mjs"` };
+  const listings = [[real], [real, stray], [real], [real, stray]];
+  const { lines, slept } = await watch(machine, ['--interval', '5', '--timeout', '15'], [], { listProcesses: () => listings.shift() });
+  assert.deepEqual(slept, [5000, 5000, 5000]);
+  assert.deepEqual(lines, ['sessions --watch: nothing changed in 15s']);
+
+  const board = await runSessions(machine, [], { listProcesses: () => [real, stray] });
+  assert.match(board.stdout, /^ {2}pid 32036 {2}C:\/Temp\/js-harness-pre-push-x {2}/m);
 }));
 
 // --- read-only ---

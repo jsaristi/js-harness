@@ -52,7 +52,9 @@ test('install writes every component and records a manifest', () => {
       assert.ok(fs.existsSync(target), `expected ${target} to exist`);
       const content = fs.readFileSync(target, 'utf8');
       assert.equal(content, component.content('0.1.0'));
-      assert.match(content, /^---\nname: js-harness\ndescription: .+\n---/);
+      // Every component is a skill: its frontmatter names it after the folder it is installed in.
+      const frontmatter = /^---\nname: (.+)\ndescription: .+\n---\n/.exec(content);
+      assert.equal(frontmatter?.[1], path.basename(path.dirname(target)), target);
     }
 
     const onDisk = readManifest(home);
@@ -66,11 +68,20 @@ test('install writes the Claude and Codex skill files at the documented paths', 
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
-    assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness', 'SKILL.md')));
+    for (const host of ['.claude', '.codex']) {
+      for (const skill of ['js-harness', 'js-harness-orchestrator']) {
+        assert.ok(fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')), `${host} ${skill}`);
+      }
+    }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// Other tests index the first two, so a new component goes after them.
+test('the components are the two skills, each for Claude Code and for Codex, the first skill first', () => {
+  assert.deepEqual(components.map((component) => component.id), ['claude-skill', 'codex-skill', 'claude-orchestrator-skill', 'codex-orchestrator-skill']);
+  assert.equal(new Set(components.map((component) => component.target('home'))).size, components.length, 'no two components share a file');
 });
 
 test('sync rewrites components for the current version and updates the manifest', () => {
@@ -124,7 +135,9 @@ test('uninstall removes unmodified files, keeps modified ones, and deletes the m
 
     assert.equal(fs.existsSync(claudeComponent.target(home)), false);
     assert.equal(fs.existsSync(codexComponent.target(home)), true);
-    assert.deepEqual(result.removed, [claudeComponent.target(home)]);
+    const untouched = components.filter((component) => component !== codexComponent).map((component) => component.target(home));
+    for (const target of untouched) assert.equal(fs.existsSync(target), false, target);
+    assert.deepEqual(result.removed, untouched);
     assert.deepEqual(result.kept, [codexComponent.target(home)]);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
@@ -139,6 +152,8 @@ test('uninstall removes now-empty directories it created', () => {
     uninstall(home);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness')), false);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-orchestrator')), false);
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-orchestrator')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -733,6 +748,63 @@ test('the installed skill names codex-review and check --push', () => {
   assert.match(text, /js-harness check --push/);
   assert.match(text, /only check it runs/);
   assert.match(text, /default branch/);
+});
+
+// The board is how a session learns what the others are doing; the first skill is where it learns the
+// command exists.
+test('the installed skill names sessions and its --watch', () => {
+  const text = components[0].content('0.1.0');
+  assert.match(text, /js-harness sessions/);
+  assert.match(text, /--watch/);
+});
+
+// --- the orchestrator skill: read by a session that supervises the others, and by one that works next to others ---
+
+test('the orchestrator skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
+  const home = makeTmpHome();
+  try {
+    const [, , claudeOrchestrator, codexOrchestrator] = components;
+    assert.equal(claudeOrchestrator.target(home), path.join(home, '.claude', 'skills', 'js-harness-orchestrator', 'SKILL.md'));
+    assert.equal(codexOrchestrator.target(home), path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'));
+    assert.equal(codexOrchestrator.content('0.1.0'), claudeOrchestrator.content('0.1.0'), 'Claude and Codex read the same text');
+
+    install(home, '0.1.0');
+    assert.equal(fs.readFileSync(claudeOrchestrator.target(home), 'utf8'), claudeOrchestrator.content('0.1.0'));
+    fs.writeFileSync(codexOrchestrator.target(home), 'an older text', 'utf8');
+    sync(home, '0.2.0');
+    assert.equal(fs.readFileSync(codexOrchestrator.target(home), 'utf8'), codexOrchestrator.content('0.2.0'));
+
+    const result = uninstall(home);
+    assert.ok(result.removed.includes(claudeOrchestrator.target(home)) && result.removed.includes(codexOrchestrator.target(home)));
+    assert.deepEqual(result.kept, []);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'skills')), false, 'no skill folder is left under the home');
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the orchestrator skill has a one-line description a host can read, and names the commands an orchestrator runs', () => {
+  const text = components[2].content('0.1.0');
+  const frontmatter = /^---\nname: js-harness-orchestrator\ndescription: (.+)\n---\n/.exec(text);
+  assert.ok(frontmatter, text.slice(0, 200));
+  // A colon followed by a space, or a hash after one, would end or break the YAML value a host parses.
+  assert.doesNotMatch(frontmatter[1], /: | #/);
+  for (const command of ['js-harness sessions', 'js-harness sessions --watch', 'js-harness progress']) {
+    assert.ok(text.includes(command), command);
+  }
+});
+
+// The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user
+// copies, and it leads the new session back to this skill.
+test('the orchestrator skill carries its fixed opening prompt as its one fenced block, and the prompt names the skill', () => {
+  const text = components[2].content('0.1.0');
+  const blocks = [...text.matchAll(/^```\n([\s\S]*?)\n```$/gm)];
+  assert.equal(blocks.length, 1);
+  assert.match(blocks[0][1], /orchestrator/);
+  assert.match(blocks[0][1], /js-harness-orchestrator/);
+  // It ships to every user of the harness: it speaks of "the user", not of who wrote it.
+  assert.doesNotMatch(text, /Sebasti/);
 });
 
 // --- optional files: written outside the components, on request (the login launcher of `remote start --at-login`) ---

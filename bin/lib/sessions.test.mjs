@@ -845,9 +845,11 @@ test('boardChanges leaves out the session that is watching', () => {
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [] }, { self: A }), []);
 });
 
+const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, commandLine: 'node bin/check.mjs' });
+/** A board's gates, on a machine whose worktrees are `D:/a` and `D:/b`. */
+const gates = (...items) => ({ gates: { available: true, items }, worktrees: { available: true, items: [{ path: 'D:/a' }, { path: 'D:/b' }] } });
+
 test('boardChanges: a gate that starts, alone or while another runs, and one that ends', () => {
-  const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, commandLine: 'node bin/check.mjs' });
-  const gates = (...items) => ({ gates: { available: true, items } });
   assert.deepEqual(changes(gates(), gates(gate(5, 'D:/a'))), ['gate started in D:/a (pid 5)']);
   assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), gate(6, 'D:/b'))), ['gate started in D:/b (pid 6) while another runs in D:/a (pid 5)']);
   assert.deepEqual(changes(gates(gate(5, 'D:/a'), gate(6, { unavailable: 'relative path' })), gates(gate(6, { unavailable: 'relative path' }))), ['gate ended in D:/a (pid 5)']);
@@ -855,6 +857,24 @@ test('boardChanges: a gate that starts, alone or while another runs, and one tha
   const down = { gates: { available: false, reason: 'the process listing: boom' } };
   assert.deepEqual(changes(gates(gate(5, 'D:/a')), down), [], 'a listing that failed is not a gate that ended');
   assert.deepEqual(changes(down, gates(gate(5, 'D:/a'))), []);
+});
+
+// Seen live on 2026-10-06: a watch returned for a `check.mjs` the test suite of a running gate had started
+// in a temporary folder. The board lists such a process; the watch compares the gates of the worktrees.
+test('boardChanges: a gate in a folder that is none of the worktrees wakes nobody, starting or ending', () => {
+  const stray = gate(9, 'C:/Temp/js-harness-pre-push-x');
+  assert.deepEqual(changes(gates(), gates(stray)), []);
+  assert.deepEqual(changes(gates(stray), gates()), []);
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), stray)), []);
+  assert.deepEqual(changes(gates(stray), gates(stray, gate(5, 'D:/a'))), ['gate started in D:/a (pid 5)'], 'and it is not "another" a real gate runs beside');
+  // The worktree is named as the board spells it, whatever the command line's slashes and case.
+  assert.deepEqual(changes(gates(), gates(gate(5, 'd:\\A\\'))), ['gate started in d:\\A\\ (pid 5)']);
+});
+
+test('boardChanges compares no gate at a look that could not list the worktrees: it cannot tell which are theirs', () => {
+  const unlisted = { worktrees: { available: false, reason: 'git worktree: boom' } };
+  assert.deepEqual(changes(gates(), { ...gates(gate(5, 'D:/a')), ...unlisted }), []);
+  assert.deepEqual(changes({ ...gates(gate(5, 'D:/a')), ...unlisted }, gates()), []);
 });
 
 test('boardChanges: a pull request that opens and one that is no longer open', () => {
@@ -899,6 +919,33 @@ test('watchBaseline is the newer board, keeping from the older one whatever the 
   assert.deepEqual(baseline.pullRequests, newer.pullRequests);
   assert.deepEqual(baseline.worktrees.items, [{ path: 'D:/wt', changed: 3, plans: older.worktrees.items[0].plans }]);
   assert.deepEqual(lib.watchBaseline(older, boardOf({ worktrees: { available: false, reason: 'boom' } })).worktrees, older.worktrees);
+});
+
+// Which gates a watch compares depends on the worktrees, so a look that could not list them compares none;
+// the gate that started at that look must still be new at the next one.
+test('watchBaseline keeps the older gates across a look that could not list the worktrees, so a gate that started then is still said', () => {
+  const older = boardOf(gates());
+  const blind = boardOf({ ...gates(gate(5, 'D:/a')), worktrees: { available: false, reason: 'git worktree: boom' } });
+  assert.deepEqual(lib.boardChanges(older, blind), []);
+  const baseline = lib.watchBaseline(older, blind);
+  assert.deepEqual(baseline.gates, older.gates);
+  assert.deepEqual(lib.boardChanges(baseline, boardOf(gates(gate(5, 'D:/a')))), ['gate started in D:/a (pid 5)']);
+});
+
+// --- the relief file ---
+
+test('reliefTail gives how many lines a relief file holds and its last ones, blank lines apart', () => {
+  const text = ['2026-01-01 10:00 orchestrator started', '', '2026-01-01 10:05 asked: the board', '2026-01-01 10:06 sent to the board session', '   ', ''].join('\r\n');
+  assert.deepEqual(lib.reliefTail(text, 2), { lineCount: 3, lines: ['2026-01-01 10:05 asked: the board', '2026-01-01 10:06 sent to the board session'] });
+  assert.deepEqual(lib.reliefTail(text).lines.length, 3, 'the default is more than three lines');
+  assert.deepEqual(lib.reliefTail(Array.from({ length: 9 }, (_, n) => `line ${n}`).join('\n')), { lineCount: 9, lines: ['line 4', 'line 5', 'line 6', 'line 7', 'line 8'] });
+  assert.deepEqual(lib.reliefTail(''), { lineCount: 0, lines: [] });
+});
+
+test('boardChanges does not compare the relief file: its writer is the session that watches', () => {
+  const relief = (lines) => ({ relief: { path: 'C:/home/.js-harness/relief/proj.md', exists: true, lineCount: lines.length, lines } });
+  assert.deepEqual(changes(relief(['one']), relief(['one', 'two'])), []);
+  assert.deepEqual(changes({ relief: { path: 'x', exists: false } }, relief(['one'])), []);
 });
 
 const BOARD = {
@@ -993,6 +1040,28 @@ test('renderBoard says so when there is nothing: no session, no gate, no pull re
     '',
     lib.NOT_VISIBLE,
   ]);
+});
+
+test('renderBoard prints the relief file after the pull requests: its path and last lines, that there is none yet, or why it cannot be read', () => {
+  const nothing = { root: '/home/me/proj', hours: 1, sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] } };
+  const section = (relief) => {
+    const lines = lib.renderBoard({ ...nothing, relief }, { now: NOW });
+    assert.deepEqual([lines.at(-1), lines.at(-2)], [lib.NOT_VISIBLE, '']);
+    assert.equal(lines[lines.indexOf('Relief') - 2], '  none open', 'after the pull requests');
+    return lines.slice(lines.indexOf('Relief'), -2);
+  };
+  const file = '/home/me/.js-harness/relief/-home-me-proj.md';
+  assert.deepEqual(section({ path: file, exists: true, lineCount: 7, lines: ['2026-01-01 10:05 asked: the board', `2026-01-01 10:06 ${'x'.repeat(200)}`] }), [
+    'Relief',
+    `  ${file}  7 lines, the last 2:`,
+    '  | 2026-01-01 10:05 asked: the board',
+    `  | 2026-01-01 10:06 ${'x'.repeat(142)}…`,
+  ]);
+  assert.deepEqual(section({ path: file, exists: true, lineCount: 1, lines: ['2026-01-01 10:00 orchestrator started'] }), ['Relief', `  ${file}  1 line:`, '  | 2026-01-01 10:00 orchestrator started']);
+  assert.deepEqual(section({ path: file, exists: true, lineCount: 0, lines: [] }), ['Relief', `  ${file}  empty`]);
+  assert.deepEqual(section({ path: file, exists: false }), ['Relief', `  no relief file yet: the first line an orchestrator appends creates ${file}`]);
+  assert.deepEqual(section({ path: file, unavailable: 'EISDIR' }), ['Relief', `  ${file}  unavailable: EISDIR`]);
+  assert.equal(lib.renderBoard(nothing, { now: NOW }).includes('Relief'), false, 'a board that was not given one prints no section');
 });
 
 // R3-untested-branches: an end with no time compared as the string "null", which sorts after every date.

@@ -42,7 +42,8 @@ something can be checked by a command, it belongs in `bin/`. He asked for it on 
   entry in the checklist of `docs/ROADMAP.md`, the README line that lists commands if there is one.
 - In, since the scope was widened on 2026-10-06 (Progress): `sessions --watch`; a second skill in
   `bin/lib/manifest.mjs` with its tests in `bin/lib/manifest.test.mjs` and its paths in
-  `scripts/e2e.mjs`; a line for `sessions` in the first skill and in the roadmap's Commands row.
+  `scripts/e2e.mjs`; a line for `sessions` in the first skill and in the roadmap's Commands row;
+  the board's `Relief` section, which reads the orchestrator's relief file.
 - Out: sending anything to another session, stopping a session or a process, and writing any file
   (the command is read-only, because a board that acts would need the consent the acting needs).
   `AGENTS.md` (1,497 of 1,500 tokens; the memories point to the command instead). Codex sessions
@@ -51,7 +52,8 @@ something can be checked by a command, it belongs in `bin/`. He asked for it on 
 ## Constraints
 - Zero dependencies, plain Node, like every command in `bin/` — because it must run in any host
   with no install step.
-- Read-only: it opens transcripts, task outputs and feature documents for reading and runs only
+- Read-only: it opens transcripts, task outputs, feature documents and the orchestrator's relief
+  file for reading and runs only
   `git worktree list`, `git rev-list`, `git status`, `git diff --name-only`, `git ls-files`, the
   process listing and `gh pr list` — because it runs while other sessions work in the same
   checkout. `--watch` runs the same and nothing more, again at every look.
@@ -274,10 +276,25 @@ Why not compaction as the rule: a summary is a session telling from memory what 
 defect this feature removes; and on 2026-10-06 the session that opened this document lost its
 engram writes after each of its two compactions.
 
-Still open, to be settled with what T7 shows: where the relief file lives and whether a command
-appends its lines (the first version is a file the skill tells the orchestrator to append to, and
-the board prints its path and last lines); whether the orchestrator can notify his phone by
-itself; how long one lasts before a relief; whether Codex loads the skill.
+The relief file, settled with T6. It is `<home>/.js-harness/relief/<project slug>.md`: `<home>` is
+`JS_HARNESS_HOME` or the user's home, as for `install` and `remote`, and the slug is the one of the
+sessions folder, so every worktree of a project shares one file and two projects never share one.
+It is outside the repository because it is not a plan: nothing in it is reviewed or merged, and a
+file in a worktree would belong to a branch. The orchestrator writes it, by appending with its own
+tools, as the skill tells it; no command of the harness writes it and `install` does not create it.
+`js-harness sessions` prints its path and last lines under `Relief` and only reads it. It is undone
+by deleting that one file: no manifest records it, so `uninstall` leaves it, and with it the
+`.js-harness` folder that holds it. The first line an orchestrator appends says that it started and
+gives its session id, which is how the next one finds the last reply of the one before it.
+
+The skill is `js-harness-orchestrator`, the text of `orchestratorSkillContent` in
+`bin/lib/manifest.mjs`, installed for Claude Code and for Codex. It has the orchestrator's part and
+the work session's part in one file, because a host loads a skill by its description and both
+kinds of session need the same picture of who owns what.
+
+Still open, to be settled with what T7 shows: whether a command should append the relief lines
+(today the session does); whether the orchestrator can notify his phone by itself; how long one
+lasts before a relief; whether Codex loads the skill.
 
 ### Watch, context and plans
 What T5 added to the board, and what each fact is read from.
@@ -336,7 +353,9 @@ command only waits and prints. What wakes it, one line each:
   given something and finished it between two looks;
 - a session whose context passes the limit (said once, not at every look above it);
 - a session that leaves the window;
-- a gate that starts, said apart when another gate is running, and a gate that ends (by pid);
+- a gate that starts, said apart when another gate is running, and a gate that ends (by pid),
+  among the gates whose folder is one of the board's worktrees and the ones started by a relative
+  path, which name no folder (`npm run check` is one);
 - a pull request that opens, and one that is no longer open (by number; merged and closed look
   the same, the board lists the open ones);
 - a feature plan that appears, one that no longer differs from `origin/main`, and one whose done
@@ -346,10 +365,25 @@ command only waits and prints. What wakes it, one line each:
 What does not wake it, on purpose: a session that starts working, or goes to `background`; the
 age of a last entry; the last write of a background file; the tail of a reply; a context that
 grows below the limit; a piece of work that ends while others of the session stay open; the
-counts and the head of a worktree; a worktree that is removed. The session that watches is never
+counts and the head of a worktree; a worktree that is removed; a line added to the relief file. A
+gate whose command line names a folder that is none of the board's worktrees does not wake it
+either, though the board lists it: the test suite of a running gate starts `bin/check.mjs` in
+temporary folders, and on 2026-10-06 a watch returned with `gate ended in
+C:/Users/Oficina/AppData/Local/Temp/js-harness-pre-push-3duIqX (pid 32036)`. Such a process is not
+the "another" a gate is said to start beside. The session that watches is never
 compared. A fact that could not be read at one look is not compared at that look, and the board
 to compare with keeps its last readable value (`watchBaseline`), so a failed `gh` call or a busy
-transcript neither wakes the watch nor hides the change that happens across it.
+transcript neither wakes the watch nor hides the change that happens across it. Which gates are
+compared depends on the worktrees, so a look that could not list them compares no gate and the
+board to compare with keeps the gates it had.
+
+The relief file. The board's last section, `Relief`, after the pull requests: the path of the
+orchestrator's relief file, how many lines it holds and the last five of them, blank lines apart
+(the whole file is one read away, so no flag asks for more). The path is the one under "The
+orchestrator", or `--relief <path>`. A file that is not there yet is said as that, with the path
+the first line would create; one that is there and cannot be read is unavailable with the reason.
+`--json` has it as `relief`: `{ path, exists: false }`, `{ path, exists: true, lineCount, lines }`
+or `{ path, unavailable }`. It is read at every look and never written.
 
 Output and exit codes. With changes: `sessions --watch: N changes after Ns`, the changes, an
 empty line, the board; exit 0. At the timeout: `sessions --watch: nothing changed in Ns` and no
@@ -413,7 +447,7 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
 - [x] T4 Live check on this machine with two or more sessions, output recorded here; the memories `main-session-orchestrates` and `cross-session-prompts` point to the command — route: inline (one run and two memory edits)
 - [x] T5 `sessions --watch`: the command waits and returns when the board changes (a session starts waiting, its open work changes, a gate starts or ends, a pull request opens or closes, a feature's plan changes, a context passes the threshold), printing what changed, at no cost while nothing changes; the board also gains each session's context size and each worktree's feature plan (document, done and total, next step) — route: delegated writer
 - [x] T5b Accepted follow-ups of the third review: `R3-watch-wait-upper-bound`, `R3-task-only-end-between-followup-call-and-result`, `R3-new-session-first-look-unreadable`, `R3-tool-result-without-recorded-call`, `R3-plan-listing-quoted-names-and-doc-drift`; and the context limit as a percentage of a window (`--context-window`, `--context-limit <N>%`) — route: delegated writer
-- [ ] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected — route: delegated writer
+- [x] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected; with it the board's `Relief` section and the watch comparing only gates of the project's worktrees — route: delegated writer
 - [ ] T7 On this machine, on Sebastián's word: `js-harness install`, the orchestrator session opened with the skill, and one real stretch with two sessions supervised by it, recorded here — route: inline
 
 ## Progress
@@ -710,9 +744,50 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   tool definitions). Either way the number right after a compaction reads low until the first
   reply; said here so nobody plans a stretch on it.
 
+- 2026-10-06: `0989fc0` (T5b) committed, gate green. gentle-ai assessed `24e1786..0989fc0` as
+  medium, 399 lines, not due (`under_budget`); it waits in the slice for T6's commit.
+- 2026-10-06, 22:02 local: a false wake of the watch, during the gate of `0989fc0`: `gate ended in
+  C:/Users/Oficina/AppData/Local/Temp/js-harness-pre-push-3duIqX (pid 32036)`. The test suite
+  starts `bin/check.mjs` by absolute path inside temporary repositories
+  (`bin/pre-push-hook.test.mjs`), so a real gate shows extra gates while it runs. Fixed in T6:
+  the watch compares only gates whose folder is one of the board's worktrees. The wake before it,
+  at 21:57, was the first with two real changes in one return: the gate of the documentation
+  branch ending and this branch's gate starting.
+- 2026-10-06: T6 written by a second delegated writer (a new one: the installer was ground the
+  first had not read). Parent spot check `node --test bin/lib/manifest.test.mjs
+  bin/lib/sessions.test.mjs bin/sessions.test.mjs bin/js-harness.test.mjs`: 301 pass, 0 fail.
+  The writer also ran `scripts/e2e.mjs` (14 steps pass) after confirming in its source that
+  every install step takes a temporary home; nothing was written under the real `~/.claude`,
+  `~/.codex` or `~/.js-harness`.
+  - The skill is `js-harness-orchestrator`, 63 lines, for both hosts, appended after the first
+    two components; the engine did not change. One skill serves both roles (the orchestrator
+    and a work session), chosen by its description.
+  - The relief file's place was settled by the main session, told to Sebastián before the
+    writer started; he has not answered on it, so it can still move:
+    `<home>/.js-harness/relief/<project slug>.md`, written by the orchestrator, read by the
+    board, in no manifest, undone by deleting that one file.
+    `uninstall` therefore leaves it, and `.js-harness` with it.
+  - Accepted as the writer left them: a gate started by a relative path names no folder and
+    stays compared, because dropping it would silence a real gate; a look that cannot list the
+    worktrees compares no gate; the board prints the last five non-blank lines of the relief
+    file, with no flag for the number; an orchestrator's first relief line gives its session
+    id, so the next one finds its last reply; the wording of the fixed opening prompt.
+  - Gaps the writer found between this design and what the command can do, for T7 to judge
+    with a real orchestrator:
+    1. a watch never compares the session that runs it, so it does not return when the
+       orchestrator's own context passes the limit, and a timed-out watch prints no board; the
+       skill tells the orchestrator to read its own row on every board;
+    2. the design says the board prints the previous orchestrator's last reply: it prints three
+       lines of every last reply by default (`--tail`), marks no session as the orchestrator,
+       and leaves out one older than the `--hours` window;
+    3. "a gate is about to start while another runs": the watch reports it after it started;
+    4. not established: whether Codex loads the skill, and whether Claude Code triggers it
+       from its description.
+
 ## Next step
-T6 with the delegated writer: the skill, with "The orchestrator" and "Watch, context and plans" as
-its specification, and the relief file's place settled as written under T6's entry when it lands.
-The commit of T5b carries this entry; its hash and its review go in with T6's commit.
-Before T7: Sebastián's word on `js-harness install`. Before any push: his word, and his answer on
-the Codex review of the code commits.
+T7, on Sebastián's word and not before: `js-harness install` on this machine (it writes four skill
+files under the real `~/.claude` and `~/.codex` and a manifest; `js-harness uninstall --global`
+removes them), then an orchestrator session opened with the skill's opening prompt and one real
+stretch supervised by it, recorded here with the four gaps above judged. The commit of T6 carries
+this entry; its hash and its review go in with T7's record. Before any push: his word, and his
+answer on the Codex review of the code commits (`875c5d9` to T6's).

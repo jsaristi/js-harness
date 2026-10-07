@@ -30,7 +30,7 @@ Commands:
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
-  sessions    Show the project's recent Claude Code sessions (state, context size, background work still open, tail of the last reply), with the worktrees and each one's feature plan, the running gates and the open pull requests. Read-only; --json gives the same data. --watch waits and returns only when the board changes in a way that needs a decision, or at --timeout.
+  sessions    Show the project's recent Claude Code sessions (state, context size, background work still open, tail of the last reply), with the worktrees and each one's feature plan, the running gates, the open pull requests and the orchestrator's relief file (its path and last lines). Read-only; --json gives the same data. --watch waits and returns only when the board changes in a way that needs a decision, or at --timeout.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;

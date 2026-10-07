@@ -46,7 +46,7 @@ First request of a one-word prompt, estimated tokens:
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
-| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), and a TUI over the same commands |
+| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), `sessions` (2026-10-06, read-only, no TUI entry), and a TUI over the same commands |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
@@ -166,7 +166,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] A subagent that is sent a follow-up reads as running again
 - [x] Live check on this machine with two or more sessions open, and the memories point to the command
 - [x] `sessions --watch` returns when the board changes and costs nothing while it does not
-- [ ] The orchestrator ships as a skill the installer writes and removes through the manifest
+- [x] The orchestrator ships as a skill the installer writes and removes through the manifest
 - [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity

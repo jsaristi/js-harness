@@ -7,18 +7,20 @@
 // sessions work in the same checkout. Zero dependencies; `--json` gives the same data as the text.
 // `--watch` takes the same board again and again and returns when two of them differ in a way that needs
 // a decision, so a session can wait on the others without spending anything while nothing happens.
+// The board also prints the relief file of the session that orchestrates the others (its path and last
+// lines): that session writes it, this command only reads it.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGates, readPullRequests, readWorktrees, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
   '                           [--context-window <tokens>] [--context-limit <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
-  '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
+  '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>] [--relief <path>]',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -63,7 +65,7 @@ function parseArgs(argv) {
   const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, contextLimitSpec: `${DEFAULT_CONTEXT_LIMIT_PERCENT}%`, watch: false };
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
-  const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp']]);
+  const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp'], ['--relief', 'relief']]);
   const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
@@ -218,6 +220,17 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit
   return { id, modifiedAt, ...facts };
 }
 
+/** The relief file at `file` as the board shows it: `{ path, exists: true, lineCount, lines }`, `{ path,
+ * exists: false }` when there is none yet, or `{ path, unavailable }` with the reason when it is there
+ * and cannot be read. */
+function readRelief(file, readFile) {
+  try {
+    return { path: file, exists: true, ...reliefTail(readFile(file)) };
+  } catch (err) {
+    return err.code === 'ENOENT' ? { path: file, exists: false } : { path: file, unavailable: err.code ?? err.message };
+  }
+}
+
 export async function sessionsMain(
   argv,
   {
@@ -257,6 +270,9 @@ export async function sessionsMain(
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
+  // Where the session that orchestrates this project keeps its notes: one file per project under the
+  // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`.
+  const reliefFile = path.resolve(parsed.relief ?? path.join(env.JS_HARNESS_HOME ?? homedir(), '.js-harness', 'relief', `${slug}.md`));
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
@@ -306,6 +322,7 @@ export async function sessionsMain(
       worktrees,
       gates: readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []),
       pullRequests: readPullRequests(run, root),
+      relief: readRelief(reliefFile, readFile),
       notVisible: NOT_VISIBLE,
     };
   };
