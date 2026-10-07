@@ -123,14 +123,14 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   then inline runs
 
 ### Slice C — own instructions, structured answer
-- [ ] T6 The answer as data and the prompt of our own, both in `bin/lib/`: a schema for the
+- [x] T6 The answer as data and the prompt of our own, both in `bin/lib/`: a schema for the
   answer the rubric already gives in JSON (findings with file, line range, severity, title,
   explanation, confidence; the verdict) and its reader from the review sub-agent's rollout
   file; a versioned review prompt that names the range and carries the intent, chosen with
   `--prompt own` and fed by `--doc <feature document>` (its Goal and Done when). The default
   stays `--base` with Codex's own sentence; `--output-schema` is not used, since a review
   ignores it — route: delegated writer
-- [ ] T7 The answer read as data under the lean session: findings validated against the
+- [x] T7 The answer read as data under the lean session: findings validated against the
   schema, printed as `file:line severity title`, counted by severity in the run log; an
   answer off the schema is a failed attempt, recorded — route: same writer
 
@@ -623,8 +623,57 @@ What follows from it:
     from `--cwd`, each section cut at 2,000 characters, read with `parseContract`.
   - The evidence rule is unchanged and holds under `own`, since the prompt names
     `git diff <from> <head>`.
+- 2026-10-07: T6 and T7 committed as `81250a4` (gate green). gentle-ai assessed
+  `7529f67..81250a4` as `medium`, review due (1,870 lines, `slice_budget_reached`);
+  granted without asking. Lineage `review-43ed9ea7c48748ff`, one lens
+  (`review-reliability`): approved and acknowledged, so the reviewed boundary is `81250a4`.
+  Four findings, none blocking, carried in Follow-ups.
+- 2026-10-07T09:38Z: the third Codex review of this feature, announced with its count and
+  run without waiting (the reading of his sentence above): the same range
+  `338386a..e3aad48` under `--session lean --prompt own --doc
+  odd/tasks/codex-review-lean.md --keep-home`, inside the proof of the login, CLI 0.160.1.
+  Run id `1529f49e-8df4-4306-b0de-71288c113d95`. T6 and T7 are checked off on it.
+  - Outcome `reviewed`, coverage 216 of 216, no finding, verdict `correct` with confidence
+    0.85, read from the real rollout file (`answerSource` `rollout`); 37 s.
+  - Tokens: 107,236 input, of which 71,936 cached (35,300 not cached), 656 output, 106
+    reasoning; 5 requests; the first request 7,066 input tokens. 6 commands, none failed.
+  - The kept home shows the prompt of our own was what the review got: a user message of
+    1,742 characters that starts "Review the code changes in the committed range …" and
+    holds the Goal heading; the project's `AGENTS.md` beside it; no global persona text.
+  - The login: PASS again, `icacls` unchanged, 51 entries before and after.
+  - Beside the run of 08:20Z (Codex's own sentence, `--base`):
+
+    | | `--prompt codex` | `--prompt own` + `--doc` |
+    |---|---|---|
+    | input tokens | 145,852 | 107,236 |
+    | of them not cached | 36,668 | 35,300 |
+    | output tokens | 634 | 656 |
+    | requests | 6 | 5 |
+    | first request | 6,714 | 7,066 |
+    | seconds | 39 | 37 |
+    | findings | 0 | 0 |
+
+    One run each, so this says only that both work and that the intent costs about 350
+    tokens in the first request. It is not a comparison: the model chose different files to
+    read in each, and neither found anything on a range with no known defect. T10 to T12
+    are what compare.
 
 ## Follow-ups
+- From gentle-ai's review of `81250a4`:
+  - R3-finding-shape-unproved-fails-closed (`bin/lib/codex-review-answer.mjs:44`, WARNING):
+    the schema of one finding has only been tested against invented fixtures, and both real
+    answers so far held an empty `findings`. An off-schema answer fails the attempt, so a
+    difference in a real finding would fail exactly the reviews that found something. Closed
+    by T10 and T12: the first real answer with a finding becomes a recorded fixture, before
+    the comparison rests on the reader.
+  - R3-verdict-printed-on-failed-attempt (`bin/codex-review.mjs:809`): the finding lines and
+    the verdict are printed before the completion and evidence checks, so an attempt that
+    then fails still prints "the patch is correct". Print them only once the attempt stands,
+    with T8.
+  - R3-stdin-early-close-unasserted (`bin/codex-review.mjs:464`): no test for a child that
+    exits before reading the prompt (an EPIPE on the write). With T8.
+  - R3-intent-cut-splits-surrogate (`bin/lib/codex-review-prompt.mjs:77`): the cut at 2,000
+    characters can split a surrogate pair. With T8.
 - From gentle-ai's review of `7529f67`, with the next change to the command's tests:
   - R3-off-windows-case-test-host-platform (`bin/codex-review.test.mjs:1138`): the test of a
     variable spelled in another case off Windows passes no platform, so it may rest on the
@@ -668,24 +717,24 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-Slices A and B are done: T1 to T5 are checked, and the lean session read a real diff on
-2026-10-07 (CLI 0.160.1; Progress holds the numbers). Next, Sebastián's answers, one at a
-time:
-1. T6, what becomes of `--output-schema`. `exec review` ignores it and takes a prompt or
-   `--base`, not both. The run of 2026-10-07 showed the rubric already answers in JSON
-   (`findings`, `overall_correctness`, `overall_explanation`) in the sub-agent's rollout
-   file. So the proposal is: keep `--base` and Codex's rubric, read the findings as data from
-   that file, validate them with a schema of ours in `bin/lib/`, and pass the intent (the
-   feature document's Done when) only if a measured run shows it finds more; the versioned
-   prompt of our own is then a second configuration for T12, not the default.
-2. T12, how the `current` session is measured, since it runs `--ephemeral` in his real home
-   and reports zero tokens: a run without `--ephemeral` that leaves session files in his
-   `~/.codex` and reads them, or a home that copies his configuration.
-3. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip.
-   The lean session has now reviewed `338386a..e3aad48` (recorded in `codex-reviews.jsonl`);
-   the rest is not covered. `current` refused ranges above about a thousand lines.
+Slices A, B and C are done: T1 to T7 are checked. The lean session reads its diff, measures
+its tokens, reads Codex's answer as data and can review with a prompt of our own that carries
+the intent (CLI 0.160.1; Progress holds the numbers of both real runs). Next is slice D, one
+delegated writer: T8 (the evidence rule under the lean session and both prompts, with the
+three small findings of the last review, Follow-ups) and T9 (a large range reviewed in
+parts). Then slice E: the seeded diff and its scorer (T10), the comparison and its report
+(T11), and the runs (T12), whose count is put to Sebastián before they start.
 
-Every Codex review is asked first, with the count: two spent so far in this feature (one
-read nothing, one read its diff). The temporary worktree `codex-review-lean-probe` is
-removed. Which CLI version the comparison runs on is open: 0.160.1 is installed, F6 was
-paused on 0.160.0, and T12's runs must all share one version.
+Open, for him, one at a time, none blocking slice D:
+1. T12, how the `current` session is measured, since it runs `--ephemeral` in his real
+   home and reports zero tokens: a run without `--ephemeral` that leaves session files in
+   his `~/.codex` and reads them, or a home that copies his configuration.
+2. Which CLI version the comparison runs on: 0.160.1 is installed, F6 was paused on 0.160.0,
+   and T12's runs must all share one version.
+3. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip.
+   The lean session has reviewed `338386a..e3aad48` twice; the rest is not covered, and it
+   is larger than a session has taken so far, which T9 is for.
+
+On the cap: three Codex reviews spent in this feature (one read nothing, two read their
+diff). A single run that proves a piece is announced with its count and run; the batch of
+T12 is asked first. Both kept lean homes are swept by the next lean review.
