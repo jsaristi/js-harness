@@ -215,7 +215,9 @@ work) these tasks do not measure.
    18:29 UTC, on Sebastián's word: `D:\js-harness` was brought up to `main`, the server was
    restarted on the new code and `js-harness remote start --at-login` registered the watchdog
    task. The log went from 79 MB to 1.1 MB, and the task has run every five minutes since with
-   result 0 and the server up. Not yet seen: the task bringing back a server that died.
+   result 0 and the server up. The task bringing back a server that died was seen once, the
+   same day, by timing: the desktop app restarted at 17:53 local and a new supervisor was up at
+   17:55:02, two seconds after a run of the task, with no restart of the PC in between.
 3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.
