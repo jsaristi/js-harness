@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runSession, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
+import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runFindings, runPrompt, runSession, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like codex-reviews.test.mjs does.
@@ -173,4 +173,55 @@ test('runSession reads the log as it is: old lines and new ones side by side', (
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000005', session: 'lean', model: 'gpt-6.1-sol', effort: 'medium' });
   appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000006', session: 'current' });
   assert.deepEqual(readCodexReviewRuns(root).map(runSession), ['current', 'lean', 'current']);
+});
+
+// What a lean attempt adds to its line once the review's answer is read as data.
+const answered = {
+  prompt: 'own',
+  promptVersion: 'js-harness.codex-review-prompt/v1',
+  findings: { total: 3, bySeverity: { P0: 0, P1: 2, P2: 0, P3: 0, none: 1 } },
+  verdict: 'incorrect',
+  answerSource: 'rollout',
+};
+
+test('runPrompt: a line written before the prompt was recorded reads as `codex`, the only one there was', () => {
+  assert.equal('prompt' in run, false, 'the fixture is a line as they were first written');
+  assert.equal(runPrompt(run), 'codex');
+  assert.equal(runPrompt({ ...run, prompt: 'codex', promptVersion: null }), 'codex');
+  assert.equal(runPrompt({ ...run, ...answered }), 'own');
+});
+
+test('runPrompt: a prompt it does not know, or a line that is not one, reads as `codex` too', () => {
+  for (const prompt of ['mine', 'OWN', '', null, 7, ['own']]) assert.equal(runPrompt({ ...run, prompt }), 'codex', JSON.stringify(prompt));
+  for (const line of [null, undefined, 'own', 7]) assert.equal(runPrompt(line), 'codex', JSON.stringify(line));
+});
+
+test('runFindings: the counts of a line whose answer was read, and null for every line that has none', () => {
+  assert.deepEqual(runFindings({ ...run, ...answered }), answered.findings);
+  assert.deepEqual(runFindings({ ...run, ...answered, prompt: 'codex', promptVersion: null }), answered.findings, 'the answer is read under either prompt');
+  // A line written before the answer was read, and every `current` attempt since: no findings data, which
+  // is not the same as a review that found nothing.
+  assert.equal('findings' in run, false, 'the fixture is a line as they were first written');
+  assert.equal(runFindings(run), null);
+  assert.equal(runFindings({ ...run, prompt: 'codex', promptVersion: null, findings: null, verdict: null, answerSource: null }), null);
+  assert.deepEqual(runFindings({ ...run, ...answered, findings: { total: 0, bySeverity: { P0: 0, P1: 0, P2: 0, P3: 0, none: 0 } } }).total, 0);
+});
+
+test('runFindings: counts that were read from no answer, or are not counts, read as null', () => {
+  assert.equal(runFindings({ ...run, ...answered, answerSource: null }), null);
+  assert.equal(runFindings({ ...run, findings: answered.findings }), null, 'a line that does not say where its counts came from');
+  for (const findings of [null, undefined, 3, 'three', [], {}, { total: '3' }, { total: -1 }, { total: 1.5 }]) {
+    assert.equal(runFindings({ ...run, ...answered, findings }), null, JSON.stringify(findings));
+  }
+  for (const line of [null, undefined, 'own', 7]) assert.equal(runFindings(line), null, JSON.stringify(line));
+});
+
+test('runPrompt and runFindings read the log as it is: old lines and new ones side by side', () => {
+  const root = makeRepo();
+  appendCodexReviewRun(root, run);
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000007', session: 'lean', ...answered });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000008', session: 'lean', ...answered, outcome: 'failed', findings: null, verdict: null, answerSource: null });
+  const runs = readCodexReviewRuns(root);
+  assert.deepEqual(runs.map(runPrompt), ['codex', 'own', 'own']);
+  assert.deepEqual(runs.map(runFindings), [null, answered.findings, null]);
 });

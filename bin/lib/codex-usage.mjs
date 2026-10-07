@@ -101,6 +101,16 @@ function byFileName(a, b) {
   return nameA < nameB ? -1 : nameA > nameB ? 1 : a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** The rollout files of the Codex home `home`, one per thread: every `rollout-*.jsonl` under
+ * `<home>/sessions/`, at any depth, in the order of `byFileName`. None for a home that is not a path or
+ * holds no such folder. An empty path would resolve to the working directory, which is not a Codex home,
+ * so it holds none either. The readers of a home share this walk: the tokens here, and the review's answer
+ * in `./codex-review-answer.mjs`. */
+export function rolloutPaths(home) {
+  if (typeof home !== 'string' || home === '') return [];
+  return rolloutFiles(path.join(home, 'sessions')).sort(byFileName);
+}
+
 /** The `token_count` lines of one rollout file that carry counts, in order, each as `{ info, at }`:
  * `at` is the line's `timestamp` in milliseconds, or `null` when it has none that parses. A file that
  * cannot be read holds none, and so does a line that is not JSON (a truncated tail) or is anything else.
@@ -161,9 +171,7 @@ const comesBefore = (a, b) => (a.at !== null && b.at !== null ? a.at < b.at : a.
  * line that is not JSON all read as nothing. */
 export function rolloutReading(home) {
   const reading = noRolloutReading();
-  // An empty path would resolve to the working directory, which is not a Codex home.
-  if (typeof home !== 'string' || home === '') return reading;
-  const files = rolloutFiles(path.join(home, 'sessions')).sort(byFileName);
+  const files = rolloutPaths(home);
   if (files.length === 0) return reading;
   reading.requests = 0;
   reading.threads = 0;

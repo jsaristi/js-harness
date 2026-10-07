@@ -10,7 +10,8 @@ import {
   childEnv, codexArgs, codexReviewMain, LEAN_EFFORT, LEAN_MODEL, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
-import { codexReviewRunsPath, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPrompt } from './lib/codex-review-runs.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
@@ -122,11 +123,25 @@ const reviewedWith = (...commands) => jsonl(thread, turn, ...commands, msg(FINDI
 const PROBE_OK = { status: 0, stdout: 'codex-cli 0.159.1\n' };
 
 /** A fake async child: `stdout` (a string or an array of chunks) is written, then it closes with
- * `status`/`signal`; `error` is emitted instead as a failed start; `hang` never ends. */
-function fakeChild({ stdout = '', status = 0, signal = null, error, hang = false }) {
+ * `status`/`signal`; `error` is emitted instead as a failed start; `hang` never ends. As a real child,
+ * it has a `stdin` only when it was spawned with one (`piped`), and `received` is what was written there. */
+function fakeChild({ stdout = '', status = 0, signal = null, error, hang = false, piped = false }) {
   const child = new EventEmitter();
   child.pid = 4242;
   child.stdout = new PassThrough();
+  child.stdin = null;
+  child.received = null;
+  if (piped) {
+    child.stdin = new PassThrough();
+    child.received = { text: '', ended: false };
+    child.stdin.setEncoding('utf8');
+    child.stdin.on('data', (chunk) => {
+      child.received.text += chunk;
+    });
+    child.stdin.on('end', () => {
+      child.received.ended = true;
+    });
+  }
   child.kill = () => {};
   setImmediate(() => {
     if (error) return child.emit('error', error);
@@ -139,10 +154,29 @@ function fakeChild({ stdout = '', status = 0, signal = null, error, hang = false
   return child;
 }
 
+// What the review's sub-agent ends with when it found nothing, as one real lean review did (0.160.1).
+const NO_FINDINGS = { findings: [], overall_correctness: 'patch is correct', overall_explanation: 'Nothing in the diff breaks existing behaviour.' };
+
+/** The rollout file of the review sub-agent's thread, as lines: its first line names the sub-agent, and
+ * its last message of the model is the answer `said`, an object (written as JSON) or a text taken as it is.
+ * With `null` the model never answered. */
+const reviewSession = (said = NO_FINDINGS) => [
+  { type: 'session_meta', payload: { id: 'review', cli_version: '0.160.1', source: { subagent: 'review' } } },
+  { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Review the code changes' }] } },
+  ...(said === null ? [] : [{ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: typeof said === 'string' ? said : JSON.stringify(said, null, 2) }] } }]),
+];
+
+const ANSWER_FILE = ['sessions', '2026', '10', '07', 'rollout-2026-10-07T05-34-59-review-answer.jsonl'];
+
 /** The deps for a run: real git and a fake `codex --version` probe through `spawn`, a fake async
  * review through `spawnAsync`, and a `killTree` that only records. `calls`, `probes` and `killed`
- * log what happened. */
-function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
+ * log what happened; each call holds its `child`, for what it was sent on stdin.
+ *
+ * As a real Codex does, the fake leaves the rollout file of the review's sub-agent in its home when the
+ * session is not ephemeral and has a home of its own, which is the lean session: `said` is the answer in
+ * it (see `reviewSession`), a review that found nothing unless a test says otherwise, and `false` writes
+ * no such file at all. */
+function fakeCodex(stdout, answer = {}, probe = PROBE_OK, said = NO_FINDINGS) {
   const calls = [];
   const probes = [];
   const killed = [];
@@ -152,8 +186,16 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
     return probe;
   };
   const spawnAsync = (command, args, opts) => {
-    calls.push({ command, args, opts });
-    return fakeChild({ stdout, ...answer });
+    const home = opts.env?.CODEX_HOME;
+    const ephemeral = `${command} ${args.join(' ')}`.includes('--ephemeral');
+    // A Codex that never started wrote nothing.
+    if (said !== false && !answer.error && !ephemeral && typeof home === 'string' && fs.existsSync(home)) {
+      fs.mkdirSync(path.join(home, ...ANSWER_FILE.slice(0, -1)), { recursive: true });
+      fs.writeFileSync(path.join(home, ...ANSWER_FILE), jsonl(...reviewSession(said)), 'utf8');
+    }
+    const child = fakeChild({ stdout, ...answer, piped: opts.stdio?.[0] === 'pipe' });
+    calls.push({ command, args, opts, child });
+    return child;
   };
   const lifetimes = [];
   const killTree = (child, lifetime) => {
@@ -1457,6 +1499,382 @@ test('--keep-home without --session lean is a usage error: exit 2, and nothing r
   assert.equal(loggedRun(root), false);
 });
 
+// --- the prompt: the sentence Codex writes for `--base`, or this command's own, read from stdin ---
+
+/** The lean argv of a review asked with this command's own prompt, token by token: the lean flags, no
+ * `--base`, and `-` as the prompt, which makes Codex read it from stdin. */
+const ownArgv = (platform = 'linux') => [
+  'exec', 'review', '--json',
+  '--ignore-user-config', '--ignore-rules',
+  '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
+  '-m', 'gpt-6.1-sol',
+  '-c', 'model_reasoning_effort="medium"',
+  '-c', 'sandbox_mode=read-only',
+  '-c', 'approval_policy=never',
+  ...(platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : []),
+  '-c', 'skills.include_instructions=false',
+  '-',
+];
+
+const OWN = ['--session', 'lean', '--prompt', 'own'];
+
+// A feature document as the task contract shapes it, with what a command line would choke on.
+const GOAL = 'Say "done" & keep 100% of %PATH%, even with ^ | < > in it.';
+const DONE_WHEN = '- `npm run check` exits 0\n- Sebastián reads the result';
+const FEATURE_DOC = `# A feature\n\n## Goal\n${GOAL}\n\n## Why\nBecause.\n\n## Done when\n${DONE_WHEN}\n\n## Constraints\n- None\n`;
+
+/** Writes a feature document outside any repository and returns its path. */
+function featureDoc(markdown = FEATURE_DOC) {
+  const file = path.join(tmp('js-harness-codex-review-doc-'), 'feature.md');
+  fs.writeFileSync(file, markdown, 'utf8');
+  return file;
+}
+
+test('codexArgs: under the own prompt the lean argv names no base and ends with `-`, the prompt on stdin', () => {
+  const base = 'a'.repeat(40);
+  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'own'), [
+    'exec', 'review', '--json',
+    '--ignore-user-config', '--ignore-rules',
+    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
+    '-m', 'gpt-6.1-sol',
+    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'sandbox_mode=read-only',
+    '-c', 'approval_policy=never',
+    '-c', 'skills.include_instructions=false',
+    '-',
+  ]);
+  for (const platform of ['win32', 'linux', 'darwin']) {
+    const argv = codexArgs(base, 'lean', platform, 'own');
+    assert.deepEqual(argv, ownArgv(platform), platform);
+    // `--base` and a prompt exclude each other on Codex's command line: the range is in the prompt.
+    assert.equal(argv.some((token) => token === '--base' || token.includes(base)), false, platform);
+    assert.equal(argv.includes('--ephemeral'), false, platform);
+  }
+  // The default prompt is the argv as it was.
+  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex'), leanArgv(base));
+  assert.deepEqual(codexArgs(base, 'current', 'linux', 'codex'), currentArgv(base));
+  assert.throws(() => codexArgs(base, 'current', 'linux', 'own'), /lean/);
+  assert.throws(() => codexArgs(base, 'lean', 'linux', 'mine'), /prompt/);
+});
+
+test('--prompt own hands Codex this command\'s prompt on stdin: the committed range, and no --base', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  const { command, args, opts, child } = fake.calls[0];
+  assert.equal(command, 'codex');
+  assert.deepEqual(args, ownArgv());
+  assert.deepEqual(opts.stdio, ['pipe', 'pipe', 'inherit']);
+  // The whole prompt, and then the end of the input, which is what Codex waits for.
+  assert.deepEqual(child.received, { text: reviewPrompt({ from: base, head }), ended: true });
+  assert.ok(child.received.text.includes(`git diff ${base} ${head}`));
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('without --prompt, and with --prompt codex, the review is the `--base` one: nothing is sent on stdin', async () => {
+  const { root, base } = makeRepo();
+  for (const flags of [['--session', 'lean'], ['--session', 'lean', '--prompt', 'codex'], ['--prompt', 'codex'], []]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
+    assert.deepEqual(fake.calls[0].args, flags.includes('lean') ? leanArgv(base) : currentArgv(base), flags.join(' '));
+    assert.deepEqual(fake.calls[0].opts.stdio, ['ignore', 'pipe', 'inherit'], 'Codex would wait on an open stdin');
+    assert.equal(fake.calls[0].child.stdin, null);
+  }
+});
+
+test('--doc adds the Goal and the Done when of the feature document to the own prompt', async () => {
+  const { root, base, head } = makeRepo();
+  const expected = reviewPrompt({ from: base, head, intent: { goal: GOAL, doneWhen: DONE_WHEN } });
+  // A path as it is, and one from `--cwd`, as the other commands read a document.
+  fs.mkdirSync(path.join(root, 'odd'));
+  fs.writeFileSync(path.join(root, 'odd', 'feature.md'), FEATURE_DOC, 'utf8');
+  for (const doc of [featureDoc(), path.join('odd', 'feature.md')]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...OWN, '--doc', doc, '--cwd', root], fake);
+    assert.equal(result.code, 0, result.err);
+    assert.deepEqual(fake.calls[0].args, ownArgv(), 'the document changes the prompt and no argument');
+    assert.equal(fake.calls[0].child.received.text, expected);
+  }
+  assert.ok(expected.includes(GOAL));
+  assert.ok(expected.includes(DONE_WHEN));
+});
+
+test('on Windows the own prompt never goes through cmd.exe: the line ends with `-`, and the prompt arrives whole on stdin', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', ...OWN, '--doc', featureDoc(), '--cwd', root], { ...fake, platform: 'win32' });
+  assert.equal(result.code, 0, result.err);
+  const { command, args, opts, child } = fake.calls[0];
+  assert.equal(opts.shell, true);
+  assert.deepEqual(args, []);
+  assert.equal(command, windowsCommandLine('codex', ownArgv('win32')));
+  assert.equal(command.endsWith(' -c skills.include_instructions=false -'), true, command);
+  assert.equal(/[\r\n%&^|<>]/.test(command), false, 'nothing of the prompt is on the line cmd.exe parses');
+  // Newlines, quotes, `%` and `&` and the rest: as an argument cmd.exe would act on them, so it is refused there.
+  const prompt = reviewPrompt({ from: base, head, intent: { goal: GOAL, doneWhen: DONE_WHEN } });
+  assert.throws(() => quoteWindowsArg(prompt), /cmd\.exe/);
+  assert.deepEqual(child.received, { text: prompt, ended: true });
+  assert.ok(child.received.text.includes('Say "done" & keep 100% of %PATH%, even with ^ | < > in it.\n'));
+});
+
+test('the run line says which prompt the review was asked with, and the version of this command\'s own', async () => {
+  const { root, base } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base)));
+  await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
+  await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
+  const runs = readCodexReviewRuns(root);
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
+  assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
+    ['reviewed', 'current', 'codex', null],
+    ['reviewed', 'lean', 'codex', null],
+    ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],
+    ['failed', 'lean', 'own', REVIEW_PROMPT_VERSION],
+  ]);
+  assert.deepEqual(runs.map(runPrompt), ['codex', 'codex', 'own', 'own']);
+  for (const line of runs) assert.deepEqual(Object.keys(line).filter((name) => name !== 'reason'), Object.keys(runs[0]), 'the same fields in the same order under either prompt');
+  // The record of the review does not change with the prompt.
+  assert.deepEqual(readCodexReviews(root).map((record) => Object.keys(record)), Array.from({ length: 3 }, () => ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run']));
+});
+
+test('the line that announces the review names this command\'s own prompt when it is the one sent', async () => {
+  const { root, base, head } = makeRepo();
+  const result = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(
+    result.out.split('\n')[0],
+    `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`,
+  );
+});
+
+test('--prompt and --doc: a prompt that is not one, the own prompt outside the lean session, and a document with no own prompt are usage errors', async () => {
+  const { root, base } = makeRepo();
+  const doc = featureDoc();
+  const cases = [
+    [['--session', 'lean', '--prompt', 'mine'], /--prompt must be `codex` or `own`/],
+    [['--session', 'lean', '--prompt', 'OWN'], /--prompt must be `codex` or `own`/],
+    [['--session', 'lean', '--prompt'], /--prompt requires a value/],
+    [['--prompt', 'own'], /--prompt own needs --session lean/],
+    [['--session', 'current', '--prompt', 'own'], /--prompt own needs --session lean/],
+    [['--prompt', 'own', '--unavailable', 'model rejected'], /--prompt own needs --session lean/],
+    [['--session', 'lean', '--doc', doc], /--doc needs --prompt own/],
+    [['--session', 'lean', '--prompt', 'codex', '--doc', doc], /--doc needs --prompt own/],
+    [['--doc', doc], /--doc needs --prompt own/],
+    [[...OWN, '--doc'], /--doc requires a value/],
+  ];
+  for (const [flags, message] of cases) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 2, flags.join(' '));
+    assert.match(result.err, message, flags.join(' '));
+    assert.match(result.err, /Usage: js-harness codex-review .*\[--prompt <codex\|own>\] \[--doc <feature document>\]/);
+    assert.equal(fake.calls.length, 0);
+    assert.equal(fake.probes.length, 0);
+  }
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+});
+
+test('a --doc that cannot be read, or holds no Goal or no Done when, is a usage error that names what is missing', async () => {
+  const { root, base } = makeRepo();
+  const cases = [
+    [path.join(tmp('js-harness-codex-review-doc-'), 'nowhere.md'), /--doc .*nowhere\.md: cannot read it \(ENOENT\)/],
+    [featureDoc(FEATURE_DOC.replace('## Done when', '## Finished when')), /--doc .*feature\.md: .*no `## Done when` heading/],
+    [featureDoc(FEATURE_DOC.replace('## Goal', '## Aim')), /--doc .*feature\.md: .*no `## Goal` heading/],
+    [featureDoc(FEATURE_DOC.replace(`${GOAL}\n`, '')), /--doc .*feature\.md: .*`## Goal` section .* is empty/],
+  ];
+  for (const [doc, message] of cases) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...OWN, '--doc', doc, '--cwd', root], fake);
+    assert.equal(result.code, 2, doc);
+    assert.match(result.err, message);
+    assert.match(result.err, /Usage: js-harness codex-review/);
+    assert.equal(fake.calls.length, 0);
+    assert.equal(fake.probes.length, 0);
+  }
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+});
+
+test('the evidence rule holds under the own prompt: every changed line in the output of a successful command, or nothing is recorded', async () => {
+  const { root, base, head } = makeRepo();
+  // The command the prompt names, with the whole patch in its output.
+  const shown = fakeCodex(reviewedWith(cmd(`git diff ${base} ${head}`, 0, patchOf(root, base))));
+  const inspected = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], shown);
+  assert.equal(inspected.code, 0, inspected.err);
+  assert.deepEqual(readCodexReviewRuns(root).at(-1).coverage, { seen: 2, total: 2 });
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+
+  // A review that answered without reading the diff: a valid answer is not evidence that it did.
+  const unseen = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
+  assert.equal(unseen.code, 1);
+  assert.match(unseen.err, /showed 0 of 2 changed lines/);
+  const logged = readCodexReviewRuns(root).at(-1);
+  assert.equal(logged.outcome, 'not-inspected');
+  assert.equal(logged.answerSource, 'rollout');
+  assert.equal(readCodexReviews(root).length, 1, 'no second record');
+});
+
+test('a child with no stdin cannot be handed the prompt: it is stopped and the attempt fails, instead of waiting for a prompt that never comes', async () => {
+  const { root } = makeRepo();
+  const fake = fakeCodex('', { hang: true });
+  // What no real spawn does when asked for a pipe; the review must still end.
+  const noStdin = (command, args, opts) => fake.spawnAsync(command, args, { ...opts, stdio: ['ignore', 'pipe', 'inherit'] });
+  // The timeout only bounds this test: should the child be left waiting, the run ends as timed out, which
+  // the assertions below tell apart, instead of holding the runner for the half hour a review may take.
+  const result = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], { ...fake, spawnAsync: noStdin, timeoutMs: 5000 });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /could not start it: .*no stdin/);
+  assert.deepEqual(fake.killed, [4242]);
+  assert.equal(onlyRun(root).outcome, 'failed');
+  assert.equal(wrote(root), false);
+});
+
+// --- the answer as data: the findings of a lean review, read from the rollout file of its sub-agent ---
+
+/** One finding as the rubric asks for it, at `file` (absolute) from line `start` to `end`. */
+const found = (file, start, end, over = {}) => ({
+  title: 'Drops the last record',
+  body: 'The loop stops one short, so the last line is never written.',
+  confidence_score: 0.8,
+  priority: 1,
+  code_location: { absolute_file_path: file, line_range: { start, end } },
+  ...over,
+});
+
+/** An answer with three findings in the repository at `root`, named as git names it. One gives no priority. */
+function answerWith(root) {
+  const top = git(root, 'rev-parse', '--show-toplevel');
+  const { priority, ...unranked } = found(`${top}/f.txt`, 2, 4, { title: 'No priority given' });
+  assert.equal(priority, 1);
+  return {
+    findings: [found(`${top}/f.txt`, 1, 1, { title: '[P1] Drops the\n  last record' }), found(`${top}/lib/deep.mjs`, 3, 9, { priority: 3, title: 'Slow on large input' }), unranked],
+    overall_correctness: 'patch is incorrect',
+    overall_explanation: 'One record\nis lost.',
+    overall_confidence_score: 0.7,
+  };
+}
+
+const THREE_FOUND = { total: 3, bySeverity: { P0: 0, P1: 1, P2: 0, P3: 1, none: 1 } };
+// A finding as this command prints it: `file:line severity title`.
+const FINDING_LINE = /^\S+:\d+(-\d+)? (P[0-3]|-) /;
+
+test('a lean review prints each finding as `file:line severity title` and then the verdict, and counts them by severity in its run line', async () => {
+  const { root, base, head } = makeRepo();
+  // The host's own platform: the paths of the findings are the host's, as git gives them.
+  for (const flags of [['--session', 'lean'], OWN]) {
+    const fake = fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, platform: process.platform });
+    assert.equal(result.code, 0, result.err);
+    const lines = result.out.split('\n');
+    const at = lines.indexOf('f.txt:1 P1 [P1] Drops the last record');
+    assert.notEqual(at, -1, result.out);
+    assert.deepEqual(lines.slice(at, at + 4), [
+      'f.txt:1 P1 [P1] Drops the last record',
+      'lib/deep.mjs:3-9 P3 Slow on large input',
+      'f.txt:2-4 - No priority given',
+      'Codex\'s verdict: the patch is incorrect (confidence 0.7). One record is lost.',
+    ]);
+    assert.equal(lines.filter((line) => FINDING_LINE.test(line)).length, 3);
+    assert.ok(at > lines.findIndex((line) => /exit 0 {2}/.test(line)), 'after the commands');
+    assert.ok(at < lines.findIndex((line) => /^Recorded/.test(line)), 'before the record');
+    assert.ok(result.shown.includes(FINDINGS), 'the review as Codex rendered it is still passed through, with the body of each finding');
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual([logged.outcome, logged.findings, logged.verdict, logged.answerSource], ['reviewed', THREE_FOUND, 'incorrect', 'rollout']);
+    assert.deepEqual(runFindings(logged), THREE_FOUND);
+  }
+  // The record is what it was: `check --push` reads it alone, and it holds nothing of the answer.
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head), reviewedRecord(base, head)]);
+});
+
+test('a lean review that found nothing prints the verdict alone, and its run line counts zero findings, not none', async () => {
+  const { root, base } = makeRepo();
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(result.code, 0, result.err);
+  const lines = result.out.split('\n');
+  assert.ok(lines.includes('Codex\'s verdict: the patch is correct. Nothing in the diff breaks existing behaviour.'), result.out);
+  assert.equal(lines.some((line) => FINDING_LINE.test(line)), false, result.out);
+  const logged = onlyRun(root);
+  assert.deepEqual(logged.findings, { total: 0, bySeverity: { P0: 0, P1: 0, P2: 0, P3: 0, none: 0 } });
+  assert.deepEqual([logged.verdict, logged.answerSource], ['correct', 'rollout']);
+});
+
+test('a lean review whose answer cannot be read as data is a failed attempt: logged with the reason, exit 1, and no record', async () => {
+  const offSchema = {
+    findings: [found('/x', 1, 1, { priority: 7 }), found('/x', 0, 1), found('/x', 1, 1, { title: 7 }), found('/x', 1, 1, { body: 7 })],
+    overall_correctness: 'patch is correct',
+  };
+  const cases = [
+    [false, 'its Codex home holds no session of the review sub-agent, so there is no answer to read'],
+    [null, 'the session of the review sub-agent holds no answer'],
+    ['No actionable bugs were identified.', 'the answer of the review is not JSON'],
+    [
+      offSchema,
+      'the answer of the review is off its schema (js-harness.codex-review-answer/v1): findings[0].priority: 7 is above 3; ' +
+        'findings[1].code_location.line_range.start: 0 is below 1; findings[2].title: expected a string, got a number; and 2 more',
+    ],
+    [{ ...NO_FINDINGS, overall_correctness: 'fine' }, 'the answer of the review is off its schema (js-harness.codex-review-answer/v1): overall_correctness: expected "patch is correct" or "patch is incorrect", got "fine"'],
+  ];
+  for (const [said, reason] of cases) {
+    for (const flags of [['--session', 'lean'], OWN]) {
+      const { root, base } = makeRepo();
+      const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fakeCodex(reviewed(root, base), {}, PROBE_OK, said));
+      assert.equal(result.code, 1, reason);
+      const logged = onlyRun(root);
+      assert.equal(logged.outcome, 'failed', reason);
+      assert.equal(logged.reason, reason);
+      assert.ok(result.err.includes(`Codex's turn completed, but ${reason}; no record was written.`), result.err);
+      assert.match(result.err, /Rerun the review/);
+      assert.deepEqual([logged.findings, logged.verdict, logged.answerSource], [null, null, null], reason);
+      assert.equal(runFindings(logged), null);
+      // The session did show the whole patch: that alone is still not a review.
+      assert.deepEqual(logged.coverage, { seen: 2, total: 2 });
+      assert.equal(result.out.includes('Codex\'s verdict'), false);
+      assert.equal(wrote(root), false, 'a failed attempt is never a review record');
+    }
+  }
+});
+
+test('a Codex that did not complete fails as it did, with its own reason and exit code, whatever its home holds of an answer', async () => {
+  const { root, base } = makeRepo();
+  // No answer to read, and one that is not JSON: the exit of Codex is what is reported.
+  for (const said of [false, 'not an answer']) {
+    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, said));
+    assert.equal(result.code, 7);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual([logged.outcome, logged.reason, logged.findings], ['failed', 'it exited 7', null]);
+  }
+  const hung = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex('', { hang: true }, PROBE_OK, false), timeoutMs: 30 });
+  assert.equal(hung.code, 1);
+  assert.equal(readCodexReviewRuns(root).at(-1).outcome, 'timed-out');
+  // What it did answer before it failed is kept with what it spent: a measurement, and no review.
+  const answered = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, answerWith(root)), platform: process.platform });
+  assert.equal(answered.code, 7);
+  const logged = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([logged.outcome, logged.reason, logged.findings, logged.verdict], ['failed', 'it exited 7', THREE_FOUND, 'incorrect']);
+  assert.equal(wrote(root), false);
+});
+
+test('the current session reads no answer: nothing is printed of one and its run line holds none, whatever the home the user named holds', async () => {
+  const { root, base, head } = makeRepo();
+  const mine = fakeHome();
+  const named = path.join(mine.home, 'named-codex-home');
+  // A review session with findings, as a real home may hold of a review that is not this one.
+  writeRollouts(mine.codexHome, reviewSession(answerWith(root)));
+  writeRollouts(named, reviewSession(answerWith(root)));
+  for (const env of [{}, { CODEX_HOME: named }]) {
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir }, env);
+    assert.equal(result.code, 0, result.err);
+    assert.equal(result.out.includes('Codex\'s verdict'), false);
+    assert.equal(result.out.split('\n').some((line) => FINDING_LINE.test(line)), false, result.out);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual([logged.prompt, logged.promptVersion, logged.findings, logged.verdict, logged.answerSource], ['codex', null, null, null, null]);
+    assert.equal(runFindings(logged), null);
+  }
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head), reviewedRecord(base, head)]);
+});
+
 // --- the run log: every attempt that launched Codex leaves one measured line ---
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -1532,6 +1950,9 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
     session: 'current',
     model: null,
     effort: null,
+    // The `--base` review, asked with the sentence Codex writes itself.
+    prompt: 'codex',
+    promptVersion: null,
     // An ephemeral session in the user's own home: what it spent is written nowhere this command reads.
     usage: UNKNOWN_USAGE,
     usageSource: null,
@@ -1542,6 +1963,10 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
     coverage: { seen: 2, total: 2 },
+    // Nor is its answer: the rollout file that holds it as data is never written.
+    findings: null,
+    verdict: null,
+    answerSource: null,
   };
   const logged = onlyRun(root);
   assert.deepEqual(logged, expected);
@@ -1570,6 +1995,8 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
     session: 'lean',
     model: 'gpt-6.1-sol',
     effort: 'medium',
+    prompt: 'codex',
+    promptVersion: null,
     usage: REVIEW_SPENT,
     usageSource: 'rollout',
     requests: 7,
@@ -1579,6 +2006,10 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
     coverage: { seen: 2, total: 2 },
+    // The answer of the review's sub-agent, read from the same home: it found nothing.
+    findings: { total: 0, bySeverity: { P0: 0, P1: 0, P2: 0, P3: 0, none: 0 } },
+    verdict: 'correct',
+    answerSource: 'rollout',
   };
   const logged = onlyRun(root);
   assert.deepEqual(logged, expected);
@@ -1598,17 +2029,22 @@ test('the counts of several threads are added up, and a lean home with no rollou
   assert.deepEqual([summed.usageSource, summed.requests, summed.firstRequestInputTokens, summed.threads], ['rollout', 9, 18200, 2]);
 
   // Codex wrote no rollout file (an older CLI, another layout): unknown, said as `null`, and never zeros.
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), homedir: mine.homedir });
+  // With no file there is no answer to read either, which is what fails the attempt, not the tokens.
+  const noFile = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), {}, PROBE_OK, false);
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...noFile, homedir: mine.homedir });
   const unknown = readCodexReviewRuns(root)[1];
   assert.deepEqual(unknown.usage, UNKNOWN_USAGE);
   assert.deepEqual([unknown.usageSource, unknown.requests, unknown.firstRequestInputTokens, unknown.threads], [null, null, null, null]);
-  assert.equal(unknown.outcome, 'reviewed', 'what was not measured does not change how the review ends');
+  assert.equal(unknown.outcome, 'failed');
+  assert.match(unknown.reason, /no session of the review sub-agent/);
 
-  // A rollout file with no count in it: the file was read, so no request and no thread, and still no token.
+  // Rollout files with no count in them: the files were read, so no request and no thread, and still no
+  // token. What was not measured does not change how the review ends.
   await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), parentThread), homedir: mine.homedir });
   const empty = readCodexReviewRuns(root)[2];
   assert.deepEqual(empty.usage, UNKNOWN_USAGE);
   assert.deepEqual([empty.usageSource, empty.requests, empty.firstRequestInputTokens, empty.threads], [null, 0, null, 0]);
+  assert.equal(empty.outcome, 'reviewed');
 });
 
 test('the tokens are read on every way out that launched Codex, before its home is removed', async () => {

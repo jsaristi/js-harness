@@ -123,14 +123,16 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   then inline runs
 
 ### Slice C — own instructions, structured answer
-- [ ] T6 The review prompt versioned in `bin/lib/` and a JSON Schema for the answer: findings
-  with file, line, severity, title and explanation. `--doc <feature document>` passes the intent
-  of the change, its Goal and Done when. First, read from source how `exec review` takes a
-  prompt together with `--base` and whether `--output-schema` holds in review mode — route:
-  delegated writer
-- [ ] T7 The answer read as data: findings validated against the schema, printed as
-  `file:line severity title`, counted by severity in the run log; an answer off the schema is a
-  failed attempt, recorded — route: same writer
+- [ ] T6 The answer as data and the prompt of our own, both in `bin/lib/`: a schema for the
+  answer the rubric already gives in JSON (findings with file, line range, severity, title,
+  explanation, confidence; the verdict) and its reader from the review sub-agent's rollout
+  file; a versioned review prompt that names the range and carries the intent, chosen with
+  `--prompt own` and fed by `--doc <feature document>` (its Goal and Done when). The default
+  stays `--base` with Codex's own sentence; `--output-schema` is not used, since a review
+  ignores it — route: delegated writer
+- [ ] T7 The answer read as data under the lean session: findings validated against the
+  schema, printed as `file:line severity title`, counted by severity in the run log; an
+  answer off the schema is a failed attempt, recorded — route: same writer
 
 ### Slice D — completeness
 - [ ] T8 The evidence rule holds under the lean session and the own prompt: every changed line
@@ -575,6 +577,52 @@ What follows from it:
     change to this command can start the Codex binary from inside the review.
   The kept home stays at `~/.js-harness/codex-review-homes/<run id>` until the next lean
   review sweeps it (60 minutes old) or it is deleted by hand.
+- 2026-10-07: the design of slice C, settled. Asked whether to read the rubric's JSON now and
+  leave the prompt of our own for the comparison, Sebastián answered "no me importa si gasta
+  cupo de codex la idea es eso que se pueda tener una revision". Taken as: the cap is not the
+  criterion, a working review is; so both are built now and the numbers of T12 choose the
+  default. T6 and T7 are rewritten for it:
+  - The answer is read from the review sub-agent's rollout file (the session whose
+    `session_meta` source is `{"subagent":"review"}`, its last assistant message), which
+    exists only under the lean session, so structured findings are a lean-session feature.
+  - The schema is the one the rubric sends (read from the kept home, CLI 0.160.1):
+    `findings[]` of `title`, `body`, `confidence_score` 0 to 1, `priority` 0 to 3
+    (optional), `code_location.absolute_file_path`, `code_location.line_range.start|end`;
+    `overall_correctness` ("patch is correct" or "patch is incorrect"),
+    `overall_explanation`, `overall_confidence_score`.
+  - `--prompt own` is a custom-target review: no `--base` on Codex's command line, the
+    prompt names the range and the command to see it, and `--doc` adds the Goal and the
+    Done when of the feature document. `--prompt codex` (default) is today's `--base`.
+  - On the cap (my reading of his sentence, to be corrected by him if wrong): a single run
+    that proves a piece on the real binary is announced with its count and run without
+    waiting; the batch of T12 is still put to him with its count first, as he asked at the
+    start.
+- 2026-10-07: T6 and T7 built by one delegated writer (route: delegated, the writer trigger:
+  ten files), test first. Not checked off until a real review under `--prompt own` shows
+  the answer read from a real rollout file.
+  - RED seen, then GREEN, per piece: the shared walk `rolloutPaths` (missing export → 25 of
+    25); `bin/lib/codex-review-answer.mjs` (module not found → 28 of 28);
+    `bin/lib/codex-review-prompt.mjs` (module not found → 14 of 14); `runFindings` and
+    `runPrompt` in the run log's reader (missing export → 19 of 19); the command (16 of 19
+    new tests red → 150 of 150 for the whole file, 209 s). The parent re-ran the four module
+    files: 86 of 86, 8 s.
+  - The prompt goes on stdin: `codex exec review --help` (0.160.1) says a PROMPT of `-` is
+    read from stdin, so no multi-line text crosses the Windows command line. The lean argv
+    under `--prompt own` is the lean one with `-` in place of `--base <base>`.
+  - What the writer decided where the brief was open: a failure of Codex itself keeps its own
+    reason and exit code, then an unreadable answer is `failed` (exit 1, no review record),
+    then the evidence rule; a lean home with no rollout file is now `failed` where it was
+    `reviewed`; the five new fields of a run line (`prompt`, `promptVersion`, `findings`,
+    `verdict`, `answerSource`) are always present and `null` under `current`; Codex's
+    rendered review is still printed, with the `file:line severity title` lines and the
+    verdict after it; the schema lets unknown fields pass, does not enforce the 80-character
+    title, takes `null` for `priority` and `overall_confidence_score`, refuses an end before
+    a start, and accepts JSON inside a fence or after a sentence, as Codex's own parser
+    does; the prompt takes full commit ids, and with an intent says the change may be one
+    step, so a criterion not reached yet is not a finding by itself; `--doc` is resolved
+    from `--cwd`, each section cut at 2,000 characters, read with `parseContract`.
+  - The evidence rule is unchanged and holds under `own`, since the prompt names
+    `git diff <from> <head>`.
 
 ## Follow-ups
 - From gentle-ai's review of `7529f67`, with the next change to the command's tests:

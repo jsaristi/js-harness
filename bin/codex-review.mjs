@@ -31,19 +31,39 @@
 // session is ephemeral in the user's own home, which this command never reads: its tokens are not known,
 // and the run line says so with `null`, never with a zero.
 //
+// What a review answered is read from that home too. Codex's rubric makes the review end with its findings
+// as JSON, which `--json` prints only rendered as text; the JSON is the last message in the rollout file of
+// the review's sub-agent (`bin/lib/codex-review-answer.mjs`). Under the lean session it is read, checked
+// against a schema, printed as one line per finding and counted in the run line. A lean review whose answer
+// cannot be read that way is a failed attempt, and no review is recorded. The `current` session has no such
+// file, so it is as it was: the rendered text passed through, and no findings as data.
+//
+// What a review is asked is chosen with `--prompt`, for the lean session alone. `codex`, the default, is
+// `--base <merge-base>` with the sentence Codex writes itself. `own` is this command's prompt
+// (`bin/lib/codex-review-prompt.mjs`): it names the committed range and the command that shows it, and with
+// `--doc <feature document>` carries that document's Goal and Done when, to judge the change against.
+// `--base` and a prompt exclude each other on Codex's command line, so under `own` there is no `--base`
+// there, and the prompt goes in on stdin (`-`): it has newlines, and may hold quotes, `%` and `&`, none of
+// which the one command line `cmd.exe` runs on Windows can carry. Codex's rubric applies under either, so
+// the answer is read the same way; which prompt becomes the default is decided by a comparison.
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
 // were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time, what
-// the rollout files say it spent (tokens, requests, threads) and what Codex's events say it did (turns,
-// items by type, commands). A reviewed record names its run line by id; a run line is a measurement and
+// the rollout files say it spent (tokens, requests, threads), what Codex's events say it did (turns,
+// items by type, commands), the prompt it was asked with and, when its answer was read, the findings by
+// severity and the verdict. A reviewed record names its run line by id; a run line is a measurement and
 // never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
+import { IntentError, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -53,12 +73,22 @@ import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. Only the lean session keeps anything
 // there, the Codex home of its run; under `current` the flag is read and nothing uses it. `--keep-home`
-// leaves that home after the run, so it needs the session that has one.
+// leaves that home after the run, so it needs the session that has one. `--prompt own` and its `--doc`
+// are configurations of the lean session too: `--doc` is a path, taken from `--cwd` when it is relative.
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]';
+  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--prompt <codex|own>] [--doc <feature document>] [--keep-home] ' +
+  '[--unavailable <reason>] [--cwd <path>] [--home <path>]';
 
 // The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
 const SESSIONS = ['current', 'lean'];
+
+// What the review is asked with; the first is the default. `codex` is the sentence Codex writes itself for
+// `--base`, `own` this command's prompt (`reviewPrompt`).
+const PROMPTS = ['codex', 'own'];
+
+// The PROMPT argument that makes `codex exec review` read its prompt from stdin (its `--help`, 0.160.1:
+// "If `-` is used, read from stdin").
+const PROMPT_ON_STDIN = '-';
 
 class ArgError extends Error {}
 
@@ -83,7 +113,12 @@ function parseArgs(argv) {
   if (!SESSIONS.includes(session)) throw new ArgError('--session must be `current` or `lean`');
   const keepHome = argv.includes('--keep-home');
   if (keepHome && session !== 'lean') throw new ArgError('--keep-home needs --session lean: only the lean session has a Codex home of its own to keep');
-  return { base, unavailable, session, home, keepHome, cwd: get('--cwd') ?? process.cwd() };
+  const prompt = get('--prompt') ?? PROMPTS[0];
+  if (!PROMPTS.includes(prompt)) throw new ArgError('--prompt must be `codex` or `own`');
+  if (prompt === 'own' && session !== 'lean') throw new ArgError('--prompt own needs --session lean: this command\'s own prompt is a configuration of the lean session');
+  const doc = get('--doc');
+  if (doc !== undefined && prompt !== 'own') throw new ArgError('--doc needs --prompt own: only this command\'s own prompt carries the intent of a feature document');
+  return { base, unavailable, session, home, keepHome, prompt, doc, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -158,10 +193,17 @@ const leanFlags = (platform) => [
  * one that loads only what a review needs. `platform` is where Codex runs: the lean list has one more
  * setting on `win32`, and the current one is the same everywhere. The global `AGENTS.md` is in neither
  * list: no flag leaves it out, only a home of the review's own, which `codexReviewMain` sets for `lean`
- * in the environment (`leanEnv`). */
-export function codexArgs(base, session = 'current', platform = process.platform) {
-  if (session === 'lean') return ['exec', 'review', '--json', ...leanFlags(platform), '--base', base];
+ * in the environment (`leanEnv`).
+ *
+ * `prompt` is what the review is asked with. `codex`, the default, is `--base <base>`: Codex writes the
+ * sentence itself. `own`, for the lean session alone, is a custom-target review: no `--base`, which Codex
+ * refuses beside a prompt, and `-` in its place, so Codex reads the prompt from stdin; `base` is then in
+ * that prompt and not in this list. */
+export function codexArgs(base, session = 'current', platform = process.platform, prompt = 'codex') {
+  if (!PROMPTS.includes(prompt)) throw new Error(`Unknown prompt ${JSON.stringify(prompt)}: it must be \`codex\` or \`own\`.`);
+  if (session === 'lean') return ['exec', 'review', '--json', ...leanFlags(platform), ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
   if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
+  if (prompt !== 'codex') throw new Error('The own prompt is a configuration of the lean session: the current one is asked with Codex\'s sentence.');
   return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
 }
 
@@ -345,12 +387,13 @@ function codexVersion(spawn, platform, env) {
 /** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
  * error }`. Unlike `spawnSync` it cannot be held by a grandchild that keeps the pipe open: on the
  * timer or an overflow past `maxBuffer` it kills the tree and resolves at once, without waiting for
- * the child to close. `onLine` gets each complete stdout line as it arrives.
+ * the child to close. `onLine` gets each complete stdout line as it arrives. `input`, when given, is
+ * written to the child's stdin, which is then closed: the review prompt, for a Codex told to read it there.
  *
  * On Windows the child is the `cmd.exe` shim, and killing only it leaves Codex running with the stdout pipe
  * open, so the whole tree goes: found by `bin/lib/process-tree.mjs` from when the child was spawned, never by
  * parent pid alone (`kill(child, { startedAt })`). Elsewhere the child leads its own process group. */
-function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBuffer, onLine, signals }) {
+function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBuffer, onLine, signals, input }) {
   return new Promise((resolve) => {
     let settled = false;
     let stdout = '';
@@ -410,6 +453,17 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
     });
     child.on('error', (error) => finish({ error }));
     child.on('close', (status, signal) => finish({ status, signal }));
+    if (input !== undefined) {
+      if (!child.stdin) {
+        // Codex was told to read its prompt from stdin and would wait there until the timeout.
+        stop(Object.assign(new Error('Codex was started with no stdin to read the review prompt from'), { code: 'ENOSTDIN' }));
+        return;
+      }
+      // A child that ends before it has read the prompt closes the pipe under the write: how it ended is
+      // what gets reported, by `close`, so the write's own error is dropped instead of thrown.
+      child.stdin.on('error', () => {});
+      child.stdin.end(input);
+    }
   });
 }
 
@@ -480,6 +534,32 @@ function spentLine(spent, items, durationMs, lean) {
   );
 }
 
+/** A text on one line: a title or an explanation the model wrapped must not break the line it is printed in. */
+const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
+
+/** The answer of a review (`normalizeAnswer`) as lines: one per finding, `file:start-end severity title`
+ * (`file:start` for a single line, and `-` for a finding the model gave no priority), then the verdict
+ * with its explanation. The body of each finding is not repeated here: it is in the review as Codex
+ * rendered it, which is passed through above these lines. */
+function answerLines({ findings, verdict, explanation, confidence }) {
+  const lines = findings.map(({ file, start, end, severity, title }) => `${file}:${start === end ? start : `${start}-${end}`} ${severity ?? '-'} ${oneLine(title)}`);
+  const sure = confidence === null ? '' : ` (confidence ${confidence})`;
+  return [...lines, `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd()];
+}
+
+// How many errors of an answer off its schema are named in the reason; the rest are counted.
+const ANSWER_ERRORS_SHOWN = 3;
+
+/** Why the answer of a lean review could not be read as data (a `rolloutAnswer` that is not `ok`), as the
+ * run log and the error say it. */
+function answerFailure({ reason, errors = [] }) {
+  if (reason === 'no-review-session') return 'its Codex home holds no session of the review sub-agent, so there is no answer to read';
+  if (reason === 'no-answer') return 'the session of the review sub-agent holds no answer';
+  if (reason === 'not-json') return 'the answer of the review is not JSON';
+  const more = errors.length > ANSWER_ERRORS_SHOWN ? `; and ${errors.length - ANSWER_ERRORS_SHOWN} more` : '';
+  return `the answer of the review is off its schema (${REVIEW_ANSWER_SCHEMA_VERSION}): ${errors.slice(0, ANSWER_ERRORS_SHOWN).join('; ')}${more}`;
+}
+
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
  * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now` (the wall clock, for the dates),
@@ -503,6 +583,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (!(err instanceof ArgError)) throw err;
     error(`${err.message}\n\n${USAGE}`);
     return 2;
+  }
+  // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
+  // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.
+  let intent = null;
+  if (args.doc !== undefined) {
+    try {
+      intent = reviewIntent(fs.readFileSync(path.resolve(args.cwd, args.doc), 'utf8'));
+    } catch (err) {
+      error(`--doc ${args.doc}: ${err instanceof IntentError ? err.message : `cannot read it (${err.code ?? err.message})`}\n\n${USAGE}`);
+      return 2;
+    }
   }
 
   const root = git(spawn, args.cwd, ['rev-parse', '--show-toplevel']);
@@ -565,6 +656,20 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const { session } = args;
     const lean = session === 'lean';
+    // This command's own prompt, for the range the record will claim: from the merge-base to the commit
+    // HEAD is now, both by id, so what the model is told to diff cannot move under it. `undefined` under
+    // the default prompt, where Codex writes its sentence from `--base`. Built before anything is made
+    // or launched, so a range that cannot be named leaves nothing behind.
+    const own = args.prompt === 'own';
+    let promptText;
+    if (own) {
+      try {
+        promptText = reviewPrompt({ from, head, intent });
+      } catch (err) {
+        error(`Could not write the review prompt (${err.message}), so the review was not started and nothing was recorded.`);
+        return 1;
+      }
+    }
     // The lean session's own Codex home, named after the run: the id is made here, before the launch,
     // and the run line reuses it. Until the home exists nothing is launched, so a failure here writes no
     // run line and no record. `current` makes no id yet, no folder, and never asks where the home is.
@@ -604,24 +709,29 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // `current` is ephemeral, which writes none, in the user's own home, which this command never reads:
     // nothing is known of it, and that stays `null`.
     let spent = noRolloutReading();
+    // What the review answered, as `rolloutAnswer` gives it, from the same rollout files and so for `lean`
+    // alone; `null` under `current`, where no answer is read and none is asked for.
+    let answered = null;
     try {
-      log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})` : ''}; this can take several minutes.`);
+      const how = lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})${own ? ' and this command\'s own prompt' : ''}` : '';
+      log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${how}; this can take several minutes.`);
       startedAt = now();
       launchedAt = readClock(monotonicNow);
-      // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
-      // stays live.
-      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform), {
+      // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt
+      // under the own one; stdout carries the JSONL, stderr (the progress) stays live.
+      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform, args.prompt), {
         cwd: root,
-        stdio: ['ignore', 'pipe', 'inherit'],
+        stdio: [own ? 'pipe' : 'ignore', 'pipe', 'inherit'],
         env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
-      }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
+      }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals, input: promptText });
       endedAt = readClock(monotonicNow);
     } finally {
       // The lean home goes on every way out, whatever the review came to: Codex has ended or was
-      // killed. Its rollout files are read first, since they go with it. What could not be cleaned is a
-      // warning and never changes how the attempt ends.
+      // killed. Its rollout files are read first, since they go with it: what the session spent, and what
+      // the review answered. What could not be cleaned is a warning and never changes how the attempt ends.
       if (leanHome) {
         spent = rolloutReading(leanHome.home);
+        answered = rolloutAnswer(leanHome.home);
         const left = leanHome.dispose({ keep: args.keepHome });
         if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
         // The path comes last, so that it can be copied whole. Kept is not for ever: the folder is still
@@ -639,6 +749,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const evidence = reviewEvidence(events, expected);
     // The turns, the items and the commands of the session. Its `usage` is left out on purpose: see `spent`.
     const reading = sessionReading(events);
+    // The answer as this command keeps it, when there is one that is valid: under `lean` alone. It is kept
+    // in the run line whatever the attempt comes to, as what it spent is: a measurement.
+    const review = answered?.ok ? normalizeAnswer(answered.answer, { root, platform }) : null;
     /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
      * could not be built or written: the measurement is lost and said so, and the attempt ends as it
      * would. Building the line is inside the `try` for that reason: its id and its date come from
@@ -662,6 +775,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           // config sets them and Codex's events do not name them, so they are `null`, not a guess.
           model: lean ? LEAN_MODEL : null,
           effort: lean ? LEAN_EFFORT : null,
+          // What the review was asked with, and the version of the text when it is this command's own.
+          prompt: args.prompt,
+          promptVersion: own ? REVIEW_PROMPT_VERSION : null,
           // The four counts, each `null` when it is not known, and where they were read from: `rollout`,
           // or `null` when none was. A line written before `usageSource` existed took its `usage` from
           // Codex's events (`bin/lib/codex-review-runs.mjs`).
@@ -674,6 +790,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           items: reading.items,
           commands: reading.commands,
           coverage: evidence.coverage,
+          // What the review answered, read as data: how many findings, by severity, and the verdict, with
+          // where they were read from. All `null` when no answer was read (`current`) or none was valid,
+          // which is never the same as a review that found nothing: that one counts 0.
+          findings: review ? findingCounts(review.findings) : null,
+          verdict: review ? review.verdict : null,
+          answerSource: review ? 'rollout' : null,
         };
         appendCodexReviewRun(root, run, { spawn });
         return run.id;
@@ -684,6 +806,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     };
     for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
     if (evidence.review) write(`${evidence.review}\n`);
+    if (review) for (const line of answerLines(review)) log(line);
     log(spentLine(spent, reading.items, durationMs, lean));
     if (result.status !== 0 || !evidence.completed) {
       const reason = result.error?.code === 'ENOBUFS'
@@ -698,6 +821,15 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
       error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
       return typeof result.status === 'number' && result.status !== 0 ? result.status : 1;
+    }
+    // A lean review answers in a structure this command reads. A turn that completed and left no such
+    // answer did not do what a review does, so the attempt failed, whatever its commands showed: asked
+    // before the evidence rule, which says how much of the diff was read and nothing of what came of it.
+    if (answered && !answered.ok) {
+      const why = answerFailure(answered);
+      logRun('failed', why);
+      error(`Codex's turn completed, but ${why}; no record was written.\n${WAYS_ON}`);
+      return 1;
     }
     if (!evidence.inspected) {
       const { seen, total } = evidence.coverage;

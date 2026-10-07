@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { noRolloutReading, rolloutReading, sessionReading } from './codex-usage.mjs';
+import { noRolloutReading, rolloutPaths, rolloutReading, sessionReading } from './codex-usage.mjs';
 
 // The events `codex exec --json` prints, already parsed (`parseEvents` in ../codex-review.mjs): fixtures
 // only, no test here launches Codex.
@@ -315,4 +315,18 @@ test('rolloutReading: an empty home path reads nothing, and never the working di
   } finally {
     process.chdir(cwd);
   }
+});
+
+test('rolloutPaths: the rollout files of a home, at any depth, by file name and then by path; none for what is no home', () => {
+  const home = fakeHome();
+  // Written in another order than their names, and in folders whose order disagrees with the names.
+  const late = rollout(home, 'rollout-2026-10-07T05-34-09-zzzz.jsonl', [meta], ['2026', '10', '06']);
+  const early = rollout(home, 'rollout-2026-10-07T05-34-02-aaaa.jsonl', [meta], ['2026', '10', '07', 'deeper']);
+  const twin = rollout(home, 'rollout-2026-10-07T05-34-02-aaaa.jsonl', [meta], ['2026', '10', '05']);
+  rollout(home, 'history.jsonl', [meta]);
+  rollout(home, 'rollout-notes.txt', [meta]);
+  fs.mkdirSync(path.join(home, 'sessions', 'rollout-a-folder.jsonl'));
+  fs.writeFileSync(path.join(home, 'rollout-2026-outside-sessions.jsonl'), '{}\n', 'utf8');
+  assert.deepEqual(rolloutPaths(home), [twin, early, late]);
+  for (const none of [undefined, null, '', 7, {}, path.join(home, 'nowhere')]) assert.deepEqual(rolloutPaths(none), [], JSON.stringify(none));
 });

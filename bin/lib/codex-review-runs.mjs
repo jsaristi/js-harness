@@ -25,6 +25,15 @@
 // `turn.completed` events reported, which for `exec review` on codex-cli 0.160.0 is zeros by construction
 // and not a measurement (`rolloutReading` in ./codex-usage.mjs has the source). Read such a `usage` as
 // unknown, not as a review that cost nothing.
+//
+// What a review was asked and what it answered. `prompt` is `codex`, a `--base` review with the sentence
+// Codex writes itself, or `own`, this harness's prompt (`./codex-review-prompt.mjs`), whose version is then
+// `promptVersion`; under `codex` that is `null`. `findings` (`total`, and `bySeverity` with `P0` to `P3` and
+// `none`), `verdict` (`correct` or `incorrect`) and `answerSource` (`rollout`) are there when the review's
+// answer was read as data (`./codex-review-answer.mjs`), which only a lean attempt can be; otherwise all
+// three are `null`. The schema stayed `v1` here too, so a line written before these fields has none of
+// them: a reader takes a missing `prompt` as `codex`, the only one there was (`runPrompt`), and missing
+// findings as no data (`runFindings`), which is never a review that found nothing.
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
@@ -35,6 +44,21 @@ const FILE = 'codex-review-runs.jsonl';
  * `current`, which is what every line written before the field existed ran in. */
 export function runSession(run) {
   return run?.session === 'lean' ? 'lean' : 'current';
+}
+
+/** The prompt a run line's review was asked with: its `prompt` when that is `codex` or `own`, else
+ * `codex`, which is what every line written before the field existed was asked with. */
+export function runPrompt(run) {
+  return run?.prompt === 'own' ? 'own' : 'codex';
+}
+
+/** The counts of the findings of a run line, `{ total, bySeverity }`, or `null` when the line holds none:
+ * it was written before the answer was read as data, it ran in the `current` session, or its answer could
+ * not be read. Only counts that say they were read from an answer (`answerSource`) are given, so `null` is
+ * told apart from a review that found nothing, whose `total` is 0. */
+export function runFindings(run) {
+  const findings = run?.answerSource === 'rollout' ? run.findings : null;
+  return Number.isInteger(findings?.total) && findings.total >= 0 ? findings : null;
 }
 
 /** `<git common dir>/js-harness/codex-review-runs.jsonl` for the repository at `root`, or `null` when
