@@ -917,6 +917,14 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   `codex-review-lean` to land and review with it, or record a skip with `--unavailable` and go
   on to the push. The parent's recommendation is to wait: the skip would push 3,356 changed
   lines that no Codex review read, and the lean review is being proven in its own session now.
+- 2026-10-07, about 04:36 local: a false wake of a new kind. The watch returned with
+  `plan odd/tasks/codex-review-lean.md appeared in D:/js-harness-worktrees/codex-review-lean-probe:
+  4/15 done`, for a worktree and a plan the board had shown unchanged all night. So one look in
+  between did not list that plan (the other session was running git in its worktrees at the
+  time, the likely cause), and the next look read its return as an appearance. A plan that
+  cannot be listed on one look is told apart from an absent one for a first look (T5b); the same
+  is owed between two looks. A follow-up for T7's judgement, with the other wakes that ask
+  nothing.
 
 ## Next step
 Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
