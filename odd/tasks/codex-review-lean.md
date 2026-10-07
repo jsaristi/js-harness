@@ -66,8 +66,8 @@ a feature; a cheaper one that finds less is not, which is why the switch waits o
 - `check --push` keeps reading `codex-reviews.jsonl` as it does — because a failed attempt must
   never count as a review. Attempts and their measurements go to a second file in the same
   folder of the git common dir, which deleting undoes exactly.
-- `AGENTS.md` is at 1,497 of 1,500 estimated tokens — so a line changes there only by replacing
-  words, and the gate measures it.
+- `AGENTS.md` is at 1,500 of 1,500 estimated tokens (1,497 when this feature opened) — so a
+  line changes there only by replacing words, and the gate measures it.
 - Zero dependencies, and the review's prompt and schema ship inside `bin/` — because
   `package.json` publishes `bin/` and `AGENTS.md` only, and every command runs with no install.
 - Never two gates at once; a commit runs in the background; after a failed gate `git config
@@ -521,6 +521,13 @@ What follows from it:
   F6 (`codex-parity`) was paused on 0.160.0. Whether the review runs on 0.160.1 or waits for
   0.160.0 to be put back is Sebastián's decision; the question is pending. The `icacls`
   reading taken before the run that did not happen is discarded.
+- 2026-10-07: the question above was read three times as a task for him to run in Codex,
+  because its block was worded as an instruction. Sebastián approved a closing format of
+  four states for every reply and asked for it to be fixed in the harness. Done here, as
+  prose: `AGENTS.md` reworded (1,500 of 1,500 tokens) and `docs/ROADMAP.md`, Next, item 6,
+  which holds the format and what is left to build (a check, in that feature's own
+  session). No code changed. The question about the CLI version is still pending and is
+  asked again in that format once this commit is in.
 
 ## Follow-ups
 - From gentle-ai's review of `7529f67`, with the next change to the command's tests:

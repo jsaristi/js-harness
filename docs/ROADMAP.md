@@ -233,11 +233,34 @@ work) these tasks do not measure.
    him, and a plain "nothing to send" when the agent goes on by itself (he could not tell the
    two apart and sent stale prompts twice). A notice when a session finishes, saying which
    session to return to. And the context window watched, with its percentage reported and a
-   cut proposed before auto-compact (this session reached 77% of 500k unnoticed). Today all
-   three live in prose: `AGENTS.md` (at 1,497 of 1,500 tokens, and its "exactly one prompt in
-   every reply" now contradicts the first) and the agent's memory. A feature of its own, in its
-   own session: what a hook, the status line or `js-harness` can check or print, so the prose
-   can shrink.
+   cut proposed before auto-compact (this session reached 77% of 500k unnoticed). A feature of
+   its own, in its own session: what a hook, the status line or `js-harness` can check or
+   print, so the prose can shrink.
+
+   The format of the first is decided (Sebastián, 2026-10-07, "usá ese formato y cementalo en
+   el harness"), after a block worded as an instruction ("run the lean review on Codex
+   0.160.1") was read three times as a task for him to do in Codex. Every reply closes with
+   one state of four:
+   - working: he sends nothing; the reply says what wakes the agent and what it reports next.
+     No block.
+   - decision: the work waits on him. One block.
+   - cut: a compact (two numbered blocks, the bare `/compact` and the resume prompt) or a new
+     session.
+   - finished: the session closed; the reply names the session he returns to. No block.
+
+   A block sits under three fixed lines: what it is (for example "leave to spend one Codex
+   review"), where it is sent (this chat) and what sending it does (the agent runs it; he
+   runs nothing). The text of a decision is his answer in his words, as short as "Sí", never
+   a technical instruction; the question, with its cost, goes above it in plain words. The
+   resume prompt of a cut is the one long text, labelled as text to paste, not to understand.
+   A decision is never asked while work still runs: the agent waits for it to end. A decision
+   asked again says first that the earlier answer still holds and what changed.
+
+   Where it lives today: `AGENTS.md`, "Working with Sebastián", reworded to the four states on
+   `feat/codex-review-lean` (1,500 of 1,500 tokens, so the next rule added needs one removed),
+   and the agent's memory. It reaches the other worktrees when that branch merges. Still to
+   build in this feature: a check that refuses a reply that closes with none of the four
+   states, so the rule stops depending on the agent reading prose.
 
 ## Stack doctor notes
 
