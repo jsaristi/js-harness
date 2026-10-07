@@ -271,8 +271,10 @@ export async function sessionsMain(
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
   // Where the session that orchestrates this project keeps its notes: one file per project under the
-  // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`.
-  const reliefFile = path.resolve(parsed.relief ?? path.join(env.JS_HARNESS_HOME ?? homedir(), '.js-harness', 'relief', `${slug}.md`));
+  // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`. An empty
+  // JS_HARNESS_HOME is no home: joined as it is, it would put the file under the folder the command runs
+  // in. A relative `--relief` is read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
+  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(env.JS_HARNESS_HOME || homedir(), '.js-harness', 'relief', `${slug}.md`));
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 

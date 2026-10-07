@@ -375,12 +375,18 @@ compared. A fact that could not be read at one look is not compared at that look
 to compare with keeps its last readable value (`watchBaseline`), so a failed `gh` call or a busy
 transcript neither wakes the watch nor hides the change that happens across it. Which gates are
 compared depends on the worktrees, so a look that could not list them compares no gate and the
-board to compare with keeps the gates it had.
+board to compare with keeps the gates it had. The worktrees say which gates are watched, never
+whether one runs: a gate started when its pid is on no gate of the older board and ended when it
+is on none of the newer one, so a worktree removed or added under a running gate is neither. A
+gate still running after its worktree was removed is no longer watched, and its end is not said.
 
 The relief file. The board's last section, `Relief`, after the pull requests: the path of the
 orchestrator's relief file, how many lines it holds and the last five of them, blank lines apart
 (the whole file is one read away, so no flag asks for more). The path is the one under "The
-orchestrator", or `--relief <path>`. A file that is not there yet is said as that, with the path
+orchestrator", or `--relief <path>`. A relative `--relief` is read from the folder the command
+runs in, not from `--cwd`: `--claude-home` and `--tmp` are handed to the file system as given,
+which is the same folder. An empty `JS_HARNESS_HOME` is no home, and the user's is used. A file
+that is not there yet is said as that, with the path
 the first line would create; one that is there and cannot be read is unavailable with the reason.
 `--json` has it as `relief`: `{ path, exists: false }`, `{ path, exists: true, lineCount, lines }`
 or `{ path, unavailable }`. It is read at every look and never written.
@@ -448,6 +454,7 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
 - [x] T5 `sessions --watch`: the command waits and returns when the board changes (a session starts waiting, its open work changes, a gate starts or ends, a pull request opens or closes, a feature's plan changes, a context passes the threshold), printing what changed, at no cost while nothing changes; the board also gains each session's context size and each worktree's feature plan (document, done and total, next step) — route: delegated writer
 - [x] T5b Accepted follow-ups of the third review: `R3-watch-wait-upper-bound`, `R3-task-only-end-between-followup-call-and-result`, `R3-new-session-first-look-unreadable`, `R3-tool-result-without-recorded-call`, `R3-plan-listing-quoted-names-and-doc-drift`; and the context limit as a percentage of a window (`--context-window`, `--context-limit <N>%`) — route: delegated writer
 - [x] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected; with it the board's `Relief` section and the watch comparing only gates of the project's worktrees — route: delegated writer
+- [x] T6b Accepted follow-ups of the fourth review: `R3-watched-gates-follow-worktree-set`, `R3-relief-path-base-untested`, `R3-usage-error-test-names-collide` — route: delegated writer
 - [ ] T7 On this machine, on Sebastián's word: `js-harness install`, the orchestrator session opened with the skill, and one real stretch with two sessions supervised by it, recorded here — route: inline
 
 ## Progress
@@ -784,10 +791,54 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
     4. not established: whether Codex loads the skill, and whether Claude Code triggers it
        from its description.
 
+- 2026-10-06: `1acbf06` (T6) committed, gate green. gentle-ai assessed `24e1786..1acbf06` (T5b
+  and T6 together) as medium and due (`slice_budget_reached`); consent granted, one consolidated
+  reviewer, approved, lineage `review-a2d969e2a2b702a5`, acknowledged. Three advisory findings,
+  all SUGGESTION, all accepted as T6b:
+  - `R3-watched-gates-follow-worktree-set` (`bin/lib/sessions.mjs:599-601`): which gates a watch
+    compares is recomputed from each board's own worktree list, so a worktree removed or added
+    between two looks reads as a gate ending or starting, where the design says a removed
+    worktree wakes nobody.
+  - `R3-relief-path-base-untested` (`bin/sessions.mjs:275`): a relative `--relief` ignores
+    `--cwd`, and a `JS_HARNESS_HOME` set to the empty string passes the nullish check and puts
+    the relief file under the folder the command runs in.
+  - `R3-usage-error-test-names-collide` (`bin/sessions.test.mjs:166`): two generated test names
+    are equal once cut to 60 characters.
+  The reviewer's full claims are outside the repository, in
+  `D:\js-harness-worktrees\sb-g-findings.txt`.
+- 2026-10-06, found by the parent while preparing T7: the `js-harness` on this machine's PATH is
+  not this checkout. `command -v js-harness` gives `C:\Users\Oficina\AppData\Local\pnpm\bin\js-harness`,
+  a shim of a global pnpm install from the GitHub repository dated 2026-09-28, and `js-harness
+  sessions` run through it answers `Unknown command: sessions`. The skill names its commands as
+  bare `js-harness <cmd>`, like the first skill, so an orchestrator opened today could not run
+  them. T7 therefore needs, in this order: this branch merged to `main`, that global install
+  brought up to `main` (it is his machine's install, so on his word), `js-harness install`, and
+  only then the orchestrator session. `js-harness status --global` here says `installed package
+  version: 0.1.0`, `manifest version: (not installed)`.
+- Commits of the feature, all on `feat/session-board`, nothing pushed: `875c5d9`, `5a79a0d`,
+  `6c92d93`, `df1ad94`, `24e1786`, `0989fc0`, `1acbf06`. Reviewed by gentle-ai up to `1acbf06`.
+  No Codex review yet; the pre-push hook refuses the branch until one covers the code commits or
+  a skip is recorded, and that is Sebastián's decision because it spends quota. Asked on
+  2026-10-06, not answered yet.
+
+- 2026-10-06: T6b written by the same writer as T6, parent spot check `node --test
+  bin/lib/sessions.test.mjs bin/sessions.test.mjs bin/js-harness.test.mjs`: 230 pass, 0 fail.
+  All three claims held. A gate now starts or ends by its pid across all the gates of the two
+  boards, and the worktrees only decide which gates are watched; one consequence, written in the
+  design: a gate still running after its worktree was removed is no longer watched, so its end
+  is not said. A relative `--relief` stays relative to the folder the command runs in, like
+  `--claude-home` and `--tmp`, none of which resolves against `--cwd`; that is now pinned by a
+  test instead of changed. An empty `JS_HARNESS_HOME` falls back to the OS home.
+  - Found outside this feature, not touched: every other command reads the harness home as
+    `env.JS_HARNESS_HOME ?? os.homedir()` (`bin/remote.mjs:88`, `bin/install.mjs:21` and `:63`,
+    `bin/update.mjs:22` and `:92`, `bin/doctor.mjs:39`, `bin/check.mjs:518`, `bin/init.mjs:40`,
+    `bin/tui.mjs:379`), so a variable set to the empty string makes the current folder the
+    home, and `install` would then write its manifest and skills there. A follow-up of its own.
+
 ## Next step
-T7, on Sebastián's word and not before: `js-harness install` on this machine (it writes four skill
-files under the real `~/.claude` and `~/.codex` and a manifest; `js-harness uninstall --global`
-removes them), then an orchestrator session opened with the skill's opening prompt and one real
-stretch supervised by it, recorded here with the four gaps above judged. The commit of T6 carries
-this entry; its hash and its review go in with T7's record. Before any push: his word, and his
-answer on the Codex review of the code commits (`875c5d9` to T6's).
+Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
+the push and the pull requests (two slices stacked to `main`, see Delivery), the merge, the
+global install brought up to `main`, and `js-harness install`. T7 closes with an orchestrator
+session opened with the skill's opening prompt and one real stretch supervised by it, recorded
+here with the four gaps of T6 judged. The commit of T6b carries this entry; its hash and its
+assessment go in with the next record.

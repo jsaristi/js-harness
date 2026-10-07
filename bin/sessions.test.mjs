@@ -162,8 +162,18 @@ const USAGE_ERRORS = [
   ['--relief'], ['--relief', ''], ['--relief', '--json'],
 ];
 
+/** A usage case as the name of its test says it: its arguments, a long run of digits as its length, so
+ * the name stays short without losing what comes after the digits. */
+const usageName = (argv) => JSON.stringify(argv).replace(/\d{20,}/g, (digits) => `<${digits.length} digits>`);
+
+// R3-usage-error-test-names-collide: a failure names its case, so two cases cannot share a name.
+test('every usage case has its own test name', () => {
+  const names = USAGE_ERRORS.map(usageName);
+  assert.deepEqual(names.filter((name, index) => names.indexOf(name) !== index), []);
+});
+
 for (const argv of USAGE_ERRORS) {
-  test(`sessionsMain exits 2 with its usage on stderr for ${JSON.stringify(argv).slice(0, 60)}`, async () => {
+  test(`sessionsMain exits 2 with its usage on stderr for ${usageName(argv)}`, async () => {
     const out = [];
     const err = [];
     const neverRun = () => {
@@ -688,6 +698,22 @@ test('--relief names the file, and one that cannot be read is unavailable with i
   const said = lines[lines.indexOf('Relief') + 1];
   assert.ok(said.startsWith(`  ${path.dirname(file)}  unavailable: `) && !said.endsWith(': '), said);
   assert.equal(lines.at(-1), NOT_VISIBLE);
+}));
+
+// R3-relief-path-base-untested: where a relief path that is not absolute lands.
+test('a relative --relief is read from the folder the command runs in, whatever --cwd says, like the other paths', withMachine(async (machine) => {
+  writeSessions(machine);
+  const file = path.join(machine.worktree, 'notes', 'relief.md');
+  writeAt(file, 'a note\n', 30);
+  const { code, stdout } = await runSessions(machine, ['--json', '--cwd', machine.root, '--relief', path.join('notes', 'relief.md')]);
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(stdout).relief, { path: file, exists: true, lineCount: 1, lines: ['a note'] });
+}));
+
+test('an empty JS_HARNESS_HOME is no home: the relief file is under the home folder, not under the folder the command runs in', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { stdout } = await runSessions(machine, ['--json'], { env: { JS_HARNESS_HOME: '' } });
+  assert.deepEqual(JSON.parse(stdout).relief, { path: machine.relief, exists: false });
 }));
 
 test('--watch does not return for a line appended to the relief file, and prints the file as it is when it does return', withMachine(async (machine) => {

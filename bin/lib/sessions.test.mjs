@@ -877,6 +877,20 @@ test('boardChanges compares no gate at a look that could not list the worktrees:
   assert.deepEqual(changes({ ...gates(gate(5, 'D:/a')), ...unlisted }, gates()), []);
 });
 
+// R3-watched-gates-follow-worktree-set: which gates are watched was worked out from each board's own
+// worktrees, so a list that changed under a running gate read as that gate ending or starting.
+test('boardChanges: a worktree removed or added while a gate keeps its pid is neither a gate that ended nor one that started', () => {
+  const on = (paths, ...items) => ({ gates: { available: true, items }, worktrees: { available: true, items: paths.map((path) => ({ path })) } });
+  const running = gate(5, 'D:/b');
+  assert.deepEqual(changes(on(['D:/a', 'D:/b'], running), on(['D:/a'], running)), [], 'its worktree is no longer listed');
+  assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a', 'D:/b'], running)), [], 'its folder became a worktree');
+  // The list changing does not hide a gate that really ends or starts at the same look.
+  assert.deepEqual(changes(on(['D:/a', 'D:/b'], running), on(['D:/a'])), ['gate ended in D:/b (pid 5)']);
+  assert.deepEqual(changes(on(['D:/a']), on(['D:/a', 'D:/b'], running)), ['gate started in D:/b (pid 5)']);
+  // And a gate in a folder that is no worktree yet is still not the "another" a new gate runs beside.
+  assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a'], running, gate(6, 'D:/a'))), ['gate started in D:/a (pid 6)']);
+});
+
 test('boardChanges: a pull request that opens and one that is no longer open', () => {
   const pr = (number) => ({ number, title: `feat: ${number}`, branch: `feat/${number}` });
   const prs = (...items) => ({ pullRequests: { available: true, items } });

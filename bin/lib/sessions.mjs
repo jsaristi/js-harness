@@ -601,12 +601,15 @@ function watchedGates(board) {
   return board.gates.items.filter((gate) => gate.worktree?.unavailable || trees.has(comparable(String(gate.worktree))));
 }
 
+/** A gate started when its pid is on no gate of the older board, and ended when it is on none of the
+ * newer one: the worktrees say which gates are watched, never whether one runs. So a worktree removed or
+ * added under a running gate is neither its end nor its start. */
 function gateChanges(before, after) {
   const was = watchedGates(before);
   const is = watchedGates(after);
   if (was === null || is === null) return []; // a listing that failed is not a gate that ended
-  const earlier = byKey(was, 'pid');
-  const now = byKey(is, 'pid');
+  const earlier = byKey(before.gates.items, 'pid');
+  const now = byKey(after.gates.items, 'pid');
   const lines = [];
   for (const gate of is) {
     if (earlier.has(gate.pid)) continue;
