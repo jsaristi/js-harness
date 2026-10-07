@@ -500,6 +500,27 @@ What follows from it:
   Recorded in `docs/ROADMAP.md`, Next, item 6, as a feature of its own; applied by hand until
   then. This session's context read 77% of 500k at that moment (auto-compact at 93%), so it is
   compacted before the next run.
+- 2026-10-07, after the compact: Sebastián approved that one lean review. It was not run,
+  because the Codex CLI on this host changed under the feature. Evidence:
+  - `codex --version` now prints `codex-cli 0.160.1`; the run line of 05:34Z records
+    `0.160.0`.
+  - The global pnpm package `@openai/codex` was replaced at 2026-10-07T05:51:18Z (its
+    `package.json` time; the global `package.json` now asks for `^0.160.1`).
+  - `~/.codex/version.json` holds `latest_version` `0.160.1`, checked at 05:51:04Z.
+  - One session file in the real home starts at 05:51:03Z and ends a second later with a
+    turn aborted: originator `codex-tui`, source `vscode`, `cli_version` `0.159.1`, cwd
+    `C:\Users\Oficina`. So another Codex client started then, and the update followed within
+    15 seconds.
+  - No command of this session did it: a search of every Claude transcript under
+    `~/.claude/projects` for a pnpm, npm or bun install of `@openai/codex` found none (the
+    pattern would match the command text of any Bash call that ran one).
+  What this session did in the real home to learn it: listed names and times, read
+  `version.json` and the six lines of that session file. It wrote nothing and did not open
+  `auth.json`.
+  Consequences: the reading of the source in this document is of tag `rust-v0.160.0`, and
+  F6 (`codex-parity`) was paused on 0.160.0. Whether the review runs on 0.160.1 or waits for
+  0.160.0 to be put back is Sebastián's decision; the question is pending. The `icacls`
+  reading taken before the run that did not happen is discarded.
 
 ## Follow-ups
 - From gentle-ai's review of `7529f67`, with the next change to the command's tests:
@@ -546,8 +567,10 @@ What follows from it:
 
 ## Next step
 T1 to T4 are done and T5 is written and corrected: the lean session sets its own Windows
-sandbox and reads its tokens from its rollout files. Next: Sebastián's go-ahead for one more
-lean review of `338386a..e3aad48` from the temporary worktree
+sandbox and reads its tokens from its rollout files. Blocked first on one answer: the Codex
+CLI became 0.160.1 on 2026-10-07 at 05:51Z, outside this session (Progress), so Sebastián
+says whether the approved review runs on 0.160.1 or waits for 0.160.0. Then: the one more
+lean review he approved of `338386a..e3aad48` from the temporary worktree
 (`D:js-harness-worktreescodex-review-lean-probe`, detached at `e3aad48`, removed after
 it), with `--keep-home` and inside the proof of the login:
 `node evals/review/login-proof.mjs --real-home C:UsersOficina.codex --out
