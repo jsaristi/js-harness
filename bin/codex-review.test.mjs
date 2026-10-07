@@ -12,7 +12,7 @@ import {
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
-import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
@@ -2724,6 +2724,8 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
   assert.deepEqual(Object.keys(runs[0]).slice(4, 9), ['base', 'from', 'head', 'part', 'outcome'], 'the part comes after the range it is a part of');
   // One record, of the shape `check --push` reads, for the whole range; it names the runs of its parts.
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(2), runs: [idOf(1), idOf(2)] }]);
+  // `check --push` counts a record only when this says it is one, so the fields of a review in parts must not unmake it.
+  assert.equal(isValidCodexReview(readCodexReviews(root)[0]), true);
   // What is said: that the range is split and why each part is asked as it is, each part as it starts, and the record.
   const lines = result.out.split('\n');
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
@@ -2732,6 +2734,69 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
   assert.ok(lines.includes(`Codex is reviewing part 1 of 2 of ${short} (2 files, 6 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
   assert.ok(lines.includes(`Codex is reviewing part 2 of 2 of ${short} (1 file, 2 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
   assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short}, made in 2 parts, in .*codex-reviews\\.jsonl\\.$`));
+});
+
+test('a run line of a part that cannot be written leaves its place empty in the record: `runs` has an entry for every part, and `run` is there only when the last part has its line', async () => {
+  const twoParts = (root, base, head, { first, second } = {}) => fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), during: first },
+    { stdout: partShown(root, base, head, 'c.txt'), during: second },
+  );
+  const review = async (root, fake) => {
+    const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, randomUUID: runIds() });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Recorded the Codex review of [0-9a-f]{7}\.\.[0-9a-f]{7}, made in 2 parts, in /);
+    const records = readCodexReviews(root);
+    assert.equal(records.length, 1);
+    // Whatever was lost of its measurements, it is a review of the range, and `check --push` takes it as one.
+    assert.equal(isValidCodexReview(records[0]), true);
+    return { result, record: records[0] };
+  };
+  const warnings = (result) => (result.err.match(/Could not write the run log, so what this attempt measured was not kept/g) ?? []).length;
+
+  // No part has its line: the log could not be written at all. The record still says there were two parts.
+  const none = makeThreeFileRepo();
+  blockRunLog(none.root);
+  const { result: lostBoth, record: unmeasured } = await review(none.root, twoParts(none.root, none.base, none.head));
+  const { run: _run, ...noRun } = reviewedRecord(none.base, none.head);
+  assert.deepEqual(unmeasured, { ...noRun, runs: [null, null] });
+  assert.equal(warnings(lostBoth), 2);
+
+  // The first part lost its line and the last has one: the log could be written from the second session on.
+  const early = makeThreeFileRepo();
+  blockRunLog(early.root);
+  const unblock = () => fs.rmSync(codexReviewRunsPath(early.root), { recursive: true });
+  const { result: lostFirst, record: lastMeasured } = await review(early.root, twoParts(early.root, early.base, early.head, { second: unblock }));
+  assert.deepEqual(lastMeasured, { ...reviewedRecord(early.base, early.head), run: idOf(2), runs: [null, idOf(2)] });
+  assert.deepEqual(readCodexReviewRuns(early.root).map((line) => [line.id, line.part.index]), [[idOf(2), 2]]);
+  assert.equal(warnings(lostFirst), 1);
+
+  // The last part lost its line: the record names no `run`, and the first part keeps its place in `runs`.
+  const late = makeThreeFileRepo();
+  const block = () => {
+    const log = codexReviewRunsPath(late.root);
+    fs.renameSync(log, `${log}.of-the-first-part`);
+    fs.mkdirSync(log);
+  };
+  const { result: lostLast, record: firstMeasured } = await review(late.root, twoParts(late.root, late.base, late.head, { second: block }));
+  const { run: _last, ...noLast } = reviewedRecord(late.base, late.head);
+  assert.deepEqual(firstMeasured, { ...noLast, runs: [idOf(1), null] });
+  assert.equal(warnings(lostLast), 1);
+});
+
+test('a lean range of more files than a part holds is reviewed in parts though it changes few lines, and says which bound it is over', async () => {
+  const names = Array.from({ length: 41 }, (_, index) => `f${String(index).padStart(2, '0')}.txt`);
+  const { root, base, head } = makeRepoWith(Object.fromEntries(names.map((name) => [name, 'one\n'])), Object.fromEntries(names.map((name) => [name, 'two\n'])));
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, ...names.slice(0, 40)) }, { stdout: partShown(root, base, head, names[40]) });
+  // The default bound of lines, 400, which 82 changed lines are far under.
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  assert.equal(result.out.split('\n')[0], `The range ${short} changes 82 lines in 41 files, more files than the 40 a part holds, so it is reviewed in 2 parts, one after another.`);
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => line.part), [{ index: 1, of: 2, files: 40, changedLines: 80 }, { index: 2, of: 2, files: 1, changedLines: 2 }]);
+  // The command the first part is told to run names forty files and stops there.
+  const asked = fake.calls[0].child.received.text;
+  assert.ok(asked.includes(`-- ${names.slice(0, 40).join(' ')}\``), asked);
+  assert.equal(asked.includes(names[40]), false);
 });
 
 test('the findings of every part are printed once, after the last part, by file and then by line, with the verdict of each part and the totals of them all', async () => {

@@ -11,10 +11,15 @@
 // the run as before it, so the lean home's link is gone. Bytes that changed in that same file are not a
 // failure: a refresh of the login through the link is meant to reach the real file.
 //
-// It calls no model and runs nothing of its own: it takes a snapshot, runs the command it is given (with
-// no shell, its output passed through), takes the snapshot again and writes a short Markdown report.
-// No shell means the command's first word must be a real executable, `node <script>` for one: a `.cmd`
-// shim, which is what `codex` and `npm` are on Windows, cannot be started that way.
+// It calls no model: it takes a snapshot, runs the command it is given (with no shell, its output passed
+// through), takes the snapshot again and writes a short Markdown report. No shell means the command's
+// first word must be a real executable, `node <script>` for one: a `.cmd` shim, which is what `codex` and
+// `npm` are on Windows, cannot be started that way.
+//
+// The one thing it runs of its own is a listing of the Codex processes alive, and only when something of
+// the home other than the login changed: a real home is written by every Codex client of the user, so such
+// a change may be another client's and not the command's, and the report names who was running
+// (`codexProcesses`) instead of leaving the reader to find out by hand.
 //
 // What it reads. Of `auth.json`: what a stat says and a SHA-256, to tell changed bytes from unchanged; the
 // bytes are never returned, printed or stored, and the report does not even hold that digest. Of every
@@ -164,14 +169,37 @@ const FOOTER =
   'A file is compared by size, date and SHA-256 (by size and date alone above 64 MiB or when it cannot be read); ' +
   'a folder by the count of its direct entries and its date, not by what is in it. No byte of any file is in this report.';
 
+// Said under the changes outside the login. A real home is not this tool's alone: the desktop app and any
+// other Codex session of the same user write their databases, caches and histories into it all the time,
+// so a change there is not shown to be the command's by having happened around it.
+const MAY_BE_ANOTHER = 'Another Codex client running on this machine may be what wrote these, and the proof cannot tell: it sees that the home changed, not who changed it.';
+
+/** The lines that say who else may have written: the sentence above, then the Codex `processes` alive at
+ * the end of the run (`{ list }`, as `codexProcesses` gives them, or `{ error }` with why they could not
+ * be listed; nothing at all reads as a listing that was not made). */
+function otherWriters(processes) {
+  if (!Array.isArray(processes?.list)) {
+    return [`${MAY_BE_ANOTHER} The Codex processes alive at the end of the run could not be listed (${processes?.error ?? 'no listing was made'}).`];
+  }
+  if (processes.list.length === 0) return [`${MAY_BE_ANOTHER} No Codex process was alive at the end of the run.`];
+  return [
+    `${MAY_BE_ANOTHER} Codex processes alive at the end of the run:`,
+    ...processes.list.map(({ name, pid, startedAt }) => `- \`${name}\`, pid ${pid}, ${startedAt ? `started ${startedAt}` : 'start time unknown'}`),
+  ];
+}
+
 /** The Markdown report of one proof: the date, the command and its exit code (`exitCode` is `null`, with
  * `startError`, when it could not be started), the verdict on the login, and every other top-level
  * change. It holds names, sizes, counts and dates; no byte of any file, and not the login's digest.
  *
+ * When something else changed, the report says that another Codex client may be the writer and names the
+ * Codex `processes` alive at the end of the run (see `otherWriters`), so the reader does not have to find
+ * out by hand; when nothing else changed it says nothing of them, whatever `processes` holds.
+ *
  * When the home could not be read after the command, `after` and `comparison` are `null` and
  * `afterError` says why: the report then tells what was read before, that nothing is known after, and
  * FAIL, since the proof is exactly the second reading. */
-export function report({ date, realHome, command, exitCode, startError, before, after, comparison, afterError }) {
+export function report({ date, realHome, command, exitCode, startError, before, after, comparison, afterError, processes }) {
   const lines = [
     '# Login proof: a real Codex home around one command',
     '',
@@ -219,9 +247,62 @@ export function report({ date, realHome, command, exitCode, startError, before, 
   lines.push(`- Verdict: ${auth.ok ? 'PASS' : 'FAIL'}, ${why}.`, '', '## Everything else at the top level of the home', '');
   lines.push(`${Object.keys(before.entries).length} entries before, ${Object.keys(after.entries).length} after.`, '');
   if (changes.length === 0) lines.push('Nothing else changed.');
-  else lines.push(...changes.map((change) => `- \`${change.path}\`: ${change.what}`));
+  else lines.push(...changes.map((change) => `- \`${change.path}\`: ${change.what}`), '', ...otherWriters(processes));
   lines.push('', FOOTER, '');
   return lines.join('\n');
+}
+
+// How long the listing of the processes may take: it is one question to the system, asked after the run
+// the proof is about, and a listing that hangs must not keep the report from being written.
+const LIST_TIMEOUT_MS = 15000;
+
+// What PowerShell is asked on Windows: one line a process whose name holds `codex`, with its id, when it
+// started (in UTC, in the round-trip format; empty when Windows does not say) and its name, a tab between
+// them. `Win32_Process` is asked, as in bin/lib/process-tree.mjs: `tasklist` gives no start time.
+const WINDOWS_LISTING =
+  "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'codex' } | ForEach-Object { " +
+  "$started = if ($_.CreationDate) { $_.CreationDate.ToUniversalTime().ToString('o') } else { '' }; " +
+  '($_.ProcessId, $started, $_.Name) -join [char]9 }';
+
+const WINDOWS_LINE = /^(\d+)\t([^\t]*)\t(.+)$/;
+// A line of `ps -o pid=,lstart=,comm=`: the id, a date as `Tue Oct  6 11:23:05 2026`, and the command.
+const PS_LINE = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+)$/;
+
+/** `text` as an ISO date, or `null` when it is none: Windows gives no start time for some processes. */
+function isoOf(text) {
+  const ms = Date.parse(text);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+/** The Codex processes alive now, each `{ name, pid, startedAt }` (`startedAt` an ISO date, or `null` when
+ * the system did not say), sorted by pid: every process whose name holds `codex` in any case, which takes
+ * in the CLI and the desktop app. On Windows (`platform` is `win32`) from PowerShell's
+ * `Get-CimInstance Win32_Process`, elsewhere from `ps`, whose command is named by its last part.
+ *
+ * Throws, saying why, when the listing could not be run or did not end well. Nothing of a process but
+ * those three is read: not its command line, which may hold what a report must not. */
+export function codexProcesses(platform = process.platform, spawn = spawnSync) {
+  const windows = platform === 'win32';
+  const command = windows ? 'powershell.exe' : 'ps';
+  const args = windows ? ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_LISTING] : ['-A', '-o', 'pid=,lstart=,comm='];
+  // `ps` writes the date in the language of the machine unless it is told not to. PowerShell is given the
+  // environment as it is.
+  const options = { encoding: 'utf8', timeout: LIST_TIMEOUT_MS, windowsHide: true, ...(windows ? {} : { env: { ...process.env, LC_ALL: 'C' } }) };
+  const ran = spawn(command, args, options);
+  if (ran.error) throw new Error(`${command} could not be run (${ran.error.message})`);
+  if (ran.status !== 0) {
+    const said = String(ran.stderr ?? '').trim().split(/\r?\n/)[0];
+    const how = typeof ran.status === 'number' ? `exited ${ran.status}` : `ended on ${ran.signal ?? 'no status'}`;
+    throw new Error(`${command} ${how}${said ? `: ${said}` : ''}`);
+  }
+  const found = [];
+  for (const line of String(ran.stdout ?? '').split(/\r?\n/)) {
+    const match = (windows ? WINDOWS_LINE : PS_LINE).exec(line);
+    if (!match) continue;
+    const name = windows ? match[3].trim() : match[3].trim().split('/').at(-1);
+    if (/codex/i.test(name)) found.push({ name, pid: Number(match[1]), startedAt: isoOf(match[2]) });
+  }
+  return found.sort((a, b) => a.pid - b.pid);
 }
 
 class ArgError extends Error {}
@@ -248,10 +329,12 @@ function parseArgs(argv) {
 /** Runs the proof and returns the exit code: the wrapped command's, or 1 when the login is not the same
  * file after as before, when it has another number of names, when the home could not be read after the
  * command, when the command could not be started or when the report could not be written; 2 with usage,
- * and nothing run, on a bad command line. `deps` (all optional) injects `spawn`, `log`, `error` and
- * `now`. */
+ * and nothing run, on a bad command line. `deps` (all optional) injects `spawn`, `log`, `error`, `now`
+ * and `listProcesses`, which gives the Codex processes alive (`codexProcesses`, by default, for
+ * `platform`). */
 export function loginProofMain(argv = process.argv.slice(2), deps = {}) {
-  const { spawn = spawnSync, log = console.log, error = console.error, now = () => new Date() } = deps;
+  const { spawn = spawnSync, log = console.log, error = console.error, now = () => new Date(), platform = process.platform } = deps;
+  const listProcesses = deps.listProcesses ?? (() => codexProcesses(platform));
   let args;
   try {
     args = parseArgs(argv);
@@ -276,7 +359,18 @@ export function loginProofMain(argv = process.argv.slice(2), deps = {}) {
   const exitCode = !ran.error && typeof ran.status === 'number' ? ran.status : null;
   const startError = ran.error ? (ran.error.code ?? ran.error.message) : ran.signal ? `ended on ${ran.signal}` : undefined;
   const comparison = after ? compare(before, after) : null;
-  const text = report({ date: now().toISOString(), realHome, command, exitCode, startError, before, after, comparison, afterError });
+  // Who else may have written, asked only when something outside the login changed, and at the end of
+  // the run: a client that is alive now is the one a reader would go looking for. A listing that fails is
+  // told in the report and changes nothing of the proof, which is about the login.
+  let processes;
+  if (comparison && comparison.changes.length > 0) {
+    try {
+      processes = { list: listProcesses() };
+    } catch (err) {
+      processes = { error: err?.message ?? String(err) };
+    }
+  }
+  const text = report({ date: now().toISOString(), realHome, command, exitCode, startError, before, after, comparison, afterError, processes });
   log(text);
   let written = true;
   try {

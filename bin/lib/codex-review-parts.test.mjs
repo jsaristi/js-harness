@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { numstatFiles, PART_MAX_CHANGED_LINES, reviewParts } from './codex-review-parts.mjs';
+import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './codex-review-parts.mjs';
 
 const file = (path, changedLines) => ({ path, changedLines });
 /** The parts as lists of paths, which is what most tests compare. */
@@ -75,6 +75,35 @@ test('the same range gives the same parts in whatever order its files are given,
   assert.deepEqual(paths(parts), [['B'], ['a'], ['a.b'], ['a/b'], ['z']]);
   assert.deepEqual(reviewParts([...files].reverse(), 400), parts);
   assert.deepEqual(files.map((entry) => entry.path), given);
+});
+
+// --- the files of a part: every path of a part goes on one command line ---
+
+test('a part holds 40 files at most, however few lines they change', () => {
+  assert.equal(PART_MAX_FILES, 40);
+  // A hundred files of one line each: far under the bound of changed lines, and too many paths for one command.
+  const files = Array.from({ length: 100 }, (_, index) => file(`src/f${String(index).padStart(3, '0')}.mjs`, 1));
+  const parts = reviewParts(files);
+  assert.deepEqual(parts.map((part) => [part.files.length, part.changedLines]), [[40, 40], [40, 40], [20, 20]]);
+  assert.deepEqual(parts.flatMap((part) => part.files), files.map((entry) => entry.path), 'every file once, in path order');
+  // Exactly the bound is one part, and one more file is another.
+  assert.deepEqual(reviewParts(files.slice(0, 40)).map((part) => part.files.length), [40]);
+  assert.deepEqual(reviewParts(files.slice(0, 41)).map((part) => part.files.length), [40, 1]);
+});
+
+test('files that change no line (binary ones) are bounded by their count too', () => {
+  const images = Array.from({ length: 90 }, (_, index) => file(`img/${String(index).padStart(2, '0')}.png`, 0));
+  assert.deepEqual(reviewParts(images).map((part) => [part.files.length, part.changedLines]), [[40, 0], [40, 0], [10, 0]]);
+  // Whichever bound is reached first ends the part: the lines after `a.mjs`, the files after `b.mjs` and 39 images.
+  const mixed = [file('a.mjs', 300), file('b.mjs', 200), ...images.slice(0, 45)];
+  assert.deepEqual(reviewParts(mixed).map((part) => [part.files.length, part.changedLines]), [[1, 300], [40, 200], [6, 0]]);
+});
+
+test('the bound of files is the third argument, and is refused when it is not a positive integer', () => {
+  const files = Array.from({ length: 5 }, (_, index) => file(`f${index}`, 1));
+  assert.deepEqual(paths(reviewParts(files, 400, 2)), [['f0', 'f1'], ['f2', 'f3'], ['f4']]);
+  assert.deepEqual(paths(reviewParts(files, 400, 1)), [['f0'], ['f1'], ['f2'], ['f3'], ['f4']]);
+  for (const bound of [0, -1, 1.5, '40', null, Number.NaN, Infinity]) assert.throws(() => reviewParts(files, 400, bound), /positive integer of files/, String(bound));
 });
 
 test('reviewParts refuses a bound that is not a positive integer, and a file that is not a path with a count', () => {

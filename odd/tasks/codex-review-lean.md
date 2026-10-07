@@ -144,7 +144,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   findings merged — route: same writer
 
 ### Slice E — quality before the switch
-- [ ] T10 A diff with seeded defects and its answer key in `evals/review/`, and a scorer that
+- [x] T10 A diff with seeded defects and its answer key in `evals/review/`, and a scorer that
   matches findings to the key by file and line — route: delegated writer
 - [ ] T11 The comparison and its report: `evals/review/compare.mjs` runs configurations over
   ranges and stores each reading in `evals/results/review/`; `report.mjs --require-complete`
@@ -753,9 +753,51 @@ What follows from it:
   - The effort and CodeGraph are varied by the comparison through injection, not by new
     flags of `codex-review`: the command keeps fixing the model and the effort, as he
     decided.
+- 2026-10-07: the documents committed as `1c7b561` (gate green). After that gate an
+  untracked `Microsoft/Windows/PowerShell/ModuleAnalysisCache` sat in the worktree root,
+  created at 10:50:36Z, while the gate ran: the cache PowerShell writes under the current
+  folder when it is started without `LOCALAPPDATA`. Removed by hand. Which test starts
+  PowerShell that way is not found; it did not appear in the next writer's test runs
+  (Follow-ups).
+- 2026-10-07: T10 built by one delegated writer (route: delegated), test first, with the
+  four findings of the review of `b5c8766`. T10 is checked: the fixture builds, and its
+  tests and the scorer's pass (74 of 74 over the four files, re-run by the parent; the
+  command file 176 of 176, 290 s).
+  - The seeded project, `evals/review/seeded/`: `stockroom`, a file-backed inventory CLI.
+    `head` adds a stocktake (count, undo, a paged low-stock report, export): 292 changed
+    lines in 6 files, under the 400 of a part, so it is reviewed whole. Built by
+    `evals/review/seeded.mjs` into a repository of two commits whose ids are the same on
+    every build (`0366ee03…` and `80952caf…`, held by a test).
+  - Seven defects, each on lines the diff adds, none hinted at in a name, a comment or a
+    spec: D1 off-by-one `src/report.mjs:24`; D2 missing await `src/stocktake.mjs:41`; D3
+    wrong condition `src/validate.mjs:49`; D4 unvalidated path `src/cli.mjs:100`; D5 lost
+    update `src/cli.mjs:80`; D6 swallowed error `src/report.mjs:39-42`; D7 against the
+    intent `src/stocktake.mjs:17-21`. The key, `key.json`, is never copied into the built
+    repository. The writer showed all seven misbehaving in a built copy.
+  - A limit to read the results with: the feature document of the seeded project is in
+    both trees, so a reviewer without `--doc` can still open it; D7 measures whether the
+    intent is used, not strictly whether it was passed.
+  - The scorer, `evals/review/score.mjs`: a finding matches a defect in the same file whose
+    range, widened by 3 lines, it overlaps; a defect is found once, a finding counts for
+    one defect, the rest is extra; it returns found, missed, extra and recall. Known limit:
+    a reviewer that places D6 in `cli.mjs` scores a miss and an extra.
+  - RED seen, then GREEN: the file bound of a part (parts of 100 files → 40, 40, 20); the
+    record of a run in parts whose run line could not be written (no `runs` → one entry
+    per part, `null` where a line was lost); the proof's sentence about another writer (7
+    red against a stub → 30 of 30); the scorer (13 red against a stub → 13 of 13). The
+    fixture's tests mostly passed at once, so each was checked by breaking the fixture (a
+    hint word, a key line on unchanged code, a failing spec), and then failed.
+  - The four findings, closed: a part holds 40 files at most (`PART_MAX_FILES`); the record
+    of a run in parts is honest when a run line is lost; `isValidCodexReview` takes a
+    record with `runs`; the login proof, when anything but `auth.json` changed, says that
+    another running Codex client may be the writer and lists the Codex processes alive.
 
 ## Follow-ups
-- From gentle-ai's review of `b5c8766`:
+- Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
+  which once left an untracked `Microsoft/` folder there (2026-10-07, the gate of
+  `1c7b561`). Not reproduced since. Find the spawn and give it the variable or a folder of
+  its own.
+- From gentle-ai's review of `b5c8766` (all four closed with T10, Progress):
   - R3-part-command-length-unbounded (`bin/lib/codex-review-parts.mjs:73-82`, WARNING): a
     part is bounded by changed lines only, so many small or binary files can make one git
     command line longer than Windows takes. It fails closed, but the message does not name
@@ -828,22 +870,23 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-Slices A to D are done: T1 to T9 are checked. The lean session reads its diff, measures its
-tokens, reads the answer of Codex as data, reviews with a prompt of our own, and reviews a
-large range in parts (CLI 0.160.1; Progress holds the numbers of the five real reviews).
-Next is slice E, one delegated writer for T10 and T11: a seeded diff with its answer key
-and a scorer, then `evals/review/compare.mjs` and `report.mjs --require-complete`, with
-the three small findings of the last review (Follow-ups). The configurations to compare
-are: `current` measured in a seeded copy of his home; `lean`; `lean` with the prompt of
-our own and the intent; `lean` at `high`; `lean` with CodeGraph. Over two ranges: a real
-one with no known defect and the seeded one. That is ten cells, ten Codex reviews, and the
-count is put to Sebastián before T12 starts.
+Slices A to D and T10 are done: T1 to T10 are checked. Next is T11, one delegated writer:
+`evals/review/compare.mjs`, which runs one cell (a configuration over a range) at a time
+and stores its reading in `evals/results/review/`, and `report.mjs --require-complete`,
+which sets the readings side by side and fails while a cell is missing. The configurations:
+`current` measured in a seeded copy of his home with the login linked
+(`evals/codex-home.mjs`); `lean`; `lean` with the prompt of our own and the intent;
+`lean` at `high`; `lean` with CodeGraph (the real range only, where an index means
+something). The ranges: `338386a..e3aad48` of this repository, with no known defect, and
+the seeded one, scored against its key. Nine cells, nine Codex reviews; the count is put to
+Sebastián before T12 starts.
 
-Open, for him, none blocking T10 and T11:
-1. The go-ahead for the ten runs of T12, once the tools exist.
+Open, for him, none blocking T11:
+1. The go-ahead for the nine runs of T12, once the tools exist.
 2. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
-   7,370 changed lines in 21 files, so about nineteen parts at 400 lines, and the test file
-   of the command alone is 2,564. It is the first real use of T9 and its count is asked.
+   more than 7,000 changed lines in over twenty files, so about twenty parts, and the test
+   file of the command alone is over 2,500 lines, which may not be read whole. It is the
+   first real use of T9 and its count is asked.
 
 On the cap: five Codex reviews spent in this feature (one read nothing, four read their
 diff). A single run that proves a piece is announced with its count and run; a batch is

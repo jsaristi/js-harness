@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { compare, loginProofMain, report, snapshot } from './login-proof.mjs';
+import { codexProcesses, compare, loginProofMain, report, snapshot } from './login-proof.mjs';
 
 // Every "real home" here is a temporary folder with fixtures: the tool takes no default home, so no test
 // can reach the machine's own Codex home.
@@ -33,7 +33,8 @@ function fakeHome({ login = LOGIN } = {}) {
 /** A command that runs `script` in a Node of its own, with `args` as `process.argv[1]` onwards. */
 const node = (script, ...args) => [process.execPath, '-e', script, ...args];
 
-/** Runs the tool with its output captured. */
+/** Runs the tool with its output captured. The processes of this machine are never listed: a test that
+ * says nothing of them gets none. */
 function prove(argv, deps = {}) {
   const out = [];
   const err = [];
@@ -41,6 +42,7 @@ function prove(argv, deps = {}) {
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     now: () => new Date('2026-10-06T12:00:00.000Z'),
+    listProcesses: () => [],
     ...deps,
   });
   return { code, out: out.join('\n'), err: err.join('\n') };
@@ -309,6 +311,147 @@ test('--real-home is required and has no default; without it, --out or a command
   }
   assert.equal(fs.existsSync(marker), false, 'no command was run');
   assert.equal(fs.existsSync(out), false, 'and no report written');
+});
+
+// --- who else may have written: the Codex processes alive when something else of the home changed ---
+
+const CLIENTS = [
+  { name: 'Codex.exe', pid: 4312, startedAt: '2026-10-06T11:23:05.000Z' },
+  { name: 'codex.exe', pid: 9120, startedAt: null },
+];
+
+/** A report of a home in which `new.txt` appeared, with what was learnt of the Codex processes. */
+function reportWithAChange(processes) {
+  const { home } = fakeHome();
+  const before = snapshot(home);
+  fs.writeFileSync(path.join(home, 'new.txt'), 'x', 'utf8');
+  const after = snapshot(home);
+  return report({ date: '2026-10-06T12:00:00.000Z', realHome: home, command: ['node', 'x.mjs'], exitCode: 0, before, after, comparison: compare(before, after), processes });
+}
+
+const MAY_BE_ANOTHER = 'Another Codex client running on this machine may be what wrote these, and the proof cannot tell: it sees that the home changed, not who changed it.';
+
+test('report: when something else of the home changed, it says another Codex client may be the writer and lists the Codex processes alive', () => {
+  const lines = reportWithAChange({ list: CLIENTS }).split('\n');
+  const at = lines.indexOf(`${MAY_BE_ANOTHER} Codex processes alive at the end of the run:`);
+  assert.notEqual(at, -1, lines.join('\n'));
+  assert.ok(at > lines.findIndex((line) => /`new\.txt`[^\n]*added/.test(line)), 'after the changes it is about');
+  assert.deepEqual(lines.slice(at + 1, at + 3), ['- `Codex.exe`, pid 4312, started 2026-10-06T11:23:05.000Z', '- `codex.exe`, pid 9120, start time unknown']);
+  // The login is judged as it was: what else changed, and who was running, is for a person to read.
+  assert.match(lines.join('\n'), /Verdict: PASS/);
+});
+
+test('report: no Codex process alive is said as such, and a listing that failed as "could not be listed", with why', () => {
+  assert.ok(reportWithAChange({ list: [] }).includes(`${MAY_BE_ANOTHER} No Codex process was alive at the end of the run.`));
+  const failed = reportWithAChange({ error: 'powershell.exe exited 1' });
+  assert.ok(failed.includes(`${MAY_BE_ANOTHER} The Codex processes alive at the end of the run could not be listed (powershell.exe exited 1).`), failed);
+  // A report made with no word of them says that too, instead of leaving the question unasked.
+  assert.match(reportWithAChange(undefined), /could not be listed \(no listing was made\)/);
+});
+
+test('report: when nothing else changed there is no word of other clients and no process list, whatever is alive', () => {
+  const { home } = fakeHome();
+  const snap = snapshot(home);
+  const text = report({ date: '2026-10-06T12:00:00.000Z', realHome: home, command: ['node', 'x.mjs'], exitCode: 0, before: snap, after: snap, comparison: compare(snap, snap), processes: { list: CLIENTS } });
+  assert.match(text, /Nothing else changed\./);
+  assert.doesNotMatch(text, /Codex client|Codex process|pid/);
+});
+
+test('the tool lists the Codex processes once, after the command has ended, when it changed something else of the home', () => {
+  const { home, out } = fakeHome();
+  const write = "require('node:fs').writeFileSync(require('node:path').join(process.argv[1], 'history.jsonl'), 'x')";
+  const asked = [];
+  const listProcesses = () => {
+    asked.push(fs.existsSync(path.join(home, 'history.jsonl')));
+    return CLIENTS;
+  };
+  const result = prove(['--real-home', home, '--out', out, '--', ...node(write, home)], { listProcesses });
+  assert.equal(result.code, 0, 'who else is running changes nothing of the verdict');
+  assert.deepEqual(asked, [true], 'once, at the end of the run');
+  const written = fs.readFileSync(out, 'utf8');
+  assert.ok(written.includes(MAY_BE_ANOTHER), written);
+  assert.ok(written.includes('- `Codex.exe`, pid 4312, started 2026-10-06T11:23:05.000Z'));
+  assert.equal(result.out.trim(), written.trim());
+});
+
+test('the tool does not list any process when nothing else of the home changed', () => {
+  const { home, auth, out } = fakeHome();
+  let asked = 0;
+  const listProcesses = () => {
+    asked += 1;
+    return CLIENTS;
+  };
+  // Not even when the login itself was rewritten in place: that is the write the proof is about.
+  const rewrite = "require('node:fs').writeFileSync(process.argv[1], 'a login rewritten in place', { flag: 'w' })";
+  for (const script of ['process.exit(0)', rewrite]) {
+    const result = prove(['--real-home', home, '--out', out, '--', ...node(script, auth)], { listProcesses });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Nothing else changed\./);
+    assert.doesNotMatch(result.out, /Codex client|Codex process/);
+  }
+  assert.equal(asked, 0);
+});
+
+test('a listing of the processes that throws is told in the report as "could not be listed", and changes nothing else', () => {
+  const { home, out } = fakeHome();
+  const write = "require('node:fs').writeFileSync(require('node:path').join(process.argv[1], 'history.jsonl'), 'x')";
+  const listProcesses = () => {
+    throw new Error('spawnSync powershell.exe ENOENT');
+  };
+  const result = prove(['--real-home', home, '--out', out, '--', ...node(write, home)], { listProcesses });
+  assert.equal(result.code, 0, result.err);
+  assert.ok(fs.readFileSync(out, 'utf8').includes(`${MAY_BE_ANOTHER} The Codex processes alive at the end of the run could not be listed (spawnSync powershell.exe ENOENT).`), result.out);
+  assert.match(result.out, /`history\.jsonl`[^\n]*added/);
+  assert.match(result.out, /Verdict: PASS/);
+});
+
+/** A fake `spawnSync` that answers with `result` and keeps what it was asked. */
+function fakeSpawn(result) {
+  const calls = [];
+  const spawn = (command, args, options) => {
+    calls.push({ command, args, options });
+    return { status: 0, stdout: '', stderr: '', ...result };
+  };
+  return { spawn, calls };
+}
+
+test('codexProcesses on Windows asks PowerShell for Win32_Process and keeps the Codex ones: name, pid and start time', () => {
+  const stdout = ['9120\t\tcodex.exe', '4312\t2026-10-06T11:23:05.0000000Z\tCodex.exe', '77\t2026-10-06T09:00:00.0000000Z\tnode.exe', '', 'not a line of it'].join('\r\n');
+  const { spawn, calls } = fakeSpawn({ stdout });
+  assert.deepEqual(codexProcesses('win32', spawn), [
+    { name: 'Codex.exe', pid: 4312, startedAt: '2026-10-06T11:23:05.000Z' },
+    { name: 'codex.exe', pid: 9120, startedAt: null },
+  ]);
+  assert.equal(calls.length, 1);
+  const [{ command, args, options }] = calls;
+  assert.equal(command, 'powershell.exe');
+  assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
+  assert.match(args[3], /Get-CimInstance Win32_Process/);
+  assert.equal(options.encoding, 'utf8');
+  assert.ok(options.timeout > 0, 'a listing that hangs must not hang the proof');
+});
+
+test('codexProcesses elsewhere reads `ps`: the pid, when it started and the command, whose name is its last part', () => {
+  const stdout = [
+    '  812 Tue Oct  6 11:23:05 2026 /Applications/Codex.app/Contents/MacOS/Codex',
+    '   44 Tue Oct  6 09:00:00 2026 /usr/bin/node',
+    ' 9120 Mon Oct  5 08:01:02 2026 codex',
+    '',
+  ].join('\n');
+  for (const platform of ['linux', 'darwin']) {
+    const { spawn, calls } = fakeSpawn({ stdout });
+    const found = codexProcesses(platform, spawn);
+    assert.deepEqual(found.map((one) => [one.name, one.pid]), [['Codex', 812], ['codex', 9120]], platform);
+    assert.equal(found[0].startedAt, new Date('Tue Oct  6 11:23:05 2026').toISOString(), 'the date `ps` gives is in the time of the machine');
+    assert.deepEqual([calls[0].command, calls[0].args], ['ps', ['-A', '-o', 'pid=,lstart=,comm=']], platform);
+    assert.equal(calls[0].options.env.LC_ALL, 'C', 'so the date is written in the one language this reads');
+  }
+});
+
+test('codexProcesses throws when the listing could not be run, and says why', () => {
+  assert.throws(() => codexProcesses('win32', fakeSpawn({ error: Object.assign(new Error('spawnSync powershell.exe ENOENT'), { code: 'ENOENT' }), status: null }).spawn), /powershell\.exe.*ENOENT/);
+  assert.throws(() => codexProcesses('win32', fakeSpawn({ status: 1, stderr: 'Access denied\r\nmore' }).spawn), /powershell\.exe exited 1: Access denied/);
+  assert.throws(() => codexProcesses('linux', fakeSpawn({ status: null, signal: 'SIGTERM' }).spawn), /ps ended on SIGTERM/);
 });
 
 test('a report that cannot be written is exit 1, and it is still printed', () => {

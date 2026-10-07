@@ -18,6 +18,14 @@
 // (odd/tasks/codex-review-lean.md) are what set it. `js-harness codex-review --part-lines <n>` takes another.
 export const PART_MAX_CHANGED_LINES = 400;
 
+// How many files a part holds at most, however few lines they change. Every path of a part goes on one git
+// command line (the diff this command checks the part against) and into the one command the prompt names
+// for the model to run, and Windows limits a command line: 8,191 characters through `cmd.exe`, 32,767 for a
+// process started without it. Bounded by changed lines alone, a range of many small or binary files would be
+// one part whose command cannot be run, and the review would fail without saying why. Forty paths stay
+// under the smaller limit up to about 190 characters a path, the two commit ids included.
+export const PART_MAX_FILES = 40;
+
 // One record of `git diff --numstat -z --no-renames`: the additions, the deletions (`-` for both when the
 // file is binary) and the path, which may hold anything but a NUL.
 const NUMSTAT_RECORD = /^(?:(\d+)\t(\d+)|-\t-)\t([\s\S]+)$/;
@@ -54,15 +62,20 @@ const isChangedFile = (file) =>
  *
  *  - The files are taken in path order (by code unit, so the same on every machine), whatever order they
  *    are given in, and a part is a run of that order: the same range always gives the same parts.
- *  - A part holds as many whole files as fit in `maxChangedLines`. A file larger than that is alone in a
- *    part of its own; no file is ever in two parts.
- *  - A file that changes no line (a binary one) is in the part its place in the order gives it.
- *  - No part is empty: a range with no file has no part, and one at or under the bound has one.
+ *  - A part holds as many whole files as fit in `maxChangedLines`, and never more than `maxFiles` of them
+ *    (see `PART_MAX_FILES`). A file larger than the bound of lines is alone in a part of its own; no file
+ *    is ever in two parts.
+ *  - A file that changes no line (a binary one) is in the part its place in the order gives it, and counts
+ *    as a file of that part like any other.
+ *  - No part is empty: a range with no file has no part, and one at or under both bounds has one.
  *
- * Throws when `maxChangedLines` is not a positive integer or a file is not a path with a count. */
-export function reviewParts(files, maxChangedLines = PART_MAX_CHANGED_LINES) {
+ * Throws when either bound is not a positive integer or a file is not a path with a count. */
+export function reviewParts(files, maxChangedLines = PART_MAX_CHANGED_LINES, maxFiles = PART_MAX_FILES) {
   if (!Number.isInteger(maxChangedLines) || maxChangedLines < 1) {
     throw new Error(`The bound of a part must be a positive integer of changed lines, got ${JSON.stringify(maxChangedLines)}.`);
+  }
+  if (!Number.isInteger(maxFiles) || maxFiles < 1) {
+    throw new Error(`The bound of a part must be a positive integer of files, got ${JSON.stringify(maxFiles)}.`);
   }
   for (const file of files) {
     if (!isChangedFile(file)) throw new Error(`Not a changed file with its count of changed lines: ${JSON.stringify(file)}.`);
@@ -72,8 +85,9 @@ export function reviewParts(files, maxChangedLines = PART_MAX_CHANGED_LINES) {
   let part = null;
   for (const { path, changedLines } of ordered) {
     // A file that does not fit beside the ones before it starts a part. One larger than the bound fits
-    // beside nothing, and nothing fits beside it, so it ends up alone without being asked for by name.
-    if (part === null || part.changedLines + changedLines > maxChangedLines) {
+    // beside nothing, and nothing fits beside it, so it ends up alone without being asked for by name. A
+    // part that already holds its count of files is full too, whatever room its lines leave.
+    if (part === null || part.changedLines + changedLines > maxChangedLines || part.files.length >= maxFiles) {
       part = { files: [], changedLines: 0 };
       parts.push(part);
     }

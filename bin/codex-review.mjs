@@ -54,13 +54,14 @@
 // diff through a tool whose output is bounded, so on a large range some changed lines are never shown and
 // the evidence rule says, rightly, that the range was not inspected. The rule is not relaxed for that: the
 // range is split by whole files into parts of at most `PART_MAX_CHANGED_LINES` changed lines, or
-// `--part-lines <n>` (`bin/lib/codex-review-parts.mjs`), and the parts are reviewed one after another, never
-// two at once. Each part is a Codex session of its own, in a lean home of its own, asked with this command's
-// own prompt naming its files (`--base` cannot be limited to files), held to the evidence rule for the
+// `--part-lines <n>`, and of at most `PART_MAX_FILES` files, whose paths go on one command line
+// (`bin/lib/codex-review-parts.mjs`), and the parts are reviewed one after another, never two at once.
+// Each part is a Codex session of its own, in a lean home of its own, asked with this command's own
+// prompt naming its files (`--base` cannot be limited to files), held to the evidence rule for the
 // changed lines of its own files, and logged in a run line of its own. The first part that does not pass
 // stops the run. The review is recorded, in one record for the whole range, only when every part passed,
-// and the findings of all of them are printed then, together. A range within the bound is one part, and its
-// review is the one described above, unchanged; the `current` session never splits a range.
+// and the findings of all of them are printed then, together. A range within both bounds is one part, and
+// its review is the one described above, unchanged; the `current` session never splits a range.
 //
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
@@ -69,8 +70,9 @@
 // the rollout files say it spent (tokens, requests, threads), what Codex's events say it did (turns,
 // items by type, commands), the prompt it was asked with, which part of the range it was when the range was
 // reviewed in parts and, when its answer was read, the findings by severity and the verdict. A reviewed record names its run line by id (`run`), and the record of a range
-// reviewed in parts the lines of all its parts (`runs`, with `run` the last); a run line is a measurement
-// and never evidence of a review, so `check --push` does not read it.
+// reviewed in parts the lines of all its parts (`runs`, one entry a part, `null` for a line that could not be
+// written, with `run` the last); a run line is a measurement and never evidence of a review, so
+// `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -79,7 +81,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
-import { numstatFiles, PART_MAX_CHANGED_LINES, reviewParts } from './lib/codex-review-parts.mjs';
+import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
@@ -638,11 +640,11 @@ function totalsLine(attempts) {
 }
 
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
- * lines than `maxChangedLines`: `{ parts }`, each `{ index, of, files, changedLines, prompt, expected }`
- * with the prompt its session is asked with and the keys of the changed lines it must have seen
- * (`patchKeys`). `{ parts: null }` when the range is one part, which is reviewed whole. `{ error }`, a
- * sentence, when the range cannot be split in a way that is known to show all of it; nothing is launched
- * then. `intent` is what `--doc` gave, for the prompt of every part.
+ * lines than `maxChangedLines` or more files than a part holds (`PART_MAX_FILES`): `{ parts }`, each
+ * `{ index, of, files, changedLines, prompt, expected }` with the prompt its session is asked with and the
+ * keys of the changed lines it must have seen (`patchKeys`). `{ parts: null }` when the range is one part,
+ * which is reviewed whole. `{ error }`, a sentence, when the range cannot be split in a way that is known
+ * to show all of it; nothing is launched then. `intent` is what `--doc` gave, for the prompt of every part.
  *
  * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
  * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
@@ -753,8 +755,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   let outcome = 'unavailable';
   // The id of the run line of a reviewed attempt, for its record; a skip launches nothing and has none.
   let runId;
-  // The parts a large range was reviewed in, and the ids of their run lines; `null` and none for a range
-  // reviewed whole, and for a skip.
+  // The parts a large range was reviewed in, and the ids of their run lines, one for each part (`null` for
+  // a line that could not be written); `null` and none for a range reviewed whole, and for a skip.
   let parts = null;
   let runIds = [];
   if (args.unavailable === undefined) {
@@ -1046,7 +1048,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     } else {
       const lines = parts.reduce((sum, part) => sum + part.changedLines, 0);
       const files = parts.reduce((sum, part) => sum + part.files.length, 0);
-      log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}, more than the ${thousands(args.partLines)} a part holds, so it is reviewed in ${parts.length} parts, one after another.`);
+      // Which bound of a part the range is over: its changed lines, or, when those would fit, its files alone.
+      const over = lines > args.partLines ? `more than the ${thousands(args.partLines)} a part holds` : `more files than the ${thousands(PART_MAX_FILES)} a part holds`;
+      log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}, ${over}, so it is reviewed in ${parts.length} parts, one after another.`);
       if (!own) log('Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
       // One part at a time, in order, and the next only once the one before it has passed: the first that
       // does not pass ends the run with the exit code of its own failure. The lines of the parts before
@@ -1067,7 +1071,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       for (const finding of passed.flatMap((one) => one.review.findings).sort(byPlace)) log(findingLine(finding));
       passed.forEach((one, at) => log(`Part ${at + 1} of ${passed.length}: ${verdictLine(one.review)}`));
       log(totalsLine(passed));
-      runIds = passed.map((one) => one.runId).filter((id) => id !== undefined);
+      // One entry for every part, in order: `null` where the line of a part could not be written, so that
+      // the record says how many parts the review was made in and which of them were measured.
+      runIds = passed.map((one) => one.runId ?? null);
       runId = passed.at(-1).runId;
     }
     outcome = 'reviewed';
@@ -1082,7 +1088,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     ...(outcome === 'unavailable' ? { reason: args.unavailable } : {}),
     // The run line this review was measured in; absent when that line could not be written. For a range
     // reviewed in parts it is the line of the last part, the one that completed the review, and `runs`
-    // names the lines of all the parts, in order, that could be written.
+    // names the line of every part, in order, with `null` in the place of a part whose line could not be
+    // written: `runs` is as long as the parts were many, and `run`, when it is there, is its last entry.
     ...(runId === undefined ? {} : { run: runId }),
     ...(runIds.length === 0 ? {} : { runs: runIds }),
   };
