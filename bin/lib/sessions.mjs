@@ -7,22 +7,39 @@ import { parseSnapshot } from './process-tree.mjs';
 const TITLE_LENGTH = 60;
 const NOTIFICATION_PATTERN = /<task-notification>([\s\S]*?)<\/task-notification>/g;
 
-/** A transcript's entries, one JSON object per line. A line that does not parse is skipped and counted,
- * never fatal: a session appends to its transcript while the board reads it, so the last line may be
- * half written. */
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** A transcript's entries, one JSON object per line. A line that does not parse, or that parses to
+ * something other than an object (`null`, a number, a string, a list), is skipped and counted, never
+ * fatal: a session appends to its transcript while the board reads it, so the last line may be half
+ * written, and nothing below has to ask whether an entry is one. */
 export function parseTranscript(text) {
   const entries = [];
   let skipped = 0;
   for (const line of text.split('\n')) {
     if (line.trim() === '') continue;
+    let entry;
     try {
-      entries.push(JSON.parse(line));
+      entry = JSON.parse(line);
     } catch {
       skipped += 1;
+      continue;
     }
+    if (isObject(entry)) entries.push(entry);
+    else skipped += 1;
   }
   return { entries, skipped };
 }
+
+/** The content blocks of an entry's message: the objects of its `content` list, and none when the
+ * content is a string or missing. Whatever else sits in the list is not a block and is left out. */
+function blocksOf(entry) {
+  const content = entry.message?.content;
+  return Array.isArray(content) ? content.filter(isObject) : [];
+}
+
+/** A block that carries text: `type: "text"` with a string in `text`. */
+const isText = (block) => block.type === 'text' && typeof block.text === 'string';
 
 /** The text of one tag of a notification block, or `undefined` when the block has no such tag. */
 function tagOf(block, name) {
@@ -52,7 +69,7 @@ function notificationsOf(entry) {
 function promptText(entry) {
   if (entry.type !== 'user' || entry.isMeta || entry.isCompactSummary) return null;
   const content = entry.message?.content;
-  const text = typeof content === 'string' ? content : Array.isArray(content) ? content.find((block) => block.type === 'text')?.text : null;
+  const text = typeof content === 'string' ? content : blocksOf(entry).find(isText)?.text;
   if (typeof text !== 'string' || text.trimStart().startsWith('<') || text.startsWith('[Request interrupted')) return null;
   return text;
 }
@@ -70,19 +87,19 @@ function oneLine(text) {
 function turnOf(entry) {
   if (entry.isSidechain || entry.isMeta) return null;
   const content = entry.message?.content;
+  const blocks = blocksOf(entry);
   if (entry.type === 'assistant') {
-    const blocks = Array.isArray(content) ? content : [];
     if (blocks.some((block) => block.type === 'tool_use')) return 'working';
     // Every block of a message is its own entry and all of them carry the message's stop reason, so a
     // text block closes the turn only when the message did not stop to call a tool.
-    return blocks.some((block) => block.type === 'text') && entry.message.stop_reason !== 'tool_use' ? 'ended' : 'working';
+    return blocks.some(isText) && entry.message.stop_reason !== 'tool_use' ? 'ended' : 'working';
   }
   if (entry.type !== 'user') return null;
   if (entry.isCompactSummary) return 'ended';
   if (typeof content === 'string') return content.trimStart().startsWith('<local-command-stdout>') ? 'ended' : 'working';
   if (!Array.isArray(content)) return null;
-  if (content.some((block) => block.type === 'tool_result')) return 'working';
-  return content.some((block) => block.type === 'text' && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
+  if (blocks.some((block) => block.type === 'tool_result')) return 'working';
+  return blocks.some((block) => isText(block) && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
 }
 
 const isAgent = (name) => name === 'Agent' || name === 'Task';
@@ -121,6 +138,7 @@ export function sessionFacts(text, { tail = 3 } = {}) {
   const { entries, skipped } = parseTranscript(text);
   const calls = new Map(); // tool_use id -> the tool_use block and the entry that holds it
   const workByCall = new Map(); // tool_use id -> work, in launch order
+  const endsByTask = new Map(); // task id -> the first end a notification recorded for it
   let customTitle = null;
   let firstPrompt = null;
   let lastEntryAt = null;
@@ -140,14 +158,16 @@ export function sessionFacts(text, { tail = 3 } = {}) {
     for (const { task, toolUse, status } of notificationsOf(entry)) {
       if (status === undefined) continue; // an event of a task that is still running
       const at = entry.timestamp ?? entry.attachment?.timestamp;
+      // Kept by task id as well: a quick task can end before the tool result that gives its work that id.
+      if (task !== undefined && !endsByTask.has(task)) endsByTask.set(task, { at, status });
       for (const work of workByCall.values()) {
         if ((task !== undefined && work.id === task) || (toolUse !== undefined && work.toolUseId === toolUse)) end(work, at, status);
       }
     }
-    if (entry.isSidechain || !Array.isArray(entry.message?.content)) continue;
+    if (entry.isSidechain) continue;
 
-    for (const block of entry.message.content) {
-      if (entry.type === 'assistant' && block.type === 'text' && block.text.trim() !== '') lastReply = block.text;
+    for (const block of blocksOf(entry)) {
+      if (entry.type === 'assistant' && isText(block) && block.text.trim() !== '') lastReply = block.text;
       // A resumed session writes earlier entries again: only the first sight of a call launches work, so
       // a repeated call never reopens work whose end was recorded in between.
       if (entry.type === 'assistant' && block.type === 'tool_use' && !calls.has(block.id)) {
@@ -157,7 +177,7 @@ export function sessionFacts(text, { tail = 3 } = {}) {
       }
       if (entry.type !== 'user' || block.type !== 'tool_result' || !calls.has(block.tool_use_id)) continue;
       const launch = calls.get(block.tool_use_id);
-      const outcome = entry.toolUseResult !== null && typeof entry.toolUseResult === 'object' && !Array.isArray(entry.toolUseResult) ? entry.toolUseResult : {};
+      const outcome = isObject(entry.toolUseResult) ? entry.toolUseResult : {};
       let work = workByCall.get(block.tool_use_id);
       if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
@@ -170,6 +190,9 @@ export function sessionFacts(text, { tail = 3 } = {}) {
         work.id = outcome.agentId ?? null;
         end(work, entry.timestamp, block.is_error === true ? 'error' : (outcome.status ?? 'returned'));
       }
+      // The notification of a quick task can be written before this result: its end was kept by task id.
+      const early = work ? endsByTask.get(work.id) : undefined;
+      if (early) end(work, early.at, early.status);
     }
   }
 
@@ -203,36 +226,50 @@ export function projectSlug(root) {
 
 const failed = (result) => Boolean(result.error) || result.status !== 0;
 
-/** Why a command failed, in one line: that it is not installed, what the system said when it could not
- * be started, the first line it wrote to stderr, or its exit code when it wrote nothing. */
-function failure(command, result) {
-  if (result.error) return result.error.code === 'ENOENT' ? `${command} is not installed or not on PATH` : result.error.message;
+/** Why a command failed, in one line: what the system said when it could not be started, the first line
+ * it wrote to stderr, or its exit code when it wrote nothing. ENOENT has two causes the error does not
+ * tell apart: a program that is not there, and a folder to run it in that is not there. `ranIn` is that
+ * folder when the caller knows the program starts (it has just run), and then the folder is what is
+ * missing. */
+function failure(command, result, { ranIn } = {}) {
+  if (result.error?.code === 'ENOENT') return ranIn === undefined ? `${command} is not installed or not on PATH` : `the folder ${ranIn} does not exist (ENOENT starting ${command} there)`;
+  if (result.error) return result.error.message;
   return String(result.stderr ?? '').trim().split(/\r?\n/)[0] || `exit ${result.status}`;
 }
 
-/** The entries of `git worktree list --porcelain`: `{ path, head, branch, bare }`, `branch` without its
- * `refs/heads/` and `null` for a detached or bare entry. */
+/** The entries of `git worktree list --porcelain`: `{ path, head, branch, bare, prunable }`, `branch`
+ * without its `refs/heads/` and `null` for a detached or bare entry. `prunable` is the reason git gives
+ * for an entry it would prune (its folder is gone), and `null` for every other entry. */
 export function parseWorktreeList(porcelain) {
   const trees = [];
   for (const line of porcelain.split(/\r?\n/)) {
     const [key, ...rest] = line.split(' ');
     const value = rest.join(' ');
-    if (key === 'worktree') trees.push({ path: value, head: null, branch: null, bare: false });
+    if (key === 'worktree') trees.push({ path: value, head: null, branch: null, bare: false, prunable: null });
     else if (trees.length === 0) continue;
     else if (key === 'HEAD') trees.at(-1).head = value;
     else if (key === 'branch') trees.at(-1).branch = value.replace(/^refs\/heads\//, '');
     else if (key === 'bare') trees.at(-1).bare = true;
+    else if (key === 'prunable') trees.at(-1).prunable = value || 'git gives no reason';
   }
   return trees;
 }
 
-/** One count git prints for a worktree, or why it could not be read. */
-function gitCount(run, cwd, args, parse = (stdout) => Number(stdout.trim())) {
+/** The count a command printed: digits and nothing else. Empty output is not zero, and `0x10`, `1e3` and
+ * `-1`, which `Number` would take, are not counts. `null` for anything else. */
+function printedCount(stdout) {
+  const printed = stdout.trim();
+  return /^\d+$/.test(printed) ? Number(printed) : null;
+}
+
+/** One count git gives for a worktree, or why it could not be read. It runs after the list of worktrees
+ * was read with the same `git`, so a spawn that fails with ENOENT is the worktree's folder missing. */
+function gitCount(run, cwd, args, parse = printedCount) {
   const what = `git ${args.find((arg) => !arg.startsWith('-'))}`;
   const result = run('git', args, { cwd });
-  if (failed(result)) return { failed: result, unavailable: `${what}: ${failure('git', result)}` };
+  if (failed(result)) return { failed: result, unavailable: `${what}: ${failure('git', result, { ranIn: cwd })}` };
   const value = parse(result.stdout);
-  if (!Number.isInteger(value)) return { unavailable: `${what}: printed ${JSON.stringify(result.stdout.trim())}, not a count` };
+  if (value === null) return { unavailable: `${what}: printed ${JSON.stringify(result.stdout.trim())}, not a count` };
   return value;
 }
 
@@ -244,8 +281,10 @@ export function readWorktrees(run, root) {
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
   if (failed(listed)) return { available: false, reason: `git worktree: ${failure('git', listed)}` };
   const items = parseWorktreeList(listed.stdout).map((tree) => {
-    if (tree.bare) {
-      const none = { unavailable: 'a bare repository has no checkout' };
+    if (tree.bare || tree.prunable !== null) {
+      // Nothing is run in a folder git itself reports gone: the spawn would fail with ENOENT, which reads
+      // like a missing git.
+      const none = { unavailable: tree.bare ? 'a bare repository has no checkout' : `its folder is gone: git lists the worktree as prunable (${tree.prunable})` };
       return { ...tree, aheadOfMain: none, aheadOfUpstream: none, changed: none };
     }
     const aheadOfMain = gitCount(run, tree.path, ['rev-list', '--count', 'origin/main..HEAD']);
@@ -261,16 +300,20 @@ export function readWorktrees(run, root) {
 
 /** `[{ pid, createdAt, commandLine }]` from what the Windows listing of `bin/sessions.mjs` prints: a row
  * of the shared process listing per process (`parseSnapshot` of `bin/lib/process-tree.mjs`), a line
- * `C<TAB>pid<TAB>command line` for it, and `OK<TAB>count` at the very end. Throws without that last
- * line: "no gate is running" must never be read from a listing that stopped half way. */
+ * `C<TAB>pid<TAB>command line` for it, and as its last line `OK<TAB>count`, the number of `C` lines it
+ * wrote. Throws when the last line is not that marker, or when its count is not the number of `C` lines
+ * read: "no gate is running" must never be read from a listing that stopped half way or lost lines. */
 export function parseProcessList(stdout) {
-  if (!/^OK\t\d+\r?$/m.test(stdout)) throw new Error('the listing did not finish');
+  const lines = stdout.split(/\r?\n/).filter((line) => line !== '');
+  const marker = /^OK\t(\d+)$/.exec(lines.at(-1) ?? '');
+  if (!marker) throw new Error('the listing did not finish');
   const createdAt = new Map(parseSnapshot(stdout).map((row) => [row.pid, row.createdAt]));
-  return stdout
-    .split(/\r?\n/)
+  const found = lines
     .map((line) => /^C\t(\d+)\t(.*)$/.exec(line))
     .filter(Boolean)
     .map((match) => ({ pid: Number(match[1]), createdAt: createdAt.get(Number(match[1])) ?? null, commandLine: match[2] }));
+  if (found.length !== Number(marker[1])) throw new Error(`the listing announces ${marker[1]} command lines and holds ${found.length}`);
+  return found;
 }
 
 /** The same list from `ps -A -o pid=,args=`, which gives no start time. */
@@ -384,7 +427,9 @@ function sessionLines(session, now) {
     const ended = session.work.filter((work) => work.ended);
     // Every piece without a recorded end gets its own line; the ended ones are a count and the latest,
     // because a long session has hundreds and the board is read on a phone.
-    const last = ended.reduce((latest, work) => (latest === null || String(work.endedAt) > String(latest.endedAt) ? work : latest), null);
+    // An end with no time is the latest only when no end has one; among equals the later in the list wins.
+    const time = (work) => work.endedAt ?? '';
+    const last = ended.reduce((latest, work) => (latest === null || time(work) >= time(latest) ? work : latest), null);
     const lastText = last ? ` (last: ${last.tool} ${JSON.stringify(last.description ?? '')} ${last.status} ${ago(last.endedAt, now)})` : '';
     lines.push(`  work: ${open.length} with no recorded end, ${ended.length} ended${lastText}`);
     for (const work of open) lines.push(workLine(work, now));

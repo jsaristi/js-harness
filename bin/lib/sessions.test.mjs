@@ -222,6 +222,72 @@ test('the tail option sets how many lines, and a transcript without a reply has 
   assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), reply('one\ntwo', 2)), { tail: 0 }).tail, []);
 });
 
+// --- review follow-ups on the transcript reader ---
+
+// R3-null-entry-fatal: valid JSON that is not an entry, and a block that is not a block, are skipped.
+test('parseTranscript skips and counts a line that parses to something other than an object', () => {
+  const { entries, skipped } = lib.parseTranscript(transcript('null', '42', '"text"', '[1]', 'true', prompt('hello', 1)));
+  assert.equal(entries.length, 1);
+  assert.equal(skipped, 5);
+});
+
+test('sessionFacts survives lines that are not entries and blocks that are not blocks', () => {
+  const odd = (type, content, minute) => ({ type, ...base(minute), message: { role: type, stop_reason: 'end_turn', content } });
+  const facts = lib.sessionFacts(
+    transcript(
+      'null',
+      odd('user', [null, 7, { type: 'text', text: 5 }, { type: 'text' }], 1),
+      prompt('go', 2),
+      odd('assistant', [null, 'x', { type: 'text', text: null }, { type: 'text' }, { type: 'tool_use' }], 3),
+      { type: 'user', ...base(4), message: 'not an object' },
+      { type: 'attachment', ...base(4), attachment: null },
+      reply('done', 5),
+      odd('assistant', [null, { type: 'text', text: 9 }], 6),
+    ),
+  );
+  assert.equal(facts.skippedLines, 1);
+  assert.equal(facts.title, 'go');
+  assert.deepEqual(facts.tail, ['done']);
+  assert.deepEqual(facts.work, []);
+});
+
+// R3-untested-branches.
+test('a Task call, the older name of Agent, is listed as an Agent', () => {
+  const facts = lib.sessionFacts(transcript(call('toolu_t', 'Task', { description: 'Old name', subagent_type: 'Explore', prompt: 'made up' }, 2)));
+  assert.deepEqual(facts.work.map((w) => [w.tool, w.kind, w.mode]), [['Agent', 'Explore', 'foreground']]);
+});
+
+test('a first prompt whose content is a list of blocks gives the title from its text block', () => {
+  const blocks = { type: 'user', ...base(1), origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'what is in\nthis picture' }] } };
+  const facts = lib.sessionFacts(transcript(blocks, reply('a cat', 2)));
+  assert.deepEqual([facts.title, facts.titleSource], ['what is in this picture', 'first-prompt']);
+});
+
+test('the end of work absorbed mid-turn takes the attachment\'s own time when the entry has none', () => {
+  const absorbed = { type: 'attachment', attachment: { type: 'queued_command', commandMode: 'task-notification', timestamp: at(8), prompt: notice({ task: 'b1', status: 'completed' }) } };
+  const facts = lib.sessionFacts(transcript(...backgroundBash('toolu_1', 'b1', 2), absorbed));
+  assert.deepEqual([facts.work[0].ended, facts.work[0].endedAt], [true, at(8)]);
+});
+
+test('a foreground Agent result with no status ended as returned, and one that is an error as error', () => {
+  const launch = (id) => call(id, 'Agent', { description: 'Look', subagent_type: 'Explore', prompt: 'made up' }, 2);
+  const facts = lib.sessionFacts(transcript(launch('toolu_1'), result('toolu_1', 'plain text, no structure', 3), launch('toolu_2'), result('toolu_2', { status: 'completed', agentId: 'a2' }, 4, { is_error: true })));
+  assert.deepEqual(facts.work.map((w) => [w.id, w.ended, w.status, w.endedAt]), [[null, true, 'returned', at(3)], ['a2', true, 'error', at(4)]]);
+});
+
+test('a notification that arrives before the tool result that records the task id still ends that work', () => {
+  const launch = call('toolu_1', 'Bash', { command: 'true', description: 'Quick', run_in_background: true }, 2);
+  const late = result('toolu_1', { stdout: '', backgroundTaskId: 'b1' }, 4);
+  const byCall = lib.sessionFacts(transcript(launch, notified({ task: 'b1', toolUse: 'toolu_1', status: 'completed' }, 3), late, reply('done', 5)));
+  assert.deepEqual(byCall.work.map((w) => [w.id, w.ended, w.endedAt]), [['b1', true, at(3)]]);
+  // Three notifications of the surveyed transcripts name no tool call: the task id is all that ties them.
+  const byTask = lib.sessionFacts(transcript(launch, notified({ task: 'b1', status: 'failed' }, 3), late, reply('done', 5)));
+  assert.deepEqual(byTask.work.map((w) => [w.id, w.ended, w.status, w.endedAt]), [['b1', true, 'failed', at(3)]]);
+  assert.equal(byTask.state, 'waiting');
+  const agent = lib.sessionFacts(transcript(call('toolu_a', 'Agent', { description: 'Fast', prompt: 'made up' }, 2), notified({ task: 'a1', status: 'completed' }, 3), result('toolu_a', { isAsync: true, status: 'async_launched', agentId: 'a1' }, 4)));
+  assert.deepEqual(agent.work.map((w) => [w.id, w.mode, w.ended, w.endedAt]), [['a1', 'background', true, at(3)]]);
+});
+
 // --- machine facts: every external command is a fake `run`, keyed on what it is asked ---
 
 const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
@@ -258,14 +324,52 @@ test('projectSlug turns every character outside letters and digits into a dash',
   assert.equal(lib.projectSlug('/home/me/my_app.v2'), '-home-me-my-app-v2');
 });
 
+const GONE = ['worktree D:/proj-worktrees/gone', 'HEAD 4444444444444444444444444444444444444444', 'branch refs/heads/feat/gone', 'prunable gitdir file points to non-existent location', ''].join('\n');
+
 test('parseWorktreeList reads path, head and branch, and a detached or bare entry has no branch', () => {
   assert.deepEqual(lib.parseWorktreeList(`${WORKTREES}\nworktree D:/proj.git\nbare\n`.replace(/\n/g, '\r\n')), [
-    { path: 'D:/proj', head: '1111111111111111111111111111111111111111', branch: 'main', bare: false },
-    { path: 'D:/proj-worktrees/board', head: '2222222222222222222222222222222222222222', branch: 'feat/board', bare: false },
-    { path: 'D:/proj-worktrees/loose', head: '3333333333333333333333333333333333333333', branch: null, bare: false },
-    { path: 'D:/proj.git', head: null, branch: null, bare: true },
+    { path: 'D:/proj', head: '1111111111111111111111111111111111111111', branch: 'main', bare: false, prunable: null },
+    { path: 'D:/proj-worktrees/board', head: '2222222222222222222222222222222222222222', branch: 'feat/board', bare: false, prunable: null },
+    { path: 'D:/proj-worktrees/loose', head: '3333333333333333333333333333333333333333', branch: null, bare: false, prunable: null },
+    { path: 'D:/proj.git', head: null, branch: null, bare: true, prunable: null },
   ]);
 });
+
+// R3-enoent-misattributed: a worktree whose folder is gone is not "git is not installed".
+test('parseWorktreeList keeps why git calls a worktree prunable', () => {
+  assert.deepEqual(lib.parseWorktreeList(GONE), [
+    { path: 'D:/proj-worktrees/gone', head: '4444444444444444444444444444444444444444', branch: 'feat/gone', bare: false, prunable: 'gitdir file points to non-existent location' },
+  ]);
+  assert.equal(lib.parseWorktreeList('worktree D:/x\nHEAD 1\nbranch refs/heads/x\nprunable\n')[0].prunable, 'git gives no reason');
+});
+
+test('readWorktrees runs nothing in a worktree git lists as prunable, and says its folder is gone', () => {
+  const run = (command, args, { cwd }) => {
+    if (args.includes('worktree')) return ok(GONE);
+    throw new Error(`nothing may run in a folder that is gone: ${command} ${args.join(' ')} in ${cwd}`);
+  };
+  const [tree] = lib.readWorktrees(run, 'D:/proj').items;
+  const gone = { unavailable: 'its folder is gone: git lists the worktree as prunable (gitdir file points to non-existent location)' };
+  assert.deepEqual([tree.aheadOfMain, tree.aheadOfUpstream, tree.changed], [gone, gone, gone]);
+});
+
+test('readWorktrees reads ENOENT on a count as the worktree folder missing, because git has just run', () => {
+  const run = (command, args) => (args.includes('worktree') ? ok('worktree D:/proj-worktrees/board\nHEAD 1\nbranch refs/heads/b\n') : notFound(command));
+  const [tree] = lib.readWorktrees(run, 'D:/proj').items;
+  assert.deepEqual(tree.aheadOfMain, { unavailable: 'git rev-list: the folder D:/proj-worktrees/board does not exist (ENOENT starting git there)' });
+  assert.deepEqual(tree.aheadOfUpstream, { unavailable: 'git rev-list: the folder D:/proj-worktrees/board does not exist (ENOENT starting git there)' });
+  assert.deepEqual(tree.changed, { unavailable: 'git status: the folder D:/proj-worktrees/board does not exist (ENOENT starting git there)' });
+});
+
+// R3-empty-stdout-counts-zero: a count is digits only.
+for (const printed of ['', '  \n', '0x10', '1e3', '-1', '3.0', '2 commits']) {
+  test(`readWorktrees does not take ${JSON.stringify(printed)} for a count`, () => {
+    const run = (_command, args) => (args.includes('worktree') ? ok('worktree D:/proj\nHEAD 1\nbranch refs/heads/main\n') : args.includes('rev-list') ? ok(printed) : ok(''));
+    const [tree] = lib.readWorktrees(run, 'D:/proj').items;
+    assert.deepEqual(tree.aheadOfMain, { unavailable: `git rev-list: printed ${JSON.stringify(printed.trim())}, not a count` });
+    assert.equal(tree.changed, 0, 'no line of status is no changed file, a count of its own');
+  });
+}
 
 test('readWorktrees gives each worktree its commits not on origin/main, not on its upstream, and its changed files', () => {
   const run = fakeRun([
@@ -320,12 +424,24 @@ test('readWorktrees is unavailable as a whole, with the reason, when the list ca
 // --- running gates ---
 
 test('parseProcessList joins each row of the shared process listing with its command line, and wants the end marker', () => {
-  const stdout = ['4242\t100\t1767261600000\tnode.exe', 'C\t4242\t"C:\\Program Files\\nodejs\\node.exe" "D:/proj/bin/check.mjs"', '77\t1\t\tbash.exe', 'C\t77\tbash -c "node bin/check.mjs"', 'OK\t312', ''].join('\r\n');
+  const stdout = ['4242\t100\t1767261600000\tnode.exe', 'C\t4242\t"C:\\Program Files\\nodejs\\node.exe" "D:/proj/bin/check.mjs"', '77\t1\t\tbash.exe', 'C\t77\tbash -c "node bin/check.mjs"', 'OK\t2', ''].join('\r\n');
   assert.deepEqual(lib.parseProcessList(stdout), [
     { pid: 4242, createdAt: 1767261600000, commandLine: '"C:\\Program Files\\nodejs\\node.exe" "D:/proj/bin/check.mjs"' },
     { pid: 77, createdAt: null, commandLine: 'bash -c "node bin/check.mjs"' },
   ]);
   assert.throws(() => lib.parseProcessList('4242\t100\t1\tnode.exe\nC\t4242\tnode bin/check.mjs\n'), /did not finish/);
+  assert.deepEqual(lib.parseProcessList('OK\t0\n'), []);
+});
+
+// R3-end-marker-not-final: the marker proves a whole listing only when it is the last line and its count
+// is the number of command lines read.
+test('parseProcessList refuses an end marker that is not the last line, and one whose count disagrees', () => {
+  const row = '4242\t100\t1\tnode.exe\nC\t4242\tnode bin/check.mjs\n';
+  assert.throws(() => lib.parseProcessList(`OK\t1\n${row}`), /did not finish/);
+  assert.throws(() => lib.parseProcessList(`${row}OK\t1\n77\t1\t1\tnode.exe\n`), /did not finish/);
+  assert.throws(() => lib.parseProcessList(`${row}OK\t2\n`), /announces 2 command lines and holds 1/);
+  assert.throws(() => lib.parseProcessList('OK\t1\n'), /announces 1 command lines and holds 0/);
+  assert.deepEqual(lib.parseProcessList(`${row}OK\t1\r\n\r\n`).map((found) => found.pid), [4242]);
 });
 
 test('parsePsList reads pid and command line, with no start time', () => {
@@ -477,6 +593,16 @@ test('renderBoard says so when there is nothing: no session, no gate, no pull re
     '',
     lib.NOT_VISIBLE,
   ]);
+});
+
+// R3-untested-branches: an end with no time compared as the string "null", which sorts after every date.
+test('renderBoard names the latest timed end as the last one, and an untimed end only when none has a time', () => {
+  const ended = (description, endedAt) => ({ tool: 'Bash', kind: null, id: description, description, launchedAt: before(3600), ended: true, endedAt, status: 'completed' });
+  const session = (work) => ({ id: 'eeeeeeee-5555', title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', skippedLines: 0, work, tail: [] });
+  const workLine = (work) => lib.renderBoard({ ...BOARD, sessions: [session(work)] }, { now: NOW })[4];
+  assert.equal(workLine([ended('early', before(1800)), ended('late', before(600)), ended('untimed', null)]), '  work: 0 with no recorded end, 3 ended (last: Bash "late" completed 10m ago)');
+  assert.equal(workLine([ended('untimed', null), ended('early', before(1800))]), '  work: 0 with no recorded end, 2 ended (last: Bash "early" completed 30m ago)');
+  assert.equal(workLine([ended('first', null), ended('second', null)]), '  work: 0 with no recorded end, 2 ended (last: Bash "second" completed at an unknown time)');
 });
 
 test('renderBoard gives the reason of an unknown state and of a time it cannot read', () => {
