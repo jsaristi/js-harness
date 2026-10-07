@@ -947,6 +947,13 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   `Microsoft/Windows/PowerShell/ModuleAnalysisCache` appeared again, this time seen while the
   gate was still running. For T7: an orchestrator that reads "is about to commit" in a session's
   tail can keep the gates apart, which the helper alone cannot.
+- 2026-10-07, 06:28 local, a gap of the board seen on this session: the commit helper stopped
+  from the app at 05:47 is still listed 38 minutes later as work "with no recorded end"
+  (`Bash bx6qwy42v ... launched 38m ago  file written 18m ago`). A piece of work stopped by hand
+  leaves no end the board reads, so it counts as running for as long as the session lives. Here the
+  watch itself already keeps this session at `background`; a session with no watch would be
+  shown as `background` by such a leftover when it is in fact waiting. For T7, with the other
+  gaps.
 
 ## Next step
 Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
