@@ -8,10 +8,17 @@
 // all appear in the output of the commands that succeeded in its JSONL event stream (design and
 // probes: odd/tasks/codex-exec-review.md).
 //
+// Codex runs in one of two sessions, chosen with `--session`. `current`, the default, is the review
+// as it has run so far: the user's whole Codex config, with a read-only sandbox and two desktop plugins
+// off. `lean` ignores that config and its rules, disables plugins, apps and hooks, and sets the model
+// and the effort itself (`LEAN_MODEL`, `LEAN_EFFORT`); it does not yet run in a home of its own, so
+// the global `AGENTS.md` still reaches it. `lean` lives beside `current` until a comparison of the two
+// decides the default (odd/tasks/codex-review-lean.md).
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
-// were interrupted, with its outcome, the range, the codex-cli version, the wall time and what Codex's
+// were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time and what Codex's
 // events say it spent (tokens, turns, items by type, commands). A reviewed record names its run line by
 // id; a run line is a measurement and never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
@@ -24,7 +31,11 @@ import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
-const USAGE = 'Usage: js-harness codex-review --base <rev> [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
+const USAGE =
+  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
+
+// The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
+const SESSIONS = ['current', 'lean'];
 
 class ArgError extends Error {}
 
@@ -45,7 +56,9 @@ function parseArgs(argv) {
   const unavailable = get('--unavailable')?.trim();
   if (unavailable === '') throw new ArgError('--unavailable needs a non-empty reason');
   get('--home');
-  return { base, unavailable, cwd: get('--cwd') ?? process.cwd() };
+  const session = get('--session') ?? SESSIONS[0];
+  if (!SESSIONS.includes(session)) throw new ArgError('--session must be `current` or `lean`');
+  return { base, unavailable, session, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -62,19 +75,54 @@ function git(spawn, cwd, args, options = {}) {
   return null;
 }
 
-// Read-only sandbox, no approvals: the review reads the repository and nothing else. The two desktop
-// plugins are off because their REPL (`cua_repl`) cannot launch processes, and the model used it
-// instead of the shell in 6 of 41 stored reviews, so those never ran `git diff`.
-const CODEX_CONFIG = [
-  'sandbox_mode=read-only',
-  'approval_policy=never',
+// Read-only sandbox, no approvals: the review reads the repository and nothing else. Both sessions.
+const SANDBOX_CONFIG = ['sandbox_mode=read-only', 'approval_policy=never'];
+
+// The `current` session, on top of the user's whole Codex config: the two desktop plugins are off
+// because their REPL (`cua_repl`) cannot launch processes, and the model used it instead of the shell
+// in 6 of 41 stored reviews, so those never ran `git diff`.
+const CURRENT_CONFIG = [
+  ...SANDBOX_CONFIG,
   'plugins."unified-computer-use@openai-bundled".enabled=false',
   'plugins."computer-use@openai-bundled".enabled=false',
 ];
 
-/** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. */
-export function codexArgs(base) {
-  return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CODEX_CONFIG.flatMap((setting) => ['-c', setting])];
+// The model and the effort of the lean session. Sebastián fixed both on 2026-10-06, and the command
+// sets them itself instead of taking them from the user's Codex config.
+export const LEAN_MODEL = 'gpt-6.1-sol';
+export const LEAN_EFFORT = 'medium';
+
+// The `lean` session: what a review needs and nothing else. Why each flag is here, with the lines of
+// Codex's source it was read from, is the section "What Codex loads, and what `exec review` accepts
+// (T4, 2026-10-06)" of odd/tasks/codex-review-lean.md.
+const LEAN_FLAGS = [
+  // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
+  // instructions file, and the user's model and effort. Auth still uses the home.
+  '--ignore-user-config',
+  // Leaves out the execpolicy `.rules` files, which are found through the home's folder, not the config.
+  '--ignore-rules',
+  // Leave out the plugins wholesale (so no plugin is turned off one by one), the built-in
+  // `codex_apps` MCP server, and the handlers of `hooks.json`, which is read from the home either way.
+  '--disable', 'plugins',
+  '--disable', 'apps',
+  '--disable', 'hooks',
+  // With the user's config ignored, the command names the model and the effort itself.
+  '-m', LEAN_MODEL,
+  '-c', `model_reasoning_effort="${LEAN_EFFORT}"`,
+  ...SANDBOX_CONFIG.flatMap((setting) => ['-c', setting]),
+  // Leaves out the instructions of the skills in `$CODEX_HOME/skills` and `~/.agents/skills`. INFERRED
+  // from source (the key is read; its effect was not seen in a run): T5's first real run confirms it.
+  '-c', 'skills.include_instructions=false',
+];
+
+/** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. `session` is
+ * `current`, today's configuration on top of the user's Codex config and the default, or `lean`, the
+ * one that loads only what a review needs. The global `AGENTS.md` is in neither list: no flag leaves
+ * it out, only a home of the review's own, which `codexReviewMain` does not set yet. */
+export function codexArgs(base, session = 'current') {
+  if (session === 'lean') return ['exec', 'review', '--json', '--ephemeral', ...LEAN_FLAGS, '--base', base];
+  if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
+  return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
 }
 
 const isWindowsApps = (dir) => /\\microsoft\\windowsapps$/i.test(dir.trim().replace(/^"|"$/g, '').replace(/\//g, '\\').replace(/\\+$/, ''));
@@ -424,13 +472,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     const expected = patchKeys(patch);
+    // No `CODEX_HOME` is set for either session yet, so `lean` still loads the global `AGENTS.md` of the
+    // real home: a home of its own is T5 of odd/tasks/codex-review-lean.md and waits on a decision.
     const codexEnv = childEnv(env, platform);
     const cli = codexVersion(spawn, platform, codexEnv);
     if (!cli) {
       error(NO_CODEX);
       return 1;
     }
-    log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
+    const { session } = args;
+    const lean = session === 'lean';
+    log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})` : ''}; this can take several minutes.`);
     // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
     // the date on the wall clock; how long the review took is read off the monotonic one, because the
     // wall clock can be stepped while Codex runs (a time sync, a manual change).
@@ -438,7 +490,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const launchedAt = monotonicNow();
     // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
     // stays live.
-    const result = await runReview(spawnAsync, kill, platform, codexArgs(from), {
+    const result = await runReview(spawnAsync, kill, platform, codexArgs(from, session), {
       cwd: root,
       stdio: ['ignore', 'pipe', 'inherit'],
       env: codexEnv,
@@ -464,10 +516,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           outcome: runOutcome,
           ...(reason === undefined ? {} : { reason }),
           cli,
-          // The user's Codex config sets both until this command sets them itself (T3 in
-          // odd/tasks/codex-review-lean.md), and Codex's events do not name them.
-          model: null,
-          effort: null,
+          session,
+          // Under `lean` the command sets both, so they are known. Under `current` the user's Codex
+          // config sets them and Codex's events do not name them, so they are `null`, not a guess.
+          model: lean ? LEAN_MODEL : null,
+          effort: lean ? LEAN_EFFORT : null,
           ...reading,
           coverage: evidence.coverage,
         };

@@ -108,7 +108,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   review record names its run — route: same writer
 
 ### Slice B — a clean session
-- [ ] T3 `codex-review --session lean`: `--ignore-user-config`, `-m gpt-6.1-sol`,
+- [x] T3 `codex-review --session lean`: `--ignore-user-config`, `-m gpt-6.1-sol`,
   `-c model_reasoning_effort="medium"`, read-only sandbox, no approvals, with the exact argv
   under test; `current` stays the default — route: delegated writer
 - [x] T4 What a session still loads from the Codex home under `--ignore-user-config` (the global
@@ -311,16 +311,35 @@ What this changes, and waits on Sebastián:
     date source never changes how an attempt ends. RED: 2 failing, the injected error escaping.
   RED over the file: 97 tests, 5 failing. GREEN, the writer's verification over the five test
   files: 177 of 177, 129 s. Parent: read the diff of the command and of the run log.
+- 2026-10-06: the corrections committed as `338386a` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai assessed `73ec5ae..338386a` as `medium`, review not due
+  (`under_budget`, 191 lines): pending in the slice, the reviewed boundary stays `73ec5ae`.
+- 2026-10-06: T3 by the writer, resumed. `--session <current|lean>`, `current` the default and
+  its argv unchanged to the token. The lean argv, pinned by a test, also through the Windows
+  launch path: `exec review --json --ephemeral --ignore-user-config --ignore-rules --disable
+  plugins --disable apps --disable hooks -m gpt-6.1-sol -c model_reasoning_effort="medium" -c
+  sandbox_mode=read-only -c approval_policy=never -c skills.include_instructions=false --base
+  <base>`. The model and the effort are the exported constants `LEAN_MODEL` and `LEAN_EFFORT`;
+  the run line gains `session` and, under `lean`, holds them instead of `null`. RED: the
+  import failed, then 106 tests with 8 failing on assertions. GREEN: 106/106; the writer's
+  verification over the five test files: 186 of 186, 236 s. Parent: `--session fast` exits 2
+  with the usage, and both argv lists printed from the module read as above.
+  - Not shown yet, and T5's first real run shows it: that Codex accepts the feature names
+    `plugins`, `apps` and `hooks` after `--disable`, and that each flag does what T4 read
+    from source. `lean` sets no `CODEX_HOME`, so until T5 it still loads the global
+    `AGENTS.md`.
 
 ## Follow-ups
 - `bin/codex-review.test.mjs` takes just over 120 s here, about 1.3 s a test, since each one
   spawns real git; a foreground limit of 120 s cuts it off, so it is run with a longer one.
+- The five test files of the review command took 129 s in one run and 236 s in the next on
+  this host, so a foreground limit of 300 s leaves little room.
 - The reason logged for a timeout or an overflow quotes the built-in bounds even when a test
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
 Slice A is written (T1, T2) and T4 is read. Waiting on Sebastián: how the login reaches a home
 of the review's own (a copy per run, or a hard link), which T5 needs; then what becomes of
-`--output-schema`, which T6 needs. T3, the `--session lean` argv, waits on neither. Slice A
-holds code, so before a push it needs gentle-ai's assessment and a Codex review of its range,
-which draws on the cap and is asked first.
+`--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
+`7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai
+has reviewed up to `73ec5ae`.
