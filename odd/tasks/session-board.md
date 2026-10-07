@@ -835,10 +835,46 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
     `bin/tui.mjs:379`), so a variable set to the empty string makes the current folder the
     home, and `install` would then write its manifest and skills there. A follow-up of its own.
 
+- 2026-10-06: `000b7c6` (T6b) committed, gate green. gentle-ai assessed `1acbf06..000b7c6` as medium
+  and not due (`under_budget`): it is the last code commit, so it stays unreviewed by gentle-ai
+  unless a later commit reaches the budget; a Codex review of the branch would cover it.
+- 2026-10-06, 22:41 local: the gate of `000b7c6` left an untracked file in this worktree,
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache`, which made `gentle-ai review assess` answer
+  `unassessable` until it was deleted. It is the cache Windows PowerShell keeps under
+  `%LOCALAPPDATA%`, written relative to the working folder, so some test of the suite starts
+  PowerShell with no `LOCALAPPDATA`. Not reproduced: `node --test bin/sessions.test.mjs` did not
+  create it, plain or with `HOME` and `USERPROFILE` pointed at an empty folder, and no other
+  worktree has the folder, so which test does it is not known. Nothing in `bin` or `scripts`
+  sets `PSModuleAnalysisCachePath` (`rg -n PSModuleAnalysisCachePath bin scripts`: no match);
+  setting it in the gate's throwaway home (`checkSensor` in `bin/check.mjs`) would be the fix.
+  A follow-up of the gate, not of this feature.
+
+- 2026-10-06, 23:42 local: the Codex review, on Sebastián's word ("Corré la revisión de Codex sobre
+  feat/session-board"). `node bin/js-harness.mjs codex-review --base origin/main` over
+  `3915b88..000b7c6`, with this document's pending entries stashed for the run because the command
+  refuses a tree with uncommitted tracked changes. It ended in 64 s with exit 1 and recorded
+  nothing. Codex's own closing text: "No defects were confirmed, but the review is incomplete and
+  this is not an approval. Required delegation tools are unavailable, and the fresh-context review
+  fallback failed with Access denied (os error 5)." The command's verdict: "its successful
+  commands showed 367 of 3356 changed lines of 3915b88..HEAD; nothing was recorded". So the
+  branch has no Codex record and the pre-push hook still refuses it. The failure is the one the
+  feature `codex-review-lean` exists for (Codex following the delegation rules of its home
+  instead of reading the patch), not something in this branch. The output is outside the
+  repository, in `D:\js-harness-worktrees\sb-codex-review.out`. Open, his decision: rerun, wait
+  for the lean review to land, or record a skip with `--unavailable`.
+
+- 2026-10-06, 23:47 local: the first wake of the watch on another session's change, 138 s after its
+  launch: `session 77a27016 "Codex review lean integration" is waiting (was working)`, with its
+  last entry 16 s before. That session had been waiting for more than three hours; a look one
+  minute later showed it `working`, last entry 4 s before, so Sebastián had just written to it.
+  The watch therefore said "waiting" for a session that was in the middle of being given work:
+  the line is true of the look it compares, and it is the limit already written under "Watch,
+  context and plans" (what ends a turn is not only a finished task). For T7 to judge whether an
+  orchestrator should look once more before it speaks.
+
 ## Next step
 Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
 the push and the pull requests (two slices stacked to `main`, see Delivery), the merge, the
 global install brought up to `main`, and `js-harness install`. T7 closes with an orchestrator
 session opened with the skill's opening prompt and one real stretch supervised by it, recorded
-here with the four gaps of T6 judged. The commit of T6b carries this entry; its hash and its
-assessment go in with the next record.
+here with the four gaps of T6 judged. The entries after T6b's commit are uncommitted and go with T7's record.
