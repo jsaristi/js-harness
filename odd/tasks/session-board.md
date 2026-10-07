@@ -925,6 +925,28 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   cannot be listed on one look is told apart from an absent one for a first look (T5b); the same
   is owed between two looks. A follow-up for T7's judgement, with the other wakes that ask
   nothing.
+- 2026-10-07, 05:46 local: the entry above named the wrong cause, corrected here with its proof.
+  The same line came back (`plan odd/tasks/codex-review-lean.md appeared in
+  D:/js-harness-worktrees/codex-review-lean-probe`), again seconds after the other session
+  started a lean Codex review, and this time the folder was looked at: `stat` gives it a birth
+  time of 05:45:32, 50 seconds before the look. The other session makes that worktree anew for
+  each of its review runs, so the plan did appear, and the watch said the truth both times;
+  nothing failed to list. What stands is the judgement owed to T7: a worktree another session
+  removes and makes again for each run is a true change that asks nothing of anybody, like the session
+  that leaves the window. The follow-up named above (telling an unlistable plan from an absent
+  one between two looks) has no observed case and is withdrawn.
+- 2026-10-07, 06:07 local: two gates at once a second time, and this time by the parent's own
+  doing. The commit of the entry above was started when the gate was free but the other session
+  was a minute from committing; stopping the helper did not stop it (the app's stop ended the
+  shell it tracks, while `git commit` and the gate under it lived on), and the other session's
+  gate started three minutes into this one. The watch said it in so many words: `gate started in
+  D:/js-harness-worktrees/codex-review-lean (pid 17200) while another runs in
+  D:/js-harness-worktrees/session-board (pid 35856)`. This gate ended red after about 20 minutes
+  with nothing committed, the same as the first collision, so two gates at once on this machine
+  cost the first one its time limit; `core.bare` stayed `false`. The stray
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` appeared again, this time seen while the
+  gate was still running. For T7: an orchestrator that reads "is about to commit" in a session's
+  tail can keep the gates apart, which the helper alone cannot.
 
 ## Next step
 Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
