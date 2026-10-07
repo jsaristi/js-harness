@@ -35,8 +35,11 @@
 // as JSON, which `--json` prints only rendered as text; the JSON is the last message in the rollout file of
 // the review's sub-agent (`bin/lib/codex-review-answer.mjs`). Under the lean session it is read, checked
 // against a schema, printed as one line per finding and counted in the run line. A lean review whose answer
-// cannot be read that way is a failed attempt, and no review is recorded. The `current` session has no such
-// file, so it is as it was: the rendered text passed through, and no findings as data.
+// cannot be read that way is a failed attempt, and no review is recorded. The findings and the verdict are
+// printed only for an attempt that stands (completed, answered, every changed line shown): above an error
+// they would read as the review the attempt is not, so one line says instead that it does not stand. The
+// `current` session has no such file, so it is as it was: the rendered text passed through, and no
+// findings as data.
 //
 // What a review is asked is chosen with `--prompt`, for the lean session alone. `codex`, the default, is
 // `--base <merge-base>` with the sentence Codex writes itself. `own` is this command's prompt
@@ -47,14 +50,27 @@
 // which the one command line `cmd.exe` runs on Windows can carry. Codex's rubric applies under either, so
 // the answer is read the same way; which prompt becomes the default is decided by a comparison.
 //
+// A range too large for one session is reviewed in parts, under the lean session alone. The model reads the
+// diff through a tool whose output is bounded, so on a large range some changed lines are never shown and
+// the evidence rule says, rightly, that the range was not inspected. The rule is not relaxed for that: the
+// range is split by whole files into parts of at most `PART_MAX_CHANGED_LINES` changed lines, or
+// `--part-lines <n>` (`bin/lib/codex-review-parts.mjs`), and the parts are reviewed one after another, never
+// two at once. Each part is a Codex session of its own, in a lean home of its own, asked with this command's
+// own prompt naming its files (`--base` cannot be limited to files), held to the evidence rule for the
+// changed lines of its own files, and logged in a run line of its own. The first part that does not pass
+// stops the run. The review is recorded, in one record for the whole range, only when every part passed,
+// and the findings of all of them are printed then, together. A range within the bound is one part, and its
+// review is the one described above, unchanged; the `current` session never splits a range.
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
 // were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time, what
 // the rollout files say it spent (tokens, requests, threads), what Codex's events say it did (turns,
-// items by type, commands), the prompt it was asked with and, when its answer was read, the findings by
-// severity and the verdict. A reviewed record names its run line by id; a run line is a measurement and
-// never evidence of a review, so `check --push` does not read it.
+// items by type, commands), the prompt it was asked with, which part of the range it was when the range was
+// reviewed in parts and, when its answer was read, the findings by severity and the verdict. A reviewed record names its run line by id (`run`), and the record of a range
+// reviewed in parts the lines of all its parts (`runs`, with `run` the last); a run line is a measurement
+// and never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -63,7 +79,8 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
-import { IntentError, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { numstatFiles, PART_MAX_CHANGED_LINES, reviewParts } from './lib/codex-review-parts.mjs';
+import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -75,8 +92,10 @@ import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 // there, the Codex home of its run; under `current` the flag is read and nothing uses it. `--keep-home`
 // leaves that home after the run, so it needs the session that has one. `--prompt own` and its `--doc`
 // are configurations of the lean session too: `--doc` is a path, taken from `--cwd` when it is relative.
+// `--part-lines` is how many changed lines a part of a large range holds at most, in place of
+// `PART_MAX_CHANGED_LINES`; only the lean session reviews a range in parts.
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--prompt <codex|own>] [--doc <feature document>] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]';
 
 // The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
@@ -118,21 +137,34 @@ function parseArgs(argv) {
   if (prompt === 'own' && session !== 'lean') throw new ArgError('--prompt own needs --session lean: this command\'s own prompt is a configuration of the lean session');
   const doc = get('--doc');
   if (doc !== undefined && prompt !== 'own') throw new ArgError('--doc needs --prompt own: only this command\'s own prompt carries the intent of a feature document');
-  return { base, unavailable, session, home, keepHome, prompt, doc, cwd: get('--cwd') ?? process.cwd() };
+  const partLinesGiven = get('--part-lines');
+  let partLines = PART_MAX_CHANGED_LINES;
+  if (partLinesGiven !== undefined) {
+    partLines = /^[1-9]\d*$/.test(partLinesGiven) ? Number(partLinesGiven) : Number.NaN;
+    if (!Number.isSafeInteger(partLines)) throw new ArgError('--part-lines must be a positive integer: how many changed lines a part of a large range holds at most');
+    if (session !== 'lean') throw new ArgError('--part-lines needs --session lean: only the lean session reviews a large range in parts');
+  }
+  return { base, unavailable, session, home, keepHome, prompt, doc, partLines, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
 
-/** Trimmed stdout of a successful `git <args>` run in `cwd` (empty when it printed nothing), else
- * `null`: a failed run and an empty answer are different things. `options` extend the spawn's. */
-function git(spawn, cwd, args, options = {}) {
+/** The stdout of a successful `git <args>` run in `cwd`, as git wrote it (empty when it printed nothing),
+ * else `null`: a failed run and an empty answer are different things. `options` extend the spawn's. */
+function gitOutput(spawn, cwd, args, options = {}) {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8', ...options });
-    if (result && !result.error && result.status === 0) return (result.stdout ?? '').trim();
+    if (result && !result.error && result.status === 0) return result.stdout ?? '';
   } catch {
     // No git on PATH: the caller reports it as an unresolvable repository or revision.
   }
   return null;
+}
+
+/** `gitOutput`, trimmed: for an answer of one line, or one whose ends do not matter. Not for a list of
+ * paths (`-z`), where a path may begin or end with a space. */
+function git(spawn, cwd, args, options = {}) {
+  return gitOutput(spawn, cwd, args, options)?.trim() ?? null;
 }
 
 // Read-only sandbox, no approvals: the review reads the repository and nothing else. Both sessions.
@@ -307,9 +339,11 @@ export function parseEvents(text) {
  * Exact coverage is the bar; every changed line of a real run was found. With no expected keys (a
  * range of binary files or blank lines only) there is nothing to match, so one successful command
  * stands in. Without `expectedKeys` nothing is inspected. `coverage` is how many were seen, and
- * `missing` up to five that were not, as `file: line`. `errors` are the failed turn's messages;
- * `warnings` are error items Codex raises without failing (an unrecognized configuration setting, for
- * one). */
+ * `missing` up to five that were not, as `file: line`. `missingFiles` is every file with a changed line
+ * that was not seen, in the order of the diff, each `{ file, missing, total }`: its path as the diff names
+ * it, from the root of the repository, how many of its changed lines were not seen, and how many it has.
+ * `errors` are the failed turn's messages; `warnings` are error items Codex raises without failing (an
+ * unrecognized configuration setting, for one). */
 export function reviewEvidence(events, expectedKeys = null) {
   let turnCompleted = false;
   let turnFailed = false;
@@ -343,7 +377,18 @@ export function reviewEvidence(events, expectedKeys = null) {
   const coverage = { seen: expected.length - missingAll.length, total: expected.length };
   const covered = Array.isArray(expectedKeys) && (expected.length === 0 ? succeeded : missingAll.length === 0);
   const missing = missingAll.slice(0, 5).map((missingKey) => missingKey.replace('\n', ': '));
-  return { inspected: completed && review !== '' && covered, completed, review, commands, errors, warnings, coverage, missing };
+  // A key is `<file>\n<line>` (see `patchKeys`), and a `Map` keeps the files in the order they were first seen.
+  const perFile = (keys) => {
+    const counts = new Map();
+    for (const fileKey of keys) {
+      const file = fileKey.slice(0, fileKey.indexOf('\n'));
+      counts.set(file, (counts.get(file) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const totals = perFile(expected);
+  const missingFiles = [...perFile(missingAll)].map(([file, count]) => ({ file, missing: count, total: totals.get(file) }));
+  return { inspected: completed && review !== '' && covered, completed, review, commands, errors, warnings, coverage, missing, missingFiles };
 }
 
 const truncate = (text, length) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
@@ -537,14 +582,107 @@ function spentLine(spent, items, durationMs, lean) {
 /** A text on one line: a title or an explanation the model wrapped must not break the line it is printed in. */
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** The answer of a review (`normalizeAnswer`) as lines: one per finding, `file:start-end severity title`
- * (`file:start` for a single line, and `-` for a finding the model gave no priority), then the verdict
- * with its explanation. The body of each finding is not repeated here: it is in the review as Codex
- * rendered it, which is passed through above these lines. */
-function answerLines({ findings, verdict, explanation, confidence }) {
-  const lines = findings.map(({ file, start, end, severity, title }) => `${file}:${start === end ? start : `${start}-${end}`} ${severity ?? '-'} ${oneLine(title)}`);
+/** One finding of a review's answer (`normalizeAnswer`) as a line: `file:start-end severity title`, with
+ * `file:start` for a single line and `-` for a finding the model gave no priority. The body of the finding
+ * is not repeated here: it is in the review as Codex rendered it, which is passed through above. */
+function findingLine({ file, start, end, severity, title }) {
+  return `${file}:${start === end ? start : `${start}-${end}`} ${severity ?? '-'} ${oneLine(title)}`;
+}
+
+/** The verdict of a review's answer as a line, with its explanation. */
+function verdictLine({ verdict, explanation, confidence }) {
   const sure = confidence === null ? '' : ` (confidence ${confidence})`;
-  return [...lines, `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd()];
+  return `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd();
+}
+
+/** Findings in the order a person reads a change in: by file, then by the line each starts at, then by the
+ * one it ends at. The order of the code units, with no locale, so the same on every machine. */
+const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start - b.start || a.end - b.end);
+
+// What is said of an answer that was read from an attempt that does not stand, in place of its findings and
+// its verdict: "the patch is correct" above an error would be read as the review it is not. The counts of
+// that answer stay in the run line, which is a measurement and no review.
+const NOT_STANDING = 'Codex answered, but this attempt does not stand, so what it answered is not shown as a review; the run log keeps its counts.';
+
+// How many files a message names before it counts the rest: a range has no bound of its own.
+const FILES_SHOWN = 8;
+
+/** `names` as a list for a message: the first `FILES_SHOWN`, then how many more there are. */
+function listed(names) {
+  const more = names.length > FILES_SHOWN ? `, and ${names.length - FILES_SHOWN} more` : '';
+  return `${names.slice(0, FILES_SHOWN).join(', ')}${more}`;
+}
+
+/** `count` things, with `noun` in the singular for one: `1 file`, `2 files`. */
+const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
+
+/** The sum of what `pick` gives for each of `attempts`, or `null` when one of them is `null`: a total with
+ * a part that was not measured is not known, and is never the sum of the rest. */
+const totalOf = (attempts, pick) => attempts.reduce((total, attempt) => (total === null || pick(attempt) === null ? null : total + pick(attempt)), 0);
+
+/** What the parts of a range spent together, as one line, once all of them passed: `attempts` are their
+ * results, each with its `spent` (a `rolloutReading`) and its `durationMs`. When a part left no token
+ * count the line says the tokens of the whole are not known, as `spentLine` does for one session. */
+function totalsLine(attempts) {
+  const ms = totalOf(attempts, (attempt) => attempt.durationMs);
+  const seconds = ms === null ? 'unknown' : Math.round(ms / 1000);
+  const [input, cached, output, reasoning] = ['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningOutputTokens'].map((name) => totalOf(attempts, (attempt) => attempt.spent.usage[name]));
+  if ([input, cached, output, reasoning].every((count) => count === null)) {
+    return `All ${attempts.length} parts passed, in ${seconds} s; the tokens of the whole are not known, since the Codex home of a part held no token count.`;
+  }
+  const requests = totalOf(attempts, (attempt) => attempt.spent.requests);
+  return (
+    `All ${attempts.length} parts passed: Codex used ${spoken(input)} input tokens (${spoken(cached)} cached) and ${spoken(output)} output ` +
+    `(${spoken(reasoning)} reasoning) in ${seconds} s over ${spoken(requests)} request${requests === 1 ? '' : 's'}.`
+  );
+}
+
+/** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
+ * lines than `maxChangedLines`: `{ parts }`, each `{ index, of, files, changedLines, prompt, expected }`
+ * with the prompt its session is asked with and the keys of the changed lines it must have seen
+ * (`patchKeys`). `{ parts: null }` when the range is one part, which is reviewed whole. `{ error }`, a
+ * sentence, when the range cannot be split in a way that is known to show all of it; nothing is launched
+ * then. `intent` is what `--doc` gave, for the prompt of every part.
+ *
+ * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
+ * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
+ * the other files are, so that the parts add up to the range. A renamed file is then two files, the old
+ * name removed whole and the new one added whole, and every line of both is to be shown. */
+function planParts(spawn, root, { from, head, maxChangedLines, intent }) {
+  const room = { maxBuffer: REVIEW_MAX_BUFFER };
+  const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], room);
+  if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+  let groups;
+  try {
+    groups = reviewParts(numstatFiles(numstat), maxChangedLines);
+  } catch (err) {
+    return { error: `Could not read which files the range changes (${err.message})` };
+  }
+  if (groups.length <= 1) return { parts: null };
+  const parts = [];
+  for (const [at, group] of groups.entries()) {
+    const part = { index: at + 1, of: groups.length, files: group.files, changedLines: group.changedLines };
+    const which = `part ${part.index} of ${part.of}`;
+    let prompt;
+    try {
+      prompt = reviewPrompt({ from, head, intent, part });
+    } catch (err) {
+      return { error: `The range needs ${part.of} parts, and the prompt of ${which} cannot be written. ${err.message}` };
+    }
+    const shown = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', '--no-renames', from, head, '--', ...group.files], room);
+    if (shown === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
+    parts.push({ ...part, prompt, expected: patchKeys(shown) });
+  }
+  // The proof that the split leaves nothing out: every changed line of the range is one a part must have
+  // seen. A path a pathspec reads as something else, or one cut on its way here, would be a file in no part.
+  const whole = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', '--no-renames', from, head], room);
+  if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
+  const inAPart = new Set(parts.flatMap((part) => part.expected));
+  const left = patchKeys(whole).filter((rangeKey) => !inAPart.has(rangeKey));
+  if (left.length > 0) {
+    return { error: `The ${parts.length} parts the range would be reviewed in do not show ${thousands(left.length)} of the changed lines of the range between them (the first: ${truncate(left[0].replace('\n', ': '), 100)}), so their reviews would not be a review of the range` };
+  }
+  return { parts };
 }
 
 // How many errors of an answer off its schema are named in the reason; the rest are counted.
@@ -615,6 +753,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   let outcome = 'unavailable';
   // The id of the run line of a reviewed attempt, for its record; a skip launches nothing and has none.
   let runId;
+  // The parts a large range was reviewed in, and the ids of their run lines; `null` and none for a range
+  // reviewed whole, and for a skip.
+  let parts = null;
+  let runIds = [];
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
@@ -645,6 +787,19 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     const expected = patchKeys(patch);
+    const { session } = args;
+    const lean = session === 'lean';
+    // The parts a large range is reviewed in, under the lean session alone: `null` for a range that is
+    // one part, and under `current`, which never asks how large the range is. Worked out before anything
+    // is probed, made or launched, so a range that cannot be split leaves nothing behind.
+    if (lean) {
+      const plan = planParts(spawn, root, { from, head, maxChangedLines: args.partLines, intent });
+      if (plan.error) {
+        error(`${plan.error}${plan.error.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
+        return 1;
+      }
+      ({ parts } = plan);
+    }
     // The environment of the `--version` probe and of the `current` session, which sets no `CODEX_HOME`
     // and so runs in the user's real Codex home. The lean session adds a `CODEX_HOME` of its own below;
     // the probe only asks for the version, which no home changes, so it runs before that home is made.
@@ -654,15 +809,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(NO_CODEX);
       return 1;
     }
-    const { session } = args;
-    const lean = session === 'lean';
     // This command's own prompt, for the range the record will claim: from the merge-base to the commit
     // HEAD is now, both by id, so what the model is told to diff cannot move under it. `undefined` under
     // the default prompt, where Codex writes its sentence from `--base`. Built before anything is made
-    // or launched, so a range that cannot be named leaves nothing behind.
+    // or launched, so a range that cannot be named leaves nothing behind. A range in parts has the
+    // prompts of its parts instead (`planParts`).
     const own = args.prompt === 'own';
     let promptText;
-    if (own) {
+    if (own && parts === null) {
       try {
         promptText = reviewPrompt({ from, head, intent });
       } catch (err) {
@@ -670,183 +824,253 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         return 1;
       }
     }
-    // The lean session's own Codex home, named after the run: the id is made here, before the launch,
-    // and the run line reuses it. Until the home exists nothing is launched, so a failure here writes no
-    // run line and no record. `current` makes no id yet, no folder, and never asks where the home is.
-    let leanHome = null;
-    let leanRunId;
-    if (lean) {
-      try {
-        leanRunId = randomUUID();
-      } catch (err) {
-        error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.`);
-        return 1;
-      }
-      try {
-        // `||`, not `??`: an empty `--home` or `JS_HARNESS_HOME` is unset, and the next source is asked.
-        // Resolved as it is, an empty path is the working directory, and the lean home, with its link to
-        // the login, would be made there.
-        const homes = leanHomesDir(path.resolve(args.home || env.JS_HARNESS_HOME || homedir()));
-        // What a killed run left, or a kept one. Twice the timeout: no review that is still running is that old.
-        sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
-        leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId });
-      } catch (err) {
-        error(`${err.message}\nThe lean review was not started and nothing was recorded.`);
-        return 1;
-      }
-    }
-    // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
-    // the date on the wall clock; how long the review took is read off the monotonic one, because the
-    // wall clock can be stepped while Codex runs (a time sync, a manual change).
-    let startedAt;
-    let launchedAt;
-    let endedAt;
-    let result;
-    // What the session spent. Not what Codex's own events say: `exec review --json` reports a `usage` of
-    // zeros in `turn.completed` by construction, since the review runs in a sub-agent whose token counts
-    // are dropped before they reach the parent thread (`core/src/codex_delegate.rs:311-319` at
-    // rust-v0.160.0). The counts are in the rollout files of the session's home, read below for `lean`.
-    // `current` is ephemeral, which writes none, in the user's own home, which this command never reads:
-    // nothing is known of it, and that stays `null`.
-    let spent = noRolloutReading();
-    // What the review answered, as `rolloutAnswer` gives it, from the same rollout files and so for `lean`
-    // alone; `null` under `current`, where no answer is read and none is asked for.
-    let answered = null;
-    try {
-      const how = lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})${own ? ' and this command\'s own prompt' : ''}` : '';
-      log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${how}; this can take several minutes.`);
-      startedAt = now();
-      launchedAt = readClock(monotonicNow);
-      // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt
-      // under the own one; stdout carries the JSONL, stderr (the progress) stays live.
-      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform, args.prompt), {
-        cwd: root,
-        stdio: [own ? 'pipe' : 'ignore', 'pipe', 'inherit'],
-        env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
-      }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals, input: promptText });
-      endedAt = readClock(monotonicNow);
-    } finally {
-      // The lean home goes on every way out, whatever the review came to: Codex has ended or was
-      // killed. Its rollout files are read first, since they go with it: what the session spent, and what
-      // the review answered. What could not be cleaned is a warning and never changes how the attempt ends.
-      if (leanHome) {
-        spent = rolloutReading(leanHome.home);
-        answered = rolloutAnswer(leanHome.home);
-        const left = leanHome.dispose({ keep: args.keepHome });
-        if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
-        // The path comes last, so that it can be copied whole. Kept is not for ever: the folder is still
-        // where the sweep of a later lean review looks, and that removes it like one a killed run left.
-        if (args.keepHome) {
-          log(
-            `The lean Codex home of this run was kept${left ? '' : ', without the login'}, for its rollout files under \`sessions\` (what the session sent and spent); ` +
-              `the next lean review removes it once it is ${Math.ceil((2 * timeoutMs) / 60000)} minutes old, and it can be deleted by hand at any time: ${leanHome.home}`,
-          );
+    const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+    /** One attempt: one Codex session, over the whole range or over one `part` of it (see `planParts`),
+     * from the making of its lean home to its line in the run log. `expectedKeys` are the changed lines
+     * its commands must have shown (`patchKeys`), `prompt` what it is asked with (`codex` or `own`),
+     * `promptText` the text of the own prompt and `promptVersion` the version of that text.
+     *
+     * Resolves with `{ exit }`, the exit code of the command when the attempt does not stand, whatever
+     * the reason; or, when it stands, `{ exit: 0, runId, review, spent, durationMs }`: the id of its run
+     * line (`undefined` when the line could not be written), its answer as data (`null` under `current`),
+     * what it spent and how long it took. It prints what a single review prints, but for the findings and
+     * the verdict of a part, which wait for the other parts. */
+    const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null }) => {
+      const ownPrompt = prompt === 'own';
+      // The lean session's own Codex home, named after the run: the id is made here, before the launch,
+      // and the run line reuses it. Until the home exists nothing is launched, so a failure here writes no
+      // run line and no record. `current` makes no id yet, no folder, and never asks where the home is.
+      let leanHome = null;
+      let leanRunId;
+      if (lean) {
+        try {
+          leanRunId = randomUUID();
+        } catch (err) {
+          error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.`);
+          return { exit: 1 };
+        }
+        try {
+          // `||`, not `??`: an empty `--home` or `JS_HARNESS_HOME` is unset, and the next source is asked.
+          // Resolved as it is, an empty path is the working directory, and the lean home, with its link to
+          // the login, would be made there.
+          const homes = leanHomesDir(path.resolve(args.home || env.JS_HARNESS_HOME || homedir()));
+          // What a killed run left, or a kept one. Twice the timeout: no review that is still running is
+          // that old. Once a run, before its first session: the parts of a range may together take longer
+          // than that, and a later part must not remove the home `--keep-home` kept for an earlier one.
+          if (part === null || part.index === 1) sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
+          leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId });
+        } catch (err) {
+          error(`${err.message}\nThe lean review was not started and nothing was recorded.`);
+          return { exit: 1 };
         }
       }
-    }
-    const durationMs = elapsedMs(launchedAt, endedAt);
-    const events = parseEvents(result.stdout);
-    const evidence = reviewEvidence(events, expected);
-    // The turns, the items and the commands of the session. Its `usage` is left out on purpose: see `spent`.
-    const reading = sessionReading(events);
-    // The answer as this command keeps it, when there is one that is valid: under `lean` alone. It is kept
-    // in the run line whatever the attempt comes to, as what it spent is: a measurement.
-    const review = answered?.ok ? normalizeAnswer(answered.answer, { root, platform }) : null;
-    /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
-     * could not be built or written: the measurement is lost and said so, and the attempt ends as it
-     * would. Building the line is inside the `try` for that reason: its id and its date come from
-     * injected sources, and neither may change how a review ends. */
-    const logRun = (runOutcome, reason) => {
+      // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
+      // the date on the wall clock; how long the review took is read off the monotonic one, because the
+      // wall clock can be stepped while Codex runs (a time sync, a manual change).
+      let startedAt;
+      let launchedAt;
+      let endedAt;
+      let result;
+      // What the session spent. Not what Codex's own events say: `exec review --json` reports a `usage` of
+      // zeros in `turn.completed` by construction, since the review runs in a sub-agent whose token counts
+      // are dropped before they reach the parent thread (`core/src/codex_delegate.rs:311-319` at
+      // rust-v0.160.0). The counts are in the rollout files of the session's home, read below for `lean`.
+      // `current` is ephemeral, which writes none, in the user's own home, which this command never reads:
+      // nothing is known of it, and that stays `null`.
+      let spent = noRolloutReading();
+      // What the review answered, as `rolloutAnswer` gives it, from the same rollout files and so for `lean`
+      // alone; `null` under `current`, where no answer is read and none is asked for.
+      let answered = null;
       try {
-        const run = {
-          schema: CODEX_REVIEW_RUN_SCHEMA,
-          // The lean session made its id before the launch, to name its home; `current` makes it here.
-          id: leanRunId ?? randomUUID(),
-          startedAt: startedAt.toISOString(),
-          durationMs,
-          base,
-          from,
-          head,
-          outcome: runOutcome,
-          ...(reason === undefined ? {} : { reason }),
-          cli,
-          session,
-          // Under `lean` the command sets both, so they are known. Under `current` the user's Codex
-          // config sets them and Codex's events do not name them, so they are `null`, not a guess.
-          model: lean ? LEAN_MODEL : null,
-          effort: lean ? LEAN_EFFORT : null,
-          // What the review was asked with, and the version of the text when it is this command's own.
-          prompt: args.prompt,
-          promptVersion: own ? REVIEW_PROMPT_VERSION : null,
-          // The four counts, each `null` when it is not known, and where they were read from: `rollout`,
-          // or `null` when none was. A line written before `usageSource` existed took its `usage` from
-          // Codex's events (`bin/lib/codex-review-runs.mjs`).
-          usage: spent.usage,
-          usageSource: tokensKnown(spent) ? 'rollout' : null,
-          requests: spent.requests,
-          firstRequestInputTokens: spent.firstRequestInputTokens,
-          threads: spent.threads,
-          turns: reading.turns,
-          items: reading.items,
-          commands: reading.commands,
-          coverage: evidence.coverage,
-          // What the review answered, read as data: how many findings, by severity, and the verdict, with
-          // where they were read from. All `null` when no answer was read (`current`) or none was valid,
-          // which is never the same as a review that found nothing: that one counts 0.
-          findings: review ? findingCounts(review.findings) : null,
-          verdict: review ? review.verdict : null,
-          answerSource: review ? 'rollout' : null,
-        };
-        appendCodexReviewRun(root, run, { spawn });
-        return run.id;
-      } catch (err) {
-        error(`Could not write the run log, so what this attempt measured was not kept: ${err.message}`);
-        return undefined;
+        const how = lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})${ownPrompt ? ' and this command\'s own prompt' : ''}` : '';
+        const what = part === null ? range : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
+        log(`Codex is reviewing ${what}${how}; this can take several minutes.`);
+        startedAt = now();
+        launchedAt = readClock(monotonicNow);
+        // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt
+        // under the own one; stdout carries the JSONL, stderr (the progress) stays live.
+        result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform, prompt), {
+          cwd: root,
+          stdio: [ownPrompt ? 'pipe' : 'ignore', 'pipe', 'inherit'],
+          env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
+        }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals, input: asked });
+        endedAt = readClock(monotonicNow);
+      } finally {
+        // The lean home goes on every way out, whatever the review came to: Codex has ended or was
+        // killed. Its rollout files are read first, since they go with it: what the session spent, and what
+        // the review answered. What could not be cleaned is a warning and never changes how the attempt ends.
+        if (leanHome) {
+          spent = rolloutReading(leanHome.home);
+          answered = rolloutAnswer(leanHome.home);
+          const left = leanHome.dispose({ keep: args.keepHome });
+          if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
+          // The path comes last, so that it can be copied whole. Kept is not for ever: the folder is still
+          // where the sweep of a later lean review looks, and that removes it like one a killed run left.
+          if (args.keepHome) {
+            log(
+              `The lean Codex home of this run was kept${left ? '' : ', without the login'}, for its rollout files under \`sessions\` (what the session sent and spent); ` +
+                `the next lean review removes it once it is ${Math.ceil((2 * timeoutMs) / 60000)} minutes old, and it can be deleted by hand at any time: ${leanHome.home}`,
+            );
+          }
+        }
       }
+      const durationMs = elapsedMs(launchedAt, endedAt);
+      const events = parseEvents(result.stdout);
+      const evidence = reviewEvidence(events, expectedKeys);
+      // The turns, the items and the commands of the session. Its `usage` is left out on purpose: see `spent`.
+      const reading = sessionReading(events);
+      // The answer as this command keeps it, when there is one that is valid: under `lean` alone. It is kept
+      // in the run line whatever the attempt comes to, as what it spent is: a measurement.
+      const review = answered?.ok ? normalizeAnswer(answered.answer, { root, platform }) : null;
+      /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
+       * could not be built or written: the measurement is lost and said so, and the attempt ends as it
+       * would. Building the line is inside the `try` for that reason: its id and its date come from
+       * injected sources, and neither may change how a review ends. */
+      const logRun = (runOutcome, reason) => {
+        try {
+          const run = {
+            schema: CODEX_REVIEW_RUN_SCHEMA,
+            // The lean session made its id before the launch, to name its home; `current` makes it here.
+            id: leanRunId ?? randomUUID(),
+            startedAt: startedAt.toISOString(),
+            durationMs,
+            base,
+            from,
+            head,
+            // Which part of that range the line measured. The line of a review of the whole range has no
+            // such field, as no line had before a range was reviewed in parts (`runPart`).
+            ...(part === null ? {} : { part: { index: part.index, of: part.of, files: part.files.length, changedLines: part.changedLines } }),
+            outcome: runOutcome,
+            ...(reason === undefined ? {} : { reason }),
+            cli,
+            session,
+            // Under `lean` the command sets both, so they are known. Under `current` the user's Codex
+            // config sets them and Codex's events do not name them, so they are `null`, not a guess.
+            model: lean ? LEAN_MODEL : null,
+            effort: lean ? LEAN_EFFORT : null,
+            // What the review was asked with, and the version of the text when it is this command's own.
+            prompt,
+            promptVersion,
+            // The four counts, each `null` when it is not known, and where they were read from: `rollout`,
+            // or `null` when none was. A line written before `usageSource` existed took its `usage` from
+            // Codex's events (`bin/lib/codex-review-runs.mjs`).
+            usage: spent.usage,
+            usageSource: tokensKnown(spent) ? 'rollout' : null,
+            requests: spent.requests,
+            firstRequestInputTokens: spent.firstRequestInputTokens,
+            threads: spent.threads,
+            turns: reading.turns,
+            items: reading.items,
+            commands: reading.commands,
+            coverage: evidence.coverage,
+            // What the review answered, read as data: how many findings, by severity, and the verdict, with
+            // where they were read from. All `null` when no answer was read (`current`) or none was valid,
+            // which is never the same as a review that found nothing: that one counts 0.
+            findings: review ? findingCounts(review.findings) : null,
+            verdict: review ? review.verdict : null,
+            answerSource: review ? 'rollout' : null,
+          };
+          appendCodexReviewRun(root, run, { spawn });
+          return run.id;
+        } catch (err) {
+          error(`Could not write the run log, so what this attempt measured was not kept: ${err.message}`);
+          return undefined;
+        }
+      };
+      const completed = result.status === 0 && evidence.completed;
+      // Whether the attempt stands: Codex completed, its answer could be read when one is read, and its
+      // commands showed every changed line. Known before anything of the answer is printed, because the
+      // findings and the verdict of an attempt that does not stand are not a review, and are not shown as one.
+      const stands = completed && !(answered && !answered.ok) && evidence.inspected;
+      for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
+      if (evidence.review) write(`${evidence.review}\n`);
+      if (review && !stands) {
+        log(NOT_STANDING);
+      } else if (review && part === null) {
+        // The answer of a part is not printed here: it waits for the other parts, and the findings of a
+        // range are printed together once every part has passed.
+        for (const line of [...review.findings.map(findingLine), verdictLine(review)]) log(line);
+      }
+      log(spentLine(spent, reading.items, durationMs, lean));
+      if (!completed) {
+        const reason = result.error?.code === 'ENOBUFS'
+          ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
+          : result.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
+          : result.error?.code === 'EINTR' ? 'it was interrupted and stopped'
+          : result.error ? `could not start it: ${result.error.message}`
+            : result.status !== 0 ? `it exited ${result.status ?? `on ${result.signal ?? 'a signal'}`}`
+              : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
+        const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
+        const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
+        logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
+        error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
+        return { exit: typeof result.status === 'number' && result.status !== 0 ? result.status : 1 };
+      }
+      // A lean review answers in a structure this command reads. A turn that completed and left no such
+      // answer did not do what a review does, so the attempt failed, whatever its commands showed: asked
+      // before the evidence rule, which says how much of the diff was read and nothing of what came of it.
+      if (answered && !answered.ok) {
+        const why = answerFailure(answered);
+        logRun('failed', why);
+        error(`Codex's turn completed, but ${why}; no record was written.\n${WAYS_ON}`);
+        return { exit: 1 };
+      }
+      if (!evidence.inspected) {
+        const { seen, total } = evidence.coverage;
+        const within = part === null ? '' : `part ${part.index} of ${part.of} of `;
+        const why = evidence.review === '' ? 'it ended without a review message'
+          : total === 0 ? 'it ran no successful command'
+            : `its successful commands showed ${seen} of ${total} changed lines of ${within}${base.slice(0, 7)}..HEAD`;
+        // The files whose changed lines were not all shown, so that a person knows where the review fell
+        // short without reading the session. Under the lean session: the `current` one refuses in the
+        // words it always has, until the comparison of the two decides what becomes of it.
+        const unread = lean && evidence.missingFiles.length > 0
+          ? `\n  not read in full: ${listed(evidence.missingFiles.map(({ file, missing: lines, total: all }) => `${file} (${lines} of ${all} changed lines missing)`))}`
+          : '';
+        const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
+        const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
+        logRun('not-inspected', why);
+        error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${WAYS_ON}`);
+        return { exit: 1 };
+      }
+      // The run line goes first, so that the record can name it. If the record then cannot be written
+      // the command exits 1 and the log keeps a `reviewed` line no record names: a measurement of a
+      // session that did meet the evidence rule, and still not a review `check --push` will count.
+      return { exit: 0, runId: logRun('reviewed'), review, spent, durationMs };
     };
-    for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
-    if (evidence.review) write(`${evidence.review}\n`);
-    if (review) for (const line of answerLines(review)) log(line);
-    log(spentLine(spent, reading.items, durationMs, lean));
-    if (result.status !== 0 || !evidence.completed) {
-      const reason = result.error?.code === 'ENOBUFS'
-        ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
-        : result.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
-        : result.error?.code === 'EINTR' ? 'it was interrupted and stopped'
-        : result.error ? `could not start it: ${result.error.message}`
-          : result.status !== 0 ? `it exited ${result.status ?? `on ${result.signal ?? 'a signal'}`}`
-            : evidence.errors.length ? 'the turn failed' : 'the turn never completed';
-      const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
-      const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
-      logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
-      error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
-      return typeof result.status === 'number' && result.status !== 0 ? result.status : 1;
-    }
-    // A lean review answers in a structure this command reads. A turn that completed and left no such
-    // answer did not do what a review does, so the attempt failed, whatever its commands showed: asked
-    // before the evidence rule, which says how much of the diff was read and nothing of what came of it.
-    if (answered && !answered.ok) {
-      const why = answerFailure(answered);
-      logRun('failed', why);
-      error(`Codex's turn completed, but ${why}; no record was written.\n${WAYS_ON}`);
-      return 1;
-    }
-    if (!evidence.inspected) {
-      const { seen, total } = evidence.coverage;
-      const why = evidence.review === '' ? 'it ended without a review message'
-        : total === 0 ? 'it ran no successful command'
-          : `its successful commands showed ${seen} of ${total} changed lines of ${base.slice(0, 7)}..HEAD`;
-      const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
-      const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
-      logRun('not-inspected', why);
-      error(`Codex's turn completed, but ${why}; nothing was recorded.${missing}${ran}\n${WAYS_ON}`);
-      return 1;
+
+    if (parts === null) {
+      const whole = await attempt({ expectedKeys: expected, prompt: args.prompt, promptText, promptVersion: own ? REVIEW_PROMPT_VERSION : null });
+      if (whole.exit !== 0) return whole.exit;
+      runId = whole.runId;
+    } else {
+      const lines = parts.reduce((sum, part) => sum + part.changedLines, 0);
+      const files = parts.reduce((sum, part) => sum + part.files.length, 0);
+      log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}, more than the ${thousands(args.partLines)} a part holds, so it is reviewed in ${parts.length} parts, one after another.`);
+      if (!own) log('Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
+      // One part at a time, in order, and the next only once the one before it has passed: the first that
+      // does not pass ends the run with the exit code of its own failure. The lines of the parts before
+      // it stay in the run log, as measurements; none of them is a review of the range.
+      const passed = [];
+      for (const part of parts) {
+        const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part });
+        if (one.exit !== 0) {
+          const later = part.of - part.index;
+          const unstarted = later === 0 ? '' : later === 1 ? 'the part after it was not started and ' : `the ${later} parts after it were not started and `;
+          error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.`);
+          return one.exit;
+        }
+        passed.push(one);
+      }
+      // Every part stands, so what they answered is the review of the range: the findings of them all, in
+      // the order of the files, then what each part concluded, then what they spent together.
+      for (const finding of passed.flatMap((one) => one.review.findings).sort(byPlace)) log(findingLine(finding));
+      passed.forEach((one, at) => log(`Part ${at + 1} of ${passed.length}: ${verdictLine(one.review)}`));
+      log(totalsLine(passed));
+      runIds = passed.map((one) => one.runId).filter((id) => id !== undefined);
+      runId = passed.at(-1).runId;
     }
     outcome = 'reviewed';
-    // The run line goes first, so that the record can name it. If the record then cannot be written
-    // the command exits 1 and the log keeps a `reviewed` line no record names: a measurement of a
-    // session that did meet the evidence rule, and still not a review `check --push` will count.
-    runId = logRun('reviewed');
   }
 
   const record = {
@@ -856,8 +1080,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     reviewedAt: now().toISOString(),
     outcome,
     ...(outcome === 'unavailable' ? { reason: args.unavailable } : {}),
-    // The run line this review was measured in; absent when that line could not be written.
+    // The run line this review was measured in; absent when that line could not be written. For a range
+    // reviewed in parts it is the line of the last part, the one that completed the review, and `runs`
+    // names the lines of all the parts, in order, that could be written.
     ...(runId === undefined ? {} : { run: runId }),
+    ...(runIds.length === 0 ? {} : { runs: runIds }),
   };
   let file;
   try {
@@ -867,6 +1094,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return 1;
   }
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;
-  log(`Recorded ${what} of ${base.slice(0, 7)}..${head.slice(0, 7)} in ${file}.`);
+  const how = parts === null ? '' : `, made in ${parts.length} parts,`;
+  log(`Recorded ${what} of ${base.slice(0, 7)}..${head.slice(0, 7)}${how} in ${file}.`);
   return 0;
 }

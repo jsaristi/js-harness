@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runFindings, runPrompt, runSession, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
+import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt, runSession, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like codex-reviews.test.mjs does.
@@ -224,4 +224,40 @@ test('runPrompt and runFindings read the log as it is: old lines and new ones si
   const runs = readCodexReviewRuns(root);
   assert.deepEqual(runs.map(runPrompt), ['codex', 'own', 'own']);
   assert.deepEqual(runs.map(runFindings), [null, answered.findings, null]);
+});
+
+// What the attempt of one part of a range reviewed in parts adds to its line.
+const partOf = { index: 2, of: 3, files: 4, changedLines: 380 };
+
+test('runPart: the part a line measured, and null for every line that measured a whole range', () => {
+  assert.deepEqual(runPart({ ...run, session: 'lean', ...answered, part: partOf }), partOf);
+  // A line written before a range was ever reviewed in parts, and every review of a whole range since:
+  // neither has the field, and neither is a part.
+  assert.equal('part' in run, false, 'the fixture is a line as they were first written');
+  assert.equal(runPart(run), null);
+  assert.equal(runPart({ ...run, session: 'lean', ...answered }), null);
+  assert.equal(runPart({ ...run, part: null }), null);
+  // Only what the reader knows is given, so a field a later version adds is not handed on by accident.
+  assert.deepEqual(runPart({ ...run, part: { ...partOf, later: true } }), partOf);
+  assert.deepEqual(runPart({ ...run, part: { index: 1, of: 2, files: 1, changedLines: 0 } }), { index: 1, of: 2, files: 1, changedLines: 0 }, 'a part of binary files alone');
+});
+
+test('runPart: a part that is not one, or a line that is not one, reads as null', () => {
+  const bad = [
+    'part 2 of 3', 2, [], {}, { index: 2, of: 3 },
+    { ...partOf, index: 0 }, { ...partOf, index: 4 }, { ...partOf, index: '2' }, { ...partOf, index: 1.5 },
+    { ...partOf, of: 0 }, { ...partOf, of: null }, { ...partOf, files: 0 }, { ...partOf, files: ['a.txt'] },
+    { ...partOf, changedLines: -1 }, { ...partOf, changedLines: '380' },
+  ];
+  for (const part of bad) assert.equal(runPart({ ...run, part }), null, JSON.stringify(part));
+  for (const line of [null, undefined, 'part', 7]) assert.equal(runPart(line), null, JSON.stringify(line));
+});
+
+test('runPart reads the log as it is: the lines of whole ranges and of parts side by side', () => {
+  const root = makeRepo();
+  appendCodexReviewRun(root, run);
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000009', session: 'lean', ...answered, part: { ...partOf, index: 1 } });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000a', session: 'lean', ...answered, outcome: 'not-inspected', part: partOf });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-00000000000b', session: 'lean', ...answered });
+  assert.deepEqual(readCodexReviewRuns(root).map(runPart), [null, { ...partOf, index: 1 }, partOf, null]);
 });

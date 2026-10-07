@@ -34,6 +34,13 @@
 // three are `null`. The schema stayed `v1` here too, so a line written before these fields has none of
 // them: a reader takes a missing `prompt` as `codex`, the only one there was (`runPrompt`), and missing
 // findings as no data (`runFindings`), which is never a review that found nothing.
+//
+// A part of a range. A range too large for one session is reviewed in parts (`./codex-review-parts.mjs`),
+// each part an attempt with a line of its own, whose `part` says which it was: `index` of `of`, from 1, with
+// how many `files` it covered and their `changedLines`. Its `coverage`, its tokens and its findings are
+// those of the part; its `base`, `from` and `head` are the whole range's. The line of a review of a whole
+// range has NO `part` field, as no line had before parts existed, so a reader takes a missing `part` as a
+// whole range (`runPart`). The review record of a range reviewed in parts names the lines of its parts.
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
@@ -59,6 +66,19 @@ export function runPrompt(run) {
 export function runFindings(run) {
   const findings = run?.answerSource === 'rollout' ? run.findings : null;
   return Number.isInteger(findings?.total) && findings.total >= 0 ? findings : null;
+}
+
+const isCount = (value, least) => Number.isInteger(value) && value >= least;
+
+/** The part of its range a run line measured, `{ index, of, files, changedLines }`, or `null` when the line
+ * measured a whole range: it has no `part`, as every line written before a range was reviewed in parts and
+ * every review of a whole range since, or what it has there is not a part. */
+export function runPart(run) {
+  const part = run?.part;
+  if (part === null || typeof part !== 'object') return null;
+  const { index, of, files, changedLines } = part;
+  const valid = isCount(of, 1) && isCount(index, 1) && index <= of && isCount(files, 1) && isCount(changedLines, 0);
+  return valid ? { index, of, files, changedLines } : null;
 }
 
 /** `<git common dir>/js-harness/codex-review-runs.jsonl` for the repository at `root`, or `null` when

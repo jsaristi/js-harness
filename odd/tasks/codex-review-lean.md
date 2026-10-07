@@ -135,7 +135,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   answer off the schema is a failed attempt, recorded — route: same writer
 
 ### Slice D — completeness
-- [ ] T8 The evidence rule holds under the lean session and the own prompt: every changed line
+- [x] T8 The evidence rule holds under the lean session and the own prompt: every changed line
   of every changed file in the output of a successful command, and a refusal names the files not
   read — route: delegated writer
 - [ ] T9 A large range is reviewed in parts instead of refused: whole files grouped up to a
@@ -657,9 +657,47 @@ What follows from it:
     tokens in the first request. It is not a comparison: the model chose different files to
     read in each, and neither found anything on a range with no known defect. T10 to T12
     are what compare.
+- 2026-10-07: T8 and T9 built by one delegated writer (route: delegated, the writer trigger:
+  eight files), test first. T8 is checked: the rule held in both real lean runs (216 of 216
+  under each prompt) and is now pinned by tests. T9 is not checked until a real range is
+  reviewed in parts.
+  - RED seen, then GREEN: `bin/lib/codex-review-parts.mjs` (module not found → 13 of 13);
+    the part prompt (missing export); the cut inside a surrogate pair (a lone `\ud83d` →
+    cut before it); `runPart` (missing export → 22 of 22); the refusal that names files
+    (no "not read in full" line); the verdict printed only when the attempt stands (the
+    one-line notice absent). The 15 command tests of T9 were written after the code, then
+    run against the committed command: 14 failed for the right reason and the one that says
+    a single part is as today passed, as it should. Whole command file: 174 of 174, 273 s;
+    the five module files: 110 of 110, 9 s (re-run by the parent).
+  - T8, what was there and what was added: the rule and one test under `--prompt own`
+    existed. Added: the lean session with either prompt, reviewed and not-inspected; under
+    lean the refusal lists the files not read in full with how many changed lines of each
+    were missing (eight at most, then "and N more"); `reviewEvidence().missingFiles`. The
+    `current` refusal keeps its exact words.
+  - The findings of the last two reviews, closed here: the finding lines and the verdict
+    print only when the attempt stands; a child that closes stdin early (EPIPE) leaves the
+    outcome to its own exit; the cut of an intent section never leaves half a surrogate
+    pair; the off-Windows case test passes `linux` and `darwin`; `--keep-home` with a
+    login that could not be removed has a test at the command's level. The two that passed
+    at once were checked by breaking the code, and then failed.
+  - T9 as built: under the lean session a range above `PART_MAX_CHANGED_LINES` (400,
+    provisional; `--part-lines <n>` overrides) is split into parts of whole files in path
+    order, a larger file alone. Each part is its own session in its own lean home, one after
+    another, with the prompt of our own naming its files, its own evidence check and its own
+    run line (`part: {index, of, files, changedLines}`, absent on a single-part run). The
+    review is recorded only when every part passed; the first that fails stops the run.
+    Findings are merged in file and line order, one verdict line per part.
+  - What the writer decided where the brief was open: `--no-renames` in the count, in each
+    command of a part and in each expected set, so that parts provably add up to the range
+    (a rename split over two parts otherwise does not); a refusal before any launch when
+    the parts together would not show every changed line; the review record gains `runs`,
+    every part id, beside `run`, the last part line; the part prompt has its own version
+    constant and the whole-range text stays `v1` to the character; a path with a quote or
+    a control character refuses the split; stale homes are swept once per run, so a later
+    part cannot remove an earlier kept home.
 
 ## Follow-ups
-- From gentle-ai's review of `81250a4`:
+- From gentle-ai's review of `81250a4` (all but the first closed with T8, Progress):
   - R3-finding-shape-unproved-fails-closed (`bin/lib/codex-review-answer.mjs:44`, WARNING):
     the schema of one finding has only been tested against invented fixtures, and both real
     answers so far held an empty `findings`. An off-schema answer fails the attempt, so a
@@ -674,7 +712,7 @@ What follows from it:
     exits before reading the prompt (an EPIPE on the write). With T8.
   - R3-intent-cut-splits-surrogate (`bin/lib/codex-review-prompt.mjs:77`): the cut at 2,000
     characters can split a surrogate pair. With T8.
-- From gentle-ai's review of `7529f67`, with the next change to the command's tests:
+- From gentle-ai's review of `7529f67` (both closed with T8, Progress):
   - R3-off-windows-case-test-host-platform (`bin/codex-review.test.mjs:1138`): the test of a
     variable spelled in another case off Windows passes no platform, so it may rest on the
     host's; pass `linux` and `darwin`.
