@@ -81,7 +81,7 @@ test('sessionFacts reports the lines it skipped', () => {
 test('a background Bash call is listed with the task id its tool result records, its description and its launch time', () => {
   const facts = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_1', 'b1abc', 2)));
   assert.deepEqual(facts.work, [
-    { tool: 'Bash', kind: null, toolUseId: 'toolu_1', id: 'b1abc', description: 'Run the gate', launchedAt: at(2), mode: 'background', ended: false, endedAt: null, status: null },
+    { tool: 'Bash', kind: null, toolUseId: 'toolu_1', id: 'b1abc', description: 'Run the gate', launchedAt: at(2), mode: 'background', resumed: false, ended: false, endedAt: null, status: null },
   ]);
 });
 
@@ -138,7 +138,7 @@ test('a Bash call that asked for the background and whose result records no task
 test('an Agent call launched in the background takes its agent id from the tool result, and a notification ends it', () => {
   const open = lib.sessionFacts(transcript(prompt('go', 1), ...asyncAgent('toolu_a', 'a1f', 2)));
   assert.deepEqual(open.work, [
-    { tool: 'Agent', kind: 'Explore', toolUseId: 'toolu_a', id: 'a1f', description: 'Research the format', launchedAt: at(2), mode: 'background', ended: false, endedAt: null, status: null },
+    { tool: 'Agent', kind: 'Explore', toolUseId: 'toolu_a', id: 'a1f', description: 'Research the format', launchedAt: at(2), mode: 'background', resumed: false, ended: false, endedAt: null, status: null },
   ]);
   const closed = lib.sessionFacts(transcript(prompt('go', 1), ...asyncAgent('toolu_a', 'a1f', 2), notified({ task: 'a1f', toolUse: 'toolu_a', status: 'completed' }, 6)));
   assert.deepEqual([closed.work[0].ended, closed.work[0].status], [true, 'completed']);
@@ -286,6 +286,89 @@ test('a notification that arrives before the tool result that records the task i
   assert.equal(byTask.state, 'waiting');
   const agent = lib.sessionFacts(transcript(call('toolu_a', 'Agent', { description: 'Fast', prompt: 'made up' }, 2), notified({ task: 'a1', status: 'completed' }, 3), result('toolu_a', { isAsync: true, status: 'async_launched', agentId: 'a1' }, 4)));
   assert.deepEqual(agent.work.map((w) => [w.id, w.mode, w.ended, w.endedAt]), [['a1', 'background', true, at(3)]]);
+});
+
+// --- T3c: a subagent that is sent a follow-up runs again (and R3-stale-early-end-on-id-reuse) ---
+
+/** A `SendMessage` call to a subagent and its result. `resumed` is what the result says: the agent had
+ * stopped and runs again (`resumedAgentId`), or it was still running and the message waits for it. */
+const followUp = (id, agent, minute, { summary = 'Fix the findings', resumed = true } = {}) => [
+  call(id, 'SendMessage', { to: agent, recipient: agent, type: 'message', summary, message: 'made up', content: 'made up' }, minute),
+  result(id, resumed ? { success: true, message: `Resuming agent ${agent}`, resumedAgentId: agent, pin: {} } : { success: true, message: `Message queued for delivery to ${agent} at its next tool round.`, pin: {} }, minute),
+];
+const firstRun = [...asyncAgent('toolu_a', 'a1', 2), notified({ task: 'a1', toolUse: 'toolu_a', status: 'completed' }, 5), reply('The agent is done.', 6)];
+
+test('a follow-up that resumes a subagent is a new piece of work with the same id, open until its own end', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, ...followUp('toolu_s', 'a1', 8), reply('It is running again.', 9)));
+  assert.deepEqual(facts.work, [
+    { tool: 'Agent', kind: 'Explore', toolUseId: 'toolu_a', id: 'a1', description: 'Research the format', launchedAt: at(2), mode: 'background', resumed: false, ended: true, endedAt: at(5), status: 'completed' },
+    { tool: 'Agent', kind: 'Explore', toolUseId: 'toolu_s', id: 'a1', description: 'Fix the findings', launchedAt: at(8), mode: 'background', resumed: true, ended: false, endedAt: null, status: null },
+  ]);
+  assert.equal(facts.state, 'background');
+});
+
+test('the end of a resumed subagent names the follow-up call, and closes that piece only', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, ...followUp('toolu_s', 'a1', 8), notified({ task: 'a1', toolUse: 'toolu_s', status: 'failed' }, 12), reply('It failed.', 13)));
+  assert.deepEqual(facts.work.map((w) => [w.toolUseId, w.ended, w.endedAt, w.status]), [['toolu_a', true, at(5), 'completed'], ['toolu_s', true, at(12), 'failed']]);
+  assert.equal(facts.state, 'waiting');
+});
+
+test('a message queued for a subagent that is still running starts no work', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...asyncAgent('toolu_a', 'a1', 2), ...followUp('toolu_s', 'a1', 3, { resumed: false }), reply('Told it.', 4)));
+  assert.deepEqual(facts.work.map((w) => [w.toolUseId, w.ended]), [['toolu_a', false]]);
+});
+
+test('a subagent that ran in the foreground is resumed in the background, with the kind of its first run', () => {
+  const first = [call('toolu_f', 'Agent', { description: 'Write the code', subagent_type: 'general-purpose', run_in_background: false, prompt: 'made up' }, 2), result('toolu_f', { status: 'completed', agentId: 'a7' }, 6)];
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...first, ...followUp('toolu_s', 'a7', 8, { summary: 'One more change' })));
+  assert.deepEqual(facts.work.map((w) => [w.id, w.kind, w.mode, w.resumed, w.description, w.ended]), [
+    ['a7', 'general-purpose', 'foreground', false, 'Write the code', true],
+    ['a7', 'general-purpose', 'background', true, 'One more change', false],
+  ]);
+});
+
+test('a follow-up to a subagent the transcript never launched is still listed, with no kind', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...followUp('toolu_s', 'a9', 3)));
+  assert.deepEqual(facts.work.map((w) => [w.tool, w.id, w.kind, w.resumed, w.ended]), [['Agent', 'a9', null, true, false]]);
+});
+
+test('an old end written again after a follow-up does not close the follow-up', () => {
+  const again = notified({ task: 'a1', toolUse: 'toolu_a', status: 'completed' }, 10);
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, ...followUp('toolu_s', 'a1', 8), again, ...asyncAgent('toolu_a', 'a1', 2), reply('Still running.', 11)));
+  assert.deepEqual(facts.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_a', true, at(5)], ['toolu_s', false, null]]);
+});
+
+test('a follow-up and its result written again after its end do not reopen it', () => {
+  const resumed = followUp('toolu_s', 'a1', 8);
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, ...resumed, notified({ task: 'a1', toolUse: 'toolu_s', status: 'completed' }, 12), ...resumed, reply('done', 13)));
+  assert.deepEqual(facts.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_a', true, at(5)], ['toolu_s', true, at(12)]]);
+});
+
+test('an end that names only the task closes every open piece of that id, and one that names a call nothing launched after it', () => {
+  // The first run has no recorded end: the end of the resumed run says the subagent stopped, so both did.
+  const open = [...asyncAgent('toolu_a', 'a1', 2), ...followUp('toolu_s', 'a1', 8)];
+  const byTask = lib.sessionFacts(transcript(...open, notified({ task: 'a1', status: 'completed' }, 12)));
+  assert.deepEqual(byTask.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_a', true, at(12)], ['toolu_s', true, at(12)]]);
+  const byLaterCall = lib.sessionFacts(transcript(...open, notified({ task: 'a1', toolUse: 'toolu_s', status: 'completed' }, 12)));
+  assert.deepEqual(byLaterCall.work.map((w) => [w.toolUseId, w.ended]), [['toolu_a', true], ['toolu_s', true]]);
+  const byFirstCall = lib.sessionFacts(transcript(...open, notified({ task: 'a1', toolUse: 'toolu_a', status: 'completed' }, 12)));
+  assert.deepEqual(byFirstCall.work.map((w) => [w.toolUseId, w.ended]), [['toolu_a', true], ['toolu_s', false]]);
+});
+
+// R3-stale-early-end-on-id-reuse: an end kept by task id closed every later work that carried the id.
+test('an end is used once: work launched later under the same id stays open, and is never ended before its launch', () => {
+  const relaunched = lib.sessionFacts(transcript(...asyncAgent('toolu_1', 'a1', 2), notified({ task: 'a1', status: 'completed' }, 5), ...asyncAgent('toolu_2', 'a1', 8), reply('Again.', 9)));
+  assert.deepEqual(relaunched.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_1', true, at(5)], ['toolu_2', false, null]]);
+  assert.equal(relaunched.state, 'background');
+
+  // An end that arrives before the result that gives the id is kept for that one call, then gone.
+  const quick = call('toolu_1', 'Bash', { command: 'true', description: 'Quick', run_in_background: true }, 2);
+  const early = lib.sessionFacts(transcript(quick, notified({ task: 'b1', status: 'completed' }, 3), result('toolu_1', { stdout: '', backgroundTaskId: 'b1' }, 4), ...backgroundBash('toolu_2', 'b1', 8)));
+  assert.deepEqual(early.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_1', true, at(3)], ['toolu_2', false, null]]);
+
+  // An end for an id nothing has launched yet is not an end of a call made after it.
+  const stale = lib.sessionFacts(transcript(notified({ task: 'a1', status: 'completed' }, 1), ...asyncAgent('toolu_1', 'a1', 2), ...followUp('toolu_s', 'a1', 8)));
+  assert.deepEqual(stale.work.map((w) => [w.toolUseId, w.ended]), [['toolu_1', false], ['toolu_s', false]]);
 });
 
 // --- machine facts: every external command is a fake `run`, keyed on what it is asked ---
@@ -603,6 +686,18 @@ test('renderBoard names the latest timed end as the last one, and an untimed end
   assert.equal(workLine([ended('early', before(1800)), ended('late', before(600)), ended('untimed', null)]), '  work: 0 with no recorded end, 3 ended (last: Bash "late" completed 10m ago)');
   assert.equal(workLine([ended('untimed', null), ended('early', before(1800))]), '  work: 0 with no recorded end, 2 ended (last: Bash "early" completed 30m ago)');
   assert.equal(workLine([ended('first', null), ended('second', null)]), '  work: 0 with no recorded end, 2 ended (last: Bash "second" completed at an unknown time)');
+});
+
+// T3c: a follow-up reopens a subagent, and its line says it is that subagent resumed.
+test('renderBoard marks the work of a resumed subagent', () => {
+  const resumed = (id, kind) => ({ tool: 'Agent', kind, id, description: 'Fix the findings', launchedAt: before(120), mode: 'background', resumed: true, ended: false, file: { path: 'x', modifiedAt: before(3) } });
+  const session = { id: 'ffffffff-6666', title: 't', state: 'background', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', skippedLines: 0, work: [resumed('a1', 'general-purpose'), resumed('a2', null)], tail: [] };
+  const lines = lib.renderBoard({ ...BOARD, sessions: [session] }, { now: NOW });
+  assert.deepEqual(lines.slice(4, 7), [
+    '  work: 2 with no recorded end, 0 ended',
+    '    Agent a1 (general-purpose, resumed) "Fix the findings"  launched 2m ago  file written 3s ago',
+    '    Agent a2 (resumed) "Fix the findings"  launched 2m ago  file written 3s ago',
+  ]);
 });
 
 test('renderBoard gives the reason of an unknown state and of a time it cannot read', () => {

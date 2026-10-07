@@ -159,6 +159,18 @@ may be off by a few.
   running, not an end.
 - A resumed session writes earlier entries again (544 of 6,438 `tool_use` ids appear twice in one
   file), so only the first sight of a call launches work.
+- A follow-up to a subagent (established on 2026-10-07 from the same transcripts, 63 calls, three
+  of them the ones that resumed the writer of this section): a `tool_use` named `SendMessage`
+  whose `input` has `to` and `recipient` (the agent id), `type: "message"`, `summary`, `message`
+  and `content`. Its `tool_result` has `toolUseResult.success: true` and a `message`, and says one
+  of two things. When the subagent had stopped (55 calls; 34 of those subagents had run in the
+  foreground, 21 in the background): `message` is `Resuming agent <id>` and `resumedAgentId` is
+  the agent id. The subagent then runs again in the background under the same id and in the same
+  `subagents/agent-<id>.jsonl`, and its end is a `<task-notification>` whose `<task-id>` is that
+  id and whose `<tool-use-id>` is the `SendMessage` call, not the first `Agent` call (53 of the
+  55; of the other two, one was still running). When the subagent was still running (8 calls):
+  `message` is `Message queued for delivery to <id> at its next tool round.`, there is no
+  `resumedAgentId`, and no notification ever names that call; nothing new starts.
 - Notifications also arrive for ids no call of the transcript launched (52 ids): work a subagent
   started. The board does not list it and its last line says so.
 - Files: `<tmp>/claude/<slug>/<session>/tasks/<task id>.output` is a shell's output. The same
@@ -166,6 +178,16 @@ may be off by a few.
   `<claude home>/projects/<slug>/<session>/subagents/agent-<id>.jsonl`.
 
 ### Decisions taken while writing T1 to T3
+
+- (T3c) A follow-up that resumes a subagent is a new piece of work with the subagent's id and
+  `resumed: true`, not the first piece reopened: it has its own call, launch time and end, and
+  the first run keeps the end it had. Its description is the follow-up's `summary`, its kind the
+  first run's. In text its line reads `Agent <id> (<kind>, resumed) ...` under the count of work
+  with no recorded end, with the last write of the subagent's transcript.
+- (T3c) Which end closes what: an end that names a call closes that call's piece and any older
+  piece of the same id still open, never one launched after that call; an end that names only the
+  task closes every open piece of that id; an end that closes nothing is kept by task id for the
+  one call made before it whose result gives that id later, and is used once.
 
 - `Agent` calls are listed whether they run in the background or the foreground (`mode` says
   which), because a session in the middle of a foreground subagent is exactly the "still has work
@@ -224,7 +246,8 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
 - [x] T2 Machine facts in `bin/lib/sessions.mjs`: worktrees with their unpushed counts, running gates, open pull requests, each unavailable with its reason — route: delegated writer, same delegation as T1
 - [x] T3 `bin/sessions.mjs`: `sessions`, `--json`, `--hours`, `--tail`, the injectable paths, text output, exit codes; dispatcher entry, help line and the roadmap checklist entry — route: delegated writer, same delegation
 - [x] T3b Accepted review follow-ups on the library: `R3-enoent-misattributed`, `R3-empty-stdout-counts-zero`, `R3-null-entry-fatal`, `R3-end-marker-not-final`, `R3-untested-branches` — route: delegated writer (the library, its test, and the listing script of the command)
-- [ ] T3c A subagent that is sent a follow-up reads as running again: establish the transcript shape of a resumed subagent from real transcripts, then reopen its work on the board — route: delegated writer (the library and its test, and reading real transcripts prepares the write)
+- [x] T3c A subagent that is sent a follow-up reads as running again: establish the transcript shape of a resumed subagent from real transcripts, then reopen its work on the board; with it `R3-stale-early-end-on-id-reuse` of the second review, the same ground — route: delegated writer (the library and its test, and reading real transcripts prepares the write)
+- [x] T3d Accepted follow-ups of the second review: `R3-args-prototype-keys`, `R3-stat-race-branch-untested`, `R3-facts-throw-kills-board`, `R3-dispatch-test-not-hermetic` (its fifth finding, `R3-stale-early-end-on-id-reuse`, is in T3c) — route: delegated writer, same delegation as T3c
 - [ ] T4 Live check on this machine with two or more sessions, output recorded here; the memories `main-session-orchestrates` and `cross-session-prompts` point to the command — route: inline (one run and two memory edits)
 - [ ] T5 `sessions --watch`: the command waits and returns when the board changes (a session's state, its open background work, a gate starting or ending, a pull request opening or closing), printing what changed; it costs nothing while nothing changes — route: delegated writer
 - [ ] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected — route: delegated writer
@@ -352,10 +375,58 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   whether Codex loads a skill from that frontmatter.
 - Commits so far: `875c5d9` (slice 1, the library; gate green; gentle-ai approved, lineage
   `review-f4fbf1b6d5dfc3fa`).
+- 2026-10-07, second review: with `5a79a0d` (the T3b fixes) and `6c92d93` (the command, this
+  document, the roadmap entry) committed, gentle-ai reviewed `875c5d9..6c92d93` (risk medium, due
+  by `slice_budget_reached`, consent granted, one consolidated reviewer), outcome approved, lineage
+  `review-2276b071e49a490d`, acknowledged. Five advisory findings, all accepted by the parent:
+  `R3-stale-early-end-on-id-reuse` (WARNING), and `R3-args-prototype-keys`,
+  `R3-stat-race-branch-untested`, `R3-facts-throw-kills-board`, `R3-dispatch-test-not-hermetic`
+  (SUGGESTION).
+- 2026-10-07, T3c with `R3-stale-early-end-on-id-reuse` (delegated writer, not committed). The
+  shape of a follow-up was read first from the real transcripts, the parent's three follow-ups to
+  this writer among them, and is under "Transcript format". RED: `node --test
+  bin/lib/sessions.test.mjs`, 74 tests, 63 pass, 11 fail: no `resumed` key on work (2), a
+  `SendMessage` that resumes a subagent launched nothing (7, among them the end that names the
+  follow-up, the repeated old end, the repeated follow-up, the task-only end), no `resumed` label
+  in the text (1), and the finding itself: a second launch under an id whose end had been kept was
+  closed at once, `endedAt` 10:05 before its `launchedAt` 10:08 (1). The case of a message queued
+  for a subagent still running passed as written. GREEN: 74 pass. `node --test
+  bin/sessions.test.mjs` got one case for the file of resumed work, green as written once the
+  library was. Over the 34 real transcripts, with a script that printed counts only: 454 pieces
+  of work, 55 of them resumed, one of those open (this writer), none ended before its launch.
+  Live, `node bin/js-harness.mjs sessions --hours 2`, exit 0, while this writer ran as a resumed
+  subagent: `729ed66b` `background`, two pieces with no recorded end and 26 ended. The two: `Agent
+  ab8b82d56ba4fa5d8 (general-purpose, resumed)`, launched 5 minutes before (01:36:12Z, the time
+  of the parent's `SendMessage`), file written 1 second before; and a shell, `brjc287q0`, launched
+  19 minutes before with its output last written 18 minutes before, which nobody checked by hand.
+  `77a27016` `waiting`, nothing open, 11 ended. No gate, no open pull request.
+- 2026-10-07, T3d (same writer, not committed):
+  - `R3-args-prototype-keys`: RED, `node --test bin/sessions.test.mjs`, 11 of 13 new usage cases
+    fail: `constructor x`, `toString x`, `hasOwnProperty x` and `__proto__ x` went on to run git;
+    `--tail ""`, `--tail " "` and `--tail 0x2` were taken for 0, 0 and 2; `--hours 1e1` for 10;
+    `--cwd ""`, `--claude-home ""` and `--tmp ""` for paths. `--hours ""` and `--hours " "` were
+    already refused. GREEN: all 22 usage cases pass. The flags are in a `Map`, a number is plain
+    digits (with a decimal part for `--hours`), an empty value is a missing one. Live:
+    `node bin/js-harness.mjs sessions constructor x` prints `unknown argument: constructor` and
+    the usage, exit 2.
+  - `R3-stat-race-branch-untested`: the test passed as written (the branch was right, and
+    untested): a transcript whose `stat` fails after the listing is on the board as `{ id,
+    modifiedAt: null, unavailable: "ENOENT" }`, after every dated session, the text prints its
+    line, exit 0.
+  - `R3-facts-throw-kills-board`: RED 1 fail, the command rejected with the reader's `TypeError`.
+    No transcript shape is known to make the reader throw since T3b, so the reader is a dependency
+    of the command (`readFacts`) and the test hands in one that throws. GREEN: that session is
+    `unavailable: its transcript could not be read into facts: <message>` and the others print.
+  - `R3-dispatch-test-not-hermetic`: RED reproduced by running the test with `TEMP` and `TMP`
+    inside a scratch repository: the message named that repository, not the temp cwd. The test
+    now asserts the exit code, the empty stdout, the one-line message and the temp Claude home in
+    it, and no longer which project git answers with. GREEN in both temp roots.
+  After both: `node --test bin/lib/sessions.test.mjs bin/sessions.test.mjs
+  bin/js-harness.test.mjs`, 138 tests, 138 pass.
 
 ## Next step
-The follow-ups of T3b are committed through the gate, then slice 2 (the command, this document, the
-roadmap entry), each when no other gate is running and each followed by its gentle-ai assessment.
-Then T3c and T4, so the board is proved by hand before anything is built on it; then T5, T6 and
+T3c and T3d are in the working tree for the parent to commit through the gate, when no other gate
+is running, followed by its gentle-ai assessment and the roadmap step for T3c.
+Then T4, so the board is proved by hand before anything is built on it; then T5, T6 and
 T7. Before any push: Sebastián's word, and his answer on the Codex review of the code commits,
 which spends quota. Before T7: his word on `js-harness install`.

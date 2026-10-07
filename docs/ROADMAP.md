@@ -163,7 +163,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Machine facts: worktrees with their unpushed counts, running gates, open pull requests, each unavailable with its reason
 - [x] `sessions` and `sessions --json`, read-only, in the dispatcher's help
 - [x] Accepted review follow-ups on the library
-- [ ] A subagent that is sent a follow-up reads as running again
+- [x] A subagent that is sent a follow-up reads as running again
 - [ ] Live check on this machine with two or more sessions open, and the memories point to the command
 - [ ] `sessions --watch` returns when the board changes and costs nothing while it does not
 - [ ] The orchestrator ships as a skill the installer writes and removes through the manifest

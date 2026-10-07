@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { sessionsMain } from './sessions.mjs';
-import { NOT_VISIBLE, projectSlug } from './lib/sessions.mjs';
+import { NOT_VISIBLE, projectSlug, sessionFacts } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
 // `--claude-home` and `--tmp`, and `git`, `gh` and the process listing are fakes, so no test reads this
@@ -134,7 +134,15 @@ function withMachine(body) {
 
 // --- usage ---
 
-for (const argv of [['--hours'], ['--hours', 'soon'], ['--hours', '0'], ['--tail', '-1'], ['--tail', '1.5'], ['--claude-home'], ['--tmp', '--json'], ['--bogus'], ['extra']]) {
+const USAGE_ERRORS = [
+  ['--hours'], ['--hours', 'soon'], ['--hours', '0'], ['--tail', '-1'], ['--tail', '1.5'], ['--claude-home'], ['--tmp', '--json'], ['--bogus'], ['extra'],
+  // R3-args-prototype-keys: a name every object inherits is not a flag, and an empty value is not a number
+  // (`Number('')` is 0) nor a path.
+  ['constructor', 'x'], ['toString', 'x'], ['hasOwnProperty', 'x'], ['__proto__', 'x'],
+  ['--tail', ''], ['--tail', ' '], ['--tail', '0x2'], ['--hours', ''], ['--hours', ' '], ['--hours', '1e1'], ['--cwd', ''], ['--claude-home', ''], ['--tmp', ''],
+];
+
+for (const argv of USAGE_ERRORS) {
   test(`sessionsMain exits 2 with its usage on stderr for ${JSON.stringify(argv)}`, async () => {
     const out = [];
     const err = [];
@@ -276,6 +284,73 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
   const board = JSON.parse(stdout);
   assert.deepEqual(board.sessions[0], { id: SESSION_A, modifiedAt: before(60).toISOString(), unavailable: 'EBUSY' });
   assert.equal(board.sessions[1].id, SESSION_B);
+}));
+
+// R3-stat-race-branch-untested: a session can remove or lock its transcript between the listing and the stat.
+test('a transcript whose date cannot be read after it was listed is on the board as unavailable, after the dated ones', withMachine(async (machine) => {
+  writeSessions(machine);
+  const stat = (file) => {
+    if (file.endsWith(`${SESSION_A}.jsonl`)) throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+    return fs.statSync(file);
+  };
+  const data = await runSessions(machine, ['--json'], { stat });
+  assert.equal(data.code, 0);
+  const board = JSON.parse(data.stdout);
+  assert.deepEqual(board.sessions.map((session) => session.id), [SESSION_B, SESSION_A]);
+  assert.deepEqual(board.sessions[1], { id: SESSION_A, modifiedAt: null, unavailable: 'ENOENT' });
+
+  const text = await runSessions(machine, [], { stat });
+  assert.equal(text.code, 0);
+  const lines = text.stdout.split('\n');
+  const [dated, undated, worktrees] = [lines.findIndex((line) => line.startsWith('bbbbbbbb  working')), lines.indexOf('aaaaaaaa  unavailable: ENOENT'), lines.indexOf('Worktrees')];
+  assert.ok(dated !== -1 && dated < undated && undated < worktrees, text.stdout);
+  assert.equal(lines[0], `Sessions  ${machine.root}  2 changed in the last 12h`);
+}));
+
+// R3-facts-throw-kills-board: no shape of transcript is known to make the reader throw, so one is handed in.
+test('a transcript the reader cannot turn into facts is listed as unavailable with the reason, and the others are printed', withMachine(async (machine) => {
+  writeSessions(machine);
+  const readFacts = (text, options) => {
+    if (text.includes('Board feature')) throw new TypeError('boom at entry 3');
+    return sessionFacts(text, options);
+  };
+  const data = await runSessions(machine, ['--json'], { readFacts });
+  assert.equal(data.code, 0);
+  const board = JSON.parse(data.stdout);
+  assert.deepEqual(board.sessions[0], { id: SESSION_A, modifiedAt: before(60).toISOString(), unavailable: 'its transcript could not be read into facts: boom at entry 3' });
+  assert.deepEqual([board.sessions[1].id, board.sessions[1].state], [SESSION_B, 'working']);
+  const text = await runSessions(machine, [], { readFacts });
+  assert.equal(text.code, 0);
+  assert.ok(text.stdout.split('\n').includes('aaaaaaaa  unavailable: its transcript could not be read into facts: boom at entry 3'), text.stdout);
+}));
+
+// T3c: the work of a resumed subagent has the subagent's transcript as its file.
+test('a subagent that was sent a follow-up is open work again, with the last write of its transcript', withMachine(async (machine) => {
+  writeAt(
+    path.join(machine.projectDir, `${SESSION_A}.jsonl`),
+    jsonl(
+      prompt('build the board', 900),
+      call('toolu_a', 'Agent', { description: 'Write the code', subagent_type: 'general-purpose', prompt: 'made up' }, 800),
+      result('toolu_a', { isAsync: true, status: 'async_launched', agentId: 'a1' }, 800),
+      { type: 'user', ...entry(600), origin: { kind: 'task-notification' }, message: { role: 'user', content: '<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>toolu_a</tool-use-id>\n<status>completed</status>\n</task-notification>' } },
+      reply('The code is written.', 590),
+      call('toolu_s', 'SendMessage', { to: 'a1', recipient: 'a1', type: 'message', summary: 'Fix the findings', message: 'made up', content: 'made up' }, 120),
+      result('toolu_s', { success: true, message: 'Resuming agent a1', resumedAgentId: 'a1', pin: {} }, 120),
+      reply('It is fixing them.', 100),
+    ),
+    100,
+  );
+  writeAt(path.join(machine.projectDir, SESSION_A, 'subagents', 'agent-a1.jsonl'), '{}\n', 5);
+  const data = await runSessions(machine, ['--json']);
+  const [session] = JSON.parse(data.stdout).sessions;
+  assert.equal(session.state, 'background');
+  assert.deepEqual(session.work.map((work) => [work.id, work.resumed, work.ended, work.file]), [
+    ['a1', false, true, undefined],
+    ['a1', true, false, { path: path.join(machine.projectDir, SESSION_A, 'subagents', 'agent-a1.jsonl'), modifiedAt: before(5).toISOString() }],
+  ]);
+  const text = await runSessions(machine, []);
+  assert.ok(text.stdout.split('\n').includes('    Agent a1 (general-purpose, resumed) "Fix the findings"  launched 2m ago  file written 5s ago'), text.stdout);
+  assert.ok(text.stdout.includes('  work: 1 with no recorded end, 1 ended (last: Agent "Write the code" completed 10m ago)'), text.stdout);
 }));
 
 test('the machine facts are on the board: worktrees with their counts, running gates, open pull requests', withMachine(async (machine) => {

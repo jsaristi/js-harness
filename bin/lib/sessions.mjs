@@ -113,10 +113,19 @@ function newWork(block, entry, mode) {
     description: block.input?.description ?? null,
     launchedAt: entry.timestamp ?? null,
     mode,
+    resumed: false,
     ended: false,
     endedAt: null,
     status: null,
   };
+}
+
+/** The work a follow-up starts: a `SendMessage` call whose result says the subagent `agent` runs again.
+ * It is a piece of its own, with the subagent's id, because it has its own call, launch time and end;
+ * `resumed` tells it from the subagent's first run, whose `kind` it keeps. Its description is the
+ * follow-up's `summary`. */
+function resumedWork(block, entry, agent, kind) {
+  return { ...newWork(block, entry, 'background'), tool: 'Agent', kind, id: agent, description: block.input?.summary ?? null, resumed: true };
 }
 
 function end(work, at, status) {
@@ -130,15 +139,22 @@ function end(work, at, status) {
  * `cwd` and `gitBranch` its last entry records, its background `work` with each recorded end, the `state`
  * derived from those, the `tail` of its last reply (`tail` lines, default 3) and the lines skipped.
  *
- * Work is every `Agent` call and every `Bash` call that went to the background. Its id (the task id of
- * a shell, the agent id of a subagent) comes from the tool result that follows the call, never from the
- * call itself, so work whose result is not written yet has `id: null`. A foreground `Agent` call ends
- * with its tool result; everything else ends with a task notification that carries a status. */
+ * Work is every `Agent` call, every `Bash` call that went to the background, and every `SendMessage`
+ * call that resumed a subagent. Its id (the task id of a shell, the agent id of a subagent) comes from
+ * the tool result that follows the call, never from the call itself, so work whose result is not written
+ * yet has `id: null`. A foreground `Agent` call ends with its tool result; everything else ends with a
+ * task notification that carries a status.
+ *
+ * An end closes only work launched before it. One that names a call closes that call's piece, and any
+ * older piece of the same id still open; one that names only the task closes every open piece of that
+ * id. A piece launched afterwards under the same id (a follow-up to the same subagent) is open until
+ * its own end. An end that arrives before the result that gives its work an id is kept, and used once. */
 export function sessionFacts(text, { tail = 3 } = {}) {
   const { entries, skipped } = parseTranscript(text);
-  const calls = new Map(); // tool_use id -> the tool_use block and the entry that holds it
-  const workByCall = new Map(); // tool_use id -> work, in launch order
-  const endsByTask = new Map(); // task id -> the first end a notification recorded for it
+  const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
+  const workByCall = new Map(); // tool_use id -> work
+  const endsByTask = new Map(); // task id -> the latest end that closed nothing, and the index of its entry
+  const launchIndex = (work) => calls.get(work.toolUseId).index;
   let customTitle = null;
   let firstPrompt = null;
   let lastEntryAt = null;
@@ -147,7 +163,7 @@ export function sessionFacts(text, { tail = 3 } = {}) {
   let turn = null;
   let lastReply = null;
 
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') customTitle = entry.customTitle;
     if (typeof entry.timestamp === 'string' && (lastEntryAt === null || entry.timestamp > lastEntryAt)) lastEntryAt = entry.timestamp;
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
@@ -158,11 +174,20 @@ export function sessionFacts(text, { tail = 3 } = {}) {
     for (const { task, toolUse, status } of notificationsOf(entry)) {
       if (status === undefined) continue; // an event of a task that is still running
       const at = entry.timestamp ?? entry.attachment?.timestamp;
-      // Kept by task id as well: a quick task can end before the tool result that gives its work that id.
-      if (task !== undefined && !endsByTask.has(task)) endsByTask.set(task, { at, status });
+      const named = toolUse === undefined ? undefined : workByCall.get(toolUse);
+      let closed = false;
       for (const work of workByCall.values()) {
-        if ((task !== undefined && work.id === task) || (toolUse !== undefined && work.toolUseId === toolUse)) end(work, at, status);
+        const sameTask = task !== undefined && work.id === task;
+        // The end of the run a call started is not the end of a run started after it under the same id,
+        // which matters when a resumed session writes an old notification again.
+        const hit = named ? work === named || (sameTask && launchIndex(work) < launchIndex(named)) : sameTask;
+        if (!hit || work.ended) continue;
+        end(work, at, status);
+        closed = true;
       }
+      // An end that closed nothing may be early: a quick task can end before the tool result that gives
+      // its work the id. It is kept by task id for the call that was made before it, and no other.
+      if (!closed && !named && task !== undefined) endsByTask.set(task, { at, status, index });
     }
     if (entry.isSidechain) continue;
 
@@ -171,7 +196,7 @@ export function sessionFacts(text, { tail = 3 } = {}) {
       // A resumed session writes earlier entries again: only the first sight of a call launches work, so
       // a repeated call never reopens work whose end was recorded in between.
       if (entry.type === 'assistant' && block.type === 'tool_use' && !calls.has(block.id)) {
-        calls.set(block.id, { block, entry });
+        calls.set(block.id, { block, entry, index });
         if (isAgent(block.name)) workByCall.set(block.id, newWork(block, entry, block.input?.run_in_background === true ? 'background' : 'foreground'));
         else if (block.name === 'Bash' && block.input?.run_in_background === true) workByCall.set(block.id, newWork(block, entry, 'background'));
       }
@@ -179,7 +204,14 @@ export function sessionFacts(text, { tail = 3 } = {}) {
       const launch = calls.get(block.tool_use_id);
       const outcome = isObject(entry.toolUseResult) ? entry.toolUseResult : {};
       let work = workByCall.get(block.tool_use_id);
-      if (typeof outcome.backgroundTaskId === 'string') {
+      if (launch.block.name === 'SendMessage') {
+        // A follow-up starts work only when its result says the subagent had stopped and runs again
+        // (`resumedAgentId`); a message queued for a subagent that is still running starts nothing.
+        if (!work && typeof outcome.resumedAgentId === 'string') {
+          const firstRun = [...workByCall.values()].find((earlier) => earlier.id === outcome.resumedAgentId);
+          workByCall.set(block.tool_use_id, (work = resumedWork(launch.block, launch.entry, outcome.resumedAgentId, firstRun?.kind ?? null)));
+        }
+      } else if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
         if (!work) workByCall.set(block.tool_use_id, (work = newWork(launch.block, launch.entry, 'background')));
         work.id = outcome.backgroundTaskId;
@@ -190,9 +222,14 @@ export function sessionFacts(text, { tail = 3 } = {}) {
         work.id = outcome.agentId ?? null;
         end(work, entry.timestamp, block.is_error === true ? 'error' : (outcome.status ?? 'returned'));
       }
-      // The notification of a quick task can be written before this result: its end was kept by task id.
+      // The notification of a quick task can be written before this result. The end kept for its id is
+      // this work's only when the call came before it, and it is used once: work launched later under
+      // the same id is not closed by it.
       const early = work ? endsByTask.get(work.id) : undefined;
-      if (early) end(work, early.at, early.status);
+      if (early && launch.index < early.index) {
+        end(work, early.at, early.status);
+        endsByTask.delete(work.id);
+      }
     }
   }
 
@@ -409,7 +446,9 @@ function counted(value, label) {
 
 function workLine(work, now) {
   const id = work.id ?? '(no id yet)';
-  const kind = work.kind ? ` (${work.kind})` : '';
+  // `resumed` says the subagent was sent a follow-up and is running again, not a second subagent.
+  const labels = [work.kind, work.resumed ? 'resumed' : null].filter(Boolean);
+  const kind = labels.length > 0 ? ` (${labels.join(', ')})` : '';
   const file = work.file?.modifiedAt ? `file written ${ago(work.file.modifiedAt, now)}` : `file unavailable: ${work.file?.unavailable ?? 'not looked up'}`;
   return `    ${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}  launched ${ago(work.launchedAt, now)}  ${file}`;
 }

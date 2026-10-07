@@ -18,29 +18,37 @@ class SessionsArgError extends Error {}
 
 function requireValue(argv, i, flag) {
   const value = argv[i + 1];
-  if (value === undefined || value.startsWith('--')) throw new SessionsArgError(`${flag} requires a value`);
+  if (value === undefined || value === '' || value.startsWith('--')) throw new SessionsArgError(`${flag} requires a value`);
   return value;
+}
+
+/** The number `value` spells in plain digits, with an optional decimal part when `decimals` allows it, or
+ * `NaN`. `Number` alone would take an empty or blank value for 0, and `0x2` and `1e1` for numbers. */
+function plainNumber(value, { decimals }) {
+  return (decimals ? /^(\d+\.?\d*|\.\d+)$/ : /^\d+$/).test(value) ? Number(value) : NaN;
 }
 
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
   const parsed = { hours: 12, tail: 3, json: false };
-  const paths = { '--cwd': 'cwd', '--claude-home': 'claudeHome', '--tmp': 'tmp' };
+  // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
+  // would pass for flags.
+  const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--json') {
       parsed.json = true;
       continue;
     }
-    if (token in paths) {
-      parsed[paths[token]] = requireValue(argv, i, token);
+    if (paths.has(token)) {
+      parsed[paths.get(token)] = requireValue(argv, i, token);
     } else if (token === '--hours') {
-      parsed.hours = Number(requireValue(argv, i, token));
-      if (!(parsed.hours > 0) || !Number.isFinite(parsed.hours)) throw new SessionsArgError('--hours takes a number above zero');
+      parsed.hours = plainNumber(requireValue(argv, i, token), { decimals: true });
+      if (!(parsed.hours > 0)) throw new SessionsArgError('--hours takes a number above zero');
     } else if (token === '--tail') {
-      parsed.tail = Number(requireValue(argv, i, token));
-      if (!Number.isInteger(parsed.tail) || parsed.tail < 0) throw new SessionsArgError('--tail takes a whole number, zero or more');
+      parsed.tail = plainNumber(requireValue(argv, i, token), { decimals: false });
+      if (Number.isNaN(parsed.tail)) throw new SessionsArgError('--tail takes a whole number, zero or more');
     } else {
       throw new SessionsArgError(`unknown argument: ${token}`);
     }
@@ -139,7 +147,8 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 }
 
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
- * the last write of its file. A transcript that cannot be read is a session with `unavailable`. */
+ * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
+ * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
 function readSession(id, modifiedAt, { projectDir, tasksRoot, tail }, io) {
   let text;
   try {
@@ -147,7 +156,12 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail }, io) {
   } catch (err) {
     return { id, modifiedAt, unavailable: err.code ?? err.message };
   }
-  const facts = sessionFacts(text, { tail });
+  let facts;
+  try {
+    facts = io.readFacts(text, { tail });
+  } catch (err) {
+    return { id, modifiedAt, unavailable: `its transcript could not be read into facts: ${err.message}` };
+  }
   const folders = { sessionDir: path.join(projectDir, id), tasksDir: path.join(tasksRoot, id, 'tasks') };
   for (const work of facts.work) {
     if (!work.ended) work.file = workFile(work, folders, io);
@@ -175,6 +189,8 @@ export async function sessionsMain(
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     readdir = (absolute) => fs.readdirSync(absolute),
     stat = (absolute) => fs.statSync(absolute),
+    // The transcript reader, replaceable so a test can make it fail on one transcript.
+    readFacts = sessionFacts,
   } = {},
 ) {
   let parsed;
@@ -189,7 +205,7 @@ export async function sessionsMain(
   const slug = projectSlug(root);
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
-  const io = { readFile, readdir, stat };
+  const io = { readFile, readdir, stat, readFacts };
 
   let names;
   try {
