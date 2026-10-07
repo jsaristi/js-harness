@@ -117,7 +117,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   `AGENTS.md`, `hooks.json`, skills, plugin caches), and every way to leave the global
   `AGENTS.md` out, read from the installed CLI's help and Codex's source and written here with
   its sources; no model call — route: one read-only explorer
-- [ ] T5 The way T4 finds, implemented, and proven on the real binary before a review rests on
+- [x] T5 The way T4 finds, implemented, and proven on the real binary before a review rests on
   it: the real `~/.codex` hashed before and after, the real login still answering, the first
   request's size recorded. Calls the model: asked first, with the count — route: delegated writer,
   then inline runs
@@ -300,7 +300,9 @@ What follows from it:
 - Does a refresh of the login inside a copy leave the real one invalid? Not shown, and not to
   be tried on his login. (T5 is designed so that it never has to be.)
 - Do the skills of `~/.agents/skills`, a hook or the apps server still reach a lean session?
-  (T5, read from its first real run)
+  Answered for the text of the first request by the run of 2026-10-07T08:20Z (Progress): no
+  skill, plugin or MCP text and no global `AGENTS.md`. The tool list of that request is not
+  in the rollout file, so what tools were offered is not shown.
 - With the orchestrator block gone, does Codex still refuse a range above about a thousand
   lines? T9's bound is set from a measured run, not from that number. (T12)
 
@@ -528,6 +530,51 @@ What follows from it:
   which holds the format and what is left to build (a check, in that feature's own
   session). No code changed. The question about the CLI version is still pending and is
   asked again in that format once this commit is in.
+- 2026-10-07T08:20Z: Sebastián said yes to the one lean review on CLI 0.160.1. Run from this
+  worktree at `5fe0510` over `338386a..e3aad48` (the temporary worktree), with `--keep-home`,
+  inside the proof of the login. It is the second Codex review of this feature and the first
+  that read its diff. T5 is checked off on it. Run id
+  `f439089a-2ca4-4c4f-aea4-8221594c76f4`; the run line holds every number below.
+  - Outcome `reviewed`, coverage 216 of 216 changed lines, no finding, 39 s.
+  - Tokens, from the rollout file: 145,852 input, of which 109,184 cached (36,668 not
+    cached), 634 output, 98 reasoning; 6 requests; the first request 6,714 input tokens.
+  - The login: PASS (`evals/results/review/login-proof.md`): the same file, bytes unchanged,
+    names 1 → 1, 51 entries in the real home before and after, nothing else changed.
+    `icacls` of the real `auth.json` printed the same before and after. The kept home holds
+    no `auth.json`.
+  - The Windows sandbox: `-c windows.sandbox="unelevated"` let the session run its commands;
+    5 ran, none was rejected by policy (2 ended with exit 1, see below).
+  - The model and the effort reached the review: its `turn_context` line says
+    `gpt-6.1-sol`, `medium`, approval `never`, sandbox `read-only`.
+  - What the home shows of the session. Two rollout files: the parent thread (17 lines, no
+    `token_count`, so it made no request) and the review sub-agent (source
+    `{"subagent":"review"}`, 44 lines, 6 `token_count` lines). `threads` is 1 because only
+    one file holds usage. Each `token_count` line is one request with its own
+    `last_token_usage`; none was a line written for rate limits alone, so `requests` did not
+    overcount here.
+  - What the first request held, read from the sub-agent's file: base instructions of 8,043
+    characters (the review rubric); a developer message of 1,263 characters (permissions and
+    collaboration mode); a user message of 6,588 characters with the project's `AGENTS.md`
+    and the environment; a user message of 353 characters, the review prompt Codex writes
+    for `--base` ("Review the code changes against the base branch … Run `git diff …`").
+    Absent from all of them: the global `AGENTS.md` (searched for its persona wording), any
+    skill, plugin or MCP text.
+  - Where the input went: the model read the diff (23 KB of output), then `AGENTS.md`,
+    `docs/ROADMAP.md` and this document in one command (41 KB, cut by its own
+    `max_output_tokens`), then parts of the changed files. So most of the uncached input is
+    reading it chose to do, not what the session loaded.
+  - New, for T6: the sub-agent's last message is JSON, not rendered text:
+    `{"findings": [], "overall_correctness": "patch is correct", "overall_explanation": …}`.
+    So the rubric already answers in a structure, and it is in the rollout file of a home
+    that is kept until read. With no finding in this run, the shape of one finding is still
+    only known from source.
+  - New, a follow-up: the model ran `codex exec review --help` (exit 1),
+    `codex --ignore-user-config features list` (exit 0) and
+    `codex --disable plugins --disable apps --disable hooks features list` (exit 1) inside
+    its sandbox, to check the flags the diff names. None calls the model. A review of a
+    change to this command can start the Codex binary from inside the review.
+  The kept home stays at `~/.js-harness/codex-review-homes/<run id>` until the next lean
+  review sweeps it (60 minutes old) or it is deleted by hand.
 
 ## Follow-ups
 - From gentle-ai's review of `7529f67`, with the next change to the command's tests:
@@ -573,21 +620,24 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T4 are done and T5 is written and corrected: the lean session sets its own Windows
-sandbox and reads its tokens from its rollout files. Blocked first on one answer: the Codex
-CLI became 0.160.1 on 2026-10-07 at 05:51Z, outside this session (Progress), so Sebastián
-says whether the approved review runs on 0.160.1 or waits for 0.160.0. Then: the one more
-lean review he approved of `338386a..e3aad48` from the temporary worktree
-(`D:js-harness-worktreescodex-review-lean-probe`, detached at `e3aad48`, removed after
-it), with `--keep-home` and inside the proof of the login:
-`node evals/review/login-proof.mjs --real-home C:UsersOficina.codex --out
-evals/results/review/login-proof.md -- node bin/js-harness.mjs codex-review --session lean
---keep-home --base 338386a --cwd D:js-harness-worktreescodex-review-lean-probe`, with
-`icacls` of the real `auth.json` read before and after. Then: read the kept home's rollout
-files (what the first request held, whether `requests` overcounts), check T5 off if the
-review read its diff, and put to him, one at a time, `--output-schema` (T6) and how the
-`current` session is measured (T12). Of the
-two reviews he approved one is spent; the `current` one over the slice is not run at 2,832
-lines without asking him again. T5 is checked off when a lean review reads its diff. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
-`7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai
-has reviewed up to `73ec5ae`.
+Slices A and B are done: T1 to T5 are checked, and the lean session read a real diff on
+2026-10-07 (CLI 0.160.1; Progress holds the numbers). Next, Sebastián's answers, one at a
+time:
+1. T6, what becomes of `--output-schema`. `exec review` ignores it and takes a prompt or
+   `--base`, not both. The run of 2026-10-07 showed the rubric already answers in JSON
+   (`findings`, `overall_correctness`, `overall_explanation`) in the sub-agent's rollout
+   file. So the proposal is: keep `--base` and Codex's rubric, read the findings as data from
+   that file, validate them with a schema of ours in `bin/lib/`, and pass the intent (the
+   feature document's Done when) only if a measured run shows it finds more; the versioned
+   prompt of our own is then a second configuration for T12, not the default.
+2. T12, how the `current` session is measured, since it runs `--ephemeral` in his real home
+   and reports zero tokens: a run without `--ephemeral` that leaves session files in his
+   `~/.codex` and reads them, or a home that copies his configuration.
+3. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip.
+   The lean session has now reviewed `338386a..e3aad48` (recorded in `codex-reviews.jsonl`);
+   the rest is not covered. `current` refused ranges above about a thousand lines.
+
+Every Codex review is asked first, with the count: two spent so far in this feature (one
+read nothing, one read its diff). The temporary worktree `codex-review-lean-probe` is
+removed. Which CLI version the comparison runs on is open: 0.160.1 is installed, F6 was
+paused on 0.160.0, and T12's runs must all share one version.

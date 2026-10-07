@@ -1,9 +1,9 @@
 # Login proof: a real Codex home around one command
 
-- Date: 2026-10-07T05:34:29.220Z
+- Date: 2026-10-07T08:20:59.620Z
 - Real Codex home: `C:\Users\Oficina\.codex`
-- Command: `node bin/js-harness.mjs codex-review --session lean --base 338386a --cwd D:\js-harness-worktrees\codex-review-lean-probe`
-- Exit code: 1
+- Command: `node bin/js-harness.mjs codex-review --session lean --keep-home --base 338386a --cwd D:\js-harness-worktrees\codex-review-lean-probe`
+- Exit code: 0
 
 ## auth.json
 
@@ -15,7 +15,7 @@
 
 ## Everything else at the top level of the home
 
-55 entries before, 55 after.
+51 entries before, 51 after.
 
 Nothing else changed.
 
