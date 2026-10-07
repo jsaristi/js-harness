@@ -872,9 +872,56 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   context and plans" (what ends a turn is not only a finished task). For T7 to judge whether an
   orchestrator should look once more before it speaks.
 
+- 2026-10-07: `51a96f2` committed the three entries above, at the second try. During the first
+  try the session of `codex-review-lean` started a gate of its own (pid 30180) while this
+  commit's gate ran (pid 30936); neither was stopped, and this one ended red after about 19
+  minutes with `commit rc=1`. Its cause was not captured, because `sb-commit-when-free.sh` keeps
+  the last six lines of the output; the gate's 20-minute limit on a sensor is the likely one.
+  `core.bare` stayed `false`. The helper waits until no gate runs and then starts, so it cannot
+  see a gate that another session starts afterwards: "never two gates at once" is a rule two
+  sessions cannot keep from outside the gate. A lock taken by the gate itself would keep it; a
+  follow-up of the gate, not of this feature, and the board already shows both gates when it
+  happens.
+- 2026-10-07: the gate of `51a96f2` left `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in
+  this worktree again, the second time in two gates; deleted again. Still not traced to a test.
+- 2026-10-07: one more kind of wake that asks nothing of anybody: the watch returned because an
+  old session left the 12-hour window. True, and of no use to an orchestrator; for T7 to judge
+  with the other gaps whether leaving the window should wake at all.
+- 2026-10-07: the app's own figure for the window, read with the desktop app's usage tool from this
+  session: 500,000 tokens, auto-compact at 93%. At the same moment (a minute apart) the app gave
+  this session 114,878 tokens (23%) and the board 99k (21%). So the board's default window of
+  480,000 is not the real window: it is the figure that made the board's percentage match the
+  app's when Sebastián compared them (342k read as 71%, 350k as 73%), and it works because the
+  board counts the usage of the last reply and so misses what entered the context after it,
+  some 15k here. The default stays for now, because it keeps the percentage within a point or
+  two of the app's; the honest form (the real window, and the count the app shows) is for
+  whoever takes the item below.
+- 2026-10-07: overlap with another branch, found on the board, not decided. The session of
+  `codex-review-lean` recorded on its branch a roadmap item of its own, "Session signals"
+  (`824ace8`, `docs/ROADMAP.md` Next item 6, asked by Sebastián on 2026-10-07, not started):
+  whose turn it is in every reply, a notice when a session finishes saying which session to
+  return to, and the context window watched with its percentage and a cut proposed before
+  auto-compact. The same branch reworded the closing rule of `AGENTS.md` to four states
+  (`5fe0510`, which leaves the file at 1,500 of 1,500 tokens). What this feature already holds
+  of that item: the board prints each session's context with its percentage and the watch
+  returns when one passes the limit; the watch returns when a session finishes a turn; the
+  orchestrator skill says when it speaks. What it does not hold: anything inside a reply (whose
+  turn it is), and a session's own context, which the watch never compares. So "Session
+  signals" has two halves, one a reader of this board and one a hook or status line of the
+  session itself, and whether it builds on this command is for that feature to settle with
+  him. Mechanically: both branches add lines to `docs/ROADMAP.md` (this one the Session board
+  phase and the `sessions` command row, that one 40 lines), so the second to merge resolves a
+  conflict there, and that item's "77% of 500k" and this document's 480,000 are reconciled by
+  the entry above.
+- 2026-10-07: still open, asked several times and not answered: for this branch, wait for
+  `codex-review-lean` to land and review with it, or record a skip with `--unavailable` and go
+  on to the push. The parent's recommendation is to wait: the skip would push 3,356 changed
+  lines that no Codex review read, and the lean review is being proven in its own session now.
+
 ## Next step
 Each on Sebastián's word, in this order: the Codex review of the code commits (or a recorded skip),
 the push and the pull requests (two slices stacked to `main`, see Delivery), the merge, the
 global install brought up to `main`, and `js-harness install`. T7 closes with an orchestrator
 session opened with the skill's opening prompt and one real stretch supervised by it, recorded
-here with the four gaps of T6 judged. The entries after T6b's commit are uncommitted and go with T7's record.
+here with the gaps of T6 and of the wakes above judged. Head of the branch before this record:
+`51a96f2`; the entries of 2026-10-07 go in with the next commit.
