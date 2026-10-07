@@ -959,6 +959,26 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   Codex review of this branch's code commits runs with the lean review, on his word because it
   spends quota. Until then the branch stays as it is and the parent only keeps the board. That
   feature stood at 10 of 15 tasks when he answered.
+- 2026-10-07, a candidate for what the harness ships, not decided. Sebastián asked that every
+  sub-agent run at high effort, and reminded that the work here is dogfooding: a rule we adopt
+  belongs in the harness, not in one agent's memory. What was checked: Claude Code 2.1.292 added an
+  `effort` parameter to the Agent tool (its changelog; the tool's listed schema in the desktop
+  app does not show it), the desktop app here runs engine 2.1.293, and two probe sub-agents
+  recorded the level asked for (`"effort":"low"` and `"effort":"high"` in
+  `<session>/subagents/agent-<id>.meta.json`), while one launched without it inherited the
+  session's level. For now the rule lives in the parent's memory only. Where it could ship: a
+  line in the skill the installer writes for work sessions (`bin/lib/manifest.mjs`), since
+  `AGENTS.md` has no room; or, checkable rather than prose, a line of the board per sub-agent
+  with the effort its meta file records, so a writer at another level is seen. His to choose,
+  after this branch's review.
+- 2026-10-07, 16:06 local: the board counts a push's check as a gate. Pushing the documents
+  branch `docs/remote-watchdog-revival` ran the pre-push hook (`check --push`, a few seconds: it
+  only reads which code commits a Codex record covers), and the watch returned with `gate
+  started in D:/js-harness-worktrees/remote-revival (pid 40224) while another runs in
+  D:/js-harness-worktrees/codex-review-lean (pid 28240)`. Both are `bin/check.mjs`, which is all
+  the board looks at, so a check of seconds reads as a second gate and the commit helper would
+  wait on it. For T7: tell the two apart by the arguments of the process. The push opened
+  pull request #40, which the board listed on its next look.
 
 ## Next step
 Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged. Then, each
