@@ -343,3 +343,99 @@ test('sweepStaleLeanHomes never throws: no folder yet, or a path that is a file,
   assert.equal(sweepStaleLeanHomes(file, { olderThanMs: 0, now: Date.now() }), 0);
   assert.equal(sweepStaleLeanHomes(path.join(root, 'nowhere')), 0);
 });
+
+// --- a seeded home: a copy of a configuration, for a session that is measured with the user's own ---
+
+/** A seed as a comparison gives one: it writes a configuration into the Codex home it is handed. */
+const configSeed = (seen = {}) => ({ folder, home }) => {
+  Object.assign(seen, { folder, home, entries: fs.readdirSync(home) });
+  fs.writeFileSync(path.join(home, 'config.toml'), 'model = "x"\n', 'utf8');
+  fs.mkdirSync(path.join(folder, '.engram'));
+  return { env: { ENGRAM_PORT: '45678' } };
+};
+
+test('with a seed the run folder is a home directory: the Codex home is its `.codex`, seeded first and given the login last, as a hard link', () => {
+  const { realHome, realAuth, parent } = homes();
+  const seen = {};
+  const seeded = createLeanHome({ realHome, parent, id: 'run-1', seed: configSeed(seen) });
+  assert.equal(seeded.folder, path.join(parent, 'run-1'));
+  assert.equal(seeded.home, path.join(parent, 'run-1', '.codex'));
+  assert.deepEqual(seen, { folder: seeded.folder, home: seeded.home, entries: [] }, 'the seed runs in a home that holds no login yet, so it can never write through the link');
+  assert.deepEqual(seeded.seeded, { env: { ENGRAM_PORT: '45678' } }, 'what the seed returned is handed on');
+  assert.deepEqual(fs.readdirSync(seeded.home).sort(), ['auth.json', 'config.toml']);
+  assert.equal(identity(path.join(seeded.home, 'auth.json')), identity(realAuth), 'the same file as the real login, not a copy');
+  assert.equal(links(realAuth), 2);
+  assert.deepEqual(fs.readdirSync(realHome), ['auth.json'], 'nothing is written into the real Codex home');
+  // The whole run folder goes, the login's name first, and the login stays.
+  assert.equal(seeded.dispose(), null);
+  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(links(realAuth), 1);
+  assert.equal(read(realAuth), LOGIN);
+});
+
+test('without a seed the folder and the home are one, as they were', () => {
+  const { realHome, parent } = homes();
+  const lean = createLeanHome({ realHome, parent, id: 'run-1' });
+  assert.equal(lean.folder, lean.home);
+  assert.equal(lean.seeded, undefined);
+  assert.deepEqual(fs.readdirSync(lean.home), ['auth.json']);
+  lean.dispose();
+});
+
+test('a seed that left an `auth.json` is refused: a copy of the login is never used, and the real one is not written through', () => {
+  const { realHome, realAuth, parent } = homes();
+  const copies = ({ home }) => fs.writeFileSync(path.join(home, 'auth.json'), 'a copy', 'utf8');
+  assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', seed: copies }), /auth\.json.*copy/);
+  assert.deepEqual(fs.readdirSync(parent), [], 'nothing is left behind');
+  assert.equal(read(realAuth), LOGIN);
+  assert.equal(links(realAuth), 1);
+});
+
+test('a seed that throws leaves nothing behind, and its reason is the error', () => {
+  const { realHome, realAuth, parent } = homes();
+  const fails = ({ home }) => {
+    fs.writeFileSync(path.join(home, 'config.toml'), 'half', 'utf8');
+    throw new Error('the template is gone');
+  };
+  assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', seed: fails }), /the template is gone/);
+  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(links(realAuth), 1);
+});
+
+test('the sweep removes a seeded home a killed run left, the login\'s name first: the login keeps its bytes and its one name', () => {
+  const { realHome, realAuth, parent } = homes();
+  const now = Date.parse('2026-10-06T12:00:00.000Z');
+  const rm = [];
+  const killed = createLeanHome({ realHome, parent, id: 'killed', seed: configSeed() });
+  assert.equal(links(realAuth), 2);
+  aged(killed.folder, now - 2000);
+  // What the recursive removal is handed no longer holds a name of the login.
+  const watched = fs.rmSync;
+  fs.rmSync = (target, options) => {
+    rm.push({ target, loginThere: fs.existsSync(path.join(target, '.codex', 'auth.json')) });
+    return watched(target, options);
+  };
+  try {
+    assert.equal(sweepStaleLeanHomes(parent, { olderThanMs: 1000, now }), 1);
+  } finally {
+    fs.rmSync = watched;
+  }
+  assert.deepEqual(rm, [{ target: killed.folder, loginThere: false }]);
+  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(links(realAuth), 1);
+  assert.equal(read(realAuth), LOGIN);
+});
+
+test('a seeded home that cannot be removed is a message, with the login\'s name already gone from its `.codex`', () => {
+  const { realHome, realAuth, parent } = homes();
+  const rm = () => {
+    throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+  };
+  const seeded = createLeanHome({ realHome, parent, id: 'run-1', seed: configSeed(), rm });
+  const left = seeded.dispose();
+  assert.match(left, /could not remove/);
+  assert.ok(left.includes(seeded.folder), left);
+  assert.equal(fs.existsSync(path.join(seeded.home, 'auth.json')), false);
+  assert.equal(fs.existsSync(path.join(seeded.home, 'config.toml')), true);
+  assert.equal(links(realAuth), 1);
+});

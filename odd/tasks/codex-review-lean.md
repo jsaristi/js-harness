@@ -146,7 +146,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 ### Slice E — quality before the switch
 - [x] T10 A diff with seeded defects and its answer key in `evals/review/`, and a scorer that
   matches findings to the key by file and line — route: delegated writer
-- [ ] T11 The comparison and its report: `evals/review/compare.mjs` runs configurations over
+- [x] T11 The comparison and its report: `evals/review/compare.mjs` runs configurations over
   ranges and stores each reading in `evals/results/review/`; `report.mjs --require-complete`
   sets them side by side — route: same writer
 - [ ] T12 The runs, after Sebastián's go-ahead on the count: the same range under `current` and
@@ -791,6 +791,62 @@ What follows from it:
     of a run in parts is honest when a run line is lost; `isValidCodexReview` takes a
     record with `runs`; the login proof, when anything but `auth.json` changed, says that
     another running Codex client may be the writer and lists the Codex processes alive.
+- 2026-10-07: T10 committed as `b0053cf` (gate green). gentle-ai assessed
+  `b5c8766..b0053cf` as `medium`, review due (2,430 lines); granted without asking, lineage
+  `review-b03a2a43f62f5e1d`. The bound status that follows a start then failed in gentle-ai
+  itself: `gentle-ai.review-integration.failure/v2`, code `operation_timeout`, phase
+  `pre_native`, cause "context deadline exceeded", `retry_safe` false, next action `stop`.
+  Nothing was mutated. Put to Sebastián as the three choices the workflow asks for (report
+  and continue, continue without reporting, stop); he chose to continue without reporting.
+  The captured decline of that candidate was run once: `action` `declined`, `consent`
+  `declined_this_candidate`, the same target. No GitHub operation. So `b5c8766..b0053cf`
+  has no gentle-ai review: its checks are the writer's tests, the parent's re-run (74 of
+  74) and the gate. The next assessment starts from `b0053cf`, so that the candidate that
+  timed out is not offered again inside a larger one; the Codex review before a push still
+  covers this range.
+- 2026-10-07: T11 built by one delegated writer (route: delegated), test first. T11 is
+  checked: the tools exist and their tests pass (61 of 61 over the three module files,
+  re-run by the parent; the command file 187 of 187, 390 s). No cell has been run.
+  - `evals/review/compare.mjs`: `--list` shows the nine cells and which are recorded;
+    `--cell <config>:<range>` runs exactly one cell an invocation, which is the control on
+    spend; `--dry-run` shows the plan and starts nothing; a recorded cell is refused without
+    `--force`. A reading is one JSON file in `evals/results/review/readings/`, written
+    whatever the outcome of the review, so a failed cell shows in the report.
+  - `evals/review/report.mjs`: one table a range, one row a configuration (outcome,
+    findings, for the seeded range found of 7 and extra, tokens, requests, seconds, CLI);
+    `--require-complete` exits 1 while a cell has no reading (today: nine of nine).
+  - The ranges are checked out apart from the repository: the real one as a `git clone` in
+    a sibling folder (`<parent of the repo>/codex-review-lean-range`, marked, removed after
+    the cell), so its review record and run log do not land in the real git dir; the seeded
+    one built in the temp folder. Only the CodeGraph cell initialises an index, in that
+    clone.
+  - Seams in `bin/codex-review.mjs`, reached only through `deps`, never from the command
+    line (a test holds that): the effort of a lean session, extra `-c` settings, a measured
+    `current`, and a callback with the structured outcome.
+  - How `current` is measured: a home under `~/.js-harness/codex-review-homes/<run id>`
+    seeded by F6's `buildCodexTemplate` and `seedCodexHome` (his `config.toml` without the
+    desktop pieces and with an engram port of its own, the global `AGENTS.md`, hooks,
+    skills, the plugin cache), the seed run before the login is hard-linked and refused if
+    it left an `auth.json`; `current`'s argv without `--ephemeral`. The template of that
+    copy is built at `<parent of the repo>/codex-review-lean-home-template`.
+  - What a measured `current` is not, to read its row with: no `notify`, no `node_repl`,
+    none of the five desktop plugins, an empty engram store; `HOME` is not moved, so
+    gentle-ai's hooks still see his real state. It is his configuration as F6 copies it,
+    not the session byte for byte.
+  - Not proven with fakes, so the first real cells are the proof: that a review that is
+    not ephemeral, in the copy, writes the sub-agent's rollout with a JSON answer; that
+    `-c mcp_servers.codegraph.*` holds under `--ignore-user-config`; whether the copied
+    hooks start engram.
+  - The argv of the five configurations, from `--dry-run`: `lean` as in T3 and T5;
+    `lean-own` the same ending in `-`; `lean-high` with
+    `model_reasoning_effort="high"`; `lean-codegraph` with
+    `-c mcp_servers.codegraph.command="codegraph" -c mcp_servers.codegraph.args=["serve",
+    "--mcp"]` before `--base`; `current` as today without `--ephemeral`.
+  - What the writer decided where the brief was open: a review that never launched writes
+    no reading; the findings of a review that does not stand are kept beside its outcome;
+    a `current` reading takes its model and effort from the top of `config.toml`, marked
+    as such; finding bodies are cut at 600 characters; `--require-complete` counts a
+    recorded cell whatever its outcome.
 
 ## Follow-ups
 - Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
@@ -870,24 +926,29 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-Slices A to D and T10 are done: T1 to T10 are checked. Next is T11, one delegated writer:
-`evals/review/compare.mjs`, which runs one cell (a configuration over a range) at a time
-and stores its reading in `evals/results/review/`, and `report.mjs --require-complete`,
-which sets the readings side by side and fails while a cell is missing. The configurations:
-`current` measured in a seeded copy of his home with the login linked
-(`evals/codex-home.mjs`); `lean`; `lean` with the prompt of our own and the intent;
-`lean` at `high`; `lean` with CodeGraph (the real range only, where an index means
-something). The ranges: `338386a..e3aad48` of this repository, with no known defect, and
-the seeded one, scored against its key. Nine cells, nine Codex reviews; the count is put to
-Sebastián before T12 starts.
+T1 to T11 are checked. What is left is T12 to T15: the runs, the verdict, the proposal for
+the plugin and the roadmap. Next: Sebastián's go-ahead for the nine cells of T12, nine Codex
+reviews, asked with the count before the first. They run one at a time, each as
+`node evals/review/compare.mjs --cell <config>:<range>` from this worktree, never beside a
+gate or a test run, in this order, so that a tool that is wrong is found on the cheap cells
+first: `lean:seeded`, `lean-own:seeded`, `lean-high:seeded`, `current:seeded`,
+`lean:real`, `lean-own:real`, `lean-high:real`, `current:real`, `lean-codegraph:real`.
+After each: read its reading, and stop if the tool is at fault rather than the review. The
+first seeded answer with a finding becomes the recorded fixture the answer reader still
+lacks (Follow-ups). Then `node evals/review/report.mjs --require-complete`, the verdict
+(T13: lean becomes the default only if it found the same or more with fewer tokens), the
+proposal for the Codex plugin (T14) and the roadmap (T15).
 
-Open, for him, none blocking T11:
-1. The go-ahead for the nine runs of T12, once the tools exist.
+What the first cells also prove, since fakes could not: a measured `current` in the copy of
+his home, and CodeGraph under `--ignore-user-config`. Either may need a correction before
+its cell counts.
+
+Open, for him:
+1. The go-ahead for the nine runs.
 2. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
-   more than 7,000 changed lines in over twenty files, so about twenty parts, and the test
-   file of the command alone is over 2,500 lines, which may not be read whole. It is the
-   first real use of T9 and its count is asked.
+   by now over 9,000 changed lines, so more than twenty parts, and the test file of the
+   command alone is over 3,000 lines, which may not be read whole. Its count is asked.
 
 On the cap: five Codex reviews spent in this feature (one read nothing, four read their
-diff). A single run that proves a piece is announced with its count and run; a batch is
-asked first. The kept lean homes are swept by the next lean review.
+diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` was declined after a
+timeout of gentle-ai itself (Progress), and the commit of T11 is assessed from `b0053cf`.

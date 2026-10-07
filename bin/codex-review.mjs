@@ -73,6 +73,16 @@
 // reviewed in parts the lines of all its parts (`runs`, one entry a part, `null` for a line that could not be
 // written, with `run` the last); a run line is a measurement and never evidence of a review, so
 // `check --push` does not read it.
+//
+// What the comparison of the configurations varies (`evals/review/compare.mjs`) is not on the command line,
+// on purpose: the command fixes the model and the effort, and a person who runs it gets exactly the two
+// sessions above. The comparison calls `codexReviewMain` with injected `deps` instead: `effort`, the effort
+// of the lean session; `extraCodexConfig`, more `-c` settings for it (an MCP server); `measuredCurrent`,
+// which runs the `current` session where it can be measured; and `onResult`, which hands back each attempt's
+// run line and answer. A measured `current` session is today's argv without `--ephemeral`, in a Codex home
+// of the run's own that the caller's `seed` fills with a copy of the user's configuration, the login being
+// the same hard link the lean home holds (`createLeanHome`): the real home is never written, and the tokens
+// and the answer are read from the copy's rollout files as they are for `lean`.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -196,8 +206,8 @@ const LEAN_WINDOWS_SANDBOX = 'unelevated';
 // Codex's source it was read from, is the section "What Codex loads, and what `exec review` accepts
 // (T4, 2026-10-06)" of odd/tasks/codex-review-lean.md. It is not `--ephemeral`: its home is thrown away
 // after the run, and only a session that is not ephemeral writes there the rollout files the tokens are
-// read from.
-const leanFlags = (platform) => [
+// read from. `effort` is `LEAN_EFFORT` for everyone but the comparison of the configurations.
+const leanFlags = (platform, effort) => [
   // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
   // instructions file, and the user's model and effort. Auth still uses the home.
   '--ignore-user-config',
@@ -210,7 +220,7 @@ const leanFlags = (platform) => [
   '--disable', 'hooks',
   // With the user's config ignored, the command names the model and the effort itself.
   '-m', LEAN_MODEL,
-  '-c', `model_reasoning_effort="${LEAN_EFFORT}"`,
+  '-c', `model_reasoning_effort="${effort}"`,
   ...SANDBOX_CONFIG.flatMap((setting) => ['-c', setting]),
   // On Windows alone. With approvals at `never`, a read-only sandbox and NO Windows sandbox configured,
   // Codex forbids every shell command, "rejected: blocked by policy" (`core/src/exec_policy.rs:789-806` at
@@ -232,13 +242,28 @@ const leanFlags = (platform) => [
  * `prompt` is what the review is asked with. `codex`, the default, is `--base <base>`: Codex writes the
  * sentence itself. `own`, for the lean session alone, is a custom-target review: no `--base`, which Codex
  * refuses beside a prompt, and `-` in its place, so Codex reads the prompt from stdin; `base` is then in
- * that prompt and not in this list. */
-export function codexArgs(base, session = 'current', platform = process.platform, prompt = 'codex') {
+ * that prompt and not in this list.
+ *
+ * The last argument is what the comparison of the configurations varies, each with today's value as its
+ * default; no flag of the command sets any of them. `effort` is the effort of the lean session.
+ * `extraConfig` is more `key=value` settings for it, each handed over with `-c` after the session's own and
+ * before what is reviewed. `ephemeral`, for the current session alone, is whether Codex is told to write
+ * no session files: `false` for a session measured in a home of its own, whose tokens are read from them. */
+export function codexArgs(base, session = 'current', platform = process.platform, prompt = 'codex', { effort = LEAN_EFFORT, extraConfig = [], ephemeral = true } = {}) {
   if (!PROMPTS.includes(prompt)) throw new Error(`Unknown prompt ${JSON.stringify(prompt)}: it must be \`codex\` or \`own\`.`);
-  if (session === 'lean') return ['exec', 'review', '--json', ...leanFlags(platform), ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
+  // Both end up inside one argument of a command line, the effort between the quotes of a TOML string.
+  if (typeof effort !== 'string' || !/^[a-z]+$/.test(effort)) throw new Error(`The effort of the lean session must be one lowercase word, got ${JSON.stringify(effort)}.`);
+  if (!Array.isArray(extraConfig) || !extraConfig.every((setting) => typeof setting === 'string' && /^[^=\s][^=]*=/.test(setting))) {
+    throw new Error(`Extra Codex configuration must be a list of \`key=value\` settings, got ${JSON.stringify(extraConfig)}.`);
+  }
+  if (session === 'lean') {
+    const extra = extraConfig.flatMap((setting) => ['-c', setting]);
+    return ['exec', 'review', '--json', ...leanFlags(platform, effort), ...extra, ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
+  }
   if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
   if (prompt !== 'codex') throw new Error('The own prompt is a configuration of the lean session: the current one is asked with Codex\'s sentence.');
-  return ['exec', 'review', '--json', '--ephemeral', '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
+  if (extraConfig.length > 0) throw new Error('Extra Codex configuration is a variation of the lean session: the current one runs on the user\'s own.');
+  return ['exec', 'review', '--json', ...(ephemeral ? ['--ephemeral'] : []), '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
 }
 
 const isWindowsApps = (dir) => /\\microsoft\\windowsapps$/i.test(dir.trim().replace(/^"|"$/g, '').replace(/\//g, '\\').replace(/\\+$/, ''));
@@ -265,6 +290,20 @@ function leanEnv(env, home, platform) {
     if (platform === 'win32' && /^codex_home$/i.test(key)) delete out[key];
   }
   out.CODEX_HOME = home;
+  return out;
+}
+
+/** `env` with `changes` applied: a string sets a variable, `null` takes it away. What the seed of a
+ * measured session says its copy of the home needs (the port of its own engram, for one). On Windows a
+ * variable is the same in any case, so every spelling of a changed one goes first. */
+function withChanges(env, changes, platform) {
+  const out = { ...env };
+  for (const [name, value] of Object.entries(changes ?? {})) {
+    for (const key of Object.keys(out)) {
+      if (key === name || (platform === 'win32' && key.toLowerCase() === name.toLowerCase())) delete out[key];
+    }
+    if (typeof value === 'string') out[name] = value;
+  }
   return out;
 }
 
@@ -562,8 +601,8 @@ const tokensKnown = (spent) => Object.values(spent.usage).some((count) => count 
 /** What an attempt spent and did, as one line: the tokens and the requests of `spent` (a
  * `rolloutReading`), the seconds (`unknown` when the wall time was not measured) and `items` by type, the
  * most frequent first. When no token is known the line says that, and why, instead of a row of zeros or
- * of `unknown`: the `current` session is ephemeral, so Codex writes its tokens nowhere, and a `lean` one
- * left no count in its home. */
+ * of `unknown`: the `current` session is ephemeral, so Codex writes its tokens nowhere, and a session in a
+ * home of its own (`lean` is true for it: the lean one, or a measured current one) left no count there. */
 function spentLine(spent, items, durationMs, lean) {
   const seconds = durationMs === null ? 'unknown' : Math.round(durationMs / 1000);
   const did = Object.entries(items)
@@ -709,11 +748,25 @@ function answerFailure({ reason, errors = [] }) {
  * makes the lean session's home), `platform`, `log`, `error` and `write` (the review passed through
  * to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
- * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
+ * on a bad flag; 1 when nothing could be recorded or the review did not complete.
+ *
+ * Four more `deps` are what the comparison of the configurations varies, and nothing on the command line
+ * reaches them (see the top of this file):
+ *  - `effort`: the effort of the lean session, in place of `LEAN_EFFORT`; the run line says it.
+ *  - `extraCodexConfig`: `key=value` settings added to the lean session's argv (`codexArgs`).
+ *  - `measuredCurrent`: `{ seed }`, which runs the `current` session measured: in a Codex home of the run's
+ *    own, `<home>/.js-harness/codex-review-homes/<run id>/.codex`, that `seed({ folder, home })` fills with
+ *    a copy of the user's configuration before the login is hard-linked into it, and without `--ephemeral`.
+ *    `seed` may return `{ env, release }`: variables the session gets (`null` takes one away), and what to
+ *    call once Codex has ended and before the home is removed. The lean session ignores it.
+ *  - `onResult`: called with `{ run, logged, review }` for every attempt that launched Codex: its run line,
+ *    whether the line reached the run log, and its answer as `normalizeAnswer` gives it (`null` when none
+ *    was read). */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
+  const { effort = LEAN_EFFORT, extraCodexConfig = [], measuredCurrent = null, onResult = null } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -791,6 +844,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const expected = patchKeys(patch);
     const { session } = args;
     const lean = session === 'lean';
+    // The current session, measured, when the caller asked for that (`measuredCurrent`); never the lean one,
+    // which is measured as it is. Asked wrong, it is the caller's mistake, said before anything is made.
+    const measured = !lean && measuredCurrent !== null ? measuredCurrent : null;
+    if (measured !== null && typeof measured?.seed !== 'function') throw new Error('`measuredCurrent` needs a `seed` function, which fills the Codex home the current session is measured in.');
+    // Whether the session runs in a Codex home of the run's own, which its tokens and its answer are read from.
+    const ownHome = lean || measured !== null;
     // The parts a large range is reviewed in, under the lean session alone: `null` for a range that is
     // one part, and under `current`, which never asks how large the range is. Worked out before anything
     // is probed, made or launched, so a range that cannot be split leaves nothing behind.
@@ -839,16 +898,21 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
      * the verdict of a part, which wait for the other parts. */
     const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null }) => {
       const ownPrompt = prompt === 'own';
+      // What Codex is launched with, worked out before anything is made: an injected effort or setting that
+      // cannot go on a command line is the caller's mistake, and leaves no home behind.
+      const codexArgv = codexArgs(from, session, platform, prompt, { effort, extraConfig: lean ? extraCodexConfig : [], ephemeral: measured === null });
       // The lean session's own Codex home, named after the run: the id is made here, before the launch,
       // and the run line reuses it. Until the home exists nothing is launched, so a failure here writes no
-      // run line and no record. `current` makes no id yet, no folder, and never asks where the home is.
+      // run line and no record. `current` makes no id yet, no folder, and never asks where the home is,
+      // unless it is measured: then it has a home of the run's own too, seeded with a copy of the user's
+      // configuration, made, removed and swept by the same code (`leanHome` names either).
       let leanHome = null;
       let leanRunId;
-      if (lean) {
+      if (ownHome) {
         try {
           leanRunId = randomUUID();
         } catch (err) {
-          error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.`);
+          error(`Could not make the id of this run, which names ${lean ? 'the lean session\'s Codex home' : 'the Codex home the current session is measured in'} (${err.message}), so the review was not started and nothing was recorded.`);
           return { exit: 1 };
         }
         try {
@@ -860,9 +924,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           // that old. Once a run, before its first session: the parts of a range may together take longer
           // than that, and a later part must not remove the home `--keep-home` kept for an earlier one.
           if (part === null || part.index === 1) sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
-          leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId });
+          leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId, ...(measured === null ? {} : { seed: measured.seed }) });
         } catch (err) {
-          error(`${err.message}\nThe lean review was not started and nothing was recorded.`);
+          error(`${err.message}\nThe ${lean ? 'lean review' : 'review'} was not started and nothing was recorded.`);
           return { exit: 1 };
         }
       }
@@ -876,25 +940,28 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // What the session spent. Not what Codex's own events say: `exec review --json` reports a `usage` of
       // zeros in `turn.completed` by construction, since the review runs in a sub-agent whose token counts
       // are dropped before they reach the parent thread (`core/src/codex_delegate.rs:311-319` at
-      // rust-v0.160.0). The counts are in the rollout files of the session's home, read below for `lean`.
-      // `current` is ephemeral, which writes none, in the user's own home, which this command never reads:
-      // nothing is known of it, and that stays `null`.
+      // rust-v0.160.0). The counts are in the rollout files of the session's home, read below for a session
+      // in a home of the run's own: `lean`, and a measured `current`. `current` as a person runs it is
+      // ephemeral, which writes none, in the user's own home, which this command never reads: nothing is
+      // known of it, and that stays `null`.
       let spent = noRolloutReading();
-      // What the review answered, as `rolloutAnswer` gives it, from the same rollout files and so for `lean`
-      // alone; `null` under `current`, where no answer is read and none is asked for.
+      // What the review answered, as `rolloutAnswer` gives it, from the same rollout files and so for the
+      // same sessions; `null` under `current` as a person runs it, where no answer is read and none is asked for.
       let answered = null;
       try {
-        const how = lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})${ownPrompt ? ' and this command\'s own prompt' : ''}` : '';
+        const how = lean ? ` with the lean session (${LEAN_MODEL}, ${effort})${ownPrompt ? ' and this command\'s own prompt' : ''}`
+          : measured !== null ? ' with the current session, measured in a copy of the Codex home' : '';
         const what = part === null ? range : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
         log(`Codex is reviewing ${what}${how}; this can take several minutes.`);
         startedAt = now();
         launchedAt = readClock(monotonicNow);
         // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt
         // under the own one; stdout carries the JSONL, stderr (the progress) stays live.
-        result = await runReview(spawnAsync, kill, platform, codexArgs(from, session, platform, prompt), {
+        result = await runReview(spawnAsync, kill, platform, codexArgv, {
           cwd: root,
           stdio: [ownPrompt ? 'pipe' : 'ignore', 'pipe', 'inherit'],
-          env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
+          // The home of the run, and for a seeded one what its seed says the session needs beside it.
+          env: leanHome ? withChanges(leanEnv(codexEnv, leanHome.home, platform), leanHome.seeded?.env, platform) : codexEnv,
         }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals, input: asked });
         endedAt = readClock(monotonicNow);
       } finally {
@@ -904,8 +971,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (leanHome) {
           spent = rolloutReading(leanHome.home);
           answered = rolloutAnswer(leanHome.home);
+          // What the seed of a measured home started (an engram of its own, for one) is stopped while the
+          // home it holds files in is still there. It is the caller's, and changes nothing of how this ends.
+          if (typeof leanHome.seeded?.release === 'function') {
+            try {
+              await leanHome.seeded.release();
+            } catch (err) {
+              error(`Warning: what the seed of this run's Codex home started could not be stopped: ${err?.message ?? err}.`);
+            }
+          }
           const left = leanHome.dispose({ keep: args.keepHome });
-          if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
+          if (left) error(`Warning: the ${lean ? 'lean ' : ''}Codex home of this run was not left clean: ${left}.`);
           // The path comes last, so that it can be copied whole. Kept is not for ever: the folder is still
           // where the sweep of a later lean review looks, and that removes it like one a killed run left.
           if (args.keepHome) {
@@ -929,8 +1005,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
        * would. Building the line is inside the `try` for that reason: its id and its date come from
        * injected sources, and neither may change how a review ends. */
       const logRun = (runOutcome, reason) => {
+        let run;
+        let logged = false;
         try {
-          const run = {
+          run = {
             schema: CODEX_REVIEW_RUN_SCHEMA,
             // The lean session made its id before the launch, to name its home; `current` makes it here.
             id: leanRunId ?? randomUUID(),
@@ -949,7 +1027,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             // Under `lean` the command sets both, so they are known. Under `current` the user's Codex
             // config sets them and Codex's events do not name them, so they are `null`, not a guess.
             model: lean ? LEAN_MODEL : null,
-            effort: lean ? LEAN_EFFORT : null,
+            effort: lean ? effort : null,
             // What the review was asked with, and the version of the text when it is this command's own.
             prompt,
             promptVersion,
@@ -973,11 +1051,21 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             answerSource: review ? 'rollout' : null,
           };
           appendCodexReviewRun(root, run, { spawn });
-          return run.id;
+          logged = true;
         } catch (err) {
           error(`Could not write the run log, so what this attempt measured was not kept: ${err.message}`);
-          return undefined;
         }
+        // The caller that asked for it gets the line, logged or not, with the answer as data: a comparison
+        // keeps what the review found, which no line printed here holds whole. A line that could not even be
+        // built is not handed over. What the callback throws is its own, and never how a review ends.
+        if (onResult !== null && run !== undefined) {
+          try {
+            onResult({ run, logged, review });
+          } catch (err) {
+            error(`Warning: the result of this attempt could not be handed to the caller: ${err?.message ?? err}`);
+          }
+        }
+        return logged ? run.id : undefined;
       };
       const completed = result.status === 0 && evidence.completed;
       // Whether the attempt stands: Codex completed, its answer could be read when one is read, and its
@@ -993,7 +1081,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         // range are printed together once every part has passed.
         for (const line of [...review.findings.map(findingLine), verdictLine(review)]) log(line);
       }
-      log(spentLine(spent, reading.items, durationMs, lean));
+      log(spentLine(spent, reading.items, durationMs, ownHome));
       if (!completed) {
         const reason = result.error?.code === 'ENOBUFS'
           ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
