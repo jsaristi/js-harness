@@ -387,8 +387,54 @@ What this changes, and waits on Sebastián:
     list too, and Codex on Windows prepares its sandbox per home (`cap_sid`, `.sandbox` in
     the real one). So the proof run also reads `icacls` of the real `auth.json` before and
     after, by hand.
+- 2026-10-07: T5's build committed as `e531c1f` (gate green, `core.bare` `false`, the
+  worktree clean), 1,601 lines against the roughly 300 the parent had told Sebastián, so the
+  two ranges he approved had grown to 1,826 and 2,832 lines. Told to him; the first review was
+  kept to what he approved by running it from a temporary worktree at `e3aad48`
+  (`D:js-harness-worktreescodex-review-lean-probe`), over `338386a..e3aad48`, 255 lines;
+  the second is not run without asking again.
+- 2026-10-07: gentle-ai assessed `e3aad48..e531c1f` as `medium`, review due; granted without
+  asking. Lineage `review-ad600fc281d41934`, one lens (`review-reliability`): approved and
+  acknowledged, so the reviewed boundary is `e531c1f`. Four findings, none blocking, all
+  accepted, fixed with the next change to these files (Follow-ups); none bears on a run with
+  `JS_HARNESS_HOME` and `CODEX_HOME` unset, which was checked before the run below.
+- 2026-10-07T05:34Z, the first real lean review, inside the proof of the login
+  (`evals/results/review/login-proof.md`), after a dry run of the proof around an empty
+  command had read the real home twice without a difference.
+  - The login: PASS. `auth.json` is the same file before and after (device and file id), its
+    bytes unchanged, its names 1 before and 1 after, 4,009 bytes, last written
+    2026-09-27T21:45:10Z; none of the other 55 top-level entries of the real home changed.
+    `icacls` of the real `auth.json`, of the reviewed worktree and of its `bin` read the same
+    before and after. No lean home was left under `<home>/.js-harness/codex-review-homes`.
+  - The CLI took the lean argv: every flag and the three feature names after `--disable`
+    (R3-lean-argv-unproven-against-codex, closed for acceptance; what each does is not shown).
+  - The review did not happen. Every shell command the model tried was refused before it ran,
+    "rejected: blocked by policy", for `powershell.exe`, `bash.exe` and `cmd.exe` alike, and
+    the model answered that it could not see the diff. The command recorded nothing as a
+    review and one run line, `not-inspected`, 0 of 216 changed lines, 18 s. Likely cause, read
+    from his config and not yet from Codex's source: `[windows] sandbox = "unelevated"` is a
+    key of the `config.toml` the lean session ignores, so the session had no sandbox to run a
+    command in and no one to ask.
+  - The measurement did not happen either: the one `turn.completed` carried a `usage` of four
+    zeros, present and not missing, although the model made four tool attempts and wrote a
+    message. So Codex's JSONL may not report a review's tokens at all, and T1 reads the only
+    place the command looks. What this attempt drew from the cap is not known.
+  - Both are being read from Codex's source by a read-only explorer before another call to
+    the model is asked for.
 
 ## Follow-ups
+- From gentle-ai's review of `e531c1f`, with the next change to these files:
+  - R3-empty-state-home-resolves-to-cwd (WARNING, `bin/codex-review.mjs:544`): an empty
+    `JS_HARNESS_HOME` or `--home` is not taken as unset, so the lean home and its link to the
+    login would be made under the working directory.
+  - R3-real-home-case-sensitive-lookup (`bin/lib/codex-review-home.mjs:33-35`): `CODEX_HOME`
+    spelled in another case in an injected environment is not read.
+  - R3-proof-second-snapshot-uncaught (`evals/review/login-proof.mjs:239`): a second reading
+    that throws leaves no report after the run it exists to observe.
+  - R3-proof-no-shell-windows-shim (`evals/review/login-proof.mjs:238`): the wrapped command
+    must be a real executable; say so in the usage.
+- The command keeps nothing of Codex's raw events, so a run that goes wrong can only be read
+  from its summary. Keep the JSONL of every attempt beside the run log, or behind a flag.
 - `uninstall` does not know `<home>/.js-harness/codex-review-homes`. Every run empties it, so
   what a machine keeps is an empty folder; make `uninstall` remove it, or record it in the
   manifest, before the lean session becomes the default (T13).
@@ -414,8 +460,11 @@ What this changes, and waits on Sebastián:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T4 are done and T5 is written. Next, with his go-ahead of 2026-10-07 for two reviews:
-the proof of the login around one `lean` review of `338386a..HEAD`, then one `current`
-review of `7deddfc..HEAD`. T5 is checked off when the proof passes. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
+T1 to T4 are done and T5 is written. Its proof of the login passed; its review did not run,
+since the lean session has no Windows sandbox, and reported no tokens. Next: the explorer's
+reading of both from Codex's source, then the fix, then Sebastián's go-ahead for one more
+lean review of `338386a..e3aad48` from the temporary worktree, which is kept for it. Of the
+two reviews he approved one is spent; the `current` one over the slice is not run at 2,832
+lines without asking him again. T5 is checked off when a lean review reads its diff. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
 `7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai
 has reviewed up to `73ec5ae`.

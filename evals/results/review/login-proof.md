@@ -1,0 +1,22 @@
+# Login proof: a real Codex home around one command
+
+- Date: 2026-10-07T05:34:29.220Z
+- Real Codex home: `C:\Users\Oficina\.codex`
+- Command: `node bin/js-harness.mjs codex-review --session lean --base 338386a --cwd D:\js-harness-worktrees\codex-review-lean-probe`
+- Exit code: 1
+
+## auth.json
+
+- Same file before and after (device and file id): yes
+- Bytes: unchanged
+- Names (hard links): 1 → 1
+- Size: 4009 → 4009 bytes; last written 2026-09-27T21:45:10.145Z → 2026-09-27T21:45:10.145Z
+- Verdict: PASS, the login is the file it was, under as many names as before.
+
+## Everything else at the top level of the home
+
+55 entries before, 55 after.
+
+Nothing else changed.
+
+A file is compared by size, date and SHA-256 (by size and date alone above 64 MiB or when it cannot be read); a folder by the count of its direct entries and its date, not by what is in it. No byte of any file is in this report.
