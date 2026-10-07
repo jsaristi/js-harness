@@ -328,8 +328,25 @@ What this changes, and waits on Sebastián:
     `plugins`, `apps` and `hooks` after `--disable`, and that each flag does what T4 read
     from source. `lean` sets no `CODEX_HOME`, so until T5 it still loads the global
     `AGENTS.md`.
+- 2026-10-06: T3 committed as `e3aad48` (gate green, `core.bare` `false`, the worktree clean).
+  gentle-ai assessed `73ec5ae..e3aad48` as `medium`, review due (`slice_budget_reached`, 438
+  lines, the corrections of `338386a` with T3); granted without asking. Lineage
+  `review-b49708c1e845a7d1`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `e3aad48`. Its three findings, none blocking, all accepted and
+  carried to T5, which touches the same lines (Follow-ups).
 
 ## Follow-ups
+- With T5, from gentle-ai's review of `e3aad48`:
+  - R3-lean-argv-unproven-against-codex (WARNING, `bin/codex-review.mjs:101-108`): nothing
+    shows yet that the real CLI accepts the lean flags and the feature names after `--disable`;
+    the tests compare the argv with a list of the same tokens. T5's first real run is the
+    proof, and until it passes a `--session lean` run may only add `failed` lines to the log.
+  - R3-run-line-session-same-schema (`bin/codex-review.mjs:519`): run lines written before
+    `e3aad48` have no `session`, so a reader must take a missing one as `current`; say so in
+    the run log's header and hold it with a test.
+  - R3-duration-nan-not-clamped (`bin/codex-review.mjs:498`): a monotonic source that gives a
+    non-number makes `durationMs` `null`, and the clock is read outside the `try`. Only an
+    injected clock can do either; make the duration `null` on purpose when it is not finite.
 - `bin/codex-review.test.mjs` takes just over 120 s here, about 1.3 s a test, since each one
   spawns real git; a foreground limit of 120 s cuts it off, so it is run with a longer one.
 - The five test files of the review command took 129 s in one run and 236 s in the next on
