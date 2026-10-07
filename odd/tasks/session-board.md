@@ -51,9 +51,10 @@ something can be checked by a command, it belongs in `bin/`. He asked for it on 
 ## Constraints
 - Zero dependencies, plain Node, like every command in `bin/` — because it must run in any host
   with no install step.
-- Read-only: it opens transcripts and task outputs for reading and runs only `git worktree list`,
-  `git rev-list`, `git status`, the process listing and `gh pr list` — because it runs while other
-  sessions work in the same checkout.
+- Read-only: it opens transcripts, task outputs and feature documents for reading and runs only
+  `git worktree list`, `git rev-list`, `git status`, `git diff --name-only`, `git ls-files`, the
+  process listing and `gh pr list` — because it runs while other sessions work in the same
+  checkout. `--watch` runs the same and nothing more, again at every look.
 - Every path and every external command is injectable (`--claude-home`, `--tmp`, a `deps` object
   for `git`, `gh` and the process listing) — because tests use fixture folders, never this
   machine's sessions.
@@ -213,6 +214,148 @@ may be off by a few.
 - A usage error exits 2, as in `progress`, `remote` and `codex-review`. The constraint first said
   1; the writer flagged the difference and the parent settled it on 2026-10-06.
 
+### The orchestrator
+Approved by Sebastián on 2026-10-06 ("Sí al plan completo, seguí con los pasos 3 a 6"), after the
+plan was laid out to him in three answers. This section is that plan; T5 and T6 build it.
+
+Two kinds of session. A work session owns one feature: its worktree, its feature document and its
+own prompts. The orchestrator is a dedicated session with no feature. It reads; the only file it
+writes is its relief file. It never implements, never commits, never writes in a worktree and never
+answers for Sebastián. It does not write another session's prompts, with one exception: the opening
+prompt of a new work session, which therefore carries what that session needs (what to read first,
+the decisions already taken, how the machine is shared), as pointers and not as content.
+
+Why it does not implement: reading code, running tests and discussing a design are what fill a
+context. A session that orchestrates and builds at once is the one that opened this document, and
+it compacted twice in a day. An orchestrator whose turns are a board and a few lines lasts.
+
+Where each thing lives, so that nothing lives in a conversation:
+- the project's plan (the order of the features, the decisions): `docs/ROADMAP.md` on `main`,
+  changed through small documentation pull requests;
+- a feature's plan (tasks, progress, next step): `odd/tasks/<feature>.md` on its branch, written
+  only by the session that owns the feature;
+- what is in flight between sessions and in neither file yet (his decisions, questions still
+  open, notices not yet delivered, what each session is for): the orchestrator's relief file;
+- the facts (who works, what runs, gates, branches, context sizes): not stored, computed by
+  `js-harness sessions`.
+
+How a request enters. Sebastián tells the orchestrator what he wants. It places it with the roadmap
+and the board: work of a feature whose session is open goes to that session, and he says it there
+in his own words; new work gets the opening prompt of a new session; a design conversation is also
+a session of its own. The orchestrator notes in the relief file what was asked and where it went,
+and goes back to waiting.
+
+When it speaks. It waits on `sessions --watch`, which costs nothing while nothing changes, and
+writes to him only when: a session starts waiting on him; a session finished with nothing running
+behind it; a gate is about to start while another runs; a prompt he holds became stale; a feature's
+plan changed; a session's context passed the threshold. Otherwise it is silent.
+
+When a plan changes (something failed, did not come out as wanted, or a problem appeared). The
+session that finds it writes it in its own document before going on: the task reopened or added,
+with the reason, committed. Every worktree is on the same disk, so the board reads each branch's
+document without a merge, and the watch returns when a task list or a next step changes. The
+orchestrator tells him what changed, why (the written reason), and which other session it touches;
+for that session it gives a one-line notice, and that session updates its own document. A change
+to the project's plan goes to the roadmap on `main`. The rule under all of it: a change does not
+exist until it is in a file.
+
+Relief, not compaction. The orchestrator keeps nothing the files do not hold, so it is replaced
+when its context passes a threshold, the board showing each session's context size:
+- it writes to the relief file as things happen, one dated line each, never at the end, because it
+  can die without warning (the desktop app restarting kills it like any session); the file only
+  grows, it is never rewritten or summarized;
+- when the threshold is passed it tells him and gives the fixed opening prompt, always the same;
+- the new orchestrator reads the relief file, the board, and the last reply of the one before it
+  (the board prints it), and says it is watching; only then is the old one archived, so there are
+  never two;
+- compaction is the net, not the plan: if the context filled before the relief, the session coming
+  back from a compaction does what a new orchestrator does.
+Why not compaction as the rule: a summary is a session telling from memory what happened, the
+defect this feature removes; and on 2026-10-06 the session that opened this document lost its
+engram writes after each of its two compactions.
+
+Still open, to be settled with what T7 shows: where the relief file lives and whether a command
+appends its lines (the first version is a file the skill tells the orchestrator to append to, and
+the board prints its path and last lines); whether the orchestrator can notify his phone by
+itself; how long one lasts before a relief; whether Codex loads the skill.
+
+### Watch, context and plans
+What T5 added to the board, and what each fact is read from.
+
+- Context size. The last reply of the session's own (not a side chain, not a message the harness
+  wrote itself with model `<synthetic>`) records its `usage`; the context is `input_tokens` plus
+  `cache_read_input_tokens` plus `cache_creation_input_tokens`, with the model and the time. In
+  this project's transcripts that sum is within half a percent of the `preTokens` the harness
+  writes at a compaction. After a compaction and until the next reply it is the boundary's
+  `compactMetadata.postTokens`. A transcript where no reply records usage has it unavailable.
+- The context limit, `--context-limit <tokens>`, default 350,000. It marks (`pastContextLimit`,
+  "past the limit of 350k") and limits nothing. Measured in this project's transcripts on
+  2026-10-06: the six automatic compactions came at 466,887 to 468,151 tokens, the manual ones at
+  243,607 to 406,565 (median 322,517), and a session starts at 75,365 to 98,097. 350,000 is three
+  quarters of the automatic point: about 115,000 tokens are left to write the relief before the
+  harness compacts by itself, and it is close to where Sebastián compacts by hand. The automatic
+  point belongs to the model and its window, so the default is this machine's today, not a
+  constant; the flag is the way to move it.
+- Feature plans. For each worktree, the documents under `odd/tasks/` that differ from
+  `origin/main`: `git diff --name-only --diff-filter=d --merge-base origin/main -- odd/tasks`
+  (committed on the branch or changed in the working tree) and `git ls-files --others
+  --exclude-standard -- odd/tasks` (not tracked yet), both with `--no-optional-locks`. Each is
+  read from the worktree's disk, so an edit shows before its commit, and parsed with `tokenize`
+  and `parseFeature` of `bin/lib/progress.mjs`: title, steps done and total, the pending tasks
+  (the id a step starts with, else its first 40 characters), and the non-blank lines of `## Next
+  step` (all of them in `--json`, the first three in the text). A document that cannot be read
+  is unavailable with the reason; a worktree with none prints nothing extra, which is the case
+  of the main checkout.
+- This session. `CLAUDE_CODE_SESSION_ID`, which Claude Code sets for every command a session
+  runs, or `--self <id>` (the whole id or its first eight characters or more), which wins. The
+  session is printed like the others and marked `(this session)`, `self: true` in `--json`.
+
+The watch. `sessions --watch` takes a board, waits `--interval` seconds, takes another, and
+returns when the two differ in a way that needs a decision; otherwise the new one becomes the
+board to compare with and it waits again, until `--timeout`. It prints nothing while it waits.
+The difference is `boardChanges` in the library, a function of two boards; the loop in the
+command only waits and prints. What wakes it, one line each:
+- a session that appears in the window, with its state;
+- a session that starts waiting, from any other state; from `background` the line says how many
+  pieces of work it had open, which is "its open work became empty while its turn was over";
+- a session waiting at both looks whose turn ended at a different time (`turnEndedAt`): it was
+  given something and finished it between two looks;
+- a session whose context passes the limit (said once, not at every look above it);
+- a session that leaves the window;
+- a gate that starts, said apart when another gate is running, and a gate that ends (by pid);
+- a pull request that opens, and one that is no longer open (by number; merged and closed look
+  the same, the board lists the open ones);
+- a feature plan that appears, one that no longer differs from `origin/main`, and one whose done
+  or total count, pending tasks or next step changed (the whole text of the next step is
+  compared, not only the lines the board prints).
+
+What does not wake it, on purpose: a session that starts working, or goes to `background`; the
+age of a last entry; the last write of a background file; the tail of a reply; a context that
+grows below the limit; a piece of work that ends while others of the session stay open; the
+counts and the head of a worktree; a worktree that is removed. The session that watches is never
+compared. A fact that could not be read at one look is not compared at that look, and the board
+to compare with keeps its last readable value (`watchBaseline`), so a failed `gh` call or a busy
+transcript neither wakes the watch nor hides the change that happens across it.
+
+Output and exit codes. With changes: `sessions --watch: N changes after Ns`, the changes, an
+empty line, the board; exit 0. At the timeout: `sessions --watch: nothing changed in Ns` and no
+board, so being woken for nothing costs one line; exit 0. `--json` gives `{ watch: { changed,
+waitedSeconds, changes }, board }`, without `board` at the timeout. The seconds are the time that
+passed, looks included, so a 20 s timeout can say 24. A usage error is 2: `--interval` or
+`--timeout` that is not a number above zero, either of them without `--watch`, a `--self`
+shorter than eight characters. The sessions folder missing at any look is 1.
+
+Defaults. `--interval 30`: a look is one process listing, one `gh` call and a few `git` calls
+per worktree (about four seconds in all on this machine, with six worktrees), so 30 s is some
+120 `gh` calls an hour and a change is seen within half a minute. `--timeout 3000`: fifty minutes, so whoever waits hears
+"nothing changed" within the hour and never takes silence for a watch that died.
+
+Limits. Something that happens and is undone between two looks is not seen: a gate shorter than
+the interval, a pull request opened and closed. The output of a local command also ends a turn,
+so "finished another turn" can be a `/` command Sebastián ran in that session. A gate is known
+by its pid alone, so one that ends and another that starts with the same pid between two looks
+read as the same gate.
+
 ## Constraints on the work
 - TDD strict, runner `node --test`: each behavior has its failing test first.
 - No commit by the writer: the parent commits, in the background, and only when no other
@@ -248,8 +391,8 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
 - [x] T3b Accepted review follow-ups on the library: `R3-enoent-misattributed`, `R3-empty-stdout-counts-zero`, `R3-null-entry-fatal`, `R3-end-marker-not-final`, `R3-untested-branches` — route: delegated writer (the library, its test, and the listing script of the command)
 - [x] T3c A subagent that is sent a follow-up reads as running again: establish the transcript shape of a resumed subagent from real transcripts, then reopen its work on the board; with it `R3-stale-early-end-on-id-reuse` of the second review, the same ground — route: delegated writer (the library and its test, and reading real transcripts prepares the write)
 - [x] T3d Accepted follow-ups of the second review: `R3-args-prototype-keys`, `R3-stat-race-branch-untested`, `R3-facts-throw-kills-board`, `R3-dispatch-test-not-hermetic` (its fifth finding, `R3-stale-early-end-on-id-reuse`, is in T3c) — route: delegated writer, same delegation as T3c
-- [ ] T4 Live check on this machine with two or more sessions, output recorded here; the memories `main-session-orchestrates` and `cross-session-prompts` point to the command — route: inline (one run and two memory edits)
-- [ ] T5 `sessions --watch`: the command waits and returns when the board changes (a session's state, its open background work, a gate starting or ending, a pull request opening or closing), printing what changed; it costs nothing while nothing changes — route: delegated writer
+- [x] T4 Live check on this machine with two or more sessions, output recorded here; the memories `main-session-orchestrates` and `cross-session-prompts` point to the command — route: inline (one run and two memory edits)
+- [x] T5 `sessions --watch`: the command waits and returns when the board changes (a session starts waiting, its open work changes, a gate starts or ends, a pull request opens or closes, a feature's plan changes, a context passes the threshold), printing what changed, at no cost while nothing changes; the board also gains each session's context size and each worktree's feature plan (document, done and total, next step) — route: delegated writer
 - [ ] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected — route: delegated writer
 - [ ] T7 On this machine, on Sebastián's word: `js-harness install`, the orchestrator session opened with the skill, and one real stretch with two sessions supervised by it, recorded here — route: inline
 
@@ -424,9 +567,66 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   After both: `node --test bin/lib/sessions.test.mjs bin/sessions.test.mjs
   bin/js-harness.test.mjs`, 138 tests, 138 pass.
 
+- 2026-10-06, 20:43 local, T4, the live check, done by the parent while the gate of `df1ad94` ran.
+  `node bin/js-harness.mjs sessions --hours 3` against the same facts read another way:
+  - `729ed66b` (this session): the board showed two pieces of work with no recorded end, the
+    shells `brjc287q0` (a watcher) and `b520tmsvq` (the commit), and the writer ended 41 s
+    before. The Windows process list had both scripts running with the same start times, and the
+    writer's end notification had just arrived. While the writer ran its third follow-up, the
+    board had shown it open and marked resumed (its own report), where before T3c it read ended.
+  - `77a27016` (the Codex review session): `waiting`, nothing open. The desktop app's own
+    session list showed it idle, its worktree was clean at `2c74d42`, and no process named it.
+  - `0432a149` (the closed watchdog session): `waiting`; the app showed it idle.
+  - Gates: one, pid 29604, worktree `session-board`, started 6 s before; the process list had
+    that pid created at 20:43:36.
+  - `feat/codex-parity`: 13 not on `origin/main`, 14 not pushed; `git rev-list --count` gave
+    13 against `origin/main` and 14 against its upstream `origin/feat/codex-parity`.
+  Every fact matched. Two limits seen: a process that is alive but silent reads the same as a dead
+  one, the board only has the last write of its file (the watcher's said "20m ago" while it ran);
+  and the app listed a session, `js-harness-8a`, that the board does not show (probably the
+  remote server's own; not checked). The memories `main-session-orchestrates` and
+  `cross-session-prompts` now name the command, the second with the rule of checking `Gates`
+  before a commit.
+- 2026-10-06: `df1ad94` (T3c and T3d) committed, gate green. gentle-ai assessed
+  `6c92d93..df1ad94` as medium and not due (`under_budget`), so it waits in the slice for the
+  next commit. Sebastián approved the orchestrator plan ("Sí al plan completo, seguí con los pasos
+  3 a 6"); it is written under "The orchestrator" in the design. T5 grows by what that plan needs
+  from the command: each session's context size, each worktree's feature plan, and a watch that
+  also returns on a plan change.
+- 2026-10-06, T5 (delegated writer, not committed by it), in three parts, each test first. The
+  design is under "Watch, context and plans".
+  - A, context size. Library RED: `node --test bin/lib/sessions.test.mjs`, 80 tests, 73 pass, 7
+    fail; GREEN: 80 pass. Command RED: `node --test bin/sessions.test.mjs`, 47 tests, 46 pass, 1
+    fail (the four `--context-limit` usage cases passed as written: an unknown argument already
+    exits 2); GREEN: 47 pass.
+  - B, feature plans. Library RED: 86 tests, 80 pass, 6 fail; GREEN: 86 pass. Command RED: 48
+    tests, 47 pass, 1 fail; GREEN: 48 pass.
+  - C, the watch. Library RED: 96 tests, 86 pass, 10 fail (`turnEndedAt`, `boardChanges`,
+    `watchBaseline`); GREEN: 97 pass, the 97th being `isSelf`, whose test was written after it.
+    Command RED: 66 tests, 59 pass, 7 fail (the eleven new usage cases passed as written, for the
+    same reason as in A); GREEN: 66 pass. Dispatcher help line RED: 22 tests, 21 pass, 1 fail;
+    GREEN: 22 pass. The three files together: 185 pass.
+  - Live, from this worktree. `sessions --hours 2`, exit 0: two sessions, this one `background`
+    with 2 pieces open, marked `(this session)`, context 320k tokens; `77a27016` `waiting`,
+    275k; the plans of `codex-parity` (12/14, pending T7, T8), `codex-review-lean` (4/15) and
+    this one (7/10, pending T5, T6, T7) under their worktrees, none under the main checkout or
+    the two `orca` worktrees. `sessions --watch --interval 5 --timeout 20`, exit 0, one line:
+    `sessions --watch: nothing changed in 24s`. `sessions --watch --interval 0`, exit 2 with the
+    usage. A watch that returns on a change, live: the real command, clock, `git`, `gh` and
+    process listing, with `--claude-home` on a made-up sessions folder outside the repository
+    holding one synthetic session in the middle of a tool call, `--interval 3 --timeout 60`. Its
+    reply was appended 8.0 s in; the watch had printed nothing until 17.6 s, then `sessions
+    --watch: 1 change after 14s`, the line `session eeeeeeee "synthetic prompt" is waiting (was
+    working)` and the board, exit 0. No watch has yet returned on a change of a real session.
+  - Size: 872 lines added and 68 removed in `bin/` (source 415 and 62, tests 457 and 5).
+  - Decided by the writer, for the parent to confirm: the context limit default (350,000, the
+    reasons in the design); a watch at its timeout prints one line and no board; `--interval` and
+    `--timeout` without `--watch` are usage errors; a session that appears already past the limit
+    gets both lines; a worktree that arrives with a plan wakes the watch and one that is removed
+    does not.
+
 ## Next step
-T3c and T3d are in the working tree for the parent to commit through the gate, when no other gate
-is running, followed by its gentle-ai assessment and the roadmap step for T3c.
-Then T4, so the board is proved by hand before anything is built on it; then T5, T6 and
-T7. Before any push: Sebastián's word, and his answer on the Codex review of the code commits,
-which spends quota. Before T7: his word on `js-harness install`.
+T5 is written and waits for the parent's commit and review. Then T6, the skill, with "The
+orchestrator" and "Watch, context and plans" as its specification. Before T7:
+Sebastián's word on `js-harness install`. Before any push: his word, and his answer on the Codex
+review of the code commits. The range `6c92d93..df1ad94` is still unreviewed (under budget).

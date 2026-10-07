@@ -246,7 +246,7 @@ test('--help says what --at-login does to remote start and stop, and so does the
 });
 
 test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*background work.*worktrees.*gates.*pull requests/m);
+  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*worktrees.*feature plan.*gates.*pull requests.*--watch waits/m);
   const result = run(['sessions', '--bogus']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --bogus/);

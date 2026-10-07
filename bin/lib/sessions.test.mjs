@@ -371,6 +371,50 @@ test('an end is used once: work launched later under the same id stays open, and
   assert.deepEqual(stale.work.map((w) => [w.toolUseId, w.ended]), [['toolu_1', false], ['toolu_s', false]]);
 });
 
+// --- T5 A: the context a session carries ---
+
+const usage = (input, read, created) => ({ input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: created, output_tokens: 50 });
+const spoke = (minute, tokens, { model = 'model-x', text = 'ok', stop = 'end_turn' } = {}) => ({ type: 'assistant', ...base(minute), message: { role: 'assistant', model, stop_reason: stop, usage: tokens, content: [{ type: 'text', text }] } });
+
+test('the context is what the last reply was sent with: its input tokens, read from and written to the cache', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(10, 90000, 500)), prompt('more', 3), spoke(4, usage(12, 270000, 5388))));
+  assert.deepEqual(facts.context, { tokens: 275400, model: 'model-x', at: at(4) });
+  assert.equal(facts.pastContextLimit, false);
+});
+
+test('a reply the harness wrote itself, a side chain and an entry with no usage are not the session\'s context', () => {
+  const synthetic = spoke(5, usage(0, 0, 0), { model: '<synthetic>' });
+  const side = { ...spoke(6, usage(1, 999999, 1)), isSidechain: true };
+  const noNumbers = spoke(7, { input_tokens: 'many' });
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(10, 100000, 0)), synthetic, side, noNumbers, reply('no usage at all', 8)));
+  assert.deepEqual(facts.context, { tokens: 100010, model: 'model-x', at: at(2) });
+});
+
+test('usage without the cache counts is read as it is, and a transcript whose replies record none has no context, with the reason', () => {
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, { input_tokens: 4200, output_tokens: 9 }))).context.tokens, 4200);
+  const none = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2)));
+  assert.deepEqual(none.context, { unavailable: 'no reply of the transcript records its token usage' });
+  assert.equal(none.pastContextLimit, null);
+});
+
+test('after a compaction the context is what the harness says it left, until the next reply', () => {
+  const boundary = { type: 'system', subtype: 'compact_boundary', ...base(6), compactMetadata: { trigger: 'auto', preTokens: 467000, postTokens: 15700 } };
+  const compacted = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(10, 466000, 800)), boundary));
+  assert.deepEqual(compacted.context, { tokens: 15700, model: 'model-x', at: at(6) });
+  const later = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(10, 466000, 800)), boundary, spoke(8, usage(5, 90000, 0))));
+  assert.equal(later.context.tokens, 90005);
+  const unknown = lib.sessionFacts(transcript(spoke(2, usage(10, 466000, 800)), { type: 'system', subtype: 'compact_boundary', ...base(6) }));
+  assert.equal(unknown.context.tokens, 466810, 'a boundary that does not say what it left changes nothing');
+});
+
+test('a session is past the context limit when its context is above it, and the limit can be set', () => {
+  const big = transcript(prompt('go', 1), spoke(2, usage(1, lib.DEFAULT_CONTEXT_LIMIT, 0)));
+  assert.equal(lib.DEFAULT_CONTEXT_LIMIT, 350000);
+  assert.equal(lib.sessionFacts(big).pastContextLimit, true);
+  assert.equal(lib.sessionFacts(big, { contextLimit: 400000 }).pastContextLimit, false);
+  assert.equal(lib.sessionFacts(transcript(spoke(2, usage(0, 350000, 0)))).pastContextLimit, false, 'at the limit is not past it');
+});
+
 // --- machine facts: every external command is a fake `run`, keyed on what it is asked ---
 
 const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
@@ -504,6 +548,96 @@ test('readWorktrees is unavailable as a whole, with the reason, when the list ca
   assert.deepEqual(lib.readWorktrees(() => notFound('git'), 'C:/tmp'), { available: false, reason: 'git worktree: git is not installed or not on PATH' });
 });
 
+// --- T5 B: the feature plans of a worktree's branch ---
+
+const PLAN = [
+  '# Session board',
+  '',
+  '## Tasks',
+  '- [x] T1 the library',
+  '- [x] T3b review follow-ups',
+  '- [ ] T5 `sessions --watch`: the command waits',
+  '- [ ] a step that carries no id and runs on for longer than forty characters',
+  '',
+  '## Progress',
+  '- 2026-01-01: started',
+  '',
+  '## Next step',
+  '',
+  'T5 with the delegated writer.',
+  '  Then T6, the skill.  ',
+  '',
+  'Before any push: his word.',
+  'A fourth line.',
+  '',
+  '## Notes',
+  'not part of the next step',
+  '',
+].join('\n');
+
+test('planOf reads a feature document: title, steps done and total, what is pending and its next step', () => {
+  assert.deepEqual(lib.planOf(PLAN.replace(/\n/g, '\r\n'), 'odd/tasks/session-board.md'), {
+    path: 'odd/tasks/session-board.md',
+    title: 'Session board',
+    done: 2,
+    total: 4,
+    pending: ['T5', 'a step that carries no id and runs on fo…'],
+    nextStep: ['T5 with the delegated writer.', 'Then T6, the skill.', 'Before any push: his word.', 'A fourth line.'],
+  });
+});
+
+test('planOf of a document with no title, no checkbox and no next step says so with empty facts', () => {
+  assert.deepEqual(lib.planOf('some notes\n', 'odd/tasks/loose-notes.md'), { path: 'odd/tasks/loose-notes.md', title: 'loose-notes', done: 0, total: 0, pending: [], nextStep: [] });
+});
+
+test('readPlans lists the feature documents that differ from origin/main on the branch or in the working tree, and reads each', () => {
+  const asked = [];
+  const run = (command, args, { cwd }) => {
+    asked.push([command, ...args, cwd].join(' '));
+    return args.includes('diff') ? ok('odd/tasks/session-board.md\nodd/tasks/sub/nested.md\nodd/tasks/notes.txt\n') : ok('odd/tasks/draft.md\nodd/tasks/session-board.md\n');
+  };
+  const read = [];
+  const readFile = (file) => {
+    read.push(file);
+    if (file.endsWith('draft.md')) throw Object.assign(new Error('EBUSY: locked'), { code: 'EBUSY' });
+    return PLAN;
+  };
+  const plans = lib.readPlans(run, readFile, 'D:/proj-worktrees/board/');
+  assert.deepEqual(asked, [
+    'git --no-optional-locks diff --name-only --diff-filter=d --merge-base origin/main -- odd/tasks D:/proj-worktrees/board/',
+    'git ls-files --others --exclude-standard -- odd/tasks D:/proj-worktrees/board/',
+  ]);
+  assert.deepEqual(read, ['D:/proj-worktrees/board/odd/tasks/draft.md', 'D:/proj-worktrees/board/odd/tasks/session-board.md']);
+  assert.equal(plans.available, true);
+  assert.deepEqual(plans.items.map((plan) => [plan.path, plan.unavailable ?? `${plan.done}/${plan.total}`]), [['odd/tasks/draft.md', 'EBUSY'], ['odd/tasks/session-board.md', '2/4']]);
+});
+
+test('readPlans has no plan for a branch with no feature document, and is unavailable with the reason when git fails', () => {
+  assert.deepEqual(lib.readPlans(() => ok(''), () => PLAN, 'D:/proj'), { available: true, items: [] });
+  const noMain = (_command, args) => (args.includes('diff') ? fails("fatal: ambiguous argument 'origin/main': unknown revision") : ok(''));
+  assert.deepEqual(lib.readPlans(noMain, () => PLAN, 'D:/proj'), { available: false, reason: "git diff: fatal: ambiguous argument 'origin/main': unknown revision" });
+  const noList = (_command, args) => (args.includes('ls-files') ? fails('fatal: not a git repository') : ok(''));
+  assert.deepEqual(lib.readPlans(noList, () => PLAN, 'D:/proj'), { available: false, reason: 'git ls-files: fatal: not a git repository' });
+});
+
+test('readWorktrees gives each worktree its plans when it is handed a way to read files, and none otherwise', () => {
+  const run = fakeRun([
+    [git('worktree', 'list'), ok(`${WORKTREES}\n${GONE}`)],
+    [git('rev-list'), ok('0\n')],
+    [git('status'), ok('')],
+    [git('diff'), (cwd) => ok(cwd.endsWith('board') ? 'odd/tasks/session-board.md\n' : '')],
+    [git('ls-files'), ok('')],
+  ]);
+  const withPlans = lib.readWorktrees(run, 'D:/proj', { readFile: () => PLAN }).items;
+  assert.deepEqual(withPlans.map((tree) => (tree.plans.available ? tree.plans.items.map((plan) => plan.path) : tree.plans.reason)), [
+    [],
+    ['odd/tasks/session-board.md'],
+    [],
+    'its folder is gone: git lists the worktree as prunable (gitdir file points to non-existent location)',
+  ]);
+  assert.equal('plans' in lib.readWorktrees(run, 'D:/proj').items[0], false);
+});
+
 // --- running gates ---
 
 test('parseProcessList joins each row of the shared process listing with its command line, and wants the end marker', () => {
@@ -586,6 +720,127 @@ test('readPullRequests is unavailable, with the reason, when gh is missing, fail
 const NOW = Date.parse('2026-01-01T12:00:00.000Z');
 const before = (seconds) => new Date(NOW - seconds * 1000).toISOString();
 
+// --- T5 C: what changed between two boards, for `sessions --watch` ---
+
+test('sessionFacts gives the time the turn ended, and none while the session works', () => {
+  const ended = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 5), { type: 'attachment', ...base(6), attachment: { type: 'hook_success' } }, { type: 'system', subtype: 'stop_hook_summary', ...base(7) }));
+  assert.deepEqual([ended.state, ended.turnEndedAt, ended.lastEntryAt], ['waiting', at(5), at(7)]);
+  const working = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 5), prompt('more', 8)));
+  assert.deepEqual([working.state, working.turnEndedAt], ['working', null]);
+  const again = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 5), prompt('more', 8), reply('done again', 9)));
+  assert.equal(again.turnEndedAt, at(9));
+});
+
+const A = 'aaaaaaaa-1111-4111-8111-111111111111';
+const B = 'bbbbbbbb-2222-4222-8222-222222222222';
+const seen = (id, state, more = {}) => ({ id, title: `title ${id[0]}`, state, turnEndedAt: state === 'working' ? null : before(600), lastEntryAt: before(600), context: { tokens: 100000, model: 'model-x', at: before(600) }, pastContextLimit: false, work: [], tail: ['a line'], ...more });
+const open = (id) => ({ tool: 'Bash', id, description: 'Run', ended: false, file: { path: 'x', modifiedAt: before(90) } });
+const boardOf = (parts = {}) => ({ hours: 12, contextLimit: 350000, generatedAt: before(30), sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] }, ...parts });
+const changes = (was, is, options) => lib.boardChanges(boardOf(was), boardOf(is), options);
+
+test('boardChanges: a session that starts waiting, with what it was doing', () => {
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'waiting')] }), ['session aaaaaaaa "title a" is waiting (was working)']);
+  assert.deepEqual(changes({ sessions: [seen(A, 'background', { work: [open('b1'), open('b2')] })] }, { sessions: [seen(A, 'waiting')] }), [
+    'session aaaaaaaa "title a" is waiting: the 2 pieces of work it had open ended (was background)',
+  ]);
+  assert.deepEqual(changes({ sessions: [seen(A, 'unknown', { title: null })] }, { sessions: [seen(A, 'waiting', { title: null })] }), ['session aaaaaaaa "(no title)" is waiting (was unknown)']);
+});
+
+test('boardChanges: a session that was waiting, worked and waits again between two looks finished another turn', () => {
+  assert.deepEqual(changes({ sessions: [seen(A, 'waiting')] }, { sessions: [seen(A, 'waiting', { turnEndedAt: before(40) })] }), ['session aaaaaaaa "title a" finished another turn and is waiting']);
+});
+
+test('boardChanges: a session that appears, one that leaves the window, one that passes the context limit', () => {
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working'), seen(B, 'working')] }), ['session bbbbbbbb "title b" appeared (working)']);
+  assert.deepEqual(changes({ sessions: [seen(A, 'waiting'), seen(B, 'working')] }, { sessions: [seen(B, 'working')] }), ['session aaaaaaaa "title a" left the window of the last 12h']);
+  const big = { context: { tokens: 366499, model: 'model-x', at: before(40) }, pastContextLimit: true };
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens, limit 350k']);
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', big)] }, { sessions: [seen(A, 'working', { ...big, context: { ...big.context, tokens: 380000 } })] }), [], 'already past: said once');
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { pastContextLimit: null })] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens, limit 350k']);
+});
+
+test('boardChanges: what does not matter wakes nobody', () => {
+  const quiet = [
+    [seen(A, 'waiting'), seen(A, 'working', { turnEndedAt: null, lastEntryAt: before(5) })],
+    [seen(A, 'working'), seen(A, 'background', { work: [open('b1')] })],
+    [seen(A, 'working'), seen(A, 'working', { lastEntryAt: before(1), tail: ['another line'], context: { tokens: 120000, model: 'model-x', at: before(1) } })],
+    [seen(A, 'background', { work: [open('b1'), open('b2')] }), seen(A, 'background', { work: [{ ...open('b1'), file: { path: 'x', modifiedAt: before(1) } }] })],
+    [seen(A, 'waiting'), seen(A, 'waiting', { lastEntryAt: before(1) })],
+    [seen(A, 'working'), { id: A, modifiedAt: before(1), unavailable: 'EBUSY' }],
+    [{ id: A, modifiedAt: before(1), unavailable: 'EBUSY' }, seen(A, 'waiting')],
+  ];
+  for (const [was, is] of quiet) assert.deepEqual(changes({ sessions: [was] }, { sessions: [is], generatedAt: before(0) }), [], `${was.state} to ${is.state}`);
+  const tree = (changed) => ({ path: 'D:/proj', branch: 'main', head: '1', aheadOfMain: changed, aheadOfUpstream: changed, changed, plans: { available: true, items: [] } });
+  assert.deepEqual(changes({ worktrees: { available: true, items: [tree(0)] } }, { worktrees: { available: true, items: [tree(7)] } }), []);
+});
+
+test('isSelf takes the whole id of a session or its first eight characters or more', () => {
+  assert.deepEqual([lib.isSelf(A, A), lib.isSelf(A, 'aaaaaaaa'), lib.isSelf(A, 'aaaaaaaa-1111')], [true, true, true]);
+  assert.deepEqual([lib.isSelf(A, 'aaaaaaa'), lib.isSelf(A, B), lib.isSelf(A, ''), lib.isSelf(A, undefined)], [false, false, false, false]);
+});
+
+test('boardChanges leaves out the session that is watching', () => {
+  assert.deepEqual(changes({ sessions: [seen(A, 'working'), seen(B, 'working')] }, { sessions: [seen(A, 'waiting'), seen(B, 'waiting')] }, { self: A }), ['session bbbbbbbb "title b" is waiting (was working)']);
+  assert.deepEqual(changes({ sessions: [] }, { sessions: [seen(A, 'working')] }, { self: A }), []);
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [] }, { self: A }), []);
+});
+
+test('boardChanges: a gate that starts, alone or while another runs, and one that ends', () => {
+  const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, commandLine: 'node bin/check.mjs' });
+  const gates = (...items) => ({ gates: { available: true, items } });
+  assert.deepEqual(changes(gates(), gates(gate(5, 'D:/a'))), ['gate started in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), gate(6, 'D:/b'))), ['gate started in D:/b (pid 6) while another runs in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(gate(5, 'D:/a'), gate(6, { unavailable: 'relative path' })), gates(gate(6, { unavailable: 'relative path' }))), ['gate ended in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(), gates(gate(7, { unavailable: 'relative path' }))), ['gate started in an unknown worktree (pid 7)']);
+  const down = { gates: { available: false, reason: 'the process listing: boom' } };
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), down), [], 'a listing that failed is not a gate that ended');
+  assert.deepEqual(changes(down, gates(gate(5, 'D:/a'))), []);
+});
+
+test('boardChanges: a pull request that opens and one that is no longer open', () => {
+  const pr = (number) => ({ number, title: `feat: ${number}`, branch: `feat/${number}` });
+  const prs = (...items) => ({ pullRequests: { available: true, items } });
+  assert.deepEqual(changes(prs(pr(40)), prs(pr(40), pr(41))), ['pull request #41 opened: feat: 41 (feat/41)']);
+  assert.deepEqual(changes(prs(pr(40), pr(41)), prs(pr(41))), ['pull request #40 is no longer open: feat: 40 (feat/40)']);
+  assert.deepEqual(changes(prs(pr(40)), { pullRequests: { available: false, reason: 'gh pr: exit 1' } }), []);
+});
+
+test('boardChanges: a feature plan whose steps, pending tasks or next step changed, one that appears and one that goes', () => {
+  const plan = (more = {}) => ({ path: 'odd/tasks/board.md', title: 'Board', done: 1, total: 3, pending: ['T2', 'T3'], nextStep: ['T2 with the writer.', 'Then T3.'], ...more });
+  const trees = (...plans) => ({ worktrees: { available: true, items: [{ path: 'D:/wt', branch: 'feat/board', plans: { available: true, items: plans } }] } });
+  assert.deepEqual(changes(trees(plan()), trees(plan())), []);
+  assert.deepEqual(changes(trees(plan()), trees(plan({ done: 2, pending: ['T3'] }))), ['plan odd/tasks/board.md in D:/wt changed: 2/3 done (was 1/3); pending T3 (was T2, T3)']);
+  assert.deepEqual(changes(trees(plan()), trees(plan({ total: 4, pending: ['T2', 'T3', 'T4'] }))), ['plan odd/tasks/board.md in D:/wt changed: 1/4 done (was 1/3); pending T2, T3, T4 (was T2, T3)']);
+  assert.deepEqual(changes(trees(plan()), trees(plan({ nextStep: ['T2 with the writer.', 'Then T3, reopened: the gate failed.'] }))), ['plan odd/tasks/board.md in D:/wt changed: next step now starts "T2 with the writer."']);
+  assert.deepEqual(changes(trees(plan({ pending: [] })), trees(plan({ pending: [], nextStep: [] }))), ['plan odd/tasks/board.md in D:/wt changed: its next step is now empty']);
+  assert.deepEqual(changes(trees(), trees(plan())), ['plan odd/tasks/board.md appeared in D:/wt: 1/3 done, pending T2, T3']);
+  assert.deepEqual(changes(trees(plan()), trees()), ['plan odd/tasks/board.md in D:/wt no longer differs from origin/main']);
+  // A worktree that appears with a plan is a feature that starts; one whose plans or document cannot be read is not compared.
+  assert.deepEqual(changes({}, trees(plan())), ['plan odd/tasks/board.md appeared in D:/wt: 1/3 done, pending T2, T3']);
+  const unread = { worktrees: { available: true, items: [{ path: 'D:/wt', plans: { available: false, reason: 'git diff: boom' } }] } };
+  assert.deepEqual([changes(trees(plan()), unread), changes(unread, trees(plan())), changes(trees(plan()), { worktrees: { available: false, reason: 'boom' } })], [[], [], []]);
+  assert.deepEqual([changes(trees(plan()), trees({ path: 'odd/tasks/board.md', unavailable: 'EBUSY' })), changes(trees({ path: 'odd/tasks/board.md', unavailable: 'EBUSY' }), trees(plan()))], [[], []]);
+});
+
+test('watchBaseline is the newer board, keeping from the older one whatever the newer could not read', () => {
+  const gate = { pid: 5, startedAt: before(10), worktree: 'D:/a', commandLine: 'x' };
+  const older = boardOf({ sessions: [seen(A, 'waiting'), seen(B, 'working')], gates: { available: true, items: [gate] }, pullRequests: { available: true, items: [{ number: 40 }] }, worktrees: { available: true, items: [{ path: 'D:/wt', changed: 0, plans: { available: true, items: [{ path: 'p', done: 1 }] } }] } });
+  const newer = boardOf({
+    generatedAt: before(0),
+    sessions: [{ id: A, modifiedAt: null, unavailable: 'EBUSY' }, seen(B, 'waiting')],
+    gates: { available: false, reason: 'boom' },
+    pullRequests: { available: true, items: [] },
+    worktrees: { available: true, items: [{ path: 'D:/wt', changed: 3, plans: { available: false, reason: 'git diff: boom' } }] },
+  });
+  const baseline = lib.watchBaseline(older, newer);
+  assert.equal(baseline.generatedAt, before(0));
+  assert.deepEqual(baseline.sessions.map((session) => [session.id, session.state]), [[A, 'waiting'], [B, 'waiting']]);
+  assert.deepEqual(baseline.gates, older.gates);
+  assert.deepEqual(baseline.pullRequests, newer.pullRequests);
+  assert.deepEqual(baseline.worktrees.items, [{ path: 'D:/wt', changed: 3, plans: older.worktrees.items[0].plans }]);
+  assert.deepEqual(lib.watchBaseline(older, boardOf({ worktrees: { available: false, reason: 'boom' } })).worktrees, older.worktrees);
+});
+
 const BOARD = {
   root: 'D:\\proj',
   hours: 12,
@@ -597,6 +852,8 @@ const BOARD = {
       lastEntryAt: before(120),
       cwd: 'D:\\proj',
       gitBranch: 'main',
+      context: { tokens: 275400, model: 'model-x', at: before(120) },
+      pastContextLimit: false,
       skippedLines: 1,
       work: [
         { tool: 'Agent', kind: 'Explore', id: 'a1f', description: 'Research the format', launchedAt: before(20 * 60), ended: false, file: { path: 'x', modifiedAt: before(30) } },
@@ -606,7 +863,7 @@ const BOARD = {
       ],
       tail: ['What comes next', '```', `send ${'x'.repeat(200)}`],
     },
-    { id: 'bbbbbbbb-2222-4222-8222-222222222222', title: null, state: 'working', lastEntryAt: before(3 * 86400), cwd: null, gitBranch: null, skippedLines: 0, work: [], tail: [] },
+    { id: 'bbbbbbbb-2222-4222-8222-222222222222', title: null, state: 'working', lastEntryAt: before(3 * 86400), cwd: null, gitBranch: null, context: { unavailable: 'no reply of the transcript records its token usage' }, pastContextLimit: null, skippedLines: 0, work: [], tail: [] },
     { id: 'cccccccc-3333-4333-8333-333333333333', unavailable: 'EACCES' },
   ],
   worktrees: {
@@ -631,7 +888,7 @@ test('renderBoard prints the sessions, then worktrees, gates and pull requests, 
     'Sessions  D:\\proj  3 changed in the last 12h',
     '',
     'aaaaaaaa  background  Board feature  last entry 2m ago',
-    '  cwd D:\\proj  branch main',
+    '  cwd D:\\proj  branch main  context 275k tokens',
     '  work: 2 with no recorded end, 2 ended (last: Bash "Tests" failed 30m ago)',
     '    Agent a1f (Explore) "Research the format"  launched 20m ago  file written 30s ago',
     '    Bash (no id yet) "Run the gate"  launched 2h 05m ago  file unavailable: the transcript does not record its task id yet',
@@ -641,7 +898,7 @@ test('renderBoard prints the sessions, then worktrees, gates and pull requests, 
     `  | send ${'x'.repeat(154)}…`,
     '',
     'bbbbbbbb  working  (no title)  last entry 3d ago',
-    '  cwd unavailable: no entry records it  branch unavailable: no entry records it',
+    '  cwd unavailable: no entry records it  branch unavailable: no entry records it  context unavailable: no reply of the transcript records its token usage',
     '',
     'cccccccc  unavailable: EACCES',
     '',
@@ -686,6 +943,48 @@ test('renderBoard names the latest timed end as the last one, and an untimed end
   assert.equal(workLine([ended('early', before(1800)), ended('late', before(600)), ended('untimed', null)]), '  work: 0 with no recorded end, 3 ended (last: Bash "late" completed 10m ago)');
   assert.equal(workLine([ended('untimed', null), ended('early', before(1800))]), '  work: 0 with no recorded end, 2 ended (last: Bash "early" completed 30m ago)');
   assert.equal(workLine([ended('first', null), ended('second', null)]), '  work: 0 with no recorded end, 2 ended (last: Bash "second" completed at an unknown time)');
+});
+
+// T5 A: a context past the limit says so, with the limit.
+test('renderBoard says when a session\'s context is past the limit, and which session is the one that asked', () => {
+  const session = (id, tokens, more = {}) => ({ id, title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens, model: 'model-x', at: before(60) }, pastContextLimit: tokens > 350000, skippedLines: 0, work: [], tail: [], ...more });
+  const lines = lib.renderBoard({ ...BOARD, contextLimit: 350000, sessions: [session('11111111-a', 366499), session('22222222-b', 999, { self: true })] }, { now: NOW });
+  assert.deepEqual(lines.slice(2, 7), [
+    '11111111  waiting  t  last entry 1m ago',
+    '  cwd C:\\p  branch main  context 366k tokens, past the limit of 350k',
+    '',
+    '22222222  waiting  t  last entry 1m ago  (this session)',
+    '  cwd C:\\p  branch main  context 1k tokens',
+  ]);
+});
+
+// T5 B: a worktree's feature plans are printed under it.
+test('renderBoard prints under a worktree the plans of its branch: steps, what is pending and the start of the next step', () => {
+  const tree = (path, plans) => ({ path, head: '1111111111111111111111111111111111111111', branch: 'feat/x', bare: false, aheadOfMain: 1, aheadOfUpstream: 'no upstream', changed: 0, plans });
+  const plan = { path: 'odd/tasks/session-board.md', title: 'Session board', done: 9, total: 12, pending: ['T5', 'T6', 'T7'], nextStep: ['T5 with the delegated writer.', `Then ${'y'.repeat(200)}`, 'Before any push: his word.', 'A fourth line.', 'A fifth.'] };
+  const worktrees = {
+    available: true,
+    items: [
+      tree('D:/a', { available: true, items: [plan, { path: 'odd/tasks/draft.md', unavailable: 'EBUSY' }, { path: 'odd/tasks/done.md', title: 'Done', done: 2, total: 2, pending: [], nextStep: [] }] }),
+      tree('D:/b', { available: true, items: [] }),
+      tree('D:/c', { available: false, reason: "git diff: fatal: ambiguous argument 'origin/main': unknown revision" }),
+    ],
+  };
+  const lines = lib.renderBoard({ ...BOARD, sessions: [], worktrees }, { now: NOW });
+  assert.deepEqual(lines.slice(2, 14), [
+    'Worktrees',
+    '  D:/a  feat/x  1111111  1 not on origin/main, no upstream, 0 changed',
+    '    plan odd/tasks/session-board.md  Session board  9/12  pending T5, T6, T7',
+    '      > T5 with the delegated writer.',
+    `      > Then ${'y'.repeat(154)}…`,
+    '      > Before any push: his word.',
+    '      > (2 more lines)',
+    '    plan odd/tasks/draft.md  unavailable: EBUSY',
+    '    plan odd/tasks/done.md  Done  2/2  nothing pending',
+    '  D:/b  feat/x  1111111  1 not on origin/main, no upstream, 0 changed',
+    '  D:/c  feat/x  1111111  1 not on origin/main, no upstream, 0 changed',
+    "    plans unavailable: git diff: fatal: ambiguous argument 'origin/main': unknown revision",
+  ]);
 });
 
 // T3c: a follow-up reopens a subagent, and its line says it is that subagent resumed.

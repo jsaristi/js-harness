@@ -164,8 +164,8 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] `sessions` and `sessions --json`, read-only, in the dispatcher's help
 - [x] Accepted review follow-ups on the library
 - [x] A subagent that is sent a follow-up reads as running again
-- [ ] Live check on this machine with two or more sessions open, and the memories point to the command
-- [ ] `sessions --watch` returns when the board changes and costs nothing while it does not
+- [x] Live check on this machine with two or more sessions open, and the memories point to the command
+- [x] `sessions --watch` returns when the board changes and costs nothing while it does not
 - [ ] The orchestrator ships as a skill the installer writes and removes through the manifest
 - [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 

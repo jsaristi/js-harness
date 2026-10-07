@@ -3,8 +3,16 @@
 // text goes in and session facts come out, and every external command is a `run` the caller hands in,
 // so the tests use inline synthetic transcripts and fake commands, never this machine's sessions.
 import { parseSnapshot } from './process-tree.mjs';
+import { parseFeature, tokenize } from './progress.mjs';
 
 const TITLE_LENGTH = 60;
+
+/** The context size above which a session is marked as past the limit. It limits nothing: it is where
+ * the board says "replace this session before the harness compacts it". Every automatic compaction in
+ * this project's transcripts (six of six) fired between 466,887 and 468,151 tokens; three quarters of
+ * that leaves about 115,000 tokens to hand over in, and the user's own manual compactions sat around it
+ * (243,607 to 406,565, median 322,517). A new session starts near 84,000. */
+export const DEFAULT_CONTEXT_LIMIT = 350000;
 const NOTIFICATION_PATTERN = /<task-notification>([\s\S]*?)<\/task-notification>/g;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -102,6 +110,21 @@ function turnOf(entry) {
   return blocks.some((block) => isText(block) && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
 }
 
+/** The context a reply was sent with, `{ tokens, model, at }`: its input tokens plus what it read from
+ * and wrote to the prompt cache, which together are everything the model was given for that reply (the
+ * harness's own count at a compaction is within half a percent of it). `null` for an entry that is not
+ * the session's own reply with usage: a side chain, a message the harness wrote itself (model
+ * `<synthetic>`, all zeros), an entry with no usage. */
+function contextOf(entry) {
+  if (entry.type !== 'assistant' || entry.isSidechain || !isObject(entry.message) || entry.message.model === '<synthetic>') return null;
+  const usage = entry.message.usage;
+  if (!isObject(usage) || !Number.isFinite(usage.input_tokens)) return null;
+  const counted = (value) => (Number.isFinite(value) ? value : 0);
+  const tokens = usage.input_tokens + counted(usage.cache_read_input_tokens) + counted(usage.cache_creation_input_tokens);
+  if (tokens <= 0) return null;
+  return { tokens, model: typeof entry.message.model === 'string' ? entry.message.model : null, at: entry.timestamp ?? null };
+}
+
 const isAgent = (name) => name === 'Agent' || name === 'Task';
 
 function newWork(block, entry, mode) {
@@ -148,8 +171,15 @@ function end(work, at, status) {
  * An end closes only work launched before it. One that names a call closes that call's piece, and any
  * older piece of the same id still open; one that names only the task closes every open piece of that
  * id. A piece launched afterwards under the same id (a follow-up to the same subagent) is open until
- * its own end. An end that arrives before the result that gives its work an id is kept, and used once. */
-export function sessionFacts(text, { tail = 3 } = {}) {
+ * its own end. An end that arrives before the result that gives its work an id is kept, and used once.
+ *
+ * `turnEndedAt` is the time of the entry that ended the turn, and `null` while the session works: two
+ * looks that both find the session waiting tell by it whether it finished another turn in between.
+ *
+ * `context` is what the session's last reply was sent with (`contextOf`), or, after a compaction and
+ * until the next reply, what the harness says the compaction left. `pastContextLimit` says whether it is
+ * above `contextLimit`, and is `null` when the context could not be read. */
+export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT } = {}) {
   const { entries, skipped } = parseTranscript(text);
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
@@ -161,15 +191,26 @@ export function sessionFacts(text, { tail = 3 } = {}) {
   let cwd = null;
   let gitBranch = null;
   let turn = null;
+  let turnEndedAt = null;
   let lastReply = null;
+  let context = null;
 
   for (const [index, entry] of entries.entries()) {
+    context = contextOf(entry) ?? context;
+    // A compaction replaces the context: until the next reply the harness's own count is all there is.
+    if (entry.type === 'system' && entry.subtype === 'compact_boundary' && Number.isFinite(entry.compactMetadata?.postTokens)) {
+      context = { tokens: entry.compactMetadata.postTokens, model: context?.model ?? null, at: entry.timestamp ?? null };
+    }
     if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') customTitle = entry.customTitle;
     if (typeof entry.timestamp === 'string' && (lastEntryAt === null || entry.timestamp > lastEntryAt)) lastEntryAt = entry.timestamp;
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
     if (typeof entry.gitBranch === 'string') gitBranch = entry.gitBranch;
     firstPrompt ??= promptText(entry);
-    turn = turnOf(entry) ?? turn;
+    const said = turnOf(entry);
+    if (said !== null) {
+      turn = said;
+      turnEndedAt = said === 'ended' ? (entry.timestamp ?? null) : null;
+    }
 
     for (const { task, toolUse, status } of notificationsOf(entry)) {
       if (status === undefined) continue; // an event of a task that is still running
@@ -240,7 +281,10 @@ export function sessionFacts(text, { tail = 3 } = {}) {
     lastEntryAt,
     cwd,
     gitBranch,
+    context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
+    pastContextLimit: context === null ? null : context.tokens > contextLimit,
     state: turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting',
+    turnEndedAt,
     work,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
     skippedLines: skipped,
@@ -310,11 +354,63 @@ function gitCount(run, cwd, args, parse = printedCount) {
   return value;
 }
 
+const PENDING_LENGTH = 40;
+
+/** One feature document as a plan: `{ path, title, done, total, pending, nextStep }`. Title and checkboxes
+ * are `parseFeature`'s (bin/lib/progress.mjs), so the board counts what `js-harness progress` counts.
+ * `pending` names each unchecked step by the id that starts it (`T5`, `T3b`), or by the start of its text
+ * when it has none. `nextStep` is every non-blank line of the `## Next step` section, all of them, because
+ * a watch compares the whole text; the text board prints the first few. */
+export function planOf(markdown, docPath) {
+  const id = docPath.split('/').at(-1).replace(/\.md$/, '');
+  const { title, done, total, steps } = parseFeature(markdown, id);
+  const pending = steps
+    .filter((step) => !step.done)
+    .map((step) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(step.text)?.[1] ?? (step.text.length > PENDING_LENGTH ? `${step.text.slice(0, PENDING_LENGTH)}…` : step.text));
+  const nextStep = [];
+  let inSection = false;
+  for (const token of tokenize(markdown)) {
+    if (token.heading && token.heading.level <= 2) {
+      if (inSection) break;
+      inSection = token.heading.level === 2 && token.heading.title.toLowerCase() === 'next step';
+    } else if (inSection && token.line.trim() !== '') {
+      nextStep.push(token.line.trim());
+    }
+  }
+  return { path: docPath, title, done, total, pending, nextStep };
+}
+
+/** The plans of the branch checked out at `cwd`: its feature documents, `odd/tasks/*.md`, that differ
+ * from `origin/main` — changed by a commit of the branch or in the working tree (a diff of the working
+ * tree against the merge base, so what `main` gained since the branch was cut is not the branch's), or
+ * not tracked yet. Each is read with `readFile` and is a `planOf`, or `{ path, unavailable }` when it
+ * cannot be read. A worktree on `main` with nothing changed has none. */
+export function readPlans(run, readFile, cwd) {
+  const names = new Set();
+  for (const args of [
+    ['--no-optional-locks', 'diff', '--name-only', '--diff-filter=d', '--merge-base', 'origin/main', '--', 'odd/tasks'],
+    ['ls-files', '--others', '--exclude-standard', '--', 'odd/tasks'],
+  ]) {
+    const listed = run('git', args, { cwd });
+    if (failed(listed)) return { available: false, reason: `git ${args.find((arg) => !arg.startsWith('-'))}: ${failure('git', listed, { ranIn: cwd })}` };
+    for (const name of listed.stdout.split(/\r?\n/)) if (/^odd\/tasks\/[^/]+\.md$/.test(name)) names.add(name);
+  }
+  const items = [...names].sort().map((name) => {
+    try {
+      return planOf(readFile(`${cwd.replace(/[\\/]+$/, '')}/${name}`), name);
+    } catch (err) {
+      return { path: name, unavailable: err.code ?? err.message };
+    }
+  });
+  return { available: true, items };
+}
+
 /** Every worktree of the repository at `root`: `path`, `branch`, `head`, `aheadOfMain` (commits not on
  * `origin/main`), `aheadOfUpstream` (commits not on its upstream, or `'no upstream'`) and `changed`
  * (files `git status` lists). The status is read with `--no-optional-locks`, so the board never holds
- * the index lock a session committing in that worktree needs. */
-export function readWorktrees(run, root) {
+ * the index lock a session committing in that worktree needs. With `readFile`, each worktree also
+ * carries `plans`, the feature plans of its branch (`readPlans`). */
+export function readWorktrees(run, root, { readFile } = {}) {
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
   if (failed(listed)) return { available: false, reason: `git worktree: ${failure('git', listed)}` };
   const items = parseWorktreeList(listed.stdout).map((tree) => {
@@ -322,7 +418,7 @@ export function readWorktrees(run, root) {
       // Nothing is run in a folder git itself reports gone: the spawn would fail with ENOENT, which reads
       // like a missing git.
       const none = { unavailable: tree.bare ? 'a bare repository has no checkout' : `its folder is gone: git lists the worktree as prunable (${tree.prunable})` };
-      return { ...tree, aheadOfMain: none, aheadOfUpstream: none, changed: none };
+      return { ...tree, aheadOfMain: none, aheadOfUpstream: none, changed: none, ...(readFile && { plans: { available: false, reason: none.unavailable } }) };
     }
     const aheadOfMain = gitCount(run, tree.path, ['rev-list', '--count', 'origin/main..HEAD']);
     let aheadOfUpstream = gitCount(run, tree.path, ['rev-list', '--count', '@{upstream}..HEAD']);
@@ -330,7 +426,7 @@ export function readWorktrees(run, root) {
     if (aheadOfUpstream.failed && /no upstream|does not point to a branch/i.test(String(aheadOfUpstream.failed.stderr))) aheadOfUpstream = 'no upstream';
     const changed = gitCount(run, tree.path, ['--no-optional-locks', 'status', '--porcelain'], (stdout) => stdout.split(/\r?\n/).filter((line) => line !== '').length);
     const fact = (value) => (value?.unavailable ? { unavailable: value.unavailable } : value);
-    return { ...tree, aheadOfMain: fact(aheadOfMain), aheadOfUpstream: fact(aheadOfUpstream), changed: fact(changed) };
+    return { ...tree, aheadOfMain: fact(aheadOfMain), aheadOfUpstream: fact(aheadOfUpstream), changed: fact(changed), ...(readFile && { plans: readPlans(run, readFile, tree.path) }) };
   });
   return { available: true, items };
 }
@@ -417,6 +513,161 @@ export function readPullRequests(run, root) {
   }
 }
 
+// ---- what changed between two boards ------------------------------------------------------------------
+//
+// `sessions --watch` looks at the board again and again and returns only when something on it calls for
+// a decision. What that is, is decided here, from two boards and nothing else.
+
+/** Whether `id` is the session named by `self`: its whole id, or its first eight characters or more. */
+export function isSelf(id, self) {
+  return typeof self === 'string' && self !== '' && (id === self || (self.length >= 8 && id.startsWith(self)));
+}
+
+const sessionLabel = (session) => `session ${session.id.slice(0, 8)} ${JSON.stringify(session.title ?? '(no title)')}`;
+const pieces = (count) => `${count} piece${count === 1 ? '' : 's'} of work`;
+const byKey = (items, key) => new Map(items.map((item) => [item[key], item]));
+
+function sessionChanges(before, after, self) {
+  const lines = [];
+  const earlier = byKey(before.sessions, 'id');
+  const limit = thousands(after.contextLimit ?? DEFAULT_CONTEXT_LIMIT);
+  for (const session of after.sessions) {
+    const was = earlier.get(session.id);
+    // A transcript that could not be read on one side says nothing about what the session did.
+    if (isSelf(session.id, self) || session.unavailable || was?.unavailable) continue;
+    if (!was) lines.push(`${sessionLabel(session)} appeared (${session.state})`);
+    else if (session.state === 'waiting' && was.state !== 'waiting') {
+      const open = was.work.filter((work) => !work.ended).length;
+      const how = was.state === 'background' ? `: the ${pieces(open)} it had open ended` : '';
+      lines.push(`${sessionLabel(session)} is waiting${how} (was ${was.state})`);
+    } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
+      // Waiting at both looks, but not at the same point: it was given something and finished it.
+      lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
+    }
+    if (session.pastContextLimit === true && was?.pastContextLimit !== true) {
+      lines.push(`${sessionLabel(session)} passed the context limit: ${thousands(session.context.tokens)} tokens, limit ${limit}`);
+    }
+  }
+  const now = new Set(after.sessions.map((session) => session.id));
+  for (const session of before.sessions) {
+    if (!now.has(session.id) && !isSelf(session.id, self)) lines.push(`${sessionLabel(session)} left the window of the last ${after.hours}h`);
+  }
+  return lines;
+}
+
+const gatePlace = (gate) => `in ${gate.worktree?.unavailable ? 'an unknown worktree' : gate.worktree} (pid ${gate.pid})`;
+
+function gateChanges(before, after) {
+  if (!before.gates.available || !after.gates.available) return []; // a listing that failed is not a gate that ended
+  const earlier = byKey(before.gates.items, 'pid');
+  const now = byKey(after.gates.items, 'pid');
+  const lines = [];
+  for (const gate of after.gates.items) {
+    if (earlier.has(gate.pid)) continue;
+    // Two gates at once is what the board exists to catch: they share the machine and one of them is
+    // probably a mistake.
+    const other = after.gates.items.find((item) => item.pid !== gate.pid);
+    lines.push(`gate started ${gatePlace(gate)}${other ? ` while another runs ${gatePlace(other)}` : ''}`);
+  }
+  for (const gate of before.gates.items) if (!now.has(gate.pid)) lines.push(`gate ended ${gatePlace(gate)}`);
+  return lines;
+}
+
+function pullRequestChanges(before, after) {
+  if (!before.pullRequests.available || !after.pullRequests.available) return [];
+  const earlier = byKey(before.pullRequests.items, 'number');
+  const now = byKey(after.pullRequests.items, 'number');
+  const text = (pr) => `${pr.title} (${pr.branch})`;
+  return [
+    ...after.pullRequests.items.filter((pr) => !earlier.has(pr.number)).map((pr) => `pull request #${pr.number} opened: ${text(pr)}`),
+    // The board lists the open ones only, so merged and closed look the same from here.
+    ...before.pullRequests.items.filter((pr) => !now.has(pr.number)).map((pr) => `pull request #${pr.number} is no longer open: ${text(pr)}`),
+  ];
+}
+
+const pendingText = (plan) => (plan.pending.length > 0 ? plan.pending.join(', ') : 'nothing');
+const START_LENGTH = 100;
+
+/** What changed in one feature plan, as the parts of one line; empty when nothing that matters did. */
+function planDifferences(was, plan) {
+  const parts = [];
+  if (plan.done !== was.done || plan.total !== was.total) parts.push(`${plan.done}/${plan.total} done (was ${was.done}/${was.total})`);
+  if (pendingText(plan) !== pendingText(was)) parts.push(`pending ${pendingText(plan)} (was ${pendingText(was)})`);
+  if (plan.nextStep.join('\n') !== was.nextStep.join('\n')) {
+    const start = plan.nextStep[0] ?? '';
+    parts.push(plan.nextStep.length === 0 ? 'its next step is now empty' : `next step now starts ${JSON.stringify(start.length > START_LENGTH ? `${start.slice(0, START_LENGTH - 1)}…` : start)}`);
+  }
+  return parts;
+}
+
+function planChanges(before, after) {
+  if (!before.worktrees.available || !after.worktrees.available) return [];
+  const earlier = byKey(before.worktrees.items, 'path');
+  const lines = [];
+  for (const tree of after.worktrees.items) {
+    // A worktree that was not there had no plan: one that arrives with a plan is a feature that starts.
+    const was = earlier.has(tree.path) ? earlier.get(tree.path).plans : { available: true, items: [] };
+    if (!tree.plans?.available || !was?.available) continue;
+    const old = byKey(was.items, 'path');
+    const now = byKey(tree.plans.items, 'path');
+    for (const plan of tree.plans.items) {
+      const previous = old.get(plan.path);
+      if (plan.unavailable || previous?.unavailable) continue;
+      if (!previous) {
+        lines.push(`plan ${plan.path} appeared in ${tree.path}: ${plan.done}/${plan.total} done, pending ${pendingText(plan)}`);
+        continue;
+      }
+      const parts = planDifferences(previous, plan);
+      if (parts.length > 0) lines.push(`plan ${plan.path} in ${tree.path} changed: ${parts.join('; ')}`);
+    }
+    // A plan is listed while its document differs from origin/main, so this is also what a merge looks like.
+    for (const plan of was.items) if (!now.has(plan.path)) lines.push(`plan ${plan.path} in ${tree.path} no longer differs from origin/main`);
+  }
+  return lines;
+}
+
+/** What changed from the board `before` to the board `after` that calls for a decision, one line each,
+ * and `[]` when nothing did:
+ *
+ * - a session that appears, one that starts waiting (from any other state) or that waits again after
+ *   another turn, one that passes the context limit, one that leaves the window;
+ * - a gate that starts (said apart when another one is running) or ends;
+ * - a pull request that opens or is no longer open;
+ * - a feature plan that appears, stops differing from `origin/main`, or whose done or total count,
+ *   pending tasks or next step changed.
+ *
+ * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
+ * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
+ * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree.
+ * `self` names the session that is watching, which is never compared: it works for as long as it watches.
+ * A fact that could not be read on either side is not compared, so a failed listing is never a change. */
+export function boardChanges(before, after, { self } = {}) {
+  return [...sessionChanges(before, after, self), ...gateChanges(before, after), ...pullRequestChanges(before, after), ...planChanges(before, after)];
+}
+
+/** The board the next look is compared with: `newer`, with whatever it could not read taken from `older`.
+ * Without this a transcript that was busy for one look, or one failed `gh` call, would hide the change
+ * that happens across it. */
+export function watchBaseline(older, newer) {
+  const kept = (fact, previous) => (fact.available ? fact : previous);
+  const sessions = byKey(older.sessions.filter((session) => !session.unavailable), 'id');
+  const trees = older.worktrees.available ? byKey(older.worktrees.items, 'path') : new Map();
+  const plansOf = (tree) => {
+    const previous = trees.get(tree.path)?.plans;
+    if (tree.plans === undefined || !previous?.available) return tree.plans;
+    if (!tree.plans.available) return previous;
+    const old = byKey(previous.items.filter((plan) => !plan.unavailable), 'path');
+    return { ...tree.plans, items: tree.plans.items.map((plan) => (plan.unavailable ? (old.get(plan.path) ?? plan) : plan)) };
+  };
+  return {
+    ...newer,
+    sessions: newer.sessions.map((session) => (session.unavailable ? (sessions.get(session.id) ?? session) : session)),
+    gates: kept(newer.gates, older.gates),
+    pullRequests: kept(newer.pullRequests, older.pullRequests),
+    worktrees: newer.worktrees.available ? { ...newer.worktrees, items: newer.worktrees.items.map((tree) => (tree.plans === undefined ? tree : { ...tree, plans: plansOf(tree) })) } : older.worktrees,
+  };
+}
+
 // ---- the board as text --------------------------------------------------------------------------------
 
 const TAIL_WIDTH = 160;
@@ -453,13 +704,25 @@ function workLine(work, now) {
   return `    ${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}  launched ${ago(work.launchedAt, now)}  ${file}`;
 }
 
-function sessionLines(session, now) {
+/** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */
+const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
+
+function contextText(session, limit) {
+  const context = session.context ?? { unavailable: 'not read' };
+  if (context.unavailable) return `context unavailable: ${context.unavailable}`;
+  return `context ${thousands(context.tokens)} tokens${session.pastContextLimit ? `, past the limit of ${thousands(limit)}` : ''}`;
+}
+
+function sessionLines(session, now, contextLimit) {
   const id = session.id.slice(0, 8);
-  if (session.unavailable) return [`${id}  unavailable: ${session.unavailable}`];
+  // The session that asked for the board is marked: its own state is always "working", and a watch
+  // leaves it out of what it compares.
+  const self = session.self ? '  (this session)' : '';
+  if (session.unavailable) return [`${id}  unavailable: ${session.unavailable}${self}`];
   const state = session.stateReason ? `${session.state} (${session.stateReason})` : session.state;
-  const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}`];
+  const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
-  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
+  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}  ${contextText(session, contextLimit)}`);
 
   if (session.work.length > 0) {
     const open = session.work.filter((work) => !work.ended);
@@ -482,19 +745,40 @@ function sessionLines(session, now) {
  * reason the whole list could not be read. */
 function sectionLines(title, fact, empty, itemLine) {
   if (!fact.available) return [title, `  unavailable: ${fact.reason}`, ''];
-  return [title, ...(fact.items.length === 0 ? [`  ${empty}`] : fact.items.map(itemLine)), ''];
+  return [title, ...(fact.items.length === 0 ? [`  ${empty}`] : fact.items.flatMap(itemLine)), ''];
+}
+
+const NEXT_STEP_LINES = 3;
+const clipped = (line) => (line.length > TAIL_WIDTH ? `${line.slice(0, TAIL_WIDTH - 1)}…` : line);
+
+/** The lines under a worktree for the plans of its branch: one per feature document with its steps and
+ * what is pending, then the first lines of its next step. Nothing for a worktree with no such document. */
+function planLines(plans) {
+  if (plans === undefined) return [];
+  if (!plans.available) return [`    plans unavailable: ${plans.reason}`];
+  return plans.items.flatMap((plan) => {
+    if (plan.unavailable) return [`    plan ${plan.path}  unavailable: ${plan.unavailable}`];
+    const pending = plan.pending.length > 0 ? `pending ${plan.pending.join(', ')}` : 'nothing pending';
+    const more = plan.nextStep.length - NEXT_STEP_LINES;
+    return [
+      `    plan ${plan.path}  ${plan.title}  ${plan.done}/${plan.total}  ${pending}`,
+      ...plan.nextStep.slice(0, NEXT_STEP_LINES).map((line) => `      > ${clipped(line)}`),
+      ...(more > 0 ? [`      > (${more} more line${more === 1 ? '' : 's'})`] : []),
+    ];
+  });
 }
 
 /** The board as lines of text: the sessions (in the order given, most recent first), then worktrees,
  * running gates and open pull requests, and a last line that says what the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
-  for (const session of board.sessions) lines.push(...sessionLines(session, now), '');
+  for (const session of board.sessions) lines.push(...sessionLines(session, now, board.contextLimit ?? DEFAULT_CONTEXT_LIMIT), '');
 
   lines.push(
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {
       const upstream = tree.aheadOfUpstream === 'no upstream' ? 'no upstream' : counted(tree.aheadOfUpstream, 'not pushed');
-      return `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
+      const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
+      return [line, ...planLines(tree.plans)];
     }),
     ...sectionLines('Gates', board.gates, 'none running', (gate) => {
       const worktree = gate.worktree?.unavailable ? `worktree unavailable: ${gate.worktree.unavailable}` : gate.worktree;

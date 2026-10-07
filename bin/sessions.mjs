@@ -5,14 +5,28 @@
 // bin/lib/sessions.mjs; this file only finds the folders, reads them and runs `git`, `gh` and one process
 // listing. Read-only: it opens files for reading and signals no process, because it runs while other
 // sessions work in the same checkout. Zero dependencies; `--json` gives the same data as the text.
+// `--watch` takes the same board again and again and returns when two of them differ in a way that needs
+// a decision, so a session can wait on the others without spending anything while nothing happens.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
-import { NOT_VISIBLE, parseProcessList, parsePsList, projectSlug, readGates, readPullRequests, readWorktrees, renderBoard, sessionFacts } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_LIMIT, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, projectSlug, readGates, readPullRequests, readWorktrees, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
-const USAGE = 'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]';
+const USAGE = [
+  'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--context-limit <tokens>] [--self <session id>] [--json]',
+  '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
+  '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
+].join('\n');
+
+// How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
+// one process listing, one `gh` call and a few `git` calls per worktree: every 30 s that is some 120 `gh`
+// calls an hour, far from any limit, and a change is seen within half a minute. The timeout keeps a
+// watch under an hour, so whoever waits on it hears "nothing changed" before it could take the silence
+// for a watch that died.
+const DEFAULT_INTERVAL = 30;
+const DEFAULT_TIMEOUT = 3000;
 
 class SessionsArgError extends Error {}
 
@@ -31,17 +45,25 @@ function plainNumber(value, { decimals }) {
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false };
+  const parsed = { hours: 12, tail: 3, json: false, contextLimit: DEFAULT_CONTEXT_LIMIT, watch: false };
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
   const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp']]);
+  const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
-    if (token === '--json') {
-      parsed.json = true;
+    if (token === '--json' || token === '--watch') {
+      parsed[token.slice(2)] = true;
       continue;
     }
-    if (paths.has(token)) {
+    if (waits.has(token)) {
+      const seconds = plainNumber(requireValue(argv, i, token), { decimals: true });
+      if (!(seconds > 0)) throw new SessionsArgError(`${token} takes a number of seconds above zero`);
+      parsed[waits.get(token)] = seconds;
+    } else if (token === '--self') {
+      parsed.self = requireValue(argv, i, token);
+      if (parsed.self.length < 8) throw new SessionsArgError('--self takes a session id, or its first eight characters or more');
+    } else if (paths.has(token)) {
       parsed[paths.get(token)] = requireValue(argv, i, token);
     } else if (token === '--hours') {
       parsed.hours = plainNumber(requireValue(argv, i, token), { decimals: true });
@@ -49,12 +71,19 @@ function parseArgs(argv) {
     } else if (token === '--tail') {
       parsed.tail = plainNumber(requireValue(argv, i, token), { decimals: false });
       if (Number.isNaN(parsed.tail)) throw new SessionsArgError('--tail takes a whole number, zero or more');
+    } else if (token === '--context-limit') {
+      parsed.contextLimit = plainNumber(requireValue(argv, i, token), { decimals: false });
+      if (!(parsed.contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero');
     } else {
       throw new SessionsArgError(`unknown argument: ${token}`);
     }
     i += 1; // consume the value too, so it is never re-read as its own token
   }
-  return parsed;
+  // A wait given to a board that does not wait is a mistake to name, not a flag to ignore.
+  for (const [flag, key] of waits) {
+    if (!parsed.watch && parsed[key] !== undefined) throw new SessionsArgError(`${flag} only applies with --watch`);
+  }
+  return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 
 /** The main checkout of the repository `cwd` is in, so the board is the same from any worktree: the
@@ -149,7 +178,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -158,7 +187,7 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail }, io) {
   }
   let facts;
   try {
-    facts = io.readFacts(text, { tail });
+    facts = io.readFacts(text, { tail, contextLimit });
   } catch (err) {
     return { id, modifiedAt, unavailable: `its transcript could not be read into facts: ${err.message}` };
   }
@@ -191,6 +220,8 @@ export async function sessionsMain(
     stat = (absolute) => fs.statSync(absolute),
     // The transcript reader, replaceable so a test can make it fail on one transcript.
     readFacts = sessionFacts,
+    // How a watch waits between two looks; with `now` it is all of its time, so a test waits for nothing.
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   } = {},
 ) {
   let parsed;
@@ -206,53 +237,90 @@ export async function sessionsMain(
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
+  // The session that asked: Claude Code names it in the environment of every command it runs.
+  const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
-  let names;
-  try {
-    names = readdir(projectDir);
-  } catch (err) {
-    stderr(`js-harness sessions: no sessions folder for ${root}: ${projectDir} (${err.code ?? err.message})`);
-    return 1;
-  }
-
-  const generatedAt = now();
-  const since = generatedAt - parsed.hours * 3600 * 1000;
-  const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail };
-  const sessions = [];
-  for (const name of names) {
-    if (!name.endsWith('.jsonl')) continue;
-    const id = name.slice(0, -'.jsonl'.length);
-    let changedAt;
+  /** One look at the machine: the board, or `null` (said on stderr) when the project has no sessions folder. */
+  const look = () => {
+    let names;
     try {
-      changedAt = stat(path.join(projectDir, name)).mtimeMs;
+      names = readdir(projectDir);
     } catch (err) {
-      // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
-      sessions.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
-      continue;
+      stderr(`js-harness sessions: no sessions folder for ${root}: ${projectDir} (${err.code ?? err.message})`);
+      return null;
     }
-    if (changedAt >= since) sessions.push(readSession(id, new Date(changedAt).toISOString(), where, io));
-  }
-  // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
-  const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
-  sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
 
-  const worktrees = readWorktrees(run, root);
-  const board = {
-    root,
-    projectDir,
-    hours: parsed.hours,
-    generatedAt: new Date(generatedAt).toISOString(),
-    sessions,
-    worktrees,
-    gates: readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []),
-    pullRequests: readPullRequests(run, root),
-    notVisible: NOT_VISIBLE,
+    const generatedAt = now();
+    const since = generatedAt - parsed.hours * 3600 * 1000;
+    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextLimit: parsed.contextLimit };
+    const sessions = [];
+    for (const name of names) {
+      if (!name.endsWith('.jsonl')) continue;
+      const id = name.slice(0, -'.jsonl'.length);
+      let changedAt;
+      try {
+        changedAt = stat(path.join(projectDir, name)).mtimeMs;
+      } catch (err) {
+        // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
+        sessions.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+        continue;
+      }
+      if (changedAt >= since) sessions.push(readSession(id, new Date(changedAt).toISOString(), where, io));
+    }
+    // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
+    const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
+    sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
+    for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
+
+    const worktrees = readWorktrees(run, root, { readFile });
+    return {
+      root,
+      projectDir,
+      hours: parsed.hours,
+      contextLimit: parsed.contextLimit,
+      self,
+      generatedAt: new Date(generatedAt).toISOString(),
+      sessions,
+      worktrees,
+      gates: readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []),
+      pullRequests: readPullRequests(run, root),
+      notVisible: NOT_VISIBLE,
+    };
   };
+  const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
 
-  if (parsed.json) {
-    stdout(JSON.stringify(board, null, 2));
+  const first = look();
+  if (first === null) return 1;
+  if (!parsed.watch) {
+    for (const line of parsed.json ? [JSON.stringify(first, null, 2)] : boardLines(first)) stdout(line);
     return 0;
   }
-  for (const line of renderBoard(board, { now: generatedAt })) stdout(line);
+
+  // The watch: look, wait, look again, and say nothing until two looks differ in a way that matters
+  // (`boardChanges`) or the timeout is up. Whoever waits on it pays for one answer, not for the waiting.
+  const started = now();
+  const waited = () => Math.round((now() - started) / 1000);
+  let baseline = first;
+  for (let left = parsed.timeout * 1000; left > 0; left = parsed.timeout * 1000 - (now() - started)) {
+    await sleep(Math.min(parsed.interval * 1000, left));
+    const board = look();
+    if (board === null) return 1;
+    const changes = boardChanges(baseline, board, { self });
+    if (changes.length === 0) {
+      baseline = watchBaseline(baseline, board);
+      continue;
+    }
+    if (parsed.json) {
+      stdout(JSON.stringify({ watch: { changed: true, waitedSeconds: waited(), changes }, board }, null, 2));
+      return 0;
+    }
+    stdout(`sessions --watch: ${changes.length} change${changes.length === 1 ? '' : 's'} after ${waited()}s`);
+    for (const change of changes) stdout(`  ${change}`);
+    stdout('');
+    for (const line of boardLines(board)) stdout(line);
+    return 0;
+  }
+  // Nothing to decide: one line and no board, so a watch that wakes for nothing costs next to nothing.
+  stdout(parsed.json ? JSON.stringify({ watch: { changed: false, waitedSeconds: waited(), changes: [] } }, null, 2) : `sessions --watch: nothing changed in ${waited()}s`);
   return 0;
 }

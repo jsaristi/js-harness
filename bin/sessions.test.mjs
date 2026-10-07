@@ -55,7 +55,7 @@ function writeSessions(machine) {
       result('toolu_a1', { stdout: '', backgroundTaskId: 'b1' }, 800),
       call('toolu_a2', 'Agent', { description: 'Research the format', subagent_type: 'Explore', prompt: 'made up' }, 700),
       result('toolu_a2', { isAsync: true, status: 'async_launched', agentId: 'a1' }, 700),
-      reply('Both are still running.\n\nNext prompt:\n```\ncontinue\n```', 60),
+      { ...reply('Both are still running.\n\nNext prompt:\n```\ncontinue\n```', 60), message: { role: 'assistant', model: 'model-x', stop_reason: 'end_turn', usage: { input_tokens: 12, cache_read_input_tokens: 12000, cache_creation_input_tokens: 388, output_tokens: 40 }, content: [{ type: 'text', text: 'Both are still running.\n\nNext prompt:\n```\ncontinue\n```' }] } },
     ),
     60,
   );
@@ -93,6 +93,8 @@ function fakeRun(machine, answers = {}) {
     worktree: () => ok([`worktree ${slashes(machine.root)}`, 'HEAD 1111111111111111111111111111111111111111', 'branch refs/heads/main', '', `worktree ${slashes(machine.worktree)}`, 'HEAD 2222222222222222222222222222222222222222', 'branch refs/heads/feat/board', ''].join('\n')),
     'rev-list': (args) => ok(args.includes('origin/main..HEAD') ? '3\n' : '1\n'),
     status: () => ok(' M bin/a.mjs\n'),
+    diff: () => ok(''),
+    'ls-files': () => ok(''),
     pr: () => ok(JSON.stringify([{ number: 41, title: 'feat: session board', headRefName: 'feat/board' }])),
   };
   const run = (command, args, options = {}) => {
@@ -114,6 +116,7 @@ async function runSessions(machine, argv, deps = {}) {
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
     now: () => NOW,
+    env: {}, // never this machine's: CLAUDE_CODE_SESSION_ID is set in every shell a session opens
     run: fakeRun(machine).run,
     listProcesses: () => [],
     ...deps,
@@ -140,6 +143,11 @@ const USAGE_ERRORS = [
   // (`Number('')` is 0) nor a path.
   ['constructor', 'x'], ['toString', 'x'], ['hasOwnProperty', 'x'], ['__proto__', 'x'],
   ['--tail', ''], ['--tail', ' '], ['--tail', '0x2'], ['--hours', ''], ['--hours', ' '], ['--hours', '1e1'], ['--cwd', ''], ['--claude-home', ''], ['--tmp', ''],
+  // T5: the context limit is a whole number of tokens above zero.
+  ['--context-limit'], ['--context-limit', '0'], ['--context-limit', '1.5'], ['--context-limit', 'big'],
+  // T5: the waits of a watch are numbers above zero and mean nothing without it; --self is an id or its start.
+  ['--watch', '--interval'], ['--watch', '--interval', '0'], ['--watch', '--interval', 'soon'], ['--watch', '--timeout', '0'], ['--watch', '--timeout', '-5'],
+  ['--interval', '5'], ['--timeout', '5'], ['--timeout', '5', '--json'], ['--self'], ['--self', 'abc'], ['--watch', '--self', ''],
 ];
 
 for (const argv of USAGE_ERRORS) {
@@ -284,6 +292,47 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
   const board = JSON.parse(stdout);
   assert.deepEqual(board.sessions[0], { id: SESSION_A, modifiedAt: before(60).toISOString(), unavailable: 'EBUSY' });
   assert.equal(board.sessions[1].id, SESSION_B);
+}));
+
+// T5 A: each session's context size, and the limit that marks it.
+test('the board carries each session\'s context and whether it is past --context-limit', withMachine(async (machine) => {
+  writeSessions(machine);
+  const plain = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.equal(plain.contextLimit, 350000);
+  assert.deepEqual(plain.sessions.map((session) => [session.context, session.pastContextLimit]), [
+    [{ tokens: 12400, model: 'model-x', at: before(60).toISOString() }, false],
+    [{ unavailable: 'no reply of the transcript records its token usage' }, null],
+  ]);
+  const low = JSON.parse((await runSessions(machine, ['--json', '--context-limit', '12000'])).stdout);
+  assert.equal(low.contextLimit, 12000);
+  assert.deepEqual(low.sessions.map((session) => session.pastContextLimit), [true, null]);
+  const text = (await runSessions(machine, ['--context-limit', '12000'])).stdout.split('\n');
+  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens, past the limit of 12k'), text.join('\n'));
+  assert.ok(text.includes('  cwd C:\\proj  branch main  context unavailable: no reply of the transcript records its token usage'), text.join('\n'));
+}));
+
+// T5 B: each worktree's feature plans.
+const BOARD_PLAN = '# Board\n\n## Tasks\n- [x] T1 read\n- [ ] T2 watch\n\n## Next step\nT2 with the writer.\n';
+/** The fake git answers of a machine whose linked worktree has one feature document on its branch (and,
+ * with `untracked`, one git lists that is not on disk). */
+const withPlan = (machine, { untracked = '' } = {}) => ({
+  diff: (_args, options) => ok(options.cwd === slashes(machine.worktree) ? 'odd/tasks/board.md\n' : ''),
+  'ls-files': (_args, options) => ok(options.cwd === slashes(machine.worktree) ? untracked : ''),
+});
+
+test('each worktree carries the feature plans of its branch, in --json and in the text', withMachine(async (machine) => {
+  writeSessions(machine);
+  writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
+  const { run } = fakeRun(machine, withPlan(machine, { untracked: 'odd/tasks/gone.md\n' }));
+  const board = JSON.parse((await runSessions(machine, ['--json'], { run })).stdout);
+  assert.deepEqual(board.worktrees.items.map((tree) => tree.plans), [
+    { available: true, items: [] },
+    { available: true, items: [{ path: 'odd/tasks/board.md', title: 'Board', done: 1, total: 2, pending: ['T2'], nextStep: ['T2 with the writer.'] }, { path: 'odd/tasks/gone.md', unavailable: 'ENOENT' }] },
+  ]);
+  const lines = (await runSessions(machine, [], { run })).stdout.split('\n');
+  const at = lines.indexOf(`  ${slashes(machine.worktree)}  feat/board  2222222  3 not on origin/main, 1 not pushed, 1 changed`);
+  assert.deepEqual(lines.slice(at + 1, at + 4), ['    plan odd/tasks/board.md  Board  1/2  pending T2', '      > T2 with the writer.', '    plan odd/tasks/gone.md  unavailable: ENOENT']);
+  assert.equal(lines[at - 1], `  ${slashes(machine.root)}  main  1111111  3 not on origin/main, 1 not pushed, 1 changed`, 'a worktree with no plan prints nothing extra');
 }));
 
 // R3-stat-race-branch-untested: a session can remove or lock its transcript between the listing and the stat.
@@ -463,6 +512,109 @@ test('--tail sets how many lines of the last reply are printed', withMachine(asy
   assert.deepEqual(JSON.parse(five.stdout).sessions[0].tail, ['Both are still running.', 'Next prompt:', '```', 'continue', '```']);
 }));
 
+// --- T5 C: --watch ---
+
+const SESSION_D = 'dddddddd-4444-4444-8444-444444444444';
+const fileOfD = (machine) => path.join(machine.projectDir, `${SESSION_D}.jsonl`);
+/** A fourth session in the middle of a tool call; `finishes` writes the reply that ends its turn. */
+const startsWorking = (machine) => writeAt(fileOfD(machine), jsonl(prompt('watch me', 100), call('toolu_d1', 'Read', { file_path: 'x' }, 90)), 90);
+const finishes = (machine) => fs.appendFileSync(fileOfD(machine), jsonl(result('toolu_d1', {}, -3), reply('All done.', -4)));
+const D_WAITS = 'session dddddddd "watch me" is waiting (was working)';
+
+/** Runs a watch with a clock that only `sleep` moves. `steps[n]` runs during the n-th sleep: that is
+ * where a test changes the machine between two looks. `printedWhileWaiting` is how many lines had been
+ * written at each sleep. */
+async function watch(machine, argv, steps = [], deps = {}) {
+  const wait = { ms: NOW, slept: [], printedWhileWaiting: [] };
+  const out = [];
+  const sleep = async (ms) => {
+    wait.printedWhileWaiting.push(out.length);
+    wait.slept.push(ms);
+    wait.ms += ms;
+    steps[wait.slept.length - 1]?.();
+  };
+  const done = await runSessions(machine, ['--watch', ...argv], { now: () => wait.ms, sleep, stdout: (line) => out.push(line), ...deps });
+  return { ...done, lines: out.join('\n').split('\n'), slept: wait.slept, printedWhileWaiting: wait.printedWhileWaiting };
+}
+
+test('--watch prints nothing while the board does not change, and returns the change and the board when a session starts waiting', withMachine(async (machine) => {
+  writeSessions(machine);
+  startsWorking(machine);
+  const { code, lines, slept, printedWhileWaiting, stderr } = await watch(machine, ['--interval', '5', '--timeout', '60'], [() => {}, () => finishes(machine)]);
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(slept, [5000, 5000]);
+  assert.deepEqual(printedWhileWaiting, [0, 0]);
+  assert.deepEqual(lines.slice(0, 3), ['sessions --watch: 1 change after 10s', `  ${D_WAITS}`, '']);
+  assert.match(lines[3], /^Sessions {2}.* 3 changed in the last 12h$/);
+  assert.match(lines[5], /^dddddddd {2}waiting {2}watch me {2}/);
+  assert.equal(lines.at(-1), NOT_VISIBLE);
+}));
+
+test('--watch returns at --timeout with one line when nothing that matters changed: a session that starts working, a file that is written', withMachine(async (machine) => {
+  writeSessions(machine);
+  const output = path.join(machine.tmp, 'claude', machine.slug, SESSION_A, 'tasks', 'b1.output');
+  const written = () => fs.utimesSync(output, new Date(NOW), new Date(NOW));
+  const prompted = () => fs.appendFileSync(path.join(machine.projectDir, `${SESSION_A}.jsonl`), jsonl(prompt('one more thing', -40)));
+  const { code, lines, slept } = await watch(machine, ['--interval', '30', '--timeout', '70'], [written, prompted]);
+  assert.equal(code, 0);
+  assert.deepEqual(slept, [30000, 30000, 10000], 'the last wait is what is left of the timeout');
+  assert.deepEqual(lines, ['sessions --watch: nothing changed in 70s']);
+}));
+
+test('--watch --json gives the changes and the board, or the timeout alone', withMachine(async (machine) => {
+  writeSessions(machine);
+  startsWorking(machine);
+  const changed = JSON.parse((await watch(machine, ['--json', '--interval', '5', '--timeout', '60'], [() => finishes(machine)])).lines.join('\n'));
+  assert.deepEqual(changed.watch, { changed: true, waitedSeconds: 5, changes: [D_WAITS] });
+  assert.deepEqual([changed.board.sessions[0].id, changed.board.sessions[0].state], [SESSION_D, 'waiting']);
+  const quiet = JSON.parse((await watch(machine, ['--json', '--interval', '5', '--timeout', '10'])).lines.join('\n'));
+  assert.deepEqual(quiet, { watch: { changed: false, waitedSeconds: 10, changes: [] } });
+}));
+
+test('--watch leaves out the session that watches: CLAUDE_CODE_SESSION_ID, or --self, which wins', withMachine(async (machine) => {
+  writeSessions(machine);
+  startsWorking(machine);
+  const env = { CLAUDE_CODE_SESSION_ID: SESSION_D };
+  const own = await watch(machine, ['--interval', '5', '--timeout', '10'], [() => finishes(machine)], { env });
+  assert.deepEqual(own.lines, ['sessions --watch: nothing changed in 10s']);
+  startsWorking(machine);
+  const other = await watch(machine, ['--interval', '5', '--timeout', '10', '--self', 'bbbbbbbb'], [() => finishes(machine)], { env });
+  assert.deepEqual(other.lines.slice(0, 2), ['sessions --watch: 1 change after 5s', `  ${D_WAITS}`]);
+  assert.deepEqual(other.lines.filter((line) => line.endsWith('  (this session)')).map((line) => line.slice(0, 8)), ['bbbbbbbb']);
+}));
+
+test('the plain board marks the session that asked for it, and marks none when nothing names it', withMachine(async (machine) => {
+  writeSessions(machine);
+  const env = { CLAUDE_CODE_SESSION_ID: SESSION_A };
+  const marked = (await runSessions(machine, [], { env })).stdout.split('\n').filter((line) => line.endsWith('  (this session)'));
+  assert.deepEqual(marked.map((line) => line.slice(0, 8)), ['aaaaaaaa']);
+  const board = JSON.parse((await runSessions(machine, ['--json'], { env })).stdout);
+  assert.deepEqual([board.self, board.sessions.filter((session) => session.self).map((session) => session.id)], [SESSION_A, [SESSION_A]]);
+  const none = await runSessions(machine, ['--json']);
+  assert.deepEqual([JSON.parse(none.stdout).self, none.stdout.includes('"self": true')], [null, false]);
+  assert.doesNotMatch((await runSessions(machine, [])).stdout, /this session/);
+}));
+
+test('--watch does not lose a change across a look that could not read the fact', withMachine(async (machine) => {
+  writeSessions(machine);
+  const one = { number: 41, title: 'feat: session board', headRefName: 'feat/board' };
+  const answers = [ok(JSON.stringify([one])), { status: 1, stdout: '', stderr: 'boom' }, ok(JSON.stringify([one, { number: 42, title: 'feat: more', headRefName: 'feat/more' }]))];
+  const { run } = fakeRun(machine, { pr: () => answers.shift() });
+  const { code, lines, slept } = await watch(machine, ['--interval', '5', '--timeout', '60'], [], { run });
+  assert.equal(code, 0);
+  assert.deepEqual(slept, [5000, 5000]);
+  assert.deepEqual(lines.slice(0, 2), ['sessions --watch: 1 change after 10s', '  pull request #42 opened: feat: more (feat/more)']);
+}));
+
+test('--watch exits 1 when the sessions folder is gone at a later look', withMachine(async (machine) => {
+  writeSessions(machine);
+  const gone = () => fs.rmSync(machine.projectDir, { recursive: true, force: true });
+  const { code, lines, stderr } = await watch(machine, ['--interval', '5', '--timeout', '60'], [gone]);
+  assert.equal(code, 1);
+  assert.deepEqual(lines, ['']);
+  assert.match(stderr, /^js-harness sessions: no sessions folder for /);
+}));
+
 // --- read-only ---
 
 test('sessionsMain writes nothing: every file of the machine is as it was', withMachine(async (machine) => {
@@ -478,5 +630,6 @@ test('sessionsMain writes nothing: every file of the machine is as it was', with
   const was = snapshot();
   await runSessions(machine, []);
   await runSessions(machine, ['--json', '--hours', '24']);
+  await watch(machine, ['--interval', '5', '--timeout', '10']);
   assert.deepEqual(snapshot(), was);
 }));
