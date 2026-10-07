@@ -51,8 +51,10 @@ a feature; a cheaper one that finds less is not, which is why the switch waits o
 - Nothing writes into the real `~/.codex`, and the content of `auth.json` is never read, parsed,
   printed, logged or committed — because Codex refreshes that file in place and a refresh inside
   a copy may leave the real login invalid (unverified; `odd/tasks/codex-parity.md`, Constraints),
-  and the login is his. If a home of the review's own is needed, the file is copied as bytes by
-  code and the real tree is hashed before and after a first run, before any review rests on it.
+  and the login is his. The one exception is his own (2026-10-06, Progress): the lean home's
+  `auth.json` is a hard link to the real one, never a copy, so a refresh during a review
+  writes the real file as his own Codex would. The real home is read before and after a first
+  run, before any review rests on it.
 - Every call to the model through Codex is asked first, with the number of reviews — because
   they draw on the subscription's usage cap, which cannot be measured in advance. T5 and T12
   call the model; no other task does.
@@ -333,9 +335,66 @@ What this changes, and waits on Sebastián:
   lines, the corrections of `338386a` with T3); granted without asking. Lineage
   `review-b49708c1e845a7d1`, one lens (`review-reliability`): approved and acknowledged, so
   the reviewed boundary is `e3aad48`. Its three findings, none blocking, all accepted and
-  carried to T5, which touches the same lines (Follow-ups).
+  carried to T5, which touches the same lines (Follow-ups). Recorded as `2c74d42` (gate green,
+  `passive`).
+- 2026-10-06: Sebastián decided the login of the lean home: "Hard link al auth.json real,
+  recreado en cada corrida. Probalo primero con el hash antes y después." So the lean session
+  runs in a home of its own under `<home>/.js-harness/codex-review-homes/<run id>`, made and
+  removed by every run, whose `auth.json` is a hard link to the real one and never a copy.
+  Why the link: Codex saves the login by truncating and writing the same path
+  (`login/src/auth/storage.rs:206-223`), so the two names always hold one token and a refresh
+  cannot leave the real login stale. What it costs, said to him before he chose: a refresh
+  during a review writes the real `auth.json` through the link, as his own Codex would. The
+  constraint "nothing writes into the real `~/.codex`" stands for everything else, and the
+  proof he asked for comes first: the real home read before and after one lean review
+  (`evals/review/login-proof.mjs`), which calls the model and is asked with its count.
+- 2026-10-06: engram refused the update of this document's mirror ("Claude host session
+  registration could not be confirmed"), as it did to F6's session. The mirror
+  `odd/codex-review-lean/tasks` holds the document as it was opened; this file is whole. The
+  mirror is pending until engram takes a write.
+- 2026-10-07: Sebastián approved the model calls of T5 and of the slice's review, two reviews
+  and no more: "Dale con las 2 revisiones cuando T5 esté commiteado". One `lean` over
+  `338386a..HEAD` inside the proof of the login, then one `current` over `7deddfc..HEAD`.
+- 2026-10-07: T5's build by a new writer, no model called and the real `~/.codex` never
+  touched (every test makes its own fake home).
+  - `bin/lib/codex-review-home.mjs`: `createLeanHome` makes `<parent>/<id>`, hard-links the
+    real `auth.json` into it and checks that the two names are one file (device and file id);
+    a missing login, another volume (`EXDEV`) or any failed link is an error that leaves
+    nothing behind and says no copy is made. `dispose` removes the login's second name first,
+    by a call that removes one name, and then the folder; it never throws. A run that was
+    killed leaves its folder, and `sweepStaleLeanHomes` removes those older than twice the
+    review's timeout. The module never opens the file.
+  - `bin/codex-review.mjs`: under `lean` only, the run's id is made before the launch, the
+    home is created under `<home>/.js-harness/codex-review-homes/` and given as
+    `CODEX_HOME`, and it is disposed on every way out; a home that cannot be made launches
+    nothing and exits 1. `--home` names the harness's state dir again. `current` makes no
+    folder and sets nothing, pinned by a test.
+  - The two smaller findings of the review of `e3aad48`: `runSession(run)` reads a run line
+    with no `session` as `current`; a duration that is not finite is `null` on purpose.
+  - `evals/review/login-proof.mjs`: reads the real home before and after a wrapped command
+    (for `auth.json` its size, date, link count, file id and digest; for the rest of the top
+    level sizes, dates and digests, folders by count) and writes a report with no byte of any
+    file; it exits 1 if `auth.json` is another file afterwards or its link count did not
+    return.
+  - RED: the home module 17 of 18 failing against a stub; the command 14 failing; the proof
+    18 of 18. GREEN, the writer's verification over seven test files: 239 of 239, 171 s.
+    Parent: read `bin/lib/codex-review-home.mjs` whole and ran three of the files again, 50
+    of 50.
+  - Added by the writer beyond its brief and kept: `dispose` warns when the lean name had
+    become another file (Codex renaming instead of truncating), an id that is not a plain
+    folder name is refused, and an existing folder is never taken over.
+  - Seen by the parent and not covered by the script: a hard link shares the file's access
+    list too, and Codex on Windows prepares its sandbox per home (`cap_sid`, `.sandbox` in
+    the real one). So the proof run also reads `icacls` of the real `auth.json` before and
+    after, by hand.
 
 ## Follow-ups
+- `uninstall` does not know `<home>/.js-harness/codex-review-homes`. Every run empties it, so
+  what a machine keeps is an empty folder; make `uninstall` remove it, or record it in the
+  manifest, before the lean session becomes the default (T13).
+- A `--home` or `JS_HARNESS_HOME` on another volume than the Codex home makes `lean` refuse
+  with `EXDEV`; on this host the temp folder is on C: and the repository on D:.
+- The `codex --version` probe runs before the lean home exists, so in the user's home.
 - With T5, from gentle-ai's review of `e3aad48`:
   - R3-lean-argv-unproven-against-codex (WARNING, `bin/codex-review.mjs:101-108`): nothing
     shows yet that the real CLI accepts the lean flags and the feature names after `--disable`;
@@ -355,8 +414,8 @@ What this changes, and waits on Sebastián:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-Slice A is written (T1, T2) and T4 is read. Waiting on Sebastián: how the login reaches a home
-of the review's own (a copy per run, or a hard link), which T5 needs; then what becomes of
-`--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
+T1 to T4 are done and T5 is written. Next, with his go-ahead of 2026-10-07 for two reviews:
+the proof of the login around one `lean` review of `338386a..HEAD`, then one `current`
+review of `7deddfc..HEAD`. T5 is checked off when the proof passes. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
 `7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai
 has reviewed up to `73ec5ae`.

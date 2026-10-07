@@ -9,11 +9,22 @@
 // A record of a review names its run line by id (`run`). The run line is written first, so a line whose
 // outcome is `reviewed` and that no record names means the record could not be written afterwards: the
 // session met the evidence rule and was measured, and the command still exited 1 with no review recorded.
+//
+// Reading old lines. The schema stayed `v1` when `session` was added, so lines written before it have
+// none: they were all run in the `current` session, the only one there was, and a reader takes a missing
+// `session` as `current` (`runSession`), never as unknown. `durationMs` is `null` when the wall time of
+// the attempt could not be measured; it is never a guess.
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
 
 const FILE = 'codex-review-runs.jsonl';
+
+/** The session a run line was measured in: its `session` when that is `current` or `lean`, else
+ * `current`, which is what every line written before the field existed ran in. */
+export function runSession(run) {
+  return run?.session === 'lean' ? 'lean' : 'current';
+}
 
 /** `<git common dir>/js-harness/codex-review-runs.jsonl` for the repository at `root`, or `null` when
  * `root` is not inside one. */

@@ -9,11 +9,16 @@ import { PassThrough } from 'node:stream';
 import {
   childEnv, codexArgs, codexReviewMain, LEAN_EFFORT, LEAN_MODEL, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { codexReviewRunsPath, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { codexReviewsPath, readCodexReviews } from './lib/codex-reviews.mjs';
 
-// Real git and a fake `codex` (injected spawns): no test ever calls a real Codex.
+// Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
+// temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
+// stats anything of the machine's own Codex home or writes into its own state dir.
+const LOGIN = 'FIXTURE login, not a token\n';
 let configDir;
+let osHome;
 const made = [];
 before(() => {
   for (const key of Object.keys(process.env)) {
@@ -23,6 +28,7 @@ before(() => {
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
+  osHome = fakeHome().home;
 });
 after(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
@@ -40,6 +46,26 @@ function tmp(prefix) {
   made.push(dir);
   return dir;
 }
+
+/** A fake OS home: `home`, with the Codex home `codexHome` in it and, unless `login` is `null`, a
+ * fixture for the login in `auth`. `homes` is where the lean homes of that OS home are made. */
+function fakeHome({ login = LOGIN } = {}) {
+  const home = tmp('js-harness-codex-review-oshome-');
+  const codexHome = path.join(home, '.codex');
+  fs.mkdirSync(codexHome);
+  const auth = path.join(codexHome, 'auth.json');
+  if (login !== null) fs.writeFileSync(auth, login, 'utf8');
+  return { home, codexHome, auth, homes: leanHomesDir(home), homedir: () => home };
+}
+
+/** The device and file id of `file`: two names with the same one are the same file. */
+const fileId = (file) => {
+  const { dev, ino } = fs.statSync(file, { bigint: true });
+  return `${dev}:${ino}`;
+};
+
+/** The entries of `dir`, or none when it is not there. */
+const listed = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []);
 
 /** A repo whose first commit (`base`) holds `before` and second (`head`) holds `after`, both maps
  * of file name to content. */
@@ -140,8 +166,9 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
 const RUN_ID = '00000000-0000-4000-8000-000000000001';
 
 /** Runs the command with output captured; `now`, the monotonic clock and the run's id are fixed so
- * the record is comparable, and the platform is fixed to linux unless a test says otherwise. `shown`
- * is what the review passed through to the user, `out` what the command itself logged. */
+ * the record is comparable, and the platform is fixed to linux unless a test says otherwise. The OS
+ * home is the file's fake one unless a test gives its own `homedir`. `shown` is what the review passed
+ * through to the user, `out` what the command itself logged. */
 async function run(argv, extra = {}, env = {}) {
   const out = [];
   const err = [];
@@ -150,6 +177,7 @@ async function run(argv, extra = {}, env = {}) {
     now: () => new Date('2026-09-29T12:00:00.000Z'),
     monotonicNow: () => 0,
     randomUUID: () => RUN_ID,
+    homedir: () => osHome,
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
@@ -801,10 +829,12 @@ test('--base is required, and an empty --unavailable reason is a usage error', a
   assert.equal(wrote(root), false);
 });
 
-test('--home is still accepted, though nothing reads it any more', async () => {
+test('--home is accepted under the current session, which keeps nothing there', async () => {
   const { root, base } = makeRepo();
-  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', tmp('js-harness-codex-review-home-')], fakeCodex(reviewed(root, base)));
+  const home = tmp('js-harness-codex-review-home-');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root, '--home', home], fakeCodex(reviewed(root, base)));
   assert.equal(result.code, 0);
+  assert.deepEqual(listed(home), []);
 });
 
 // --- the session: today's configuration, or the lean one beside it ---
@@ -845,7 +875,7 @@ test('codexArgs: `current` is the default and today\'s argv to the token; `lean`
   assert.throws(() => codexArgs(base, 'other'), /session/);
 });
 
-test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment', async () => {
+test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment but for its home', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   const env = { PATH: '/x', HOME: '/home/x' };
@@ -855,9 +885,12 @@ test('--session lean spawns Codex with the lean argv, from the repository root, 
   assert.equal(fake.calls[0].command, 'codex');
   assert.deepEqual(fake.calls[0].args, leanArgv(base));
   assert.equal(fs.realpathSync(fake.calls[0].opts.cwd), fs.realpathSync(root));
-  // No home of its own yet: nothing about CODEX_HOME is set, so the real one is used.
-  assert.deepEqual(fake.calls[0].opts.env, env);
+  // A home of its own, named after the run, and nothing else added or taken away.
+  assert.deepEqual(fake.calls[0].opts.env, { ...env, CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
+  assert.deepEqual(env, { PATH: '/x', HOME: '/home/x' }, 'the caller\'s environment is not mutated');
+  // The probe asks only for the version, which no home changes, so it runs before one is made.
   assert.deepEqual(fake.probes[0].args, ['--version']);
+  assert.deepEqual(fake.probes[0].opts.env, env);
 });
 
 test('without --session, and with --session current, the argv is today\'s', async () => {
@@ -939,6 +972,292 @@ test('--unavailable with a session launches nothing and records the skip as befo
   assert.equal(fake.calls.length, 0);
   assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')]);
   assert.equal(loggedRun(root), false);
+});
+
+// --- the lean session's home: a folder of its own for one run, with the login as a hard link ---
+
+/** `fake` with a look at Codex's home at the moment it is launched: `during(home, opts)`. */
+const watching = (fake, during) => ({
+  ...fake,
+  spawnAsync: (command, args, opts) => {
+    during(opts.env.CODEX_HOME, opts);
+    return fake.spawnAsync(command, args, opts);
+  },
+});
+
+/** What a Codex session leaves in its home: files and folders beside the login. */
+function codexWrites(home) {
+  fs.mkdirSync(path.join(home, 'sessions', '2026', '10'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'sessions', '2026', '10', 'rollout.jsonl'), '{}\n', 'utf8');
+  fs.writeFileSync(path.join(home, 'version.json'), '{}', 'utf8');
+}
+
+test('the lean session runs in a Codex home of its own: a new folder named after the run, holding the login as a hard link and nothing else', async () => {
+  const { root, base, head } = makeRepo();
+  const mine = fakeHome();
+  fs.writeFileSync(path.join(mine.codexHome, 'AGENTS.md'), 'the global instructions a review must not load', 'utf8');
+  const seen = {};
+  const fake = watching(fakeCodex(reviewed(root, base)), (home) => {
+    Object.assign(seen, { home, entries: listed(home), id: fileId(path.join(home, 'auth.json')), links: fs.statSync(mine.auth).nlink });
+  });
+  const realId = fileId(mine.auth);
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(result.err, '');
+  assert.equal(seen.home, path.join(mine.homes, RUN_ID));
+  assert.deepEqual(seen.entries, ['auth.json'], 'no global AGENTS.md, no config, no skills');
+  assert.equal(seen.id, realId, 'the same file as the real login, not a copy');
+  assert.equal(seen.links, 2);
+  // After the run: the folder is gone, and the login is as it was, under its one name.
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+  assert.equal(fileId(mine.auth), realId);
+  assert.deepEqual(listed(mine.codexHome).sort(), ['AGENTS.md', 'auth.json'], 'nothing is written into the real Codex home');
+  // The folder's name is the id of the run line, which the record names.
+  assert.equal(onlyRun(root).id, RUN_ID);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('the current session is as it was: no CODEX_HOME, no folder made, and no home even asked for', async () => {
+  const { root, base } = makeRepo();
+  const state = tmp('js-harness-codex-review-state-');
+  const never = () => {
+    throw new Error('the current session must not ask where the home is');
+  };
+  for (const flags of [[], ['--session', 'current']]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const env = { PATH: '/x', JS_HARNESS_HOME: state };
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, homedir: never, createLeanHome: never }, env);
+    assert.equal(result.code, 0, result.err);
+    assert.deepEqual(fake.calls[0].args, currentArgv(base));
+    assert.deepEqual(fake.calls[0].opts.env, env);
+    assert.equal('CODEX_HOME' in fake.calls[0].opts.env, false);
+  }
+  assert.deepEqual(listed(state), [], 'no lean home, and no state dir either');
+});
+
+test('a CODEX_HOME the user set is where the login is taken from, and the child gets the lean home instead', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome({ login: null });
+  const elsewhere = path.join(tmp('js-harness-codex-review-codexhome-'), 'codex');
+  fs.mkdirSync(elsewhere);
+  fs.writeFileSync(path.join(elsewhere, 'auth.json'), LOGIN, 'utf8');
+  let links;
+  const fake = watching(fakeCodex(reviewed(root, base)), () => {
+    links = fs.statSync(path.join(elsewhere, 'auth.json')).nlink;
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir }, { CODEX_HOME: elsewhere });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(links, 2, 'the login of the home the user named');
+  assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(mine.homes, RUN_ID));
+  assert.equal(fs.statSync(path.join(elsewhere, 'auth.json')).nlink, 1);
+});
+
+test('on Windows a CODEX_HOME spelled in another case is replaced, not left beside the lean one', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform: 'win32' }, { Codex_Home: 'C:\\Users\\x\\.codex', SystemRoot: 'C:\\Windows' });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(fake.calls[0].opts.env, { SystemRoot: 'C:\\Windows', CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
+});
+
+test('where the lean homes go: --home, else JS_HARNESS_HOME, else the OS home; the login always comes from the real Codex home', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const flagHome = tmp('js-harness-codex-review-state-');
+  const envHome = tmp('js-harness-codex-review-state-');
+  const cases = [
+    [['--home', flagHome], { JS_HARNESS_HOME: envHome }, flagHome],
+    [[], { JS_HARNESS_HOME: envHome }, envHome],
+    [[], {}, mine.home],
+  ];
+  for (const [flags, env, expected] of cases) {
+    let links;
+    const fake = watching(fakeCodex(reviewed(root, base)), () => {
+      links = fs.statSync(mine.auth).nlink;
+    });
+    const result = await run(['--base', 'HEAD~1', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+    assert.equal(result.code, 0, result.err);
+    assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID));
+    assert.equal(links, 2, 'the login of the real Codex home, wherever the state dir is');
+    assert.deepEqual(listed(leanHomesDir(expected)), []);
+  }
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('the lean home is removed on every way out, and the login is left as it was', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const realId = fileId(mine.auth);
+  const spawnThrows = () => {
+    throw new Error('spawn EINVAL');
+  };
+  const endings = [
+    ['reviewed', fakeCodex(reviewed(root, base)), {}, 0],
+    ['a failed turn', fakeCodex(jsonl(thread, turn, { type: 'turn.failed', error: { message: 'model overloaded' } })), {}, 1],
+    ['a non-zero exit', fakeCodex(reviewed(root, base), { status: 7 }), {}, 7],
+    ['not inspected', fakeCodex(reviewedWith(cmd('git status'))), {}, 1],
+    ['a start that fails', fakeCodex('', { error: new Error('boom') }), {}, 1],
+    ['a timeout', fakeCodex('', { hang: true }), { timeoutMs: 30 }, 1],
+    ['an overflow', fakeCodex(['x'.repeat(20), 'y'.repeat(20)]), { maxBuffer: 30 }, 1],
+  ];
+  for (const [name, fake, extra, code] of endings) {
+    let seen;
+    const watched = watching(fake, (home) => {
+      codexWrites(home);
+      seen = { home, links: fs.statSync(mine.auth).nlink };
+    });
+    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...watched, ...extra, homedir: mine.homedir });
+    assert.equal(result.code, code, name);
+    assert.equal(seen.links, 2, name);
+    assert.equal(fs.existsSync(seen.home), false, `${name}: the folder is gone`);
+    assert.deepEqual(listed(mine.homes), [], name);
+    assert.equal(fs.statSync(mine.auth).nlink, 1, name);
+    assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN, name);
+    assert.equal(fileId(mine.auth), realId, name);
+    assert.doesNotMatch(result.err, /lean Codex home/, `${name}: nothing to warn about`);
+  }
+
+  // A spawn that throws launches nothing, and still leaves nothing.
+  const thrown = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(''), spawnAsync: spawnThrows, homedir: mine.homedir });
+  assert.equal(thrown.code, 1);
+  assert.match(thrown.err, /could not start it: spawn EINVAL/);
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('Ctrl-C during a lean review removes its home too', async () => {
+  const { root } = makeRepo();
+  const mine = fakeHome();
+  const fake = fakeCodex('', { hang: true });
+  const signals = new EventEmitter();
+  const pending = run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, signals, homedir: mine.homedir });
+  while (fake.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  // Read, then interrupt, then assert: a failed assertion before the signal would leave the review waiting.
+  const linksDuring = fs.statSync(mine.auth).nlink;
+  signals.emit('SIGINT');
+  const result = await pending;
+  assert.equal(linksDuring, 2);
+  assert.equal(result.code, 1);
+  assert.equal(onlyRun(root).outcome, 'interrupted');
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+  assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
+});
+
+test('a login Codex refreshed during a lean review is the real login afterwards: the link, not a copy', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const realId = fileId(mine.auth);
+  const refreshed = 'FIXTURE login after a refresh, longer than the first one\n';
+  const fake = watching(fakeCodex(reviewed(root, base)), (home) => {
+    codexWrites(home);
+    // As Codex saves it: the same path opened for writing and truncated.
+    fs.writeFileSync(path.join(home, 'auth.json'), refreshed, { encoding: 'utf8', flag: 'w' });
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fs.readFileSync(mine.auth, 'utf8'), refreshed);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+  assert.equal(fileId(mine.auth), realId);
+  assert.deepEqual(listed(mine.homes), []);
+});
+
+test('a lean home that cannot be made launches nothing: exit 1 with the reason, no run line, no record', async () => {
+  const { root, base } = makeRepo();
+  const loggedOut = fakeHome({ login: null });
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: loggedOut.homedir });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /not logged in/);
+  assert.match(result.err, /codex login/);
+  assert.match(result.err, /not started/);
+  assert.doesNotMatch(result.out, /Codex is reviewing|Codex used/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+  assert.deepEqual(listed(loggedOut.homes), []);
+
+  // A link that cannot be made (the state dir on another volume): the same, and no copy instead.
+  const mine = fakeHome();
+  const otherVolume = (options) => createLeanHome({
+    ...options,
+    link: () => {
+      throw Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' });
+    },
+  });
+  const crossed = fakeCodex(reviewed(root, base));
+  const refused = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...crossed, homedir: mine.homedir, createLeanHome: otherVolume });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /EXDEV/);
+  assert.match(refused.err, /No copy is made/);
+  assert.equal(crossed.calls.length, 0);
+  assert.equal(loggedRun(root), false);
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('a run id that cannot be made stops a lean review before it starts, since it names the home', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: noId });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /no entropy/);
+  assert.match(result.err, /not started/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+  assert.deepEqual(listed(mine.home), ['.codex'], 'no state dir was made');
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('a lean home that cannot be removed is a warning that names it, and the review ends as it would', async () => {
+  const { root, base, head } = makeRepo();
+  const mine = fakeHome();
+  const homes = [];
+  // The real home, whose removal then reports a failure, as a folder still held by a process would.
+  const stuck = (options) => {
+    const lean = createLeanHome(options);
+    homes.push(lean.home);
+    return { home: lean.home, dispose: () => lean.dispose() ?? `could not remove ${lean.home} (EBUSY)` };
+  };
+  const reviewedRun = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir, createLeanHome: stuck });
+  assert.equal(reviewedRun.code, 0);
+  assert.ok(reviewedRun.err.includes(`could not remove ${homes[0]} (EBUSY)`), reviewedRun.err);
+  assert.match(reviewedRun.err, /^Warning: /m);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+
+  const failed = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), homedir: mine.homedir, createLeanHome: stuck });
+  assert.equal(failed.code, 7);
+  assert.ok(failed.err.includes(`could not remove ${homes[1]} (EBUSY)`), failed.err);
+  assert.match(failed.err, /did not complete.*exited 7/is);
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => line.outcome), ['reviewed', 'failed']);
+});
+
+test('before a lean review the homes a killed run left are removed: older than twice the timeout, never a younger one', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const at = Date.parse('2026-09-29T12:00:00.000Z');
+  const minute = 60 * 1000;
+  const leftBehind = (id, ageMs) => {
+    const lean = createLeanHome({ realHome: mine.codexHome, parent: mine.homes, id });
+    fs.utimesSync(lean.home, new Date(at - ageMs), new Date(at - ageMs));
+  };
+  leftBehind('killed', 21 * minute);
+  leftBehind('running', 19 * minute);
+  let seen;
+  const fake = watching(fakeCodex(reviewed(root, base)), () => {
+    seen = { homes: listed(mine.homes).sort(), links: fs.statSync(mine.auth).nlink };
+  });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir, timeoutMs: 10 * minute });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(seen.homes, [RUN_ID, 'running'], 'the stale one was gone before Codex was launched');
+  assert.equal(seen.links, 3);
+  assert.deepEqual(listed(mine.homes), ['running']);
+  assert.equal(fs.statSync(mine.auth).nlink, 2);
+  assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
 });
 
 // --- the run log: every attempt that launched Codex leaves one measured line ---
@@ -1168,6 +1487,36 @@ test('the wall time is never below zero', async () => {
   const { root, base } = makeRepo();
   await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow: ticking(10, 4) });
   assert.equal(onlyRun(root).durationMs, 0);
+});
+
+test('a monotonic clock that gives no finite number leaves the wall time unknown: `null` in the run line, said in the summary', async () => {
+  const { root, base, head } = makeRepo();
+  const broken = [() => Number.NaN, ticking(0, Infinity), ticking(-Infinity, 0), () => undefined, () => '2500', ticking(0, null)];
+  for (const monotonicNow of broken) {
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, / in unknown s: /);
+    assert.doesNotMatch(result.out, /NaN|Infinity/);
+  }
+  const runs = readCodexReviewRuns(root);
+  assert.deepEqual(runs.map((line) => line.durationMs), broken.map(() => null));
+  assert.equal(Object.keys(runs[0]).includes('durationMs'), true, 'the field is there, and says not measured');
+  assert.equal(readCodexReviews(root).length, broken.length);
+  assert.deepEqual(readCodexReviews(root)[0], reviewedRecord(base, head));
+});
+
+test('a monotonic clock that throws does not change how an attempt ends: the wall time is unknown and the rest is kept', async () => {
+  const { root, base, head } = makeRepo();
+  const noClock = () => {
+    throw new Error('no clock');
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow: noClock });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(onlyRun(root).durationMs, null);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+  const failed = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), monotonicNow: noClock });
+  assert.equal(failed.code, 7);
+  assert.match(failed.err, /did not complete.*exited 7/is);
 });
 
 test('without an injected monotonic clock the wall time is a whole number of milliseconds, zero or more', async () => {

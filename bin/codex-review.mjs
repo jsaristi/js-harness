@@ -10,10 +10,17 @@
 //
 // Codex runs in one of two sessions, chosen with `--session`. `current`, the default, is the review
 // as it has run so far: the user's whole Codex config, with a read-only sandbox and two desktop plugins
-// off. `lean` ignores that config and its rules, disables plugins, apps and hooks, and sets the model
-// and the effort itself (`LEAN_MODEL`, `LEAN_EFFORT`); it does not yet run in a home of its own, so
-// the global `AGENTS.md` still reaches it. `lean` lives beside `current` until a comparison of the two
-// decides the default (odd/tasks/codex-review-lean.md).
+// off. `lean` ignores that config and its rules, disables plugins, apps and hooks, sets the model and
+// the effort itself (`LEAN_MODEL`, `LEAN_EFFORT`), and runs in a Codex home of its own, because that is
+// the only way to leave the user's global `AGENTS.md` out. `lean` lives beside `current` until a
+// comparison of the two decides the default (odd/tasks/codex-review-lean.md).
+//
+// The lean session's home is a folder made for the one run, `<home>/.js-harness/codex-review-homes/<run
+// id>/`, handed to Codex as `CODEX_HOME` and removed when the run ends, however it ends. It holds one
+// thing: the login, as a hard link to the real `auth.json`, never a copy, so a refresh of the login inside
+// the review is a refresh of the real one (`bin/lib/codex-review-home.mjs` has the reasons and how to undo
+// it). `<home>` is `--home`, else `JS_HARNESS_HOME`, else the OS home; the real Codex home is `CODEX_HOME`,
+// else `.codex` under the OS home. `current` makes no folder and sets no `CODEX_HOME`.
 //
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
@@ -23,16 +30,21 @@
 // id; a run line is a measurement and never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { sessionReading } from './lib/codex-usage.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
-// `--home` used to locate the Codex plugin; it is still parsed so existing callers do not break.
+// `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
+// commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. Only the lean session keeps anything
+// there, the Codex home of its run; under `current` the flag is read and nothing uses it.
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--unavailable <reason>] [--cwd <path>] [--home <path> (ignored)]';
+  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--unavailable <reason>] [--cwd <path>] [--home <path>]';
 
 // The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
 const SESSIONS = ['current', 'lean'];
@@ -55,10 +67,10 @@ function parseArgs(argv) {
   if (base === undefined) throw new ArgError('--base is required');
   const unavailable = get('--unavailable')?.trim();
   if (unavailable === '') throw new ArgError('--unavailable needs a non-empty reason');
-  get('--home');
+  const home = get('--home');
   const session = get('--session') ?? SESSIONS[0];
   if (!SESSIONS.includes(session)) throw new ArgError('--session must be `current` or `lean`');
-  return { base, unavailable, session, cwd: get('--cwd') ?? process.cwd() };
+  return { base, unavailable, session, home, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -118,7 +130,8 @@ const LEAN_FLAGS = [
 /** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. `session` is
  * `current`, today's configuration on top of the user's Codex config and the default, or `lean`, the
  * one that loads only what a review needs. The global `AGENTS.md` is in neither list: no flag leaves
- * it out, only a home of the review's own, which `codexReviewMain` does not set yet. */
+ * it out, only a home of the review's own, which `codexReviewMain` sets for `lean` in the environment
+ * (`leanEnv`). */
 export function codexArgs(base, session = 'current') {
   if (session === 'lean') return ['exec', 'review', '--json', '--ephemeral', ...LEAN_FLAGS, '--base', base];
   if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
@@ -137,6 +150,18 @@ export function childEnv(env, platform) {
   for (const key of Object.keys(out)) {
     if (/^path$/i.test(key) && typeof out[key] === 'string') out[key] = out[key].split(';').filter((dir) => !isWindowsApps(dir)).join(';');
   }
+  return out;
+}
+
+/** The environment of the lean session: `env` (already a child's, see `childEnv`) with `CODEX_HOME` set
+ * to the run's own `home`. On Windows names are case-insensitive, so one spelled in another case is
+ * dropped instead of left beside it. */
+function leanEnv(env, home, platform) {
+  const out = { ...env };
+  for (const key of Object.keys(out)) {
+    if (platform === 'win32' && /^codex_home$/i.test(key)) delete out[key];
+  }
+  out.CODEX_HOME = home;
   return out;
 }
 
@@ -386,8 +411,26 @@ const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 /** A count for a person: grouped by thousands, and `unknown` for one Codex did not report. */
 const spoken = (count) => (count === null ? 'unknown' : thousands(count));
 
+/** A reading of the monotonic clock, or `NaN` when the source throws: the clock is injected, and it may
+ * not change how an attempt ends. */
+function readClock(monotonicNow) {
+  try {
+    return monotonicNow();
+  } catch {
+    return Number.NaN;
+  }
+}
+
+/** The whole milliseconds between two readings of the monotonic clock, never below zero. `null`, on
+ * purpose, when either reading is not a finite number: a wall time that was not measured is said to be
+ * unknown, instead of a `NaN` that only happens to be written as `null`. */
+function elapsedMs(from, to) {
+  return Number.isFinite(from) && Number.isFinite(to) ? Math.max(0, Math.round(to - from)) : null;
+}
+
 /** The reading of a session (`sessionReading`) and its wall time as one line: the tokens, the
- * seconds and the items by type, the most frequent first. */
+ * seconds (`unknown` when the wall time was not measured) and the items by type, the most frequent
+ * first. */
 function spentLine(reading, durationMs) {
   const { inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens } = reading.usage;
   const items = Object.entries(reading.items)
@@ -396,7 +439,7 @@ function spentLine(reading, durationMs) {
     .join(', ');
   return (
     `Codex used ${spoken(inputTokens)} input tokens (${spoken(cachedInputTokens)} cached) and ${spoken(outputTokens)} output ` +
-    `(${spoken(reasoningOutputTokens)} reasoning) in ${Math.round(durationMs / 1000)} s: ${items || 'no items'}.`
+    `(${spoken(reasoningOutputTokens)} reasoning) in ${durationMs === null ? 'unknown' : Math.round(durationMs / 1000)} s: ${items || 'no items'}.`
   );
 }
 
@@ -404,14 +447,16 @@ function spentLine(reading, durationMs) {
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
  * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now` (the wall clock, for the dates),
  * `monotonicNow` (milliseconds on a clock that never steps, for the wall time of the review),
- * `randomUUID` (the id of the run line), `platform`, `log`, `error` and `write` (the review passed
- * through to the user)
+ * `randomUUID` (the id of the run line, and under `lean` the name of its Codex home), `homedir` (the
+ * OS home, which the harness's state dir and the real Codex home default to), `createLeanHome` (what
+ * makes the lean session's home), `platform`, `log`, `error` and `write` (the review passed through
+ * to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
-  const { monotonicNow = () => performance.now() } = deps;
+  const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -472,8 +517,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     const expected = patchKeys(patch);
-    // No `CODEX_HOME` is set for either session yet, so `lean` still loads the global `AGENTS.md` of the
-    // real home: a home of its own is T5 of odd/tasks/codex-review-lean.md and waits on a decision.
+    // The environment of the `--version` probe and of the `current` session, which sets no `CODEX_HOME`
+    // and so runs in the user's real Codex home. The lean session adds a `CODEX_HOME` of its own below;
+    // the probe only asks for the version, which no home changes, so it runs before that home is made.
     const codexEnv = childEnv(env, platform);
     const cli = codexVersion(spawn, platform, codexEnv);
     if (!cli) {
@@ -482,20 +528,54 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const { session } = args;
     const lean = session === 'lean';
-    log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})` : ''}; this can take several minutes.`);
+    // The lean session's own Codex home, named after the run: the id is made here, before the launch,
+    // and the run line reuses it. Until the home exists nothing is launched, so a failure here writes no
+    // run line and no record. `current` makes no id yet, no folder, and never asks where the home is.
+    let leanHome = null;
+    let leanRunId;
+    if (lean) {
+      try {
+        leanRunId = randomUUID();
+      } catch (err) {
+        error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.`);
+        return 1;
+      }
+      try {
+        const homes = leanHomesDir(path.resolve(args.home ?? env.JS_HARNESS_HOME ?? homedir()));
+        // What a killed run left. Twice the timeout: no review that is still running is that old.
+        sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
+        leanHome = createLeanHome({ realHome: realCodexHome(env, homedir()), parent: homes, id: leanRunId });
+      } catch (err) {
+        error(`${err.message}\nThe lean review was not started and nothing was recorded.`);
+        return 1;
+      }
+    }
     // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
     // the date on the wall clock; how long the review took is read off the monotonic one, because the
     // wall clock can be stepped while Codex runs (a time sync, a manual change).
-    const startedAt = now();
-    const launchedAt = monotonicNow();
-    // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
-    // stays live.
-    const result = await runReview(spawnAsync, kill, platform, codexArgs(from, session), {
-      cwd: root,
-      stdio: ['ignore', 'pipe', 'inherit'],
-      env: codexEnv,
-    }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
-    const durationMs = Math.max(0, Math.round(monotonicNow() - launchedAt));
+    let startedAt;
+    let launchedAt;
+    let endedAt;
+    let result;
+    try {
+      log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}${lean ? ` with the lean session (${LEAN_MODEL}, ${LEAN_EFFORT})` : ''}; this can take several minutes.`);
+      startedAt = now();
+      launchedAt = readClock(monotonicNow);
+      // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
+      // stays live.
+      result = await runReview(spawnAsync, kill, platform, codexArgs(from, session), {
+        cwd: root,
+        stdio: ['ignore', 'pipe', 'inherit'],
+        env: leanHome ? leanEnv(codexEnv, leanHome.home, platform) : codexEnv,
+      }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
+      endedAt = readClock(monotonicNow);
+    } finally {
+      // The lean home goes on every way out, whatever the review came to: Codex has ended or was
+      // killed. What could not be cleaned is a warning and never changes how the attempt ends.
+      const left = leanHome?.dispose();
+      if (left) error(`Warning: the lean Codex home of this run was not left clean: ${left}.`);
+    }
+    const durationMs = elapsedMs(launchedAt, endedAt);
     const events = parseEvents(result.stdout);
     const evidence = reviewEvidence(events, expected);
     const reading = sessionReading(events);
@@ -507,7 +587,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       try {
         const run = {
           schema: CODEX_REVIEW_RUN_SCHEMA,
-          id: randomUUID(),
+          // The lean session made its id before the launch, to name its home; `current` makes it here.
+          id: leanRunId ?? randomUUID(),
           startedAt: startedAt.toISOString(),
           durationMs,
           base,

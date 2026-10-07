@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
+import { appendCodexReviewRun, codexReviewRunsPath, readCodexReviewRuns, runSession, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like codex-reviews.test.mjs does.
@@ -153,4 +153,24 @@ test('deleting the one file undoes the run log and leaves the review record alon
   assert.deepEqual(readCodexReviewRuns(root), []);
   assert.deepEqual(readCodexReviews(root), [review]);
   assert.equal(isValidCodexReview(review), true, 'a record that names its run is still a valid record');
+});
+
+test('runSession: a line written before the session was recorded reads as `current`, the only one there was', () => {
+  assert.equal('session' in run, false, 'the fixture is a line as they were first written');
+  assert.equal(runSession(run), 'current');
+  assert.equal(runSession({ ...run, session: 'current' }), 'current');
+  assert.equal(runSession({ ...run, session: 'lean' }), 'lean');
+});
+
+test('runSession: a session it does not know, or a line that is not one, reads as `current` too', () => {
+  for (const session of ['fast', 'LEAN', '', null, 7, ['lean']]) assert.equal(runSession({ ...run, session }), 'current', JSON.stringify(session));
+  for (const line of [null, undefined, 'lean', 7]) assert.equal(runSession(line), 'current', JSON.stringify(line));
+});
+
+test('runSession reads the log as it is: old lines and new ones side by side', () => {
+  const root = makeRepo();
+  appendCodexReviewRun(root, run);
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000005', session: 'lean', model: 'gpt-6.1-sol', effort: 'medium' });
+  appendCodexReviewRun(root, { ...run, id: '00000000-0000-4000-8000-000000000006', session: 'current' });
+  assert.deepEqual(readCodexReviewRuns(root).map(runSession), ['current', 'lean', 'current']);
 });
