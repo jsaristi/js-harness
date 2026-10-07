@@ -138,7 +138,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 - [x] T8 The evidence rule holds under the lean session and the own prompt: every changed line
   of every changed file in the output of a successful command, and a refusal names the files not
   read — route: delegated writer
-- [ ] T9 A large range is reviewed in parts instead of refused: whole files grouped up to a
+- [x] T9 A large range is reviewed in parts instead of refused: whole files grouped up to a
   bound of changed lines, a larger file alone, each part its own session with its own evidence
   and its own line in the run log; the review is recorded only when every part passed, with the
   findings merged — route: same writer
@@ -641,6 +641,10 @@ What follows from it:
     1,742 characters that starts "Review the code changes in the committed range …" and
     holds the Goal heading; the project's `AGENTS.md` beside it; no global persona text.
   - The login: PASS again, `icacls` unchanged, 51 entries before and after.
+    Corrected on the same day: that report also lists three files of the real home whose
+    bytes changed during the run (`logs_2.sqlite-shm`, `logs_2.sqlite-wal`,
+    `models_cache.json`), which this entry and the message to Sebastián left out; see the
+    entry on the real home below.
   - Beside the run of 08:20Z (Codex's own sentence, `--base`):
 
     | | `--prompt codex` | `--prompt own` + `--doc` |
@@ -695,8 +699,77 @@ What follows from it:
     constant and the whole-range text stays `v1` to the character; a path with a quote or
     a control character refuses the split; stale homes are swept once per run, so a later
     part cannot remove an earlier kept home.
+- 2026-10-07: T8 and T9 committed as `b5c8766` (gate green). gentle-ai assessed
+  `81250a4..b5c8766` as `medium`, review due (1,876 lines); granted without asking. Lineage
+  `review-ee9a819d44c3c251`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `b5c8766`. Four findings, none blocking, in Follow-ups; one of
+  them corrected a claim of this document (next entry).
+- 2026-10-07, the real home during a lean run, corrected. The proof report of the run of
+  09:38Z did not say "nothing else changed": it listed `logs_2.sqlite-shm`,
+  `logs_2.sqlite-wal` and `models_cache.json` as changed. The parent had read the report
+  through a filter that dropped those lines. What was then checked:
+  - Four Codex processes are alive that this session did not start: the desktop app's
+    `app-server` and its daemon of 0.159.1 (started 2026-10-05T20:21Z), the app's own
+    `codex.exe app-server` and `exec-server` (2026-10-06T11:23Z), and a sandbox service
+    (2026-10-06T11:22Z).
+  - `models_cache.json` of the real home says who wrote it: `client_version` `0.159.1`,
+    `fetched_at` 2026-10-07T10:46:39Z. The review command runs the CLI of 0.160.1.
+  - A control, the proof around a command that waits 70 seconds and starts nothing of
+    Codex: both log files changed again.
+  - `codex --version` given an empty home leaves no file in it, so the version probe of the
+    command is not the writer.
+  So the changes belong to his own running Codex app, and the login proof says only what it
+  measures: the login untouched. It cannot say "the lean session wrote nothing in the real
+  home" while another client writes there; carried as a follow-up for the proof tool. The
+  same app is the likely origin of the CLI becoming 0.160.1 at 05:51Z (a session of
+  `codex-tui` 0.159.1 started 15 seconds before).
+- 2026-10-07T10:45Z: T9 proven on the real binary, announced as two Codex reviews (the
+  fourth and fifth of the feature) and run: `338386a..e3aad48` with `--part-lines 200
+  --prompt own --doc … --keep-home`. T9 is checked off on it.
+  - The split: 255 changed lines in 3 files, part 1 `bin/codex-review.mjs` (89), part 2
+    the test file and this document (166). One after another, each in its own lean home.
+  - Part 1: `reviewed`, coverage 85 of 85, verdict correct (0.88), 144,027 input tokens
+    (105,984 cached), 573 output, 6 requests, first request 7,126, 34 s.
+  - Part 2: `reviewed`, coverage 131 of 131, verdict correct (0.88), 87,960 input (35,840
+    cached), 547 output, 4 requests, first request 7,136, 35 s.
+  - Together: 231,987 input (141,824 cached, 90,163 not cached), 1,120 output, 10 requests,
+    69 s; one review record for the range, with `runs` naming both parts. 85 + 131 is the
+    216 of the whole range, so the parts add up.
+  - Against the same range whole under the same prompt (107,236 input, 35,300 not cached):
+    two parts cost about twice the input, because each part reads its own context again.
+    Splitting is the price of a range that cannot be read whole, not a saving.
+  - Seen again: the model started the `codex` binary inside its sandbox in part 1
+    (`codex features list`), and in part 2 tried `node --test`, which the sandbox refused
+    (spawn EPERM); it said so in its explanation.
+  - The login: PASS, `icacls` unchanged. The same three files of the real home changed,
+    explained above.
+- 2026-10-07: decided for slice E, without a question to Sebastián, each for a stated reason:
+  - The `current` session is measured in a home that copies his configuration with the
+    login linked, not by leaving session files in his `~/.codex`: the second would write
+    in his real home, which he ruled out. `evals/codex-home.mjs` already seeds such a home
+    for F6.
+  - The comparison runs on the CLI that is installed, 0.160.1, and every reading records
+    its version; if he puts 0.160.0 back, the cells are run again.
+  - The effort and CodeGraph are varied by the comparison through injection, not by new
+    flags of `codex-review`: the command keeps fixing the model and the effort, as he
+    decided.
 
 ## Follow-ups
+- From gentle-ai's review of `b5c8766`:
+  - R3-part-command-length-unbounded (`bin/lib/codex-review-parts.mjs:73-82`, WARNING): a
+    part is bounded by changed lines only, so many small or binary files can make one git
+    command line longer than Windows takes. It fails closed, but the message does not name
+    the cause. Bound a part by its file count or command length too. Before T12 reviews a
+    range with many files.
+  - R3-parts-runlog-failure-unasserted (`bin/codex-review.mjs:1070`): when a part's run line
+    cannot be written, the record can hold `runs` without `run`, or a shorter `runs`; no
+    test drives that.
+  - R3-parts-record-validity-unasserted (`bin/codex-review.mjs:1087`): nothing asserts that
+    `isValidCodexReview` takes a record with `runs`, which is what the push check needs.
+  - R3-login-proof-real-home-changed: answered in Progress (the real home during a lean
+    run). What remains is for the tool: when the home changes outside `auth.json`, the
+    report should say that a running Codex client may be the writer, and list the Codex
+    processes alive, so the reader does not have to find out by hand.
 - From gentle-ai's review of `81250a4` (all but the first closed with T8, Progress):
   - R3-finding-shape-unproved-fails-closed (`bin/lib/codex-review-answer.mjs:44`, WARNING):
     the schema of one finding has only been tested against invented fixtures, and both real
@@ -755,24 +828,23 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-Slices A, B and C are done: T1 to T7 are checked. The lean session reads its diff, measures
-its tokens, reads Codex's answer as data and can review with a prompt of our own that carries
-the intent (CLI 0.160.1; Progress holds the numbers of both real runs). Next is slice D, one
-delegated writer: T8 (the evidence rule under the lean session and both prompts, with the
-three small findings of the last review, Follow-ups) and T9 (a large range reviewed in
-parts). Then slice E: the seeded diff and its scorer (T10), the comparison and its report
-(T11), and the runs (T12), whose count is put to Sebastián before they start.
+Slices A to D are done: T1 to T9 are checked. The lean session reads its diff, measures its
+tokens, reads the answer of Codex as data, reviews with a prompt of our own, and reviews a
+large range in parts (CLI 0.160.1; Progress holds the numbers of the five real reviews).
+Next is slice E, one delegated writer for T10 and T11: a seeded diff with its answer key
+and a scorer, then `evals/review/compare.mjs` and `report.mjs --require-complete`, with
+the three small findings of the last review (Follow-ups). The configurations to compare
+are: `current` measured in a seeded copy of his home; `lean`; `lean` with the prompt of
+our own and the intent; `lean` at `high`; `lean` with CodeGraph. Over two ranges: a real
+one with no known defect and the seeded one. That is ten cells, ten Codex reviews, and the
+count is put to Sebastián before T12 starts.
 
-Open, for him, one at a time, none blocking slice D:
-1. T12, how the `current` session is measured, since it runs `--ephemeral` in his real
-   home and reports zero tokens: a run without `--ephemeral` that leaves session files in
-   his `~/.codex` and reads them, or a home that copies his configuration.
-2. Which CLI version the comparison runs on: 0.160.1 is installed, F6 was paused on 0.160.0,
-   and T12's runs must all share one version.
-3. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip.
-   The lean session has reviewed `338386a..e3aad48` twice; the rest is not covered, and it
-   is larger than a session has taken so far, which T9 is for.
+Open, for him, none blocking T10 and T11:
+1. The go-ahead for the ten runs of T12, once the tools exist.
+2. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
+   7,370 changed lines in 21 files, so about nineteen parts at 400 lines, and the test file
+   of the command alone is 2,564. It is the first real use of T9 and its count is asked.
 
-On the cap: three Codex reviews spent in this feature (one read nothing, two read their
-diff). A single run that proves a piece is announced with its count and run; the batch of
-T12 is asked first. Both kept lean homes are swept by the next lean review.
+On the cap: five Codex reviews spent in this feature (one read nothing, four read their
+diff). A single run that proves a piece is announced with its count and run; a batch is
+asked first. The kept lean homes are swept by the next lean review.
