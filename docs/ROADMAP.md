@@ -227,6 +227,17 @@ work) these tasks do not measure.
    attempt and runs in a session that loads only what a review needs, on `gpt-6.1-sol` at
    `medium` (Sebastián, 2026-10-06). The Review and Effort rows above still describe what runs
    today; they change when the comparison of the two configurations decides the switch.
+6. Session signals, asked by Sebastián on 2026-10-07 and not started: he runs several sessions
+   from the phone and wants three things said by the harness itself rather than remembered by
+   the agent. Whose turn it is in every reply: a prompt for him only when the work waits on
+   him, and a plain "nothing to send" when the agent goes on by itself (he could not tell the
+   two apart and sent stale prompts twice). A notice when a session finishes, saying which
+   session to return to. And the context window watched, with its percentage reported and a
+   cut proposed before auto-compact (this session reached 77% of 500k unnoticed). Today all
+   three live in prose: `AGENTS.md` (at 1,497 of 1,500 tokens, and its "exactly one prompt in
+   every reply" now contradicts the first) and the agent's memory. A feature of its own, in its
+   own session: what a hook, the status line or `js-harness` can check or print, so the prose
+   can shrink.
 
 ## Stack doctor notes
 

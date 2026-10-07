@@ -488,8 +488,26 @@ What follows from it:
   - Left open by the writer, settled by the first kept home: `requests` may count a line
     Codex writes when only the rate limits change. The shape of a rollout line is read from
     source and has not been seen in a real file.
+- 2026-10-07: the correction committed as `7529f67` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai assessed `e531c1f..7529f67` as `medium`, review due (1,330
+  lines); granted without asking. Lineage `review-04599bf4472ce38a`, one lens
+  (`review-reliability`): approved and acknowledged, so the reviewed boundary is `7529f67`.
+  Two suggestions, both about tests, accepted and carried (Follow-ups).
+- 2026-10-07: asked for one more lean review of `338386a..e3aad48` with `--keep-home`, inside
+  the proof of the login; not yet answered. Sebastián asked instead where to run it (here, in
+  this session; F6's stays paused) and for three things to be built into the harness: whose
+  turn it is in every reply, a notice when a session finishes, and the context window watched.
+  Recorded in `docs/ROADMAP.md`, Next, item 6, as a feature of its own; applied by hand until
+  then. This session's context read 77% of 500k at that moment (auto-compact at 93%), so it is
+  compacted before the next run.
 
 ## Follow-ups
+- From gentle-ai's review of `7529f67`, with the next change to the command's tests:
+  - R3-off-windows-case-test-host-platform (`bin/codex-review.test.mjs:1138`): the test of a
+    variable spelled in another case off Windows passes no platform, so it may rest on the
+    host's; pass `linux` and `darwin`.
+  - R3-keep-home-failed-clean-branch-unasserted (`bin/codex-review.mjs:631`): no test at the
+    command's level covers `--keep-home` when the login's name could not be removed cleanly.
 - Closed on 2026-10-07 with the correction above, from gentle-ai's review of `e531c1f`:
   - R3-empty-state-home-resolves-to-cwd (WARNING, `bin/codex-review.mjs:544`): an empty
     `JS_HARNESS_HOME` or `--home` is not taken as unset, so the lean home and its link to the
@@ -529,8 +547,16 @@ What follows from it:
 ## Next step
 T1 to T4 are done and T5 is written and corrected: the lean session sets its own Windows
 sandbox and reads its tokens from its rollout files. Next: Sebastián's go-ahead for one more
-lean review of `338386a..e3aad48` from the temporary worktree, kept for it, with
-`--keep-home` and inside the proof of the login. Of the
+lean review of `338386a..e3aad48` from the temporary worktree
+(`D:js-harness-worktreescodex-review-lean-probe`, detached at `e3aad48`, removed after
+it), with `--keep-home` and inside the proof of the login:
+`node evals/review/login-proof.mjs --real-home C:UsersOficina.codex --out
+evals/results/review/login-proof.md -- node bin/js-harness.mjs codex-review --session lean
+--keep-home --base 338386a --cwd D:js-harness-worktreescodex-review-lean-probe`, with
+`icacls` of the real `auth.json` read before and after. Then: read the kept home's rollout
+files (what the first request held, whether `requests` overcounts), check T5 off if the
+review read its diff, and put to him, one at a time, `--output-schema` (T6) and how the
+`current` session is measured (T12). Of the
 two reviews he approved one is spent; the `current` one over the slice is not run at 2,832
 lines without asking him again. T5 is checked off when a lean review reads its diff. After it, his answer on what becomes of `--output-schema`, which T6 needs. T1, T2 and T3 hold code, so before a push their range,
 `7deddfc..HEAD`, needs a Codex review, which draws on the cap and is asked first; gentle-ai
