@@ -16,6 +16,7 @@
 // id; a run line is a measurement and never evidence of a review, so `check --push` does not read it.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { sessionReading } from './lib/codex-usage.mjs';
@@ -353,13 +354,16 @@ function spentLine(reading, durationMs) {
 
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
- * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now`, `randomUUID` (the id of the run
- * line), `platform`, `log`, `error` and `write` (the review passed through to the user)
+ * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now` (the wall clock, for the dates),
+ * `monotonicNow` (milliseconds on a clock that never steps, for the wall time of the review),
+ * `randomUUID` (the id of the run line), `platform`, `log`, `error` and `write` (the review passed
+ * through to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete. */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
+  const { monotonicNow = () => performance.now() } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -427,8 +431,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     log(`Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
-    // From here on Codex is launched, so every way out leaves one line in the run log.
+    // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
+    // the date on the wall clock; how long the review took is read off the monotonic one, because the
+    // wall clock can be stepped while Codex runs (a time sync, a manual change).
     const startedAt = now();
+    const launchedAt = monotonicNow();
     // stdin is ignored (Codex would wait to read it), stdout carries the JSONL, stderr (the progress)
     // stays live.
     const result = await runReview(spawnAsync, kill, platform, codexArgs(from), {
@@ -436,32 +443,34 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       stdio: ['ignore', 'pipe', 'inherit'],
       env: codexEnv,
     }, { timeoutMs, maxBuffer, onLine: (line) => progressLine(line, log), signals });
-    const durationMs = now().getTime() - startedAt.getTime();
+    const durationMs = Math.max(0, Math.round(monotonicNow() - launchedAt));
     const events = parseEvents(result.stdout);
     const evidence = reviewEvidence(events, expected);
     const reading = sessionReading(events);
     /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
-     * could not be written: the measurement is lost and said so, and the attempt ends as it would. */
+     * could not be built or written: the measurement is lost and said so, and the attempt ends as it
+     * would. Building the line is inside the `try` for that reason: its id and its date come from
+     * injected sources, and neither may change how a review ends. */
     const logRun = (runOutcome, reason) => {
-      const run = {
-        schema: CODEX_REVIEW_RUN_SCHEMA,
-        id: randomUUID(),
-        startedAt: startedAt.toISOString(),
-        durationMs,
-        base,
-        from,
-        head,
-        outcome: runOutcome,
-        ...(reason === undefined ? {} : { reason }),
-        cli,
-        // The user's Codex config sets both until this command sets them itself (T3 in
-        // odd/tasks/codex-review-lean.md), and Codex's events do not name them.
-        model: null,
-        effort: null,
-        ...reading,
-        coverage: evidence.coverage,
-      };
       try {
+        const run = {
+          schema: CODEX_REVIEW_RUN_SCHEMA,
+          id: randomUUID(),
+          startedAt: startedAt.toISOString(),
+          durationMs,
+          base,
+          from,
+          head,
+          outcome: runOutcome,
+          ...(reason === undefined ? {} : { reason }),
+          cli,
+          // The user's Codex config sets both until this command sets them itself (T3 in
+          // odd/tasks/codex-review-lean.md), and Codex's events do not name them.
+          model: null,
+          effort: null,
+          ...reading,
+          coverage: evidence.coverage,
+        };
         appendCodexReviewRun(root, run, { spawn });
         return run.id;
       } catch (err) {
@@ -498,6 +507,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     outcome = 'reviewed';
+    // The run line goes first, so that the record can name it. If the record then cannot be written
+    // the command exits 1 and the log keeps a `reviewed` line no record names: a measurement of a
+    // session that did meet the evidence rule, and still not a review `check --push` will count.
     runId = logRun('reviewed');
   }
 

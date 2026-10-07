@@ -294,6 +294,23 @@ What this changes, and waits on Sebastián:
     a record that then fails to write leaves a measured run with no record, which
     `check --push` never reads; the append and read plumbing is shared from
     `bin/lib/codex-reviews.mjs`, whose own tests pass unedited.
+- 2026-10-06: T1 and T2 committed as `73ec5ae` (gate green, `core.bare` `false`, the worktree
+  clean). gentle-ai assessed `7deddfc..73ec5ae` as `medium`, review due
+  (`slice_budget_reached`, 933 lines); granted without asking, as agreed. Lineage
+  `review-1792335775ecde79`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `73ec5ae`. Its three findings, none blocking, all accepted and fixed
+  by the writer, resumed:
+  - R3-reviewed-run-without-record (WARNING): the order is kept and now proven, with a test
+    where the record cannot be written after the run was logged: exit 1, the message, one
+    `reviewed` run line and no record; the run log's header says what such a line means. The
+    behavior existed, so the test passed at once: a guard, not a RED.
+  - R3-wall-clock-duration: the wall time is read off a monotonic clock (`monotonicNow`,
+    `performance.now()` by default), whole milliseconds, never below zero; `startedAt` stays
+    on the wall clock. RED: 3 failing, `-3600000 !== 2501` with the wall clock set back an hour.
+  - R3-logrun-build-outside-try: the run line is built inside the `try`, so a failing id or
+    date source never changes how an attempt ends. RED: 2 failing, the injected error escaping.
+  RED over the file: 97 tests, 5 failing. GREEN, the writer's verification over the five test
+  files: 177 of 177, 129 s. Parent: read the diff of the command and of the run log.
 
 ## Follow-ups
 - `bin/codex-review.test.mjs` takes just over 120 s here, about 1.3 s a test, since each one

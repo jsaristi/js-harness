@@ -139,15 +139,16 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK) {
 
 const RUN_ID = '00000000-0000-4000-8000-000000000001';
 
-/** Runs the command with output captured; `now` and the run's id are fixed so the record is
- * comparable, and the platform is fixed to linux unless a test says otherwise. `shown` is what the
- * review passed through to the user, `out` what the command itself logged. */
+/** Runs the command with output captured; `now`, the monotonic clock and the run's id are fixed so
+ * the record is comparable, and the platform is fixed to linux unless a test says otherwise. `shown`
+ * is what the review passed through to the user, `out` what the command itself logged. */
 async function run(argv, extra = {}, env = {}) {
   const out = [];
   const err = [];
   const shown = [];
   const code = await codexReviewMain(argv, env, {
     now: () => new Date('2026-09-29T12:00:00.000Z'),
+    monotonicNow: () => 0,
     randomUUID: () => RUN_ID,
     log: (line) => out.push(line),
     error: (line) => err.push(line),
@@ -187,10 +188,16 @@ function onlyRun(root) {
   return runs[0];
 }
 
-/** A clock that answers each call with the next of `times`, then keeps giving the last. */
-function clock(...times) {
+/** A function that answers each call with the next of `values`, then keeps giving the last. */
+function ticking(...values) {
   let calls = 0;
-  return () => new Date(times[Math.min(calls++, times.length - 1)]);
+  return () => values[Math.min(calls++, values.length - 1)];
+}
+
+/** A wall clock (`now`) that answers each call with the next of `times`. */
+function clock(...times) {
+  const next = ticking(...times);
+  return () => new Date(next());
 }
 
 // --- the run ---
@@ -806,8 +813,11 @@ const spent = { type: 'turn.completed', usage: { input_tokens: 297479, cached_in
 
 test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, what it spent and how long it took', async () => {
   const { root, base, head } = makeRepo();
-  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:01:47.000Z');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now });
+  // The wall clock is read when the review starts and when the record is written; the time between
+  // comes from the monotonic clock, in milliseconds with a fraction.
+  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:02:00.000Z');
+  const monotonicNow = ticking(5000.4, 112000.2);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now, monotonicNow });
   assert.equal(result.code, 0);
   const expected = {
     schema: 'js-harness.codex-review-run/v1',
@@ -831,7 +841,7 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
   assert.deepEqual(logged, expected);
   assert.deepEqual(Object.keys(logged), Object.keys(expected), 'the fields come in a fixed order');
   // The record is written after the run ended, and names the run by its id.
-  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), reviewedAt: '2026-09-29T12:01:47.000Z' }]);
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), reviewedAt: '2026-09-29T12:02:00.000Z' }]);
 });
 
 test('the run log is a second file in the folder of the review record, and a run line is not a record', async () => {
@@ -925,8 +935,7 @@ test('an attempt that did not complete is logged as failed, with the reason the 
 test('a failed attempt still holds what Codex spent before it failed', async () => {
   const { root, base, head } = makeRepo();
   const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent), { status: 7 });
-  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:00:09.500Z');
-  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, now });
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, monotonicNow: ticking(100, 9600) });
   const logged = onlyRun(root);
   assert.equal(logged.usage.inputTokens, 297479);
   assert.equal(logged.usage.reasoningOutputTokens, 703);
@@ -1006,10 +1015,88 @@ test('what launches no Codex leaves no run line: a skip, a refusal, a missing CL
   assert.doesNotMatch([skipped, unknown, missing, dirty].map((result) => result.out).join('\n'), /Codex used/);
 });
 
+test('the wall time is measured on the monotonic clock: a wall clock that steps during the review changes nothing', async () => {
+  const { root, base } = makeRepo();
+  // The wall clock is set back an hour while Codex runs; `startedAt` is still its first reading.
+  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T11:00:00.000Z');
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now, monotonicNow: ticking(1000, 3500.6) });
+  assert.equal(result.code, 0);
+  const logged = onlyRun(root);
+  assert.equal(logged.startedAt, '2026-09-29T12:00:00.000Z');
+  assert.equal(logged.durationMs, 2501, 'whole milliseconds, rounded');
+  assert.match(result.out, / in 3 s: /);
+});
+
+test('the wall time is never below zero', async () => {
+  const { root, base } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow: ticking(10, 4) });
+  assert.equal(onlyRun(root).durationMs, 0);
+});
+
+test('without an injected monotonic clock the wall time is a whole number of milliseconds, zero or more', async () => {
+  const { root, base } = makeRepo();
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow: undefined });
+  const { durationMs } = onlyRun(root);
+  assert.ok(Number.isInteger(durationMs) && durationMs >= 0, String(durationMs));
+});
+
 /** Puts a folder where the run log goes, so that the append fails. */
 function blockRunLog(root) {
   fs.mkdirSync(codexReviewRunsPath(root), { recursive: true });
 }
+
+/** Puts a folder where the review record goes, so that its append fails; the run log, a second file
+ * in the same folder, can still be written. */
+function blockRecord(root) {
+  fs.mkdirSync(codexReviewsPath(root), { recursive: true });
+}
+
+test('a record that cannot be written after a reviewed run: exit 1, the error says so, and the run log holds the one reviewed line', async () => {
+  const { root, base, head } = makeRepo();
+  blockRecord(root);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(result.code, 1);
+  assert.match(result.err, /Could not write the record: /);
+  assert.doesNotMatch(result.err, /run log/);
+  assert.doesNotMatch(result.out, /Recorded/);
+  // The session happened and met the evidence rule, so its measurement stays; no record names it.
+  const logged = onlyRun(root);
+  assert.equal(logged.outcome, 'reviewed');
+  assert.equal('reason' in logged, false);
+  assert.deepEqual([logged.id, logged.base, logged.head], [RUN_ID, base, head]);
+  assert.equal(fs.statSync(codexReviewsPath(root)).isDirectory(), true, 'no record file was written');
+  assert.deepEqual(readCodexReviews(root), []);
+});
+
+/** An id source that fails: the run line cannot even be built. */
+const noId = () => {
+  throw new Error('no entropy');
+};
+
+test('a run line that cannot be built is the same warning: the reviewed attempt still writes its record, naming no run', async () => {
+  const { root, base, head } = makeRepo();
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), randomUUID: noId });
+  assert.equal(result.code, 0);
+  assert.match(result.err, /Could not write the run log.*no entropy/);
+  const { run: _run, ...withoutRun } = reviewedRecord(base, head);
+  assert.deepEqual(readCodexReviews(root), [withoutRun]);
+  assert.match(result.out, /Recorded the Codex review/);
+  assert.equal(loggedRun(root), false);
+});
+
+test('a run line that cannot be built does not change how a failed attempt ends', async () => {
+  const { root, base } = makeRepo();
+  const failed = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), randomUUID: noId });
+  assert.equal(failed.code, 7);
+  assert.match(failed.err, /Could not write the run log.*no entropy/);
+  assert.match(failed.err, /did not complete.*exited 7/is);
+  const unseen = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewedWith(cmd('git status'))), randomUUID: noId });
+  assert.equal(unseen.code, 1);
+  assert.match(unseen.err, /Could not write the run log.*no entropy/);
+  assert.match(unseen.err, /showed 0 of 2 changed lines/);
+  assert.equal(wrote(root), false);
+  assert.equal(loggedRun(root), false);
+});
 
 test('a run log that cannot be written is a warning: the reviewed attempt still writes its record, naming no run', async () => {
   const { root, base, head } = makeRepo();
@@ -1040,8 +1127,7 @@ test('after the run one line says what Codex spent: tokens, wall time and the it
   const { root, base } = makeRepo();
   const statuses = Array.from({ length: 5 }, () => cmd('git status'));
   const fake = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), spent));
-  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:01:47.000Z');
-  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, now });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, monotonicNow: ticking(0, 107000) });
   assert.equal(result.code, 0);
   const lines = result.out.split('\n');
   const at = lines.indexOf('Codex used 297,479 input tokens (240,640 cached) and 2,396 output (703 reasoning) in 107 s: 6 command_execution, 1 agent_message.');

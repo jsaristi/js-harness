@@ -5,6 +5,10 @@
 // own because a run is never evidence of a review: `check --push` reads `codex-reviews.jsonl` alone, so
 // an attempt that failed can never count as one. Deleting this one file undoes everything this module
 // writes.
+//
+// A record of a review names its run line by id (`run`). The run line is written first, so a line whose
+// outcome is `reviewed` and that no record names means the record could not be written afterwards: the
+// session met the evidence rule and was measured, and the command still exited 1 with no review recorded.
 import { appendJsonLine, jsonLinesPath, readJsonLines } from './codex-reviews.mjs';
 
 export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
