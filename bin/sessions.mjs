@@ -12,10 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
-import { DEFAULT_CONTEXT_LIMIT, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, projectSlug, readGates, readPullRequests, readWorktrees, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGates, readPullRequests, readWorktrees, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--context-limit <tokens>] [--self <session id>] [--json]',
+  'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
+  '                           [--context-window <tokens>] [--context-limit <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
   '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
 ].join('\n');
@@ -37,15 +38,29 @@ function requireValue(argv, i, flag) {
 }
 
 /** The number `value` spells in plain digits, with an optional decimal part when `decimals` allows it, or
- * `NaN`. `Number` alone would take an empty or blank value for 0, and `0x2` and `1e1` for numbers. */
+ * `NaN`. `Number` alone would take an empty or blank value for 0, and `0x2` and `1e1` for numbers; and
+ * digits enough to overflow are `Infinity` to it, which no flag here can mean. */
 function plainNumber(value, { decimals }) {
-  return (decimals ? /^(\d+\.?\d*|\.\d+)$/ : /^\d+$/).test(value) ? Number(value) : NaN;
+  const number = (decimals ? /^(\d+\.?\d*|\.\d+)$/ : /^\d+$/).test(value) ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : NaN;
+}
+
+// The longest wait a watch takes, in seconds: the largest delay a Node timer accepts is 2,147,483,647 ms,
+// and one above it fires after a millisecond, which would make the watch look at the machine in a loop.
+const MAX_WAIT = 2147483;
+
+/** `--context-limit` as tokens: a whole number of them, or `<N>%` of `window` (above zero, up to 100).
+ * `NaN` for anything else. */
+function contextLimitOf(spec, window) {
+  if (!spec.endsWith('%')) return plainNumber(spec, { decimals: false });
+  const percent = plainNumber(spec.slice(0, -1), { decimals: true });
+  return percent > 0 && percent <= 100 ? Math.round((window * percent) / 100) : NaN;
 }
 
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false, contextLimit: DEFAULT_CONTEXT_LIMIT, watch: false };
+  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, contextLimitSpec: `${DEFAULT_CONTEXT_LIMIT_PERCENT}%`, watch: false };
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
   const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp']]);
@@ -58,7 +73,7 @@ function parseArgs(argv) {
     }
     if (waits.has(token)) {
       const seconds = plainNumber(requireValue(argv, i, token), { decimals: true });
-      if (!(seconds > 0)) throw new SessionsArgError(`${token} takes a number of seconds above zero`);
+      if (!(seconds > 0 && seconds <= MAX_WAIT)) throw new SessionsArgError(`${token} takes a number of seconds above zero, up to ${MAX_WAIT}`);
       parsed[waits.get(token)] = seconds;
     } else if (token === '--self') {
       parsed.self = requireValue(argv, i, token);
@@ -71,9 +86,11 @@ function parseArgs(argv) {
     } else if (token === '--tail') {
       parsed.tail = plainNumber(requireValue(argv, i, token), { decimals: false });
       if (Number.isNaN(parsed.tail)) throw new SessionsArgError('--tail takes a whole number, zero or more');
+    } else if (token === '--context-window') {
+      parsed.contextWindow = plainNumber(requireValue(argv, i, token), { decimals: false });
+      if (!(parsed.contextWindow > 0)) throw new SessionsArgError('--context-window takes a whole number of tokens above zero');
     } else if (token === '--context-limit') {
-      parsed.contextLimit = plainNumber(requireValue(argv, i, token), { decimals: false });
-      if (!(parsed.contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero');
+      parsed.contextLimitSpec = requireValue(argv, i, token);
     } else {
       throw new SessionsArgError(`unknown argument: ${token}`);
     }
@@ -83,7 +100,10 @@ function parseArgs(argv) {
   for (const [flag, key] of waits) {
     if (!parsed.watch && parsed[key] !== undefined) throw new SessionsArgError(`${flag} only applies with --watch`);
   }
-  return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
+  // The limit is read last: as a percentage it is a share of the window, whichever flag came first.
+  const contextLimit = contextLimitOf(parsed.contextLimitSpec, parsed.contextWindow);
+  if (!(contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (73%)');
+  return { ...parsed, contextLimit, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 
 /** The main checkout of the repository `cwd` is in, so the board is the same from any worktree: the
@@ -178,7 +198,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit, contextWindow }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -187,7 +207,7 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit
   }
   let facts;
   try {
-    facts = io.readFacts(text, { tail, contextLimit });
+    facts = io.readFacts(text, { tail, contextLimit, contextWindow });
   } catch (err) {
     return { id, modifiedAt, unavailable: `its transcript could not be read into facts: ${err.message}` };
   }
@@ -252,7 +272,7 @@ export async function sessionsMain(
 
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
-    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextLimit: parsed.contextLimit };
+    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextLimit: parsed.contextLimit, contextWindow: parsed.contextWindow };
     const sessions = [];
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
@@ -277,7 +297,9 @@ export async function sessionsMain(
       root,
       projectDir,
       hours: parsed.hours,
+      contextWindow: parsed.contextWindow,
       contextLimit: parsed.contextLimit,
+      contextLimitPercent: percentOf(parsed.contextLimit, parsed.contextWindow),
       self,
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,

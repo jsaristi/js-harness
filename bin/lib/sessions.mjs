@@ -7,12 +7,23 @@ import { parseFeature, tokenize } from './progress.mjs';
 
 const TITLE_LENGTH = 60;
 
-/** The context size above which a session is marked as past the limit. It limits nothing: it is where
- * the board says "replace this session before the harness compacts it". Every automatic compaction in
- * this project's transcripts (six of six) fired between 466,887 and 468,151 tokens; three quarters of
- * that leaves about 115,000 tokens to hand over in, and the user's own manual compactions sat around it
- * (243,607 to 406,565, median 322,517). A new session starts near 84,000. */
-export const DEFAULT_CONTEXT_LIMIT = 350000;
+/** The window a context is a share of, in tokens. One reading of this machine, 2026-10-06: the desktop
+ * app showed 71% for a session the board gave 342,000 tokens, which is a window of about 480,000. It
+ * belongs to the model and the app, so it is a default (`--context-window`), not a constant. */
+export const DEFAULT_CONTEXT_WINDOW = 480000;
+
+/** The share of the window above which a session is marked as past the limit. It limits nothing: it is
+ * where the board says "replace this session before the harness compacts it". Every automatic compaction
+ * in this project's transcripts (six of six) fired between 466,887 and 468,151 tokens; 73% of the window
+ * is 350,400, which leaves about 115,000 tokens to hand over in, and the user's own manual compactions
+ * sat around it (243,607 to 406,565, median 322,517). A new session starts near 84,000. */
+export const DEFAULT_CONTEXT_LIMIT_PERCENT = 73;
+export const DEFAULT_CONTEXT_LIMIT = Math.round((DEFAULT_CONTEXT_WINDOW * DEFAULT_CONTEXT_LIMIT_PERCENT) / 100);
+
+/** `tokens` as a whole percentage of `window`: the number the desktop app shows for a context. */
+export function percentOf(tokens, window) {
+  return Math.round((tokens / window) * 100);
+}
 const NOTIFICATION_PATTERN = /<task-notification>([\s\S]*?)<\/task-notification>/g;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -171,15 +182,17 @@ function end(work, at, status) {
  * An end closes only work launched before it. One that names a call closes that call's piece, and any
  * older piece of the same id still open; one that names only the task closes every open piece of that
  * id. A piece launched afterwards under the same id (a follow-up to the same subagent) is open until
- * its own end. An end that arrives before the result that gives its work an id is kept, and used once.
+ * its own end. An end that arrives before the result that gives its work an id is kept, and used once,
+ * for the call it names or, when it names none, for a call that is not a follow-up.
  *
  * `turnEndedAt` is the time of the entry that ended the turn, and `null` while the session works: two
  * looks that both find the session waiting tell by it whether it finished another turn in between.
  *
  * `context` is what the session's last reply was sent with (`contextOf`), or, after a compaction and
- * until the next reply, what the harness says the compaction left. `pastContextLimit` says whether it is
- * above `contextLimit`, and is `null` when the context could not be read. */
-export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT } = {}) {
+ * until the next reply, what the harness says the compaction left. `contextPercent` is its share of
+ * `contextWindow` and `pastContextLimit` says whether it is above `contextLimit` (tokens); both are
+ * `null` when the context could not be read. */
+export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT, contextWindow = DEFAULT_CONTEXT_WINDOW } = {}) {
   const { entries, skipped } = parseTranscript(text);
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
@@ -228,7 +241,7 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
       }
       // An end that closed nothing may be early: a quick task can end before the tool result that gives
       // its work the id. It is kept by task id for the call that was made before it, and no other.
-      if (!closed && !named && task !== undefined) endsByTask.set(task, { at, status, index });
+      if (!closed && !named && task !== undefined) endsByTask.set(task, { at, status, index, toolUse });
     }
     if (entry.isSidechain) continue;
 
@@ -265,9 +278,12 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
       }
       // The notification of a quick task can be written before this result. The end kept for its id is
       // this work's only when the call came before it, and it is used once: work launched later under
-      // the same id is not closed by it.
+      // the same id is not closed by it. An end that names a call is that call's alone; one that names
+      // only the task is never the end of a follow-up, whose own end names it: between a follow-up and
+      // its result it can only be the first run's end written again.
       const early = work ? endsByTask.get(work.id) : undefined;
-      if (early && launch.index < early.index) {
+      const itsOwn = early && (early.toolUse === undefined ? !work.resumed : early.toolUse === block.tool_use_id);
+      if (itsOwn && launch.index < early.index) {
         end(work, early.at, early.status);
         endsByTask.delete(work.id);
       }
@@ -282,6 +298,7 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
     cwd,
     gitBranch,
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
+    contextPercent: context === null ? null : percentOf(context.tokens, contextWindow),
     pastContextLimit: context === null ? null : context.tokens > contextLimit,
     state: turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting',
     turnEndedAt,
@@ -384,16 +401,20 @@ export function planOf(markdown, docPath) {
  * from `origin/main` — changed by a commit of the branch or in the working tree (a diff of the working
  * tree against the merge base, so what `main` gained since the branch was cut is not the branch's), or
  * not tracked yet. Each is read with `readFile` and is a `planOf`, or `{ path, unavailable }` when it
- * cannot be read. A worktree on `main` with nothing changed has none. */
+ * cannot be read. A worktree on `main` with nothing changed has none.
+ *
+ * Both listings ask for `-z`: names as they are, one per NUL. Line by line git prints a name with a
+ * character outside ASCII inside quotes with escapes, which is not a path and was dropped in silence.
+ * Neither takes the index lock (`--no-optional-locks`) a session committing in that worktree needs. */
 export function readPlans(run, readFile, cwd) {
   const names = new Set();
   for (const args of [
-    ['--no-optional-locks', 'diff', '--name-only', '--diff-filter=d', '--merge-base', 'origin/main', '--', 'odd/tasks'],
-    ['ls-files', '--others', '--exclude-standard', '--', 'odd/tasks'],
+    ['--no-optional-locks', 'diff', '--name-only', '--diff-filter=d', '--merge-base', 'origin/main', '-z', '--', 'odd/tasks'],
+    ['--no-optional-locks', 'ls-files', '--others', '--exclude-standard', '-z', '--', 'odd/tasks'],
   ]) {
     const listed = run('git', args, { cwd });
     if (failed(listed)) return { available: false, reason: `git ${args.find((arg) => !arg.startsWith('-'))}: ${failure('git', listed, { ranIn: cwd })}` };
-    for (const name of listed.stdout.split(/\r?\n/)) if (/^odd\/tasks\/[^/]+\.md$/.test(name)) names.add(name);
+    for (const name of listed.stdout.split('\0')) if (/^odd\/tasks\/[^/]+\.md$/.test(name)) names.add(name);
   }
   const items = [...names].sort().map((name) => {
     try {
@@ -523,6 +544,15 @@ export function isSelf(id, self) {
   return typeof self === 'string' && self !== '' && (id === self || (self.length >= 8 && id.startsWith(self)));
 }
 
+/** How a board says context sizes: `of(tokens)` is `342k tokens (71%)`, `limit` is `73% (350k)`. The
+ * percentage is the share of the board's context window, the number the desktop app shows; the limit
+ * leads with it because that is how it is set and read. */
+function contextSizes(board) {
+  const window = board.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+  const limit = board.contextLimit ?? DEFAULT_CONTEXT_LIMIT;
+  return { of: (tokens) => `${thousands(tokens)} tokens (${percentOf(tokens, window)}%)`, limit: `${percentOf(limit, window)}% (${thousands(limit)})` };
+}
+
 const sessionLabel = (session) => `session ${session.id.slice(0, 8)} ${JSON.stringify(session.title ?? '(no title)')}`;
 const pieces = (count) => `${count} piece${count === 1 ? '' : 's'} of work`;
 const byKey = (items, key) => new Map(items.map((item) => [item[key], item]));
@@ -530,12 +560,15 @@ const byKey = (items, key) => new Map(items.map((item) => [item[key], item]));
 function sessionChanges(before, after, self) {
   const lines = [];
   const earlier = byKey(before.sessions, 'id');
-  const limit = thousands(after.contextLimit ?? DEFAULT_CONTEXT_LIMIT);
+  const sizes = contextSizes(after);
   for (const session of after.sessions) {
-    const was = earlier.get(session.id);
-    // A transcript that could not be read on one side says nothing about what the session did.
-    if (isSelf(session.id, self) || session.unavailable || was?.unavailable) continue;
-    if (!was) lines.push(`${sessionLabel(session)} appeared (${session.state})`);
+    const listed = earlier.get(session.id);
+    // A transcript that cannot be read says nothing about what the session did.
+    if (isSelf(session.id, self) || session.unavailable) continue;
+    // The board to compare with keeps the last readable facts of a session (`watchBaseline`), so one that
+    // is unreadable there was never read: this is the first look that says anything about it.
+    const was = listed?.unavailable ? undefined : listed;
+    if (!was) lines.push(`${sessionLabel(session)} appeared (${session.state})${listed ? ': its transcript could not be read until now' : ''}`);
     else if (session.state === 'waiting' && was.state !== 'waiting') {
       const open = was.work.filter((work) => !work.ended).length;
       const how = was.state === 'background' ? `: the ${pieces(open)} it had open ended` : '';
@@ -545,7 +578,7 @@ function sessionChanges(before, after, self) {
       lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
     }
     if (session.pastContextLimit === true && was?.pastContextLimit !== true) {
-      lines.push(`${sessionLabel(session)} passed the context limit: ${thousands(session.context.tokens)} tokens, limit ${limit}`);
+      lines.push(`${sessionLabel(session)} passed the context limit: ${sizes.of(session.context.tokens)}, limit ${sizes.limit}`);
     }
   }
   const now = new Set(after.sessions.map((session) => session.id));
@@ -707,13 +740,13 @@ function workLine(work, now) {
 /** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */
 const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
 
-function contextText(session, limit) {
+function contextText(session, sizes) {
   const context = session.context ?? { unavailable: 'not read' };
   if (context.unavailable) return `context unavailable: ${context.unavailable}`;
-  return `context ${thousands(context.tokens)} tokens${session.pastContextLimit ? `, past the limit of ${thousands(limit)}` : ''}`;
+  return `context ${sizes.of(context.tokens)}${session.pastContextLimit ? `, past the limit of ${sizes.limit}` : ''}`;
 }
 
-function sessionLines(session, now, contextLimit) {
+function sessionLines(session, now, sizes) {
   const id = session.id.slice(0, 8);
   // The session that asked for the board is marked: its own state is always "working", and a watch
   // leaves it out of what it compares.
@@ -722,7 +755,7 @@ function sessionLines(session, now, contextLimit) {
   const state = session.stateReason ? `${session.state} (${session.stateReason})` : session.state;
   const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
-  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}  ${contextText(session, contextLimit)}`);
+  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}  ${contextText(session, sizes)}`);
 
   if (session.work.length > 0) {
     const open = session.work.filter((work) => !work.ended);
@@ -772,7 +805,8 @@ function planLines(plans) {
  * running gates and open pull requests, and a last line that says what the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
-  for (const session of board.sessions) lines.push(...sessionLines(session, now, board.contextLimit ?? DEFAULT_CONTEXT_LIMIT), '');
+  const sizes = contextSizes(board);
+  for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes), '');
 
   lines.push(
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {

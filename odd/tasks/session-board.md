@@ -288,18 +288,31 @@ What T5 added to the board, and what each fact is read from.
   this project's transcripts that sum is within half a percent of the `preTokens` the harness
   writes at a compaction. After a compaction and until the next reply it is the boundary's
   `compactMetadata.postTokens`. A transcript where no reply records usage has it unavailable.
-- The context limit, `--context-limit <tokens>`, default 350,000. It marks (`pastContextLimit`,
-  "past the limit of 350k") and limits nothing. Measured in this project's transcripts on
-  2026-10-06: the six automatic compactions came at 466,887 to 468,151 tokens, the manual ones at
-  243,607 to 406,565 (median 322,517), and a session starts at 75,365 to 98,097. 350,000 is three
-  quarters of the automatic point: about 115,000 tokens are left to write the relief before the
-  harness compacts by itself, and it is close to where Sebastián compacts by hand. The automatic
-  point belongs to the model and its window, so the default is this machine's today, not a
-  constant; the flag is the way to move it.
+- The context window, `--context-window <tokens>`, default 480,000. The desktop app shows a
+  context as a percentage, and that is the number Sebastián reads, so the board prints it next to
+  the tokens: `context 342k tokens (71%)`, `contextPercent` on each session and `contextWindow` on
+  the board in `--json`. The default is this machine's reading of 2026-10-06, one data point:
+  the board said 342k tokens for a session the app showed at 71%, which is a window of about
+  480,000. It belongs to the model and the app, so it is a default and not a constant. A context
+  above the window is said as it is (104%).
+- The context limit, `--context-limit`, default `73%`. It takes a whole number of tokens or
+  `<N>%` of the window (decimals allowed, above zero, up to 100), whichever flag comes first;
+  either way the board keeps it in tokens (`contextLimit`) and says it as both, the percentage
+  first (`contextLimitPercent` in `--json`): "past the limit of 73% (350k)" on the board, and
+  "passed the context limit: 366k tokens (76%), limit 73% (350k)" from the watch. It marks
+  (`pastContextLimit`) and limits nothing. 73% of the default window is 350,400 tokens, where the
+  350,000 of T5 was. Measured in this project's transcripts on 2026-10-06: the six automatic
+  compactions came at 466,887 to 468,151 tokens, the manual ones at 243,607 to 406,565 (median
+  322,517), and a session starts at 75,365 to 98,097. So the limit leaves about 115,000 tokens
+  to write the relief before the harness compacts by itself, and it is close to where Sebastián
+  compacts by hand. A limit given in tokens may be above the window: nothing checks one against
+  the other.
 - Feature plans. For each worktree, the documents under `odd/tasks/` that differ from
-  `origin/main`: `git diff --name-only --diff-filter=d --merge-base origin/main -- odd/tasks`
+  `origin/main`: `git diff --name-only --diff-filter=d --merge-base origin/main -z -- odd/tasks`
   (committed on the branch or changed in the working tree) and `git ls-files --others
-  --exclude-standard -- odd/tasks` (not tracked yet), both with `--no-optional-locks`. Each is
+  --exclude-standard -z -- odd/tasks` (not tracked yet), both with `--no-optional-locks`. `-z`
+  gives each name as it is: line by line git prints a name with a character outside ASCII
+  quoted and escaped, which is not a path, and the document was left out in silence. Each is
   read from the worktree's disk, so an edit shows before its commit, and parsed with `tokenize`
   and `parseFeature` of `bin/lib/progress.mjs`: title, steps done and total, the pending tasks
   (the id a step starts with, else its first 40 characters), and the non-blank lines of `## Next
@@ -315,7 +328,8 @@ returns when the two differ in a way that needs a decision; otherwise the new on
 board to compare with and it waits again, until `--timeout`. It prints nothing while it waits.
 The difference is `boardChanges` in the library, a function of two boards; the loop in the
 command only waits and prints. What wakes it, one line each:
-- a session that appears in the window, with its state;
+- a session that appears in the window, with its state; one whose transcript no look had been
+  able to read is announced the same way at the first look that reads it, and the line says so;
 - a session that starts waiting, from any other state; from `background` the line says how many
   pieces of work it had open, which is "its open work became empty while its turn was over";
 - a session waiting at both looks whose turn ended at a different time (`turnEndedAt`): it was
@@ -342,8 +356,13 @@ empty line, the board; exit 0. At the timeout: `sessions --watch: nothing change
 board, so being woken for nothing costs one line; exit 0. `--json` gives `{ watch: { changed,
 waitedSeconds, changes }, board }`, without `board` at the timeout. The seconds are the time that
 passed, looks included, so a 20 s timeout can say 24. A usage error is 2: `--interval` or
-`--timeout` that is not a number above zero, either of them without `--watch`, a `--self`
-shorter than eight characters. The sessions folder missing at any look is 1.
+`--timeout` that is not a number above zero and up to 2,147,483 seconds (the largest delay a
+Node timer takes; above it the timer fires after a millisecond and the watch would look in a
+loop), either of them without `--watch`, a `--self` shorter than eight characters, a
+`--context-window` that is not a whole number of tokens above zero, a `--context-limit` that is
+neither that nor a percentage above zero and up to 100, and for every numeric flag (`--hours`
+and `--tail` too) digits enough to read as infinity. The sessions folder missing at any look is
+1.
 
 Defaults. `--interval 30`: a look is one process listing, one `gh` call and a few `git` calls
 per worktree (about four seconds in all on this machine, with six worktrees), so 30 s is some
@@ -393,6 +412,7 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
 - [x] T3d Accepted follow-ups of the second review: `R3-args-prototype-keys`, `R3-stat-race-branch-untested`, `R3-facts-throw-kills-board`, `R3-dispatch-test-not-hermetic` (its fifth finding, `R3-stale-early-end-on-id-reuse`, is in T3c) — route: delegated writer, same delegation as T3c
 - [x] T4 Live check on this machine with two or more sessions, output recorded here; the memories `main-session-orchestrates` and `cross-session-prompts` point to the command — route: inline (one run and two memory edits)
 - [x] T5 `sessions --watch`: the command waits and returns when the board changes (a session starts waiting, its open work changes, a gate starts or ends, a pull request opens or closes, a feature's plan changes, a context passes the threshold), printing what changed, at no cost while nothing changes; the board also gains each session's context size and each worktree's feature plan (document, done and total, next step) — route: delegated writer
+- [x] T5b Accepted follow-ups of the third review: `R3-watch-wait-upper-bound`, `R3-task-only-end-between-followup-call-and-result`, `R3-new-session-first-look-unreadable`, `R3-tool-result-without-recorded-call`, `R3-plan-listing-quoted-names-and-doc-drift`; and the context limit as a percentage of a window (`--context-window`, `--context-limit <N>%`) — route: delegated writer
 - [ ] T6 The orchestrator ships with the harness: a second skill declared in `bin/lib/manifest.mjs` for Claude Code and Codex, installed and removed through the manifest like the first, that tells the session playing orchestrator what to run and what it may and may not do, and tells a side session how it closes; the two tests that assume one skill corrected — route: delegated writer
 - [ ] T7 On this machine, on Sebastián's word: `js-harness install`, the orchestrator session opened with the skill, and one real stretch with two sessions supervised by it, recorded here — route: inline
 
@@ -625,8 +645,74 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
     gets both lines; a worktree that arrives with a plan wakes the watch and one that is removed
     does not.
 
+- 2026-10-06: `24e1786` (T5) committed, gate green. gentle-ai assessed `6c92d93..24e1786`
+  (T3c, T3d and T5 together) as medium and due (`slice_budget_reached`); consent granted, one
+  consolidated reviewer, approved, lineage `review-1464f6f176a88b4d`, acknowledged. Five advisory
+  findings, all SUGGESTION, all accepted as T5b:
+  - `R3-watch-wait-upper-bound` (`bin/sessions.mjs:61`): `--interval` and `--timeout` have no
+    upper bound; past about 2,147,483 s Node fires a timer after a millisecond, so the watch would
+    look at the machine in a tight loop.
+  - `R3-task-only-end-between-followup-call-and-result` (`bin/lib/sessions.mjs:270`): an end that
+    names only the task, written after a `SendMessage` call and before its result, is kept by task
+    id and then closes the resumed piece the result creates.
+  - `R3-new-session-first-look-unreadable` (`bin/lib/sessions.mjs:537`): a session new to the
+    window whose transcript fails to read at its first look is never announced by the watch.
+  - `R3-tool-result-without-recorded-call` (`bin/lib/sessions.mjs:248`): every tool result now
+    dereferences its launching call; no test feeds a result whose call the transcript never
+    recorded.
+  - `R3-plan-listing-quoted-names-and-doc-drift` (`bin/lib/sessions.mjs:396`): a feature document
+    whose name git prints quoted (non-ASCII) fails the name pattern and is dropped without a
+    reason; and the design text differs from the code on a point the finding names.
+  The reviewer's full claims are outside the repository, in
+  `D:\js-harness-worktrees\sb-e-findings.txt`, for whoever writes T5b.
+- 2026-10-06, 21:25 local: the first wake of `sessions --watch` on a real event. Launched by the
+  parent at 21:14 from this worktree with `--interval 30 --timeout 3000`, it returned after 671 s
+  with one line, `gate ended in D:/js-harness-worktrees/session-board (pid 30960)`, the gate of
+  `24e1786`, and then the board. Not seen yet: a wake on another session's change (the Codex
+  review session did not move in that time). The board gave this session 334k tokens of context
+  against the default limit of 350k, which is why it is cut here with a compaction and T6 starts
+  after it.
+- Commits of the feature so far, all on `feat/session-board`, nothing pushed: `875c5d9` library,
+  `5a79a0d` T3b, `6c92d93` command, `df1ad94` T3c and T3d, `24e1786` T5. Reviewed by gentle-ai
+  up to `24e1786`. No Codex review yet: it needs Sebastián's word because it spends quota.
+
+- 2026-10-06, 21:31 local: the second real wake of the watch, on a plan change. Relaunched at 21:26, it
+  returned after 313 s with `plan odd/tasks/session-board.md in D:/js-harness-worktrees/session-board
+  changed: 8/11 done (was 8/10); pending T5b, T6, T7 (was T6, T7); next step now starts ...`: the
+  parent's own edit of this document. So a plan change is seen from disk without a commit, and a
+  session that edits its own feature document wakes its own watch, because `--self` leaves out a
+  session and the board does not know which session owns a worktree. An orchestrator owns no
+  worktree, so this does not reach it; noted for T6.
+- 2026-10-06, 21:50 local: a third wake of the watch, 587 s after its launch, of the same kind as
+  the second: `plan odd/tasks/remote-control.md appeared in
+  D:/js-harness-worktrees/remote-revival: 19/19 done, pending nothing`, the document of a
+  documentation branch the main session had just cut. Still not seen: a wake on another
+  session's change.
+- 2026-10-06: T5b written by the delegated writer, parent spot check `node --test
+  bin/lib/sessions.test.mjs bin/sessions.test.mjs bin/js-harness.test.mjs`: 213 pass, 0 fail.
+  All five claims of the third review held; four needed code and one
+  (`R3-tool-result-without-recorded-call`) only its test, which passed as written. With them,
+  the context as a percentage, from Sebastián's reading of the desktop app: when the board said
+  342k tokens the app showed him 71%, so the app measures against a window of about 480k and he
+  thinks in that number. `--context-window` (default 480,000, one reading, this machine's) and
+  `--context-limit` in tokens or `<N>%` (default `73%`, 350,400, where T5 had 350,000); the
+  board prints `context 342k tokens (71%)`. Accepted as the writer left them: a percentage
+  limit takes decimals; a limit in tokens may exceed the window and nothing compares the two; a
+  context above the window prints as it is (104%); the limit's percentage is rounded for
+  display. A session unreadable since the watch's first board and one new to the window are
+  announced with the same line, because the code cannot tell them apart. Noticed and left: an
+  end that names a follow-up's call, arrives before that follow-up's result and also closes an
+  older open piece of the same id is not kept, so the resumed piece stays open; it errs toward
+  "still running", the safe side for a board.
+- 2026-10-06: the board gave this session 144k tokens (31%) a few replies after a compaction
+  whose boundary said 21k. The likely reason, not checked: the boundary's `postTokens` counts
+  the summary and not what the harness loads again with the next reply (instructions, memory,
+  tool definitions). Either way the number right after a compaction reads low until the first
+  reply; said here so nobody plans a stretch on it.
+
 ## Next step
-T5 is written and waits for the parent's commit and review. Then T6, the skill, with "The
-orchestrator" and "Watch, context and plans" as its specification. Before T7:
-Sebastián's word on `js-harness install`. Before any push: his word, and his answer on the Codex
-review of the code commits. The range `6c92d93..df1ad94` is still unreviewed (under budget).
+T6 with the delegated writer: the skill, with "The orchestrator" and "Watch, context and plans" as
+its specification, and the relief file's place settled as written under T6's entry when it lands.
+The commit of T5b carries this entry; its hash and its review go in with T6's commit.
+Before T7: Sebastián's word on `js-harness install`. Before any push: his word, and his answer on
+the Codex review of the code commits.

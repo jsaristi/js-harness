@@ -137,6 +137,7 @@ function withMachine(body) {
 
 // --- usage ---
 
+const HUGE = '9'.repeat(400); // plain digits that `Number` reads as Infinity
 const USAGE_ERRORS = [
   ['--hours'], ['--hours', 'soon'], ['--hours', '0'], ['--tail', '-1'], ['--tail', '1.5'], ['--claude-home'], ['--tmp', '--json'], ['--bogus'], ['extra'],
   // R3-args-prototype-keys: a name every object inherits is not a flag, and an empty value is not a number
@@ -148,10 +149,17 @@ const USAGE_ERRORS = [
   // T5: the waits of a watch are numbers above zero and mean nothing without it; --self is an id or its start.
   ['--watch', '--interval'], ['--watch', '--interval', '0'], ['--watch', '--interval', 'soon'], ['--watch', '--timeout', '0'], ['--watch', '--timeout', '-5'],
   ['--interval', '5'], ['--timeout', '5'], ['--timeout', '5', '--json'], ['--self'], ['--self', 'abc'], ['--watch', '--self', ''],
+  // R3-watch-wait-upper-bound: a wait above what a Node timer takes fires after a millisecond, and digits
+  // enough to parse as Infinity are not a number of anything.
+  ['--watch', '--interval', '2147484'], ['--watch', '--timeout', '2147484'], ['--watch', '--interval', HUGE], ['--watch', '--timeout', HUGE],
+  ['--hours', HUGE], ['--tail', HUGE], ['--context-limit', HUGE], ['--context-limit', `${HUGE}%`], ['--context-window', HUGE],
+  // T5b: the window is a whole number of tokens above zero; the limit is that, or a percentage of the window up to 100.
+  ['--context-window'], ['--context-window', '0'], ['--context-window', '1.5'], ['--context-window', 'big'], ['--context-window', '50%'],
+  ['--context-limit', '0%'], ['--context-limit', '101%'], ['--context-limit', '100.5%'], ['--context-limit', '%'], ['--context-limit', '73%%'], ['--context-limit', '-5%'], ['--context-limit', '7 %'],
 ];
 
 for (const argv of USAGE_ERRORS) {
-  test(`sessionsMain exits 2 with its usage on stderr for ${JSON.stringify(argv)}`, async () => {
+  test(`sessionsMain exits 2 with its usage on stderr for ${JSON.stringify(argv).slice(0, 60)}`, async () => {
     const out = [];
     const err = [];
     const neverRun = () => {
@@ -298,17 +306,32 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
 test('the board carries each session\'s context and whether it is past --context-limit', withMachine(async (machine) => {
   writeSessions(machine);
   const plain = JSON.parse((await runSessions(machine, ['--json'])).stdout);
-  assert.equal(plain.contextLimit, 350000);
-  assert.deepEqual(plain.sessions.map((session) => [session.context, session.pastContextLimit]), [
-    [{ tokens: 12400, model: 'model-x', at: before(60).toISOString() }, false],
-    [{ unavailable: 'no reply of the transcript records its token usage' }, null],
+  assert.deepEqual([plain.contextWindow, plain.contextLimit, plain.contextLimitPercent], [480000, 350400, 73]);
+  assert.deepEqual(plain.sessions.map((session) => [session.context, session.contextPercent, session.pastContextLimit]), [
+    [{ tokens: 12400, model: 'model-x', at: before(60).toISOString() }, 3, false],
+    [{ unavailable: 'no reply of the transcript records its token usage' }, null, null],
   ]);
   const low = JSON.parse((await runSessions(machine, ['--json', '--context-limit', '12000'])).stdout);
-  assert.equal(low.contextLimit, 12000);
+  assert.deepEqual([low.contextWindow, low.contextLimit, low.contextLimitPercent], [480000, 12000, 3]);
   assert.deepEqual(low.sessions.map((session) => session.pastContextLimit), [true, null]);
   const text = (await runSessions(machine, ['--context-limit', '12000'])).stdout.split('\n');
-  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens, past the limit of 12k'), text.join('\n'));
+  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens (3%), past the limit of 3% (12k)'), text.join('\n'));
   assert.ok(text.includes('  cwd C:\\proj  branch main  context unavailable: no reply of the transcript records its token usage'), text.join('\n'));
+}));
+
+// T5b: the limit as a share of the window, the way the desktop app shows a context.
+test('--context-limit takes a percentage of --context-window, in either order, and the board says both', withMachine(async (machine) => {
+  writeSessions(machine);
+  const board = async (...argv) => JSON.parse((await runSessions(machine, ['--json', ...argv])).stdout);
+  const facts = (json) => [json.contextWindow, json.contextLimit, json.contextLimitPercent, json.sessions[0].contextPercent, json.sessions[0].pastContextLimit];
+  assert.deepEqual(facts(await board('--context-limit', '2%')), [480000, 9600, 2, 3, true]);
+  assert.deepEqual(facts(await board('--context-limit', '2.5%')), [480000, 12000, 3, 3, true]);
+  assert.deepEqual(facts(await board('--context-limit', '100%')), [480000, 480000, 100, 3, false]);
+  assert.deepEqual(facts(await board('--context-window', '20000')), [20000, 14600, 73, 62, false], 'the default limit is 73% of the window given');
+  assert.deepEqual(facts(await board('--context-window', '20000', '--context-limit', '50%')), [20000, 10000, 50, 62, true]);
+  assert.deepEqual(facts(await board('--context-limit', '50%', '--context-window', '20000')), [20000, 10000, 50, 62, true]);
+  const text = (await runSessions(machine, ['--context-limit', '50%', '--context-window', '20000'])).stdout.split('\n');
+  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens (62%), past the limit of 50% (10k)'), text.join('\n'));
 }));
 
 // T5 B: each worktree's feature plans.
@@ -316,14 +339,14 @@ const BOARD_PLAN = '# Board\n\n## Tasks\n- [x] T1 read\n- [ ] T2 watch\n\n## Nex
 /** The fake git answers of a machine whose linked worktree has one feature document on its branch (and,
  * with `untracked`, one git lists that is not on disk). */
 const withPlan = (machine, { untracked = '' } = {}) => ({
-  diff: (_args, options) => ok(options.cwd === slashes(machine.worktree) ? 'odd/tasks/board.md\n' : ''),
+  diff: (_args, options) => ok(options.cwd === slashes(machine.worktree) ? 'odd/tasks/board.md\0' : ''),
   'ls-files': (_args, options) => ok(options.cwd === slashes(machine.worktree) ? untracked : ''),
 });
 
 test('each worktree carries the feature plans of its branch, in --json and in the text', withMachine(async (machine) => {
   writeSessions(machine);
   writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
-  const { run } = fakeRun(machine, withPlan(machine, { untracked: 'odd/tasks/gone.md\n' }));
+  const { run } = fakeRun(machine, withPlan(machine, { untracked: 'odd/tasks/gone.md\0' }));
   const board = JSON.parse((await runSessions(machine, ['--json'], { run })).stdout);
   assert.deepEqual(board.worktrees.items.map((tree) => tree.plans), [
     { available: true, items: [] },
@@ -559,6 +582,14 @@ test('--watch returns at --timeout with one line when nothing that matters chang
   assert.equal(code, 0);
   assert.deepEqual(slept, [30000, 30000, 10000], 'the last wait is what is left of the timeout');
   assert.deepEqual(lines, ['sessions --watch: nothing changed in 70s']);
+}));
+
+// R3-watch-wait-upper-bound: the longest wait a Node timer takes, in whole seconds, is still a wait.
+test('--watch takes waits up to 2,147,483 seconds', withMachine(async (machine) => {
+  writeSessions(machine);
+  // --hours as wide as the wait: after 24 days every session would have left a window of 12 hours.
+  const { code, lines, slept } = await watch(machine, ['--interval', '2147483', '--timeout', '2147483', '--hours', '1000']);
+  assert.deepEqual([code, slept, lines], [0, [2147483000], ['sessions --watch: nothing changed in 2147483s']]);
 }));
 
 test('--watch --json gives the changes and the board, or the timeout alone', withMachine(async (machine) => {

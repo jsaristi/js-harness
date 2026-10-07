@@ -371,6 +371,22 @@ test('an end is used once: work launched later under the same id stays open, and
   assert.deepEqual(stale.work.map((w) => [w.toolUseId, w.ended]), [['toolu_1', false], ['toolu_s', false]]);
 });
 
+// R3-task-only-end-between-followup-call-and-result: the kept end was older than the follow-up's result
+// but newer than its call, so it closed the piece that result had just started.
+test('an end naming only the task, written between a follow-up and its result, does not close the piece that result starts', () => {
+  const [sent, answered] = followUp('toolu_s', 'a1', 8);
+  const replayed = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, sent, notified({ task: 'a1', status: 'completed' }, 9), answered, reply('It is running again.', 10)));
+  assert.deepEqual(replayed.work.map((w) => [w.toolUseId, w.ended, w.endedAt]), [['toolu_a', true, at(5)], ['toolu_s', false, null]]);
+  assert.equal(replayed.state, 'background');
+  // The end of the resumed run names the follow-up: written before the result, it is still that piece's end.
+  const own = lib.sessionFacts(transcript(prompt('go', 1), ...firstRun, sent, notified({ task: 'a1', toolUse: 'toolu_s', status: 'failed' }, 9), answered));
+  assert.deepEqual(own.work.map((w) => [w.toolUseId, w.ended, w.endedAt, w.status]), [['toolu_a', true, at(5), 'completed'], ['toolu_s', true, at(9), 'failed']]);
+  // An early end that names another call is not the end of the call whose result gives the same task id.
+  const quick = call('toolu_1', 'Bash', { command: 'true', description: 'Quick', run_in_background: true }, 2);
+  const other = lib.sessionFacts(transcript(quick, notified({ task: 'b1', toolUse: 'toolu_lost', status: 'completed' }, 3), result('toolu_1', { stdout: '', backgroundTaskId: 'b1' }, 4)));
+  assert.deepEqual(other.work.map((w) => [w.toolUseId, w.ended]), [['toolu_1', false]]);
+});
+
 // --- T5 A: the context a session carries ---
 
 const usage = (input, read, created) => ({ input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: created, output_tokens: 50 });
@@ -409,10 +425,28 @@ test('after a compaction the context is what the harness says it left, until the
 
 test('a session is past the context limit when its context is above it, and the limit can be set', () => {
   const big = transcript(prompt('go', 1), spoke(2, usage(1, lib.DEFAULT_CONTEXT_LIMIT, 0)));
-  assert.equal(lib.DEFAULT_CONTEXT_LIMIT, 350000);
+  // T5b: the default is 73% of the default window, which is where the 350,000 of T5 was.
+  assert.deepEqual([lib.DEFAULT_CONTEXT_WINDOW, lib.DEFAULT_CONTEXT_LIMIT_PERCENT, lib.DEFAULT_CONTEXT_LIMIT], [480000, 73, 350400]);
   assert.equal(lib.sessionFacts(big).pastContextLimit, true);
   assert.equal(lib.sessionFacts(big, { contextLimit: 400000 }).pastContextLimit, false);
-  assert.equal(lib.sessionFacts(transcript(spoke(2, usage(0, 350000, 0)))).pastContextLimit, false, 'at the limit is not past it');
+  assert.equal(lib.sessionFacts(transcript(spoke(2, usage(0, 350400, 0)))).pastContextLimit, false, 'at the limit is not past it');
+});
+
+// T5b: the desktop app shows the context as a share of its window, and that is the number Sebastián reads.
+test('the context is also a percentage of the context window, which can be set', () => {
+  const session = transcript(prompt('go', 1), spoke(2, usage(0, 342000, 0)));
+  assert.equal(lib.sessionFacts(session).contextPercent, 71, '342k of the default 480k, as the app showed it');
+  assert.equal(lib.sessionFacts(session, { contextWindow: 1000000 }).contextPercent, 34);
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 500000, 0)))).contextPercent, 104, 'a context above the window is said as it is');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2))).contextPercent, null);
+});
+
+// R3-tool-result-without-recorded-call: a transcript can start after the call (a compaction, a lost line).
+test('a tool result whose call the transcript never recorded starts no work and breaks nothing', () => {
+  const orphans = [result('toolu_gone', { stdout: '', backgroundTaskId: 'b9' }, 2), result('toolu_gone2', { success: true, resumedAgentId: 'a9' }, 3), result('toolu_gone3', { isAsync: true, agentId: 'a8' }, 4), result(undefined, { status: 'completed', agentId: 'a7' }, 5)];
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...orphans, notified({ task: 'b9', status: 'completed' }, 6), reply('Done.', 7)));
+  assert.deepEqual([facts.work, facts.state, facts.skippedLines], [[], 'waiting', 0]);
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), ...orphans)).state, 'working');
 });
 
 // --- machine facts: every external command is a fake `run`, keyed on what it is asked ---
@@ -594,7 +628,7 @@ test('readPlans lists the feature documents that differ from origin/main on the 
   const asked = [];
   const run = (command, args, { cwd }) => {
     asked.push([command, ...args, cwd].join(' '));
-    return args.includes('diff') ? ok('odd/tasks/session-board.md\nodd/tasks/sub/nested.md\nodd/tasks/notes.txt\n') : ok('odd/tasks/draft.md\nodd/tasks/session-board.md\n');
+    return args.includes('diff') ? ok('odd/tasks/session-board.md\0odd/tasks/sub/nested.md\0odd/tasks/notes.txt\0') : ok('odd/tasks/draft.md\0odd/tasks/session-board.md\0');
   };
   const read = [];
   const readFile = (file) => {
@@ -603,13 +637,24 @@ test('readPlans lists the feature documents that differ from origin/main on the 
     return PLAN;
   };
   const plans = lib.readPlans(run, readFile, 'D:/proj-worktrees/board/');
+  // Neither listing takes the index lock a session committing in that worktree needs.
   assert.deepEqual(asked, [
-    'git --no-optional-locks diff --name-only --diff-filter=d --merge-base origin/main -- odd/tasks D:/proj-worktrees/board/',
-    'git ls-files --others --exclude-standard -- odd/tasks D:/proj-worktrees/board/',
+    'git --no-optional-locks diff --name-only --diff-filter=d --merge-base origin/main -z -- odd/tasks D:/proj-worktrees/board/',
+    'git --no-optional-locks ls-files --others --exclude-standard -z -- odd/tasks D:/proj-worktrees/board/',
   ]);
   assert.deepEqual(read, ['D:/proj-worktrees/board/odd/tasks/draft.md', 'D:/proj-worktrees/board/odd/tasks/session-board.md']);
   assert.equal(plans.available, true);
   assert.deepEqual(plans.items.map((plan) => [plan.path, plan.unavailable ?? `${plan.done}/${plan.total}`]), [['odd/tasks/draft.md', 'EBUSY'], ['odd/tasks/session-board.md', '2/4']]);
+});
+
+// R3-plan-listing-quoted-names-and-doc-drift: without -z git prints a name with a character outside ASCII
+// inside quotes with escapes (`"odd/tasks/se\303\261al.md"`), which is no path at all.
+test('readPlans lists a feature document whose name git would print quoted', () => {
+  const asGit = (name) => (_command, args) => ok(args.includes('ls-files') ? '' : args.includes('-z') ? `${name}\0` : '"odd/tasks/se\\303\\261al.md"\n');
+  const plans = lib.readPlans(asGit('odd/tasks/señal.md'), () => PLAN, 'D:/proj');
+  assert.deepEqual(plans.items.map((plan) => [plan.path, `${plan.done}/${plan.total}`]), [['odd/tasks/señal.md', '2/4']]);
+  const unread = lib.readPlans(asGit('odd/tasks/a "b"\n.md'), () => { throw Object.assign(new Error('ENOENT: gone'), { code: 'ENOENT' }); }, 'D:/proj');
+  assert.deepEqual(unread.items, [{ path: 'odd/tasks/a "b"\n.md', unavailable: 'ENOENT' }], 'a name that cannot be read is listed with the reason');
 });
 
 test('readPlans has no plan for a branch with no feature document, and is unavailable with the reason when git fails', () => {
@@ -625,7 +670,7 @@ test('readWorktrees gives each worktree its plans when it is handed a way to rea
     [git('worktree', 'list'), ok(`${WORKTREES}\n${GONE}`)],
     [git('rev-list'), ok('0\n')],
     [git('status'), ok('')],
-    [git('diff'), (cwd) => ok(cwd.endsWith('board') ? 'odd/tasks/session-board.md\n' : '')],
+    [git('diff'), (cwd) => ok(cwd.endsWith('board') ? 'odd/tasks/session-board.md\0' : '')],
     [git('ls-files'), ok('')],
   ]);
   const withPlans = lib.readWorktrees(run, 'D:/proj', { readFile: () => PLAN }).items;
@@ -735,7 +780,7 @@ const A = 'aaaaaaaa-1111-4111-8111-111111111111';
 const B = 'bbbbbbbb-2222-4222-8222-222222222222';
 const seen = (id, state, more = {}) => ({ id, title: `title ${id[0]}`, state, turnEndedAt: state === 'working' ? null : before(600), lastEntryAt: before(600), context: { tokens: 100000, model: 'model-x', at: before(600) }, pastContextLimit: false, work: [], tail: ['a line'], ...more });
 const open = (id) => ({ tool: 'Bash', id, description: 'Run', ended: false, file: { path: 'x', modifiedAt: before(90) } });
-const boardOf = (parts = {}) => ({ hours: 12, contextLimit: 350000, generatedAt: before(30), sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] }, ...parts });
+const boardOf = (parts = {}) => ({ hours: 12, contextLimit: 350400, contextWindow: 480000, generatedAt: before(30), sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] }, ...parts });
 const changes = (was, is, options) => lib.boardChanges(boardOf(was), boardOf(is), options);
 
 test('boardChanges: a session that starts waiting, with what it was doing', () => {
@@ -754,9 +799,9 @@ test('boardChanges: a session that appears, one that leaves the window, one that
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working'), seen(B, 'working')] }), ['session bbbbbbbb "title b" appeared (working)']);
   assert.deepEqual(changes({ sessions: [seen(A, 'waiting'), seen(B, 'working')] }, { sessions: [seen(B, 'working')] }), ['session aaaaaaaa "title a" left the window of the last 12h']);
   const big = { context: { tokens: 366499, model: 'model-x', at: before(40) }, pastContextLimit: true };
-  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens, limit 350k']);
+  assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens (76%), limit 73% (350k)']);
   assert.deepEqual(changes({ sessions: [seen(A, 'working', big)] }, { sessions: [seen(A, 'working', { ...big, context: { ...big.context, tokens: 380000 } })] }), [], 'already past: said once');
-  assert.deepEqual(changes({ sessions: [seen(A, 'working', { pastContextLimit: null })] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens, limit 350k']);
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', { pastContextLimit: null })] }, { sessions: [seen(A, 'working', big)] }), ['session aaaaaaaa "title a" passed the context limit: 366k tokens (76%), limit 73% (350k)']);
 });
 
 test('boardChanges: what does not matter wakes nobody', () => {
@@ -767,11 +812,26 @@ test('boardChanges: what does not matter wakes nobody', () => {
     [seen(A, 'background', { work: [open('b1'), open('b2')] }), seen(A, 'background', { work: [{ ...open('b1'), file: { path: 'x', modifiedAt: before(1) } }] })],
     [seen(A, 'waiting'), seen(A, 'waiting', { lastEntryAt: before(1) })],
     [seen(A, 'working'), { id: A, modifiedAt: before(1), unavailable: 'EBUSY' }],
-    [{ id: A, modifiedAt: before(1), unavailable: 'EBUSY' }, seen(A, 'waiting')],
   ];
   for (const [was, is] of quiet) assert.deepEqual(changes({ sessions: [was] }, { sessions: [is], generatedAt: before(0) }), [], `${was.state} to ${is.state}`);
   const tree = (changed) => ({ path: 'D:/proj', branch: 'main', head: '1', aheadOfMain: changed, aheadOfUpstream: changed, changed, plans: { available: true, items: [] } });
   assert.deepEqual(changes({ worktrees: { available: true, items: [tree(0)] } }, { worktrees: { available: true, items: [tree(7)] } }), []);
+});
+
+// R3-new-session-first-look-unreadable: the unreadable record became the board to compare with, so the
+// session was skipped at every later look and its appearance woke nobody.
+test('boardChanges announces a session once its transcript can be read, when no look had read it before', () => {
+  const unread = { id: A, modifiedAt: before(1), unavailable: 'EBUSY' };
+  const line = (state) => `session aaaaaaaa "title a" appeared (${state}): its transcript could not be read until now`;
+  assert.deepEqual(changes({ sessions: [unread] }, { sessions: [seen(A, 'waiting')] }), [line('waiting')]);
+  // As the watch does it: new to the window and unreadable at one look, readable at the next.
+  const [first, second, third] = [boardOf(), boardOf({ sessions: [unread] }), boardOf({ sessions: [seen(A, 'working')] })];
+  assert.deepEqual(lib.boardChanges(first, second), [], 'nothing to say about a session nobody could read');
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(first, second), third), [line('working')]);
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(first, second), third, { self: A }), []);
+  // One it had read before is compared with what was read, and is not announced again.
+  const [known, busy] = [boardOf({ sessions: [seen(A, 'working')] }), boardOf({ sessions: [unread] })];
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(known, busy), boardOf({ sessions: [seen(A, 'working')] })), []);
 });
 
 test('isSelf takes the whole id of a session or its first eight characters or more', () => {
@@ -888,7 +948,7 @@ test('renderBoard prints the sessions, then worktrees, gates and pull requests, 
     'Sessions  D:\\proj  3 changed in the last 12h',
     '',
     'aaaaaaaa  background  Board feature  last entry 2m ago',
-    '  cwd D:\\proj  branch main  context 275k tokens',
+    '  cwd D:\\proj  branch main  context 275k tokens (57%)',
     '  work: 2 with no recorded end, 2 ended (last: Bash "Tests" failed 30m ago)',
     '    Agent a1f (Explore) "Research the format"  launched 20m ago  file written 30s ago',
     '    Bash (no id yet) "Run the gate"  launched 2h 05m ago  file unavailable: the transcript does not record its task id yet',
@@ -947,15 +1007,19 @@ test('renderBoard names the latest timed end as the last one, and an untimed end
 
 // T5 A: a context past the limit says so, with the limit.
 test('renderBoard says when a session\'s context is past the limit, and which session is the one that asked', () => {
-  const session = (id, tokens, more = {}) => ({ id, title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens, model: 'model-x', at: before(60) }, pastContextLimit: tokens > 350000, skippedLines: 0, work: [], tail: [], ...more });
-  const lines = lib.renderBoard({ ...BOARD, contextLimit: 350000, sessions: [session('11111111-a', 366499), session('22222222-b', 999, { self: true })] }, { now: NOW });
+  const session = (id, tokens, more = {}) => ({ id, title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens, model: 'model-x', at: before(60) }, pastContextLimit: tokens > 350400, skippedLines: 0, work: [], tail: [], ...more });
+  const sessions = [session('11111111-a', 366499), session('22222222-b', 999, { self: true })];
+  const lines = lib.renderBoard({ ...BOARD, contextLimit: 350400, contextWindow: 480000, sessions }, { now: NOW });
   assert.deepEqual(lines.slice(2, 7), [
     '11111111  waiting  t  last entry 1m ago',
-    '  cwd C:\\p  branch main  context 366k tokens, past the limit of 350k',
+    '  cwd C:\\p  branch main  context 366k tokens (76%), past the limit of 73% (350k)',
     '',
     '22222222  waiting  t  last entry 1m ago  (this session)',
-    '  cwd C:\\p  branch main  context 1k tokens',
+    '  cwd C:\\p  branch main  context 1k tokens (0%)',
   ]);
+  // T5b: a limit given in tokens is said as its share of the window too, and the window can be another.
+  const wide = lib.renderBoard({ ...BOARD, contextLimit: 300000, contextWindow: 1000000, sessions: [{ ...sessions[0], pastContextLimit: true }] }, { now: NOW });
+  assert.equal(wide[3], '  cwd C:\\p  branch main  context 366k tokens (37%), past the limit of 30% (300k)');
 });
 
 // T5 B: a worktree's feature plans are printed under it.
