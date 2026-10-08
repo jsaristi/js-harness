@@ -148,6 +148,25 @@ push of that branch.
     whose rollout names no model still stands. Under "only `gpt-6.1-sol` at `high`" it
     should not: every real lean run so far wrote the line, so a review that cannot say what
     it ran on is refused like one that ran on something else.
+- 2026-10-08: T1 committed as `14cd8bf` (gate green). gentle-ai could not review it:
+  `5663c8c..14cd8bf` is 2,540 changed lines (1,270 of them deletions, the tests of the
+  removed session), and the start, granted without asking, refused with
+  `lens_context_budget_exceeded`: "the candidate's complete reviewer evidence exceeds the
+  native context budget, so no review authority was created". The same for
+  `d71e81d..14cd8bf`. It is its documented bound and not a defect, so nothing was reported
+  and nothing has to be abandoned. A commit cannot be made smaller after the fact, so
+  `14cd8bf` has no gentle-ai review: what stands for it is the writer's tests red first,
+  the parent's re-run (100 of 100, and the command file 201 of 201) and the gate; its
+  Codex review is owed (Next step). The parent's error, to not repeat: the two parts of T1
+  were sent to the writer one after the other and committed as one, against the rule this
+  branch already had, a candidate under about 1,900 changed lines. Each part of a task is
+  committed when it is green.
+  - `4f32fd9` (171 lines, under gentle-ai's budget before) is inside that refused range
+    too; it has its Codex review record.
+  - A stray folder, `Microsoft/Windows/PowerShell/ModuleAnalysisCache`, was in the
+    worktree after the gate again (a test starts PowerShell without `LOCALAPPDATA`; the
+    follow-up of `odd/tasks/codex-review-lean.md`). Removed; it made the first assessment
+    read the candidate as unassessable.
 - Not known until the first real run: that a rollout writes the effort `high` as `high`.
   Every measured line so far passed `medium` and read `medium`. If it is written another
   way, the first review fails with the mismatch message and the reader is corrected.
@@ -155,5 +174,22 @@ push of that branch.
 ## Follow-ups
 
 ## Next step
-The commit of T1, its two reviews (T4), then T2 by one delegated writer, with the rule for a
-review that names no model.
+In this order, each slice committed when it is green and kept under about 1,900 changed
+lines, deletions counted:
+1. T3 first, in two commits: `--plan` and the bound of parts; then what `check` says of
+   code committed since the last record. It goes before T2 because the Codex review of
+   `14cd8bf` is owed and its cost has to be read before it runs: at `high`, over about
+   2,400 changed lines.
+2. The Codex review of `5663c8c..HEAD` with the default command, inside the login proof,
+   after reading its plan. It is also the first real run at `high`, which shows how a
+   rollout writes that effort.
+3. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
+   attribute marks); a range whose earlier commits a record covers starts where the
+   records end. With it, the rule decided on 2026-10-08: a lean review whose rollout names
+   no model does not stand.
+4. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
+   measurement of the part size, is put to Sebastián with its count before any of it runs.
+
+Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
+(asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which
+opened this feature), and push, pull request and merge of both branches.
