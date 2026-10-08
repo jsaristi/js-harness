@@ -313,7 +313,9 @@ test('--real-home is required and has no default; without it, --out or a command
   assert.equal(fs.existsSync(out), false, 'and no report written');
 });
 
-// --- where the report goes: never into the home the proof is about ---
+// --- where the report goes: not inside the home, nor onto a file that is an entry of its top level ---
+// That is all that is held. A hard link to a file nested deeper in the home is not caught, and no test
+// here says it is (`refusedDestination`).
 
 /** A command that leaves the file `marker` behind, to tell whether anything was run. */
 const marking = (marker) => node("require('node:fs').writeFileSync(process.argv[1], '')", marker);
@@ -357,7 +359,7 @@ test('--out inside the real home is refused before anything runs: the report is 
   assert.equal(fs.readFileSync(auth, 'utf8'), LOGIN);
 });
 
-test('--out that reaches the real home under another name is refused too: a second name of the login, a folder that is a link to the home', () => {
+test('--out that is a top-level file of the real home under another name, or that goes through a folder that is a link to the home, is refused too', () => {
   const { home, auth, root } = fakeHome();
   const marker = path.join(root, 'ran');
   fs.mkdirSync(path.join(root, 'elsewhere'));

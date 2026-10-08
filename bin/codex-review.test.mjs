@@ -1540,6 +1540,54 @@ test('with no session named, a home that cannot be made is a refusal that names 
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
 
+/** `argv` without the flags `names`, each with the value after it when it takes one (`valued`). */
+function withoutFlags(argv, names, valued = ['--prompt', '--doc', '--part-lines', '--session']) {
+  const kept = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    if (!names.includes(argv[i])) kept.push(argv[i]);
+    else if (valued.includes(argv[i])) i += 1;
+  }
+  return kept;
+}
+
+test('the way out names the flags to leave out when the refused command carried ones that go with the lean session alone, and the command it describes is taken', async () => {
+  const { root, base } = makeRepo();
+  const doc = featureDoc();
+  const leaveOut = (named, one) => `${WAY_OUT} Leave out ${named} with it: ${one ? 'that belongs' : 'those belong'} to the lean session, and the command refuses ${one ? 'it' : 'them'} beside \`--session current\`.`;
+  // `[the flags of the refused command, the way out it is told, the flags that sentence names]`.
+  const cases = [
+    [['--keep-home'], leaveOut('`--keep-home`', true), ['--keep-home']],
+    [['--part-lines', '400'], leaveOut('`--part-lines`', true), ['--part-lines']],
+    [['--prompt', 'own'], leaveOut('`--prompt own`', true), ['--prompt']],
+    [['--prompt', 'own', '--doc', doc], leaveOut('`--prompt own` and `--doc`', false), ['--prompt', '--doc']],
+    // All of them, in whatever order they were given: named in the order of the usage.
+    [['--keep-home', '--part-lines', '400', '--doc', doc, '--prompt', 'own', '--session', 'lean'], leaveOut('`--prompt own`, `--doc`, `--part-lines` and `--keep-home`', false), ['--prompt', '--doc', '--part-lines', '--keep-home']],
+    // None of them: the sentence is the one it was. `--prompt codex` is the current session's prompt too, and `--home` any session's.
+    [[], WAY_OUT, []],
+    [['--session', 'lean', '--prompt', 'codex', '--home', fakeHome().home], WAY_OUT, []],
+  ];
+  for (const [flags, wayOut, named] of cases) {
+    const which = flags.join(' ') || 'no flag';
+    const loggedOut = fakeHome({ login: null });
+    const refusedFake = fakeCodex(reviewed(root, base));
+    const refused = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...refusedFake, homedir: loggedOut.homedir });
+    assert.equal(refused.code, 1, which);
+    assert.deepEqual(refused.err.split('\n').slice(-2), ['The lean review was not started and nothing was recorded.', wayOut], which);
+    assert.equal(refusedFake.calls.length, 0, which);
+    // The command the sentence describes: the same one, with `--session current` and without what it names.
+    const described = ['--base', 'HEAD~1', ...withoutFlags(flags, [...named, '--session']), '--session', 'current', '--cwd', root];
+    const taken = fakeCodex(reviewed(root, base));
+    const result = await run(described, { ...taken, homedir: loggedOut.homedir });
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.equal(taken.calls.length, 1, which);
+    // And with any one of them left in, it is the usage error the sentence is there to spare.
+    for (const kept of named) {
+      const stillThere = ['--base', 'HEAD~1', ...withoutFlags(flags, [...named.filter((name) => name !== kept), '--session']), '--session', 'current', '--cwd', root];
+      assert.equal((await run(stillThere, { ...fakeCodex(reviewed(root, base)), homedir: loggedOut.homedir })).code, 2, `${which}: with ${kept} kept`);
+    }
+  }
+});
+
 test('a run id that cannot be made stops a lean review before it starts, since it names the home', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome();
@@ -2913,9 +2961,9 @@ function runIds() {
 const partDiff = (root, base, head, ...files) => git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', base, head, '--', ...files);
 
 /** The events of a session that ran the command of its part, got the whole diff of `files` back, and ended
- * with the review `rendered`. */
+ * with the review `rendered`; with `null`, it ended with no message at all. */
 const partSaid = (rendered, root, base, head, ...files) =>
-  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), msg(rendered), done);
+  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), ...(rendered === null ? [] : [msg(rendered)]), done);
 
 /** The events of a session that ran the command of its part and got the whole diff of `files` back. */
 const partShown = (root, base, head, ...files) => partSaid(FINDINGS, root, base, head, ...files);
@@ -3301,6 +3349,27 @@ test('a part that does not pass shows nothing of what any part answered: not wha
     assert.equal(wrote(root), false, name);
     assert.equal(readCodexReviewRuns(root).length - before, sessions.length, name);
   }
+});
+
+test('a part whose session rendered no review does not pass, so no part is shown as a line that says whose review follows with nothing under it', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  // The evidence rule asks every attempt for a review message, whatever its commands showed (`reviewEvidence`:
+  // `inspected`). So a part that rendered nothing is a part that did not pass, and the parts that are shown
+  // once all have passed each have a review to show: no message, an empty one, one of blanks alone.
+  for (const silent of [null, '', '  \n ']) {
+    const heard = inOrder();
+    const fake = fakeCodexInParts({ stdout: partSaid(RENDERED[0], root, base, head, 'a.txt') }, { stdout: partSaid(silent, root, base, head, 'b.txt') });
+    const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, randomUUID: runIds(), log: heard.log, write: heard.write });
+    const name = JSON.stringify(silent);
+    assert.equal(result.code, 1, name);
+    assert.equal(fake.calls.length, 2, `${name}: the third part was never started`);
+    assert.match(result.err, /Codex's turn completed, but it ended without a review message; nothing was recorded\./, name);
+    assert.match(result.err, /^Part 2 of 3 \(b\.txt\) did not pass, so the part after it was not started/m, name);
+    assert.deepEqual(heard.written(), [], `${name}: nothing was passed through`);
+    assert.equal(heard.said.some(([, text]) => /as Codex rendered|undefined|null/.test(text)), false, `${name}: ${heard.said.map(([, text]) => text).join('\n')}`);
+    assert.deepEqual(readCodexReviewRuns(root).slice(-2).map((line) => [line.outcome, line.part.index]), [['reviewed', 1], ['not-inspected', 2]], name);
+  }
+  assert.equal(wrote(root), false);
 });
 
 test('a review that is not in parts shows what Codex rendered as it always did: as soon as its one session ends, whatever the attempt comes to', async () => {

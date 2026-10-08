@@ -1146,6 +1146,39 @@ What follows from it:
   - Left as they are, and said: a review not in parts that does not stand still shows
     what Codex rendered above its error; the destination is checked once, before the
     command, and against the top level of the home only.
+- 2026-10-08: the five fixes committed as `d71e81d` (gate green), and both reviews of it.
+  - gentle-ai assessed `fefec21..d71e81d` as `medium`, review due (975 lines, 12 files);
+    granted without asking, lineage `review-ce74bbb742247815`, approved and acknowledged.
+    No blocker. R3-part-rendered-unguarded (`bin/codex-review.mjs:1214-1215`, warning): a
+    part that passed with nothing rendered now gets its header and a blank or the text
+    `undefined`. R3-way-out-with-lean-only-flags (`bin/codex-review.mjs:967`, suggestion):
+    the way out is said also to a command that carries flags `--session current` refuses.
+    R3-out-hardlink-nested-unproved (`evals/review/login-proof.mjs:401-408`, suggestion):
+    the title of a test section claims more than the check holds. The three accepted and
+    given to the same writer, test first; the check of the destination is not widened.
+  - Codex, `node bin/js-harness.mjs codex-review --base a560e70`, default session, inside
+    the login proof: `a560e70..d71e81d`, 694 changed lines in 10 files, 2 parts, both
+    correct (confidence 0.88 and 0.87), no finding, recorded. 301,364 input tokens
+    (222,080 cached), 1,658 output, 11 requests, 87 s. The login as it was. Two Codex
+    reviews, forty-nine in the feature. What the parts rendered came after the last one,
+    each under its header, as the fix of finding 1 says.
+- 2026-10-08: the three of gentle-ai answered by that writer; the command file 202 of 202
+  (377 s), the login-proof file 33 of 33.
+  - The unguarded part: not a defect as the code stands. A part is shown only when it
+    stands, and it cannot stand without a rendered message (`reviewEvidence` asks for one),
+    so a header over nothing cannot happen; no test could be made red. The guard the
+    single-range path has is added all the same, with a comment that says it is not
+    reachable today, and a test pins what does happen: a part with no message, an empty
+    one or blanks alone fails as not inspected, and nothing of any part is written.
+  - The way out names the flags to leave out when the refused command carried them, in
+    the order of the usage: `--prompt own`, `--doc` (it needs `--prompt own`),
+    `--part-lines`, `--keep-home`; with none the sentence is as it was. Red first. Held
+    for each flag: the command the sentence describes is accepted, and refused with any
+    one of the named flags left in.
+  - The login proof says what it holds, in its usage, its comments and its test titles:
+    a destination inside the home, or the same file as an entry of its top level. A hard
+    link to a file deeper in the home is not caught, and it says so. The check itself is
+    as it was.
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1244,6 +1277,10 @@ Codex desktop app. What this does not rest on: a measurement of the hooks' time,
 not taken.
 
 ## Follow-ups
+- The login proof refuses a report destination inside the real home or on a file of its
+  top level; a hard link from outside to a file nested deeper in the home is not caught
+  (gentle-ai, review of `d71e81d`). Every run of this feature wrote its report outside
+  the home.
 - From the review of `87854b1` (R3-parts-model-last-only): a reading of a range reviewed in
   parts takes the model of the last attempt; parts that ran on different models should
   mark the reading instead of showing one of them as measured.
@@ -1346,7 +1383,7 @@ recorded, Progress; kept as it was put to him):
    with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
    gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
 
-On the cap: forty-seven Codex reviews spent in this feature (one read nothing, forty-six read their
+On the cap: forty-nine Codex reviews spent in this feature (one read nothing, forty-eight read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to

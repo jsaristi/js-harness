@@ -182,7 +182,16 @@ function parseArgs(argv) {
     if (!Number.isSafeInteger(partLines)) throw new ArgError('--part-lines must be a positive integer: how many changed lines a part of a large range holds at most');
     if (session !== 'lean') throw new ArgError('--part-lines does not go with --session current: only the lean session reviews a large range in parts');
   }
-  return { base, unavailable, session, home, keepHome, prompt, doc, partLines, cwd: get('--cwd') ?? process.cwd() };
+  // What of this command line the `current` session would refuse above, in the order of the usage: a refusal
+  // that names that session as the way out says which of these to leave out with it (`wayOut`). `--prompt
+  // codex` is not one, since it is the prompt of both sessions.
+  const leanOnly = [
+    ...(prompt === 'own' ? ['--prompt own'] : []),
+    ...(doc !== undefined ? ['--doc'] : []),
+    ...(partLinesGiven !== undefined ? ['--part-lines'] : []),
+    ...(keepHome ? ['--keep-home'] : []),
+  ];
+  return { base, unavailable, session, home, keepHome, prompt, doc, partLines, leanOnly, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -587,6 +596,18 @@ const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness c
 // the refusal names the session that still does, whatever the reason the home could not be made.
 const CURRENT_IS_THE_WAY_OUT = 'The way out: `--session current` runs the review on your own Codex configuration, which needs no Codex home of its own.';
 
+/** The way out of a refusal to make the lean session's home, for a command that carried `leanOnly`: the
+ * flags it was given that go with the lean session alone, as `parseArgs` names them. With none, the
+ * sentence above. With some, it also says to leave those out: the command refuses each of them beside
+ * `--session current`, so the advice followed by adding the session alone would end in a usage error. */
+function wayOut(leanOnly) {
+  if (leanOnly.length === 0) return CURRENT_IS_THE_WAY_OUT;
+  const quoted = leanOnly.map((flag) => `\`${flag}\``);
+  const one = quoted.length === 1;
+  const named = one ? quoted[0] : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
+  return `${CURRENT_IS_THE_WAY_OUT} Leave out ${named} with it: ${one ? 'that belongs' : 'those belong'} to the lean session, and the command refuses ${one ? 'it' : 'them'} beside \`--session current\`.`;
+}
+
 const NO_CODEX =
   'Could not run `codex`. Install it with `npm i -g @openai/codex` and log in with `codex login`, ' +
   'or record an explicit skip with `--unavailable <reason>`; nothing was recorded.';
@@ -964,7 +985,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId, ...(measured === null ? {} : { seed: measured.seed }) });
         } catch (err) {
           // A measured `current` session is that session already, so it is told of no other.
-          error(`${err.message}\nThe ${lean ? 'lean review' : 'review'} was not started and nothing was recorded.${lean ? `\n${CURRENT_IS_THE_WAY_OUT}` : ''}`);
+          error(`${err.message}\nThe ${lean ? 'lean review' : 'review'} was not started and nothing was recorded.${lean ? `\n${wayOut(args.leanOnly)}` : ''}`);
           return { exit: 1 };
         }
       }
@@ -1211,6 +1232,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // no longer between the lines of their own sessions, which is what told them apart. Then the findings
       // of them all, in the order of the files, then what each part concluded, then what they spent together.
       passed.forEach((one, at) => {
+        // Guarded as the pass-through of a whole range is: nothing rendered is nothing shown, not a line
+        // that says whose review follows above a blank one. No part gets here that way today, since the
+        // evidence rule asks every attempt that stands for a review message (`reviewEvidence`).
+        if (!one.rendered) return;
         log(`Part ${at + 1} of ${passed.length}, as Codex rendered its review:`);
         write(`${one.rendered}\n`);
       });

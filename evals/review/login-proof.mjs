@@ -30,10 +30,11 @@
 //
 // `--real-home` is required and has no default, so the tool can never read a real home by accident.
 //
-// `--out` is refused, before anything is run, when the report would be written into that home or over a
-// file of it: the report is written after the second snapshot, so the tool itself would then change the
-// home it has just said was left alone, and a report written over `auth.json` would destroy the login
-// under a verdict of PASS (`refusedDestination`).
+// `--out` is refused, before anything is run, when the report would be written into that home, or over a
+// file that is an entry of its top level under another name: the report is written after the second
+// snapshot, so the tool itself would then change the home it has just said was left alone, and a report
+// written over `auth.json` would destroy the login under a verdict of PASS. That much is held and no more:
+// a hard link to a file nested deeper in the home is not caught (`refusedDestination`).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -46,7 +47,7 @@ import { fileURLToPath } from 'node:url';
 const USAGE =
   'Usage: node evals/review/login-proof.mjs --real-home <path> --out <file.md> -- <command…>\n' +
   'The command is started with no shell, so its first word must be a real executable (`node <script>`, for one), not a `.cmd` shim.\n' +
-  'The report is written outside the real home: an --out inside it, or one that is a file of it under another name, is refused.';
+  'An --out inside the real home, or one that is the same file as an entry of its top level under another name, is refused.';
 
 const AUTH = 'auth.json';
 
@@ -370,7 +371,12 @@ function landingOf(file) {
  * The report is written after the home was read the second time. Written into the home, it changes the
  * home the proof has just said was left as it was; written over `auth.json`, it destroys the login under a
  * report that says PASS. So a destination is refused when it lands inside the home, or on a file that is
- * one of the home's own under another name: a hard link, or a path through a link.
+ * an entry of the home's top level under another name: a hard link to it, or a path through a link.
+ *
+ * That second check is of the top level alone, which is what the snapshot reads and where the login is. A
+ * hard link, outside the home, to a file nested deeper in it (a rollout file under `sessions`, for one) is
+ * not caught: its path lands outside the home, and no file under the folders of the home is asked which
+ * file it is.
  *
  * Asked of the file system and not of the spelling alone, since one place has many spellings: another
  * case on Windows, a short name, a junction or a symbolic link on the way. Where the write would land is
@@ -397,7 +403,7 @@ function refusedDestination(realHome, out) {
     if (home !== null && fileIdOf(at) === home) return inside;
     if (path.dirname(at) === at) break;
   }
-  // The file that is there already, when one is: the same file as an entry of the home is that entry.
+  // The file that is there already, when one is: the same file as an entry of the home's top level is that entry.
   const there = fileIdOf(out);
   if (there !== null) {
     for (const name of names) {
@@ -410,8 +416,8 @@ function refusedDestination(realHome, out) {
 }
 
 /** Parses `argv`: the flags before the first `--`, the command after it. Throws an `ArgError` on a command
- * line that cannot be run as it is, a report destination that reaches the real home included
- * (`refusedDestination`): that is found here, before anything is read or run. */
+ * line that cannot be run as it is, a report destination inside the real home or on an entry of its top
+ * level included (`refusedDestination`): that is found here, before anything is read or run. */
 function parseArgs(argv) {
   const cut = argv.indexOf('--');
   const flags = cut === -1 ? argv : argv.slice(0, cut);
