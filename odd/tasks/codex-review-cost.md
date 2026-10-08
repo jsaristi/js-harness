@@ -86,7 +86,7 @@ push of that branch.
   attribute marks are left out of the parts and of the evidence rule, and the run says what it
   left out; a range whose earlier commits a record already covers is reviewed from where the
   records end — route: delegated writer
-- [ ] T3 The cost is seen first: `--plan` prints the parts, the lines and an estimate of tokens
+- [x] T3 The cost is seen first: `--plan` prints the parts, the lines and an estimate of tokens
   and starts nothing; a run above a bound of parts refuses without an explicit flag; `check`
   says how much code has been committed since the last Codex review record — route: delegated
   writer
@@ -268,6 +268,29 @@ push of that branch.
   - That fix is 22 changed lines. Its reviews go with the next slice, from `da71985`: a
     Codex session costs at least what the cheapest measured one did (72,828 input tokens),
     whatever the size of what it reads.
+- 2026-10-08: the fix of the push check committed as `cf32d4f` (gate green).
+- 2026-10-08: T3, second half, by one delegated writer (route: delegated), red first; T3 is
+  checked. The writer: the push check's tests 65 of 65 (102 s), `check`'s 73 of 73, the
+  hook's 7 of 7; re-run by the parent, `check`'s 73 of 73.
+  - The plain `check`, which runs at every commit, prints a row `codex-review` that is
+    information and never fails: how many code commits since the default branch of the
+    remote have no record, and how large the review that would cover them is today (parts,
+    changed lines, files), with the command that shows its cost with nothing spent,
+    `js-harness codex-review --base <oldest>^ --plan`. Over six parts it says so and that
+    the cheaper way is to review now. When all is covered it says that in one line; when it
+    cannot tell (no remote, no default branch, not a repository) it says why, and still
+    exits 0.
+  - `check --push` prints what it printed. The two rows share one computation of what is
+    covered.
+  - Found on the way: the push check started one git process for each record whose head is
+    outside the range, 83 of them and 5.5 s on this repository with its 92 records, which
+    at every commit is not a handful. They are one `git rev-list --ancestry-path` now, with
+    the old question as the way back when git refuses it: 19 processes and about 1 s.
+  - The plain `check` now reads `--remote`, which it took and ignored.
+  - The row on this branch before the commit: 1 of 20 code commits without a record
+    (`cf32d4f`), a review of 1 part.
+  - For T2: the row sizes the range up to `HEAD`, as a review reads it today. When a review
+    starts where the records end, the row's sizing changes with it.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -283,8 +306,8 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted. A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. The second half of T3: what `check` says of code committed since the last record. Its
-   reviews start at `da71985`, so they take in the fix of the push check too.
+1. gentle-ai and Codex on the second half of T3, from `da71985`, so they take in the fix
+   of the push check too; the plan of the Codex review read first.
 2. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
    attribute marks), with what is left of F1; a range whose earlier commits a record covers
    starts where the records end. With it, the rule decided on 2026-10-08: a lean review

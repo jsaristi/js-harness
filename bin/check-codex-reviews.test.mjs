@@ -4,7 +4,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkCodexReviews, main } from './check.mjs';
+import { checkCodexReviewDebt, checkCodexReviews, main } from './check.mjs';
+import { PART_MAX_CHANGED_LINES } from './lib/codex-review-parts.mjs';
+import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -263,6 +265,56 @@ test('a record on an unrelated branch is still not expanded, even when checking 
   assert.ok(!expanded.includes(`${base}..${side}`), expanded.join('\n'));
 });
 
+/** A `spawn` that runs git for real and keeps, in `started`, the git command of each process it starts. */
+function countingSpawn() {
+  const started = [];
+  const spawn = (cmd, args, opts) => {
+    started.push(args.find((arg) => !arg.startsWith('-') && !arg.includes('=')));
+    return spawnSync(cmd, args, opts);
+  };
+  return { spawn, started };
+}
+
+/** A branch of two code commits with a record whose head lies past `first`, the commit that is checked,
+ * and `unrelated` more records of history the default branch already holds. */
+function repoWithUnrelatedRecords(unrelated) {
+  const { root, base } = makeRepo();
+  const older = commit(root, 'old.js', 'old', 'feat: merged long ago');
+  git(root, 'update-ref', 'refs/remotes/origin/main', older);
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  const second = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, older, second);
+  for (let i = 0; i < unrelated; i += 1) record(root, base, older);
+  return { root, first };
+}
+
+test('the records whose head is outside the range cost one git process together, not one each', () => {
+  // Every review ever made leaves a record, and most are of history the default branch already holds.
+  const processes = (unrelated) => {
+    const { root, first } = repoWithUnrelatedRecords(unrelated);
+    const { spawn, started } = countingSpawn();
+    const row = checkCodexReviews(root, first, { spawn });
+    assert.equal(row.pass, true, row.detail);
+    assert.ok(!started.includes('merge-base'), started.join(' '));
+    return started.length;
+  };
+  assert.equal(processes(12), processes(1));
+});
+
+test('when git cannot say which heads lie past the tip all at once, each is asked about on its own', () => {
+  const { root, first } = repoWithUnrelatedRecords(2);
+  const asked = [];
+  const spawn = (cmd, args, opts) => {
+    if (args.includes('--ancestry-path')) return { status: 129, stdout: '', stderr: 'usage: git rev-list' };
+    if (args[0] === 'merge-base') asked.push(args[args.length - 1]);
+    return spawnSync(cmd, args, opts);
+  };
+  const row = checkCodexReviews(root, first, { spawn });
+  assert.equal(row.pass, true, row.detail);
+  assert.equal(asked.length, 2, 'one question for each distinct head outside the range');
+});
+
 // --- only a valid record is evidence ---
 
 const INVALID_SHAPES = {
@@ -425,7 +477,242 @@ test('outside a git repository the row fails', () => {
   assert.match(row.detail, /git repository/i);
 });
 
-// --- main: the row appears only with --push ---
+// --- the plain check: how much code waits for a Codex review, as information ---
+
+/** `count` lines of text, each its own line of a file. */
+const lines = (count) => 'line\n'.repeat(count);
+
+/** Commits several files at once, `files` being `{ <path>: <content> }`, and returns the commit's full id. */
+function commitFiles(root, files, message) {
+  const [[last, content], ...rest] = Object.entries(files).reverse();
+  for (const [file, text] of rest) fs.writeFileSync(path.join(root, file), text, 'utf8');
+  return commit(root, last, content, message);
+}
+
+const isInformation = (row) => row.name === 'codex-review' && row.pass === true && row.info === true;
+
+test('the plain row counts the code commits with no record and sizes the review that would cover them', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const reviewed = commit(root, 'b.js', lines(4), 'feat: two');
+  record(root, base, reviewed);
+  const oldest = commit(root, 'c.js', lines(3), 'feat: three, not reviewed');
+  commit(root, 'd.js', lines(5), 'feat: four, not reviewed');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.match(row.detail, /no Codex review record for 2 of 3 code commits since origin\/main/);
+  // The review that would cover them is of the range from the parent of the oldest one to HEAD, as
+  // `js-harness codex-review --base <oldest>^` would size it today.
+  assert.ok(row.detail.includes(`the review of ${short(root, oldest)}^..HEAD is 1 part today, 8 changed lines in 2 files`), row.detail);
+  assert.deepEqual(row.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`]);
+});
+
+test('the plain row sizes a review in thousands of changed lines and in parts', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const oldest = commitFiles(root, { 'b.js': lines(300), 'c.js': lines(300), 'd.js': lines(450) }, 'feat: three files');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.ok(row.detail.includes(`the review of ${short(root, oldest)}^..HEAD is 3 parts today, 1,050 changed lines in 3 files`), row.detail);
+  assert.doesNotMatch(row.detail, /max-parts/);
+  assert.equal(row.lines.length, 1);
+});
+
+test('the plain row names a base that exists for a root commit, as the push check does', () => {
+  const { root } = makeRepo();
+  git(root, 'checkout', '--orphan', 'unrelated');
+  const rootCommit = commit(root, 'z.js', 'unrelated history', 'feat: a root commit');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.match(row.detail, /no Codex review record for 1 of 1 code commit since origin\/main/);
+  const said = [row.detail, ...row.lines].join('\n');
+  assert.ok(!said.includes(`${short(root, rootCommit)}^`), said);
+  assert.ok(said.includes('js-harness codex-review --base origin/main --plan'), said);
+});
+
+/** A branch whose one code commit, never reviewed, changes `count` files that are each a part of their own. */
+function repoOfParts(count) {
+  const { root } = makeRepo();
+  feature(root);
+  const files = Object.fromEntries(Array.from({ length: count }, (_, at) => [`part-${at}.js`, lines(PART_MAX_CHANGED_LINES + 1)]));
+  return { root, oldest: commitFiles(root, files, 'feat: a branch nobody reviewed slice by slice') };
+}
+
+test('the plain row says a review is already more parts than a run starts, and that reviewing now is cheaper', () => {
+  const { root, oldest } = repoOfParts(MAX_PARTS_WITHOUT_FLAG + 1);
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.ok(row.detail.includes(`is ${MAX_PARTS_WITHOUT_FLAG + 1} parts today`), row.detail);
+  assert.ok(row.detail.endsWith(`already more parts than the ${MAX_PARTS_WITHOUT_FLAG} a run starts without \`--max-parts\``), row.detail);
+  assert.deepEqual(row.lines, [
+    'the cheaper way is to review now: every commit added to this range makes its review larger',
+    `what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`,
+  ]);
+});
+
+test('the plain row says nothing of --max-parts for a review of as many parts as a run starts', () => {
+  const { root } = repoOfParts(MAX_PARTS_WITHOUT_FLAG);
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.ok(row.detail.includes(`is ${MAX_PARTS_WITHOUT_FLAG} parts today`), row.detail);
+  assert.doesNotMatch([row.detail, ...row.lines].join('\n'), /max-parts|cheaper/);
+});
+
+test('the plain row says of a range that changes no file as a whole that its review has no part', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const change = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.equal(
+    row.detail,
+    `no Codex review record for 2 of 2 code commits since origin/main: the review of ${short(root, change)}^..HEAD has no part today, since the range changes no file as a whole`,
+  );
+});
+
+test('the plain row says in one short detail that every code commit is covered', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const head = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, base, head);
+  assert.deepEqual(checkCodexReviewDebt(root), {
+    name: 'codex-review',
+    pass: true,
+    info: true,
+    detail: '2 code commits since origin/main, all covered by a Codex review record',
+  });
+});
+
+test('the plain row says there is no code commit when the branch holds none', () => {
+  const { root } = makeRepo();
+  feature(root);
+  commit(root, 'docs/notes.md', 'words', 'docs: notes');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.equal(row.detail, 'no code commits since origin/main');
+  assert.equal(row.lines, undefined);
+});
+
+test('the plain row counts the records that are no review and leaves their listing to the push check', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, base, first, { outcome: 'unavailable', reason: 'model rejected' });
+  const change = commit(root, 'c.js', 'three', 'feat: three');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  record(root, first, git(root, 'rev-parse', 'HEAD'), { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  appendCodexReview(root, { base: first, head: change });
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.equal(
+    row.detail,
+    '3 code commits since origin/main, all covered by a Codex review record ' +
+      '(2 of the records that cover them are a skip or a range with nothing to review: js-harness check --push lists them); 1 invalid record ignored',
+  );
+  assert.equal(row.lines, undefined, 'the listing is the push check\'s');
+  // The push check, over the same records, is the one that lists them.
+  assert.equal(checkCodexReviews(root, 'HEAD').lines.length, 2);
+});
+
+// A fresh clone, a project with no remote, a folder that is no repository: the plain check runs in all of
+// them at every commit, and what it cannot tell must never turn it red.
+const CANNOT_TELL = {
+  'a repository with no refs of the remote': {
+    make: () => {
+      const { root } = makeRepo(null);
+      feature(root);
+      commit(root, 'b.js', 'two', 'feat: two');
+      return [root];
+    },
+    why: 'no default branch of origin to compare against (refs/remotes/origin/HEAD, origin/main or origin/master), so there is no range to check',
+  },
+  'a repository with no remote of that name': {
+    make: () => {
+      const root = tmp('js-harness-check-plain-');
+      git(root, 'init');
+      git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+      git(root, 'config', 'user.name', 'js-harness test');
+      commit(root, 'a.js', 'one', 'init');
+      return [root];
+    },
+    why: 'origin is not a configured remote, so there is no default branch to compare against',
+  },
+  'a repository with no commit yet': {
+    make: () => {
+      const root = tmp('js-harness-check-plain-');
+      git(root, 'init');
+      return [root];
+    },
+    why: 'HEAD does not name a commit',
+  },
+  'a folder that is no git repository': {
+    make: () => [tmp('js-harness-check-plain-nongit-')],
+    why: 'this is not a git repository',
+  },
+  'a git that cannot be started': {
+    make: () => [
+      makeRepo().root,
+      {
+        spawn: () => {
+          throw new Error('spawnSync git ENOENT');
+        },
+      },
+    ],
+    why: 'this is not a git repository',
+  },
+};
+
+for (const [state, { make, why }] of Object.entries(CANNOT_TELL)) {
+  test(`in ${state} the plain row says it cannot tell and why, and fails nothing`, () => {
+    assert.deepEqual(checkCodexReviewDebt(...make()), {
+      name: 'codex-review',
+      pass: true,
+      info: true,
+      detail: `cannot tell how much code waits for a Codex review: ${why}`,
+    });
+  });
+}
+
+test('the plain row says the size could not be told when git cannot size the range, and still counts the commits', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  const spawn = (cmd, args, opts) => (args[0] === 'diff' ? { status: 128, stdout: '', stderr: 'fatal' } : spawnSync(cmd, args, opts));
+  const row = checkCodexReviewDebt(root, { spawn });
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.equal(
+    row.detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: how large the review of ${short(root, head)}^..HEAD is today could not be told`,
+  );
+  assert.equal(row.lines.length, 1);
+});
+
+test('the plain row is measured against the remote it is given', () => {
+  const { root, base } = makeRepo(null);
+  git(root, 'remote', 'add', 'upstream', 'https://example.invalid/upstream.git');
+  git(root, 'update-ref', 'refs/remotes/upstream/main', base);
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  assert.match(checkCodexReviewDebt(root).detail, /^cannot tell/);
+  assert.match(checkCodexReviewDebt(root, { remote: 'upstream' }).detail, /^no Codex review record for 1 of 1 code commit since upstream\/main/);
+});
+
+test('the plain row starts a handful of git processes, however many records there are', () => {
+  const processes = (unrelated) => {
+    const { root } = repoWithUnrelatedRecords(unrelated);
+    const { spawn, started } = countingSpawn();
+    const row = checkCodexReviewDebt(root, { spawn });
+    assert.match(row.detail, /^2 code commits since origin\/main, all covered/);
+    return started.length;
+  };
+  const few = processes(1);
+  assert.equal(processes(12), few);
+  assert.ok(few <= 12, `${few} git processes`);
+});
+
+// --- main: the failing row appears only with --push, the informational one only without ---
 
 async function runCheck(argv) {
   let output = '';
@@ -457,11 +744,36 @@ function projectWithUnreviewedCommit() {
   return { root, head, home: tmp('js-harness-check-push-home-') };
 }
 
-test('plain check runs and prints no codex-review row', async () => {
-  const { root, home } = projectWithUnreviewedCommit();
+test('plain check prints the codex-review row as information and exits 0 on an uncovered commit', async () => {
+  const { root, head, home } = projectWithUnreviewedCommit();
   const { code, output } = await runCheck(['--cwd', root, '--home', home]);
-  assert.equal(code, 0);
-  assert.doesNotMatch(output, /codex-review/);
+  assert.equal(code, 0, output);
+  assert.match(output, /^INFO {2}codex-review {2}no Codex review record for 1 of 1 code commit since origin\/main: the review of /m);
+  assert.ok(output.includes(`\n      what it would cost, with nothing spent: js-harness codex-review --base ${short(root, head)}^ --plan`), output);
+  // The row that fails is the push check's: here the same commit is information.
+  assert.doesNotMatch(output, /^(PASS|FAIL) {2}codex-review/m);
+  assert.equal(output.split('\n').filter((l) => /^(PASS|FAIL|INFO) {2}codex-review /.test(l)).length, 1, output);
+});
+
+test('plain check exits 0 where the row cannot tell: a project with no remote, a folder that is no repository', async () => {
+  const noRemote = tmp('js-harness-check-plain-');
+  git(noRemote, 'init');
+  const noRepository = tmp('js-harness-check-plain-nongit-');
+  for (const root of [noRemote, noRepository]) {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
+    const { code, output } = await runCheck(['--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /m);
+  }
+});
+
+test('plain check --remote measures the row against that remote', async () => {
+  const { root, home } = projectWithUnreviewedCommit();
+  git(root, 'remote', 'add', 'mirror', 'https://example.invalid/mirror.git');
+  git(root, 'update-ref', 'refs/remotes/mirror/main', 'HEAD');
+  const { code, output } = await runCheck(['--remote', 'mirror', '--cwd', root, '--home', home]);
+  assert.equal(code, 0, output);
+  assert.match(output, /^INFO {2}codex-review {2}no code commits since mirror\/main$/m);
 });
 
 test('check --push runs only the codex-review row and fails on an uncovered commit', async () => {

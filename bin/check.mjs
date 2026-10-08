@@ -7,6 +7,8 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
+import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
+import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { codexReviewsPath, isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
@@ -359,10 +361,11 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   return row(detail, lines);
 }
 
-/** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. */
-function gitOut(spawn, cwd, args) {
+/** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. `input`, when given, is what
+ * git reads on its standard input. */
+function gitOut(spawn, cwd, args, input) {
   try {
-    const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...(input !== undefined && { input }) });
     if (result && !result.error && result.status === 0) return result.stdout.trim();
   } catch {
     // No git on PATH: the caller reports the repository or revision as unresolvable.
@@ -399,29 +402,51 @@ function coveredBy(spawn, cwd, rec) {
   return listed === null ? null : new Set(listed.split('\n').filter(Boolean));
 }
 
-/** The `--push` row: every non-merge commit between the remote's default branch and `head` that
- * changes a file other than Markdown must lie in a range some `codex-review` record covers (any
- * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
- * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
- * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed. */
-export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
-  const name = 'codex-review';
-  const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
+/** Which of `heads` (full commit ids) lie past `tip`, as `merge-base --is-ancestor <tip> <head>` says it:
+ * the commits `tip` is an ancestor of, itself among them.
+ *
+ * One git process answers for them all, because the heads are those of every record ever written and this
+ * runs at every commit: `rev-list --ancestry-path ^<tip> <heads>` lists the commits on a path from `tip` to
+ * any of them, which holds a head past the tip and no other head. `--ignore-missing` passes over an id this
+ * repository does not know, and the ids go on standard input, which no count of records makes too long for
+ * a command line. Should git refuse that, each head is asked about on its own. */
+function headsPastTip(spawn, cwd, tip, heads) {
+  if (heads.length === 0) return new Set();
+  const onPath = gitOut(spawn, cwd, ['rev-list', '--ancestry-path', '--ignore-missing', `^${tip}`, '--stdin'], `${heads.join('\n')}\n`);
+  if (onPath === null) return new Set(heads.filter((head) => gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, head])));
+  const listed = new Set(onPath.split('\n'));
+  return new Set(heads.filter((head) => head === tip || listed.has(head)));
+}
+
+/** What the Codex review records say of the code commits between the default branch of `remote` and
+ * `head`, for the two rows that read it: the `--push` row, which fails on a commit no record covers, and
+ * the row of the plain check, which says how large the review of those commits is.
+ *
+ * `{ unknown }` when it cannot be told: the `detail` and `lines` of the `--push` row and, where those words
+ * speak of a push, the `why` of the plain one. Otherwise the commit `tip` that `head` names, the default
+ * branch as the ref `baseRef` and its label `base`, the `codeCommits` of `base..tip` (newest first: every
+ * non-merge commit that changes a file other than Markdown), the `covers` (each valid record that reaches
+ * the range, with the commits it covers), the `uncovered` code commits, and the `note` that counts the
+ * records that were left out. */
+function codexReviewCoverage(cwd, head, { spawn, remote }) {
+  const unknown = (detail, lines, why) => ({ unknown: { detail, ...(lines ? { lines } : {}), ...(why ? { why } : {}) } });
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
   if (!tip) {
-    return fail(gitOut(spawn, cwd, ['rev-parse', '--git-dir']) === null ? `${cwd} is not a git repository` : `cannot resolve --head ${head} to a commit`);
+    return gitOut(spawn, cwd, ['rev-parse', '--git-dir']) === null
+      ? unknown(`${cwd} is not a git repository`, undefined, 'this is not a git repository')
+      : unknown(`cannot resolve --head ${head} to a commit`, undefined, `${head} does not name a commit`);
   }
   // Git hands a hook the URL, not a name, when the push names a URL: no ref of it can exist.
   const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
   if (!remotes.includes(remote)) {
-    return fail(`${remote} is not a configured remote, so there is no default branch to compare against`, [
+    return unknown(`${remote} is not a configured remote, so there is no default branch to compare against`, [
       'push through a configured remote: git remote add <name> <url>, then git push <name> ...',
       'or name one that exists: js-harness check --push --remote <name>',
     ]);
   }
   const branch = defaultBranch(spawn, cwd, remote);
   if (!branch) {
-    return fail(
+    return unknown(
       `no default branch of ${remote} to compare against (refs/remotes/${remote}/HEAD, ${remote}/main or ${remote}/master), so there is no range to check`,
       [`set it with: git remote set-head ${remote} --auto`],
     );
@@ -430,13 +455,13 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
 
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${baseRef}..${tip}`]);
-  if (inRange === null) return fail(`cannot list the commits in ${base}..${head}`);
+  if (inRange === null) return unknown(`cannot list the commits in ${base}..${head}`);
   const rangeIds = new Set(inRange.split('\n').filter(Boolean));
 
   // `%x01` starts each commit; its `<id>\t<short id>\t<parents>\t<subject>` line (four fields, the
   // subject last so a tab inside it survives) is followed by the names of the files it changes.
   const log = gitOut(spawn, cwd, ['-c', 'core.quotePath=false', 'log', '--no-merges', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
-  if (log === null) return fail(`cannot list the commits in ${base}..${head}`);
+  if (log === null) return unknown(`cannot list the commits in ${base}..${head}`);
   const codeCommits = log
     .split('\x01')
     .filter(Boolean)
@@ -450,21 +475,20 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     .filter((commit) => commit.files.some((file) => !/\.md"?$/i.test(file)));
 
   const records = readCodexReviews(cwd, { spawn });
+  const valid = records.filter(isValidCodexReview);
+  const invalid = records.length - valid.length;
+  // A record can cover part of the range only when its head is in it, or lies past the pushed tip
+  // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
+  // and expanding it would cost one git process per record ever written.
+  // A record of nothing to review is the exception to the second case: its range changes no file only
+  // as a whole (a commit and its revert), so a tip short of its head pushes a patch nobody reviewed.
+  const outside = (rec) => !rangeIds.has(rec.head);
+  const mayLiePast = valid.filter((rec) => outside(rec) && rec.outcome !== NOTHING_TO_REVIEW);
+  const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
   const covers = [];
   let ignored = 0;
-  let invalid = 0;
-  for (const rec of records) {
-    if (!isValidCodexReview(rec)) {
-      invalid += 1;
-      continue;
-    }
-    // A record can cover part of the range only when its head is in it, or lies past the pushed tip
-    // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
-    // and expanding it would cost one git process per record ever written.
-    // A record of nothing to review is the exception to the second case: its range changes no file only
-    // as a whole (a commit and its revert), so a tip short of its head pushes a patch nobody reviewed.
-    const pastTip = !rangeIds.has(rec.head);
-    if (pastTip && (rec.outcome === NOTHING_TO_REVIEW || !gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, rec.head]))) continue;
+  for (const rec of valid) {
+    if (outside(rec) && (rec.outcome === NOTHING_TO_REVIEW || !pastTip.has(rec.head))) continue;
     const covered = coveredBy(spawn, cwd, rec);
     if (covered) covers.push({ rec, covered });
     else ignored += 1;
@@ -476,6 +500,38 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
 
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
+  return { tip, baseRef, base, codeCommits, covers, uncovered, note };
+}
+
+// The outcomes of a record that is no review of Codex's, each with what a row calls it.
+const NOT_A_REVIEW = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };
+
+/** The records of a coverage (`codexReviewCoverage`) that cover a code commit and are no review of Codex's. */
+function notReviews({ covers, codeCommits }) {
+  return covers
+    .filter(({ rec, covered }) => Object.hasOwn(NOT_A_REVIEW, rec.outcome) && codeCommits.some((commit) => covered.has(commit.id)))
+    .map(({ rec }) => rec);
+}
+
+/** What both rows say of a coverage that leaves no code commit uncovered, before its `note`. */
+function coveredDetail({ codeCommits, base }) {
+  return codeCommits.length
+    ? `${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base}, all covered by a Codex review record`
+    : `no code commits since ${base}`;
+}
+
+/** The `--push` row: every non-merge commit between the remote's default branch and `head` that
+ * changes a file other than Markdown must lie in a range some `codex-review` record covers (any
+ * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
+ * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
+ * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
+ * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
+export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
+  const name = 'codex-review';
+  const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
+  const state = codexReviewCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return fail(state.unknown.detail, state.unknown.lines);
+  const { base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
@@ -492,18 +548,74 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits
   // as covered by a record, which they are; these lines are what keeps that from reading as "reviewed".
-  const kinds = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };
-  const notReviews = covers
-    .filter(({ rec, covered }) => Object.hasOwn(kinds, rec.outcome) && codeCommits.some((commit) => covered.has(commit.id)))
-    .map(({ rec }) => `${kinds[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
-  const detail = codeCommits.length
-    ? `${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base}, all covered by a Codex review record${note}`
-    : `no code commits since ${base}${note}`;
-  return { name, pass: true, detail, ...(notReviews.length ? { lines: notReviews } : {}) };
+  const lines = notReviews(state).map((rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
+  return { name, pass: true, detail: `${coveredDetail(state)}${note}`, ...(lines.length ? { lines } : {}) };
+}
+
+/** `count` things with thousands separated and `noun` in the singular for one: `1 part`, `1,050 changed lines`. */
+const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${noun}${count === 1 ? '' : 's'}`;
+
+/** How large the review of `from..tip` is today, sized as `js-harness codex-review` sizes a range: how many
+ * `parts` it is reviewed in at the default bound of a part, and the `changedLines` and `files` they hold.
+ * `null` when git cannot say. Renames are off, as in that command. */
+function reviewSize(spawn, cwd, from, tip) {
+  // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
+  const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', from, tip]);
+  if (numstat === null) return null;
+  try {
+    const files = numstatFiles(numstat);
+    return { parts: reviewParts(files).length, files: files.length, changedLines: files.reduce((sum, file) => sum + file.changedLines, 0) };
+  } catch {
+    return null;
+  }
+}
+
+/** The `codex-review` row of the plain check: how much code waits for a Codex review, said at every commit.
+ * A branch once reached 28 parts of review because no slice was reviewed when it closed and nothing said the
+ * debt was growing (odd/tasks/codex-review-cost.md); the `--push` row says it when the push is refused, and
+ * by then the review is as large as it will get.
+ *
+ * Informational: it reads what the `--push` row reads (`codexReviewCoverage`, from the remote's default
+ * branch to `HEAD`) and fails nothing, a state it cannot tell included. For the code commits no record
+ * covers it says how many they are and how large the review that covers them is today, which is that of the
+ * range from the parent of the oldest one to `HEAD`, the range `js-harness codex-review --base <oldest>^`
+ * reviews; and it names the command that prints the plan of that review and starts nothing. */
+export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const row = (detail, lines) => ({ name: 'codex-review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  const state = codexReviewCoverage(cwd, 'HEAD', { spawn, remote });
+  // A fresh clone, a project with no remote, a folder that is no repository: this runs in all of them.
+  if (state.unknown) return row(`cannot tell how much code waits for a Codex review: ${state.unknown.why ?? state.unknown.detail}`);
+  const { tip, baseRef, base, codeCommits, uncovered, note } = state;
+  if (uncovered.length === 0) {
+    // Covered by a record is not reviewed: a skip and a range with nothing to review cover too. How many
+    // such records there are is said; which they are is the push check's listing, not repeated at every commit.
+    const others = notReviews(state).length;
+    const said = others ? ` (${others} of the records that cover them ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review: js-harness check --push lists them)` : '';
+    return row(`${coveredDetail(state)}${said}${note}`);
+  }
+  // `git log` lists newest first, so the oldest uncovered commit is the last one. A root commit has no
+  // `<id>^`: the push check names the default branch as the base that reaches it, and so does this.
+  const oldest = uncovered[uncovered.length - 1];
+  const baseArg = oldest.isRoot ? base : `${oldest.shortId}^`;
+  const from = oldest.isRoot ? gitOut(spawn, cwd, ['merge-base', baseRef, tip]) : `${oldest.id}^`;
+  const size = reviewSize(spawn, cwd, from, tip);
+  // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
+  const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
+  let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
+  if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file as a whole`;
+  else if (size) {
+    sized =
+      `the review of ${baseArg}..HEAD is ${counted(size.parts, 'part')} today, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
+      (over ? `, already more parts than ${partsBound({ maxParts: MAX_PARTS_WITHOUT_FLAG, maxPartsGiven: false })}` : '');
+  }
+  return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
+    ...(over ? ['the cheaper way is to review now: every commit added to this range makes its review larger'] : []),
+    `what it would cost, with nothing spent: js-harness codex-review --base ${baseArg} --plan`,
+  ]);
 }
 
 const USAGE =
-  'Usage: js-harness check [--cwd <path>] [--home <path>] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]';
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]';
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
 // error, not a silently-swallowed token that later crashes `path.join` with `undefined`.
@@ -562,6 +674,10 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }
+  // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
+  // push's. It reads commits and records, never the working tree, so the inner run prints it as well.
+  // `deps.git` stands in for `spawnSync` here only, since `deps.spawn` is what runs a sensor.
+  if (!push) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
 
   for (const row of rows) {
     console.log(formatRow(row));
