@@ -167,6 +167,34 @@ push of that branch.
     worktree after the gate again (a test starts PowerShell without `LOCALAPPDATA`; the
     follow-up of `odd/tasks/codex-review-lean.md`). Removed; it made the first assessment
     read the candidate as unassessable.
+- 2026-10-08: T3, first half, by one delegated writer (route: delegated), red first for each
+  behaviour; T3 stays open until `check` has its line. The writer: the plan module 18 of 18,
+  the command file 206 of 206 (425 s), the comparison's tests 103 of 103; re-run by the
+  parent, the plan module 18 of 18.
+  - `--plan` prints the range, the model and the effort, the parts with their files and
+    changed lines, and an estimate of input tokens, and exits 0. It starts nothing: no Codex
+    looked for, no home made, nothing logged or recorded, and it does not mind uncommitted
+    changes, being of the committed range. A real run prints the same plan before its first
+    session.
+  - The estimate is made from this machine's run log (in the git common dir, so every
+    worktree shares it and a fresh clone has none), never from a number in the code: the
+    parts that were reviewed in the lean session with tokens read from their rollout, at
+    the fixed model and effort when five or more are, else all of them with the plan saying
+    so; the median input tokens a changed line of two bands, up to 400 lines and above;
+    never under the smallest measured run; rounded to two figures. With nothing measured the
+    plan says there is no estimate.
+  - A bound of parts, 6, chosen by the agent and his to change: a run of more is refused
+    before anything is started, exit 1, with its plan and the flag that lets it go on,
+    `--max-parts <n>` with its count. The count named is the bound in both directions.
+  - `--plan` beside `--unavailable` is a usage error. The comparison needed no change: both
+    its ranges are one part.
+  - What the plan says of the review this branch owes, `5663c8c..b7609b2`, before this
+    slice was committed: 6 parts, 2,576 changed lines in 10 files, about 745,000 input
+    tokens, from 36 parts measured at `medium` and none at `high`, so a floor. With this
+    slice committed it is over the bound, which this document says is asked of Sebastián.
+  - Found by the writer, decided by the parent for T2: a run over a range that changes
+    nothing still starts one session. With "only code" a range of documents alone becomes
+    the same case, so in T2 a run with no part starts nothing, says so and exits 0.
 - Not known until the first real run: that a rollout writes the effort `high` as `high`.
   Every measured line so far passed `medium` and read `medium`. If it is written another
   way, the first review fails with the mismatch message and the reader is corrected.
@@ -176,18 +204,18 @@ push of that branch.
 ## Next step
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted:
-1. T3 first, in two commits: `--plan` and the bound of parts; then what `check` says of
-   code committed since the last record. It goes before T2 because the Codex review of
-   `14cd8bf` is owed and its cost has to be read before it runs: at `high`, over about
-   2,400 changed lines.
-2. The Codex review of `5663c8c..HEAD` with the default command, inside the login proof,
-   after reading its plan. It is also the first real run at `high`, which shows how a
-   rollout writes that effort.
-3. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
-   attribute marks); a range whose earlier commits a record covers starts where the
-   records end. With it, the rule decided on 2026-10-08: a lean review whose rollout names
-   no model does not stand.
-4. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
+1. The first half of T3 is committed (`--plan`, the bound of parts). Its gentle-ai review
+   runs on that commit alone.
+2. The Codex review of `5663c8c..HEAD`, inside the login proof. It is over the bound of
+   six parts, so its plan, with its count and its estimate, is put to Sebastián before it
+   runs. It is also the first real run at `high`, which shows how a rollout writes that
+   effort.
+3. The second half of T3: what `check` says of code committed since the last record.
+4. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
+   attribute marks), and a run with no part starts nothing; a range whose earlier commits a
+   record covers starts where the records end. With it, the rule decided on 2026-10-08: a
+   lean review whose rollout names no model does not stand.
+5. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
    measurement of the part size, is put to Sebastián with its count before any of it runs.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin

@@ -86,6 +86,16 @@
 // the parts that passed are no review of the range. A range within both bounds is one part, and
 // its review is the one described above, unchanged.
 //
+// What a run will cost is said before it is spent (`bin/lib/codex-review-plan.mjs`). `--plan` prints the
+// plan and exits 0: the range, the model and the effort, the parts with their files and changed lines, and
+// an estimate of the input tokens made from this machine's own run log, never from a number written here.
+// It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
+// or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
+// prints the same plan before its first session. And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
+// refused before anything is started, with its plan, until it names its count with `--max-parts <n>`: one
+// run of 28 parts, started without either number having been seen, was more than half of what fifty
+// reviews spent (odd/tasks/codex-review-cost.md).
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
@@ -113,8 +123,9 @@ import { performance } from 'node:perf_hooks';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
+import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
-import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -131,16 +142,19 @@ export const REVIEW_EFFORT = 'high';
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
 // home of its run, and `--keep-home` leaves that home after the run. `--doc`, for `--prompt own`, is a
 // path, taken from `--cwd` when it is relative. `--part-lines` is how many changed lines a part of a large
-// range holds at most, in place of `PART_MAX_CHANGED_LINES`.
+// range holds at most, in place of `PART_MAX_CHANGED_LINES`. `--plan` prints what the run would start and
+// starts nothing, and `--max-parts` is how many parts a run may start, in place of `MAX_PARTS_WITHOUT_FLAG`.
 //
 // The second line of the usage is there because a person has to know that their own Codex configuration
-// is not loaded, and that nothing they pass or configure changes the model and the effort. `--session` is
-// not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
+// is not loaded, and that nothing they pass or configure changes the model and the effort. The third, because
+// what a review costs is theirs to see before it is spent. `--session` is not in the usage: there is one
+// session, so there is nothing to choose (see `SESSION`).
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
-  `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`;
+  `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
+  `--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.`;
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -189,21 +203,31 @@ function parseArgs(argv) {
     if (session === 'current') throw new ArgError(SESSION_REMOVED);
     if (session !== SESSION) throw new ArgError('--session must be `lean`: a review runs in one session, and the flag is still read only for the command lines that named it');
   }
-  // Beside `--unavailable` the three that follow are taken and change nothing: a skip launches nothing, so
-  // there is no home to keep, no prompt to send and no range to split, and the skip that was asked for is
-  // recorded all the same (`--doc` is still read first, as a flag given wrong is).
+  // Beside `--unavailable` the four that follow are taken and change nothing: a skip launches nothing, so
+  // there is no home to keep, no prompt to send, no range to split and no parts to count, and the skip that
+  // was asked for is recorded all the same (`--doc` is still read first, as a flag given wrong is).
   const keepHome = argv.includes('--keep-home');
   const prompt = get('--prompt') ?? PROMPTS[0];
   if (!PROMPTS.includes(prompt)) throw new ArgError('--prompt must be `codex` or `own`');
   const doc = get('--doc');
   if (doc !== undefined && prompt !== 'own') throw new ArgError('--doc needs --prompt own: only this command\'s own prompt carries the intent of a feature document');
-  const partLinesGiven = get('--part-lines');
-  let partLines = PART_MAX_CHANGED_LINES;
-  if (partLinesGiven !== undefined) {
-    partLines = /^[1-9]\d*$/.test(partLinesGiven) ? Number(partLinesGiven) : Number.NaN;
-    if (!Number.isSafeInteger(partLines)) throw new ArgError('--part-lines must be a positive integer: how many changed lines a part of a large range holds at most');
-  }
-  return { base, unavailable, home, keepHome, prompt, doc, partLines, cwd: get('--cwd') ?? process.cwd() };
+  /** The count `flag` was given, a positive integer, or `undefined` when the flag is not there; `what` says
+   * what it counts, for the error of one that is anything else. */
+  const count = (flag, what) => {
+    const given = get(flag);
+    if (given === undefined) return undefined;
+    const value = /^[1-9]\d*$/.test(given) ? Number(given) : Number.NaN;
+    if (!Number.isSafeInteger(value)) throw new ArgError(`${flag} must be a positive integer: ${what}`);
+    return value;
+  };
+  const partLines = count('--part-lines', 'how many changed lines a part of a large range holds at most') ?? PART_MAX_CHANGED_LINES;
+  // Left `undefined` when no count was named: the plan says which of the two bounds a run is over.
+  const maxParts = count('--max-parts', 'how many parts the run may start');
+  // A plan beside a skip is two commands in one line: the first starts and records nothing, and the second
+  // is a record. Neither is guessed at.
+  const plan = argv.includes('--plan');
+  if (plan && unavailable !== undefined) throw new ArgError('--plan does not go with --unavailable: a plan starts nothing and records nothing, and a skip is a record');
+  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -719,12 +743,28 @@ function totalsLine(attempts) {
   );
 }
 
+/** The files `from..head` changes (both full commit ids), grouped as a review of the range takes them
+ * (`reviewParts`): `{ groups }`, each `{ files, changedLines }`, of at most `maxChangedLines` changed lines
+ * and `PART_MAX_FILES` files, one group for a range within both bounds and none for a range that changes no
+ * file. `{ error }`, a sentence, when git cannot say how large the range is. It is the one git command a
+ * plan needs, so `--plan` runs this and nothing else of a review. Renames are off, as in `planParts`. */
+function rangeGroups(spawn, root, { from, head, maxChangedLines }) {
+  const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
+  if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+  try {
+    return { groups: reviewParts(numstatFiles(numstat), maxChangedLines) };
+  } catch (err) {
+    return { error: `Could not read which files the range changes (${err.message})` };
+  }
+}
+
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
- * lines than `maxChangedLines` or more files than a part holds (`PART_MAX_FILES`): `{ parts }`, each
- * `{ index, of, files, changedLines, prompt, expected }` with the prompt its session is asked with and the
- * keys of the changed lines it must have seen (`patchKeys`). `{ parts: null }` when the range is one part,
- * which is reviewed whole. `{ error }`, a sentence, when the range cannot be split in a way that is known
- * to show all of it; nothing is launched then. `intent` is what `--doc` gave, for the prompt of every part.
+ * lines than a part holds or more files (`PART_MAX_FILES`), from its `groups` (`rangeGroups`): `{ parts }`,
+ * each `{ index, of, files, changedLines, prompt, expected }` with the prompt its session is asked with and
+ * the keys of the changed lines it must have seen (`patchKeys`). `{ parts: null }` when the range is one
+ * part, which is reviewed whole. `{ error }`, a sentence, when the range cannot be split in a way that is
+ * known to show all of it; nothing is launched then. `intent` is what `--doc` gave, for the prompt of every
+ * part.
  *
  * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
  * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
@@ -734,16 +774,8 @@ function totalsLine(attempts) {
  * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
  * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
  * with `:`, would stand for other files than itself. The count and the check of the whole range name no file. */
-function planParts(spawn, root, { from, head, maxChangedLines, intent }) {
+function planParts(spawn, root, { from, head, groups, intent }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
-  const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], room);
-  if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
-  let groups;
-  try {
-    groups = reviewParts(numstatFiles(numstat), maxChangedLines);
-  } catch (err) {
-    return { error: `Could not read which files the range changes (${err.message})` };
-  }
   if (groups.length <= 1) return { parts: null };
   const parts = [];
   for (const [at, group] of groups.entries()) {
@@ -797,7 +829,8 @@ function answerFailure({ reason, errors = [] }) {
  * makes the session's home), `platform`, `log`, `error` and `write` (the review passed through
  * to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
- * on a bad flag; 1 when nothing could be recorded or the review did not complete.
+ * on a bad flag; 1 when nothing could be recorded or the review did not complete, and for a run of more
+ * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing.
  *
  * Three more `deps` are what the comparison of the configurations varies, and nothing on the command line
  * reaches them (see the top of this file):
@@ -850,6 +883,41 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return 1;
   }
 
+  /** The plan of the review of this range in `groups` (`rangeGroups`), on the model and at the effort the
+   * command passes, with its estimate from the run log of this repository's machine. A log that cannot be
+   * read is one that measured nothing: the plan then says there is no estimate, and a run goes on as it would. */
+  const planOf = (groups) => {
+    let runs = [];
+    try {
+      runs = readCodexReviewRuns(root, { spawn });
+    } catch {
+      // Nothing measured.
+    }
+    return reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs, maxParts: args.maxParts });
+  };
+
+  // `--plan`: the plan, and nothing else. It needs the range and how its files group, which is git alone:
+  // no Codex is looked for, no home is made or asked for, and nothing is logged or recorded. The tree may
+  // hold uncommitted changes, which stop a review: a plan is of the committed range and claims nothing.
+  // It never refuses a range for its size either, since saying the size is what it is for.
+  if (args.plan) {
+    const from = git(spawn, root, ['merge-base', base, 'HEAD']);
+    if (!from) {
+      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
+      return 1;
+    }
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines });
+    if (split.error) {
+      error(`${split.error}, so there is no plan of its review.`);
+      return 1;
+    }
+    const plan = planOf(split.groups);
+    for (const line of planLines(plan)) log(line);
+    const needs = needsFlagLine(plan);
+    if (needs !== null) log(needs);
+    return 0;
+  }
+
   let outcome = 'unavailable';
   // The id of the run line of a reviewed attempt, for its record; a skip launches nothing and has none.
   let runId;
@@ -891,14 +959,33 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // session is held to. The effort is the injected one when the comparison asked for another, so a cell
     // is held to the effort it was launched with, not to the constant.
     const wanted = { model: REVIEW_MODEL, effort };
-    // The parts a large range is reviewed in: `null` for a range that is one part. Worked out before
-    // anything is probed, made or launched, so a range that cannot be split leaves nothing behind.
-    const plan = planParts(spawn, root, { from, head, maxChangedLines: args.partLines, intent });
-    if (plan.error) {
-      error(`${plan.error}${plan.error.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
+    // How the files of the range group, its plan, and the parts a large range is reviewed in. All of it is
+    // worked out before anything is probed, made or launched, so a range that cannot be split, or that is
+    // more parts than a run starts, leaves nothing behind.
+    const notSplit = (why) => {
+      error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
+      return 1;
+    };
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines });
+    if (split.error) return notSplit(split.error);
+    // The plan, where the progress of the run is written and before its first session: what the run is
+    // about to spend is on the screen before any of it is spent.
+    const plan = planOf(split.groups);
+    for (const line of planLines(plan)) log(line);
+    // A bound of parts. A run over it is one nobody chose the size of: it is not started until it names
+    // its count, and the refusal says the count, so that going on is a decision made with the plan above
+    // it. The bound is the count the run named when it named one, larger or smaller than the default.
+    if (plan.over) {
+      error(
+        `The review of ${plan.range} was not started and nothing was recorded: its ${plan.parts.length} parts are more than ${partsBound(plan)}.\n` +
+          `To run it all the same, pass \`--max-parts ${plan.parts.length}\`. The cheaper way is to review each slice when it closes, from the commit before it (\`--base\`).`,
+      );
       return 1;
     }
-    ({ parts } = plan);
+    // `null` for a range that is one part.
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent });
+    if (made.error) return notSplit(made.error);
+    ({ parts } = made);
     // The environment of the `--version` probe, and what the session's is made from: the session adds a
     // `CODEX_HOME` of its own below. The probe only asks for the version, which no home changes, so it
     // runs before that home is made.

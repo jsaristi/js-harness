@@ -10,6 +10,7 @@ import {
   childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
+import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
@@ -225,6 +226,15 @@ async function run(argv, extra = {}, env = {}) {
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
+}
+
+/** What a run logged after its plan, as lines. Every run prints its plan first
+ * (`./lib/codex-review-plan.mjs`), and the plan ends with the line of its estimate. */
+function afterPlan(out) {
+  const lines = out.split('\n');
+  const estimate = lines.findIndex((line) => /^(Estimate|No estimate): /.test(line));
+  assert.notEqual(estimate, -1, `no plan in:\n${out}`);
+  return lines.slice(estimate + 1);
 }
 
 const reviewedRecord = (base, head) => ({
@@ -995,7 +1005,7 @@ test('without --session the review runs in the lean session: the lean argv, in a
   assert.deepEqual(fake.calls[0].opts.env, { ...env, CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
   assert.deepEqual(seen, [true]);
   assert.deepEqual(listed(leanHomesDir(osHome)), []);
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high); this can take several minutes.`);
+  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high); this can take several minutes.`);
   const line = onlyRun(root);
   assert.deepEqual([line.outcome, line.session, line.model, line.effort, line.prompt], ['reviewed', 'lean', 'gpt-6.1-sol', 'high', 'codex']);
 });
@@ -1083,12 +1093,13 @@ test('the usage names no session: its flags are those of a review, and its secon
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
   const [, , usage, loads, ...more] = result.err.split('\n');
-  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
   assert.equal(
     loads,
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
   );
-  assert.deepEqual(more, []);
+  // What a person has to know of the cost before starting: how to see it, and that a large run is not started by itself.
+  assert.deepEqual(more, ['--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.']);
   assert.ok(loads.includes('on gpt-6.1-sol at high effort'), loads);
   // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
   assert.doesNotMatch(result.err, /--session|current|medium|own model|your own Codex configuration loaded/);
@@ -1166,7 +1177,7 @@ test('the line that announces the review names the session, and the model and th
   const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
   for (const flags of [[], ['--session', 'lean']]) {
     const lean = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fakeCodex(reviewed(root, base)));
-    assert.equal(lean.out.split('\n')[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, high); this can take several minutes.`, flags.join(' '));
+    assert.equal(afterPlan(lean.out)[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, high); this can take several minutes.`, flags.join(' '));
   }
 });
 
@@ -1902,7 +1913,7 @@ test('the line that announces the review names this command\'s own prompt when i
   const { root, base, head } = makeRepo();
   const result = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   assert.equal(
-    result.out.split('\n')[0],
+    afterPlan(result.out)[0],
     `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`,
   );
 });
@@ -3047,8 +3058,8 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
   // What is said: that the range is split and why each part is asked as it is, each part as it starts, and the record.
   const lines = result.out.split('\n');
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  assert.equal(lines[0], `The range ${short} changes 8 lines in 3 files, more than the 6 a part holds, so it is reviewed in 2 parts, one after another.`);
-  assert.equal(lines[1], 'Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 8 lines in 3 files, more than the 6 a part holds, so it is reviewed in 2 parts, one after another.`);
+  assert.equal(afterPlan(result.out)[1], 'Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
   assert.ok(lines.includes(`Codex is reviewing part 1 of 2 of ${short} (2 files, 6 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
   assert.ok(lines.includes(`Codex is reviewing part 2 of 2 of ${short} (1 file, 2 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
   assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short}, made in 2 parts, in .*codex-reviews\\.jsonl\\.$`));
@@ -3152,7 +3163,7 @@ test('a lean range of more files than a part holds is reviewed in parts though i
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  assert.equal(result.out.split('\n')[0], `The range ${short} changes 82 lines in 41 files, more files than the 40 a part holds, so it is reviewed in 2 parts, one after another.`);
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 82 lines in 41 files, more files than the 40 a part holds, so it is reviewed in 2 parts, one after another.`);
   assert.deepEqual(readCodexReviewRuns(root).map((line) => line.part), [{ index: 1, of: 2, files: 40, changedLines: 80 }, { index: 2, of: 2, files: 1, changedLines: 2 }]);
   // The command the first part is told to run names forty files and stops there.
   const asked = fake.calls[0].child.received.text;
@@ -3232,7 +3243,7 @@ test('--doc goes into the prompt of every part, and under --prompt own nothing i
   assert.match(result.out, /reviewed in 2 parts/);
 });
 
-test('a lean range at or under the bound is one part: the review is the one it was, under either prompt, and nothing is said or logged of parts', async () => {
+test('a lean range at or under the bound is one part: the review is the one it was, under either prompt, and nothing is said or logged of parts but its plan, which is of one', async () => {
   const { root, base, head } = makeThreeFileRepo();
   // Eight changed lines: under the default bound, and exactly at one of eight.
   for (const bound of [[], ['--part-lines', '8'], ['--part-lines', '5000']]) {
@@ -3244,7 +3255,8 @@ test('a lean range at or under the bound is one part: the review is the one it w
       assert.equal(fake.calls.length, 1, name);
       assert.deepEqual(fake.calls[0].args, argv, name);
       if (flags === OWN) assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head }), name);
-      assert.doesNotMatch(result.out, /\bparts?\b/i, name);
+      assert.match(result.out.split('\n')[0], /, 1 part, 8 changed lines in 3 files\.$/, name);
+      assert.doesNotMatch(afterPlan(result.out).join('\n'), /\bparts?\b/i, name);
       const logged = readCodexReviewRuns(root).at(-1);
       assert.equal('part' in logged, false, name);
       assert.equal(runPart(logged), null, name);
@@ -3651,6 +3663,233 @@ test('the parts must show every changed line of the range between them: a split 
   assert.equal(loggedRun(root), false);
 });
 
+// --- the plan: what a run would start and send, said before anything is started ---
+
+/** The content of `file`, or `null` when it is not there. */
+const contentOf = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+
+/** A machine where nothing may be started: no `codex` is on it, and a Codex home that is made, a session
+ * that is launched or an OS home that is asked for fails the run. `deps` are those of such a run, `home` the
+ * `--home` flag of a state dir of its own, and `untouched(which)` asserts that nothing was looked for,
+ * launched, made, logged or recorded, by what the repository and that state dir hold. */
+function startsNothing(root) {
+  const state = tmp('js-harness-codex-review-state-');
+  const fake = fakeCodexInParts();
+  const lookedFor = [];
+  const spawn = (command, args, opts) => {
+    if (command === 'git') return spawnSync(command, args, opts);
+    lookedFor.push(command);
+    return { error: new Error('spawn codex ENOENT') };
+  };
+  const never = (what) => () => {
+    throw new Error(`nothing ${what} here`);
+  };
+  const before = [codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf);
+  const untouched = (which) => {
+    assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
+    assert.deepEqual(lookedFor, [], `${which}: Codex was not looked for`);
+    assert.deepEqual([codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf), before, `${which}: no record and no run line`);
+    assert.deepEqual(listed(state), [], `${which}: no home was made`);
+  };
+  return { deps: { ...fake, spawn, createLeanHome: never('makes a Codex home'), homedir: never('asks for the OS home, where the login is') }, home: ['--home', state], untouched };
+}
+
+/** The lines of the plan of `root`'s review of `base..head` in `parts` (each `{ files, changedLines }`), from
+ * the run log the repository holds now; `over` is `maxParts`, for a run that named a count. */
+const planned = (root, base, head, parts, over = {}) =>
+  planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts, runs: readCodexReviewRuns(root), ...over }));
+
+// The three files of `makeThreeFileRepo` as one part, and as the two of `--part-lines 6`.
+const AS_ONE = [{ files: ['a.txt', 'b.txt', 'c.txt'], changedLines: 8 }];
+const AS_TWO = [{ files: ['a.txt', 'b.txt'], changedLines: 6 }, { files: ['c.txt'], changedLines: 2 }];
+
+test('--plan prints the plan of the run and exits 0, and starts nothing: no Codex is looked for, no home is made, nothing is logged or recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  for (const [flags, parts] of [[[], AS_ONE], [['--part-lines', '6'], AS_TWO], [['--session', 'lean', '--prompt', 'own', '--keep-home', '--part-lines', '6'], AS_TWO]]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), planned(root, base, head, parts), which);
+    nothing.untouched(which);
+  }
+  // What it says, with `--part-lines` changing the parts as it does for a run. No part was ever measured in
+  // this repository, so there is no estimate, and the plan says that instead of a number.
+  const nothing = startsNothing(root);
+  const two = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual(two.out.split('\n'), [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 2 parts, 8 changed lines in 3 files.`,
+    '  part 1 of 2: 2 files, 6 changed lines',
+    '  part 2 of 2: 1 file, 2 changed lines',
+    'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.',
+  ]);
+  // A plan is of the committed range and records nothing, so uncommitted changes, which stop a review, do not stop it.
+  fs.writeFileSync(path.join(root, 'a.txt'), 'not committed\n', 'utf8');
+  const dirty = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(dirty.code, 0, dirty.err);
+  assert.deepEqual(dirty.out, two.out);
+  nothing.untouched('a dirty tree');
+  // A range git cannot size has no plan: that is an error, exit 1, and not a plan of no part.
+  const unsized = (command, args, opts) => (command === 'git' && args.includes('--numstat') ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
+  const failed = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: unsized });
+  assert.deepEqual([failed.code, failed.out], [1, '']);
+  assert.match(failed.err, /^Could not run `git diff --numstat` over [0-9a-f]{7}\.\.[0-9a-f]{7} to know how large the range is, so there is no plan of its review\.$/);
+  nothing.untouched('a range that cannot be sized');
+});
+
+test('--plan over a range that changes nothing is a plan of no part, which still names the model and the effort, and exits 0', async () => {
+  const { root, head } = makeRepo();
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(result.err, '');
+  assert.deepEqual(result.out.split('\n'), [
+    `Plan of the Codex review of ${head.slice(0, 7)}..${head.slice(0, 7)}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+    'No estimate: the range changes no file, so there is no part to review.',
+  ]);
+  nothing.untouched('an empty range');
+});
+
+test('a run prints its plan before its first session starts, and the estimate of a plan is made from the run lines this machine wrote', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  // Each session leaves the rollout files a real one does: 297,479 input tokens, on the model and at the effort of a review.
+  const ran = [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]];
+  const twoSessions = (during) => fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran, during },
+    { stdout: partShown(root, base, head, 'c.txt'), threads: ran, during },
+  );
+  /** A run in two parts, with what it had logged by the time each of its sessions started. */
+  const inTwoParts = async () => {
+    const out = [];
+    const onScreen = [];
+    const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(() => onScreen.push([...out])), randomUUID: runIds(), log: (line) => out.push(line) });
+    assert.equal(result.code, 0, result.err);
+    return { out, onScreen };
+  };
+  // The first run of this repository: nothing was measured yet, and its plan says so before anything is spent.
+  const none = planned(root, base, head, AS_TWO);
+  assert.match(none.at(-1), /^No estimate: /);
+  const first = await inTwoParts();
+  assert.deepEqual(first.onScreen[0].slice(0, none.length), none, 'on screen when the first session started');
+  assert.ok(first.onScreen[0].findIndex((line) => line.startsWith('Codex is reviewing part 1 of 2')) >= none.length, 'and before the session is announced');
+  assert.equal(first.out.filter((line) => line.startsWith('Plan of the Codex review')).length, 1, 'once a run, not once a part');
+  // Its two parts are in the run log now, 6 and 2 changed lines at 297,479 input tokens each, and the plan
+  // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
+  const measured = planned(root, base, head, AS_TWO);
+  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
+  assert.ok(measured[3].startsWith(
+    'Estimate: about 890,000 input tokens in all. It rests on 2 parts this machine\'s run log measured, at another effort or in a session that named none ' +
+      '(2 of them ran on gpt-6.1-sol at high effort, and from 5 on it rests on those alone): ',
+  ), measured[3]);
+  const nothing = startsNothing(root);
+  const plan = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(plan.code, 0, plan.err);
+  assert.deepEqual(plan.out.split('\n'), measured);
+  nothing.untouched('--plan');
+  // And the next run prints that same plan, before its first session.
+  const second = await inTwoParts();
+  assert.deepEqual(second.onScreen[0].slice(0, measured.length), measured);
+  // A range reviewed whole is planned as its one part, on the same stream, before its session.
+  const out = [];
+  const onScreen = [];
+  const whole = await run(['--base', 'HEAD~1', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), () => onScreen.push([...out])), log: (line) => out.push(line) });
+  assert.equal(whole.code, 0, whole.err);
+  assert.equal(onScreen[0].length, 4, 'the header, the part and the estimate, and the session that is announced');
+  assert.equal(onScreen[0][0], `Plan of the Codex review of ${base.slice(0, 7)}..${head.slice(0, 7)}: gpt-6.1-sol at high effort, 1 part, 8 changed lines in 3 files.`);
+  assert.match(onScreen[0][1], /^ {2}part 1 of 1: 3 files, 8 changed lines, about [\d,]+ input tokens$/);
+  assert.match(onScreen[0][3], /^Codex is reviewing /);
+});
+
+test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {
+  const repoOf = (count) => {
+    const names = Array.from({ length: count }, (_, index) => `f${index}.txt`);
+    return { names, ...makeRepoWith(Object.fromEntries(names.map((name) => [name, 'one\n'])), Object.fromEntries(names.map((name) => [name, 'two\n']))) };
+  };
+  // Seven files of two changed lines each, a part a file.
+  const SEVEN = ['--part-lines', '2'];
+  const { names, root, base, head } = repoOf(7);
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const plan = planned(root, base, head, names.map((name) => ({ files: [name], changedLines: 2 })));
+  assert.match(plan[0], / 7 parts, 14 changed lines in 7 files\.$/);
+  const HOW = 'To run it all the same, pass `--max-parts 7`. The cheaper way is to review each slice when it closes, from the commit before it (`--base`).';
+  for (const [flags, bound] of [
+    [[], 'the 6 a run starts without `--max-parts`'],
+    [['--session', 'lean', '--prompt', 'own', '--keep-home'], 'the 6 a run starts without `--max-parts`'],
+    [['--max-parts', '6'], '`--max-parts 6` allows'],
+    [['--max-parts', '1'], '`--max-parts 1` allows'],
+  ]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 1, which);
+    assert.deepEqual(result.out.split('\n'), plan, `${which}: the plan is shown`);
+    assert.equal(result.err, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}`, which);
+    nothing.untouched(which);
+  }
+  // `--plan` never refuses: it says what the run would need, or nothing when the run names its count.
+  for (const [flags, said] of [
+    [[], ['This is more parts than the 6 a run starts without `--max-parts`: the run would need `--max-parts 7`.']],
+    [['--max-parts', '3'], ['This is more parts than `--max-parts 3` allows: the run would need `--max-parts 7`.']],
+    [['--max-parts', '7'], []],
+  ]) {
+    const which = `--plan ${flags.join(' ')}`;
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, which);
+    assert.equal(result.err, '', which);
+    assert.deepEqual(result.out.split('\n'), [...plan, ...said], which);
+    nothing.untouched(which);
+  }
+  // With its count named, the run goes on: seven sessions and one record.
+  const seven = fakeCodexInParts(...names.map((name) => ({ stdout: partShown(root, base, head, name) })));
+  const allowed = await run(['--base', 'HEAD~1', ...SEVEN, '--max-parts', '7', '--cwd', root], { ...seven, randomUUID: runIds() });
+  assert.equal(allowed.code, 0, allowed.err);
+  assert.equal(seven.calls.length, 7);
+  assert.equal(readCodexReviews(root).length, 1);
+  // Six parts are at the bound, and run with no flag.
+  const six = repoOf(6);
+  const fake = fakeCodexInParts(...six.names.map((name) => ({ stdout: partShown(six.root, six.base, six.head, name) })));
+  const atBound = await run(['--base', 'HEAD~1', ...SEVEN, '--cwd', six.root], { ...fake, randomUUID: runIds() });
+  assert.equal(atBound.code, 0, atBound.err);
+  assert.equal(fake.calls.length, 6);
+  assert.doesNotMatch(`${atBound.out}\n${atBound.err}`, /--max-parts/);
+});
+
+test('--max-parts takes a positive integer, and --plan does not stand beside --unavailable: each is a usage error, and nothing runs', async () => {
+  const { root, base, head } = makeRepo();
+  const cases = [
+    [['--max-parts', '0'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '-3'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '1.5'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '1e1'], /^--max-parts must be a positive integer/],
+    [['--max-parts', 'all'], /^--max-parts must be a positive integer/],
+    [['--max-parts', ''], /^--max-parts must be a positive integer/],
+    [['--max-parts', '99999999999999999999'], /^--max-parts must be a positive integer/],
+    [['--max-parts'], /^--max-parts requires a value/],
+    [['--max-parts', '0', '--plan'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '0', '--unavailable', 'model rejected'], /^--max-parts must be a positive integer/],
+    [['--plan', '--unavailable', 'model rejected'], /^--plan does not go with --unavailable: a plan starts nothing and records nothing, and a skip is a record/],
+    [['--unavailable', 'model rejected', '--plan'], /^--plan does not go with --unavailable/],
+  ];
+  for (const [flags, message] of cases) {
+    const which = flags.join(' ');
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 2, which);
+    assert.match(result.err, message, which);
+    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> \[--plan\] .*\[--part-lines <n>\] \[--max-parts <n>\]/, which);
+    assert.equal(result.out, '', which);
+    nothing.untouched(which);
+  }
+  // Beside `--unavailable` a count of parts is taken and changes nothing, as the other flags of a run are: a
+  // skip launches nothing, so there are no parts to count.
+  const skip = await run(['--base', 'HEAD~1', '--max-parts', '3', '--unavailable', 'model rejected', '--cwd', root], fakeCodex(''));
+  assert.equal(skip.code, 0, skip.err);
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')]);
+});
+
 // --- what the comparison of the configurations varies: by injection alone, never by a flag ---
 
 const CODEGRAPH_CONFIG = ['mcp_servers.codegraph.command="codegraph"', 'mcp_servers.codegraph.args=["serve", "--mcp"]'];
@@ -3681,7 +3920,7 @@ test('an injected effort is the effort the command passes: in the argv, in the r
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(fake.calls[0].args, atEffort(leanArgv(base), 'medium'));
   assert.deepEqual([onlyRun(root).model, onlyRun(root).effort], ['gpt-6.1-sol', 'medium']);
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, medium); this can take several minutes.`);
+  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, medium); this can take several minutes.`);
 });
 
 test('an injected effort is what the session is held to: a review that ran at it stands, and one that ran at the command\'s own does not', async () => {
@@ -3714,12 +3953,14 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.equal(usage.code, 2);
-  // The whole usage: the flags, then the line that says what a review loads and what it runs on.
+  // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
+  // one that says how its cost is seen first.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       'the review runs on gpt-6.1-sol at high effort, which the command fixes.',
+    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x'];
   for (const flags of [[], ['--session', 'lean']]) {
