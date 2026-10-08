@@ -162,7 +162,10 @@ function parseArgs(argv) {
   const session = get('--session') ?? SESSIONS[0];
   if (!SESSIONS.includes(session)) throw new ArgError('--session must be `lean` or `current`');
   // The three that follow belong to the lean session, which is the one a review runs in unless
-  // `--session current` says otherwise: so that is the only way to give one of them wrong.
+  // `--session current` says otherwise: so that is the only way to give one of them wrong. Beside
+  // `--unavailable` they are taken and change nothing, as they always were under `--session lean`: a skip
+  // launches nothing, so there is no home to keep, no prompt to send and no range to split, and the skip
+  // that was asked for is recorded all the same (`--doc` is still read first, as a flag given wrong is).
   const keepHome = argv.includes('--keep-home');
   if (keepHome && session !== 'lean') throw new ArgError('--keep-home does not go with --session current: only the lean session has a Codex home of its own to keep');
   const prompt = get('--prompt') ?? PROMPTS[0];
@@ -575,6 +578,13 @@ const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
 
 const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
+// What a refusal to make the lean session's home ends with. The lean session is what a review runs in when
+// no session is named, and it needs two things the `current` one never did: a login in `auth.json`, to
+// link, and the harness's state dir on the volume of the Codex home, since a hard link cannot cross
+// volumes. On a machine without one of them a plain `codex-review` is refused where it used to review, so
+// the refusal names the session that still does, whatever the reason the home could not be made.
+const CURRENT_IS_THE_WAY_OUT = 'The way out: `--session current` runs the review on your own Codex configuration, which needs no Codex home of its own.';
+
 const NO_CODEX =
   'Could not run `codex`. Install it with `npm i -g @openai/codex` and log in with `codex login`, ' +
   'or record an explicit skip with `--unavailable <reason>`; nothing was recorded.';
@@ -942,7 +952,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           if (part === null || part.index === 1) sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
           leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId, ...(measured === null ? {} : { seed: measured.seed }) });
         } catch (err) {
-          error(`${err.message}\nThe ${lean ? 'lean review' : 'review'} was not started and nothing was recorded.`);
+          // A measured `current` session is that session already, so it is told of no other.
+          error(`${err.message}\nThe ${lean ? 'lean review' : 'review'} was not started and nothing was recorded.${lean ? `\n${CURRENT_IS_THE_WAY_OUT}` : ''}`);
           return { exit: 1 };
         }
       }

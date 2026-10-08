@@ -1139,6 +1139,38 @@ test('--unavailable with a session launches nothing and records the skip as befo
   assert.equal(loggedRun(root), false);
 });
 
+// A flag that only shapes a launch says nothing beside `--unavailable`, which launches nothing. It is
+// accepted all the same, as it always was beside an explicit `--session lean`: the skip is what was asked
+// for, and refusing it over a flag that changes nothing of it would only cost a second command. With lean
+// the default, the same holds with no session named.
+test('the flags of the lean session beside --unavailable change nothing of the skip: it is recorded, and nothing is launched, made or kept', async () => {
+  const doc = featureDoc();
+  const shaping = [['--keep-home'], ['--prompt', 'own'], ['--prompt', 'own', '--doc', doc], ['--part-lines', '400'], ['--keep-home', '--prompt', 'own', '--part-lines', '6']];
+  for (const flags of shaping) {
+    for (const session of [[], ['--session', 'lean']]) {
+      const { root, base, head } = makeRepo();
+      const mine = fakeHome();
+      const state = tmp('js-harness-codex-review-state-');
+      const never = () => {
+        throw new Error('a skip makes no Codex home');
+      };
+      const fake = fakeCodex('');
+      const argv = ['--base', 'HEAD~1', ...session, ...flags, '--unavailable', 'model rejected', '--home', state, '--cwd', root];
+      const result = await run(argv, { ...fake, homedir: mine.homedir, createLeanHome: never });
+      const which = [...session, ...flags].join(' ');
+      assert.equal(result.code, 0, `${which}: ${result.err}`);
+      assert.equal(result.err, '', which);
+      assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')], which);
+      assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
+      assert.equal(fake.probes.length, 0, `${which}: nor probed`);
+      assert.equal(loggedRun(root), false, which);
+      assert.deepEqual(listed(state), [], `${which}: no home was made, so none was kept`);
+      assert.doesNotMatch(result.out, /kept|Codex is reviewing|part/i, which);
+      assert.equal(fs.statSync(mine.auth).nlink, 1);
+    }
+  }
+});
+
 // --- the lean session's home: a folder of its own for one run, with the login as a hard link ---
 
 /** `fake` with a look at Codex's home at the moment it is launched: `during(home, opts)`. */
@@ -1458,6 +1490,54 @@ test('a lean home that cannot be made launches nothing: exit 1 with the reason, 
   assert.equal(loggedRun(root), false);
   assert.deepEqual(listed(mine.homes), []);
   assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+// The last line of the refusal when the home of the lean session cannot be made. Lean is what a review
+// runs in when no session is named, so a machine it cannot run on is told the session that needs no home.
+const WAY_OUT = 'The way out: `--session current` runs the review on your own Codex configuration, which needs no Codex home of its own.';
+
+test('with no session named, a home that cannot be made is a refusal that names the way out, `--session current`: nothing launched, nothing left', async () => {
+  const { root, base, head } = makeRepo();
+  const failing = (code) => (options) => createLeanHome({
+    ...options,
+    link: () => {
+      throw Object.assign(new Error(`${code}: link failed`), { code });
+    },
+  });
+  const noFolder = () => {
+    throw new Error('Could not make the lean Codex home X (EACCES).');
+  };
+  const cases = [
+    // Codex is not logged in through `auth.json`: a login in the system keyring, or none.
+    ['no auth.json', { login: null }, undefined, /There is no .*auth\.json, so Codex is not logged in there/],
+    // The harness's state dir on another volume than the Codex home.
+    ['EXDEV', {}, failing('EXDEV'), /\(EXDEV\): the two folders are on different volumes/],
+    ['EPERM', {}, failing('EPERM'), /Could not hard-link .*\(EPERM\)/],
+    ['mkdir', {}, noFolder, /Could not make the lean Codex home X \(EACCES\)/],
+  ];
+  for (const [name, home, createHome, reason] of cases) {
+    for (const flags of [[], ['--session', 'lean']]) {
+      const mine = fakeHome(home);
+      const fake = fakeCodex(reviewed(root, base));
+      const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir, ...(createHome ? { createLeanHome: createHome } : {}) });
+      const which = `${name} ${flags.join(' ')}`;
+      assert.equal(result.code, 1, which);
+      assert.match(result.err, reason, which);
+      assert.deepEqual(result.err.split('\n').slice(-2), ['The lean review was not started and nothing was recorded.', WAY_OUT], which);
+      assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
+      assert.equal(wrote(root), false);
+      assert.equal(loggedRun(root), false);
+      assert.deepEqual(listed(mine.home), ['.codex'], `${which}: no home, and no state dir, is left`);
+      if (home.login !== null) assert.equal(fs.statSync(mine.auth).nlink, 1);
+    }
+  }
+  // And the way out is one: on the machine with no `auth.json`, the session it names does review.
+  const loggedOut = fakeHome({ login: null });
+  const current = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...current, homedir: loggedOut.homedir });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(current.calls.length, 1);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
 
 test('a run id that cannot be made stops a lean review before it starts, since it names the home', async () => {
@@ -3584,6 +3664,7 @@ test('a measured current session whose home cannot be seeded is not started: no 
   assert.equal(result.code, 1);
   assert.match(result.err, /the template of the home is gone/);
   assert.match(result.err, /The review was not started and nothing was recorded/);
+  assert.doesNotMatch(result.err, /--session current/, 'it is the current session already: there is no other to name');
   assert.equal(fake.calls.length, 0);
   assert.equal(loggedRun(root), false);
   assert.deepEqual(listed(mine.homes), []);

@@ -172,6 +172,69 @@ test('a folder that is already there is never taken over: the error names it and
   assert.equal(links(realAuth), 1);
 });
 
+// --- two reviews at once: the folder of the homes may go while a home is being made in it ---
+
+/** A `mkdir` that does what another review ending does at the worst moment: each of the first `times`
+ * times the run folder is about to be made, the folder of the homes, empty until then, is removed first,
+ * and with it the state dir. The real `mkdir` then fails as it would, with `ENOENT`. `attempts` counts
+ * how often the run folder was tried. */
+function vanishingParent(parent, times) {
+  const seen = { attempts: 0 };
+  const mkdir = (dir, options) => {
+    if (!options?.recursive) {
+      seen.attempts += 1;
+      if (seen.attempts <= times) {
+        fs.rmdirSync(parent);
+        fs.rmdirSync(path.dirname(parent));
+      }
+    }
+    return fs.mkdirSync(dir, options);
+  };
+  return { mkdir, seen };
+}
+
+test('a folder of the homes that vanished while the home was being made is made again, once: the home is there, with the login, and goes as any other', () => {
+  const { realHome, realAuth, parent } = homes();
+  const before = identity(realAuth);
+  const { mkdir, seen } = vanishingParent(parent, 1);
+  const lean = createLeanHome({ realHome, parent, id: 'run-1', mkdir });
+  assert.equal(seen.attempts, 2, 'the first try found no parent, the second made it again');
+  assert.equal(lean.home, path.join(parent, 'run-1'));
+  assert.deepEqual(fs.readdirSync(lean.home), ['auth.json']);
+  assert.equal(identity(path.join(lean.home, 'auth.json')), before);
+  assert.equal(links(realAuth), 2);
+  assert.equal(lean.dispose(), null);
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'nothing is left over');
+  assert.equal(links(realAuth), 1);
+  assert.equal(read(realAuth), LOGIN);
+});
+
+test('a folder of the homes that vanishes again is the refusal it was, after one more try and no third: nothing is left behind', () => {
+  const { realHome, realAuth, parent } = homes();
+  const { mkdir, seen } = vanishingParent(parent, Infinity);
+  assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', mkdir }), (err) => {
+    assert.ok(err.message.startsWith(`Could not make the lean Codex home ${path.join(parent, 'run-1')} (ENOENT)`), err.message);
+    return true;
+  });
+  assert.equal(seen.attempts, 2, 'one retry, not a loop');
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'the folders the second try made are gone too');
+  assert.equal(links(realAuth), 1);
+});
+
+test('only a parent that is not there is tried again: any other failure to make the home is said at once', () => {
+  const { realHome, realAuth, parent } = homes();
+  let attempts = 0;
+  const mkdir = (dir, options) => {
+    if (options?.recursive) return fs.mkdirSync(dir, options);
+    attempts += 1;
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  };
+  assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', mkdir }), /Could not make the lean Codex home .*\(EACCES\)/);
+  assert.equal(attempts, 1);
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'the folders made to hold it go when it could not be made');
+  assert.equal(links(realAuth), 1);
+});
+
 // --- disposing of it ---
 
 test('dispose removes the folder and one name of the login, never the login: same bytes, one link again', () => {
@@ -323,6 +386,33 @@ test('a folder of the homes that cannot be removed is nothing to say: dispose do
   // The folder of the homes is tried, and once it did not go nothing above it is.
   assert.deepEqual(tried, [parent, parent, parent]);
   assert.equal(links(realAuth), 1);
+});
+
+test('a state dir that cannot be removed once the folder of the homes is gone is nothing to say either: dispose ends as it does when both go', () => {
+  for (const code of ['EBUSY', 'EPERM']) {
+    const { realHome, realAuth, parent } = homes();
+    const { state } = stateOf(parent);
+    const tried = [];
+    // The first step for real, the second refused, as a folder another program holds open is.
+    const rmdir = (dir) => {
+      tried.push(dir);
+      if (dir === state) throw Object.assign(new Error(`${code}: rmdir failed`), { code });
+      fs.rmdirSync(dir);
+    };
+    const lean = createLeanHome({ realHome, parent, id: 'run-1', rmdir });
+    codexWrites(lean.home);
+    let said;
+    assert.doesNotThrow(() => { said = lean.dispose(); });
+    assert.equal(said, null, code);
+    assert.deepEqual(tried, [parent, state], code);
+    assert.equal(fs.existsSync(parent), false, 'the first step is not undone');
+    assert.deepEqual(fs.readdirSync(state), [], 'and the state dir is left, empty');
+    assert.equal(links(realAuth), 1);
+    assert.equal(read(realAuth), LOGIN);
+    // A later run is not in the way of it: its home is made in the folder that stayed, and both go then.
+    assert.equal(createLeanHome({ realHome, parent, id: 'run-2' }).dispose(), null);
+    assert.equal(fs.existsSync(state), false);
+  }
 });
 
 test('dispose({ keep: true }) says when the lean name had become another file, and still removes that name alone', () => {

@@ -146,8 +146,10 @@ function identity(file) {
  * `auth.json`, when the link cannot be made (another volume, no permission), or when what was made is not
  * the same file. "Nothing" includes `parent` and the state dir above it, when making the home is what
  * made them: a folder that goes takes them with it while they are empty (`removeEmptyHomesDir`), and
- * `dispose()` does the same. `link`, `rm` and `rmdir` are the file system calls, replaced in tests. */
-export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, rmdir = fs.rmdirSync, seed }) {
+ * `dispose()` does the same. A folder of the homes that another review removed while this home was being
+ * made is made again, once (see below). `link`, `rm`, `rmdir` and `mkdir` are the file system calls,
+ * replaced in tests. */
+export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, rmdir = fs.rmdirSync, mkdir = fs.mkdirSync, seed }) {
   if (typeof id !== 'string' || !SAFE_ID.test(id)) throw new Error(`The id of a lean Codex home must be a plain folder name, got ${JSON.stringify(id)}.`);
   if (seed !== undefined && typeof seed !== 'function') throw new Error('The seed of a Codex home must be a function.');
   const realAuth = path.join(path.resolve(realHome), AUTH);
@@ -164,10 +166,24 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
   }
   if (!real.isFile()) throw new Error(`${realAuth} is not a file, so the lean session has no login to share.`);
 
-  fs.mkdirSync(path.dirname(folder), { recursive: true });
+  // The folder of the homes, then the run folder in it. Between the two another review may end and take
+  // the folder of the homes with it, empty as it still is (`removeEmptyHomesDir`): the run folder then has
+  // no parent, `ENOENT`. So both are made again, once. One more try and no loop: a second `ENOENT` is not
+  // that race, and is said. Any other failure is said at once, a folder that is already there among them.
+  const makeFolder = () => {
+    mkdir(path.dirname(folder), { recursive: true });
+    mkdir(folder);
+  };
   try {
-    fs.mkdirSync(folder);
+    try {
+      makeFolder();
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      makeFolder();
+    }
   } catch (err) {
+    // What was made to hold the home goes when the home could not be made, while it holds nothing.
+    removeEmptyHomesDir(path.dirname(folder), rmdir);
     throw new Error(`Could not make the lean Codex home ${folder} (${err.code ?? err.message}).`);
   }
   let seeded;

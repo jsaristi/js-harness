@@ -1036,6 +1036,40 @@ What follows from it:
   carried follow-up R3-exact-coverage-large-range is marked closed by this feature (parts
   instead of a tolerance), and the one about `mcp_servers.context7.type` says a review no
   longer meets it.
+- 2026-10-08: T13 and T15 committed as `fefec21` (gate green). gentle-ai assessed
+  `87854b1..fefec21` as `medium`, review due (864 lines, 12 files); granted without asking,
+  lineage `review-4dfd76380c113ffc`, approved and acknowledged. No blocker; two warnings
+  and two suggestions, all four accepted and given back to the same writer, test first:
+  - R3-concurrent-review-enoent-on-default (`bin/lib/codex-review-home.mjs:84-92`): with
+    lean the default, every review takes the path where one run can remove the folder
+    another is creating. Making a home retries once on `ENOENT`.
+  - R3-default-flip-activates-lean-preconditions (`bin/codex-review.mjs:133`): a machine
+    with the harness home on another volume, or a login that is not in `auth.json`, ran a
+    plain review before and is refused now. The refusal names `--session current` as the
+    way out, and tests hold it for a missing `auth.json` and for `EXDEV`.
+  - R3-keep-home-unavailable-unasserted (`bin/codex-review.mjs:167`): the flags that shape
+    a launch beside `--unavailable` with no session named are no longer usage errors and
+    nothing says what they do. Pinned by tests, refused unless the base accepted them.
+  - R3-rmdir-second-step-failure-untested (`bin/lib/codex-review-home.mjs:88`): the case
+    where the folder of the homes goes and `.js-harness` then cannot. A test.
+- 2026-10-08: the four closed by that writer. Re-run by the parent: the home file 37 of
+  37; the command file 196 of 196 by the writer (398 s).
+  - Two reviews at once: making a home tries once more when a folder vanished under it
+    (`ENOENT`), and no third time; red first, with the real file system giving the error
+    after the test removed the empty parent. When a home cannot be made, the empty folders
+    made to hold it go too.
+  - The way out: every refusal to make the lean home ends with "The way out:
+    `--session current` runs the review on your own Codex configuration, which needs no
+    Codex home of its own.", with or without `--session lean` named; red first. Held for a
+    missing `auth.json`, `EXDEV`, `EPERM` and a folder that cannot be made: exit 1,
+    nothing launched, no record, nothing left; and `--session current` reviews on the
+    machine with no `auth.json`.
+  - The flags beside `--unavailable`: kept accepted, since the base accepted them under
+    `--session lean` and the skip launches nothing. Pinned for five combinations, each with
+    and without the session named: the skip recorded, nothing launched, no home made. It
+    could not be red first, being what the code already did.
+  - The second removal that fails: pinned, not red first for the same reason.
+  - Follow-up closed: the window between two reviews at once (above, in Follow-ups).
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1191,8 +1225,8 @@ not taken.
   from its summary. Keep the JSONL of every attempt beside the run log, or behind a flag.
 - Closed with T13 (2026-10-08): `uninstall` did not know
   `<home>/.js-harness/codex-review-homes`; a run now removes that folder when it leaves it
-  empty. Left of it: two reviews at once on one machine can make one stop with `ENOENT`
-  when the other removes the empty folder between its two folder creations.
+  empty. Two reviews at once: making a home tries once more when the other removed the
+  empty folder under it.
 - A `--home` or `JS_HARNESS_HOME` on another volume than the Codex home makes `lean` refuse
   with `EXDEV`; on this host the temp folder is on C: and the repository on D:.
 - The `codex --version` probe runs before the lean home exists, so in the user's home.
