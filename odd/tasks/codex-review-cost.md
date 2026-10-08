@@ -82,7 +82,7 @@ push of that branch.
   rollout says, does not stand; the comparison's `current` configuration can no longer be run
   (its readings stay); usage, comments and the roadmap's Review and Effort rows say so — route:
   delegated writer
-- [ ] T2 Only code is reviewed, and nothing twice: documents, eval readings and paths a git
+- [x] T2 Only code is reviewed, and nothing twice: documents, eval readings and paths a git
   attribute marks are left out of the parts and of the evidence rule, and the run says what it
   left out; a range whose earlier commits a record already covers is reviewed from where the
   records end — route: delegated writer
@@ -410,11 +410,90 @@ push of that branch.
   it stood before each of those two reviews, the third quartile would have said 1,450,000
   and 1,030,000, under both; the highest says 3,170,000 and 1,690,000, over one and 14%
   under the other. The same range today: about 990,000 to 2,980,000.
+- 2026-10-08: that fix and the range committed as `dbc71f0` (gate green), and its two
+  reviews.
+  - gentle-ai on `7ae9cb8..dbc71f0` (860 changed lines in 11 files, medium, consent granted
+    without asking): approved and acknowledged (lineage `review-77460eaa2fa2138c`), no
+    finding. Its first bound status ran out of time before it started anything; asked once
+    more, it went on.
+  - Codex on `ed1fd0e..dbc71f0`, its plan read first (2 parts, 642 changed lines in 10
+    files, "Left out of the review: 1 Markdown document, 53 changed lines", about 490,000 to
+    1,460,000 input tokens), inside the login proof (PASS): recorded, 803,690 input tokens
+    (680,960 cached), 5,607 output, 255 s. The first plan given as a range, and the cost fell
+    inside it. Part 2 "correct"; one finding in part 1, P2, accepted: with
+    `log.showSignature` set and a signed commit in the range, git writes what it says of the
+    signature before the line of the commit, which the parser on NUL alone reads as a list of
+    another shape, so `check --push` fails a branch whose every commit has a record. The
+    parser before it passed over such text. It fails closed, so nothing unreviewed is let
+    through; the fix is `--no-show-signature` on that log, and it goes first in the next
+    slice, which moves that code.
+- 2026-10-08: T2, second half, by one delegated writer (route: delegated), red first for the
+  defect and for each behaviour. The writer: the coverage, records, plan and scope modules
+  66 of 66, the push check 91 of 91 (208 s), `check` 73 of 73, the comparison 36 of 36, the
+  command file 230 of 230 (720 s); the push check of this branch passes (24 code commits,
+  all covered). 1,497 changed lines. Re-run by the parent: the four modules, 66 of 66, and
+  the two plans below.
+  - The finding of the last Codex review, first: `--no-show-signature` on the log, red with
+    a real signed commit in a repository that shows signatures. Probed with one: only `log`
+    and `show` change what they print; `rev-list`, `diff`, `rev-parse`, `merge-base` and
+    `status` do not, and that log is the only `log` of the command and of `check`.
+  - One definition, `bin/lib/codex-review-coverage.mjs`, moved out of `check`: the code
+    commits of a range, the records that cover them, and where the records end. `check`
+    asks it of the range of the default branch, the command of the range it was given.
+  - A run starts at the parent of the oldest code commit no record covers, when that is
+    safe: that commit has a parent, the given start is that parent or an ancestor of it,
+    and every uncovered commit lies after it. Otherwise, and when the records cannot be read
+    against the range, the range as it was given, with a line that says why: in doubt, never
+    less than what was asked. The plan, the parts and their bound, the prompts, the lines a
+    session must have seen and the record are those of the range that is left, and the run
+    says in one line, before its plan, how many code commits a record already covers.
+  - A range with no code commit left starts nothing and records nothing, exit 0, and says
+    how many of the covering records are a skip or a range with nothing to review. So does
+    a range that holds no code commit at all, documents only, which until now appended a
+    record nobody asked for. A commit and its revert, uncovered, still appends one
+    `nothing-to-review` record; a second run finds it covered and appends nothing, which
+    closes the suggestion gentle-ai made.
+  - `--again` takes the range as it was given and does not read the records; it holds
+    beside `--plan` and beside `--unavailable`. A skip follows the same rule as a review:
+    over a range covered whole it records nothing.
+  - A review whose rollout file names no model does not stand: exit 1, no record, and
+    nothing of what it answered is shown. The effort keeps its rule. No real rollout is
+    kept in the repository; of the 56 lean lines of the run log of this machine, the 51
+    written since the fields exist all name the model and the effort.
+  - The row of the plain `check` takes its start from the same rule, so it sizes the review
+    the command would run; a test asks both of one history.
+  - The cells of the comparison review their range as given: `everyFile`, which only they
+    pass, implies it. Its readings and its report are untouched.
+  - On this branch: `codex-review --base 5663c8c --plan` says "Nothing to review:
+    5663c8c..dbc71f0 holds 10 code commits, and a Codex review record already covers all of
+    them", where `--again --plan` gives 12 parts and 5,880 changed lines.
+  - Left by the writer, accepted as they are: a narrowed record has no test of its own for
+    what it covers at another tip (it covers its own `base..head`, by the code that reads
+    every record); the logged command line of a cell, replayed by hand, starts where the
+    records end, unlike the cell; the test file of the command now takes about 12 minutes.
+- 2026-10-08: that slice was first committed whole (`bc680fe`, gate green, never pushed),
+  and gentle-ai refused it at the start: 1,571 changed lines, document included, and
+  `lens_context_budget_exceeded`. Its bound is on the size of the evidence, not on a count
+  of lines: 1,401 lines passed on this branch and 1,571 did not, the lines of this slice
+  being long. So the working bound of a slice here is about 1,300 changed lines, not the
+  1,900 written until now. Being the tip and unpushed, the commit was taken back and made
+  again as two, each through the gate, with the same tree at the end:
+  - `6ad93ab`: the fix of the signed commit, the coverage code moved to its module, and
+    the row of `check` sized from where the records end (699 changed lines).
+  - the commit of this entry: the command, its tests, the comparison and this document.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
 
 ## Follow-ups
+- F7-gate-near-its-timeout: the gate runs the tests under a bound of 20 minutes, and on
+  2026-10-08 the first commit of the second half of T2 was refused once on that bound alone
+  ("npm run test timed out after 1200 s", no test failing) and passed on the retry in 1,044
+  s for the whole gate, on a machine doing nothing else. What sets it is one file,
+  `bin/codex-review.test.mjs`: 230 tests that each make a real repository, 12 minutes alone
+  and more beside the other files. Splitting that file lets the runner spread it over the
+  cores; it is a move of thousands of lines, so it is several commits under the review
+  bound, and its own piece of work. Until then a commit can fail on time, and is retried.
 - F2-whole-range-runs-feed-no-estimate: a run line of a range reviewed whole holds no count
   of changed lines, so it never enters the estimate of a plan. Smaller since the first half
   of T2: a one-part range that leaves a file out is asked by its files and logs its part,
@@ -436,18 +515,14 @@ push of that branch.
   recorded as such, and the command and `check` read one definition of what a review reads.
 
 ## Next step
-In this order, each slice committed when it is green and kept under about 1,900 changed
-lines, deletions counted. A defect that is known is fixed before the Codex review of its
+In this order, each slice committed when it is green and kept under about 1,300 changed
+lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. The fix of the four findings is committed; gentle-ai and Codex on it, from `ed1fd0e`,
-   the plan read first.
-2. The second half of T2: a range whose earlier commits a record covers starts where the
-   records end, a range the records cover whole starts nothing and records nothing (the
-   suggestion gentle-ai made of equal records), and a flag to review again on purpose. With
-   it, the rule decided on 2026-10-08: a lean review whose rollout names no model does not
-   stand. The row of `check` sizes what such a review would read.
-3. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
-   measurement of the part size, is put to Sebastián with its count before any of it runs.
+1. gentle-ai on each of the two commits of the second half of T2 (from `dbc71f0`, then from
+   `6ad93ab`), and Codex on both in one run from `dbc71f0`, the plan read first; what they
+   find is fixed and reviewed the same way. That closes T4. Then T6.
+2. T5, the measurement of the part size, is put to Sebastián with its count before any of
+   it runs.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
 (asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which

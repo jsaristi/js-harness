@@ -40,7 +40,9 @@
 // What a cell reviews is not varied, and is kept as it was measured. Since 2026-10-08 `codex-review` leaves
 // documents and what a project marks out of a review, and asks a range that leaves files out by its files.
 // Both ranges here change a Markdown file, which every reading was taken with under review, so each cell is
-// run with `everyFile`: it reads every file of its range, and is asked what it was asked.
+// run with `everyFile`: it reads every file of its range, and is asked what it was asked. The same holds for
+// where a review starts: `codex-review` starts a person's run where the Codex review records end, and a cell,
+// with `everyFile`, reviews its range from its base whatever a record covers.
 //
 // Where a range is reviewed. Never in this repository's own tree: `codex-review` reviews `base..HEAD` of
 // the folder it runs in and writes its record and its run log into that folder's git dir. `real` is a

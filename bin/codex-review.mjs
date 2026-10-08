@@ -58,8 +58,10 @@
 //
 // What a review ran on is read from that home as well: the model and the effort the review's sub-agent
 // wrote in its rollout file (`rolloutReading`). A session that ran on another model or at another effort
-// than the command passed is a failed attempt, whatever it answered, and it is the one attempt whose
-// rendered review is not passed through either. What a file does not name is not held against a review.
+// than the command passed is a failed attempt, whatever it answered, and so is one whose file names no
+// model at all: a review that cannot say which model it ran on is not a review on the one model. Theirs are
+// the attempts whose rendered review is not passed through either. An effort the file does not name is not
+// held against a review.
 //
 // What a review is asked is chosen with `--prompt`. `codex`, the default, is
 // `--base <merge-base>` with the sentence Codex writes itself. `own` is this command's prompt
@@ -111,6 +113,17 @@
 // run of 28 parts, started without either number having been seen, was more than half of what fifty
 // reviews spent (odd/tasks/codex-review-cost.md).
 //
+// No review is paid for twice (`bin/lib/codex-review-coverage.mjs`). Before its plan a run reads the review
+// records against the range it was given, by the definition `check --push` reads them with: the code commits
+// of the range, and which of them a record already covers. It starts at the parent of the oldest one no
+// record covers, where that is safe, and says so in a line that counts them; from there on its range is that
+// one, in the plan, the parts and their bound, the prompts, the lines a session must have seen, the run
+// lines and the record. A range with no code commit left starts nothing and records nothing, also when it
+// holds none at all (documents only), since the push check asks a record of code commits alone. `--plan`
+// says the same and spends nothing, and `--unavailable` records its skip for the range that is left.
+// `--again` is the way to review on purpose what has a record: the range as it was given, with the records
+// not read. So is a range whose records cannot be read against it, with a line that says why.
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, for an explicit skip, or for a range that held
 // commits and nothing to review, which started no session. `codex-review-runs.jsonl`
@@ -130,8 +143,9 @@
 // the command passes, in place of `REVIEW_EFFORT` (its cells were measured at `medium` and at `high`, and
 // stay what they measured); `extraCodexConfig`, more `-c` settings for the session (an MCP server);
 // `everyFile`, which makes the review read every file of the range, as every review did while the cells were
-// measured, so that none of them leaves a document out or is asked by its files; and `onResult`, which hands
-// back each attempt's run line and answer.
+// measured, so that none of them leaves a document out, is asked by its files, or starts later than its
+// range because a record covers part of it; and `onResult`, which hands back each attempt's run line and
+// answer.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -139,6 +153,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
+import { MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
@@ -167,15 +182,17 @@ export const REVIEW_EFFORT = 'high';
 // The second line of the usage is there because a person has to know that their own Codex configuration
 // is not loaded, and that nothing they pass or configure changes the model and the effort. The third, because
 // what a review costs is theirs to see before it is spent. The fourth, because a project has to know that a
-// review does not read every file, and how it says which others to leave out. `--session` is not in the
-// usage: there is one session, so there is nothing to choose (see `SESSION`).
+// review does not read every file, and how it says which others to leave out. The fifth, because a run that
+// reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
+// `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
   `--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
-  'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.';
+  'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
+  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -248,7 +265,9 @@ function parseArgs(argv) {
   // is a record. Neither is guessed at.
   const plan = argv.includes('--plan');
   if (plan && unavailable !== undefined) throw new ArgError('--plan does not go with --unavailable: a plan starts nothing and records nothing, and a skip is a record');
-  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, cwd: get('--cwd') ?? process.cwd() };
+  // The range as it was given, whatever the records say of it: beside a plan and beside a skip too.
+  const again = argv.includes('--again');
+  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, again, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -723,13 +742,25 @@ const modelAt = (model, effort) => `${model ?? 'a model its rollout file does no
  * error; `null` when it is, as far as it was measured. `passed` is what the command passed, `{ model, effort }`.
  *
  * Each of the two is held to on its own, and only where it is known: a model or an effort the file does not
- * name is not measured, and what was not measured is not held against a review. So a home with no rollout
- * file, or one whose files name neither, gives `null`. */
+ * name is not measured, and here what was not measured is not held against a review. So a home with no
+ * rollout file, or one whose files name neither, gives `null`: that its model has to be named at all is
+ * another rule, asked after this one (`MODEL_NOT_NAMED`). */
 function ranOnAnother(ran, passed) {
   const differs = (measured, named) => measured !== null && measured !== named;
   if (!differs(ran.model, passed.model) && !differs(ran.effort, passed.effort)) return null;
   return `its session ran on ${modelAt(ran.model, ran.effort)}, and the command passed ${modelAt(passed.model, passed.effort)}`;
 }
+
+/** Why a session whose rollout file names no model is not the review the command asked for, as a sentence
+ * for the run log and the error; `model` is the one the command passed.
+ *
+ * A review runs on one model alone, and the rollout file is the one place that says which it ran on. A
+ * session that names another is refused (`ranOnAnother`); one that names none was let stand, as not
+ * measured, and three reviews ran on another model unnoticed while nothing was read at all
+ * (odd/tasks/codex-review-cost.md). Every real lean session so far wrote the line, so a review that cannot
+ * say what it ran on is refused like one that ran on something else (decided on 2026-10-08). The model
+ * alone: an effort the file does not name is still not held against a review. */
+const MODEL_NOT_NAMED = (model) => `its session's rollout file names no model, so nothing says that it ran on ${model}, the model the command passed`;
 
 // How many files a message names before it counts the rest: a range has no bound of its own.
 const FILES_SHOWN = 8;
@@ -881,6 +912,50 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   return { parts };
 }
 
+/** What the Codex review records leave of `from..head` for a run to do (both full commit ids, `from` the
+ * commit the range starts at), by the definition `check --push` reads them with
+ * (`bin/lib/codex-review-coverage.mjs`); `given` is the range as the run names it, for what is said.
+ *
+ *  - `{ covered }`: nothing. No code commit of the range is without a record, or it holds none. `covered`
+ *    says which, how many they are and, since covered is not reviewed, how many of the records that cover
+ *    them are a skip or a range with nothing to review. The run then starts nothing and records nothing:
+ *    a second record of a range adds nothing the first did not say, and a second review of it is paid twice.
+ *  - `{ start, said }`: the range from `start`, the commit before the oldest code commit no record covers,
+ *    or `from` where starting later is not safe (`reviewStart`). `said` is the line that says the run
+ *    starts later than it was asked to, `null` when it does not.
+ *
+ * When the records cannot be read against the range, the range is taken as it was given, `from`, and `said`
+ * says so and why: in doubt a run does what it was asked, never less. Nothing here throws. */
+function leftByRecords(spawn, root, { from, head, given }) {
+  const asGiven = (why) => ({ start: from, said: `Could not tell which commits of ${given} a Codex review record already covers (${why}), so the range is taken as it was given.` });
+  let coverage;
+  let start;
+  try {
+    coverage = reviewCoverage(root, { from, tip: head, spawn });
+    if (coverage.unknown) return asGiven(coverage.unknown === MARKS_UNREAD ? 'git could not say which of their files a review leaves out' : 'git could not list them');
+    ({ start } = reviewStart(coverage.uncovered, { cwd: root, from, tip: head, spawn }));
+  } catch (err) {
+    return asGiven(`reading them failed: ${err?.message ?? err}`);
+  }
+  const held = coverage.codeCommits.length;
+  if (coverage.uncovered.length === 0) {
+    const done = 'Nothing was started and nothing was recorded';
+    if (held === 0) return { covered: `Nothing to review: ${given} holds no code commit, since none of its commits changes a file a review reads. ${done}.` };
+    const others = notReviews(coverage).length;
+    const notReviewed = others === 0 ? ''
+      : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review: \`js-harness check --push\` lists them)`;
+    return { covered: `Nothing to review: ${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${held === 1 ? 'it' : 'all of them'}${notReviewed}. ${done}; \`--again\` takes the range as it was given.` };
+  }
+  if (start === from) return { start, said: null };
+  const covered = held - coverage.uncovered.length;
+  return {
+    start,
+    said:
+      `${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${covered === 0 ? 'none' : thousands(covered)} of them: ` +
+      `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`,
+  };
+}
+
 // How many errors of an answer off its schema are named in the reason; the rest are counted.
 const ANSWER_ERRORS_SHOWN = 3;
 
@@ -915,7 +990,8 @@ function answerFailure({ reason, errors = [] }) {
  *  - `extraCodexConfig`: `key=value` settings added to the argv (`codexArgs`).
  *  - `everyFile`: `true` makes the review read every file of the range, the documents and what the project
  *    marks too (`rangeGroups`): nothing is left out, so a range of one part is reviewed whole, with Codex's
- *    own review under `--prompt codex` and the prompt of a range under `--prompt own`.
+ *    own review under `--prompt codex` and the prompt of a range under `--prompt own`. The range is the one
+ *    it was given, whatever the Codex review records cover (`startingAt`).
  *  - `onResult`: called with `{ run, logged, review }` for every attempt that launched Codex: its run line,
  *    whether the line reached the run log, and its answer as `normalizeAnswer` gives it (`null` when none
  *    was read). */
@@ -951,7 +1027,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     error(`${args.cwd} is not a git repository, so there is no range to record.`);
     return 1;
   }
-  const base = git(spawn, root, ['rev-parse', '--verify', `${args.base}^{commit}`]);
+  // Where the range of this run starts: the commit `--base` names, until the records have been read. A run
+  // that starts later than it was asked to (`startingAt`) has that later commit here from then on, so that
+  // its plan, its sessions, its run lines and its record are all of the one range it reviews.
+  let base = git(spawn, root, ['rev-parse', '--verify', `${args.base}^{commit}`]);
   if (!base) {
     error(`Cannot resolve --base ${args.base} to a commit in ${root}.`);
     return 1;
@@ -976,16 +1055,43 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs, maxParts: args.maxParts, leftOut });
   };
 
+  /** Where this run starts, once the Codex review records have been read against its range, `given..head`
+   * (`given` the commit the range starts at as it was asked for): that commit, a later one, or `null` when
+   * the records leave nothing of the range, which is then said, and is all the run does. A run that starts
+   * later says so here, before its plan, and `base` is that commit from here on.
+   *
+   * Nothing twice (odd/tasks/codex-review-cost.md): a review of a whole branch held four reviews of ranges
+   * reviewed an hour before, since a run reviewed from the base it was given whatever had a record. A plan,
+   * a review and a skip all start here, so a plan is of the run it stands before.
+   *
+   * `--again` is the way to review on purpose what has a record: the range is then taken as it was given,
+   * and the records are not read. Nor are they for a range that holds no commit, which has none a record
+   * could cover and no part either. A caller that asks for `everyFile` measures the review of the range it
+   * names, so its range is taken as it was given too. */
+  const startingAt = (given) => {
+    if (args.again || everyFile || given === head) return given;
+    const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}` });
+    if (left.covered !== undefined) {
+      log(left.covered);
+      return null;
+    }
+    if (left.said !== null) log(left.said);
+    if (left.start !== given) base = left.start;
+    return left.start;
+  };
+
   // `--plan`: the plan, and nothing else. It needs the range and how its files group, which is git alone:
   // no Codex is looked for, no home is made or asked for, and nothing is logged or recorded. The tree may
   // hold uncommitted changes, which stop a review: a plan is of the committed range and claims nothing.
   // It never refuses a range for its size either, since saying the size is what it is for.
   if (args.plan) {
-    const from = git(spawn, root, ['merge-base', base, 'HEAD']);
-    if (!from) {
+    const given = git(spawn, root, ['merge-base', base, 'HEAD']);
+    if (!given) {
       error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
       return 1;
     }
+    const from = startingAt(given);
+    if (from === null) return 0;
     const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile });
     if (split.error) {
       error(`${split.error}, so there is no plan of its review.`);
@@ -1041,11 +1147,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The branch's own changes start at the merge-base: a base that moved past the fork point (a
     // fetched main) would add its newer commits to a two-point diff, lines no review of the branch
     // prints. Codex reviews from the same commit, so both sides mean the same patch.
-    const from = git(spawn, root, ['merge-base', base, 'HEAD']);
-    if (!from) {
+    const given = git(spawn, root, ['merge-base', base, 'HEAD']);
+    if (!given) {
       error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
       return 1;
     }
+    // The review starts where the records end, and there is none to start over a range they cover whole.
+    const from = startingAt(given);
+    if (from === null) return 0;
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
     const patch = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', from, 'HEAD'], { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
@@ -1319,19 +1428,24 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // rollout file says, and then the sentence that says so (`ranOnAnother`). Asked of every attempt: each
       // ran in a home of its own, which was read.
       const another = ranOnAnother(spent, wanted);
-      // Whether the attempt stands: Codex completed, on the model and at the effort it was asked for as far
-      // as that was measured, its answer could be read when one is read, and its commands showed every
-      // changed line. Known before anything of the answer is printed, because the findings and the verdict
-      // of an attempt that does not stand are not a review, and are not shown as one.
-      const stands = completed && another === null && !(answered && !answered.ok) && evidence.inspected;
+      // Whether its rollout file says which model it ran on at all: one that does not is no review of the
+      // one model either (`MODEL_NOT_NAMED`).
+      const named = spent.model !== null;
+      // Whether the attempt stands: Codex completed, on the model it was asked for, which its rollout file
+      // names, and at the effort it was asked for as far as that was measured, its answer could be read
+      // when one is read, and its commands showed every changed line. Known before anything of the answer
+      // is printed, because the findings and the verdict of an attempt that does not stand are not a
+      // review, and are not shown as one.
+      const stands = completed && another === null && named && !(answered && !answered.ok) && evidence.inspected;
       for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
       // The review as Codex rendered it, passed through here for a range reviewed whole, as it always was.
       // That of a part is not: it holds the findings of the part, in Codex's words, and shown now it would
       // stand on the screen as a review of files whose range a later part may still leave unreviewed. It is
       // handed back instead (`rendered`), and shown with the others once every part has passed. Nor is that
-      // of a session that ran on another model, however it ended: the other attempts that do not stand show
-      // what the model that was asked for rendered, and this would be the review of one that was not.
-      if (evidence.review && alone && another === null) write(`${evidence.review}\n`);
+      // of a session that ran on another model, or that names none, however it ended: the other attempts
+      // that do not stand show what the model that was asked for rendered, and this would be the review of
+      // one that was not, or of one nobody can name.
+      if (evidence.review && alone && another === null && named) write(`${evidence.review}\n`);
       if (review && !stands) {
         log(NOT_STANDING);
       } else if (review && alone) {
@@ -1369,6 +1483,15 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const why = answerFailure(answered);
         logRun('failed', why);
         error(`Codex's turn completed, but ${why}; no record was written.\n${WAYS_ON}`);
+        return { exit: 1 };
+      }
+      // The session answered and its file does not say on which model. Asked after the answer, because a
+      // home with no rollout file names none either, and what is wrong there is that there is no session
+      // to read; asked before the evidence rule, which says how much was read and nothing of by what.
+      if (!named) {
+        const why = MODEL_NOT_NAMED(wanted.model);
+        logRun('failed', why);
+        error(`Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n${WAYS_ON}`);
         return { exit: 1 };
       }
       if (!evidence.inspected) {
@@ -1455,6 +1578,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       runId = passed.at(-1).runId;
     }
     outcome = 'reviewed';
+  } else {
+    // A skip follows the records as a review does: it is recorded for the range the records leave, and not
+    // at all over a range they cover whole, where it would say of commits that have a record that their
+    // review could not be made. A base that shares no history with HEAD is still a range a skip can name.
+    const from = startingAt(git(spawn, root, ['merge-base', base, 'HEAD']) ?? base);
+    if (from === null) return 0;
   }
 
   const file = writeRecord({

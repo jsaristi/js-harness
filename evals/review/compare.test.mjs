@@ -161,6 +161,13 @@ const rollout = (root, findings, said, ran = null) => jsonl(
   },
 );
 
+/** The model and the effort a Codex was launched with, read off its launch: the value of `-m` and of the
+ * `model_reasoning_effort` setting, in an argv or in the one command line a shell is handed on Windows. */
+function launchedOn(command, args) {
+  const line = [command, ...args].join(' ');
+  return { model: / -m "?([\w.-]+)/.exec(line)?.[1], effort: /model_reasoning_effort=\\?"([a-z]+)/.exec(line)?.[1] };
+}
+
 /** A fake async child: `stdout` is written, then it closes with `status`. It has a `stdin` when it was
  * spawned with one, and `received` is what was written there. */
 function fakeChild({ stdout, status, piped }) {
@@ -191,8 +198,12 @@ function fakeChild({ stdout, status, piped }) {
  * with `findings` in its home when it has one and is not ephemeral (`said` is the text of its answer, in
  * place of one built from the findings; `ran`, the model and the effort that file says the session ran
  * with), and ends with `status`. `calls` holds each launch with what `during(opts)` saw, and `order` what
- * happened in which order. */
-function fakeCodex({ findings = [], status = 0, shows = true, said, ran = null, probe = { status: 0, stdout: 'codex-cli 0.160.1\n' }, init = 0, during = () => ({}) } = {}) {
+ * happened in which order.
+ *
+ * Unless a test says what the session ran with, its file says what a real one does: the model and the effort
+ * it was launched with (`launchedOn`). A review whose file names no model does not stand, and `ran: null` is
+ * such a file. */
+function fakeCodex({ findings = [], status = 0, shows = true, said, ran, probe = { status: 0, stdout: 'codex-cli 0.160.1\n' }, init = 0, during = () => ({}) } = {}) {
   const calls = [];
   const tools = [];
   const order = [];
@@ -211,7 +222,7 @@ function fakeCodex({ findings = [], status = 0, shows = true, said, ran = null, 
     if (typeof home === 'string' && fs.existsSync(home)) {
       const dir = path.join(home, 'sessions', '2026', '10', '07');
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'rollout-2026-10-07T05-34-59-review.jsonl'), rollout(opts.cwd, findings, said, ran), 'utf8');
+      fs.writeFileSync(path.join(dir, 'rollout-2026-10-07T05-34-59-review.jsonl'), rollout(opts.cwd, findings, said, ran === undefined ? launchedOn(command, args) : ran), 'utf8');
     }
     const child = fakeChild({ stdout: events(patch), status, piped: opts.stdio?.[0] === 'pipe' });
     calls.push({ command, args, opts, child, seen });
@@ -514,9 +525,12 @@ test('a cell runs one review of its range and stores its reading: what ran, what
     recordedAt: '2026-10-07T12:00:00.000Z',
     cli: '0.160.1',
     session: 'lean',
+    // What the session's own file says it ran with, beside what the cell asked for: the two are the same.
     model: 'gpt-6.1-sol',
     effort: 'medium',
-    modelSource: 'command',
+    modelSource: 'session',
+    configuredModel: 'gpt-6.1-sol',
+    configuredEffort: 'medium',
     prompt: 'codex',
     promptVersion: null,
     outcome: 'reviewed',
@@ -531,7 +545,7 @@ test('a cell runs one review of its range and stores its reading: what ran, what
     score: { defects: 7, found: ['D1', 'D2'], missed: ['D3', 'D4', 'D5', 'D6', 'D7'], extra: 1, recall: 2 / 7 },
   });
   assert.deepEqual(Object.keys(stored), [
-    'schema', 'config', 'range', 'recordedAt', 'cli', 'session', 'model', 'effort', 'modelSource', 'prompt', 'promptVersion', 'outcome', 'reason',
+    'schema', 'config', 'range', 'recordedAt', 'cli', 'session', 'model', 'effort', 'modelSource', 'configuredModel', 'configuredEffort', 'prompt', 'promptVersion', 'outcome', 'reason',
     'usage', 'requests', 'firstRequestInputTokens', 'durationMs', 'coverage', 'parts', 'findings', 'findingBodyMax', 'verdict', 'score',
   ]);
   assert.ok(coverage.total > 100 && coverage.seen === coverage.total, JSON.stringify(coverage));
@@ -584,6 +598,16 @@ test('a lean cell is held to the effort it was measured with, not to the one `co
   const other = await run(['--cell', 'lean:seeded', '--force'], m, fakeCodex({ findings: FOUND, ran: { model: 'gpt-6.1-sol', effort: 'high' } }));
   assert.equal(other.code, 0, other.err);
   assert.deepEqual([reading(m, 'lean', 'seeded').outcome, reading(m, 'lean', 'seeded').reason], ['failed', 'its session ran on gpt-6.1-sol at high effort, and the command passed gpt-6.1-sol at medium effort']);
+});
+
+test('a cell whose session names no model is no review either: the reading is that of a failed cell, and says why', async () => {
+  const m = machine();
+  const result = await run(['--cell', 'lean:seeded'], m, fakeCodex({ findings: FOUND, ran: null }));
+  assert.equal(result.code, 0, result.err);
+  const stored = reading(m, 'lean', 'seeded');
+  assert.deepEqual([stored.outcome, stored.reason], ['failed', 'its session\'s rollout file names no model, so nothing says that it ran on gpt-6.1-sol, the model the command passed']);
+  // What the reading gives as its model is then what the cell asked for, and it says that nothing measured it.
+  assert.deepEqual([stored.model, stored.effort, stored.modelSource], ['gpt-6.1-sol', 'medium', 'command']);
 });
 
 test('a review that failed or was not inspected is still recorded, with its outcome and its reason; a recorded cell is refused without --force', async () => {
@@ -663,6 +687,26 @@ test('a cell reads every file of its range, as it did when it was measured: noth
   assert.match(result.out, /Plan of the Codex review of [^\n]*, 1 part, /);
   assert.doesNotMatch(result.out, /Left out of the review|by its files/);
   assert.deepEqual([reading(m, 'lean', 'seeded').outcome, reading(m, 'lean', 'seeded').promptVersion], ['reviewed', null]);
+});
+
+test('a cell reviews its range as it was given: from the base of the range, also where a run of `codex-review` would start later', async () => {
+  // Since 2026-10-08 a run starts where the Codex review records end, at the parent of the oldest code commit
+  // no record covers. The first commit of this range changes a document alone, so a run would start after it;
+  // the cell is the review of the whole range, which is what its reading is of.
+  const m = machine();
+  const repository = fakeRepository(m);
+  fs.writeFileSync(path.join(repository.root, 'odd', 'tasks', 'feature.md'), `${FEATURE_DOC}\nMore words.\n`, 'utf8');
+  git(repository.root, 'commit', '--quiet', '-am', 'docs: more words');
+  fs.writeFileSync(path.join(repository.root, 'f.txt'), 'three\n', 'utf8');
+  git(repository.root, 'commit', '--quiet', '-am', 'three');
+  const head = git(repository.root, 'rev-parse', 'HEAD');
+  m.repository = { ...repository, head, ranges: repository.ranges.map((range) => (range.name === 'real' ? { ...range, base: repository.head, head } : range)) };
+  const fake = fakeCodex();
+  const result = await run(['--cell', 'lean:real'], m, fake);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(launched(fake.calls[0]), launchedWith(leanCell(repository.head)), 'asked from the base of the range');
+  assert.match(result.out, new RegExp(`^Plan of the Codex review of ${repository.head.slice(0, 7)}\\.\\.${head.slice(0, 7)}: `, 'm'));
+  assert.doesNotMatch(result.out, /this run starts at|Nothing to review/);
 });
 
 // --- a cell over the real range: a clone beside the repository ---
