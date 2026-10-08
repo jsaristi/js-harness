@@ -1179,6 +1179,16 @@ What follows from it:
     a destination inside the home, or the same file as an entry of its top level. A hard
     link to a file deeper in the home is not caught, and it says so. The check itself is
     as it was.
+- 2026-10-08: those committed as `4f32fd9` (gate green). gentle-ai assessed
+  `d71e81d..4f32fd9` as `medium`, not due (`under_budget`, 171 lines): pending in the
+  slice, the next assessment starts from `d71e81d`. Codex,
+  `node bin/js-harness.mjs codex-review --base d71e81d`, default session, inside the login
+  proof: one review, not in parts, the patch is correct (confidence 0.95), no finding,
+  recorded; 74,009 input tokens (50,048 cached), 386 output, 4 requests, 26 s; the login
+  as it was. Fifty Codex reviews in the feature.
+- 2026-10-08: `node bin/check.mjs --push` on `4f32fd9`: `PASS codex-review 15 code commits
+  since origin/main, all covered by a Codex review record`. The branch is ready for a
+  push as far as that rule goes; the push is Sebastián's.
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1366,9 +1376,9 @@ T1 to T15 are checked. What is left is Sebastián's:
 1. The proposal for the Codex plugin (the section above Follow-ups): the `doctor` row,
    `codex:rescue`, the plugin's three hooks. Each part is his to accept or not; an accepted
    part is a small feature of its own or one command of his.
-2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push hook refuses a
-   branch with a code commit no review record covers: `7deddfc..a560e70` has its record
-   since 2026-10-08, and the commit that fixes its five findings needs its own.
+2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push rule passes on
+   `4f32fd9`: every code commit of the branch is covered by a Codex review record
+   (Progress, 2026-10-08). A commit made after it needs its own.
 
 Open, for him (item 1 is done: the review of the whole branch ran on 2026-10-08 and is
 recorded, Progress; kept as it was put to him):
@@ -1383,7 +1393,7 @@ recorded, Progress; kept as it was put to him):
    with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
    gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
 
-On the cap: forty-nine Codex reviews spent in this feature (one read nothing, forty-eight read their
+On the cap: fifty Codex reviews spent in this feature (one read nothing, forty-nine read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to
