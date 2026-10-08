@@ -9,7 +9,7 @@ import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { codexReviewsPath, isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
@@ -419,6 +419,45 @@ function headsPastTip(spawn, cwd, tip, heads) {
   return new Set(heads.filter((head) => head === tip || listed.has(head)));
 }
 
+// What `git log` is asked to write for each commit: an empty field, then its line,
+// `<id>\t<short id>\t<parents>\t<subject>` (four fields, the subject last so that a tab inside it
+// survives). `loggedCommits` reads what comes back, and takes for such a line only what `COMMIT_LINE` matches.
+const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
+const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
+
+/** The commits of what `git log -z --name-only --format=<COMMIT_FORMAT>` printed, in its order: each
+ * `{ id, shortId, isRoot, subject, files }`, the files as git names them, whatever a name holds. `null` when
+ * the text is not that: a list read as far as it goes would leave out a commit, or the files of one.
+ *
+ * With `-z` git ends every field with a NUL, the line of a commit and each name after it, and writes a name
+ * as it is, with a newline between the line of a commit and its first name. So the fields are told apart by
+ * the NULs alone, and a commit starts at the empty field the format writes before its line: two NULs with
+ * nothing between them, or the start of the text. No file name can stand for that. A name holds no NUL, and
+ * is never empty, so neither one name nor several in a row put two NULs together; and what comes after an
+ * empty field is never read as a name. What a name does hold is not looked at: one may be a control
+ * character, a newline, or the whole line of a commit, and is still the name it is. */
+function loggedCommits(log) {
+  const fields = log.split('\0');
+  // Every field ends with a NUL, so what follows the last one is empty unless the text was cut.
+  if (fields.pop() !== '') return null;
+  const commits = [];
+  let at = 0;
+  while (at < fields.length) {
+    const line = fields[at + 1];
+    if (fields[at] !== '' || line === undefined || !COMMIT_LINE.test(line)) return null;
+    const [id, shortId, parents, ...subject] = line.split('\t');
+    const files = [];
+    for (at += 2; at < fields.length && fields[at] !== ''; at += 1) {
+      // The first name of a commit comes after a newline, which is git's and not the name's.
+      const first = files.length === 0;
+      if (first && !/^\n./s.test(fields[at])) return null;
+      files.push(first ? fields[at].slice(1) : fields[at]);
+    }
+    commits.push({ id, shortId, isRoot: !parents, subject: subject.join('\t'), files });
+  }
+  return commits;
+}
+
 /** What the Codex review records say of the code commits between the default branch of `remote` and
  * `head`, for the two rows that read it: the `--push` row, which fails on a commit no record covers, and
  * the row of the plain check, which says how large the review of those commits is.
@@ -465,10 +504,8 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   if (inRange === null) return unknown(`cannot list the commits in ${base}..${head}`);
   const rangeIds = new Set(inRange.split('\n').filter(Boolean));
 
-  // `%x01` starts each commit; its `<id>\t<short id>\t<parents>\t<subject>` line (four fields, the
-  // subject last so a tab inside it survives) is followed by the names of the files it changes. With `-z`
-  // every name is written as it is and ends with a NUL, as the line of the commit does, with a newline
-  // between that NUL and the first name. Without it git writes a name that holds a quote, a backslash, a
+  // The line of each commit, followed by the names of the files it changes (`loggedCommits`). With `-z`
+  // every name is written as it is. Without it git writes a name that holds a quote, a backslash, a
   // control character or a letter outside ASCII in quotes and escapes (a Markdown file then ends in
   // `.md"`), and that is not a path its attributes can be asked for.
   //
@@ -476,17 +513,17 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   // default, but a repository whose configuration sets `diff.relative` has git write them from the folder
   // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
   // would list no file, and count as one that needs no record.
-  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--no-relative', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
-  if (log === null) return unknown(`cannot list the commits in ${base}..${head}`);
-  const commits = log
-    .split('\x01')
-    .filter(Boolean)
-    .map((chunk) => {
-      const [first, ...names] = chunk.split('\0');
-      const [id, shortId, parents, ...subject] = first.split('\t');
-      const files = names.map((name, at) => (at === 0 ? name.replace(/^\n/, '') : name)).filter(Boolean);
-      return { id, shortId, isRoot: !parents, subject: subject.join('\t'), files };
-    });
+  //
+  // `--no-renames`: the files a commit changes are those `js-harness codex-review` reads of it, and that
+  // command reads a range with renames off. With git's detection of them, which is on by default, a commit
+  // that moves a file lists the new path alone: moved to a path the project marks, the file that went,
+  // which that command reviews as removed, would be in no list, and the commit would need no record.
+  //
+  // `--root`: a commit with no parent lists the files it adds. It does by default, but not in a repository
+  // whose configuration turns `log.showRoot` off, where such a commit would list none.
+  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--root', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${baseRef}..${tip}`]);
+  const commits = log === null ? null : loggedCommits(log);
+  if (commits === null) return unknown(`cannot list the commits in ${base}..${head}`);
   const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn });
   if (leftOut === null) {
     return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`);
@@ -499,15 +536,19 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   // A record can cover part of the range only when its head is in it, or lies past the pushed tip
   // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
   // and expanding it would cost one git process per record ever written.
-  // A record of nothing to review is the exception to the second case: its range changes no file only
-  // as a whole (a commit and its revert), so a tip short of its head pushes a patch nobody reviewed.
+  // Two kinds of record are the exception to the second case, and cover only when what is pushed holds
+  // their head. A record of nothing to review: its range changes no file only as a whole (a commit and
+  // its revert), so a tip short of its head pushes a patch nobody reviewed. And a review that left out
+  // files the project marks (`leftMarkedFilesOut`): the marks are those of its head, and a commit of its
+  // range can be the one that adds them, so at a tip short of that head a file it left out can be code.
   const outside = (rec) => !rangeIds.has(rec.head);
-  const mayLiePast = valid.filter((rec) => outside(rec) && rec.outcome !== NOTHING_TO_REVIEW);
+  const onlyWhole = (rec) => rec.outcome === NOTHING_TO_REVIEW || leftMarkedFilesOut(rec);
+  const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
   const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
   const covers = [];
   let ignored = 0;
   for (const rec of valid) {
-    if (outside(rec) && (rec.outcome === NOTHING_TO_REVIEW || !pastTip.has(rec.head))) continue;
+    if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
     const covered = coveredBy(spawn, cwd, rec);
     if (covered) covers.push({ rec, covered });
     else ignored += 1;

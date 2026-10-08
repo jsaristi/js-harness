@@ -140,6 +140,32 @@ test('with fewer than five such runs every measured part counts, and the estimat
   assert.equal(all.estimate(200), 40000);
 });
 
+test('the high figure of a part is its changed lines times the highest input tokens a changed line cost, in its band', () => {
+  const runs = [
+    // Up to 400 changed lines: 100, 300 and 900 input tokens a changed line.
+    partRun(100, 10000), partRun(200, 60000), partRun(300, 270000),
+    // Above: 50, 100 and 400.
+    partRun(1000, 50000), partRun(2000, 200000), partRun(500, 200000),
+  ];
+  const spread = inputEstimator(runs, PAIR);
+  assert.deepEqual(spread.perChangedLine, { upToBound: 300, aboveBound: 100 });
+  assert.deepEqual(spread.highestPerChangedLine, { upToBound: 900, aboveBound: 400 });
+  assert.equal(spread.high(PART_MAX_CHANGED_LINES), 900 * PART_MAX_CHANGED_LINES, 'a part at the bound is in the lower band');
+  assert.equal(spread.high(PART_MAX_CHANGED_LINES + 1), 400 * (PART_MAX_CHANGED_LINES + 1));
+  // Never under what the cheapest run cost, as the estimate is not, and so never under the estimate.
+  assert.equal(spread.floor, 10000);
+  assert.deepEqual([spread.estimate(5), spread.high(5)], [10000, 10000]);
+  for (const lines of [0, 1, 40, 400, 401, 5000]) assert.ok(spread.high(lines) >= spread.estimate(lines), `${lines} changed lines`);
+  // A band of fewer than three runs takes the highest of them all, as it takes their median.
+  const thin = inputEstimator(runs.slice(0, 5), PAIR);
+  assert.deepEqual(thin.highestPerChangedLine, { upToBound: 900, aboveBound: 900 });
+  // One measured part: the highest it cost a changed line is what it cost, and the two figures are one.
+  const one = inputEstimator([partRun(100, 30000)], PAIR);
+  assert.deepEqual([one.estimate(200), one.high(200)], [60000, 60000]);
+  // And with no measured part there is no high figure either.
+  assert.equal(inputEstimator([], PAIR).high, null);
+});
+
 // --- the plan ---
 
 const BASE = 'a'.repeat(40);
@@ -174,6 +200,8 @@ test('the plan names the range, the model, the effort, the parts with their file
     changedLines: 1294,
     // The sum of what is printed for the parts, so the plan adds up.
     inputTokens: 201000,
+    // Every measured part of a band cost a changed line the same, so the high figure is the same figure.
+    inputTokensHigh: 201000,
     basis: { runs: 6, samePair: true, atPair: 6, bandAt: 400 },
     maxParts: 6,
     maxPartsGiven: false,
@@ -186,6 +214,45 @@ test('the plan names the range, the model, the effort, the parts with their file
     '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
     `Estimate: about 201,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}`,
   ]);
+});
+
+// The same six, and three more whose sessions looked further into the code than their parts were large: 900
+// input tokens a changed line up to the bound of a part, 400 above it. The medians are still 300 and 100.
+const SPREAD = [...MEASURED, partRun(100, 30000), partRun(200, 60000), partRun(300, 270000), partRun(1000, 100000), partRun(2000, 200000), partRun(500, 200000)];
+const RANGE =
+  ' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: ' +
+  'how far a session looks into the code moves what it costs more than the size of its part does.';
+
+test('the estimate of the whole is a range when the measured parts did not cost a changed line alike: from the median to the most one cost', () => {
+  const plan = planOf([part(2, 380), part(1, 914)], SPREAD);
+  // Each part keeps one figure, the one from the median; the range is of the whole.
+  assert.deepEqual(plan.parts.map((one) => Object.keys(one)), [['index', 'of', 'files', 'changedLines', 'inputTokens'], ['index', 'of', 'files', 'changedLines', 'inputTokens']]);
+  assert.deepEqual(plan.parts.map((one) => one.inputTokens), [110000, 91000]);
+  // 380 x 900 is 342,000 and 914 x 400 is 365,600: each to two figures, as the figures of the parts are, and added up.
+  assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [201000, 710000]);
+  assert.deepEqual(planLines(plan), [
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
+    '  part 1 of 2: 2 files, 380 changed lines, about 110,000 input tokens',
+    '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
+    `Estimate: about 201,000 to 710,000 input tokens in all. It rests on 12 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}${RANGE}`,
+  ]);
+  // The high figure is never the smaller of the two, whatever the rounding of each part does.
+  for (const lines of [1, 37, 115, 383, 400, 401, 955, 3228]) {
+    const one = planOf([part(1, lines), part(1, lines + 1)], SPREAD);
+    assert.ok(one.inputTokensHigh >= one.inputTokens, `${lines} changed lines`);
+  }
+});
+
+test('one figure is said as one: with a single measured part, or parts that all cost a changed line the same, there is no range to speak of', () => {
+  for (const runs of [[partRun(100, 30000)], MEASURED]) {
+    const plan = planOf([part(1, 200)], runs);
+    assert.deepEqual([plan.inputTokens, plan.inputTokensHigh], [60000, 60000]);
+    assert.match(planLines(plan).at(-1), /^Estimate: about 60,000 input tokens in all\. /);
+    assert.doesNotMatch(planLines(plan).at(-1), /higher figure|about [\d,]+ to /);
+  }
+  // And where there is no estimate there is no high figure.
+  assert.equal(planOf([part(1, 200)]).inputTokensHigh, null);
+  assert.equal(planOf([], SPREAD).inputTokensHigh, null);
 });
 
 test('an estimate is printed to two figures, whatever its size, and a small part is put at what the cheapest run cost', () => {

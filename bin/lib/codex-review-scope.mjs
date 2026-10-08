@@ -160,9 +160,12 @@ export function leftOutSaid({ files, changedLines, documents, marked }) {
 }
 
 /** The patch of a range without the sections of the files a review leaves out: `patch` is what
- * `git diff --no-renames <from> <head>` printed, `paths` the files of the range in the order
- * `git diff --numstat -z --no-renames <from> <head>` gives them, and `why` what `leftOutOf` said of them.
- * The patch as it is when none of them is left out.
+ * `git diff --submodule=short --no-renames <from> <head>` printed, `paths` the files of the range in the
+ * order `git diff --numstat -z --no-renames <from> <head>` gives them, and `why` what `leftOutOf` said of
+ * them. The patch as it is when none of them is left out.
+ *
+ * `--submodule=short`, because the patch has to be one section a file: a submodule that moved is counted as
+ * a file, and under `diff.submodule=log` or `diff` git writes a line of summary for it and no section.
  *
  * A section is told to be of a file by its place, never by the name in its header: git writes the sections
  * in the order it counts the files in, and it writes a name that holds a quote, a backslash or a character

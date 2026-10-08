@@ -370,6 +370,46 @@ push of that branch.
     subfolder drop the files outside it, so a code commit elsewhere needed no record. Both
     calls of `check` pass `--no-relative` now. The command was already right, every git
     call of it running at the top, which a test now pins.
+- 2026-10-08: that fix committed as `ed1fd0e` (gate green). Codex on `469e26f..ed1fd0e`,
+  its plan read first (4 parts, 1,308 changed lines in 13 files, "Left out of the review: 1
+  Markdown document, 89 changed lines", about 890,000 input tokens), inside the login proof
+  (PASS): recorded, 1,956,411 input tokens (1,697,152 cached), 15,201 output, 660 s. Two
+  parts "correct"; four findings in the other two, all P2, all accepted:
+  - `check` listed the files of a commit with rename detection on, so a code file moved
+    into a marked folder read as a commit of marked files alone and needed no record.
+  - A record that left marked files out covered an earlier tip, where the mark did not
+    exist yet and the file was code.
+  - The list of commits was split on a byte a file name can hold, so a commit whose only
+    file had that name read as no code commit.
+  - With `diff.submodule=log` a range that changes a submodule and leaves a file out was
+    refused before anything started, its patch having one section fewer than its files.
+- 2026-10-08: the four fixed by one delegated writer (route: delegated), red first with each
+  finding's own reproduction. The writer: scope 15 of 15, plan 25 of 25, records 15 of 15,
+  the push check 89 of 89 (190 s), `check` 73 of 73, the hook 7 of 7, the command file 219
+  of 219 (582 s), the comparison 104 of 104; the push check of this branch passes (23 code
+  commits, all covered). Re-run by the parent: plan, records and scope, 55 of 55.
+  - `--no-renames` on the log of `check`, as the command has; and `--root`, since with
+    `log.showRoot` off a root commit listed no file (found by the writer, red observed).
+  - A record's `leftOut` says how many of the files were documents and how many were
+    marked. A record that left a marked file out covers only when what is pushed holds its
+    head, the rule the record of nothing to review has. Markdown constrains nothing: no
+    commit can change that rule. A record with a `leftOut` of the older shape fails
+    closed, as if it had left marked files out; there is one, `469e26f..ed1fd0e`.
+  - The log is parsed on NUL alone: each commit starts at an empty field, which no file
+    name can be. An answer of another shape fails closed.
+  - `--submodule=short` on the two patches the proof compares, at one more git process a
+    part. Not on the command a session is asked to run: the prompt module was outside the
+    slice, and pinning one side alone would fail a session after it had spent.
+- 2026-10-08: the estimate of a plan, by the same writer. Twice the plan was under half of
+  what a review of several parts cost (1,045,000 against 2,314,747, and 890,000 against
+  1,956,411), and the second rested on runs at the review's own effort: what a part costs
+  follows how far the session looks into the code more than its size. At `high` the 13
+  measured parts cost from 296 to 2,278 input tokens a changed line. The plan now gives a
+  range for the total: the figure from the median and a higher one from the most a changed
+  line cost in each band, and says that the higher one is no ceiling. Made from the log as
+  it stood before each of those two reviews, the third quartile would have said 1,450,000
+  and 1,030,000, under both; the highest says 3,170,000 and 1,690,000, over one and 14%
+  under the other. The same range today: about 990,000 to 2,980,000.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -380,6 +420,16 @@ push of that branch.
   of T2: a one-part range that leaves a file out is asked by its files and logs its part,
   and nearly every slice changes its feature document. What is left is the one-part range
   that changes no document and no marked file.
+- F4-prompt-pins-no-submodule-format: the command a part's session is asked to run does not
+  pin `--submodule=short`, so the proof pays a second `git diff` a part to compare like with
+  like. Pinning it in the prompt removes that process and is a new prompt version.
+- F5-marks-that-change: two cases the push check still lets through, both needing a
+  project to change its marks. A commit after a record's head removes a mark: the record
+  goes on covering a file it left out (it would have to hold the paths it left out). And
+  `diff.ignoreSubmodules=all` hides a moved submodule from the size, the patch and the
+  list of commits alike, so it is in no review and in no code commit.
+- F6-high-figure-widens: the higher figure of an estimate is the most a changed line cost,
+  so one very small part in the log, a few lines at a session's fixed cost, will widen it.
 - F3-old-git: reading the marks needs git 2.40 (`check-attr --source`). `doctor` could say
   so of a machine with an older one, before a review refuses to start there.
 - F1-what-code-is: closed on 2026-10-08. A range with nothing to review that holds commits is
@@ -389,7 +439,8 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted. A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. Codex on the first half of T2, from `469e26f`, its plan read first.
+1. The fix of the four findings is committed; gentle-ai and Codex on it, from `ed1fd0e`,
+   the plan read first.
 2. The second half of T2: a range whose earlier commits a record covers starts where the
    records end, a range the records cover whole starts nothing and records nothing (the
    suggestion gentle-ai made of equal records), and a flag to review again on purpose. With

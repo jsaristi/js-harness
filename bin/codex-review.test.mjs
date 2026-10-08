@@ -3796,8 +3796,10 @@ test('a run prints its plan before its first session starts, and the estimate of
   // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
   const measured = planned(root, base, head, AS_TWO);
   assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
-  // Both ran on the model and at the effort of a review, so nothing is said of another effort.
-  assert.ok(measured[3].startsWith('Estimate: about 890,000 input tokens in all. It rests on 2 parts this machine\'s run log measured on gpt-6.1-sol at high effort: '), measured[3]);
+  // Both ran on the model and at the effort of a review, so nothing is said of another effort. The whole is
+  // a range: its high figure puts both parts at the 148,740 a changed line of the dearer one, 890,000 and 300,000.
+  assert.ok(measured[3].startsWith('Estimate: about 890,000 to 1,190,000 input tokens in all. It rests on 2 parts this machine\'s run log measured on gpt-6.1-sol at high effort: '), measured[3]);
+  assert.ok(measured[3].endsWith(' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: how far a session looks into the code moves what it costs more than the size of its part does.'), measured[3]);
   const nothing = startsNothing(root);
   const plan = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(plan.code, 0, plan.err);
@@ -3824,7 +3826,7 @@ test('a run log that cannot be read is one that measured nothing: the plan says 
   // A run that leaves two measured parts in the log, so that there is an estimate to lose.
   const first = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
   assert.equal(first.code, 0, first.err);
-  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 input tokens/);
+  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 to 1,190,000 input tokens/);
   const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
   assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
   /** `spawn`, but the first time git is asked where the common dir is, which is how the run log is found,
@@ -3983,6 +3985,8 @@ function makeMixedRepo() {
 }
 
 const LEFT_OUT_LINE = 'Left out of the review: 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines).';
+// The same, as a record holds it: the documents apart from what the project marks, which `check --push` reads.
+const LEFT_OUT = { files: 2, changedLines: 6, documents: { files: 1, changedLines: 2 }, marked: { files: 1, changedLines: 4 } };
 const BY_ITS_FILES = 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.';
 
 test('a range that also changes a document and a file the project marks is asked by the files it reads, held to their changed lines alone, and says what it left out', async () => {
@@ -4025,7 +4029,7 @@ test('a range that also changes a document and a file the project marks is asked
     );
     // One record, which `check --push` reads as any other, with what the review did not read; it is not one made in parts.
     const record = readCodexReviews(root).at(-1);
-    assert.deepEqual(record, { ...reviewedRecord(base, head), leftOut: { files: 2, changedLines: 6 } }, which);
+    assert.deepEqual(record, { ...reviewedRecord(base, head), leftOut: LEFT_OUT }, which);
     assert.equal(isValidCodexReview(record), true, which);
     assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short} in .*codex-reviews\\.jsonl\\.$`), which);
   }
@@ -4065,7 +4069,7 @@ test('in parts, the files left out are in no part and in no prompt, and the part
     assert.doesNotMatch(asked, /\.md|\.json/);
   });
   assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [1, 2].map((index) => [{ index, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }]));
-  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(2), runs: [idOf(1), idOf(2)], leftOut: { files: 2, changedLines: 6 } }]);
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(2), runs: [idOf(1), idOf(2)], leftOut: LEFT_OUT }]);
   // The check that the parts leave nothing out is made against the patch without the sections of the files
   // left out, told apart by their place. A patch that is not one section a file refuses the run.
   const cut = (command, args, opts) => {
@@ -4078,6 +4082,81 @@ test('in parts, the files left out are in no part and in no prompt, and the part
   assert.equal(refused.code, 1);
   assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
   assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
+});
+
+/** A repo whose second commit moves a submodule (`sub`, from one commit to another, neither of them here),
+ * changes `a.txt` (two changed lines) and changes a document. The folder of the submodule is there and
+ * empty, as that of one that was never fetched, so the tree is clean. */
+function makeSubmoduleRepo() {
+  const root = tmp('js-harness-codex-review-');
+  git(root, 'init');
+  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(root, 'config', 'user.name', 'js-harness test');
+  fs.mkdirSync(path.join(root, 'sub'));
+  const committed = (pointer, files, message) => {
+    for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(root, name), content, 'utf8');
+    git(root, 'add', ...Object.keys(files));
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${pointer.repeat(40)},sub`);
+    git(root, 'commit', '-m', message);
+    return git(root, 'rev-parse', 'HEAD');
+  };
+  const base = committed('1', { 'a.txt': 'a1\n', 'README.md': 'one\n' }, 'one');
+  const head = committed('2', { 'a.txt': 'A1 changed\n', 'README.md': 'two\n' }, 'two');
+  assert.equal(git(root, 'status', '--porcelain'), '');
+  return { root, base, head };
+}
+
+test('a range that moves a submodule beside a file left out is checked and reviewed whatever `diff.submodule` the repository sets', async () => {
+  // The finding this is the test of. Under `log` and `diff` git writes one line of summary for a submodule
+  // where the patch of a range has a section, so the patch held a section fewer than the range has files,
+  // and the run was refused before it started.
+  const { root, base, head } = makeSubmoduleRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const pointers = ['-Subproject commit 1111111111111111111111111111111111111111', '+Subproject commit 2222222222222222222222222222222222222222'];
+  for (const format of ['log', 'diff', 'short', null]) {
+    const which = `diff.submodule ${format ?? 'not set'}`;
+    if (format === null) git(root, 'config', '--unset', 'diff.submodule');
+    else git(root, 'config', 'diff.submodule', format);
+    // What the session's own `git diff` prints of its files, under that configuration.
+    const asShown = partDiff(root, base, head, 'a.txt', 'sub');
+    const summarized = format === 'log' || format === 'diff';
+    assert.equal(asShown.includes('Submodule sub 1111111...2222222'), summarized, which);
+    assert.equal(pointers.every((line) => asShown.includes(line)), !summarized, which);
+    const fake = fakeCodex(partShown(root, base, head, 'a.txt', 'sub'));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual(result.out.split('\n').slice(0, 3), [
+      `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`,
+      '  part 1 of 1: 2 files, 4 changed lines',
+      'Left out of the review: 1 Markdown document, 2 changed lines.',
+    ], which);
+    assert.equal(fake.calls.length, 1, which);
+    // A session is held to the changed lines its own git prints: those of `a.txt`, and the two of the
+    // submodule where git writes them as a patch.
+    const total = summarized ? 2 : 4;
+    assert.deepEqual(readCodexReviewRuns(root).at(-1).coverage, { seen: total, total }, which);
+    assert.equal(readCodexReviews(root).at(-1).outcome, 'reviewed', which);
+  }
+  // In parts too, and the check that they leave no changed line of the range out still holds them to it:
+  // a part whose files do not show the submodule refuses the run, under the configuration that summarizes it.
+  git(root, 'config', 'diff.submodule', 'log');
+  const parts = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt') }, { stdout: partShown(root, base, head, 'sub') });
+  const inParts = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...parts, randomUUID: runIds() });
+  assert.equal(inParts.code, 0, inParts.err);
+  assert.deepEqual(readCodexReviewRuns(root).slice(-2).map((line) => [line.part, line.coverage]), [
+    [{ index: 1, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 2, of: 2, files: 1, changedLines: 2 }, { seen: 0, total: 0 }],
+  ]);
+  const none = fakeCodexInParts();
+  const missing = (command, args, opts) => {
+    const answer = none.spawn(command, args, opts);
+    const ofTheSubmodule = command === 'git' && args.includes('--') && args.at(-1) === 'sub';
+    return ofTheSubmodule ? { ...answer, stdout: '' } : answer;
+  };
+  const refused = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...none, spawn: missing });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /^The 2 parts the range would be reviewed in do not show 2 of the changed lines of the range between them \(the first: sub: -Subproject commit 1{40}\)/);
+  assert.equal(none.calls.length, 0);
 });
 
 test('a range that changes only what a review leaves out has no part: the run starts nothing, and records that when the range holds a commit', async () => {
@@ -4113,9 +4192,40 @@ test('a range that changes only what a review leaves out has no part: the run st
     reviewedAt: '2026-09-29T12:00:00.000Z',
     outcome: 'nothing-to-review',
     reason: 'the range changes no file a review reads: it leaves out 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines)',
-    leftOut: { files: 2, changedLines: 6 },
+    leftOut: LEFT_OUT,
   });
   assert.equal(isValidCodexReview(record), true);
+});
+
+test('a review that left out a file which a later commit of its range marks does not cover the commit before the mark, where that file is code', async () => {
+  // The finding this is the test of: one commit changes `app.js`, the next marks it. The marks are read at
+  // the head of the range, so the review through the second leaves `app.js` out, and says so in its record.
+  const { root, head: main } = makeRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  const committed = (name, content, message) => {
+    fs.writeFileSync(path.join(root, name), content, 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-m', message);
+    return git(root, 'rev-parse', 'HEAD');
+  };
+  const app = committed('app.js', 'code\n', 'feat: the application');
+  const marks = committed('.gitattributes', 'app.js -codex-review\n', 'chore: mark the application as left out');
+  const result = await run(['--base', 'origin/main', '--cwd', root], fakeCodex(partShown(root, main, marks, '.gitattributes')));
+  assert.equal(result.code, 0, result.err);
+  assert.ok(result.out.split('\n').includes('Left out of the review: 1 file the project marks `-codex-review`, 1 changed line.'), result.out);
+  assert.deepEqual(readCodexReviews(root), [{
+    ...reviewedRecord(main, marks),
+    leftOut: { files: 1, changedLines: 1, documents: { files: 0, changedLines: 0 }, marked: { files: 1, changedLines: 1 } },
+  }]);
+  // Pushed up to the commit that marks it, the application is left out and the record covers the rest.
+  const both = checkCodexReviews(root, marks);
+  assert.equal(both.pass, true, both.detail);
+  assert.equal(both.detail, '1 code commit since origin/main, all covered by a Codex review record');
+  // Pushed alone, the application is code that no review read: that record does not cover it.
+  const alone = checkCodexReviews(root, app);
+  assert.equal(alone.pass, false, alone.detail);
+  assert.match(alone.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
 });
 
 test('when git cannot say what the project marks, nothing is planned or started: a file is never left out, nor read, by guess', async () => {

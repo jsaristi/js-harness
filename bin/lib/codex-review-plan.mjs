@@ -16,6 +16,18 @@
 // a part grows: the parts of up to 400 changed lines of that one run cost 325 input tokens a changed line
 // and the larger ones 178. With no measured part there is no estimate, and the plan says so.
 //
+// Why the estimate of the whole is a range. Two reviews in parts were planned at about 1,045,000 and 890,000
+// input tokens and cost 2,314,747 and 1,956,411, the second on an estimate that rested on runs at the
+// review's own effort. What a part costs depends less on its size than on how far its session looks into
+// the code: at `high` effort, thirteen parts of 223 to 1,475 changed lines cost from 296 to 2,278 input
+// tokens a changed line, and in each of those two reviews one part cost more a changed line than any part
+// of its band measured before it. A median says what a part is likely to cost, and nothing of that. So the
+// plan gives two figures of the whole: the one its parts add up to, each at the median of its band, and a
+// high one, each part at the most a changed line cost in the measured parts of its band. The most, and not
+// the third quartile: made from the log as it was before each of those two reviews, the third quartile gave
+// 1,450,000 and 1,030,000, under what they cost both times, where the most gave 3,170,000 and 1,690,000. It
+// is the dearest that was measured, not a ceiling: the second review passed it. A part keeps one figure.
+//
 // It estimates input tokens alone, the cached ones included, which is what `usage.inputTokens` counts: the
 // number the cost of the reviews was counted in when this was asked for. What a review writes is not estimated.
 //
@@ -86,23 +98,31 @@ function median(values) {
  *  - `floor`, the smallest input total of those parts: no session costs less than what it loads before it
  *    has read a line of the diff.
  *  - `estimate(changedLines)`, the input tokens of a part of that many changed lines: the lines times the
- *    median of its band, and never under `floor`. Not rounded: `reviewPlan` rounds what is printed. */
+ *    median of its band, and never under `floor`. Not rounded: `reviewPlan` rounds what is printed.
+ *  - `highestPerChangedLine`, the most input tokens a changed line cost in those parts, by the same two
+ *    bands, a thin one taking the highest of them all; and `high(changedLines)`, the lines times the
+ *    highest of its band, never under `floor`, and so never under `estimate`. `null` with no measured
+ *    part. It is the other end of the range a plan gives of the whole (see the top of this file). */
 export function inputEstimator(runs, { model, effort, bandAt = PART_MAX_CHANGED_LINES }) {
   const measured = measuredParts(runs);
   const same = measured.filter((one) => one.model === model && one.effort === effort);
   const samePair = same.length >= RUNS_TO_STAND_ALONE;
   const basis = samePair ? same : measured;
-  if (basis.length === 0) return { runs: 0, samePair: false, atPair: 0, estimate: null };
-  const perLine = (parts) => median(parts.map((one) => one.inputTokens / one.changedLines));
-  const ofAll = perLine(basis);
-  const ofBand = (parts) => (parts.length >= RUNS_FOR_A_BAND ? perLine(parts) : ofAll);
-  const perChangedLine = {
-    upToBound: ofBand(basis.filter((one) => one.changedLines <= bandAt)),
-    aboveBound: ofBand(basis.filter((one) => one.changedLines > bandAt)),
+  if (basis.length === 0) return { runs: 0, samePair: false, atPair: 0, estimate: null, high: null };
+  const upToBound = basis.filter((one) => one.changedLines <= bandAt);
+  const aboveBound = basis.filter((one) => one.changedLines > bandAt);
+  /** What a changed line cost in each band, as `pick` takes it from the costs of the parts of one: a band
+   * of fewer than `RUNS_FOR_A_BAND` parts has what `pick` takes from them all. */
+  const byBand = (pick) => {
+    const perLine = (parts) => pick(parts.map((one) => one.inputTokens / one.changedLines));
+    const ofBand = (parts) => perLine(parts.length >= RUNS_FOR_A_BAND ? parts : basis);
+    return { upToBound: ofBand(upToBound), aboveBound: ofBand(aboveBound) };
   };
+  const perChangedLine = byBand(median);
+  const highestPerChangedLine = byBand((costs) => Math.max(...costs));
   const floor = Math.min(...basis.map((one) => one.inputTokens));
-  const estimate = (changedLines) => Math.max(floor, changedLines * (changedLines <= bandAt ? perChangedLine.upToBound : perChangedLine.aboveBound));
-  return { runs: basis.length, samePair, atPair: same.length, perChangedLine, floor, estimate };
+  const priced = (perLine) => (changedLines) => Math.max(floor, changedLines * (changedLines <= bandAt ? perLine.upToBound : perLine.aboveBound));
+  return { runs: basis.length, samePair, atPair: same.length, perChangedLine, highestPerChangedLine, floor, estimate: priced(perChangedLine), high: priced(highestPerChangedLine) };
 }
 
 /** An estimate as it is printed: to two figures. One printed to the token reads as a measurement. */
@@ -125,10 +145,13 @@ function twoFigures(tokens) {
  * alone, `samePair`, how many are, `atPair`, and where the two bands part, `bandAt`), and whether the plan is
  * `over` the bound of parts. `inputTokens` is `null`, of each part and of the whole, when there is no
  * estimate; otherwise each is to two figures, and that of the whole is the sum of those of the parts.
- * `leftOut` is the count it was handed, or `null` when no file is left out. */
+ * `inputTokensHigh` is the high figure of the whole, `null` with it: the sum of the high figures of the
+ * parts (`inputEstimator`), each to two figures as well, so it is never the smaller of the two, and is the
+ * same number when every measured part cost a changed line alike. A part holds one figure: the range is
+ * of the whole. `leftOut` is the count it was handed, or `null` when no file is left out. */
 export function reviewPlan({ base, head, model, effort, parts, runs = [], maxParts, leftOut = null }) {
   const bandAt = PART_MAX_CHANGED_LINES;
-  const { runs: measured, samePair, atPair, estimate } = inputEstimator(runs, { model, effort, bandAt });
+  const { runs: measured, samePair, atPair, estimate, high } = inputEstimator(runs, { model, effort, bandAt });
   const planned = parts.map((part, at) => ({
     index: at + 1,
     of: parts.length,
@@ -138,6 +161,7 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
   }));
   const total = (pick) => planned.reduce((sum, part) => sum + pick(part), 0);
   const bound = maxParts ?? MAX_PARTS_WITHOUT_FLAG;
+  const estimated = estimate !== null && planned.length > 0;
   return {
     range: `${base.slice(0, 7)}..${head.slice(0, 7)}`,
     model,
@@ -145,7 +169,8 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
     parts: planned,
     files: total((part) => part.files),
     changedLines: total((part) => part.changedLines),
-    inputTokens: estimate === null || planned.length === 0 ? null : total((part) => part.inputTokens),
+    inputTokens: estimated ? total((part) => part.inputTokens) : null,
+    inputTokensHigh: estimated ? total((part) => twoFigures(high(part.changedLines))) : null,
     basis: { runs: measured, samePair, atPair, bandAt },
     maxParts: bound,
     maxPartsGiven: maxParts !== undefined,
@@ -163,8 +188,12 @@ const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' 
  *
  * It says how many parts the estimate rests on and how many of them ran on the model and at the effort of
  * the review. When all of them did, that is all there is to say, whether they are the five that stand alone
- * or fewer: another effort is spoken of only when some part ran at one, or named none. */
-function estimateLine({ parts, inputTokens, model, effort, basis, leftOut }) {
+ * or fewer: another effort is spoken of only when some part ran at one, or named none.
+ *
+ * The estimate of the whole is a range, from the figure the parts add up to, to the high one, and a last
+ * sentence says what the high one is. One figure is said as one: where the two are the same number there is
+ * no range, and nothing is said of one. */
+function estimateLine({ parts, inputTokens, inputTokensHigh, model, effort, basis, leftOut }) {
   if (parts.length === 0) {
     return leftOut === null
       ? 'No estimate: the range changes no file, so there is no part to review.'
@@ -176,9 +205,15 @@ function estimateLine({ parts, inputTokens, model, effort, basis, leftOut }) {
     ? `${counted(basis.runs, 'part')} this machine's run log measured ${pair}`
     : `${counted(basis.runs, 'part')} this machine's run log measured, ${thousands(basis.atPair)} of them ${pair} and the rest at another effort or in a session that named none ` +
       `(with ${RUNS_TO_STAND_ALONE} or more of the first kind it would rest on those alone)`;
+  const ranged = inputTokensHigh > inputTokens;
   return (
-    `Estimate: about ${thousands(inputTokens)} input tokens in all. It rests on ${rests}: a part is put at its changed lines times the median input tokens a changed line cost in them, ` +
-    `the parts of up to ${thousands(basis.bandAt)} changed lines apart from the larger ones, and never under what the cheapest of them cost.`
+    `Estimate: about ${thousands(inputTokens)}${ranged ? ` to ${thousands(inputTokensHigh)}` : ''} input tokens in all. ` +
+    `It rests on ${rests}: a part is put at its changed lines times the median input tokens a changed line cost in them, ` +
+    `the parts of up to ${thousands(basis.bandAt)} changed lines apart from the larger ones, and never under what the cheapest of them cost.` +
+    (ranged
+      ? ' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: ' +
+        'how far a session looks into the code moves what it costs more than the size of its part does.'
+      : '')
   );
 }
 

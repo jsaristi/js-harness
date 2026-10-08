@@ -120,3 +120,22 @@ export function isValidCodexReview(rec) {
   if (rec.outcome === 'reviewed') return true;
   return (rec.outcome === 'unavailable' || rec.outcome === NOTHING_TO_REVIEW) && typeof rec.reason === 'string' && rec.reason.trim() !== '';
 }
+
+/** Whether the review of `rec`, a valid record, left out a file the project marks (`./codex-review-scope.mjs`),
+ * as far as the record says: a check then takes the record to cover its commits only when what is pushed
+ * holds its head.
+ *
+ * A record holds what its review did not read in `leftOut`, the count `reviewScope` gives: how many `files`
+ * and `changedLines`, and the same two for the `documents` and for the `marked` ones among them. The two
+ * kinds are not alike. A Markdown file is left out at every commit, by a rule no commit can change. A mark
+ * is read at the head of the reviewed range, and a commit of that range can be the one that adds it: at the
+ * commits before it the file is code, which nobody read.
+ *
+ * `false` only for a record that says none was marked: one with no `leftOut`, whose review read every file,
+ * and one whose `leftOut.marked.files` is the count 0. Anything else is read as a record that left a marked
+ * file out, the first records of it among them, which hold the two totals alone and cannot say. It does not
+ * make a record less valid: `isValidCodexReview` never looked at `leftOut`. */
+export function leftMarkedFilesOut(rec) {
+  if (rec.leftOut === undefined) return false;
+  return rec.leftOut?.marked?.files !== 0;
+}

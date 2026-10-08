@@ -100,7 +100,8 @@
 //
 // What a run will cost is said before it is spent (`bin/lib/codex-review-plan.mjs`). `--plan` prints the
 // plan and exits 0: the range, the model and the effort, the parts with their files and changed lines, and
-// an estimate of the input tokens made from this machine's own run log, never from a number written here.
+// an estimate of the input tokens, from a likely figure to a high one, made from this machine's own run log
+// and never from a number written here.
 // It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
 // prints the same plan before its first session; one whose range changes no file has no part, so it starts
@@ -795,6 +796,13 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile }) {
   }
 }
 
+// A submodule that moved, written as the patch of a file: one `diff --git` section with the two commits as
+// its lines, which is what git writes unless `diff.submodule` is configured. Under `log` or `diff` it
+// writes a line of summary instead, and no section, while `--numstat` still counts the path as a file: a
+// patch read by one section a file (`patchOfRead`) would be a section short, or take the summary for the
+// end of the file before it.
+const SUBMODULE_AS_A_FILE = '--submodule=short';
+
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
  * lines than a part holds or more files (`PART_MAX_FILES`), from its `groups` (`rangeGroups`): `{ parts }`,
  * each `{ index, of, files, changedLines, prompt, expected }` with the prompt its session is asked with and
@@ -815,11 +823,19 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile }) {
  *
  * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
  * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
- * with `:`, would stand for other files than itself. The count and the check of the whole range name no file. */
+ * with `:`, would stand for other files than itself. The count and the check of the whole range name no file.
+ *
+ * Two diffs are made of the files of each part, alike unless the configuration of git says how a submodule
+ * is shown (`diff.submodule`). What a part must have seen is its diff as its session's own git prints it,
+ * under that configuration: under `log` or `diff` git writes one line of summary for a submodule that
+ * moved, and a session cannot be held to lines its git never prints. The check that the parts add up to the
+ * range is made on patches with `SUBMODULE_AS_A_FILE`, where the patch of a range is one section a file
+ * whatever is configured, which is what tells the sections of the files left out apart. */
 function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
   if (groups.length <= 1 && why.size === 0) return { parts: null };
   const parts = [];
+  const inAPart = new Set();
   for (const [at, group] of groups.entries()) {
     const part = { index: at + 1, of: groups.length, files: group.files, changedLines: group.changedLines };
     const which = `part ${part.index} of ${part.of}`;
@@ -834,15 +850,18 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
     // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
     // parts. What a part must have seen is the diff of its own files and no more, or the part is held to
     // lines its prompt never asks for and its count of changed lines does not hold.
-    const shown = git(spawn, root, ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', from, head, '--', ...group.files], room);
-    if (shown === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
+    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', ...shape, '--no-renames', from, head, '--', ...group.files], room);
+    const shown = ofPart([]);
+    const proved = shown === null ? null : ofPart([SUBMODULE_AS_A_FILE]);
+    if (proved === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
     parts.push({ ...part, prompt, expected: patchKeys(shown) });
+    for (const partKey of patchKeys(proved)) inAPart.add(partKey);
   }
-  // The proof that the split leaves nothing out: every changed line of the range is one a part must have
-  // seen. A path a pathspec reads as something else, or one cut on its way here, would be a file in no part.
-  // The files a review leaves out are in no part on purpose, so their sections are taken out of the patch
-  // of the range first, by their place in it and never by a name (`patchOfRead`).
-  const whole = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', '--no-renames', from, head], room);
+  // The proof that the split leaves nothing out: every changed line of the range is one the files of a
+  // part show. A path a pathspec reads as something else, or one cut on its way here, would be a file in
+  // no part. The files a review leaves out are in no part on purpose, so their sections are taken out of
+  // the patch of the range first, by their place in it and never by a name (`patchOfRead`).
+  const whole = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE, '--no-renames', from, head], room);
   if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
   let read;
   try {
@@ -850,7 +869,6 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   } catch (err) {
     return { error: `Could not check the parts against the range. ${err.message}` };
   }
-  const inAPart = new Set(parts.flatMap((part) => part.expected));
   const left = patchKeys(read).filter((rangeKey) => !inAPart.has(rangeKey));
   if (left.length > 0) {
     const first = `(the first: ${truncate(left[0].replace('\n', ': '), 100)})`;
@@ -999,8 +1017,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // a line that could not be written); `null` and none for a range reviewed whole, and for a skip.
   let parts = null;
   let runIds = [];
-  // What the review of the range left out, `{ files, changedLines }`, for its record; `null` when it left
-  // nothing out, and for a skip, which looked at no file.
+  // What the review of the range left out, for its record: the count `reviewScope` gives, `{ files,
+  // changedLines, documents, marked }`, the last two the same two counts of each kind. `null` when it left
+  // nothing out, and for a skip, which looked at no file. The kinds are kept apart because `check --push`
+  // reads them: a document is left out at every commit, but a mark is that of the head of this range, so a
+  // record that left a marked file out covers only what is pushed up to that head (`leftMarkedFilesOut`).
   let leftOut = null;
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
@@ -1049,7 +1070,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // about to spend is on the screen before any of it is spent.
     const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
-    if (split.leftOut.files > 0) leftOut = { files: split.leftOut.files, changedLines: split.leftOut.changedLines };
+    if (split.leftOut.files > 0) leftOut = split.leftOut;
     // A range that changes no file has no part, and a run with no part starts nothing: no Codex is looked
     // for, no home is made, and there is no session to log. The run says so and exits 0, having done all
     // there was to do. It used to start one session all the same, over an empty diff. A range whose files

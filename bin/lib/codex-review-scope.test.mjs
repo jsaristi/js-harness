@@ -273,6 +273,19 @@ test('a file whose type changed is two sections under one header, and both are o
   assert.equal(patchOfRead(patch, paths, new Map([['bin/a.mjs', MARKED]])), gone + back + section('src/b.mjs', 'b'));
 });
 
+test('a submodule that moved is a file like another in a patch asked with `--submodule=short`, and its summary in place of a section is refused', () => {
+  const pointer = `diff --git a/sub b/sub\nindex 1111111..2222222 160000\n--- a/sub\n+++ b/sub\n@@ -1 +1 @@\n-Subproject commit ${'1'.repeat(40)}\n+Subproject commit ${'2'.repeat(40)}\n`;
+  const why = new Map([['README.md', DOCUMENT]]);
+  const before = section('README.md', 'doc') + section('a.js', 'a');
+  assert.equal(patchOfRead(before + pointer, ['README.md', 'a.js', 'sub'], why), section('a.js', 'a') + pointer);
+  assert.equal(patchOfRead(pointer + section('z.md', 'doc'), ['sub', 'z.md'], new Map([['z.md', DOCUMENT]])), pointer);
+  // What git writes of it under `diff.submodule=log`: a line and no section, which is not a patch of one
+  // section a file. It is refused, and not read as the end of the file before it.
+  const summary = 'Submodule sub 1111111...2222222 (commits not present)\n';
+  assert.throws(() => patchOfRead(before + summary, ['README.md', 'a.js', 'sub'], why), /2 sections .* 3 files/);
+  assert.throws(() => patchOfRead(summary + section('z.md', 'doc'), ['sub', 'z.md'], new Map([['z.md', DOCUMENT]])), /before its first section/);
+});
+
 test('a patch that is not one section a file is refused: a section taken for another file\'s would be lines nobody has to have seen', () => {
   const why = new Map([['b.js', MARKED]]);
   const patch = section('a.js', 'a') + section('b.js', 'b');

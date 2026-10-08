@@ -307,6 +307,112 @@ test('both rows say from a folder below the top of the repository what they say 
   assert.deepEqual(told(root), fromTop, 'the top, with diff.relative');
 });
 
+test('a commit that moves a file a review reads to a path the project marks is a code commit: the file that went is one it changes', () => {
+  // `js-harness codex-review` reads a range with renames off, so the file that went is removed whole and is
+  // reviewed. With git's detection of renames the commit would list the new path alone, which is marked.
+  const { root } = makeRepo();
+  commit(root, 'src/app.js', lines(20), 'feat: code');
+  const base = commit(root, '.gitattributes', 'evals/results/** -codex-review\n', 'chore: say what a review leaves out');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  feature(root);
+  fs.mkdirSync(path.join(root, 'evals', 'results'), { recursive: true });
+  git(root, 'mv', 'src/app.js', 'evals/results/app.js');
+  git(root, 'commit', '-m', 'refactor: move the code among the results');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.ok(row.lines[0].startsWith(short(root, moved)), row.lines.join('\n'));
+  // The plain row counts the same commit, and sizes the review that command would make of it.
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 20 changed lines in 1 file`,
+  );
+});
+
+/** Commits `content` at each of `names` through the index alone, as `commitInIndex` does, and returns the
+ * commit's full id. The names go to git on its standard input, each ended by a NUL, so one may hold what no
+ * command line carries whole: a tab, a newline, a control character. */
+function commitNamesInIndex(root, names, content, message) {
+  const hashed = spawnSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: content, encoding: 'utf8' });
+  assert.equal(hashed.status, 0, hashed.stderr);
+  const added = spawnSync('git', ['-c', 'core.protectNTFS=false', 'update-index', '-z', '--add', '--index-info'], {
+    cwd: root,
+    encoding: 'utf8',
+    input: names.map((name) => `100644 ${hashed.stdout.trim()}\t${name}\0`).join(''),
+  });
+  assert.equal(added.status, 0, added.stderr);
+  git(root, 'commit', '-m', message);
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+test('a file name is read whole whatever it holds, and none is taken for the line of a commit', () => {
+  // The finding this is the test of: a commit whose only file is `\u0001code.js` listed no file, and the
+  // push check passed with "no code commits".
+  const { root } = makeRepo();
+  feature(root);
+  const code = commitNamesInIndex(root, ['\u0001code.js'], 'code', 'feat: code in a file whose name starts with a control character');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.deepEqual(row.lines.slice(0, -1), [`${short(root, code)} feat: code in a file whose name starts with a control character`]);
+  assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main: the review of [0-9a-f]+\^\.\.HEAD is 1 part today, 1 changed line in 1 file$/);
+});
+
+test('names that read as the line of a commit, or begin with a newline, are names: the commits and their files are counted as they are', () => {
+  const { root } = makeMarkedRepo('*.json -codex-review\n');
+  // What git writes for a commit, as a name: after a document, and after a marked file that begins with the
+  // newline git writes before the first name of a commit.
+  const asACommit = (subject) => `${'c'.repeat(40)}\tccccccc\t\t${subject}`;
+  const documents = commitNamesInIndex(
+    root,
+    ['\nnotes.md', `${asACommit('docs: forged')}.md`, `\u0001${asACommit('docs: forged, the old way')}.md`, 'zz/data.json'],
+    'words',
+    'docs: names that read as commits',
+  );
+  const none = checkCodexReviews(root, 'HEAD');
+  assert.equal(none.pass, true, `${none.detail}\n${(none.lines ?? []).join('\n')}`);
+  assert.equal(none.detail, 'no code commits since origin/main');
+  // The same names as code: one commit, with a subject of its own, and not one for each name.
+  const code = commitNamesInIndex(root, ['\nstarts with a newline.js', asACommit('feat: forged'), 'ends with a space '], 'code', 'feat: code under such names');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.deepEqual(row.lines.slice(0, -1), [`${short(root, code)} feat: code under such names`]);
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, code)}^..HEAD is 1 part today, 3 changed lines in 3 files`,
+  );
+  // A commit that changes no file, between the two, is a commit with no name after its line.
+  git(root, 'commit', '--allow-empty', '-m', 'chore: nothing');
+  assert.match(checkCodexReviews(root, 'HEAD').detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.equal(checkCodexReviews(root, documents).detail, 'no code commits since origin/main');
+});
+
+test('an answer of git that is not the commits and their files, as they were asked for, is not read as far as it goes', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  const line = `${head}\t${head.slice(0, 7)}\t${'a'.repeat(40)}\tfeat: two`;
+  const answers = {
+    'text before the first commit': `warning: something\n\0${line}\0\nb.js\0`,
+    'a line that is no commit where one starts': `\0${head.slice(0, 12)}\tfeat: two\0\nb.js\0`,
+    'a first name with no newline before it': `\0${line}\0b.js\0`,
+    'an answer cut inside a name': `\0${line}\0\nb.j`,
+    'an answer cut after the mark of a commit': `\0${line}\0\nb.js\0\0`,
+  };
+  for (const [which, stdout] of Object.entries(answers)) {
+    const spawn = (cmd, args, opts) => (args[0] === 'log' ? { status: 0, stdout, stderr: '' } : spawnSync(cmd, args, opts));
+    const row = checkCodexReviews(root, 'HEAD', { spawn });
+    assert.equal(row.pass, false, which);
+    assert.equal(row.detail, 'cannot list the commits in origin/main..HEAD', which);
+    assert.equal(checkCodexReviewDebt(root, { spawn }).detail, `cannot tell how much code waits for a Codex review: ${row.detail}`, which);
+  }
+  // And the same answer, whole, is read.
+  const whole = (cmd, args, opts) => (args[0] === 'log' ? { status: 0, stdout: `\0${line}\0\nb.js\0`, stderr: '' } : spawnSync(cmd, args, opts));
+  assert.match(checkCodexReviews(root, 'HEAD', { spawn: whole }).detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+});
+
 test('an unavailable record covers its range and shows up as a line, still passing', () => {
   const { root, base } = makeRepo();
   feature(root);
@@ -397,6 +503,74 @@ test('a record of nothing to review covers its commits only when what is pushed 
   assert.equal(alone.pass, false, 'the change pushed without its revert is not covered');
   assert.match(alone.detail, /1 of 1 code commit/);
 });
+
+// What a review left out, as its record holds it (`reviewScope`): so many documents and so many marked files.
+const leftOutOf = (documents, marked) => ({
+  files: documents + marked,
+  changedLines: documents + marked,
+  documents: { files: documents, changedLines: documents },
+  marked: { files: marked, changedLines: marked },
+});
+
+test('a review that left out files the project marks covers its commits only when what is pushed holds its head', () => {
+  // The finding this is the test of. The marks are those of the head of the reviewed range, and a commit
+  // of the range can be the one that adds them: at the commit before it the file is code, and nobody read it.
+  const { root, base } = makeRepo();
+  feature(root);
+  const app = commit(root, 'src/app.js', 'code', 'feat: the application');
+  const marks = commit(root, '.gitattributes', 'src/** -codex-review\n', 'chore: mark the application as left out');
+  record(root, base, marks, { leftOut: leftOutOf(0, 1) });
+  const both = checkCodexReviews(root, marks);
+  assert.equal(both.pass, true, `pushed up to the head of the record: ${both.detail}`);
+  assert.equal(both.detail, '1 code commit since origin/main, all covered by a Codex review record');
+  const alone = checkCodexReviews(root, app);
+  assert.equal(alone.pass, false, 'the application pushed without the commit that marks it is not covered');
+  assert.match(alone.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.ok(alone.lines[0].startsWith(short(root, app)), alone.lines.join('\n'));
+  // The plain row reads the same records.
+  git(root, 'checkout', '--quiet', '--detach', app);
+  assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main/);
+  // And a commit past the head of the record is pushed with that head, so the record covers as any other.
+  git(root, 'checkout', '--quiet', 'feature');
+  commit(root, 'README.md', 'words', 'docs: a note');
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+});
+
+test('a review that left out documents alone still covers an earlier tip: no commit can make a Markdown file code', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  fs.writeFileSync(path.join(root, 'notes.md'), 'words', 'utf8');
+  const second = commit(root, 'c.js', 'three', 'feat: three, with a note');
+  record(root, base, second, { leftOut: leftOutOf(1, 0) });
+  const row = checkCodexReviews(root, first);
+  assert.equal(row.pass, true, row.detail);
+  assert.equal(row.detail, '1 code commit since origin/main, all covered by a Codex review record');
+});
+
+// A record from before it said how many of the files it left out were marked, and ones a hand has been at.
+const UNTOLD_LEFT_OUT = {
+  'the two counts alone, as the first records of it were written': { files: 1, changedLines: 2 },
+  'a count of marked files that is no count': { ...leftOutOf(1, 0), marked: { files: '0', changedLines: 0 } },
+  'no count of files among the marked': { ...leftOutOf(1, 0), marked: {} },
+  'something that is no count at all': 'two documents',
+  'nothing where the counts would be': null,
+};
+
+for (const [shape, leftOut] of Object.entries(UNTOLD_LEFT_OUT)) {
+  test(`a review whose record does not say that it left no marked file out (${shape}) covers as one that did: only pushed whole`, () => {
+    const { root, base } = makeRepo();
+    feature(root);
+    const first = commit(root, 'b.js', 'two', 'feat: two');
+    const second = commit(root, 'c.js', 'three', 'feat: three');
+    record(root, base, second, { leftOut });
+    assert.equal(checkCodexReviews(root, second).pass, true, 'pushed up to its head');
+    const earlier = checkCodexReviews(root, first);
+    assert.equal(earlier.pass, false, 'pushed short of its head');
+    // It is a valid record all the same, and is not counted among the invalid ones.
+    assert.match(earlier.detail, /^1 of 1 code commit since origin\/main have no Codex review record \([^)]*\)$/);
+  });
+}
 
 test('a record on an unrelated branch is still not expanded, even when checking an older head', () => {
   const { root, base } = makeRepo();
@@ -615,6 +789,20 @@ test('a root commit gets no ^ hint, and the hint that would reach it is named', 
   // What the hint says is true: a range from the unrelated default branch does reach the root.
   record(root, base, rootCommit);
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+});
+
+test('a root commit lists its files whatever `log.showRoot` the repository sets: it is a code commit like another', () => {
+  // With `log.showRoot` off git lists no file for a commit that has no parent, and a commit that lists no
+  // file needs no record.
+  const { root } = makeRepo();
+  git(root, 'checkout', '--orphan', 'unrelated');
+  const rootCommit = commit(root, 'z.js', 'unrelated history', 'feat: a root commit');
+  git(root, 'config', 'log.showRoot', 'false');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.ok(row.lines[0].startsWith(short(root, rootCommit)), row.lines.join('\n'));
+  assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main/);
 });
 
 test('--head checks that commit instead of HEAD', () => {
