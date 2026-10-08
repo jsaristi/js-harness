@@ -1070,6 +1070,24 @@ What follows from it:
     could not be red first, being what the code already did.
   - The second removal that fails: pinned, not red first for the same reason.
   - Follow-up closed: the window between two reviews at once (above, in Follow-ups).
+- 2026-10-08: the four fixes committed as `81bb786` (gate green). gentle-ai assessed
+  `fefec21..81bb786` as `medium`, not due (`under_budget`, 248 lines): it stays pending in
+  the slice, and the next assessment starts from `fefec21`.
+- 2026-10-08T06:12Z: the new default on the real binary, and the Codex review of this
+  stretch in one run: `node bin/js-harness.mjs codex-review --base 87854b1`, with no
+  `--session`, inside the login proof, CLI 0.161.0. Four Codex reviews, nineteen in the
+  feature.
+  - It ran the lean session (`gpt-6.1-sol`, `medium`), split `87854b1..81bb786` (1,102
+    changed lines, 12 files) in 4 parts of 82, 430, 385 and 205 lines, asked each with the
+    own prompt, and recorded the review once all four passed. Every part: the patch is
+    correct (confidence 0.93, 0.87, 0.88, 0.91), no finding. 386,652 input tokens (233,216
+    cached), 2,071 output, 17 requests, 111 s.
+  - The folder of the homes: `~/.js-harness` held `codex-review-homes` before the run,
+    left by the runs before the fix, and does not after it; the rest of that folder
+    (`backups`, `doctor.json`, `manifest.json`, `remote`) is as it was.
+  - The login: the same file, bytes unchanged, one name before and after.
+  - What has a Codex review record now: `87854b1..81bb786`. The code before it on this
+    branch, `7deddfc..87854b1`, has none (Next step).
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1255,15 +1273,22 @@ T1 to T15 are checked. What is left is Sebastián's:
    part is a small feature of its own or one command of his.
 2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push hook refuses a
    branch with a code commit no review record covers, so before the push the code range
-   `7deddfc..HEAD` needs its Codex review or a recorded skip (item below).
+   `7deddfc..87854b1` needs its Codex review or a recorded skip (item below).
 
 Open, for him:
-1. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
-   by now over 9,000 changed lines, so more than twenty parts, and the test file of the
-   command alone is over 3,000 lines, which may not be read whole. Its count is asked.
+1. The Codex review of the code range `7deddfc..87854b1` before any push, or a recorded
+   skip. Counted on 2026-10-08 with `reviewParts`: 13,350 changed lines in 71 files, 28
+   parts, so 28 Codex reviews, by the four parts of the run above about 2.7 million input
+   tokens and a quarter of an hour. Eight parts are one file above the 400 lines of a
+   part, the largest the test file of the command, 2,968 lines: if Codex does not print
+   all of that diff, the part fails the evidence rule, and a range is recorded only when
+   every part passes, so the 28 could end with no record. This is a choice with two ways
+   and not a step to state and do, so it is put to him: run the 28, or record the skip
+   with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
+   gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
 
-On the cap: fifteen Codex reviews spent in this feature (one read nothing, fourteen read their
+On the cap: nineteen Codex reviews spent in this feature (one read nothing, eighteen read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
-occurrence on its issue 4655), so the next assessment starts from `2b67316` and the work
-left is committed in units under about 1,900 changed lines.
+occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to
+`fefec21`; `fefec21..81bb786` is under its budget and pending.
