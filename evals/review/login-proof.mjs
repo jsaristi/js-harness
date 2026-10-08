@@ -29,6 +29,11 @@
 // no byte of any file.
 //
 // `--real-home` is required and has no default, so the tool can never read a real home by accident.
+//
+// `--out` is refused, before anything is run, when the report would be written into that home or over a
+// file of it: the report is written after the second snapshot, so the tool itself would then change the
+// home it has just said was left alone, and a report written over `auth.json` would destroy the login
+// under a verdict of PASS (`refusedDestination`).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -40,7 +45,8 @@ import { fileURLToPath } from 'node:url';
 // not be started.
 const USAGE =
   'Usage: node evals/review/login-proof.mjs --real-home <path> --out <file.md> -- <command…>\n' +
-  'The command is started with no shell, so its first word must be a real executable (`node <script>`, for one), not a `.cmd` shim.';
+  'The command is started with no shell, so its first word must be a real executable (`node <script>`, for one), not a `.cmd` shim.\n' +
+  'The report is written outside the real home: an --out inside it, or one that is a file of it under another name, is refused.';
 
 const AUTH = 'auth.json';
 
@@ -307,7 +313,105 @@ export function codexProcesses(platform = process.platform, spawn = spawnSync) {
 
 class ArgError extends Error {}
 
-/** Parses `argv`: the flags before the first `--`, the command after it. */
+/** Which file `file` is, as `<device>:<file id>`, through any link on the way to it; `null` when nothing is
+ * there or it cannot be asked. Two names with the same one are one file, whatever case or link spells them.
+ * As a `bigint`, as for the login (`snapshot`): a Windows file id does not fit a number. */
+function fileIdOf(file) {
+  try {
+    const stat = fs.statSync(file, { bigint: true, throwIfNoEntry: false });
+    return stat ? `${stat.dev}:${stat.ino}` : null;
+  } catch {
+    return null;
+  }
+}
+
+// How many links in a row are followed by hand before a destination is given up on: one that leads to
+// itself would otherwise be followed for ever.
+const MAX_LINK_HOPS = 40;
+
+/** Where a write to `file` would land: the real path of the deepest part of it that exists, every link on
+ * the way followed, then the names under it that do not exist yet. A link whose target is not there yet is
+ * followed by hand (`realpath` refuses it): a write through it would make the target. Throws when the path
+ * cannot be followed to an end, which the caller tells as a destination it cannot vouch for. */
+function landingOf(file) {
+  const missing = [];
+  let at = file;
+  let hops = 0;
+  for (;;) {
+    let entry;
+    try {
+      entry = fs.lstatSync(at, { throwIfNoEntry: false });
+    } catch (err) {
+      // A name under a file is not there either, and where it would be is still under that file.
+      if (err.code !== 'ENOTDIR') throw err;
+    }
+    if (!entry) {
+      const up = path.dirname(at);
+      if (up === at) return path.join(at, ...missing);
+      missing.unshift(path.basename(at));
+      at = up;
+      continue;
+    }
+    try {
+      return path.join(fs.realpathSync.native(at), ...missing);
+    } catch (err) {
+      // A link to nothing: where it points is read, from the real folder it is in, and followed from there.
+      if (!entry.isSymbolicLink() || err.code !== 'ENOENT') throw err;
+      hops += 1;
+      if (hops > MAX_LINK_HOPS) throw new Error('too many links in a row');
+      at = path.resolve(fs.realpathSync.native(path.dirname(at)), fs.readlinkSync(at));
+    }
+  }
+}
+
+/** Why the report must not be written to `out`, as the rest of a sentence that starts with `--out <out>`,
+ * or `null` when it may be: `out` and `realHome` are resolved paths, and `realHome` is a folder.
+ *
+ * The report is written after the home was read the second time. Written into the home, it changes the
+ * home the proof has just said was left as it was; written over `auth.json`, it destroys the login under a
+ * report that says PASS. So a destination is refused when it lands inside the home, or on a file that is
+ * one of the home's own under another name: a hard link, or a path through a link.
+ *
+ * Asked of the file system and not of the spelling alone, since one place has many spellings: another
+ * case on Windows, a short name, a junction or a symbolic link on the way. Where the write would land is
+ * followed to a real path (`landingOf`), and every folder from there up is asked which file it is; the
+ * real paths are compared as text too, for a folder that cannot be asked. Only names, ids and link targets
+ * are read: no byte of any file. */
+function refusedDestination(realHome, out) {
+  let landing;
+  let homePath;
+  let names;
+  try {
+    landing = landingOf(out);
+    homePath = fs.realpathSync.native(realHome);
+    names = fs.readdirSync(homePath);
+  } catch (err) {
+    return `cannot be followed to where the report would be written (${err.code ?? err.message}), so it is not known to be outside the real Codex home ${realHome}`;
+  }
+  const inside = `is inside the real Codex home ${realHome}: the report is written after the home was read a second time, so it would change the home the proof says was left as it was`;
+  // On Windows a path is the same in any case. Elsewhere a real path has one spelling.
+  const spelled = (text) => (process.platform === 'win32' ? text.toLowerCase() : text);
+  if (spelled(landing) === spelled(homePath) || spelled(landing).startsWith(spelled(homePath + path.sep))) return inside;
+  const home = fileIdOf(homePath);
+  for (let at = landing; ; at = path.dirname(at)) {
+    if (home !== null && fileIdOf(at) === home) return inside;
+    if (path.dirname(at) === at) break;
+  }
+  // The file that is there already, when one is: the same file as an entry of the home is that entry.
+  const there = fileIdOf(out);
+  if (there !== null) {
+    for (const name of names) {
+      if (fileIdOf(path.join(homePath, name)) === there) {
+        return `is the same file as \`${name}\` at the top level of the real Codex home ${realHome} (the same device and file id, under another name or through a link), so the report would be written over it`;
+      }
+    }
+  }
+  return null;
+}
+
+/** Parses `argv`: the flags before the first `--`, the command after it. Throws an `ArgError` on a command
+ * line that cannot be run as it is, a report destination that reaches the real home included
+ * (`refusedDestination`): that is found here, before anything is read or run. */
 function parseArgs(argv) {
   const cut = argv.indexOf('--');
   const flags = cut === -1 ? argv : argv.slice(0, cut);
@@ -323,6 +427,8 @@ function parseArgs(argv) {
   const out = path.resolve(get('--out'));
   if (command.length === 0) throw new ArgError('a command is required after `--`');
   if (fs.statSync(realHome, { throwIfNoEntry: false })?.isDirectory() !== true) throw new ArgError(`--real-home ${realHome} is not a folder`);
+  const refused = refusedDestination(realHome, out);
+  if (refused !== null) throw new ArgError(`--out ${out} ${refused}`);
   return { realHome, out, command };
 }
 

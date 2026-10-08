@@ -313,6 +313,97 @@ test('--real-home is required and has no default; without it, --out or a command
   assert.equal(fs.existsSync(out), false, 'and no report written');
 });
 
+// --- where the report goes: never into the home the proof is about ---
+
+/** A command that leaves the file `marker` behind, to tell whether anything was run. */
+const marking = (marker) => node("require('node:fs').writeFileSync(process.argv[1], '')", marker);
+
+/** Asserts that each `[out, message]` of `cases` is refused as a bad command line, with `flags` before
+ * `--out`: exit 2 with the usage, the reason matching `message`, no report printed. */
+function refusesEach(cases, flags, command) {
+  for (const [out, message] of cases) {
+    const result = prove([...flags, '--out', out, '--', ...command]);
+    assert.equal(result.code, 2, out);
+    assert.match(result.err, message, out);
+    assert.match(result.err, /Usage: node evals\/review\/login-proof\.mjs/, out);
+    assert.equal(result.out, '', `${out}: no report was printed`);
+    assert.equal(holdsNoBytes(result.err), true, out);
+  }
+}
+
+test('--out inside the real home is refused before anything runs: the report is written after the home was read, and would change what the proof says was left alone', () => {
+  const { home, auth, root } = fakeHome();
+  const marker = path.join(root, 'ran');
+  const before = snapshot(home);
+  const INSIDE = /--out .* is inside the real Codex home/;
+  const inside = [
+    // The login itself, which the report would be written over after the proof had passed.
+    auth,
+    path.join(home, 'config.toml'),
+    // A new file, at the top level and in a folder: an entry more is a change too.
+    path.join(home, 'proof.md'),
+    path.join(home, 'sessions', 'proofs', 'proof.md'),
+    path.join(home, 'no-such-folder', 'proof.md'),
+    // The same places, spelled another way.
+    `${home}${path.sep}sessions${path.sep}..${path.sep}auth.json`,
+    path.join(home, 'auth.json', 'under-a-file.md'),
+    home,
+    // On Windows a path is the same in any case.
+    ...(process.platform === 'win32' ? [auth.toUpperCase(), path.join(home.toUpperCase(), 'proof.md')] : []),
+  ];
+  refusesEach(inside.map((out) => [out, INSIDE]), ['--real-home', home], marking(marker));
+  assert.equal(fs.existsSync(marker), false, 'no command was run');
+  assert.deepEqual(snapshot(home), before, 'the home is as it was: no entry more, and the login the file and the bytes it was');
+  assert.equal(fs.readFileSync(auth, 'utf8'), LOGIN);
+});
+
+test('--out that reaches the real home under another name is refused too: a second name of the login, a folder that is a link to the home', () => {
+  const { home, auth, root } = fakeHome();
+  const marker = path.join(root, 'ran');
+  fs.mkdirSync(path.join(root, 'elsewhere'));
+  // A hard link is the same file under a name outside the home: the same device and file id.
+  const twin = path.join(root, 'elsewhere', 'notes.json');
+  fs.linkSync(auth, twin);
+  const configTwin = path.join(root, 'elsewhere', 'settings.md');
+  fs.linkSync(path.join(home, 'config.toml'), configTwin);
+  // A folder outside the home that is a link to it: a junction on Windows, a symbolic link elsewhere.
+  const door = path.join(root, 'door');
+  fs.symlinkSync(home, door, 'junction');
+  // And one that leads to a folder of the home that is not there yet, so nothing under it can be asked what it is.
+  const dangling = path.join(root, 'dangling');
+  fs.symlinkSync(path.join(home, 'not-there-yet'), dangling, 'junction');
+  const before = snapshot(home);
+  const INSIDE = /--out .* is inside the real Codex home/;
+  refusesEach([
+    [twin, /--out .* is the same file as `auth\.json` at the top level of the real Codex home/],
+    [configTwin, /--out .* is the same file as `config\.toml` at the top level of the real Codex home/],
+    [path.join(door, 'proof.md'), INSIDE],
+    [path.join(door, 'auth.json'), INSIDE],
+    [path.join(door, 'sessions', 'new', 'proof.md'), INSIDE],
+    [path.join(dangling, 'proof.md'), INSIDE],
+  ], ['--real-home', home], marking(marker));
+  // The home named through its link is the same home, and a file in it is inside it.
+  refusesEach([[path.join(home, 'proof.md'), INSIDE], [auth, INSIDE]], ['--real-home', door], marking(marker));
+  assert.equal(fs.existsSync(marker), false, 'no command was run');
+  assert.deepEqual(snapshot(home), before);
+  assert.equal(fs.readFileSync(auth, 'utf8'), LOGIN);
+  assert.equal(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), CONFIG);
+});
+
+test('an ordinary --out is taken as it always was: a folder that is not there yet, a report that is replaced, a folder beside the home whose name starts like its', () => {
+  const { home, root } = fakeHome();
+  const stale = path.join(root, 'stale.md');
+  fs.writeFileSync(stale, 'an older report', 'utf8');
+  // A file with two names, neither of them in the home, is nobody's login.
+  fs.linkSync(stale, path.join(root, 'stale-twin.md'));
+  const outs = [path.join(root, 'new', 'deep', 'proof.md'), stale, path.join(`${home}-proofs`, 'proof.md'), path.join(root, 'auth.json')];
+  for (const out of outs) {
+    const result = prove(['--real-home', home, '--out', out, '--', ...node('process.exit(0)')]);
+    assert.equal(result.code, 0, `${out}: ${result.err}`);
+    assert.match(fs.readFileSync(out, 'utf8'), /^# Login proof[^]*PASS/, out);
+  }
+});
+
 // --- who else may have written: the Codex processes alive when something else of the home changed ---
 
 const CLIENTS = [

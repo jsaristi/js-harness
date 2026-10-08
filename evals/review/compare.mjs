@@ -278,6 +278,14 @@ function cut(body) {
  * that found nothing. `outcome` and `reason` are those of the last attempt, the one that ended the run:
  * `reviewed`, or how it fell short. A reading is kept whatever the outcome, and says it.
  *
+ * `reviewed` is the outcome of the whole cell, so the last attempt's alone does not make it one. `exit` is
+ * what `codexReviewMain` returned, and the reading is `reviewed` only when that is 0 and every part of the
+ * range handed over a result. A run can end after an attempt that was reviewed: the session of the next
+ * part could not be launched (its Codex home could not be made, for one), which hands over nothing, or the
+ * record could not be written. The reading is then `failed`, with a `reason` that says which of the two,
+ * since the parts that were reviewed are no review of the range. What they spent and answered is kept as
+ * it is, as for any attempt that fell short: it is what the cell measured, to be read under that outcome.
+ *
  * `config` and `range` are the cell's, from the matrix. `key`, for the seeded range, is the answer key the
  * findings are scored against (`./score.mjs`): `found` and `missed` by defect id, how many findings were
  * `extra`, and the `recall`.
@@ -296,10 +304,22 @@ function cut(body) {
  * A reading that is not `session` has no `configuredModel` and no `configuredEffort`: its `model` and
  * `effort` are already those, and it has the fields every reading had before the session's model was read.
  * For a range in parts the model is that of the last attempt, as the outcome is. */
-export function buildReading({ config, range, results, recordedAt, key = null, configured = null }) {
+export function buildReading({ config, range, results, recordedAt, exit, key = null, configured = null }) {
   if (!Array.isArray(results) || results.length === 0) return null;
   const runs = results.map((result) => result.run);
   const last = runs.at(-1);
+  // How the cell ended. An attempt that fell short ended the run, and says how. One that was reviewed did
+  // not end it short, so if the run is short all the same the reason is the command's, and is said here.
+  const parts = last.part?.of ?? 1;
+  const heard = new Set(runs.map((run) => run.part?.index ?? 1));
+  // The first part no attempt was handed over for: the parts run in order, so it is the one the run stopped at.
+  const unheard = Array.from({ length: parts }, (_, at) => at + 1).find((index) => !heard.has(index));
+  const ended = (() => {
+    if (last.outcome !== 'reviewed') return { outcome: last.outcome, reason: last.reason ?? null };
+    if (unheard !== undefined) return { outcome: 'failed', reason: `part ${unheard} of ${parts} gave no result (codex-review exited ${exit}), so the range was not reviewed whole` };
+    if (exit !== 0) return { outcome: 'failed', reason: `codex-review exited ${exit} after its last session was reviewed, so no review of the range was recorded` };
+    return { outcome: 'reviewed', reason: last.reason ?? null };
+  })();
   const sum = (pick) => runs.reduce((total, run) => (total === null || !isCount(pick(run)) ? null : total + pick(run)), 0);
   const reviews = results.map((result) => result.review ?? null);
   const answered = reviews.every((review) => review !== null);
@@ -329,14 +349,14 @@ export function buildReading({ config, range, results, recordedAt, key = null, c
     ...(ran ? { configuredModel: asked.model, configuredEffort: asked.effort } : {}),
     prompt: last.prompt ?? null,
     promptVersion: last.promptVersion ?? null,
-    outcome: last.outcome,
-    reason: last.reason ?? null,
+    outcome: ended.outcome,
+    reason: ended.reason,
     usage: Object.fromEntries(['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningOutputTokens'].map((name) => [name, sum((run) => run.usage?.[name])])),
     requests: sum((run) => run.requests),
     firstRequestInputTokens: runs[0].firstRequestInputTokens ?? null,
     durationMs: sum((run) => run.durationMs),
     coverage: { seen: sum((run) => run.coverage?.seen), total: sum((run) => run.coverage?.total) },
-    parts: last.part?.of ?? 1,
+    parts,
     findings,
     findingBodyMax: FINDING_BODY_MAX,
     verdict: answered ? (reviews.some((review) => review.verdict === 'incorrect') ? 'incorrect' : 'correct') : null,
@@ -617,7 +637,7 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
     const { command } = reviewOf(checkout);
     log(`Cell ${cell}: js-harness codex-review ${command.join(' ')}`);
     exit = await codexReviewMain(command, env, reviewDeps);
-    reading = buildReading({ config, range, results, recordedAt: now().toISOString(), key: range.seeded ? SEEDED_KEY : null, configured });
+    reading = buildReading({ config, range, results, recordedAt: now().toISOString(), exit, key: range.seeded ? SEEDED_KEY : null, configured });
   } catch (err) {
     error(`Cell ${cell} could not be run: ${err.message}`);
     return 1;

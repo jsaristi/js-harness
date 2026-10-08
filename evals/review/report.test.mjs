@@ -118,6 +118,19 @@ test('a reading that is no review shows its outcome, and a count that is not kno
   assert.deepEqual(row(seeded, 'lean-own')[1], 'missing');
 });
 
+test('a cell that ended before every part of its range was reviewed is a row that says `failed`, with what its parts spent, and is a recorded cell', () => {
+  const repo = repository();
+  recordAll(repo);
+  // As the comparison stores it when the session of a later part could not be launched (`buildReading`).
+  record(repo, 'lean', 'real', { outcome: 'failed', reason: 'part 2 of 3 gave no result (codex-review exited 1), so the range was not reviewed whole', parts: 3 });
+  const result = run(['--require-complete'], repo);
+  assert.equal(result.code, 0, result.err);
+  const real = section(fs.readFileSync(repo.out, 'utf8'), 'real');
+  // The outcome is what says it is no review; the counts beside it are those of the parts that ran.
+  assert.deepEqual(row(real, 'lean'), ['lean', 'failed', '3', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1', 'gpt-6.1-sol medium*']);
+  assert.equal(row(real, 'lean-high')[1], 'reviewed');
+});
+
 /** What a reading holds once the model its session ran with was read from the session's own file. */
 const measured = (model, effort, configuredModel, configuredEffort) => ({ model, effort, modelSource: 'session', configuredModel, configuredEffort });
 const modelCell = (text, range, config) => row(section(text, range), config).at(-1);

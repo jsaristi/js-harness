@@ -66,7 +66,9 @@
 // prompt naming its files (`--base` cannot be limited to files), held to the evidence rule for the
 // changed lines of its own files, and logged in a run line of its own. The first part that does not pass
 // stops the run. The review is recorded, in one record for the whole range, only when every part passed,
-// and the findings of all of them are printed then, together. A range within both bounds is one part, and
+// and what the parts answered is shown then, together and not before: the review Codex rendered of each,
+// and the findings of all of them. When a part does not pass, nothing any part answered is shown, since
+// the parts that passed are no review of the range. A range within both bounds is one part, and
 // its review is the one described above, unchanged; the `current` session never splits a range.
 //
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
@@ -714,7 +716,11 @@ function totalsLine(attempts) {
  * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
  * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
  * the other files are, so that the parts add up to the range. A renamed file is then two files, the old
- * name removed whole and the new one added whole, and every line of both is to be shown. */
+ * name removed whole and the new one added whole, and every line of both is to be shown.
+ *
+ * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
+ * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
+ * with `:`, would stand for other files than itself. The count and the check of the whole range name no file. */
 function planParts(spawn, root, { from, head, maxChangedLines, intent }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
   const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], room);
@@ -736,7 +742,11 @@ function planParts(spawn, root, { from, head, maxChangedLines, intent }) {
     } catch (err) {
       return { error: `The range needs ${part.of} parts, and the prompt of ${which} cannot be written. ${err.message}` };
     }
-    const shown = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', '--no-renames', from, head, '--', ...group.files], room);
+    // `--literal-pathspecs`, as in the command the prompt of the part names: a file name is a pathspec to
+    // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
+    // parts. What a part must have seen is the diff of its own files and no more, or the part is held to
+    // lines its prompt never asks for and its count of changed lines does not hold.
+    const shown = git(spawn, root, ['--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', from, head, '--', ...group.files], room);
     if (shown === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
     parts.push({ ...part, prompt, expected: patchKeys(shown) });
   }
@@ -918,10 +928,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
      * `promptText` the text of the own prompt and `promptVersion` the version of that text.
      *
      * Resolves with `{ exit }`, the exit code of the command when the attempt does not stand, whatever
-     * the reason; or, when it stands, `{ exit: 0, runId, review, spent, durationMs }`: the id of its run
-     * line (`undefined` when the line could not be written), its answer as data (`null` under `current`),
-     * what it spent and how long it took. It prints what a single review prints, but for the findings and
-     * the verdict of a part, which wait for the other parts. */
+     * the reason; or, when it stands, `{ exit: 0, runId, review, rendered, spent, durationMs }`: the id of
+     * its run line (`undefined` when the line could not be written), its answer as data (`null` under
+     * `current`), the review as Codex rendered it, what it spent and how long it took. It prints what a
+     * single review prints, but for what a part answered: the review Codex rendered, the findings and the
+     * verdict of a part wait for the other parts, and are shown by the caller or not at all. */
     const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null }) => {
       const ownPrompt = prompt === 'own';
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
@@ -1106,7 +1117,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // findings and the verdict of an attempt that does not stand are not a review, and are not shown as one.
       const stands = completed && !(answered && !answered.ok) && evidence.inspected;
       for (const warning of evidence.warnings) error(`Codex warning: ${warning}`);
-      if (evidence.review) write(`${evidence.review}\n`);
+      // The review as Codex rendered it, passed through here for a range reviewed whole, as it always was.
+      // That of a part is not: it holds the findings of the part, in Codex's words, and shown now it would
+      // stand on the screen as a review of files whose range a later part may still leave unreviewed. It is
+      // handed back instead (`rendered`), and shown with the others once every part has passed.
+      if (evidence.review && part === null) write(`${evidence.review}\n`);
       if (review && !stands) {
         log(NOT_STANDING);
       } else if (review && part === null) {
@@ -1159,7 +1174,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // The run line goes first, so that the record can name it. If the record then cannot be written
       // the command exits 1 and the log keeps a `reviewed` line no record names: a measurement of a
       // session that did meet the evidence rule, and still not a review `check --push` will count.
-      return { exit: 0, runId: logRun('reviewed'), review, spent, durationMs };
+      return { exit: 0, runId: logRun('reviewed'), review, rendered: evidence.review, spent, durationMs };
     };
 
     if (parts === null) {
@@ -1175,20 +1190,30 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (!own) log('Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
       // One part at a time, in order, and the next only once the one before it has passed: the first that
       // does not pass ends the run with the exit code of its own failure. The lines of the parts before
-      // it stay in the run log, as measurements; none of them is a review of the range.
+      // it stay in the run log, as measurements; none of them is a review of the range, so nothing they
+      // answered is shown: what each part answered is held here until the last one has passed.
       const passed = [];
       for (const part of parts) {
         const one = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part });
         if (one.exit !== 0) {
           const later = part.of - part.index;
           const unstarted = later === 0 ? '' : later === 1 ? 'the part after it was not started and ' : `the ${later} parts after it were not started and `;
-          error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.`);
+          // Said only when a part did pass: a person who saw it pass would look for what it found.
+          const held = passed.length === 0 ? ''
+            : `\n${passed.length === 1 ? 'The part before it passed, and what it answered is' : `The ${passed.length} parts before it passed, and what they answered is`} not shown: without every part it is no review of ${range}.`;
+          error(`Part ${part.index} of ${part.of} (${listed(part.files)}) did not pass, so ${unstarted}no review of ${range} was recorded.${held}`);
           return one.exit;
         }
         passed.push(one);
       }
-      // Every part stands, so what they answered is the review of the range: the findings of them all, in
-      // the order of the files, then what each part concluded, then what they spent together.
+      // Every part stands, so what they answered is the review of the range. First each part's review as
+      // Codex rendered it, in the order of the parts, under a line that says which part it is of: they are
+      // no longer between the lines of their own sessions, which is what told them apart. Then the findings
+      // of them all, in the order of the files, then what each part concluded, then what they spent together.
+      passed.forEach((one, at) => {
+        log(`Part ${at + 1} of ${passed.length}, as Codex rendered its review:`);
+        write(`${one.rendered}\n`);
+      });
       for (const finding of passed.flatMap((one) => one.review.findings).sort(byPlace)) log(findingLine(finding));
       passed.forEach((one, at) => log(`Part ${at + 1} of ${passed.length}: ${verdictLine(one.review)}`));
       log(totalsLine(passed));

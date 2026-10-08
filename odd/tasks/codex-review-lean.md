@@ -1088,6 +1088,64 @@ What follows from it:
   - The login: the same file, bytes unchanged, one name before and after.
   - What has a Codex review record now: `87854b1..81bb786`. The code before it on this
     branch, `7deddfc..87854b1`, has none (Next step).
+- 2026-10-08: that record committed as `a560e70` (gate green; document only).
+- 2026-10-08T06:35Z to 06:52Z: the Codex review of the whole branch, run and not asked.
+  It was put down as a choice for Sebastián an hour before (28 reviews, and a part that
+  might fail the evidence rule); read again against his rule of the same day and his "no
+  me importa si gasta cupo de codex, la idea es que se pueda tener una revisión", it is a
+  step of the plan whose answer is yes, with a way back if a part fails (record the skip
+  with its reason). So it was stated with its cost and run:
+  `node bin/js-harness.mjs codex-review --base 7deddfc`, default session, inside the login
+  proof, CLI 0.161.0. Twenty-eight Codex reviews, forty-seven in the feature.
+  - The range is `7deddfc..a560e70`, the branch whole, since the command reviews up to
+    `HEAD`: 14,141 changed lines in 72 files, 28 parts. All 28 passed the evidence rule,
+    the part of the command's test file among them (2,968 lines), and the review is
+    recorded. 3,358,226 input tokens (2,280,064 cached), 18,996 output, 136 requests,
+    963 s. The login: the same file, bytes unchanged, one name.
+  - Twenty-four parts: the patch is correct. Four: incorrect, with five findings, all P2,
+    each read against the code and accepted, to be fixed test first by one writer:
+    1. `bin/codex-review.mjs:1109-1112`: in a review in parts the findings of a part are
+       printed as soon as it ends, so when a later part fails they have been shown for a
+       range no review stands for. The tests look at the log and not at what is written.
+       Hold them until every part passed.
+    2. `bin/lib/codex-review-prompt.mjs:50`: a file name with a curly apostrophe passes
+       the check of the part prompt and breaks the PowerShell quoting of the command the
+       part is told to run. Refuse those characters with the ASCII quotes.
+    3. `bin/lib/codex-review-prompt.mjs:80`: the file names of a part are given to
+       `git diff` as pathspecs, so one with pathspec magic (`*`, `[`, a leading `:`) does
+       not mean itself. Give them as literal pathspecs.
+    4. `evals/review/compare.mjs:619-620`: a cell whose review is in parts and whose later
+       part could not be launched can be read as a review of the whole range. Mark such a
+       reading as not complete.
+    5. `evals/review/login-proof.mjs:377-378`: `--out` may name a file inside the real
+       home, the login itself included, and the report is written after the proof said
+       the home was intact. Refuse a destination inside the real home before the command
+       runs.
+- 2026-10-08: the five fixed by one delegated writer (route: delegated), test first.
+  Re-run by the parent: 115 of 115 over the prompt, parts, compare, report and login-proof
+  files; the command file 200 of 200 by the writer (380 s).
+  1. What a part rendered is held and written after the last part passed, in part order,
+     each under "Part N of M, as Codex rendered its review:"; when a part fails nothing of
+     any part is shown, and the failure says that the parts before it passed and are not
+     shown. Red first: the text of parts 1 and 2 was written when part 3 started.
+  2. The seven typographic quotes U+2018 to U+201E are refused where the straight ones
+     are, and such a name refuses the split before anything is launched. Red first.
+  3. The command a part is told to run is `git --literal-pathspecs diff --no-renames …`,
+     and what the part must have seen is computed the same way. Red first, with `a[1].txt`
+     beside `a1.txt`: the part saw 2 of 4 lines. The text Codex receives changed, so the
+     part prompt is `js-harness.codex-review-part-prompt/v2`; the whole-range prompt is
+     not touched. `*`, `?` and a leading `:` cannot be file names on NTFS, so those are
+     held at the level of the string.
+  4. A reading is `reviewed` only when every part handed over a result and the command
+     exited 0; otherwise `failed` with which part gave none, keeping the tokens, requests
+     and findings of the parts that ran. Red first.
+  5. `--out` is refused (exit 2, nothing run, nothing written) when it lands inside the
+     real home, by real path and by the file ids of its ancestors, or is an existing file
+     that is the same file as an entry of the home's top level. Red first: exit 0 for
+     `--out <home>/auth.json` and for a hard link to it. It reads stats and names, no byte.
+  - Left as they are, and said: a review not in parts that does not stand still shows
+    what Codex rendered above its error; the destination is checked once, before the
+    command, and against the top level of the home only.
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1272,10 +1330,11 @@ T1 to T15 are checked. What is left is Sebastián's:
    `codex:rescue`, the plugin's three hooks. Each part is his to accept or not; an accepted
    part is a small feature of its own or one command of his.
 2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push hook refuses a
-   branch with a code commit no review record covers, so before the push the code range
-   `7deddfc..87854b1` needs its Codex review or a recorded skip (item below).
+   branch with a code commit no review record covers: `7deddfc..a560e70` has its record
+   since 2026-10-08, and the commit that fixes its five findings needs its own.
 
-Open, for him:
+Open, for him (item 1 is done: the review of the whole branch ran on 2026-10-08 and is
+recorded, Progress; kept as it was put to him):
 1. The Codex review of the code range `7deddfc..87854b1` before any push, or a recorded
    skip. Counted on 2026-10-08 with `reviewParts`: 13,350 changed lines in 71 files, 28
    parts, so 28 Codex reviews, by the four parts of the run above about 2.7 million input
@@ -1287,8 +1346,8 @@ Open, for him:
    with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
    gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
 
-On the cap: nineteen Codex reviews spent in this feature (one read nothing, eighteen read their
+On the cap: forty-seven Codex reviews spent in this feature (one read nothing, forty-six read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to
-`fefec21`; `fefec21..81bb786` is under its budget and pending.
+`fefec21`; what follows `fefec21` is assessed with the commit of the five fixes.

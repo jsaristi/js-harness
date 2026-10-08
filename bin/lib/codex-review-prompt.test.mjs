@@ -77,7 +77,8 @@ test('reviewPrompt refuses a range that is not two commit ids, since both go int
 const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 
 test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text and its version', () => {
-  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v1');
+  // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
+  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v2');
   assert.notEqual(REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION);
   // The text a whole range was asked with in the runs recorded under `v1`, to the character.
   assert.equal(
@@ -94,12 +95,27 @@ test('reviewPrompt for a part says which part it is, and names its files in the 
   assert.ok(prompt.includes(`${FROM}..${HEAD}`), prompt);
   assert.match(prompt, /part 2 of 3/);
   // The files are in the command and nowhere else: the prompt is paid on every request of the review.
-  assert.ok(prompt.includes(`\`git diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
   assert.equal(prompt.split('my notes.md').length, 2, 'each file is named once');
   assert.equal(prompt, reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, files: [...PART.files] } }), 'the same part gives the same text');
   assert.equal(prompt.endsWith('\n'), true);
   assert.equal(prompt.includes('\r'), false);
   assert.notEqual(prompt, reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, index: 3 } }));
+});
+
+test('reviewPrompt for a part names its files as themselves: git is told to read no pattern and no magic into a name', () => {
+  // Each of these is a name a file can have, and a pathspec that means something else: a pattern that takes
+  // in the files of other parts (`*`, `?`, `[1]`), or magic that leaves the file itself out (a `:` first).
+  // Whether git then shows the one file is asked of a real repository in `../codex-review.test.mjs`; `*`,
+  // `?` and a leading `:` are no file names on Windows, so here they are text.
+  const files = ['*.md', 'a?.txt', 'a[1].txt', ':(exclude)a.txt', ':!a.txt', ':/top.txt'];
+  const prompt = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 2, files } });
+  // The option goes before `diff`: it is git's, for every pathspec of the command, and no part of `diff`.
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- ${files.map((file) => `'${file}'`).join(' ')}\``), prompt);
+  // And a shell reads no pattern into them either: each is in single quotes.
+  for (const file of files) assert.equal(quotedPath(file), `'${file}'`, file);
+  // The whole range names no file, so its command is as it was.
+  assert.equal(reviewPrompt({ from: FROM, head: HEAD }).includes('--literal-pathspecs'), false);
 });
 
 test('reviewPrompt for a part says the other files of the range are reviewed in other parts: to read, not to report on', () => {
@@ -135,6 +151,22 @@ test('quotedPath refuses a path that one command line cannot hold safely, instea
   // The error names the path, so that a person can find the file.
   assert.throws(() => quotedPath('it\'s.txt'), (err) => err.message.includes(JSON.stringify('it\'s.txt')));
   assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, files: ['ok.txt', 'two\nlines.txt'] } }), /cannot be written safely/);
+});
+
+test('quotedPath refuses the quotes PowerShell reads as quotes, which would end the single quotes a path is written in', () => {
+  // PowerShell takes each of these for a quote, as it takes `'` and `"`: U+2018 to U+201B close a
+  // single-quoted string, and U+201C to U+201E are double quotes. `sh` reads none of them, so no one way of
+  // writing such a path holds in both shells.
+  const smart = ['\u2018', '\u2019', '\u201a', '\u201b', '\u201c', '\u201d', '\u201e'];
+  for (const quote of smart) {
+    const name = `it${quote}s.txt`;
+    const code = `U+${quote.codePointAt(0).toString(16).toUpperCase()}`;
+    assert.throws(() => quotedPath(name), /cannot be written safely/, code);
+    assert.throws(() => quotedPath(name), (err) => err.message.includes(JSON.stringify(name)), `${code}: the error names the path`);
+    assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, files: ['ok.txt', name] } }), /cannot be written safely/, code);
+  }
+  // Other letters outside ASCII are still written, in single quotes: only what a shell reads as a quote is refused.
+  for (const path of ['a\u00f1o/caf\u00e9.js', 'a\u2013b.txt', '\u00abx\u00bb.txt', 'a\u201fb.txt']) assert.equal(quotedPath(path), `'${path}'`, path);
 });
 
 test('reviewPrompt refuses a part that is not one: a number out of its range, a range in one part, no file', () => {

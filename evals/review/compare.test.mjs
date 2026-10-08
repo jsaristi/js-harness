@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { codexArgs } from '../../bin/codex-review.mjs';
-import { leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
+import { createLeanHome as makeLeanHome, leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
 import { REVIEW_PROMPT_VERSION } from '../../bin/lib/codex-review-prompt.mjs';
 import { windowsCommandLine } from '../../bin/lib/windows-args.mjs';
 import {
@@ -656,6 +656,72 @@ test('a range the repository does not hold is refused before any review, and the
   assert.deepEqual(entries(m.readings), []);
 });
 
+// --- a cell whose range is reviewed in parts ---
+
+/** `fakeRepository`, with a `real` range over the lean session's bound of 400 changed lines: its second
+ * commit also rewrites two files of 150 lines, so the range is two parts, `big-a.txt` (300 changed lines)
+ * and then `big-b.txt` with `f.txt` (302). */
+function fakeLargeRepository(m) {
+  const body = (mark) => `${Array.from({ length: 150 }, (_, line) => `${mark} ${line}`).join('\n')}\n`;
+  const repository = fakeRepository(m, { 'big-a.txt': body('a'), 'big-b.txt': body('b') });
+  for (const name of ['big-a.txt', 'big-b.txt']) fs.writeFileSync(path.join(repository.root, name), body(name.toUpperCase()), 'utf8');
+  git(repository.root, 'commit', '--quiet', '--amend', '--no-edit', '--all');
+  const head = git(repository.root, 'rev-parse', 'HEAD');
+  return { ...repository, head, ranges: repository.ranges.map((range) => (range.name === 'real' ? { ...range, head } : range)) };
+}
+
+/** The `review` deps `run` gives `codexReviewMain`, with `more` laid on them. */
+const reviewDeps = (fake, more) => ({ spawnAsync: fake.spawnAsync, killTree: () => {}, randomUUID: () => RUN_ID, monotonicNow: ticking(1000, 61000, 61000, 121000), write: () => {}, ...more });
+
+test('a cell whose range is reviewed in parts is one reading, `reviewed` once every part gave its result and the command exited 0', async () => {
+  const m = machine();
+  m.repository = fakeLargeRepository(m);
+  const fake = fakeCodex({ findings: [{ file: 'f.txt', start: 1, end: 1 }] });
+  const result = await run(['--cell', 'lean:real'], m, fake, { review: reviewDeps(fake) });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 2, 'one session a part');
+  const stored = reading(m, 'lean', 'real');
+  assert.deepEqual([stored.outcome, stored.reason, stored.parts, stored.requests, stored.durationMs], ['reviewed', null, 2, 4, 120000]);
+  assert.deepEqual(stored.coverage, { seen: 602, total: 602 });
+  assert.equal(stored.findings.length, 2, 'the findings of both parts');
+});
+
+test('a cell whose later part could not be launched is not a review of the range: the reading says so, and keeps what the parts that ran spent', async () => {
+  const m = machine();
+  m.repository = fakeLargeRepository(m);
+  const fake = fakeCodex({ findings: [{ file: 'f.txt', start: 1, end: 1 }] });
+  // The home of the first part is made as it always is; that of the second cannot be, so its session never
+  // starts and `codexReviewMain` hands over no result for it.
+  let homes = 0;
+  const createLeanHome = (options) => {
+    homes += 1;
+    if (homes > 1) throw new Error('The Codex home of this run could not be made: the disk is full.');
+    return makeLeanHome(options);
+  };
+  const result = await run(['--cell', 'lean:real'], m, fake, { review: reviewDeps(fake, { createLeanHome }) });
+  assert.equal(fake.calls.length, 1, 'the second part was never launched');
+  assert.match(result.err, /the disk is full/);
+  assert.match(result.err, /Part 2 of 2 .* did not pass/);
+  // The reading is written, as that of any cell that launched a review, and it is not that of a review.
+  assert.equal(result.code, 0, result.err);
+  const stored = reading(m, 'lean', 'real');
+  assert.equal(stored.outcome, 'failed');
+  assert.equal(stored.reason, 'part 2 of 2 gave no result (codex-review exited 1), so the range was not reviewed whole');
+  assert.equal(stored.parts, 2);
+  // What the one part that ran spent is a measurement all the same, and is kept.
+  assert.deepEqual([stored.usage, stored.requests, stored.firstRequestInputTokens, stored.durationMs], [SPENT, 2, 18200, 60000]);
+  assert.match(result.out, /Recorded lean:real \(failed: part 2 of 2 gave no result/);
+  // A recorded cell, whatever its outcome: listed as one, and not run again without --force.
+  assert.match((await run(['--list'], m)).out, /^lean:real\s+recorded\s+failed\s/m);
+  const again = await run(['--cell', 'lean:real'], m);
+  assert.equal(again.code, 1);
+  assert.match(again.err, /already recorded.*--force/);
+  // Nothing is left of the run.
+  assert.deepEqual(entries(m.homes), []);
+  assert.equal(fs.statSync(m.auth).nlink, 1);
+  assert.equal(fs.existsSync(path.join(m.parent, CHECKOUT_NAME)), false);
+});
+
 // --- the CodeGraph cell ---
 
 /** How `gentle-ai codegraph init` is started for `checkout` on this host. */
@@ -825,7 +891,8 @@ const resultOf = (over = {}, review = { findings: [], verdict: 'correct', explan
   },
 });
 const finding = (file, start, verdictBody = 'b') => ({ file, start, end: start, severity: 'P2', title: 't', body: verdictBody, confidence: 0.5 });
-const CELL = { config: CONFIGS[1] ?? { name: 'lean' }, range: { name: 'real', base: 'b'.repeat(40), head: 'h'.repeat(40) }, recordedAt: '2026-10-07T12:00:00.000Z' };
+// `exit` is what `codexReviewMain` returned: 0, as for a review that was recorded, unless a test says otherwise.
+const CELL = { config: CONFIGS[1] ?? { name: 'lean' }, range: { name: 'real', base: 'b'.repeat(40), head: 'h'.repeat(40) }, recordedAt: '2026-10-07T12:00:00.000Z', exit: 0 };
 
 test('buildReading: a range reviewed in parts is one reading, its counts added up and its findings together', () => {
   const part = (index, over) => ({ part: { index, of: 2, files: 1, changedLines: 3 }, ...over });
@@ -856,6 +923,32 @@ test('buildReading: what a part did not measure is not known for the whole, and 
   assert.deepEqual(stopped.usage, { inputTokens: null, cachedInputTokens: null, outputTokens: null, reasoningOutputTokens: null });
   assert.deepEqual([stopped.requests, stopped.durationMs, stopped.findings, stopped.verdict], [null, null, null, null]);
   assert.equal(stopped.firstRequestInputTokens, 50);
+});
+
+test('buildReading: `reviewed` only when every part gave a result and the command exited 0; short of that the reading is `failed`, says why, and keeps what was measured', () => {
+  const part = (index, of, over) => resultOf({ part: { index, of, files: 1, changedLines: 3 }, ...over }, { findings: [finding(`part-${index}.txt`, 1)], verdict: 'correct', explanation: '', confidence: null });
+  // The first of three parts was reviewed and the second never handed over a result: its session could not be launched.
+  const cutShort = buildReading({ ...CELL, exit: 1, results: [part(1, 3)] });
+  assert.deepEqual([cutShort.outcome, cutShort.reason, cutShort.parts], ['failed', 'part 2 of 3 gave no result (codex-review exited 1), so the range was not reviewed whole', 3]);
+  // What the part that ran spent and showed is what the cell measured, and stays in the reading.
+  assert.deepEqual(cutShort.usage, { inputTokens: 100, cachedInputTokens: 40, outputTokens: 10, reasoningOutputTokens: 4 });
+  assert.deepEqual([cutShort.requests, cutShort.firstRequestInputTokens, cutShort.durationMs, cutShort.coverage], [3, 50, 2000, { seen: 5, total: 5 }]);
+  // Two of three, the same: the part that is missing is the one after the last that answered.
+  assert.equal(buildReading({ ...CELL, exit: 1, results: [part(1, 3), part(2, 3)] }).reason, 'part 3 of 3 gave no result (codex-review exited 1), so the range was not reviewed whole');
+  // A part with no result is one too when the command exited 0: the reading does not hold the whole range.
+  assert.equal(buildReading({ ...CELL, results: [part(1, 2)] }).outcome, 'failed');
+  // Every part answered and the command still failed (the record could not be written): no review was recorded.
+  for (const results of [[part(1, 2), part(2, 2)], [resultOf()]]) {
+    const unrecorded = buildReading({ ...CELL, exit: 1, results });
+    assert.deepEqual([unrecorded.outcome, unrecorded.reason], ['failed', 'codex-review exited 1 after its last session was reviewed, so no review of the range was recorded']);
+    assert.equal(buildReading({ ...CELL, results }).outcome, 'reviewed', 'and with the exit code of a review that was recorded, it is one');
+  }
+  // An exit code nobody gave is not the 0 of a review that was recorded.
+  const { exit: _exit, ...untold } = CELL;
+  assert.equal(buildReading({ ...untold, results: [resultOf()] }).outcome, 'failed');
+  // An attempt that fell short ended the run: its own outcome and reason stand, whatever the exit code.
+  const fell = buildReading({ ...CELL, exit: 7, results: [part(1, 3), part(2, 3, { outcome: 'not-inspected', reason: 'its successful commands showed 1 of 3 changed lines' })] });
+  assert.deepEqual([fell.outcome, fell.reason], ['not-inspected', 'its successful commands showed 1 of 3 changed lines']);
 });
 
 test('buildReading: nothing launched is no reading; a body is cut whole, never inside a pair of code units', () => {

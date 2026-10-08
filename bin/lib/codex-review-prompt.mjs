@@ -29,8 +29,9 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v1';
 
 // The version of the text `reviewPrompt` writes for one part of a range, kept in the run line of that part.
 // It is a version of its own because it is another text: a change to the wording of a part leaves the
-// reviews of whole ranges comparable with one another, and the other way round.
-export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v1';
+// reviews of whole ranges comparable with one another, and the other way round. `v2` is `v1` with the file
+// names of the part read literally by the command it names (`git --literal-pathspecs diff`, see `scope`).
+export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v2';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -46,15 +47,18 @@ const COMMIT_ID = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 const PLAIN_PATH = /^[A-Za-z0-9_./][A-Za-z0-9_./-]*$/;
 
 // What no quoting on one command line holds in both shells: a control character (a newline, a tab, a NUL)
-// and the two quote characters, since PowerShell and `sh` close and escape a quote differently.
-const UNSAFE_IN_PATH = /[\x00-\x1f\x7f'"]/;
+// and the two quote characters, since PowerShell and `sh` close and escape a quote differently. And the
+// typographic quotes, which PowerShell reads as those two wherever it reads a quote: U+2018 to U+201B as
+// `'`, so one of them ends the single quotes a path is written in, and U+201C to U+201E as `"`. `sh` reads
+// them as letters, so no way of escaping one holds in both.
+const UNSAFE_IN_PATH = /[\x00-\x1f\x7f'"\u2018-\u201e]/;
 
 /** `path` as the model can copy it into a command line: as it is when it is plain, else in single quotes,
  * inside which neither `sh` nor PowerShell reads anything. Throws for a path that cannot be written safely
  * that way (see `UNSAFE_IN_PATH`), naming it: a path written wrong would be a file the review never shows. */
 export function quotedPath(path) {
   if (typeof path !== 'string' || path === '' || UNSAFE_IN_PATH.test(path)) {
-    throw new Error(`The path ${JSON.stringify(path)} cannot be written safely on one command line (it is empty, or holds a quote or a control character such as a newline).`);
+    throw new Error(`The path ${JSON.stringify(path)} cannot be written safely on one command line (it is empty, or holds a quote, straight or typographic, or a control character such as a newline).`);
   }
   return PLAIN_PATH.test(path) ? path : `'${path}'`;
 }
@@ -77,7 +81,14 @@ function scope(from, head, part) {
   // `--no-renames`: with it the diff of some files is the diff of each of them, whatever the others are. A
   // file that was renamed is then shown whole, as one removed and one added, also when its two names are in
   // different parts, which a rename could not be shown across.
-  const command = `git diff --no-renames ${from} ${head} -- ${part.files.map(quotedPath).join(' ')}`;
+  //
+  // `--literal-pathspecs`: what follows `--` is read by git as pathspecs, and a file name may be one that
+  // means something else. `*.md`, `a?.txt` and `app/[id]/page.tsx` are patterns, which also match the files
+  // of other parts, past the scope and the size of this one; a name that starts with `:` is pathspec magic,
+  // which may leave the file itself out. With the option every name is that one path and nothing more. It
+  // is an option of `git`, not of `diff`, so it goes before the subcommand. The command that says what a
+  // part must have seen is run with it too (`planParts` in `../codex-review.mjs`).
+  const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${part.files.map(quotedPath).join(' ')}`;
   return [
     `Review the code changes in the committed range ${from}..${head}. This is part ${part.index} of ${part.of} of that review: it covers the files the command below names.`,
     `Run \`${command}\` to inspect them: its output is the whole change under review in this part.`,
