@@ -1017,6 +1017,19 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
     against 480,000, as noted on 2026-10-07.
   Also seen: while this session's own transcript was past the limit, the watch said nothing
   about it, as recorded before.
+- 2026-10-08, later: a third working session, and a second overlap with this feature. Sebastián
+  opened "Subagent model routing evaluation" (worktree `subagent-model-routing`, branch
+  `feat/subagent-model-routing`, from `main`): an eval of what delegating to a cheaper
+  sub-agent model costs and saves, 54 sequential runs by its own plan, about four hours of
+  machine. Two things touch this document. The candidate rule of 2026-10-07 (every sub-agent
+  at high effort) is the same subject seen from the other side, so where that rule ships
+  should be decided with that feature's result in hand, not before. And the constraint "no
+  gate or test while trials run" now binds three sessions: the board shows a gate, but it
+  shows an eval run only as a session's background work, with nothing that says "trials are
+  running, keep your gate out". For T7: a line of the board for running trials, as there is
+  one for gates. Seen at the same time: with two sessions waiting for him at once, the watch
+  announced each as it stopped, and it was the parent's reading of both tails that said which
+  to answer first.
 
 ## Next step
 Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged; see the
