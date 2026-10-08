@@ -4,10 +4,12 @@
 //   node evals/review/compare.mjs --list
 //   node evals/review/compare.mjs --cell <config>:<range> [--force] [--dry-run] [--keep-checkout]
 //
-// Why. `js-harness codex-review` has two sessions, and which one becomes the default is decided by what
-// each finds and what it costs (odd/tasks/codex-review-lean.md, T11 to T13). A cell is one configuration
-// reviewing one range. What it spent and what it found is written to one JSON file, the reading, and
-// `./report.mjs` sets the readings side by side. This tool decides nothing.
+// Why. `js-harness codex-review` has two sessions, and which one is the default was decided by what each
+// finds and what it costs (odd/tasks/codex-review-lean.md, T11 to T13): `current` was the default while
+// the cells were read, and `lean` is since. A cell is one configuration reviewing one range. What it spent
+// and what it found is written to one JSON file, the reading, and `./report.mjs` sets the readings side by
+// side. This tool decides nothing, and no cell rests on the default: each names its session to the command,
+// so a cell run again measures the configuration it measured the first time.
 //
 // The matrix is data, below: five configurations over two ranges. `real` is a range of this repository
 // with no known defect, where a configuration shows what it costs and what it reports on ordinary work.
@@ -31,8 +33,8 @@
 // an index there, and CodeGraph does not index a temporary folder. `seeded` is built under the temp folder.
 // Both are removed after the cell.
 //
-// How `current` is measured. Today's default session is ephemeral, in the user's own Codex home, so what
-// it spends is written nowhere. Here it runs in a copy of that home, made by `../codex-home.mjs` as for the
+// How `current` is measured. As a person runs it, that session is ephemeral, in the user's own Codex home,
+// so what it spends is written nowhere. Here it runs in a copy of that home, made by `../codex-home.mjs` as for the
 // eval suite: `config.toml` without the desktop app's pieces and with an engram of the run's own, the
 // global `AGENTS.md`, the hooks, the skills and the plugin cache. The login is not part of the copy and is
 // never copied or opened: `codexReviewMain` hard-links the real `auth.json` into the copy, as it does for
@@ -71,7 +73,7 @@ const SEEDED_KEY = JSON.parse(fs.readFileSync(path.join(SEEDED_DIR, 'key.json'),
  * the review is given the range's feature document; `codegraph`, whether the CodeGraph MCP server of the
  * user's configuration is added; `only`, the ranges it runs on when not all. */
 export const CONFIGS = [
-  { name: 'current', session: 'current', prompt: 'codex', effort: null, doc: false, codegraph: false, only: null, what: 'today\'s default, the user\'s whole Codex configuration, measured in a copy of his Codex home' },
+  { name: 'current', session: 'current', prompt: 'codex', effort: null, doc: false, codegraph: false, only: null, what: 'the current session, the default while the cells were read: the user\'s whole Codex configuration, measured in a copy of his Codex home' },
   { name: 'lean', session: 'lean', prompt: 'codex', effort: LEAN_EFFORT, doc: false, codegraph: false, only: null, what: 'the lean session, asked with the sentence Codex writes for `--base`' },
   { name: 'lean-own', session: 'lean', prompt: 'own', effort: LEAN_EFFORT, doc: true, codegraph: false, only: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
   { name: 'lean-high', session: 'lean', prompt: 'codex', effort: 'high', doc: false, codegraph: false, only: null, what: 'the lean session at high effort' },
@@ -537,9 +539,11 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
   }
 
   /** What `codex-review` is called with for the tree at `checkout`, and what Codex is launched with: the
-   * one place both a dry run and a real one take them from. */
+   * one place both a dry run and a real one take them from. The session is always named, `current` too:
+   * left out, it would be whichever one the command runs by default, and the `current` cell would then
+   * measure the lean session with the seam of the measured one ignored. */
   const reviewOf = (checkout) => ({
-    command: ['--base', range.base, ...(config.session === 'lean' ? ['--session', 'lean'] : []), ...(config.prompt === 'own' ? ['--prompt', 'own', '--doc', range.doc] : []), '--cwd', checkout],
+    command: ['--base', range.base, '--session', config.session, ...(config.prompt === 'own' ? ['--prompt', 'own', '--doc', range.doc] : []), '--cwd', checkout],
     codexArgv: codexArgs(range.base, config.session, platform, config.prompt, { effort: config.effort ?? LEAN_EFFORT, extraConfig, ephemeral: config.session !== 'current' }),
   });
 

@@ -8,15 +8,20 @@
 // all appear in the output of the commands that succeeded in its JSONL event stream (design and
 // probes: odd/tasks/codex-exec-review.md).
 //
-// Codex runs in one of two sessions, chosen with `--session`. `current`, the default, is the review
-// as it has run so far: the user's whole Codex config, with a read-only sandbox and two desktop plugins
-// off. `lean` ignores that config and its rules, disables plugins, apps and hooks, sets the model and
-// the effort itself (`LEAN_MODEL`, `LEAN_EFFORT`), and runs in a Codex home of its own, because that is
-// the only way to leave the user's global `AGENTS.md` out. `lean` lives beside `current` until a
-// comparison of the two decides the default (odd/tasks/codex-review-lean.md).
+// Codex runs in one of two sessions, chosen with `--session`. `lean`, the default, loads what a review
+// needs and nothing else: the diff, read access to the repository, the project's `AGENTS.md` and Codex's
+// own review rubric. It ignores the user's Codex config and its rules, disables plugins, apps and hooks,
+// sets the model and the effort itself (`LEAN_MODEL`, `LEAN_EFFORT`), and runs in a Codex home of its
+// own, because that is the only way to leave the user's global `AGENTS.md` out. `current` is the review
+// as it ran before there was a lean one, and the way to run it on the user's own Codex configuration:
+// that whole config, with a read-only sandbox and two desktop plugins off. `lean` became the default
+// once a comparison of the two over two ranges showed it finding the same or more with fewer tokens
+// (odd/tasks/codex-review-lean.md, T12 and T13; the numbers are in evals/results/review/report.md);
+// `current` was the default until then, and is unchanged.
 //
 // The lean session's home is a folder made for the one run, `<home>/.js-harness/codex-review-homes/<run
-// id>/`, handed to Codex as `CODEX_HOME` and removed when the run ends, however it ends. It is made with
+// id>/`, handed to Codex as `CODEX_HOME` and removed when the run ends, however it ends, with the folder of
+// the homes and `.js-harness` when that leaves them empty: a review leaves nothing on the machine. It is made with
 // one thing in it: the login, as a hard link to the real `auth.json`, never a copy, so a refresh of the
 // login inside the review is a refresh of the real one (`bin/lib/codex-review-home.mjs` has the reasons and
 // how to undo it). `<home>` is `--home`, else `JS_HARNESS_HOME`, else the OS home, an empty one counting as
@@ -48,7 +53,8 @@
 // `--base` and a prompt exclude each other on Codex's command line, so under `own` there is no `--base`
 // there, and the prompt goes in on stdin (`-`): it has newlines, and may hold quotes, `%` and `&`, none of
 // which the one command line `cmd.exe` runs on Windows can carry. Codex's rubric applies under either, so
-// the answer is read the same way; which prompt becomes the default is decided by a comparison.
+// the answer is read the same way. `codex` stays the default: in the comparison the two found the same at
+// about the same cost (odd/tasks/codex-review-lean.md, Progress, 2026-10-08).
 //
 // A range too large for one session is reviewed in parts, under the lean session alone. The model reads the
 // diff through a tool whose output is bounded, so on a large range some changed lines are never shown and
@@ -80,7 +86,7 @@
 // sessions above. The comparison calls `codexReviewMain` with injected `deps` instead: `effort`, the effort
 // of the lean session; `extraCodexConfig`, more `-c` settings for it (an MCP server); `measuredCurrent`,
 // which runs the `current` session where it can be measured; and `onResult`, which hands back each attempt's
-// run line and answer. A measured `current` session is today's argv without `--ephemeral`, in a Codex home
+// run line and answer. A measured `current` session is the `current` argv without `--ephemeral`, in a Codex home
 // of the run's own that the caller's `seed` fills with a copy of the user's configuration, the login being
 // the same hard link the lean home holds (`createLeanHome`): the real home is never written, and the tokens
 // and the answer are read from the copy's rollout files as they are for `lean`.
@@ -100,19 +106,31 @@ import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-us
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
+// The model and the effort of the lean session. Sebastián fixed both on 2026-10-06, and the command
+// sets them itself instead of taking them from the user's Codex config. They are up here because the
+// usage names them.
+export const LEAN_MODEL = 'gpt-6.1-sol';
+export const LEAN_EFFORT = 'medium';
+
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. Only the lean session keeps anything
 // there, the Codex home of its run; under `current` the flag is read and nothing uses it. `--keep-home`
 // leaves that home after the run, so it needs the session that has one. `--prompt own` and its `--doc`
 // are configurations of the lean session too: `--doc` is a path, taken from `--cwd` when it is relative.
 // `--part-lines` is how many changed lines a part of a large range holds at most, in place of
-// `PART_MAX_CHANGED_LINES`; only the lean session reviews a range in parts.
+// `PART_MAX_CHANGED_LINES`; only the lean session reviews a range in parts. The lean session is the
+// default, so none of these needs `--session`; each is refused beside `--session current`.
+//
+// The second line of the usage is there because the default decides what a review loads and what it
+// costs, and a person who wants the review on their own Codex configuration has to know to ask for it.
 const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--session <current|lean>] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
-  '[--unavailable <reason>] [--cwd <path>] [--home <path>]';
+  'Usage: js-harness codex-review --base <rev> [--session <lean|current>] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
+  '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
+  `--session lean is the default: Codex gets the diff, the repository to read and the project's AGENTS.md, on ${LEAN_MODEL} at ${LEAN_EFFORT} effort, ` +
+  'and none of your Codex configuration. --session current runs the review on your own Codex configuration instead.';
 
 // The session configurations Codex can be launched with (see `codexArgs`); the first is the default.
-const SESSIONS = ['current', 'lean'];
+const SESSIONS = ['lean', 'current'];
 
 // What the review is asked with; the first is the default. `codex` is the sentence Codex writes itself for
 // `--base`, `own` this command's prompt (`reviewPrompt`).
@@ -142,12 +160,14 @@ function parseArgs(argv) {
   if (unavailable === '') throw new ArgError('--unavailable needs a non-empty reason');
   const home = get('--home');
   const session = get('--session') ?? SESSIONS[0];
-  if (!SESSIONS.includes(session)) throw new ArgError('--session must be `current` or `lean`');
+  if (!SESSIONS.includes(session)) throw new ArgError('--session must be `lean` or `current`');
+  // The three that follow belong to the lean session, which is the one a review runs in unless
+  // `--session current` says otherwise: so that is the only way to give one of them wrong.
   const keepHome = argv.includes('--keep-home');
-  if (keepHome && session !== 'lean') throw new ArgError('--keep-home needs --session lean: only the lean session has a Codex home of its own to keep');
+  if (keepHome && session !== 'lean') throw new ArgError('--keep-home does not go with --session current: only the lean session has a Codex home of its own to keep');
   const prompt = get('--prompt') ?? PROMPTS[0];
   if (!PROMPTS.includes(prompt)) throw new ArgError('--prompt must be `codex` or `own`');
-  if (prompt === 'own' && session !== 'lean') throw new ArgError('--prompt own needs --session lean: this command\'s own prompt is a configuration of the lean session');
+  if (prompt === 'own' && session !== 'lean') throw new ArgError('--prompt own does not go with --session current: this command\'s own prompt is a configuration of the lean session');
   const doc = get('--doc');
   if (doc !== undefined && prompt !== 'own') throw new ArgError('--doc needs --prompt own: only this command\'s own prompt carries the intent of a feature document');
   const partLinesGiven = get('--part-lines');
@@ -155,7 +175,7 @@ function parseArgs(argv) {
   if (partLinesGiven !== undefined) {
     partLines = /^[1-9]\d*$/.test(partLinesGiven) ? Number(partLinesGiven) : Number.NaN;
     if (!Number.isSafeInteger(partLines)) throw new ArgError('--part-lines must be a positive integer: how many changed lines a part of a large range holds at most');
-    if (session !== 'lean') throw new ArgError('--part-lines needs --session lean: only the lean session reviews a large range in parts');
+    if (session !== 'lean') throw new ArgError('--part-lines does not go with --session current: only the lean session reviews a large range in parts');
   }
   return { base, unavailable, session, home, keepHome, prompt, doc, partLines, cwd: get('--cwd') ?? process.cwd() };
 }
@@ -191,11 +211,6 @@ const CURRENT_CONFIG = [
   'plugins."unified-computer-use@openai-bundled".enabled=false',
   'plugins."computer-use@openai-bundled".enabled=false',
 ];
-
-// The model and the effort of the lean session. Sebastián fixed both on 2026-10-06, and the command
-// sets them itself instead of taking them from the user's Codex config.
-export const LEAN_MODEL = 'gpt-6.1-sol';
-export const LEAN_EFFORT = 'medium';
 
 // The Windows sandbox of the lean session. The command's own choice, as the model and the effort are, and
 // the one the user's config names: it needs no administrator, no setup step and, for a read-only session,
@@ -234,8 +249,8 @@ const leanFlags = (platform, effort) => [
 ];
 
 /** The arguments of the Codex run over `<base>..HEAD`; `base` is a full commit id. `session` is
- * `current`, today's configuration on top of the user's Codex config and the default, or `lean`, the
- * one that loads only what a review needs. `platform` is where Codex runs: the lean list has one more
+ * `lean`, the one that loads only what a review needs and the default, or `current`, the review on top
+ * of the user's whole Codex config. `platform` is where Codex runs: the lean list has one more
  * setting on `win32`, and the current one is the same everywhere. The global `AGENTS.md` is in neither
  * list: no flag leaves it out, only a home of the review's own, which `codexReviewMain` sets for `lean`
  * in the environment (`leanEnv`).
@@ -250,7 +265,7 @@ const leanFlags = (platform, effort) => [
  * `extraConfig` is more `key=value` settings for it, each handed over with `-c` after the session's own and
  * before what is reviewed. `ephemeral`, for the current session alone, is whether Codex is told to write
  * no session files: `false` for a session measured in a home of its own, whose tokens are read from them. */
-export function codexArgs(base, session = 'current', platform = process.platform, prompt = 'codex', { effort = LEAN_EFFORT, extraConfig = [], ephemeral = true } = {}) {
+export function codexArgs(base, session = SESSIONS[0], platform = process.platform, prompt = PROMPTS[0], { effort = LEAN_EFFORT, extraConfig = [], ephemeral = true } = {}) {
   if (!PROMPTS.includes(prompt)) throw new Error(`Unknown prompt ${JSON.stringify(prompt)}: it must be \`codex\` or \`own\`.`);
   // Both end up inside one argument of a command line, the effort between the quotes of a TOML string.
   if (typeof effort !== 'string' || !/^[a-z]+$/.test(effort)) throw new Error(`The effort of the lean session must be one lowercase word, got ${JSON.stringify(effort)}.`);
@@ -261,7 +276,7 @@ export function codexArgs(base, session = 'current', platform = process.platform
     const extra = extraConfig.flatMap((setting) => ['-c', setting]);
     return ['exec', 'review', '--json', ...leanFlags(platform, effort), ...extra, ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
   }
-  if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`current\` or \`lean\`.`);
+  if (session !== 'current') throw new Error(`Unknown session ${JSON.stringify(session)}: it must be \`lean\` or \`current\`.`);
   if (prompt !== 'codex') throw new Error('The own prompt is a configuration of the lean session: the current one is asked with Codex\'s sentence.');
   if (extraConfig.length > 0) throw new Error('Extra Codex configuration is a variation of the lean session: the current one runs on the user\'s own.');
   return ['exec', 'review', '--json', ...(ephemeral ? ['--ephemeral'] : []), '--base', base, ...CURRENT_CONFIG.flatMap((setting) => ['-c', setting])];
@@ -1120,7 +1135,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             : `its successful commands showed ${seen} of ${total} changed lines of ${within}${base.slice(0, 7)}..HEAD`;
         // The files whose changed lines were not all shown, so that a person knows where the review fell
         // short without reading the session. Under the lean session: the `current` one refuses in the
-        // words it always has, until the comparison of the two decides what becomes of it.
+        // words it always has, since nothing of it changed when it stopped being the default.
         const unread = lean && evidence.missingFiles.length > 0
           ? `\n  not read in full: ${listed(evidence.missingFiles.map(({ file, missing: lines, total: all }) => `${file} (${lines} of ${all} changed lines missing)`))}`
           : '';

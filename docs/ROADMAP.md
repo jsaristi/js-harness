@@ -55,11 +55,11 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6.1-sol` at `high` (Sebastián, 2026-09-29), held in gentle-ai's `codexOrchestratorAssignment` (`~/.gentle-ai/state.json`) since 2026-10-01, because every `gentle-ai sync` writes that assignment to `~/.codex/config.toml` and one had put `gpt-6-astra` at `medium` back, replacing `gpt-6-sol` at `xhigh`; `codex exec -m gpt-6.1-sol` answered at `high` on 2026-09-29, after a review earlier that day got a 400 for the same model |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in the lean session by default (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts; `--session current` runs it on the user's own configuration instead. Review model: `gpt-6.1-sol` at `medium`, fixed by the command (Sebastián, 2026-10-06), so no `gentle-ai sync` changes it; the decision before it was `gpt-6.1-sol` at `high` (2026-09-29), kept in `~/.codex/config.toml`, which every `gentle-ai sync` rewrites from `codexOrchestratorAssignment` (`~/.gentle-ai/state.json`) and which `--session current` still reads |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
-| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6.1-sol`): `high` (see Review) |
+| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `medium`, fixed by the command (see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
 
@@ -193,6 +193,45 @@ spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's con
 workflow add cost without adding score; what it may buy (recall across sessions, review, larger
 work) these tasks do not measure.
 
+## Codex review result
+
+Two ways of running `js-harness codex-review`, compared on 2026-10-08 with Codex CLI 0.161.0
+(`node evals/review/report.mjs` over `evals/results/review/readings/`, written to
+`evals/results/review/report.md`; the runs and what each proved are in
+`odd/tasks/codex-review-lean.md`). `current` is the review on the user's whole Codex
+configuration, measured in a copy of his home; `lean` loads the diff, read access to the
+repository, the project's `AGENTS.md` and Codex's review rubric. Two ranges: a diff of 292
+changed lines seeded with seven known defects, and a real range of this repository, 255
+changed lines with no known defect. Input tokens are the sum over the requests of a review,
+cache included; the first request is what the session loads before it reads the diff.
+
+| Range | Configuration | Ran with | Findings | Seeded found | Input tokens | First request | Wall time |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seeded | `current` | `gpt-6-astra` `low` | 6 | 6 of 7 | 151,204 | 27,912 | 79 s |
+| seeded | `lean` | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 54,797 | 5,717 | 60 s |
+| seeded | `lean`, own prompt | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 55,203 | 6,156 | 61 s |
+| seeded | `lean`, high effort | `gpt-6.1-sol` `high` | 8 | 7 of 7 | 57,161 | 5,726 | 87 s |
+| real | `current` | `gpt-6-astra` `low` | 0 | | 228,539 | 28,936 | 47 s |
+| real | `lean` | `gpt-6.1-sol` `medium` | 0 | | 134,283 | 6,711 | 33 s |
+| real | `lean`, own prompt | `gpt-6.1-sol` `medium` | 0 | | 145,842 | 7,063 | 34 s |
+| real | `lean`, high effort | `gpt-6.1-sol` `high` | 0 | | 374,661 | 6,711 | 92 s |
+| real | `lean` with CodeGraph | `gpt-6.1-sol` `medium` | 0 | | 160,383 | 7,491 | 30 s |
+
+The verdict: `lean` found the same or more with fewer tokens on both ranges, 36% of the input
+of `current` on the seeded range and 59% on the real one, so it is what `codex-review` runs by
+default since 2026-10-08; `--session current` stays. What it rests on, read plainly: on the
+seeded range two runs of `current`, which missed the same defect both times (the first run,
+156,564 input tokens, is in the history of `9c9b00d`), and three lean runs that found it; on
+the real range one run a cell. `lean` and `current` differ in three things at once, what the
+session loads, the model and the effort, so the defect found cannot be given to one of them.
+The first request can: about 28,000 tokens against 6,000 to 7,500 is the load. High effort
+bought nothing these ranges measure, one more finding outside the key and the same answer for
+2.8 times the input on the real range. The own prompt costs what Codex's sentence costs and
+found the same, so the default prompt stays Codex's. CodeGraph cost 19% more input for the
+same answer on a range with nothing to find, so it stays out. The model of the lean rows was
+measured in the CodeGraph cell; the other lean readings were taken before the reading
+recorded it and carry what the command passed.
+
 ## Next
 
 1. F6 Codex parity, in progress (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
@@ -225,8 +264,11 @@ work) these tasks do not measure.
    (`odd/tasks/codex-review-lean.md`, branch `feat/codex-review-lean`, in the linked worktree
    `D:\js-harness-worktrees\codex-review-lean`): `js-harness codex-review` measures every
    attempt and runs in a session that loads only what a review needs, on `gpt-6.1-sol` at
-   `medium` (Sebastián, 2026-10-06). The Review and Effort rows above still describe what runs
-   today; they change when the comparison of the two configurations decides the switch.
+   `medium` (Sebastián, 2026-10-06). The comparison of the two configurations decided the
+   switch: that session is the default since 2026-10-08, and the Review and Effort rows above
+   say what runs now. The numbers are in "Codex review result" above. Left for Sebastián: the
+   proposal for the Codex plugin, in the feature document (the `doctor` row, `codex:rescue`,
+   its three hooks), and the Codex review of the branch's own code before a push.
 6. Session signals, asked by Sebastián on 2026-10-07 and not started: he runs several sessions
    from the phone and wants three things said by the harness itself rather than remembered by
    the agent. Whose turn it is in every reply: a prompt for him only when the work waits on

@@ -365,6 +365,11 @@ test('--dry-run prints the checkout, the argv of the review and where the readin
     assert.ok(result.out.includes(`Reading: ${readingFile(m.readings, config, range)} (missing)`), result.out);
     assert.match(result.out, /^Checkout: /m, cell);
     assert.match(result.out, /^Command: js-harness codex-review --base [0-9a-f]{40} /m, cell);
+    // Every cell names its session: none rests on which one `codex-review` runs when it is given none, so
+    // a cell measures the same configuration whatever that default is.
+    const command = result.out.split('\n').find((line) => line.startsWith('Command: '));
+    assert.ok(command.includes(` --session ${config === 'current' ? 'current' : 'lean'} `), command);
+    assert.equal(command.match(/--session/g).length, 1, command);
   }
   // Each configuration differs from `lean` where it says it does, and nowhere else.
   assert.equal(cases[0][1].includes('--ephemeral'), false);

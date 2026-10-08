@@ -152,12 +152,12 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 - [x] T12 The runs, after Sebastián's go-ahead on the count: the same range under `current` and
   `lean`; `high` beside `medium`; the seeded diff under each; CodeGraph with and without —
   route: inline runs
-- [ ] T13 The verdict and the switch: `lean` becomes the default only if it found the same or
+- [x] T13 The verdict and the switch: `lean` becomes the default only if it found the same or
   more with fewer tokens; then the roadmap's Review and Effort rows, the installed skill text,
   and `AGENTS.md` only if needed and within budget — route: delegated writer
-- [ ] T14 The proposal for the Codex plugin, with the numbers: the `doctor` row, `codex:rescue`,
+- [x] T14 The proposal for the Codex plugin, with the numbers: the `doctor` row, `codex:rescue`,
   the SessionStart hook — route: inline
-- [ ] T15 The result in `docs/ROADMAP.md`, the carried follow-ups of
+- [x] T15 The result in `docs/ROADMAP.md`, the carried follow-ups of
   `odd/tasks/codex-exec-review.md` that this feature closed marked there — route: inline
 
 ## Evidence at the start (2026-10-06, `main` at `3915b88`, codex-cli 0.160.0)
@@ -980,6 +980,62 @@ What follows from it:
   - R3-token-budget-unchecked (`docs/ROADMAP.md:268`): the 1,499 of 1,500 is not left to
     the prose. `npm run check` counts `AGENTS.md` against the budget and the pre-commit
     hook ran it for `9c9b00d`; an edit that passes the cap fails the commit. No change.
+- 2026-10-08: `87854b1` (the fix, the three readings and the report; gate green) assessed
+  by gentle-ai from `9c9b00d` as `medium`, review due (736 lines, 15 files); granted
+  without asking, lineage `review-ee40ef20a7d64a34`, approved and acknowledged. No blocker.
+  - R3-partial-unknown-mismatch-note (`evals/review/report.mjs:119-121`, warning): the note
+    under a table compares rendered strings, so a half unknown on one side reads as a
+    session that ran something other than what was asked. Accepted, fixed with T13, test
+    first.
+  - R3-parts-model-last-only (`evals/review/compare.mjs:310-311`, suggestion): a range in
+    parts takes the model of its last attempt, and parts that disagree leave no sign.
+    Carried (Follow-ups): no cell of the comparison is in parts.
+- 2026-10-08: T14 written (inline): the section "Proposal for the Codex plugin" above
+  Follow-ups, from the plugin's own files and stored state and this feature's readings.
+  It proposes; nothing of the plugin was changed.
+- 2026-10-08: T13, the verdict and the switch, by one delegated writer (route: delegated),
+  test first, its run cut once by a network error and resumed from its own transcript.
+  Re-run by the parent: 93 of 93 over the home, prompt, compare and report files; the
+  command file 194 of 194 by the writer (353 s).
+  - The verdict: `lean` found the same or more with fewer tokens on both ranges, 36% of the
+    input of `current` on the seeded range and 59% on the real one. It rests on two runs of
+    `current` and three lean runs on the seeded range and one run a cell on the real one;
+    the two differ in load, model and effort at once (the entry of the last cells).
+  - The switch: no `--session` runs the lean session; `--session current` is today's
+    review on his own configuration, unchanged. The default prompt stays Codex's: the own
+    prompt found the same at about the same cost. `--keep-home`, `--prompt own` and
+    `--part-lines` no longer need `--session lean` and are refused only beside
+    `--session current`. The usage says which is the default and what it loads.
+  - What the flip would have broken, caught by a test going red: the `current` cell of the
+    comparison passed no `--session`, so it would have measured the lean session under the
+    name of the other. Every cell now names its session.
+  - Who else runs `codex-review` in this repository, all without a session, so all lean
+    now, which is the point: the dispatcher, the hint `check --push` prints, the sentence
+    of `AGENTS.md`, the line of the installed skill (`bin/lib/manifest.mjs:22`). Neither
+    names a session, a model or an effort, so the installed text and `AGENTS.md` (1,499
+    tokens) did not change. The hooks, `doctor`, `init`, `install` and the TUI never call
+    it. The pre-push rule reads records, whatever session wrote them.
+  - The roadmap's Review and Effort rows say what runs now: the lean session and what it
+    loads and leaves out, `gpt-6.1-sol` at `medium` fixed by the command.
+  - The follow-up that had to be closed before this, closed in the same slice: a lean
+    review left `<home>/.js-harness/codex-review-homes` behind, empty, and `uninstall` did
+    not know it. Decided by the parent: the session leaves nothing, so there is nothing for
+    `uninstall` to know. Once a home is removed, the folder of the homes goes when it is
+    empty, and `.js-harness` above it when that is empty too, by a removal that refuses a
+    folder with anything in it; a failure of that is silent and never changes the review.
+    `--keep-home` removes nothing. Not handled, and recorded: two reviews at once on one
+    machine have a small window in which one removes the empty folder between the two
+    folder creations of the other, which then stops with `ENOENT` and leaves nothing; a
+    second try works.
+  - The warning of the review of `87854b1` fixed here, test first: the note under a table
+    compares the model and the effort apart, each only when both sides know it.
+- 2026-10-08: T15 (inline): `docs/ROADMAP.md` has the section "Codex review result", a
+  row a configuration and a range with findings, seeded defects found, input tokens, the
+  first request and wall time, and the verdict with what it rests on; Next item 5 points
+  to it and to what is left for Sebastián. In `odd/tasks/codex-exec-review.md`, the
+  carried follow-up R3-exact-coverage-large-range is marked closed by this feature (parts
+  instead of a tolerance), and the one about `mcp_servers.context7.type` says a review no
+  longer meets it.
 - 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
   file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
   strings. One delegated writer (route: delegated, four modules and their tests), test
@@ -1032,7 +1088,55 @@ What follows from it:
     `0.159.1` and its `fetched_at` 03:15:02Z, so the desktop app wrote it, not a CLI of
     0.161.0. `logs_2.sqlite` and its two files came and went, the app's as before.
 
+## Proposal for the Codex plugin (T14, 2026-10-08), for Sebastián to decide
+The plugin is `codex@openai-codex` 1.0.6 for Claude Code, installed and enabled on this
+machine. This feature changes nothing about it; what follows is a proposal.
+
+What the plugin is today, read from its files and its stored state:
+- Its use here. It stored 41 jobs for this repository, all of them reviews, the first on
+  2026-09-27 and the last on 2026-09-30T00:14Z, the day `js-harness codex-review` replaced
+  it for reviews. None since, and no rescue job ever (`state.json` of its data folder for
+  this repository: `jobs` 41, kind `review` 41; `stopReviewGate` false).
+- What it puts in every Claude Code session. Three hooks: SessionStart (writes three
+  environment variables for its own companion script, nothing into the context),
+  SessionEnd (stops its broker) and Stop (the review gate, which is off, so a `node`
+  process starts at every stop to find that out; timeout 900 s). And the descriptions the
+  model sees: the `codex-rescue` agent, two commands and three skills, about 177 tokens by
+  this repository's estimate. Its cost in Claude's context is small; that was never the
+  problem.
+- Where the cost was, measured in this feature: a Codex session on his whole
+  configuration, which is the only kind the plugin starts (it passes no settings a thread,
+  `odd/tasks/codex-exec-review.md`), opens with 27,912 to 28,936 tokens before the diff,
+  against 5,717 to 7,491 for the clean session. Over a review that was 151,204 to 228,539
+  input tokens against 54,797 to 134,283, and six seeded defects of seven against seven.
+  A `codex:rescue` thread would pay the same opening load, on what his `config.toml`
+  names, `gpt-6-astra` at `low`.
+
+The proposal, three parts, each his to accept or not:
+1. The `doctor` row. Today the row `codex-plugin` reports the plugin installed, enabled and
+   logged in, and its fix tells a user to install the plugin. Nothing in the harness needs
+   the plugin any more: the review needs the Codex CLI and its login. Proposed: the row
+   becomes `codex`, the CLI installed and logged in (the probe it already runs), with the
+   fixes it already has for those two; the plugin is no longer something `doctor` asks
+   for. A small feature of its own, test first.
+2. `codex:rescue`. It is the one thing the plugin gives that the harness does not, and it
+   has not been used once here. Proposed: let it go with the plugin. If handing a stuck
+   task to Codex turns out to be wanted, it is built like the review was, over
+   `codex exec` with a clean session and a measured cost, rather than kept on a path that
+   loads 28,000 tokens to start.
+3. The SessionStart hook, with the other two. They exist for the plugin's own commands.
+   Proposed: disable the plugin in Claude Code (`claude plugin disable codex@openai-codex`,
+   undone by `enable`), which removes the three hooks, the agent and the commands from
+   every session. It is his configuration, so it is his command or his yes.
+
+What is not proposed: uninstalling the Codex CLI, touching his `~/.codex`, or changing the
+Codex desktop app. What this does not rest on: a measurement of the hooks' time, which was
+not taken.
+
 ## Follow-ups
+- From the review of `87854b1` (R3-parts-model-last-only): a reading of a range reviewed in
+  parts takes the model of the last attempt; parts that ran on different models should
+  mark the reading instead of showing one of them as measured.
 - Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
   which once left an untracked `Microsoft/` folder there (2026-10-07, the gate of
   `1c7b561`). Not reproduced since. Find the spawn and give it the variable or a folder of
@@ -1085,9 +1189,10 @@ What follows from it:
     must be a real executable; say so in the usage.
 - The command keeps nothing of Codex's raw events, so a run that goes wrong can only be read
   from its summary. Keep the JSONL of every attempt beside the run log, or behind a flag.
-- `uninstall` does not know `<home>/.js-harness/codex-review-homes`. Every run empties it, so
-  what a machine keeps is an empty folder; make `uninstall` remove it, or record it in the
-  manifest, before the lean session becomes the default (T13).
+- Closed with T13 (2026-10-08): `uninstall` did not know
+  `<home>/.js-harness/codex-review-homes`; a run now removes that folder when it leaves it
+  empty. Left of it: two reviews at once on one machine can make one stop with `ENOENT`
+  when the other removes the empty folder between its two folder creations.
 - A `--home` or `JS_HARNESS_HOME` on another volume than the Codex home makes `lean` refuse
   with `EXDEV`; on this host the temp folder is on C: and the repository on D:.
 - The `codex --version` probe runs before the lean home exists, so in the user's home.
@@ -1110,19 +1215,13 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T12 are checked. In order:
-1. T13, the verdict and the switch (one delegated writer, test first): `lean` found the
-   same or more with fewer tokens on both ranges (Progress, 2026-10-08), so it becomes what
-   `codex-review` runs when no `--session` is given; then the roadmap's Review and Effort
-   rows, the installed skill text, and `AGENTS.md` only if needed and within budget. The
-   verdict says what it rests on: two runs of `current` and three lean runs on the seeded
-   range, one run a cell on the real one, and three differences at once between the two.
-2. T14, the proposal for the Codex plugin with these numbers (inline).
-3. T15, the result in `docs/ROADMAP.md` (inline).
-
-Sebastián's rule of 2026-10-08 holds for these: a planned step he would only answer yes to
-is stated with its cost and done. Push, pull request and merge wait for him, and so does
-what T14 proposes: it is a proposal for him to decide.
+T1 to T15 are checked. What is left is Sebastián's:
+1. The proposal for the Codex plugin (the section above Follow-ups): the `doctor` row,
+   `codex:rescue`, the plugin's three hooks. Each part is his to accept or not; an accepted
+   part is a small feature of its own or one command of his.
+2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push hook refuses a
+   branch with a code commit no review record covers, so before the push the code range
+   `7deddfc..HEAD` needs its Codex review or a recorded skip (item below).
 
 Open, for him:
 1. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:

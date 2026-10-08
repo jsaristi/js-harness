@@ -38,12 +38,19 @@ const counted = (count) => (Number.isFinite(count) ? thousands(count) : 'unknown
 // What follows a model that was not measured, in its cell; the top of the report says what it means.
 const NOT_MEASURED = '*';
 
+/** Whether `text` is a name: a model or an effort that is known. */
+const named = (text) => typeof text === 'string' && text !== '';
+
 /** A model and an effort as one text, `<model> <effort>`: each `unknown` when it is no name, and the one
  * word `unknown` when neither is. */
 function ranWith(model, effort) {
-  const [name, level] = [model, effort].map((text) => (typeof text === 'string' && text !== '' ? text : null));
+  const [name, level] = [model, effort].map((text) => (named(text) ? text : null));
   return name === null && level === null ? 'unknown' : `${name ?? 'unknown'} ${level ?? 'unknown'}`;
 }
+
+/** Whether what was asked for and what ran are two different names. One that is not known on either side
+ * is not a difference: nothing says it is one. */
+const differs = (asked, ran) => named(asked) && named(ran) && asked !== ran;
 
 /** The model of a reading as a cell: what its session ran with. Marked, unless it was read from the
  * session's own file (`modelSource` is `session`): it is then what the command passed or the user's
@@ -114,11 +121,14 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
       if (reading.cli !== usual) notes.push(`- \`${reading.config}\` ran on codex-cli ${reading.cli}, the others on ${usual}: the comparison is only fair on one version.`);
     }
     // A session that was measured and ran something else than what it was asked for: the row shows what
-    // ran, and what was asked for is in the reading alone, so it is said here.
+    // ran, and what was asked for is in the reading alone, so it is said here. The model and the effort are
+    // compared each on its own, and only where both sides know it: a half one side does not know (an
+    // effort the user's configuration does not name, one the session did not write down) is not known to
+    // differ, and the two as one text would call it a difference.
     for (const reading of read) {
-      const asked = ranWith(reading.configuredModel, reading.configuredEffort);
-      const ran = ranWith(reading.model, reading.effort);
-      if (reading.modelSource === 'session' && asked !== 'unknown' && asked !== ran) notes.push(`- \`${reading.config}\` ran on ${ran}, and was asked for ${asked}.`);
+      if (reading.modelSource !== 'session') continue;
+      if (!differs(reading.configuredModel, reading.model) && !differs(reading.configuredEffort, reading.effort)) continue;
+      notes.push(`- \`${reading.config}\` ran on ${ranWith(reading.model, reading.effort)}, and was asked for ${ranWith(reading.configuredModel, reading.configuredEffort)}.`);
     }
     const headings = ['configuration', ...shown.map(([heading]) => heading)];
     sections.push([

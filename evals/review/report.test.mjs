@@ -152,6 +152,34 @@ test('the model of a row is the one its session ran with, and one that was not m
   assert.doesNotMatch(text, /default|should|recommend|better|winner/i, 'it reports, and chooses nothing');
 });
 
+test('a session is named as having run something else only when a half known on both sides differs: a half that is not known is no difference', () => {
+  const repo = repository();
+  // The same model, and an effort that one side does not know: nothing is known to differ.
+  record(repo, 'current', 'seeded', measured('gpt-x', 'low', 'gpt-x', null));
+  record(repo, 'lean', 'seeded', measured('gpt-x', null, 'gpt-x', 'high'));
+  // The same on both halves, and a model neither side knows beside an equal effort.
+  record(repo, 'lean-own', 'seeded', measured('gpt-x', 'low', 'gpt-x', 'low'));
+  record(repo, 'lean-high', 'seeded', measured(null, 'low', null, 'low'));
+  // Another model, with an effort that was not asked for: the model alone is a difference.
+  record(repo, 'current', 'real', measured('gpt-it-ran', 'low', 'gpt-asked', null));
+  // The same model at another effort, both known.
+  record(repo, 'lean', 'real', measured('gpt-x', 'low', 'gpt-x', 'high'));
+  // A model the session did not write down, and an effort that differs: the effort alone is a difference.
+  record(repo, 'lean-own', 'real', measured(null, 'low', 'gpt-x', 'high'));
+  // Each half known on one side only, the other way round on each: nothing can be compared.
+  record(repo, 'lean-high', 'real', measured('gpt-x', null, null, 'high'));
+  // Read from the command and not from the session: what ran was not measured, so nothing is said of it.
+  record(repo, 'lean-codegraph', 'real', { model: 'gpt-x', effort: 'low', modelSource: 'command', configuredModel: 'gpt-y', configuredEffort: 'high' });
+  const text = reportMarkdown({ readingsDir: repo.readings }).text;
+  const said = (range) => section(text, range).split('\n').filter((line) => / ran on (?!codex-cli)/.test(line));
+  assert.deepEqual(said('seeded'), [], 'an unknown half is not a difference');
+  assert.deepEqual(said('real'), [
+    '- `current` ran on gpt-it-ran low, and was asked for gpt-asked unknown.',
+    '- `lean` ran on gpt-x low, and was asked for gpt-x high.',
+    '- `lean-own` ran on unknown low, and was asked for gpt-x high.',
+  ]);
+});
+
 test('under a table, each configuration read on another CLI version than the others is named: the comparison is fair on one version', () => {
   const repo = repository();
   recordAll(repo, (config, range) => (config === 'lean-high' && range === 'seeded' ? { cli: '0.160.0' } : {}));

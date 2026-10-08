@@ -139,6 +139,7 @@ test('a link that fails names both paths and the code, says that no copy is made
       return true;
     });
     assert.equal(fs.existsSync(path.join(parent, 'run-1')), false, 'the partly made folder is removed');
+    assert.equal(fs.existsSync(path.dirname(parent)), false, 'and so are the folders made to hold it');
     assert.equal(links(realAuth), 1);
     assert.equal(read(realAuth), LOGIN);
   }
@@ -226,9 +227,102 @@ test('a kept lean home is removed by the sweep like one a killed run left', () =
   assert.equal(lean.dispose({ keep: true }), null);
   aged(lean.home, now - 2000);
   assert.equal(sweepStaleLeanHomes(parent, { olderThanMs: 1000, now }), 1);
-  assert.deepEqual(fs.readdirSync(parent), []);
+  // It was the last one there, so the sweep leaves no folder for the homes either, nor a state dir.
+  assert.equal(fs.existsSync(path.dirname(parent)), false);
   assert.equal(links(realAuth), 1);
   assert.equal(read(realAuth), LOGIN);
+});
+
+// --- what a machine keeps after a run: nothing ---
+
+/** The harness's state dir of `parent`, `<home>/.js-harness`, and the home it is in. */
+const stateOf = (parent) => ({ state: path.dirname(parent), home: path.dirname(path.dirname(parent)) });
+
+test('after the last home goes, the folder that held the homes goes too, and `.js-harness` when that leaves it empty; a home is made again from nothing', () => {
+  const { realHome, realAuth, parent } = homes();
+  const { state, home } = stateOf(parent);
+  assert.equal(path.basename(state), '.js-harness');
+  const lean = createLeanHome({ realHome, parent, id: 'run-1' });
+  codexWrites(lean.home);
+  assert.equal(lean.dispose(), null);
+  assert.equal(fs.existsSync(parent), false, 'no empty folder of homes is left');
+  assert.equal(fs.existsSync(state), false, 'nor an empty state dir');
+  assert.deepEqual(fs.readdirSync(home), [], 'the home it was in is never removed');
+  assert.equal(lean.dispose(), null, 'and a second dispose finds nothing to do');
+  // The next run finds neither folder, and makes both again.
+  const next = createLeanHome({ realHome, parent, id: 'run-2' });
+  assert.deepEqual(fs.readdirSync(parent), ['run-2']);
+  assert.equal(links(realAuth), 2);
+  assert.equal(next.dispose(), null);
+  assert.equal(fs.existsSync(state), false);
+  assert.equal(links(realAuth), 1);
+});
+
+test('the folder of the homes and `.js-harness` stay, untouched, while they hold anything else', () => {
+  // Another run's home: the folder goes with the last of them, not with the first.
+  const two = homes();
+  const first = createLeanHome({ realHome: two.realHome, parent: two.parent, id: 'run-1' });
+  const second = createLeanHome({ realHome: two.realHome, parent: two.parent, id: 'run-2' });
+  assert.equal(first.dispose(), null);
+  assert.deepEqual(fs.readdirSync(two.parent), ['run-2']);
+  assert.equal(fs.existsSync(path.join(second.home, 'auth.json')), true, 'the other run still has its login');
+  assert.equal(second.dispose(), null);
+  assert.equal(fs.existsSync(stateOf(two.parent).state), false);
+
+  // A file beside the folder of the homes, as the manifest of an installed harness is: the state dir stays.
+  const installed = homes();
+  const { state } = stateOf(installed.parent);
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, 'manifest.json'), '{}', 'utf8');
+  assert.equal(createLeanHome({ realHome: installed.realHome, parent: installed.parent, id: 'run-1' }).dispose(), null);
+  assert.deepEqual(fs.readdirSync(state), ['manifest.json'], 'the folder of the homes is gone, and nothing else');
+  assert.equal(read(path.join(state, 'manifest.json')), '{}');
+
+  // Something that is no home in the folder of the homes: that folder stays, with it.
+  const noted = homes();
+  fs.mkdirSync(noted.parent, { recursive: true });
+  fs.writeFileSync(path.join(noted.parent, 'note.txt'), 'theirs', 'utf8');
+  assert.equal(createLeanHome({ realHome: noted.realHome, parent: noted.parent, id: 'run-1' }).dispose(), null);
+  assert.deepEqual(fs.readdirSync(noted.parent), ['note.txt']);
+  assert.equal(read(path.join(noted.parent, 'note.txt')), 'theirs');
+});
+
+test('a kept home keeps its folders: nothing above it is removed until it goes', () => {
+  const { realHome, parent } = homes();
+  const lean = createLeanHome({ realHome, parent, id: 'kept' });
+  codexWrites(lean.home);
+  assert.equal(lean.dispose({ keep: true }), null);
+  assert.deepEqual(fs.readdirSync(parent), ['kept']);
+  assert.equal(lean.dispose(), null);
+  assert.equal(fs.existsSync(stateOf(parent).state), false);
+});
+
+test('only `.js-harness` is ever removed above the folder of the homes: under another name that folder stays, empty or not', () => {
+  const { root, realHome } = homes();
+  const parent = path.join(root, 'elsewhere', 'homes');
+  assert.equal(createLeanHome({ realHome, parent, id: 'run-1' }).dispose(), null);
+  assert.equal(fs.existsSync(parent), false, 'the folder made for the homes goes when it is empty');
+  assert.deepEqual(fs.readdirSync(path.join(root, 'elsewhere')), [], 'and what is above it is not the harness\'s to remove');
+});
+
+test('a folder of the homes that cannot be removed is nothing to say: dispose does not throw, and says what it would have', () => {
+  const { realHome, realAuth, parent } = homes();
+  const tried = [];
+  for (const code of ['EBUSY', 'EPERM', 'ENOTEMPTY']) {
+    const rmdir = (dir) => {
+      tried.push(dir);
+      throw Object.assign(new Error(`${code}: rmdir failed`), { code });
+    };
+    const lean = createLeanHome({ realHome, parent, id: `run-${code}`, rmdir });
+    let said;
+    assert.doesNotThrow(() => { said = lean.dispose(); });
+    assert.equal(said, null, code);
+    assert.equal(fs.existsSync(lean.home), false, 'the home itself is gone all the same');
+    assert.deepEqual(fs.readdirSync(parent), [], 'the folder is left as it is');
+  }
+  // The folder of the homes is tried, and once it did not go nothing above it is.
+  assert.deepEqual(tried, [parent, parent, parent]);
+  assert.equal(links(realAuth), 1);
 });
 
 test('dispose({ keep: true }) says when the lean name had become another file, and still removes that name alone', () => {
@@ -368,7 +462,7 @@ test('with a seed the run folder is a home directory: the Codex home is its `.co
   assert.deepEqual(fs.readdirSync(realHome), ['auth.json'], 'nothing is written into the real Codex home');
   // The whole run folder goes, the login's name first, and the login stays.
   assert.equal(seeded.dispose(), null);
-  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'with the folder it was in, and the state dir');
   assert.equal(links(realAuth), 1);
   assert.equal(read(realAuth), LOGIN);
 });
@@ -386,7 +480,7 @@ test('a seed that left an `auth.json` is refused: a copy of the login is never u
   const { realHome, realAuth, parent } = homes();
   const copies = ({ home }) => fs.writeFileSync(path.join(home, 'auth.json'), 'a copy', 'utf8');
   assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', seed: copies }), /auth\.json.*copy/);
-  assert.deepEqual(fs.readdirSync(parent), [], 'nothing is left behind');
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'nothing is left behind, not the folders made for it either');
   assert.equal(read(realAuth), LOGIN);
   assert.equal(links(realAuth), 1);
 });
@@ -398,7 +492,7 @@ test('a seed that throws leaves nothing behind, and its reason is the error', ()
     throw new Error('the template is gone');
   };
   assert.throws(() => createLeanHome({ realHome, parent, id: 'run-1', seed: fails }), /the template is gone/);
-  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(fs.existsSync(path.dirname(parent)), false);
   assert.equal(links(realAuth), 1);
 });
 
@@ -421,7 +515,7 @@ test('the sweep removes a seeded home a killed run left, the login\'s name first
     fs.rmSync = watched;
   }
   assert.deepEqual(rm, [{ target: killed.folder, loginThere: false }]);
-  assert.deepEqual(fs.readdirSync(parent), []);
+  assert.equal(fs.existsSync(path.dirname(parent)), false, 'the last home there, so its folders go with it');
   assert.equal(links(realAuth), 1);
   assert.equal(read(realAuth), LOGIN);
 });

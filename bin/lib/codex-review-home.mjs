@@ -17,13 +17,19 @@
 // default places agree, `<OS home>/.js-harness/` and `<OS home>/.codex`; a `--home` or `JS_HARNESS_HOME`
 // on another volume makes the lean session refuse to start, and says so.
 //
-// How to undo it. Everything this module writes is under `<home>/.js-harness/codex-review-homes/`
-// (`leanHomesDir`), the harness's machine state dir: AGENTS.md requires that whatever the harness writes
-// outside the repository can be undone exactly, and deleting that one folder does it. Each run removes
-// its own folder (`dispose`), and a run that was killed leaves one that the next run removes
-// (`sweepStaleLeanHomes`). A run asked to keep its folder (`dispose({ keep: true })`) removes the login's
-// name from it and leaves the rest, which the same sweep removes later. Removing a hard link removes one
-// name, never the file: the real `auth.json` stays, with its bytes.
+// How to undo it, and what a machine keeps after a run: nothing. Everything this module writes is under
+// `<home>/.js-harness/codex-review-homes/` (`leanHomesDir`), the harness's machine state dir: AGENTS.md
+// requires that whatever the harness writes outside the repository can be undone exactly, and here the
+// run undoes it itself. Each run removes its own folder (`dispose`), then the folder of the homes when
+// that left it empty, then `.js-harness` when that is empty too (`removeEmptyHomesDir`): so the lean
+// session, which is what a review runs in by default, leaves no folder for `uninstall` to know of. Both
+// are removed by a call that removes an empty folder and nothing else, never by a recursive one, so one
+// that still holds anything (another run's home, the manifest of an installed harness, a cache) stays as
+// it is. Two things outlast a run: the folder of a run that was killed, and one a run was asked to keep
+// (`dispose({ keep: true })`, which removes the login's name from it and leaves the rest). The next run
+// removes either once it is old (`sweepStaleLeanHomes`), and deleting `codex-review-homes` by hand does
+// it at any time. Removing a hard link removes one name, never the file: the real `auth.json` stays, with
+// its bytes.
 //
 // A seeded home. The comparison of the review's configurations (`evals/review/compare.mjs`) measures the
 // session that runs on the user's own configuration, and that one cannot run in an empty home: it is given
@@ -56,13 +62,34 @@ export function realCodexHome(env, homedir, platform = process.platform) {
   return set(named) ? named : path.join(homedir, '.codex');
 }
 
+// The harness's machine state dir, and the folder of the lean homes in it.
+const STATE_DIR = '.js-harness';
+const HOMES_DIR = 'codex-review-homes';
+
 /** The folder the lean homes are made in, one per run: `<home>/.js-harness/codex-review-homes`. */
 export function leanHomesDir(home) {
-  return path.join(home, '.js-harness', 'codex-review-homes');
+  return path.join(home, STATE_DIR, HOMES_DIR);
 }
 
 // One folder name and nothing else: no separator, no drive, no `.` or `..`.
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Removes `parent`, the folder the homes are in, when the home that just went was the last thing in it,
+ * and then the folder above it when that one is the harness's state dir and is empty as well: what a run
+ * made to hold its home, it takes away with it. `rmdir` removes an empty folder and refuses any other,
+ * which is the whole of the check: a folder that holds anything is left, and so is one that is busy or
+ * already gone, with nothing said, since an empty folder left behind is no fault of a review. The folder
+ * above is touched only under the name `.js-harness`: the homes of a caller that put them elsewhere are in
+ * a folder that is not this module's. Never throws. */
+function removeEmptyHomesDir(parent, rmdir = fs.rmdirSync) {
+  try {
+    rmdir(parent);
+    const state = path.dirname(parent);
+    if (path.basename(state) === STATE_DIR) rmdir(state);
+  } catch {
+    // Not empty, busy, or not there: nothing to do.
+  }
+}
 
 /** Removes a lean home: the login's second name first, then the folder. The order is deliberate: the one
  * entry that is also the user's login goes by a call that removes exactly one name, never by the
@@ -71,8 +98,10 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  * know which kind of run left the folder. When the name cannot be removed the folder is left as it is, for
  * the next run's sweep or a person.
  * With `keep` the folder is left on purpose and only the name goes, so a kept folder never holds a login.
- * Returns `null`, or what failed as a sentence; never throws. */
-function removeLeanHome(home, rm = fs.rmSync, { keep = false } = {}) {
+ * Once the folder is gone, the one it was in goes too when that left it empty (`removeEmptyHomesDir`):
+ * here, so that every way a home is removed takes it, the end of a run, a run that could not be set up,
+ * and the sweep. Returns `null`, or what failed as a sentence; never throws. */
+function removeLeanHome(home, rm = fs.rmSync, { keep = false, rmdir = fs.rmdirSync } = {}) {
   try {
     for (const place of LOGIN_PLACES) {
       try {
@@ -82,7 +111,10 @@ function removeLeanHome(home, rm = fs.rmSync, { keep = false } = {}) {
         if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
       }
     }
-    if (!keep) rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    if (!keep) {
+      rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      removeEmptyHomesDir(path.dirname(home), rmdir);
+    }
     return null;
   } catch (err) {
     return `could not remove ${home} (${err.code ?? err.message}); delete that folder by hand, which removes one name of the Codex login and never the login`;
@@ -112,8 +144,10 @@ function identity(file) {
  * Throws, with nothing left behind, when `id` is not a plain folder name, when the folder is already
  * there, when the real home holds no `auth.json` (Codex is not logged in), when the seed throws or left an
  * `auth.json`, when the link cannot be made (another volume, no permission), or when what was made is not
- * the same file. `link` and `rm` are the file system calls, replaced in tests. */
-export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, seed }) {
+ * the same file. "Nothing" includes `parent` and the state dir above it, when making the home is what
+ * made them: a folder that goes takes them with it while they are empty (`removeEmptyHomesDir`), and
+ * `dispose()` does the same. `link`, `rm` and `rmdir` are the file system calls, replaced in tests. */
+export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, rmdir = fs.rmdirSync, seed }) {
   if (typeof id !== 'string' || !SAFE_ID.test(id)) throw new Error(`The id of a lean Codex home must be a plain folder name, got ${JSON.stringify(id)}.`);
   if (seed !== undefined && typeof seed !== 'function') throw new Error('The seed of a Codex home must be a function.');
   const realAuth = path.join(path.resolve(realHome), AUTH);
@@ -159,7 +193,7 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
       throw new Error(`${leanAuth} is not the same file as ${realAuth} after linking, so it is not used: a copy could take a refresh of the login alone.`);
     }
   } catch (err) {
-    removeLeanHome(folder, rm);
+    removeLeanHome(folder, rm, { rmdir });
     throw err;
   }
 
@@ -173,7 +207,7 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
     } catch {
       // The name cannot be read: removing it below says what is wrong, if anything is.
     }
-    return removeLeanHome(folder, rm, { keep }) ?? replaced;
+    return removeLeanHome(folder, rm, { keep, rmdir }) ?? replaced;
   };
   return { home, folder, seeded, dispose };
 }
@@ -181,7 +215,9 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
 /** Removes the run folders in `parent` last changed more than `olderThanMs` before `now` (milliseconds
  * since the epoch): a run that was killed leaves its folder, with a second name of the login in it.
  * A younger folder is left alone, since another review may be running in it, and so is anything that is
- * not a folder. Returns how many were removed; never throws. */
+ * not a folder. A sweep that removes the last thing in `parent` leaves no `parent` either, as the end of
+ * a run does (`removeLeanHome`); the run that swept makes it again for its own home. Returns how many
+ * were removed; never throws. */
 export function sweepStaleLeanHomes(parent, { olderThanMs, now = Date.now() } = {}) {
   let removed = 0;
   let entries;
