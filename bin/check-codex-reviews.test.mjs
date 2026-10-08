@@ -413,6 +413,44 @@ test('an answer of git that is not the commits and their files, as they were ask
   assert.match(checkCodexReviews(root, 'HEAD', { spawn: whole }).detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
 });
 
+/** Makes the commit at HEAD a signed one, and returns its new full id: the same commit with a `gpgsig`
+ * header, written as an object, since signing for real needs a key. The signature is no signature, and git
+ * hands it to the program that checks one all the same. */
+function signHead(root) {
+  const [headers, ...message] = git(root, 'cat-file', 'commit', 'HEAD').split('\n\n');
+  const signature = ['-----BEGIN PGP SIGNATURE-----', '', 'bm90IGEgc2lnbmF0dXJl', '-----END PGP SIGNATURE-----'].join('\n ');
+  const hashed = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], { cwd: root, encoding: 'utf8', input: `${headers}\ngpgsig ${signature}\n\n${message.join('\n\n')}\n` });
+  assert.equal(hashed.status, 0, hashed.stderr);
+  git(root, 'update-ref', 'HEAD', hashed.stdout.trim());
+  return hashed.stdout.trim();
+}
+
+test('a signed commit is listed as any other in a repository that shows signatures: what git says of one is not in the list', () => {
+  // The finding this is the test of. With `log.showSignature` git writes what the program that checks a
+  // signature said, before the line of the commit: the list was then of another shape, and the push check
+  // failed a branch whose every commit had a record.
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const signed = signHead(root);
+  // A program of the test's own in place of gpg, so that no key ring of the machine is read or made: git
+  // shows what it writes on its standard error, as it does for gpg. Git starts it through its own shell,
+  // on Windows too.
+  const checker = path.join(tmp('js-harness-check-push-gpg-'), 'not-gpg');
+  fs.writeFileSync(checker, '#!/bin/sh\necho "not-gpg: nothing was verified" >&2\nexit 1\n', { mode: 0o755 });
+  git(root, 'config', 'gpg.program', checker.replace(/\\/g, '/'));
+  git(root, 'config', 'log.showSignature', 'true');
+  // The reproduction is real: asked as any command asks, git puts that text before the commit.
+  assert.match(git(root, 'log', '--format=%H', `${base}..HEAD`), /^not-gpg: nothing was verified\n[0-9a-f]{40}$/);
+  const uncovered = checkCodexReviews(root, 'HEAD');
+  assert.match(uncovered.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main/);
+  record(root, base, signed);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.equal(row.detail, '1 code commit since origin/main, all covered by a Codex review record');
+});
+
 test('an unavailable record covers its range and shows up as a line, still passing', () => {
   const { root, base } = makeRepo();
   feature(root);
@@ -884,6 +922,26 @@ test('the plain row names a base that exists for a root commit, as the push chec
   assert.ok(said.includes('js-harness codex-review --base origin/main --plan'), said);
 });
 
+test('the plain row sizes the review from where `js-harness codex-review` would start it, which is not always the parent of the oldest commit', () => {
+  // The default branch moved on by one commit, and the branch merged in work that forked before it.
+  const { root, base } = makeRepo();
+  const moved = commit(root, 'main.js', lines(40), 'feat: on the default branch');
+  git(root, 'update-ref', 'refs/remotes/origin/main', moved);
+  feature(root);
+  const mine = commit(root, 'b.js', lines(4), 'feat: two');
+  record(root, moved, mine);
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  commit(root, 's.js', lines(3), 'feat: side work, forked before the default branch moved');
+  git(root, 'checkout', '--quiet', 'feature');
+  git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  // From the parent of the side commit the review would read the 40 lines the default branch already
+  // holds. That command starts such a review at the default branch, and so does the size said here.
+  assert.equal(row.detail, 'no Codex review record for 1 of 2 code commits since origin/main: the review of origin/main..HEAD is 1 part today, 7 changed lines in 2 files');
+  assert.deepEqual(row.lines, ['what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan']);
+});
+
 /** A branch whose one code commit, never reviewed, changes `count` files that are each a part of their own. */
 function repoOfParts(count) {
   const { root } = makeRepo();
@@ -1168,7 +1226,7 @@ test('a records file that cannot be parsed is no record to the plain row, which 
 });
 
 test('a git that throws once the records have been read leaves the plain row information', async () => {
-  const { root, head, home } = projectWithReviewedCommit();
+  const { root, home } = projectWithReviewedCommit();
   // `--git-common-dir` is the last thing the reader of the records asks git: every process after it throws.
   const makeGit = () => {
     let read = false;
@@ -1178,10 +1236,11 @@ test('a git that throws once the records have been read leaves the plain row inf
       return spawnSync(cmd, args, opts);
     };
   };
-  // The record could not be expanded and the range could not be sized, and the row says both.
+  // The record could not be expanded and the range could not be sized, and the row says both. Nor could git
+  // say where a review of the commit may start, so the range named is the one that reaches every commit.
   assert.equal(
     await informationOf(root, home, makeGit),
-    `no Codex review record for 1 of 1 code commit since origin/main: how large the review of ${short(root, head)}^..HEAD is today could not be told; 1 record ignored (base or head not found)`,
+    'no Codex review record for 1 of 1 code commit since origin/main: how large the review of origin/main..HEAD is today could not be told; 1 record ignored (base or head not found)',
   );
 });
 

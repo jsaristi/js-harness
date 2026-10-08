@@ -9,7 +9,8 @@ import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
@@ -362,18 +363,6 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   return row(detail, lines);
 }
 
-/** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. `input`, when given, is what
- * git reads on its standard input. */
-function gitOut(spawn, cwd, args, input) {
-  try {
-    const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...(input !== undefined && { input }) });
-    if (result && !result.error && result.status === 0) return result.stdout.trim();
-  } catch {
-    // No git on PATH: the caller reports the repository or revision as unresolvable.
-  }
-  return null;
-}
-
 /** The branch a push is measured against: what `refs/remotes/<remote>/HEAD` points at, else
  * `<remote>/main`, else `<remote>/master`; `null` when none of them resolves to a commit. Only the
  * remote's own refs count, never a local branch: pushing `main` itself would otherwise be measured
@@ -386,94 +375,19 @@ function defaultBranch(spawn, cwd, remote) {
   return ref ? { ref, label: ref.replace(/^refs\/remotes\//, '') } : null;
 }
 
-/** Whether git exits 0 for `git <args>` in `cwd` (for the yes/no commands such as
- * `merge-base --is-ancestor`, where a non-zero exit is an answer, not a failure). */
-function gitYes(spawn, cwd, args) {
-  try {
-    const result = spawn('git', args, { cwd, encoding: 'utf8' });
-    return Boolean(result) && !result.error && result.status === 0;
-  } catch {
-    return false;
-  }
-}
-
-/** The commits a valid `rec` covers, or `null` when its ids are not commits this repository knows. */
-function coveredBy(spawn, cwd, rec) {
-  const listed = gitOut(spawn, cwd, ['rev-list', `${rec.base}..${rec.head}`]);
-  return listed === null ? null : new Set(listed.split('\n').filter(Boolean));
-}
-
-/** Which of `heads` (full commit ids) lie past `tip`, as `merge-base --is-ancestor <tip> <head>` says it:
- * the commits `tip` is an ancestor of, itself among them.
- *
- * One git process answers for them all, because the heads are those of every record ever written and this
- * runs at every commit: `rev-list --ancestry-path ^<tip> <heads>` lists the commits on a path from `tip` to
- * any of them, which holds a head past the tip and no other head. `--ignore-missing` passes over an id this
- * repository does not know, and the ids go on standard input, which no count of records makes too long for
- * a command line. Should git refuse that, each head is asked about on its own. */
-function headsPastTip(spawn, cwd, tip, heads) {
-  if (heads.length === 0) return new Set();
-  const onPath = gitOut(spawn, cwd, ['rev-list', '--ancestry-path', '--ignore-missing', `^${tip}`, '--stdin'], `${heads.join('\n')}\n`);
-  if (onPath === null) return new Set(heads.filter((head) => gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, head])));
-  const listed = new Set(onPath.split('\n'));
-  return new Set(heads.filter((head) => head === tip || listed.has(head)));
-}
-
-// What `git log` is asked to write for each commit: an empty field, then its line,
-// `<id>\t<short id>\t<parents>\t<subject>` (four fields, the subject last so that a tab inside it
-// survives). `loggedCommits` reads what comes back, and takes for such a line only what `COMMIT_LINE` matches.
-const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
-const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
-
-/** The commits of what `git log -z --name-only --format=<COMMIT_FORMAT>` printed, in its order: each
- * `{ id, shortId, isRoot, subject, files }`, the files as git names them, whatever a name holds. `null` when
- * the text is not that: a list read as far as it goes would leave out a commit, or the files of one.
- *
- * With `-z` git ends every field with a NUL, the line of a commit and each name after it, and writes a name
- * as it is, with a newline between the line of a commit and its first name. So the fields are told apart by
- * the NULs alone, and a commit starts at the empty field the format writes before its line: two NULs with
- * nothing between them, or the start of the text. No file name can stand for that. A name holds no NUL, and
- * is never empty, so neither one name nor several in a row put two NULs together; and what comes after an
- * empty field is never read as a name. What a name does hold is not looked at: one may be a control
- * character, a newline, or the whole line of a commit, and is still the name it is. */
-function loggedCommits(log) {
-  const fields = log.split('\0');
-  // Every field ends with a NUL, so what follows the last one is empty unless the text was cut.
-  if (fields.pop() !== '') return null;
-  const commits = [];
-  let at = 0;
-  while (at < fields.length) {
-    const line = fields[at + 1];
-    if (fields[at] !== '' || line === undefined || !COMMIT_LINE.test(line)) return null;
-    const [id, shortId, parents, ...subject] = line.split('\t');
-    const files = [];
-    for (at += 2; at < fields.length && fields[at] !== ''; at += 1) {
-      // The first name of a commit comes after a newline, which is git's and not the name's.
-      const first = files.length === 0;
-      if (first && !/^\n./s.test(fields[at])) return null;
-      files.push(first ? fields[at].slice(1) : fields[at]);
-    }
-    commits.push({ id, shortId, isRoot: !parents, subject: subject.join('\t'), files });
-  }
-  return commits;
-}
-
 /** What the Codex review records say of the code commits between the default branch of `remote` and
  * `head`, for the two rows that read it: the `--push` row, which fails on a commit no record covers, and
  * the row of the plain check, which says how large the review of those commits is.
  *
  * `{ unknown }` when it cannot be told: the `detail` and `lines` of the `--push` row and, where those words
  * speak of a push, the `why` of the plain one. Otherwise the commit `tip` that `head` names, the default
- * branch as the ref `baseRef` and its label `base`, the `codeCommits` of `base..tip` (newest first: every
- * non-merge commit that changes a file a review reads), the `covers` (each valid record that reaches
- * the range, with the commits it covers), the `uncovered` code commits, and the `note` that counts the
- * records that were left out.
+ * branch as the ref `baseRef` and its label `base`, and what the records say of `base..tip`, as
+ * `reviewCoverage` gives it: the `codeCommits` (newest first), the `covers`, the `uncovered` code commits,
+ * with the `note` that counts the records that were left out.
  *
- * A file a review reads is one `js-harness codex-review` does not leave out, by the one definition the two
- * share (`./lib/codex-review-scope.mjs`): not a document, and not a path the project marks with
- * `-codex-review`. What is marked is read from the commit `tip`, for the paths of every commit under it in
- * one git process: the commit that is checked, never the tree or the index, which at a commit hold the
- * change being made. */
+ * Which commits are code and which records cover them is not decided here. It is the one definition this
+ * check shares with `js-harness codex-review` (`./lib/codex-review-coverage.mjs`), which reads it for the
+ * range it is asked to review: what this refuses to push is what that command reviews. */
 function codexReviewCoverage(cwd, head, { spawn, remote }) {
   const unknown = (detail, lines, why) => ({ unknown: { detail, ...(lines ? { lines } : {}), ...(why ? { why } : {}) } });
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
@@ -499,78 +413,18 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   }
   const { ref: baseRef, label: base } = branch;
 
-  // Every commit of the range, merges included: a record whose head is one is worth expanding.
-  const inRange = gitOut(spawn, cwd, ['rev-list', `${baseRef}..${tip}`]);
-  if (inRange === null) return unknown(`cannot list the commits in ${base}..${head}`);
-  const rangeIds = new Set(inRange.split('\n').filter(Boolean));
-
-  // The line of each commit, followed by the names of the files it changes (`loggedCommits`). With `-z`
-  // every name is written as it is. Without it git writes a name that holds a quote, a backslash, a
-  // control character or a letter outside ASCII in quotes and escapes (a Markdown file then ends in
-  // `.md"`), and that is not a path its attributes can be asked for.
-  //
-  // `--no-relative`: the names are from the top of the repository, wherever `cwd` is in it. They are by
-  // default, but a repository whose configuration sets `diff.relative` has git write them from the folder
-  // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
-  // would list no file, and count as one that needs no record.
-  //
-  // `--no-renames`: the files a commit changes are those `js-harness codex-review` reads of it, and that
-  // command reads a range with renames off. With git's detection of them, which is on by default, a commit
-  // that moves a file lists the new path alone: moved to a path the project marks, the file that went,
-  // which that command reviews as removed, would be in no list, and the commit would need no record.
-  //
-  // `--root`: a commit with no parent lists the files it adds. It does by default, but not in a repository
-  // whose configuration turns `log.showRoot` off, where such a commit would list none.
-  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--root', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${baseRef}..${tip}`]);
-  const commits = log === null ? null : loggedCommits(log);
-  if (commits === null) return unknown(`cannot list the commits in ${base}..${head}`);
-  const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn });
-  if (leftOut === null) {
+  const coverage = reviewCoverage(cwd, { from: baseRef, tip, spawn });
+  if (coverage.unknown === MARKS_UNREAD) {
     return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`);
   }
-  const codeCommits = commits.filter((commit) => commit.files.some((file) => !leftOut.has(file)));
-
-  const records = readCodexReviews(cwd, { spawn });
-  const valid = records.filter(isValidCodexReview);
-  const invalid = records.length - valid.length;
-  // A record can cover part of the range only when its head is in it, or lies past the pushed tip
-  // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
-  // and expanding it would cost one git process per record ever written.
-  // Two kinds of record are the exception to the second case, and cover only when what is pushed holds
-  // their head. A record of nothing to review: its range changes no file only as a whole (a commit and
-  // its revert), so a tip short of its head pushes a patch nobody reviewed. And a review that left out
-  // files the project marks (`leftMarkedFilesOut`): the marks are those of its head, and a commit of its
-  // range can be the one that adds them, so at a tip short of that head a file it left out can be code.
-  const outside = (rec) => !rangeIds.has(rec.head);
-  const onlyWhole = (rec) => rec.outcome === NOTHING_TO_REVIEW || leftMarkedFilesOut(rec);
-  const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
-  const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
-  const covers = [];
-  let ignored = 0;
-  for (const rec of valid) {
-    if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
-    const covered = coveredBy(spawn, cwd, rec);
-    if (covered) covers.push({ rec, covered });
-    else ignored += 1;
-  }
+  if (coverage.unknown) return unknown(`cannot list the commits in ${base}..${head}`);
+  const { codeCommits, covers, uncovered, invalid, ignored } = coverage;
   const noteParts = [
     invalid ? `${invalid} invalid record${invalid === 1 ? '' : 's'} ignored` : '',
     ignored ? `${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '',
   ].filter(Boolean);
   const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
-
-  const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
   return { tip, baseRef, base, codeCommits, covers, uncovered, note };
-}
-
-// The outcomes of a record that is no review of Codex's, each with what a row calls it.
-const NOT_A_REVIEW = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };
-
-/** The records of a coverage (`codexReviewCoverage`) that cover a code commit and are no review of Codex's. */
-function notReviews({ covers, codeCommits }) {
-  return covers
-    .filter(({ rec, covered }) => Object.hasOwn(NOT_A_REVIEW, rec.outcome) && codeCommits.some((commit) => covered.has(commit.id)))
-    .map(({ rec }) => rec);
 }
 
 /** What both rows say of a coverage that leaves no code commit uncovered, before its `note`. */
@@ -581,7 +435,7 @@ function coveredDetail({ codeCommits, base }) {
 }
 
 /** The `--push` row: every non-merge commit between the remote's default branch and `head` that
- * changes a file a review reads (not a document, not a path the project marks: `codexReviewCoverage`)
+ * changes a file a review reads (not a document, not a path the project marks: `reviewCoverage`)
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
  * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
@@ -623,7 +477,7 @@ const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/
  * as in that command. */
 function reviewSize(spawn, cwd, from, tip) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
-  // `--no-relative`, as for the commits (`codexReviewCoverage`): every file of the range, named from the top.
+  // `--no-relative`, as for the commits (`reviewCoverage`): every file of the range, named from the top.
   const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip]);
   if (numstat === null) return null;
   try {
@@ -644,10 +498,10 @@ function reviewSize(spawn, cwd, from, tip) {
  *
  * Informational: it reads what the `--push` row reads (`codexReviewCoverage`, from the remote's default
  * branch to `HEAD`) and fails nothing, a state it cannot tell included. For the code commits no record
- * covers it says how many they are and how large the review that covers them is today, which is that of the
- * range from the parent of the oldest one to `HEAD`, the range `js-harness codex-review --base <oldest>^`
- * reviews, without the files that review leaves out; and it names the command that prints the plan of that
- * review and starts nothing.
+ * covers it says how many they are and how large the review that covers them is today: the review
+ * `js-harness codex-review` would run, which starts where the records end (`reviewStart`, the one rule the
+ * two share) and leaves out the files a review leaves out; and it names the command that prints the plan of
+ * that review and starts nothing.
  *
  * It fails nothing by throwing either. Every git call under it answers `null` where it fails and the
  * records are read by a reader that passes over what it cannot read, but the plain check ran none of this
@@ -676,12 +530,14 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
     const said = others ? ` (${others} of the records that cover them ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review: js-harness check --push lists them)` : '';
     return row(`${coveredDetail(state)}${said}${note}`);
   }
-  // `git log` lists newest first, so the oldest uncovered commit is the last one. A root commit has no
-  // `<id>^`: the push check names the default branch as the base that reaches it, and so does this.
-  const oldest = uncovered[uncovered.length - 1];
-  const baseArg = oldest.isRoot ? base : `${oldest.shortId}^`;
-  const from = oldest.isRoot ? gitOut(spawn, cwd, ['merge-base', baseRef, tip]) : `${oldest.id}^`;
-  const size = reviewSize(spawn, cwd, from, tip);
+  // The review that is sized is the one `js-harness codex-review` would run: it starts where that command
+  // starts it (`reviewStart`), from the commit the range of the default branch starts at, which is `null`
+  // where the two histories share none. That is the parent of the oldest uncovered commit, named as
+  // `<id>^`, when a review can start there; where it cannot (a root commit has no `<id>^`, for one) the
+  // push check names the default branch as the base that reaches every commit, and so does this.
+  const { start, before } = reviewStart(uncovered, { cwd, from: gitOut(spawn, cwd, ['merge-base', baseRef, tip]), tip, spawn });
+  const baseArg = before === null ? base : `${before.shortId}^`;
+  const size = reviewSize(spawn, cwd, start, tip);
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
