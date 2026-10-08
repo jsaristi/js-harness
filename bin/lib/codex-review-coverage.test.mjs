@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { COMMITS_UNREAD, MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { COMMITS_UNREAD, MARKS_UNREAD, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config. What `check` says of the records over the range
@@ -194,13 +194,40 @@ test('a parent the range does not start at or before is no start: a branch that 
 });
 
 test('a start that would leave an uncovered commit out is no start, whatever order the commits came in', () => {
+  const { root, first, doc, two, three } = fourCommits();
+  // Said to be the oldest, the last commit has the other one among its ancestors: from its parent, that
+  // one would be in no review.
+  const [older, newer] = commitsOf(root, two, three);
+  assert.deepEqual(reviewStart([older, newer], { cwd: root, from: first, tip: three }), { start: first, before: null });
+  // In the order git lists them, the same two start at the parent of the older one, which is not the commit
+  // the range starts at: the two answers differ in where they start as in what they start before.
+  assert.deepEqual(reviewStart([newer, older], { cwd: root, from: first, tip: three }), { start: doc, before: older });
+});
+
+test('a range starts at the commit its two ends share, at none when git says they share none, and git not saying is neither', () => {
   const { root, first, one, three } = fourCommits();
-  // Said to be the oldest, the last commit has the first one among its ancestors: from its parent, the
-  // first would be in no review.
-  const [newest, oldest] = commitsOf(root, one, three);
-  assert.deepEqual(reviewStart([newest, oldest], { cwd: root, from: first, tip: three }), { start: first, before: null });
-  // In the order git lists them, the same two start at the parent of the first.
-  assert.equal(reviewStart([oldest, newest], { cwd: root, from: first, tip: three }).start, first);
+  assert.deepEqual(rangeStart(root, { base: one, tip: three }), { from: one });
+  git(root, 'checkout', '--orphan', 'unrelated');
+  const alone = commit(root, 'z.js', 'unrelated', 'feat: a root commit');
+  assert.deepEqual(rangeStart(root, { base: first, tip: alone }), { from: null });
+  // A revision git does not know, a git that fails, one that was stopped, one that could not be started:
+  // each is a question left unanswered, and none of them the answer that there is no such commit.
+  const unknown = { unknown: true };
+  assert.deepEqual(rangeStart(root, { base: 'no-such-rev', tip: alone }), unknown);
+  const answering = (result) => () => result;
+  for (const result of [
+    { status: 128, stdout: '', stderr: 'fatal: unable to read tree' },
+    { status: 1, stdout: '', stderr: '', error: new Error('spawnSync git ETIMEDOUT') },
+    { status: null, signal: 'SIGKILL', stdout: '', stderr: '' },
+    { status: 0, stdout: '\n', stderr: '' },
+    null,
+  ]) {
+    assert.deepEqual(rangeStart(root, { base: first, tip: alone, spawn: answering(result) }), unknown, JSON.stringify(result));
+  }
+  const throwing = () => {
+    throw new Error('spawnSync git ENOENT');
+  };
+  assert.deepEqual(rangeStart(root, { base: first, tip: alone, spawn: throwing }), unknown);
 });
 
 test('an answer git does not give is not a yes: the range as it was given', () => {

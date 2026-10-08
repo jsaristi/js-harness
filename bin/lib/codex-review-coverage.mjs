@@ -186,11 +186,32 @@ export function notReviews({ covers, codeCommits }) {
     .map(({ rec }) => rec);
 }
 
+/** The commit the range `base..tip` starts at, the one `git merge-base` names: `{ from }`, its full id, or
+ * `null` when the two histories share no commit; `{ unknown: true }` when git did not say.
+ *
+ * The two are kept apart because `reviewStart` reads them apart: with no commit to hold a start to, it
+ * holds it to none. Git says that the two share no commit by exiting 1 with nothing written. Any other
+ * failure, a git that could not be started among them, is a question left unanswered: read as "none", it
+ * would let a review start at a commit nothing was asked about. */
+export function rangeStart(cwd, { base, tip, spawn = spawnSync }) {
+  const unknown = { unknown: true };
+  let result;
+  try {
+    result = spawn('git', ['merge-base', base, tip], { cwd, encoding: 'utf8' });
+  } catch {
+    return unknown;
+  }
+  if (!result || result.error) return unknown;
+  const id = String(result.stdout ?? '').trim();
+  if (result.status === 0) return id ? { from: id } : unknown;
+  return result.status === 1 && !id ? { from: null } : unknown;
+}
+
 /** Where the review of `from..tip` starts, once the records have been read: `uncovered` are the code commits
  * of the range no record covers, newest first (`reviewCoverage`), `tip` a full commit id, and `from` the
  * commit the range starts at, by its full id, or `null` when it has none (the two histories share no
- * commit). `{ start, before }`: the commit the review starts at, and the commit it starts right before,
- * when it starts where the records end.
+ * commit, as git said and not as a git that failed leaves it: `rangeStart`). `{ start, before }`: the
+ * commit the review starts at, and the commit it starts right before, when it starts where the records end.
  *
  * The records end at the oldest commit they do not cover, so the review starts at its parent, `before`
  * being that commit, when that is safe; and at `from` when it is not, with `before` `null`. Safe is all

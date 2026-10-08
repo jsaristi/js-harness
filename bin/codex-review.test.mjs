@@ -4490,9 +4490,10 @@ function makeSlicedRepo() {
 const rangeOf = (from, to) => `${from.slice(0, 7)}..${to.slice(0, 7)}`;
 
 /** What a run says, before its plan, when it starts later than the range it was given: `given` holds `held`
- * code commits, a record covers `covered` of them, and it starts at `start`. */
-const startsAt = (given, held, covered, start) =>
-  `${given} holds ${held} code commits, and a Codex review record already covers ${covered === 0 ? 'none' : covered} of them: ` +
+ * code commits, a record covers `covered` of them, and it starts at `start`. `notReviews`, when given, is
+ * what it says in brackets of the covering records that are no review. */
+const startsAt = (given, held, covered, start, notReviews = '') =>
+  `${given} holds ${held} code commits, and a Codex review record already covers ${covered === 0 ? 'none' : covered} of them${notReviews && ` (${notReviews})`}: ` +
   `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`;
 
 // What a run over a range the records leave nothing of ends with.
@@ -4572,13 +4573,15 @@ test('when the records cannot be read against the range, the range is reviewed a
   const { root, base, one, three } = makeSlicedRepo();
   appendCodexReview(root, reviewedRecord(base, one));
   const given = rangeOf(base, three);
-  const cannotTell = (why) => `Could not tell which commits of ${given} a Codex review record already covers (${why}), so the range is taken as it was given.`;
+  const cannotTell = (why) => new RegExp(`^Could not tell which commits of ${given.replace(/\./g, '\\.')} a Codex review record already covers \\(${why}\\), so the range is taken as it was given\\.$`);
   // Each is what git answers the first time it is asked that: the later times, for the plan and the run
-  // itself, it answers as it does. The last is an answer the reader of the records throws on.
+  // itself, it answers as it does. The last is an answer the reader of the records throws on: the line then
+  // ends with the message of what was thrown, which is the engine's wording of a TypeError and not this
+  // command's to keep, so it is held to say that reading failed and to say something after it.
   const failures = [
     ['git could not list them', (args) => (args[0] === 'log' ? { status: 128, stdout: '', stderr: 'fatal' } : null)],
     ['git could not say which of their files a review leaves out', (args) => (args[0] === 'check-attr' ? { status: 129, stdout: '', stderr: 'usage' } : null)],
-    ['reading them failed: result.stdout.trim is not a function', (args) => (args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : null)],
+    ['reading them failed: .+', (args) => (args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : null)],
   ];
   for (const [why, instead] of failures) {
     const fake = fakeCodex(reviewed(root, base));
@@ -4591,7 +4594,7 @@ test('when the records cannot be read against the range, the range is reviewed a
     const result = await run(['--base', 'HEAD~3', '--cwd', root], { ...fake, spawn });
     assert.equal(result.code, 0, `${why}: ${result.err}`);
     const lines = result.out.split('\n');
-    assert.equal(lines[0], cannotTell(why));
+    assert.match(lines[0], cannotTell(why));
     assert.deepEqual(lines.slice(1, 3), planned(root, base, three, ALL_THREE).slice(0, 2), why);
     assert.deepEqual(fake.calls[0].args, leanArgv(base), why);
     assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(base, three), why);
@@ -4689,6 +4692,20 @@ test('--plan says what a run would: where it starts and the plan of the range th
   appendCodexReview(root, reviewedRecord(two, three));
   assert.deepEqual(await plan([], 'covered whole'), [`Nothing to review: ${rangeOf(base, three)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
   assert.deepEqual(await plan(['--again'], 'covered whole, --again'), planned(root, base, three, ALL_THREE));
+});
+
+test('a run that starts later says how many of the covering records are no review, as a range covered whole does: a skip covers its commits and reviewed none', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  // The first commit was skipped, never reviewed: every later run leaves it out, and has to say what it leaves.
+  appendCodexReview(root, skippedRecord(base, one, 'model rejected'));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~3', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.deepEqual(result.out.split('\n'), [
+    startsAt(rangeOf(base, three), 3, 1, one, '1 of the records that do is a skip or a range with nothing to review, not a review'),
+    ...planned(root, one, three, LAST_TWO),
+  ]);
+  nothing.untouched('a plan past a skip');
 });
 
 test('the row of the plain check and the plan of the command size the same review: the same history, the same start, the same count', async () => {

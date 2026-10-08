@@ -9,7 +9,7 @@ import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
@@ -535,7 +535,10 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // where the two histories share none. That is the parent of the oldest uncovered commit, named as
   // `<id>^`, when a review can start there; where it cannot (a root commit has no `<id>^`, for one) the
   // push check names the default branch as the base that reaches every commit, and so does this.
-  const { start, before } = reviewStart(uncovered, { cwd, from: gitOut(spawn, cwd, ['merge-base', baseRef, tip]), tip, spawn });
+  // Where git did not say which commit the range starts at, no start is known and none is sized: taken
+  // for two histories that share none, a later start would be held to no commit (`rangeStart`).
+  const range = rangeStart(cwd, { base: baseRef, tip, spawn });
+  const { start, before } = range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
   const size = reviewSize(spawn, cwd, start, tip);
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.

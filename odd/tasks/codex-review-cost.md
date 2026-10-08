@@ -480,7 +480,47 @@ push of that branch.
   again as two, each through the gate, with the same tree at the end:
   - `6ad93ab`: the fix of the signed commit, the coverage code moved to its module, and
     the row of `check` sized from where the records end (699 changed lines).
-  - the commit of this entry: the command, its tests, the comparison and this document.
+  - the commit of this entry, `d632abf`: the command, its tests, the comparison and this
+    document (872 changed lines). Its gate took 1,117 s of the 1,200 it has (F7).
+- 2026-10-08: gentle-ai on each of the two, consent granted without asking, both approved
+  and acknowledged. The bound status of the first ran out of time while the gate of the
+  second was running, and went on when asked again after it.
+  - `dbc71f0..6ad93ab` (699 changed lines, medium; lineage `review-b1baeee66253f90a`): one
+    warning and one suggestion, both accepted. The warning: where the records end is worked
+    out with the commit the range starts at, and "none" was read as "the two histories share
+    no commit", which skips the guard that the start is an ancestor of the new one; but
+    `check` gets that commit from `git merge-base`, which also answers nothing when git
+    fails. The suggestion: a test of the order that could not tell the two results apart.
+  - `6ad93ab..d632abf` (872 changed lines, medium; lineage `review-3c0eb6d566170afe`): two
+    warnings and one suggestion. Accepted: a run that starts later says how many commits a
+    record covers and not how many of those records are a skip or a range with nothing to
+    review, which the message of a range covered whole does say, so commits a skip covers
+    leave every later review unsaid; and a test that asserted the wording of an error of
+    the JavaScript engine. The other warning is F7 itself, that the slice adds a dozen
+    tests to the file that already runs the gate close to its bound: true, known, and not
+    closed by this slice.
+  - The three accepted defects and the weak test go to one delegated writer before the
+    Codex review of the two commits, which is not paid to find them again.
+- 2026-10-08: those four fixed by one delegated writer (route: delegated), red first, or a
+  mutation for the two that were weak tests. The writer: the four modules 67 of 67, the push
+  check 92 of 92 (274 s), `check` 73 of 73, the command file 231 of 231 (762 s). 150
+  changed lines. Re-run by the parent: the coverage module, 12 of 12.
+  - `rangeStart`, in the coverage module: the commit a range starts at, "none" only when
+    git exits 1 with nothing written, which is how it says that two histories share no
+    commit (probed on git 2.54: a bad revision exits 128), and "not known" for every other
+    failure. On "not known" the row sizes nothing and says that it could not be told. Red
+    with a real history: with `merge-base` alone failing, the row gave a size 40 lines too
+    large, those of the default branch. The command had no such hole: it refuses a range
+    whose start git does not give, and under `--unavailable` it falls back to the base it
+    was given, a commit, so the guard always runs.
+  - The line of a run that starts later says how many of the covering records are a skip or
+    a range with nothing to review, by the helper the message of a range covered whole
+    uses. Red: a plan past a skip record said nothing of it.
+  - The test of the order asserts both results whole; the old one passed with the rule
+    forced to the range as given, the new one fails. The test of the failure matches the
+    words of the command and not those of the engine.
+  - Left as it is: the command says "share no history" also when `merge-base` failed; it
+    refuses either way, with nothing started.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -489,11 +529,18 @@ push of that branch.
 - F7-gate-near-its-timeout: the gate runs the tests under a bound of 20 minutes, and on
   2026-10-08 the first commit of the second half of T2 was refused once on that bound alone
   ("npm run test timed out after 1200 s", no test failing) and passed on the retry in 1,044
-  s for the whole gate, on a machine doing nothing else. What sets it is one file,
+  s for the whole gate. Another session ran its own gate on this machine that evening (seen
+  at 18:04 in the worktree `rule-hierarchy-plan`), so the refusal may have been two gates
+  at once; the retry and the next commit (1,117 s) had the machine to themselves as far as
+  a sample of its processes showed, and that is still within two minutes of the bound. What sets it is one file,
   `bin/codex-review.test.mjs`: 230 tests that each make a real repository, 12 minutes alone
   and more beside the other files. Splitting that file lets the runner spread it over the
   cores; it is a move of thousands of lines, so it is several commits under the review
-  bound, and its own piece of work. Until then a commit can fail on time, and is retried.
+  bound, and its own piece of work. A cheaper thing to measure first: most of its tests
+  build the same few repositories with a dozen git processes each, and a repository built
+  once and copied for each test may take a large share of the time off with a small change
+  to the helpers. Until then a commit can fail on time, and is retried, and no gate is
+  started while another session runs one.
 - F2-whole-range-runs-feed-no-estimate: a run line of a range reviewed whole holds no count
   of changed lines, so it never enters the estimate of a plan. Smaller since the first half
   of T2: a one-part range that leaves a file out is asked by its files and logs its part,
@@ -518,9 +565,11 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,300 changed
 lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. gentle-ai on each of the two commits of the second half of T2 (from `dbc71f0`, then from
-   `6ad93ab`), and Codex on both in one run from `dbc71f0`, the plan read first; what they
-   find is fixed and reviewed the same way. That closes T4. Then T6.
+1. The fix of what gentle-ai found in the two commits of the second half of T2 is
+   committed with this entry; gentle-ai on it, from `d632abf`, and Codex on
+   the three commits in one run from `dbc71f0`, the plan read first (a run of more than 6
+   parts is put to Sebastián first). What they find is fixed and reviewed the same way.
+   That closes T4. Then T6.
 2. T5, the measurement of the part size, is put to Sebastián with its count before any of
    it runs.
 

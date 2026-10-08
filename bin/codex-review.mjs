@@ -922,7 +922,8 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
  *    a second record of a range adds nothing the first did not say, and a second review of it is paid twice.
  *  - `{ start, said }`: the range from `start`, the commit before the oldest code commit no record covers,
  *    or `from` where starting later is not safe (`reviewStart`). `said` is the line that says the run
- *    starts later than it was asked to, `null` when it does not.
+ *    starts later than it was asked to, and how many of the records it starts past are no review either;
+ *    `null` when it does not start later.
  *
  * When the records cannot be read against the range, the range is taken as it was given, `from`, and `said`
  * says so and why: in doubt a run does what it was asked, never less. Nothing here throws. */
@@ -941,9 +942,8 @@ function leftByRecords(spawn, root, { from, head, given }) {
   if (coverage.uncovered.length === 0) {
     const done = 'Nothing was started and nothing was recorded';
     if (held === 0) return { covered: `Nothing to review: ${given} holds no code commit, since none of its commits changes a file a review reads. ${done}.` };
-    const others = notReviews(coverage).length;
-    const notReviewed = others === 0 ? ''
-      : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review: \`js-harness check --push\` lists them)`;
+    // Where every code commit has a record the push check lists the ones that are no review, so it is named.
+    const notReviewed = notReviewedSaid(coverage, ': `js-harness check --push` lists them');
     return { covered: `Nothing to review: ${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${held === 1 ? 'it' : 'all of them'}${notReviewed}. ${done}; \`--again\` takes the range as it was given.` };
   }
   if (start === from) return { start, said: null };
@@ -951,9 +951,20 @@ function leftByRecords(spawn, root, { from, head, given }) {
   return {
     start,
     said:
-      `${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${covered === 0 ? 'none' : thousands(covered)} of them: ` +
+      `${given} holds ${counted(held, 'code commit')}, and a Codex review record already covers ${covered === 0 ? 'none' : thousands(covered)} of them${notReviewedSaid(coverage)}: ` +
       `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`,
   };
+}
+
+/** What a run says, in brackets after the count of code commits a record covers, of the records that do and
+ * are no review of Codex's (`notReviews`): how many they are, then `more`. Nothing when there is none.
+ *
+ * Covered is not reviewed, and a run that leaves commits out for their record says so wherever it does: over
+ * a range covered whole, and where it starts later. Said only of the first, a commit that an earlier skip
+ * covers would be left out of every later run with nothing saying that no review ever read it. */
+function notReviewedSaid(coverage, more = '') {
+  const others = notReviews(coverage).length;
+  return others === 0 ? '' : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review${more})`;
 }
 
 // How many errors of an answer off its schema are named in the reason; the rest are counted.

@@ -922,8 +922,9 @@ test('the plain row names a base that exists for a root commit, as the push chec
   assert.ok(said.includes('js-harness codex-review --base origin/main --plan'), said);
 });
 
-test('the plain row sizes the review from where `js-harness codex-review` would start it, which is not always the parent of the oldest commit', () => {
-  // The default branch moved on by one commit, and the branch merged in work that forked before it.
+/** A default branch that moved on by one commit of 40 lines, and a branch off it that merged in work which
+ * forked before it moved: a record covers the branch's own commit, and none the commit of that work. */
+function repoWithWorkForkedEarlier() {
   const { root, base } = makeRepo();
   const moved = commit(root, 'main.js', lines(40), 'feat: on the default branch');
   git(root, 'update-ref', 'refs/remotes/origin/main', moved);
@@ -934,11 +935,29 @@ test('the plain row sizes the review from where `js-harness codex-review` would 
   commit(root, 's.js', lines(3), 'feat: side work, forked before the default branch moved');
   git(root, 'checkout', '--quiet', 'feature');
   git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
-  const row = checkCodexReviewDebt(root);
+  return root;
+}
+
+test('the plain row sizes the review from where `js-harness codex-review` would start it, which is not always the parent of the oldest commit', () => {
+  const row = checkCodexReviewDebt(repoWithWorkForkedEarlier());
   assert.ok(isInformation(row), JSON.stringify(row));
   // From the parent of the side commit the review would read the 40 lines the default branch already
   // holds. That command starts such a review at the default branch, and so does the size said here.
   assert.equal(row.detail, 'no Codex review record for 1 of 2 code commits since origin/main: the review of origin/main..HEAD is 1 part today, 7 changed lines in 2 files');
+  assert.deepEqual(row.lines, ['what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan']);
+});
+
+test('the plain row sizes no review when git does not say where the range starts: a `merge-base` that failed is not two histories that share no commit', () => {
+  const root = repoWithWorkForkedEarlier();
+  // Only the question of where the range starts goes unanswered: every other git process answers, the
+  // `rev-list` that says a later start reaches every uncovered commit among them.
+  const spawn = (cmd, args, opts) =>
+    args[0] === 'merge-base' && args[1] !== '--is-ancestor' ? { status: 128, stdout: '', stderr: 'fatal: unable to read tree' } : spawnSync(cmd, args, opts);
+  const row = checkCodexReviewDebt(root, { spawn });
+  assert.ok(isInformation(row), JSON.stringify(row));
+  // Taken for no shared history, that failure would leave the start held to no commit: the review would be
+  // sized from the parent of the side commit, 47 changed lines in 3 files, 40 of them the default branch's.
+  assert.equal(row.detail, 'no Codex review record for 1 of 2 code commits since origin/main: how large the review of origin/main..HEAD is today could not be told');
   assert.deepEqual(row.lines, ['what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan']);
 });
 
