@@ -71,16 +71,16 @@ only files survive. So every decision made in the conversation is written to the
 feature document and committed on the feature branch in the same session; that record is part of
 the work and needs no separate request. Tell him when to cut: a new session when a feature closes,
 a PR merges or a phase starts; `/compact` when a feature is still open but the conversation is
-long. End each reply with one state, so he knows whose turn it is: working (he sends nothing; say
-what wakes you), decision (never while work runs), cut, or finished (name the session to return
-to). A decision or cut carries what he sends, in a fenced code block of only that text, for the
-copy button, under what it is, where it goes, what sending it does. A decision's text is his
-answer, never an instruction: one was read as his task. A cut is two numbered blocks: the bare
-`/compact`, alone since text after it fails from the phone, then the resume prompt, which he never
-writes. Its reply resumes from the summary, checked against the feature document, and repeats any
-pending question. Otherwise one block: two, sent in the wrong order, once cost a session. Before
-the state, say what was done, what is next and why, and for which session: he runs several and
-gets lost. Then the map: each roadmap phase's percentage and the total, from `js-harness
+long. End each reply with one state: working (he sends nothing; say what wakes you), decision
+(never while work runs), cut, or finished (name the session to return to). A planned step he would
+only say yes to is no decision: state its cost and go on. A decision or cut carries what he sends,
+in a code block of only that text, under what it is, where it goes, what sending it does. A
+decision's text is his answer, never an instruction: one was read as his task. A cut is two
+numbered blocks: the bare `/compact`, alone since text after it fails from the phone, then the
+resume prompt, which he never writes. Its reply resumes from the summary, checked against the
+feature document, and repeats any open question. Otherwise one block: two, sent out of order, once
+cost a session. Before it, say what was done, what is next and why, and for which session: he
+runs several. Then the map: each roadmap phase's percentage and the total, from `js-harness
 progress`; if it fails, say so.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body

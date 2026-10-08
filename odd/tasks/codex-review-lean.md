@@ -749,7 +749,9 @@ What follows from it:
     in his real home, which he ruled out. `evals/codex-home.mjs` already seeds such a home
     for F6.
   - The comparison runs on the CLI that is installed, 0.160.1, and every reading records
-    its version; if he puts 0.160.0 back, the cells are run again.
+    its version; if he puts 0.160.0 back, the cells are run again. (Since then the CLI
+    became 0.161.0, see the entry of 2026-10-08: the rule is the same, one version for the
+    nine.)
   - The effort and CodeGraph are varied by the comparison through injection, not by new
     flags of `codex-review`: the command keeps fixing the model and the effort, as he
     decided.
@@ -870,6 +872,96 @@ What follows from it:
     from `2b67316`.
   - What follows for the work left: a candidate is kept under about 1,900 changed lines, by
     committing smaller units, since that is what gentle-ai 4.0.0 has reviewed here.
+- 2026-10-08T02:18Z: resumed after a compaction; state checked against this document (HEAD
+  `3b67920`, clean, T1 to T11 checked, `compare.mjs --list`: 0 of 9 cells recorded). One
+  thing changed outside the session: the CLI is now `codex-cli 0.161.0`.
+  - Evidence: `codex --version`; `npm ls -g` shows `@openai/codex@0.161.0`; the launcher
+    in the pnpm bin folder was rewritten at 2026-10-07T20:00:40Z. This session was at work
+    then (T11, committed at 20:39Z), so its transcripts were searched, the parent's and
+    its writers': no global install by npm or pnpm and no `codex update`; the only matches
+    are the text of the command's own "install it with" message and a comment. That search
+    would have found a command run through the shell tool, not one run by another program.
+    `~/.codex/version.json` still says `latest_version` `0.160.1`, checked at 05:51Z, so
+    it is not what recorded this change. Who changed it is not established.
+  - Checked without a model call: `codex exec review --help` on 0.161.0 still lists
+    `--base`, `--json`, `--ignore-user-config`, `--ignore-rules`, `--disable`,
+    `--ephemeral` and the PROMPT argument, and the dry run of `lean:seeded` builds the argv
+    of T5 unchanged. Whether the sub-agent's rollout and the answer keep their shape on
+    0.161.0 is only known after the first cell.
+  - What it means for T12: the nine cells compare configurations with each other, so they
+    hold as long as all nine run on one version; every reading records it, and a cell read
+    on another version is run again. The numbers of T5 to T9 (0.160.1) are not rows of the
+    comparison. The go-ahead for the nine is asked with this said.
+- 2026-10-08: asked for the nine with their count and what each measures, Sebastián
+  answered with a rule instead of a yes: "si el siguiente prompt es sí, por favor seguí
+  trabajando, o sea no pares, solo pará si es una decisión que debo tomar". Read as the
+  go-ahead for the nine and as a change to how replies close: a planned step he would only
+  answer yes to is stated with its cost and done, not asked. Written in `AGENTS.md`
+  ("Working with Sebastián", 1,499 of 1,500 tokens, three phrases shortened to make room),
+  in the roadmap (Next, item 6) and in the agent's memory. What still waits for him, by the
+  agent's reading: push, pull request, merge, a real choice between ways, and spend the plan
+  did not name. This replaces "ask me before spending Codex quota" for the runs this
+  document already lists; the review of `7deddfc..HEAD` has no count yet, so it is stated
+  with one before it runs.
+- 2026-10-08T02:28Z to 02:45Z: seven of the nine cells of T12 run, one at a time, each as
+  `node evals/review/compare.mjs --cell <cell>` inside `evals/review/login-proof.mjs`, CLI
+  0.161.0. Seven Codex reviews, twelve in the feature. Every reading is in
+  `evals/results/review/readings/`. Input is the sum over the requests, as Codex counts it.
+
+  | Cell | Outcome | Found of 7 | Extra | Input | Not cached | Output | Requests | Seconds |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `lean:seeded` | incorrect | 7 | 0 | 54,797 | 21,261 | 2,001 | 4 | 60 |
+  | `lean-own:seeded` | incorrect | 7 | 0 | 55,203 | 20,003 | 2,034 | 4 | 61 |
+  | `lean-high:seeded` | incorrect | 7 | 1 | 57,161 | 21,961 | 3,308 | 4 | 87 |
+  | `current:seeded` | incorrect | 6 | 0 | 156,564 | 45,716 | 1,819 | 4 | 63 |
+  | `lean:real` | correct, 0 findings | | | 134,283 | 38,283 | 656 | 6 | 33 |
+  | `lean-own:real` | correct, 0 findings | | | 145,842 | 37,554 | 605 | 6 | 34 |
+  | `lean-high:real` | correct, 0 findings | | | 374,661 | 58,373 | 2,413 | 11 | 92 |
+
+  - What the first cells proved, since fakes could not. On 0.161.0 the sub-agent's rollout
+    and the answer keep their shape: tokens, requests and seven findings were read, and the
+    answer schema held against a real answer with findings. A measured `current` works: a
+    review that is not ephemeral, in the seeded copy of his home, wrote the rollout the
+    reader needs. Every changed line was seen in all seven (226 of 226, 216 of 216).
+  - `current:seeded` missed D7, the change that contradicts the stated intent
+    (`src/stocktake.mjs:17-21`); the three lean cells found it. Its first request is 27,927
+    tokens against 5,717 to 6,156 under lean: that difference is what the session loads
+    before the diff.
+  - The seeded range does not tell the lean configurations apart: all three found the
+    seven. High effort cost 4% more input and 65% more output there, and added one finding
+    outside the key (`src/cli.mjs:80`, P2, validate every pair before the first write),
+    which is a true remark and not one of the seven. On the real range high effort cost
+    2.8 times the input of medium (eleven requests against six) for the same answer.
+  - The own prompt with the feature document costs what the sentence of Codex costs, on
+    both ranges, within 9%. The 107,236 of the run of T7 was on 0.160.1 with five requests;
+    here it took six.
+  - The login: the same file, bytes unchanged, one name before and after, in all seven.
+  - The rest of his real home during the cells. `logs_2.sqlite-shm` and `-wal` changed in
+    five of the seven, as before. Two more changes were seen, each once: during
+    `current:seeded`, `state_5.sqlite` was rewritten and its `-shm` and `-wal`, with those
+    of `goals_1.sqlite`, were removed; during `lean-high:real`, the same happened to
+    `thread_history_1.sqlite`. Looked into before going on, since a measured `current` is
+    the one session that carries his configuration:
+    - a copy of `state_5.sqlite` (never the original) holds no thread whose folder is the
+      seeded repository, the range clone or a run home; its newest thread is one of the
+      desktop app, created at 02:17Z and last written at 02:21Z;
+    - his `config.toml` sets no `sqlite_home`, and its one `CODEX_HOME` is in the settings
+      of `node_repl`, which the copy leaves out;
+    - the same kind of change happened during a lean cell, whose session reads none of his
+      configuration; the Codex processes of the app were alive before and after.
+    So a database of the app being folded into its file while nobody uses it is what this
+    looks like, not a write of the review. Not proven: `current:real` is watched for it.
+  - One thing in the tool is wrong, found by reading the reading and not by a failure:
+    `current:seeded` says `gpt-6-astra`, effort `low`, read from the top of his
+    `config.toml`, not from the session. The row of the state database of 2026-09 for a
+    review under `current` names `gpt-6.1-sol`, so what a review under his configuration
+    runs on is not known from the reading, and the verdict compares against that row. The
+    session writes it in its rollout (`turn_context`). To fix before `current:real`: the
+    reader of the rollout returns the model and the effort the session ran with, the run
+    line and the reading record them as measured. `current:real` runs the same
+    configuration, so its measured model stands for `current:seeded` too, and that cell is
+    not run again.
+  - Left: `current:real` and `lean-codegraph:real`, two reviews.
 
 ## Follow-ups
 - Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
@@ -949,30 +1041,28 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T11 are checked. What is left is T12 to T15: the runs, the verdict, the proposal for
-the plugin and the roadmap. Next: Sebastián's go-ahead for the nine cells of T12, nine Codex
-reviews, asked with the count before the first. They run one at a time, each as
-`node evals/review/compare.mjs --cell <config>:<range>` from this worktree, never beside a
-gate or a test run, in this order, so that a tool that is wrong is found on the cheap cells
-first: `lean:seeded`, `lean-own:seeded`, `lean-high:seeded`, `current:seeded`,
-`lean:real`, `lean-own:real`, `lean-high:real`, `current:real`, `lean-codegraph:real`.
-After each: read its reading, and stop if the tool is at fault rather than the review. The
-first seeded answer with a finding becomes the recorded fixture the answer reader still
-lacks (Follow-ups). Then `node evals/review/report.mjs --require-complete`, the verdict
-(T13: lean becomes the default only if it found the same or more with fewer tokens), the
-proposal for the Codex plugin (T14) and the roadmap (T15).
+T1 to T11 are checked; T12 has seven of its nine cells (Progress, 2026-10-08). In order:
+1. The model a session ran with, read from its rollout and recorded in the run line and the
+   reading (one delegated writer, test first), so that `current` is not labelled from
+   `config.toml`.
+2. `current:real`, then `lean-codegraph:real`, each as
+   `node evals/review/compare.mjs --cell <cell>` inside the login proof, one at a time,
+   never beside a gate or a test run. Watch `state_5.sqlite` of the real home in the proof
+   of `current:real`.
+3. `node evals/review/report.mjs --require-complete`, then the verdict (T13: lean becomes
+   the default only if it found the same or more with fewer tokens), the proposal for the
+   Codex plugin (T14) and the roadmap (T15).
 
-What the first cells also prove, since fakes could not: a measured `current` in the copy of
-his home, and CodeGraph under `--ignore-user-config`. Either may need a correction before
-its cell counts.
+Sebastián's rule of 2026-10-08 holds for these: a planned step he would only answer yes to
+is stated with its cost and done. The switch of T13 changes what `codex-review` does by
+default, which the plan names; push, pull request and merge wait for him.
 
 Open, for him:
-1. The go-ahead for the nine runs.
-2. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
+1. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
    by now over 9,000 changed lines, so more than twenty parts, and the test file of the
    command alone is over 3,000 lines, which may not be read whole. Its count is asked.
 
-On the cap: five Codex reviews spent in this feature (one read nothing, four read their
+On the cap: twelve Codex reviews spent in this feature (one read nothing, eleven read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655), so the next assessment starts from `2b67316` and the work

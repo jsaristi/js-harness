@@ -256,8 +256,16 @@ work) these tasks do not measure.
    A decision is never asked while work still runs: the agent waits for it to end. A decision
    asked again says first that the earlier answer still holds and what changed.
 
+   Narrowed by Sebastián on 2026-10-08 ("si el siguiente prompt es sí, seguí trabajando; solo
+   pará si es una decisión que debo tomar"), when the nine Codex reviews of a comparison were
+   put to him with a block that held only "Sí": a step already in the plan, whose only answer
+   would be yes, is not a decision. The agent states it, with its cost, and goes on. A
+   decision is a real choice between ways, something outside the plan, or something that
+   cannot be undone. The agent's reading, his to correct: push, pull request and merge still
+   wait for him, as does spend the plan did not name.
+
    Where it lives today: `AGENTS.md`, "Working with Sebastián", reworded to the four states on
-   `feat/codex-review-lean` (1,500 of 1,500 tokens, so the next rule added needs one removed),
+   `feat/codex-review-lean` (1,499 of 1,500 tokens after the rule of 2026-10-08, so the next one added needs one removed),
    and the agent's memory. It reaches the other worktrees when that branch merges. Still to
    build in this feature: a check that refuses a reply that closes with none of the four
    states, so the rule stops depending on the agent reading prose.
