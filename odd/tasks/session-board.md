@@ -979,12 +979,50 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   the board looks at, so a check of seconds reads as a second gate and the commit helper would
   wait on it. For T7: tell the two apart by the arguments of the process. The push opened
   pull request #40, which the board listed on its next look.
+- 2026-10-07: pull request #40 was merged on Sebastián's word (`main` at `3e9427c`); its branch
+  and its worktree `remote-revival` are gone.
+- 2026-10-08: the feature this branch waits for grew a successor, so the wait is longer than
+  the decision of 2026-10-07 assumed. `codex-review-lean` reached 15 of 15 tasks and its session
+  reviewed its whole branch with Codex before any push: 28 parts and, by its own report, 3.36
+  million input tokens for five findings, all five in the quarter of the range that is code
+  (tests, half of the lines, gave none). On that balance Sebastián had the same session open
+  `codex-review-cost` (six tasks), on a branch stacked on the first: the review fixed to one
+  model and one session (done, `14cd8bf`), only code reviewed and never twice, and a `--plan`
+  that shows parts, lines and estimated tokens before anything is spent. Neither branch is
+  pushed, and the question about disabling the Codex plugin is still his to answer there.
+  What it means here: this branch's range against `main` is 15 commits and 4,355 changed lines,
+  about 1,330 of them code, 2,024 tests and 1,002 documents. Reviewed as the command stands on
+  `main` after the first merge, Codex would read all of it; with the second feature merged it
+  would read about a third. Which of the two merges to wait for is his choice when the first
+  one lands, with the plan's numbers in front of him.
+- 2026-10-08, the wakes of one stretch as the parent, for T7. About twenty-five returns of the
+  watch in a day of one other session working; three led to something Sebastián had to do (two
+  questions put to him in that session, and its compaction). The rest, by kind:
+  - a gate of the other session starting or ending, and its plan changing: true, and useful
+    only to keep this session's own commits out of the way. The plan wakes repeated the same
+    line each time (`next step now starts "T1 to T15 are checked. What is left is
+    Sebastián's:"`) because the change was below the first line the message quotes.
+  - `is waiting: the 1 piece of work it had open ended (was background)`, twice, for a session
+    that took its next turn by itself seconds later. Already a gap of T6; seen again.
+  - `gate ended in an unknown worktree (pid 28632)`, for a gate whose start was never
+    announced. By its timing it was the other session's `check --push` of a few seconds, the
+    same confusion as on 2026-10-07 16:06, here without even a folder.
+  - `session 431f4077 "Project init: T7 Codex review tracking" appeared (waiting)` and the same
+    for `a857f62a "Project init: T4 sync"`, both with a last entry eight days old. Why they
+    came into the 12-hour window was not established (a guess: opened in the desktop app).
+    A session that appears with no new entry asks nothing.
+  - `passed the context limit: 351k tokens (73%), limit 73% (350k)`, once. It was the earliest
+    notice of a real need: that session went on to 432k on the board (about 90% of the app's
+    real window of 500,000) before it was compacted, six gates later. The limit is measured
+    against 480,000, as noted on 2026-10-07.
+  Also seen: while this session's own transcript was past the limit, the watch said nothing
+  about it, as recorded before.
 
 ## Next step
-Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged. Then, each
-on his word, in this order: the Codex review of the code commits with the lean review,
-the push and the pull requests (two slices stacked to `main`, see Delivery), the merge, the
-global install brought up to `main`, and `js-harness install`. T7 closes with an orchestrator
-session opened with the skill's opening prompt and one real stretch supervised by it, recorded
-here with the gaps of T6 and of the wakes above judged. Head of the branch before this record:
-`51a96f2`; the entries of 2026-10-07 go in with the next commit.
+Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged; see the
+entry of 2026-10-08 for the successor feature and the choice it opens. Then, each on his word,
+in this order: the Codex review of the code commits (its plan shown to him first), the push and
+the pull requests (two slices stacked to `main`, see Delivery), the merge, the global install
+brought up to `main`, and `js-harness install`. T7 closes with an orchestrator session opened
+with the skill's opening prompt and one real stretch supervised by it, recorded here with the
+gaps of T6 and of the wakes above judged.
