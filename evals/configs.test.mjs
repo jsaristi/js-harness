@@ -6,10 +6,11 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths,
+  DELEGATION_MODES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig,
+  prepareSandbox, sandboxEnv, sandboxPaths, subagentConfig,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
-import { childEnv, loadTask, runTrial } from './runner.mjs';
+import { childEnv, loadTask, planTrials, runTrial } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
@@ -462,6 +463,126 @@ test('an OAuth token in the environment reaches the child but never a report or 
   const logs = fs.readdirSync(runsDir);
   assert.ok(logs.length > 0);
   for (const file of logs) assert.ok(!fs.readFileSync(path.join(runsDir, file), 'utf8').includes(TOKEN), file);
+});
+
+// ---- the subagent configs: two arms across three delegation modes -----------------------------------
+// The model ids and the mode texts are what the feature measures (`odd/tasks/subagent-model-routing.md`), so
+// the tests hold their own copy of each, as they do of the allowlist: a word changed in the module by
+// accident fails here instead of quietly changing what both arms were told.
+
+const EXPECTED_SUBAGENT_MODELS = { 'sub-opus': 'claude-opus-5-5', 'sub-haiku': 'claude-haiku-5-5' };
+const EXPECTED_MODES = {
+  explore: 'Before you change any file, use the Agent tool to delegate the exploration of this repository to one subagent: have it read the code, the docs and the tests that matter for the task and return a brief with file paths. Read for yourself only to check what the brief says. Then write the change yourself.',
+  verify: 'Write the change yourself. Do not run the tests yourself: each time you need to know whether the tests pass, use the Agent tool to delegate that to a subagent that runs them and reports each failure with its message. Fix what it reports and delegate again until it reports no failure.',
+  write: 'Do not edit any file yourself. Plan the change, then use the Agent tool to delegate the writing to one subagent, with instructions complete enough for it to work alone. Review what it wrote; if something is wrong or missing, delegate the correction to a subagent again.',
+};
+const EXPECTED_SUBAGENT_NAMES = ['sub-opus-explore', 'sub-opus-verify', 'sub-opus-write', 'sub-haiku-explore', 'sub-haiku-verify', 'sub-haiku-write'];
+const SUBAGENT_CASES = Object.entries(EXPECTED_SUBAGENT_MODELS).flatMap(([arm, model]) => Object.entries(EXPECTED_MODES).map(([mode, text]) => ({ name: `${arm}-${mode}`, arm, mode, model, text })));
+const SUBAGENT_VARIABLES = ['CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE'];
+
+test('the subagent configs are the two arms across the three delegation modes: six names the runner accepts in a trial key', () => {
+  assert.deepEqual(SUBAGENT_MODELS, EXPECTED_SUBAGENT_MODELS);
+  assert.deepEqual(DELEGATION_MODES, EXPECTED_MODES);
+  assert.deepEqual(Object.keys(SUBAGENT_CONFIGS), EXPECTED_SUBAGENT_NAMES);
+  for (const { name, arm, mode, model } of SUBAGENT_CASES) {
+    assert.deepEqual(SUBAGENT_CONFIGS[name], { arm, mode, subagentModel: model }, name);
+    assert.equal(subagentConfig(name, OPTIONS).name, name);
+  }
+  const plan = planTrials({ tasks: [{ id: 't' }], configs: EXPECTED_SUBAGENT_NAMES.map((name) => subagentConfig(name, OPTIONS)), efforts: ['medium'], repeats: 1 });
+  assert.deepEqual(plan.map((trial) => trial.config.name), EXPECTED_SUBAGENT_NAMES);
+});
+
+test('the Haiku arm names its model in full, never the alias, which this Claude Code resolves to an older model', () => {
+  for (const model of Object.values(SUBAGENT_MODELS)) assert.match(model, /^claude-(opus|haiku)-\d+-\d+$/);
+  assert.equal(SUBAGENT_MODELS['sub-haiku'], 'claude-haiku-5-5');
+});
+
+test('a subagent config passes the minimal arm\'s flags, then the delegation mode appended to the system prompt, the same text in both arms', () => {
+  for (const { name, text } of SUBAGENT_CASES) {
+    const config = subagentConfig(name, OPTIONS);
+    for (const effort of ['medium', 'high']) {
+      assert.deepEqual(config.args({ effort, home: HOME }), [...minimalConfig(OPTIONS).args({ effort, home: HOME }), '--append-system-prompt', text], `${name} at ${effort}`);
+    }
+  }
+  for (const mode of Object.keys(EXPECTED_MODES)) {
+    assert.deepEqual(subagentConfig(`sub-opus-${mode}`, OPTIONS).args({ effort: 'medium' }), subagentConfig(`sub-haiku-${mode}`, OPTIONS).args({ effort: 'medium' }), `${mode}: the arms differ in no argument`);
+  }
+  assert.deepEqual(subagentConfig('sub-opus-write', OPTIONS).args({ effort: 'medium' }).slice(0, 13), [...sharedArgs('medium'), ...MINIMAL_ONLY], 'the main model and the effort are the ones given');
+});
+
+test('a subagent config runs under the minimal arm\'s sandbox env plus the forced subagent model, and nothing else', () => {
+  const context = { effort: 'medium', home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: PORT } };
+  for (const { name, model } of SUBAGENT_CASES) {
+    assert.deepEqual(
+      subagentConfig(name, OPTIONS).env(context),
+      { ...minimalConfig(OPTIONS).env(context), CLAUDE_CODE_SUBAGENT_MODEL: model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' },
+      name,
+    );
+  }
+  // The minimal arm itself never carries them: there the subagent model is whatever the session decides.
+  for (const variable of SUBAGENT_VARIABLES) assert.equal(minimalConfig(OPTIONS).env(context)[variable] ?? null, null, variable);
+});
+
+for (const platform of PLATFORMS) {
+  test(`a subagent config (${platform}) replaces a subagent model inherited from the launching shell, however its name is cased`, () => {
+    const inherited = { ...fakeInherited(platform), Claude_Code_Subagent_Model: 'haiku', CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '0' };
+    // What the config adds, laid over the sandbox env of this fake environment as the config lays it over its own.
+    const added = Object.fromEntries(SUBAGENT_VARIABLES.map((variable) => [variable, subagentConfig('sub-haiku-explore', OPTIONS).env({ home: HOME, prepared: { engramPort: PORT } })[variable]]));
+    const env = childEnv({ ...sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform }), ...added }, inherited, platform);
+    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-5-5');
+    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE, '1');
+    assert.ok(!Object.hasOwn(env, 'Claude_Code_Subagent_Model'), 'the inherited spelling is gone');
+    // Without the config, the inherited ones are removed like everything else outside the allowlist.
+    const bare = childEnv(sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform }), inherited, platform);
+    assert.deepEqual(Object.keys(bare).filter((name) => /subagent/i.test(name)), []);
+  });
+}
+
+test('subagentConfig refuses a name that is not one of the six, and builds on the same requirements as the minimal arm', () => {
+  for (const name of ['minimal', 'current', 'sub-opus', 'sub-sonnet-write', 'sub-opus-review', 'toString', undefined]) {
+    assert.throws(() => subagentConfig(name, OPTIONS), /is not a subagent config \(one of sub-opus-explore, .*sub-haiku-write\)/, String(name));
+  }
+  assert.throws(() => subagentConfig('sub-opus-write', { command: OPTIONS.command, permissionMode: 'x' }), /sub-opus-write config: "model"/);
+  assert.throws(() => subagentConfig('sub-opus-write', { command: OPTIONS.command, model: 'x' }), /permissionMode/);
+  assert.throws(() => subagentConfig('sub-opus-write', { command: 'claude', model: 'x', permissionMode: 'y' }), /absolute/);
+  assert.throws(() => subagentConfig('sub-opus-write', OPTIONS).args({}), /no effort/);
+});
+
+test('a subagent config has the minimal arm\'s lifecycle: an engram port of its own, a bare home, no seed, and the port freed afterwards', async () => {
+  const home = path.join(tmp('sub'), 'home');
+  const killed = [];
+  const released = [];
+  const config = subagentConfig('sub-haiku-write', {
+    ...OPTIONS, allocatePort: async () => 42101, killPort: (port) => (killed.push(port), { killed: [] }), releasePort: (port) => released.push(port),
+    seed: () => assert.fail('a subagent config must not seed'),
+  });
+  const prepared = await config.prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+  assert.deepEqual(prepared, { engramPort: 42101 });
+  for (const dir of Object.values(sandboxPaths(home))) assert.ok(fs.statSync(dir).isDirectory(), dir);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.claude')), [], 'nothing was copied in');
+  config.cleanup({ home, workspace: path.join(scratch, 'ws'), prepared });
+  assert.deepEqual([killed, released], [[42101], [42101]]);
+  assert.throws(() => config.env({ effort: 'medium', home: HOME }), /engram port/, 'no default port, as for every arm');
+  assert.ok(!('versionArgs' in config) && !('reader' in config), 'probed and read as Claude Code, like the minimal arm');
+});
+
+test('a subagent config: the child process receives the two variables and the appended mode on top of exactly what the minimal arm gets', async () => {
+  const { homes, ports, reports, workRoot } = await runThroughFakeAgent(() => subagentConfig('sub-haiku-verify', OPTIONS));
+  const [report] = reports;
+  assert.equal(report.env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-5-5');
+  assert.equal(report.env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE, '1');
+  assert.deepEqual(report.argv, [...sharedArgs('high'), ...MINIMAL_ONLY, '--append-system-prompt', EXPECTED_MODES.verify], 'the mode text arrives whole, as one argument');
+  for (const [key, value] of nonNull(sandboxEnv({ home: homes[0], engramPort: ports[0] }))) {
+    if (process.platform !== 'win32' && WINDOWS_PATH_NAMES.includes(key)) continue;
+    assert.equal(report.env[key], value, `${key} as the child saw it`);
+  }
+  const fold = (key) => (process.platform === 'win32' ? key.toLowerCase() : key);
+  const osAdded = process.platform === 'win32' ? ['LOGONSERVER'] : [];
+  const allowed = new Set([...EXPECTED_ALLOWLIST, ...PATH_NAMES, 'ENGRAM_PORT', ...(process.platform === 'win32' ? WINDOWS_PATH_NAMES : []), ...Object.keys(EXPECTED_SWITCHES), ...SUBAGENT_VARIABLES, ...osAdded].map(fold));
+  assert.deepEqual(Object.keys(report.env).filter((key) => !allowed.has(fold(key)) && !key.startsWith('FAKE_AGENT_')), [], 'only the allowlist, the paths, the switches and the two variables');
+  for (const key of SCRUBBED) assert.ok(!Object.keys(report.env).some((seen) => fold(seen) === fold(key)), `${key} reached the child`);
+  assert.ok(!fs.existsSync(homes[0]), 'the home is removed after the trial');
+  assert.deepEqual(fs.readdirSync(workRoot), []);
 });
 
 // ---- the shared preparation: a git identity and the fixture as the first commit ---------------------

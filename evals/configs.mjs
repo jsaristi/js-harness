@@ -252,11 +252,13 @@ export function sandboxLifecycle({ allocatePort = allocateTrialPort, releasePort
   };
 }
 
+const MINIMAL_FLAGS = ['--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands'];
+
 /** The minimal arm: the model and the built-in tools, nothing else. No user settings, no global
  * `CLAUDE.md`, no MCP servers, no hooks, no skills or slash commands. `--setting-sources ""` is the empty
  * string as its own argv element: the flag takes a list and an empty list loads no settings source. */
 export function minimalConfig(options) {
-  return buildConfig('minimal', options, ['--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands']);
+  return buildConfig('minimal', options, MINIMAL_FLAGS);
 }
 
 /** The current arm: the machine's Claude Code setup as it is used daily, so no flag restricts it. The
@@ -266,4 +268,43 @@ export function minimalConfig(options) {
  * own piece of work (`home.mjs`). */
 export function currentConfig({ seed, ...options } = {}) {
   return buildConfig('current', options, [], seed);
+}
+
+// ---- the subagent configs --------------------------------------------------------------------------
+// What `odd/tasks/subagent-model-routing.md` measures: the same orchestrator with its subagents forced onto
+// one model or another, read by the kind of work that is delegated.
+
+/** The model each arm forces on every subagent, by its full id. Never an alias: on Claude Code 2.1.292
+ * `haiku` still resolves to Haiku 4.5 (the feature document, E2), so the arm would measure another model. */
+export const SUBAGENT_MODELS = { 'sub-opus': 'claude-opus-5-5', 'sub-haiku': 'claude-haiku-5-5' };
+
+/** The delegation modes, one per kind of delegated work, each as the text appended to the system prompt.
+ * The eval tasks do not delegate by themselves (5 of F5's 60 trials did), so without it there would be no
+ * subagent to measure. A mode is one text whatever the arm, so that the arms differ in the model alone. */
+export const DELEGATION_MODES = {
+  explore: 'Before you change any file, use the Agent tool to delegate the exploration of this repository to one subagent: have it read the code, the docs and the tests that matter for the task and return a brief with file paths. Read for yourself only to check what the brief says. Then write the change yourself.',
+  verify: 'Write the change yourself. Do not run the tests yourself: each time you need to know whether the tests pass, use the Agent tool to delegate that to a subagent that runs them and reports each failure with its message. Fix what it reports and delegate again until it reports no failure.',
+  write: 'Do not edit any file yourself. Plan the change, then use the Agent tool to delegate the writing to one subagent, with instructions complete enough for it to work alone. Review what it wrote; if something is wrong or missing, delegate the correction to a subagent again.',
+};
+
+/** The six configurations, `<arm>-<mode>`, each as `{ arm, mode, subagentModel }`. An arm and a mode are
+ * folded into the config name because the runner's trial key is `task|config|effort|repeat` and has no
+ * place of its own for either. */
+export const SUBAGENT_CONFIGS = Object.fromEntries(Object.entries(SUBAGENT_MODELS).flatMap(([arm, subagentModel]) => (
+  Object.keys(DELEGATION_MODES).map((mode) => [`${arm}-${mode}`, { arm, mode, subagentModel }])
+)));
+
+/** One of the six subagent configs: the minimal arm exactly (its flags, its sandbox, no seed, the same main
+ * model and effort), plus the two things under test. The delegation mode goes after the minimal flags as
+ * `--append-system-prompt`. The subagent model goes in the trial's env, laid over the sandbox's because that
+ * env is an allowlist and would otherwise remove both variables:
+ *  - `CLAUDE_CODE_SUBAGENT_MODEL`, the model;
+ *  - `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, without which the first is only a default that the Agent tool's
+ *    `model` parameter and an agent's frontmatter override. Both arms set it, the Opus one too, because it
+ *    also changes the system prompt: an arm without it would differ in more than the model (E1). */
+export function subagentConfig(name, options) {
+  if (!Object.hasOwn(SUBAGENT_CONFIGS, name)) throw new Error(`${JSON.stringify(name)} is not a subagent config (one of ${Object.keys(SUBAGENT_CONFIGS).join(', ')})`);
+  const { mode, subagentModel } = SUBAGENT_CONFIGS[name];
+  const config = buildConfig(name, options, [...MINIMAL_FLAGS, '--append-system-prompt', DELEGATION_MODES[mode]]);
+  return { ...config, env: (context) => ({ ...config.env(context), CLAUDE_CODE_SUBAGENT_MODEL: subagentModel, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' }) };
 }

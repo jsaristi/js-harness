@@ -13,6 +13,12 @@
 //     --tasks all --name <run name> [--work-root <dir>]
 //   node evals/suite.mjs --agent codex --summary --name <run name>
 //
+// The subagent configs (`odd/tasks/subagent-model-routing.md`) are runs of Claude Code too, named in `--configs` in
+// place of the two arms and never beside them, and they keep everything they write in a `subagents` directory:
+//
+//   node evals/suite.mjs --claude <path> --configs sub-opus-write,sub-haiku-write --efforts medium --repeats 3 \
+//     --tasks <ids> --permission-mode <mode> --name <run name> [--work-root <dir>]
+//
 // It wires what the other modules provide (`runSuite`, the two config builders, the home template, the work
 // root checks and the port cleanup) and adds what none of them owns: the login token, a results file that
 // names the stack it was measured on, and the headroom summary. The reasoning is in `odd/tasks/evals.md`
@@ -25,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MAX_LOGIN_AGE_HOURS, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
-import { SANDBOX_SWITCHES, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig } from './configs.mjs';
+import { SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, minimalConfig, subagentConfig } from './configs.mjs';
 import { buildTemplate, removeTemplate, seedFromTemplate } from './home.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { loadTask, planTrials, probeVersion, removeDir, runSuite, runTrial as runRealTrial, trialKey } from './runner.mjs';
@@ -56,6 +62,11 @@ export const CODEX_PERMISSION_MODE = 'dangerously-bypass-approvals-and-sandbox';
  * comparable set of runs (`report.mjs`, `loadRuns`), and refuses a set whose models or stacks differ. */
 const CODEX_DIR = 'codex';
 
+/** The directory that holds everything a run of the subagent configs writes, for the same reason: that report also
+ * refuses a run whose configs are not `minimal` and `current`, so one results file of theirs beside F5's would stop
+ * F5's gate. Their own report reads this directory (`odd/tasks/subagent-model-routing.md`). */
+const SUBAGENTS_DIR = 'subagents';
+
 /** Where the login token of the eval run is read from: a variable of its own, so the global
  * `CLAUDE_CODE_OAUTH_TOKEN` that would log Sebastián's daily sessions in with a connector-less token is never needed. */
 export const TOKEN_VARIABLE = 'JS_HARNESS_EVAL_OAUTH_TOKEN';
@@ -72,6 +83,9 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // what Codex does with a value it does not know: widen the list from evidence of that, not from a guess.
 const CODEX_EFFORTS = ['medium', 'high'];
 const CONFIGS = ['minimal', 'current'];
+/** The subagent configs (`configs.mjs`): Claude Code's alone, since what they force is Claude Code's subagent model. */
+const SUBAGENT_NAMES = Object.keys(SUBAGENT_CONFIGS);
+const isSubagentConfig = (name) => Object.hasOwn(SUBAGENT_CONFIGS, name);
 
 export const USAGE = [
   'Usage: node evals/suite.mjs --claude <path> --configs <minimal,current> --efforts <medium,high> --repeats <n> --tasks <ids|all>',
@@ -83,14 +97,16 @@ export const USAGE = [
   `  --agent <name>            ${AGENTS.join(', ')}: the CLI the run measures; claude when it is not given`,
   '  --claude <path>           the real claude binary, an absolute path (never a .cmd shim)',
   '  --codex <path>            with --agent codex: the real codex binary (codex.exe), an absolute path, never the codex.cmd shim on PATH',
-  `  --configs <list>          ${CONFIGS.join(', ')}`,
+  `  --configs <list>          ${CONFIGS.join(', ')}; or, for claude alone and never in one run with those two, the subagent configs`,
+  `                            ${SUBAGENT_NAMES.join(', ')}`,
   `  --efforts <list>          ${EFFORTS.join(', ')}; with --agent codex: ${CODEX_EFFORTS.join(', ')}`,
   '  --repeats <n>             trials per task, config and effort',
   '  --tasks <ids|all>         task ids from evals/tasks, comma separated, or all',
   `  --permission-mode <mode>  ${PERMISSION_MODES.join(', ')}; no default, the same for both arms;`,
   `                            not taken with --agent codex, whose arms always run with --${CODEX_PERMISSION_MODE}`,
   '  --name <run name>         results go to evals/results/<name>.json, raw logs to evals/runs/<name>/;',
-  `                            with --agent codex, to evals/results/${CODEX_DIR}/<name>.json and evals/runs/${CODEX_DIR}/<name>/`,
+  `                            with --agent codex, to evals/results/${CODEX_DIR}/<name>.json and evals/runs/${CODEX_DIR}/<name>/;`,
+  `                            with subagent configs, to evals/results/${SUBAGENTS_DIR}/<name>.json and evals/runs/${SUBAGENTS_DIR}/<name>/`,
   '  --work-root <dir>         where trials run (default: js-harness-evals-work next to the repository)',
   '  --summary                 print the summary of a recorded run and run nothing',
   '',
@@ -104,18 +120,20 @@ export const USAGE = [
 export class UsageError extends Error {}
 
 const VALUE_FLAGS = ['--agent', '--claude', '--codex', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name', '--work-root'];
-/** What the command line of each agent is made of: `binary`, the flag that names its real binary; `efforts`, the
- * ones it may name; `required`, every flag a run needs (all but `--work-root`); and `refused`, the flags that are
- * the other agent's, each with the rest of the sentence that says why. */
+/** What the command line of each agent is made of: `binary`, the flag that names its real binary; `configs` and
+ * `efforts`, the ones it may name; `required`, every flag a run needs (all but `--work-root`); and `refused`, the
+ * flags that are the other agent's, each with the rest of the sentence that says why. */
 const COMMAND_LINES = {
   claude: {
     binary: '--claude',
+    configs: [...CONFIGS, ...SUBAGENT_NAMES],
     efforts: EFFORTS,
     required: ['--claude', '--configs', '--efforts', '--repeats', '--tasks', '--permission-mode', '--name'],
     refused: { '--codex': 'names the binary of a Codex run and is taken only with --agent codex' },
   },
   codex: {
     binary: '--codex',
+    configs: CONFIGS,
     efforts: CODEX_EFFORTS,
     required: ['--codex', '--configs', '--efforts', '--repeats', '--tasks', '--name'],
     refused: {
@@ -147,7 +165,11 @@ function listOf(flag, value, allowed, what) {
  * `{ mode: 'run', agent: 'codex', codex, configs, efforts, repeats, tasks, name, workRoot }` or `{ mode: 'summary',
  * agent: 'codex', name }`: the binary is `--codex`, the efforts are Codex's, and the flags that are Claude Code's
  * (`--claude`, `--permission-mode`) are refused instead of ignored, since a flag that was typed and did nothing
- * would let a run be taken for one it was not. */
+ * would let a run be taken for one it was not.
+ *
+ * A Claude run may name the subagent configs in `--configs`, and parses into the same shape. It names them alone: one
+ * that also names `minimal` or `current` is refused, because the two kinds of run keep their results apart
+ * (`SUBAGENTS_DIR`) and one command writes one results file. */
 export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory' } = {}) {
   const given = new Map();
   let summary = false;
@@ -215,11 +237,17 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
   if (workRoot !== null && !path.isAbsolute(workRoot)) throw new UsageError(`--work-root must be an absolute path, got ${JSON.stringify(workRoot)}`);
   checkName(given.get('--name'));
   const cells = {
-    configs: listOf('--configs', given.get('--configs'), CONFIGS, 'configs'),
+    configs: listOf('--configs', given.get('--configs'), line.configs, 'configs'),
     efforts: listOf('--efforts', given.get('--efforts'), line.efforts, 'efforts'),
     repeats: Number(repeats),
     tasks,
   };
+  const subagent = cells.configs.find(isSubagentConfig);
+  const arm = cells.configs.find((name) => !isSubagentConfig(name));
+  if (subagent !== undefined && arm !== undefined) {
+    throw new UsageError(`--configs: ${subagent} cannot share a run with ${arm}: a run of subagent configs keeps its results in evals/results/${SUBAGENTS_DIR}/, `
+      + 'apart from the files evals/report.mjs reads, which refuses a run that holds any config but minimal and current. Run the two as separate commands');
+  }
   if (codex) return { mode: 'run', agent, codex: given.get('--codex'), ...cells, name: given.get('--name'), workRoot };
   return { mode: 'run', claude, ...cells, permissionMode, name: given.get('--name'), workRoot };
 }
@@ -239,13 +267,24 @@ const STACK_FIELDS = {
  * itself.
  *
  * The agent must not change either, and comes first. A run that names none is Claude Code's (see `AGENTS`), so a
- * file F5 recorded is never continued as a Codex run. The stack compared is the one of the run about to continue. */
+ * file F5 recorded is never continued as a Codex run. The stack compared is the one of the run about to continue.
+ *
+ * A run of the subagent configs also names the model each config forces on its subagents (`subagentModels`, by
+ * config name), and that must not change either: it is the one thing its two arms differ in. Each config of the run
+ * about to continue is compared with what the file says of it. A config the file neither names nor holds a trial of
+ * is new to the run, which a continued run may widen, and is not a change; one it holds trials of without naming its
+ * model is, since nothing says what those trials ran on. */
 export function diffRun(recorded, current) {
+  const pinned = recorded.subagentModels ?? {};
+  const ran = new Set((recorded.trials ?? []).map((entry) => entry.config));
   const pairs = [
     ['agent', agentOf(recorded), agentOf(current)],
     ...STACK_FIELDS[agentOf(current)].map(([key, field]) => [field, recorded.stack?.[key] ?? null, current.stack?.[key] ?? null]),
     ['model', recorded.model ?? null, current.model ?? null],
     ['permission mode', recorded.permissionMode ?? null, current.permissionMode ?? null],
+    ...Object.entries(current.subagentModels ?? {})
+      .filter(([name]) => Object.hasOwn(pinned, name) || ran.has(name))
+      .map(([name, model]) => [`subagent model of ${name}`, pinned[name] ?? null, model]),
   ];
   return pairs.filter(([, before, now]) => before !== now).map(([field, before, now]) => ({ field, recorded: before, current: now }));
 }
@@ -478,6 +517,11 @@ const taskIdsIn = (tasksDir) => (fs.existsSync(tasksDir) ? fs.readdirSync(tasksD
  * the stack of a run is what a continued run is compared with, and an unknown version would equal an unknown one.
  * A work root that reading the stack made is removed again whenever the run does not go on from there.
  *
+ * A run of the subagent configs (`--configs sub-...`) is a Claude Code run in every step above, with three things of
+ * its own. Its results and raw logs go to a `subagents` directory inside `resultsDir` and `runsDir`. No home template
+ * is built: its configs are the minimal arm's, which seeds nothing. And its document names the subagent model of each
+ * config (`subagentModels`), which a continued run is compared with like the stack (`diffRun`) and may add to.
+ *
  * A run stops, exit 1, at a trial whose reading the runner refuses (`runSuite`, the `reader` stop), whatever the
  * agent: nothing is recorded for that trial, its raw output is kept with the run's raw logs, and the same command
  * repeats exactly that trial. */
@@ -513,9 +557,13 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const codex = args.agent === 'codex';
-  // Where this run's results file and raw logs live: a Codex run's in a directory of their own (see `CODEX_DIR`).
-  const resultsHome = codex ? path.join(resultsDir, CODEX_DIR) : resultsDir;
-  const rawHome = codex ? path.join(runsDir, CODEX_DIR) : runsDir;
+  // A run names subagent configs or the two arms, never both (`parseArgs`); a summary names no config at all.
+  const subagents = args.mode === 'run' && args.configs.some(isSubagentConfig);
+  // Where this run's results file and raw logs live: a Codex run's and a subagent run's each in a directory of their
+  // own (see `CODEX_DIR` and `SUBAGENTS_DIR`).
+  const ownDir = codex ? CODEX_DIR : subagents ? SUBAGENTS_DIR : null;
+  const resultsHome = ownDir === null ? resultsDir : path.join(resultsDir, ownDir);
+  const rawHome = ownDir === null ? runsDir : path.join(runsDir, ownDir);
   const file = path.join(resultsHome, `${args.name}.json`);
 
   if (args.mode === 'summary') {
@@ -640,6 +688,8 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       run = { agent: args.agent, model: CODEX_EVAL_MODEL, permissionMode: CODEX_PERMISSION_MODE, stack };
     } else {
       run = { model: EVAL_MODEL, permissionMode: args.permissionMode, stack: await stackOf({ claude: args.claude, home: realHome }) };
+      // Named only by a run that forces one, so what F5 recorded keeps the shape it always had.
+      if (subagents) run.subagentModels = Object.fromEntries(args.configs.map((name) => [name, SUBAGENT_CONFIGS[name].subagentModel]));
     }
     if (existing) {
       const changes = diffRun(existing, run);
@@ -652,6 +702,8 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       }
     }
     doc = existing ?? { format: FORMAT, name: args.name, createdAt: now().toISOString(), ...run, args: null, trials: [] };
+    // A continued run keeps the subagent model of every config it ever ran, and adds those of the configs it gains.
+    if (run.subagentModels) doc.subagentModels = { ...doc.subagentModels, ...run.subagentModels };
     doc.args = { [agentOf(args)]: binary, configs: args.configs, efforts: args.efforts, repeats: args.repeats, tasks: args.tasks, workRoot };
 
     for (const signal of SIGNALS) proc.on(signal, onSignal);
@@ -677,7 +729,9 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       // The token goes into the trial's env here and nowhere else: the allowlist inherits CLAUDE_CODE_OAUTH_TOKEN
       // from the launching environment, and this overrides whatever that holds.
       const withToken = (config) => ({ ...config, env: (context) => ({ ...config.env(context), CLAUDE_CODE_OAUTH_TOKEN: token }) });
-      configs = args.configs.map((name) => withToken(name === 'current' ? currentConfig({ ...options, seed }) : minimalConfig(options)));
+      const configOf = (name) => (name === 'current' ? currentConfig({ ...options, seed }) : isSubagentConfig(name) ? subagentConfig(name, options) : minimalConfig(options));
+      // A subagent config lays its two variables over the sandbox env the same way, and they stay under the token.
+      configs = args.configs.map((name) => withToken(configOf(name)));
     }
 
     const store = {

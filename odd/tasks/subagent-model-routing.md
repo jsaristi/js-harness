@@ -144,10 +144,13 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
 
 - [x] T0 Probe: Claude Code 2.1.292 accepts `claude-haiku-5-5` as a forced subagent model
   (route: inline; evidence E3; 1 call, about $0.35 at list price)
-- [ ] T1 The two arms and the three delegation modes: `sub-opus` and `sub-haiku` on the minimal
+- [x] T1 The two arms and the three delegation modes: `sub-opus` and `sub-haiku` on the minimal
   base with both variables, the mode text appended to the prompt, a suite entry that writes to
   `evals/results/subagents/` (route: delegated writer, `evals/configs.mjs`, `evals/suite.mjs` and
-  their tests)
+  their tests). Six configs, `<arm>-<mode>`, because the runner's trial key has no place for a
+  mode; the mode goes in `--append-system-prompt`; the results document pins `subagentModels`.
+  Writer's evidence, RED then GREEN: `node --test evals/configs.test.mjs` 74 pass, 0 fail;
+  `node --test evals/suite.test.mjs` 76 pass, 0 fail
 - [ ] T2 What a trial records: the whole `subagent_stats`, the session transcript kept before
   the trial home is deleted, and the list cost recomputed from tokens with a dated price table
   (route: delegated writer, `evals/agent-output.mjs`, `evals/runner.mjs` and their tests)
@@ -164,3 +167,23 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   (`3e9427c`) with its own CodeGraph index. Mechanism verified (E1, E2), `evals/` mapped (E4),
   design approved by Sebastián, probe spent (E3). Next: T1. Pending: the delivery strategy, since
   the forecast is about 950 authored lines over T1 to T3.
+- 2026-10-08 — The document committed as `4226cd2` (gate 1; review not due, passive). T1 written:
+  402 authored lines, about 280 of them tests. Left for T2 and T3, noticed while writing T1:
+  `--summary --name <run>` cannot read a subagent run, since it looks in `evals/results/`
+  (`evals/suite.mjs`, the summary mode); the summary printed at the end of a run includes F5's
+  headroom screen, which reads `minimal` only and so shows every task of a subagent run as
+  incomplete; the mode text is not pinned in the results document, only the subagent model, so
+  an edited text would not refuse a continued run; the refusal header still says "another
+  stack" when the change is a subagent model. Next: T2.
+- 2026-10-08 — Delivery (Sebastián): three pull requests stacked to `main`, as F5 and F6 were
+  delivered. Slice 1 holds T1 and T2 (the arms and what a trial records), slice 2 holds T3 (the
+  report), slice 3 holds the runs and the result (T4 to T7). Each merge waits for his go-ahead.
+- 2026-10-08 — Harness candidate, from how this decision was asked. The first request for it
+  gave him a `Sí` to send over terms he had no translation for ("slices stacked to main") and
+  folded a gate into the same answer; he replied that he was told to say yes without being told
+  what to. The rule he then set: a request for a decision is clear, detailed and concise, so he
+  can decide fast — what the yes covers in everyday words, what it does to him, what it does not
+  authorize, what the other option means, and one thing per yes. He added that decisions like
+  these always touch the harness, so the rule belongs with the session signals the harness
+  ships (`AGENTS.md`, "Working with Sebastián"; the reworded text lives on
+  `feat/codex-review-lean`), not only in an agent's memory.
