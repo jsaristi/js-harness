@@ -302,6 +302,19 @@ test('the records whose head is outside the range cost one git process together,
   assert.equal(processes(12), processes(1));
 });
 
+test('a record whose head this repository no longer knows is passed over in that one process, for both rows', () => {
+  // A branch that was deleted and pruned leaves such records behind: valid, and of a commit that is gone.
+  const { root, first } = repoWithUnrelatedRecords(1);
+  record(root, git(root, 'rev-parse', 'origin/main'), 'c'.repeat(40));
+  const push = countingSpawn();
+  const row = checkCodexReviews(root, first, { spawn: push.spawn });
+  assert.equal(row.pass, true, row.detail);
+  assert.ok(!push.started.includes('merge-base'), push.started.join(' '));
+  const plain = countingSpawn();
+  assert.match(checkCodexReviewDebt(root, { spawn: plain.spawn }).detail, /^2 code commits since origin\/main, all covered/);
+  assert.ok(!plain.started.includes('merge-base'), plain.started.join(' '));
+});
+
 test('when git cannot say which heads lie past the tip all at once, each is asked about on its own', () => {
   const { root, first } = repoWithUnrelatedRecords(2);
   const asked = [];
@@ -524,7 +537,10 @@ test('the plain row names a base that exists for a root commit, as the push chec
   const rootCommit = commit(root, 'z.js', 'unrelated history', 'feat: a root commit');
   const row = checkCodexReviewDebt(root);
   assert.ok(isInformation(row), JSON.stringify(row));
-  assert.match(row.detail, /no Codex review record for 1 of 1 code commit since origin\/main/);
+  // The two histories share no commit to size a review from, and `js-harness codex-review` refuses such a
+  // range: the row counts the commit and says the size could not be told, instead of sizing a review that
+  // cannot be run.
+  assert.equal(row.detail, 'no Codex review record for 1 of 1 code commit since origin/main: how large the review of origin/main..HEAD is today could not be told');
   const said = [row.detail, ...row.lines].join('\n');
   assert.ok(!said.includes(`${short(root, rootCommit)}^`), said);
   assert.ok(said.includes('js-harness codex-review --base origin/main --plan'), said);
@@ -714,7 +730,7 @@ test('the plain row starts a handful of git processes, however many records ther
 
 // --- main: the failing row appears only with --push, the informational one only without ---
 
-async function runCheck(argv) {
+async function runCheck(argv, deps = {}) {
   let output = '';
   let errOutput = '';
   const [log, error] = [console.log, console.error];
@@ -725,7 +741,7 @@ async function runCheck(argv) {
     errOutput += `${line}\n`;
   };
   try {
-    const code = await main(argv, { JS_HARNESS_CHECK_INNER: '1' });
+    const code = await main(argv, { JS_HARNESS_CHECK_INNER: '1' }, deps);
     return { code, output, errOutput };
   } finally {
     console.log = log;
@@ -774,6 +790,80 @@ test('plain check --remote measures the row against that remote', async () => {
   const { code, output } = await runCheck(['--remote', 'mirror', '--cwd', root, '--home', home]);
   assert.equal(code, 0, output);
   assert.match(output, /^INFO {2}codex-review {2}no code commits since mirror\/main$/m);
+});
+
+// --- the plain row fails nothing, whatever fails under it ---
+
+const recordsFile = (root) => path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl');
+
+/** A project whose one code commit a review record covers: the row has a record to read and a range to expand. */
+function projectWithReviewedCommit() {
+  const project = projectWithUnreviewedCommit();
+  record(project.root, git(project.root, 'rev-parse', `${project.head}^`), project.head);
+  return project;
+}
+
+/** The detail of the plain row of `root`, having checked that it is information and that `main` prints it
+ * and exits 0. `makeGit`, when given, makes the `spawn` the row runs git through, a new one for each run. */
+async function informationOf(root, home, makeGit) {
+  const row = checkCodexReviewDebt(root, makeGit ? { spawn: makeGit() } : {});
+  assert.ok(isInformation(row), JSON.stringify(row));
+  const { code, output } = await runCheck(['--cwd', root, '--home', home], makeGit ? { git: makeGit() } : {});
+  assert.equal(code, 0, output);
+  assert.ok(output.includes(`\nINFO  codex-review  ${row.detail}\n`), output);
+  return row.detail;
+}
+
+test('a records file that cannot be read is no record to the plain row, which stays information', async () => {
+  const { root, home } = projectWithReviewedCommit();
+  assert.match(await informationOf(root, home), /^1 code commit since origin\/main, all covered/);
+  // A folder where the file should be: reading it fails, and the reader of the records answers with none.
+  fs.rmSync(recordsFile(root));
+  fs.mkdirSync(recordsFile(root));
+  assert.match(await informationOf(root, home), /^no Codex review record for 1 of 1 code commit since origin\/main: the review of /);
+});
+
+test('a records file that cannot be parsed is no record to the plain row, which stays information', async () => {
+  const { root, home } = projectWithReviewedCommit();
+  fs.writeFileSync(recordsFile(root), '{"schema": "js-harness.codex-review/v1", "base": \n\u0000 not JSON at all', 'utf8');
+  assert.match(await informationOf(root, home), /^no Codex review record for 1 of 1 code commit since origin\/main: the review of /);
+});
+
+test('a git that throws once the records have been read leaves the plain row information', async () => {
+  const { root, head, home } = projectWithReviewedCommit();
+  // `--git-common-dir` is the last thing the reader of the records asks git: every process after it throws.
+  const makeGit = () => {
+    let read = false;
+    return (cmd, args, opts) => {
+      if (read) throw new Error('spawnSync git EAGAIN');
+      read = args.includes('--git-common-dir');
+      return spawnSync(cmd, args, opts);
+    };
+  };
+  // The record could not be expanded and the range could not be sized, and the row says both.
+  assert.equal(
+    await informationOf(root, home, makeGit),
+    `no Codex review record for 1 of 1 code commit since origin/main: how large the review of ${short(root, head)}^..HEAD is today could not be told; 1 record ignored (base or head not found)`,
+  );
+});
+
+/** A `spawn` that runs git for real and answers the question the reader of the records asks with bytes
+ * where text was asked for, which that reader throws on. */
+const gitThatBreaksTheRecords = () => (cmd, args, opts) =>
+  args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : spawnSync(cmd, args, opts);
+
+test('a throw from under the plain row is what it cannot tell, with what failed, and main exits as it would have', async () => {
+  const { root, home } = projectWithReviewedCommit();
+  assert.equal(
+    await informationOf(root, home, gitThatBreaksTheRecords),
+    'cannot tell how much code waits for a Codex review: reading the commits, their Codex review records or the size of their review failed (result.stdout.trim is not a function)',
+  );
+});
+
+test('the same throw under the push check is not swallowed: check --push fails loudly', async () => {
+  const { root, home } = projectWithReviewedCommit();
+  assert.throws(() => checkCodexReviews(root, 'HEAD', { spawn: gitThatBreaksTheRecords() }), /result\.stdout\.trim is not a function/);
+  await assert.rejects(runCheck(['--push', '--cwd', root, '--home', home], { spawn: gitThatBreaksTheRecords() }), /result\.stdout\.trim is not a function/);
 });
 
 test('check --push runs only the codex-review row and fails on an uncovered commit', async () => {

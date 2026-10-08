@@ -291,11 +291,33 @@ push of that branch.
     (`cf32d4f`), a review of 1 part.
   - For T2: the row sizes the range up to `HEAD`, as a review reads it today. When a review
     starts where the records end, the row's sizing changes with it.
+- 2026-10-08: the second half of T3 committed as `cd71ae4` (gate green; its own gate
+  printed the new row). gentle-ai on `da71985..cd71ae4` (608 changed lines, medium, consent
+  granted without asking): approved and acknowledged (lineage `review-0ac7af31a231c426`),
+  one warning and two suggestions, all accepted and closed by the same writer before the
+  Codex review. The writer: the push check's tests 71 of 71 (116 s), `check`'s 73 of 73,
+  the hook's 7 of 7.
+  - The warning: the row promises to fail nothing, and a throw could still leave it. A
+    records file that cannot be read or parsed did not throw (the reader returns no
+    records), nor did git failing after the records were read; a git answer that is not
+    text did, from inside the reader. Red on that one. The row's body is in one `try` now
+    and says it cannot tell, with the error's own words; the push check still fails loudly,
+    which a test pins.
+  - The two suggestions were tests that held on the code as it was, each seen to fail under
+    a mutation: a record whose head the repository no longer knows goes through the one
+    `rev-list` with no `merge-base` started, and the row of a root commit says its size
+    could not be told.
+  - Left as it is, the same in both rows: a records file that cannot be read or parsed
+    reads as no record, not as "cannot tell".
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
 
 ## Follow-ups
+- F2-whole-range-runs-feed-no-estimate: a run line of a range reviewed whole holds no count
+  of changed lines, so the one-part reviews, the commonest kind once slices are reviewed as
+  they close, never enter the estimate of a plan. The line of such a run could carry the
+  changed lines of its range.
 - F1-what-code-is: closed in part on 2026-10-08 (the fix above: a range with nothing to
   review that holds commits is recorded as such). What is left for T2: the push check counts
   as code every file that is not Markdown, and "only code is reviewed" will leave out more

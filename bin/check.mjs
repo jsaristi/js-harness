@@ -579,12 +579,27 @@ function reviewSize(spawn, cwd, from, tip) {
  * branch to `HEAD`) and fails nothing, a state it cannot tell included. For the code commits no record
  * covers it says how many they are and how large the review that covers them is today, which is that of the
  * range from the parent of the oldest one to `HEAD`, the range `js-harness codex-review --base <oldest>^`
- * reviews; and it names the command that prints the plan of that review and starts nothing. */
+ * reviews; and it names the command that prints the plan of that review and starts nothing.
+ *
+ * It fails nothing by throwing either. Every git call under it answers `null` where it fails and the
+ * records are read by a reader that passes over what it cannot read, but the plain check ran none of this
+ * before the row existed: whatever still throws is said as what the row cannot tell, with what failed, and
+ * the check goes on as it would have. The `--push` row has no such guard, and a throw under it stays loud. */
 export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
   const row = (detail, lines) => ({ name: 'codex-review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  const cannotTell = (why) => row(`cannot tell how much code waits for a Codex review: ${why}`);
+  try {
+    return codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
+  } catch (err) {
+    return cannotTell(`reading the commits, their Codex review records or the size of their review failed (${err instanceof Error ? err.message : String(err)})`);
+  }
+}
+
+/** What `checkCodexReviewDebt` says, made with its `row` and its `cannotTell`, and free to throw. */
+function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   const state = codexReviewCoverage(cwd, 'HEAD', { spawn, remote });
   // A fresh clone, a project with no remote, a folder that is no repository: this runs in all of them.
-  if (state.unknown) return row(`cannot tell how much code waits for a Codex review: ${state.unknown.why ?? state.unknown.detail}`);
+  if (state.unknown) return cannotTell(state.unknown.why ?? state.unknown.detail);
   const { tip, baseRef, base, codeCommits, uncovered, note } = state;
   if (uncovered.length === 0) {
     // Covered by a record is not reviewed: a skip and a range with nothing to review cover too. How many
