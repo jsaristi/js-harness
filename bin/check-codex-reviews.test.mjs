@@ -283,6 +283,30 @@ test('the plain row sizes the review without what it leaves out, so it says what
   );
 });
 
+test('both rows say from a folder below the top of the repository what they say from the top: what is marked, which commits are code, and the size', () => {
+  const { root } = makeMarkedRepo();
+  commit(root, 'evals/results/a.json', lines(900), 'chore: the results of an eval');
+  const oldest = commit(root, 'src/b.js', lines(4), 'feat: code');
+  commit(root, 'src/deep/c.js', lines(3), 'feat: more code, in a folder below');
+  fs.writeFileSync(path.join(root, 'evals', 'results', 'b.json'), lines(600), 'utf8');
+  commit(root, 'tools/d.js', lines(2), 'feat: code elsewhere, with more results');
+  const told = (cwd) => {
+    const push = checkCodexReviews(cwd, 'HEAD');
+    return [push.detail.replace(/ \(.*codex-reviews\.jsonl\)$/, ''), push.lines.slice(0, -1), checkCodexReviewDebt(cwd).detail];
+  };
+  const fromTop = told(root);
+  assert.equal(fromTop[0], '3 of 3 code commits since origin/main have no Codex review record');
+  assert.equal(fromTop[2], `no Codex review record for 3 of 3 code commits since origin/main: the review of ${short(root, oldest)}^..HEAD is 1 part today, 9 changed lines in 3 files`);
+  // git reads the path it is asked the marks of from the folder it runs in: asked there about a path
+  // written from the top, it answers for another path, and a marked file counts as code.
+  for (const below of ['evals', path.join('src', 'deep')]) assert.deepEqual(told(path.join(root, below)), fromTop, below);
+  // And a repository whose configuration makes git list paths from the folder it runs in, leaving out what
+  // lies outside it (`diff.relative`), still has its commits and its files counted whole.
+  git(root, 'config', 'diff.relative', 'true');
+  for (const below of ['evals', path.join('src', 'deep')]) assert.deepEqual(told(path.join(root, below)), fromTop, `${below}, with diff.relative`);
+  assert.deepEqual(told(root), fromTop, 'the top, with diff.relative');
+});
+
 test('an unavailable record covers its range and shows up as a line, still passing', () => {
   const { root, base } = makeRepo();
   feature(root);

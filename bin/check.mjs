@@ -471,7 +471,12 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   // between that NUL and the first name. Without it git writes a name that holds a quote, a backslash, a
   // control character or a letter outside ASCII in quotes and escapes (a Markdown file then ends in
   // `.md"`), and that is not a path its attributes can be asked for.
-  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
+  //
+  // `--no-relative`: the names are from the top of the repository, wherever `cwd` is in it. They are by
+  // default, but a repository whose configuration sets `diff.relative` has git write them from the folder
+  // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
+  // would list no file, and count as one that needs no record.
+  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--no-relative', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
   if (log === null) return unknown(`cannot list the commits in ${base}..${head}`);
   const commits = log
     .split('\x01')
@@ -577,7 +582,8 @@ const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/
  * as in that command. */
 function reviewSize(spawn, cwd, from, tip) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
-  const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', from, tip]);
+  // `--no-relative`, as for the commits (`codexReviewCoverage`): every file of the range, named from the top.
+  const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', '--no-relative', from, tip]);
   if (numstat === null) return null;
   try {
     const files = numstatFiles(numstat);

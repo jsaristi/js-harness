@@ -22,9 +22,15 @@
 // range, not one for each commit of it, so that every path is asked about in one process. A machine's own
 // `$GIT_DIR/info/attributes` and global attributes file still apply, as they do to every git command.
 //
+// Where git is asked from. From the top of the repository, wherever the caller runs: git reads a path it is
+// asked the attributes of from the folder it runs in, and the paths here are written from the top. Asked in
+// a folder below it, `evals/results/a.json` would be the path of that name under that folder: a marked file
+// would be read as code, and nothing would say so. So the lookup first asks git where the top is.
+//
 // It is the project that decides, in a file that is committed like any other: `* -codex-review` leaves a
 // review nothing to read, and the plan of every run says how many files were left out and why.
 import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 // The attribute a project unsets on the paths a review leaves out.
 export const REVIEW_ATTRIBUTE = 'codex-review';
@@ -61,14 +67,26 @@ export function unsetPaths(output) {
   return unset;
 }
 
+/** The top of the repository `cwd` is in, as the folder a git command is run in, or `null` when git cannot
+ * say. `git rev-parse --show-cdup` answers with the way up from `cwd` (`../../`, and nothing at the top or
+ * where a repository has no working tree, whose paths are from its top anyway), which is resolved here: no
+ * path that git wrote for another program is taken as one of this platform. */
+function topOf(cwd, spawn) {
+  const result = spawn('git', ['rev-parse', '--show-cdup'], { cwd, encoding: 'utf8' });
+  if (!result || result.error || result.status !== 0 || typeof result.stdout !== 'string') return null;
+  return resolve(cwd, result.stdout.replace(/\r?\n$/, ''));
+}
+
 /** Which of `paths` a review leaves out, and why: a `Map` from the path to `DOCUMENT` or `MARKED`, the
- * documents first; a path a review reads is not in it. `paths` are from the root of the repository at
- * `cwd`, as git writes them with `-z`, and the attributes are those of the commit `source` (see the top of
- * this file). `null` when git cannot say what is marked: an old git, a source it cannot resolve, an answer
- * that is not one. Never an empty map then, which would say that nothing is.
+ * documents first; a path a review reads is not in it. `paths` are from the top of the repository `cwd`
+ * is in, as git writes them with `-z`, whether `cwd` is that top or a folder below it, and the attributes
+ * are those of the commit `source` (see the top of this file). `null` when git cannot say what is marked:
+ * an old git, a folder that is in no repository, a source it cannot resolve, an answer that is not one.
+ * Never an empty map then, which would say that nothing is.
  *
- * One git process for all the paths, with the paths on its standard input, which no count of them makes
- * too long for a command line; none at all when every path is a document, which no attribute is asked for. */
+ * Two git processes, however many the paths: one that says where the top of the repository is, and one,
+ * run there, that is asked about all the paths, on its standard input, which no count of them makes too
+ * long for a command line. None at all when every path is a document, which no attribute is asked for. */
 export function leftOutOf(paths, { cwd, source, spawn = spawnSync }) {
   const leftOut = new Map();
   const asked = [];
@@ -79,8 +97,10 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync }) {
   if (asked.length === 0) return leftOut;
   let unset;
   try {
+    const top = topOf(cwd, spawn);
+    if (top === null) return null;
     const result = spawn('git', ['check-attr', '--source', source, '--stdin', '-z', REVIEW_ATTRIBUTE], {
-      cwd,
+      cwd: top,
       encoding: 'utf8',
       maxBuffer: ATTR_MAX_BUFFER,
       input: asked.map((path) => `${path}\0`).join(''),

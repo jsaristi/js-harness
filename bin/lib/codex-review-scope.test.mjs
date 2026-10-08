@@ -32,12 +32,14 @@ test('an answer that is not whole records of that attribute is refused, never re
   }
 });
 
-/** A `spawn` that answers every process with `answer(args, opts)` and keeps each call. */
-function fakeGit(answer) {
+/** A `spawn` that keeps each call and answers it: the question of where the top of the repository is
+ * (`git rev-parse --show-cdup`) with `top(args, opts)`, which says the folder git runs in is the top unless
+ * a test says otherwise, and the question of what is marked with `marks(args, opts)`. */
+function fakeGit(marks, top = () => ({ status: 0, stdout: '\n' })) {
   const calls = [];
   const spawn = (command, args, opts) => {
     calls.push({ command, args, opts });
-    return answer(args, opts);
+    return args[0] === 'rev-parse' ? top(args, opts) : marks(args, opts);
   };
   return { spawn, calls };
 }
@@ -45,24 +47,33 @@ function fakeGit(answer) {
 const SOURCE = 'a'.repeat(40);
 
 test('what is left out of some paths: the documents, and the paths git says are marked, each with why', () => {
-  const git = fakeGit(() => ({ status: 0, stdout: attrOutput(['bin/a.mjs', 'unspecified'], ['evals/results/a.json', 'unset'], ['bin/kept.gen.mjs', 'set']) }));
-  const left = leftOutOf(['README.md', 'bin/a.mjs', 'evals/results/a.json', 'bin/kept.gen.mjs', 'evals/results/report.md'], { cwd: '/repo', source: SOURCE, spawn: git.spawn });
+  const marks = () => ({ status: 0, stdout: attrOutput(['bin/a.mjs', 'unspecified'], ['evals/results/a.json', 'unset'], ['bin/kept.gen.mjs', 'set']) });
+  // The caller runs two folders below the top of its repository, which git says is two folders up.
+  const below = path.resolve('/repo', 'src', 'deep');
+  const git = fakeGit(marks, () => ({ status: 0, stdout: '../../\n' }));
+  const left = leftOutOf(['README.md', 'bin/a.mjs', 'evals/results/a.json', 'bin/kept.gen.mjs', 'evals/results/report.md'], { cwd: below, source: SOURCE, spawn: git.spawn });
   assert.deepEqual([...left], [['README.md', DOCUMENT], ['evals/results/report.md', DOCUMENT], ['evals/results/a.json', MARKED]]);
-  // One process for all of them, asked of the commit, with the paths on stdin: no count of paths makes a
-  // command line too long, and a document is not asked about at all.
-  assert.equal(git.calls.length, 1);
-  const [{ command, args, opts }] = git.calls;
-  assert.equal(command, 'git');
+  // Two processes, however many the paths. The first says where the top of the repository is.
+  assert.equal(git.calls.length, 2);
+  assert.deepEqual(git.calls.map((call) => call.command), ['git', 'git']);
+  assert.deepEqual([git.calls[0].args, git.calls[0].opts.cwd], [['rev-parse', '--show-cdup'], below]);
+  // The second is asked there, of the commit, about all of them, with the paths on stdin: no count of paths
+  // makes a command line too long, and a document is not asked about at all.
+  const { args, opts } = git.calls[1];
   assert.deepEqual(args, ['check-attr', '--source', SOURCE, '--stdin', '-z', 'codex-review']);
-  assert.equal(opts.cwd, '/repo');
+  assert.equal(opts.cwd, path.resolve('/repo'));
   assert.equal(opts.input, 'bin/a.mjs\0evals/results/a.json\0bin/kept.gen.mjs\0');
   assert.equal(opts.encoding, 'utf8');
+  // At the top, and in a repository with no working tree, git answers with an empty line: asked where it is.
+  const atTop = fakeGit(marks);
+  leftOutOf(['bin/a.mjs', 'evals/results/a.json', 'bin/kept.gen.mjs'], { cwd: path.resolve('/repo'), source: SOURCE, spawn: atTop.spawn });
+  assert.equal(atTop.calls[1].opts.cwd, path.resolve('/repo'));
 });
 
 test('a path given twice is asked about once, and paths that are all documents start no process', () => {
   const git = fakeGit(() => ({ status: 0, stdout: attrOutput(['a.js', 'unset']) }));
   assert.deepEqual([...leftOutOf(['a.js', 'x.md', 'a.js'], { cwd: '/repo', source: SOURCE, spawn: git.spawn })], [['x.md', DOCUMENT], ['a.js', MARKED]]);
-  assert.equal(git.calls[0].opts.input, 'a.js\0');
+  assert.equal(git.calls[1].opts.input, 'a.js\0');
   const none = fakeGit(() => {
     throw new Error('no process is started');
   });
@@ -85,6 +96,15 @@ test('when git cannot say what is marked the answer is `null`, never that nothin
   };
   for (const [which, answer] of Object.entries(failures)) {
     assert.equal(leftOutOf(['a.js', 'b.js', 'x.md'], { cwd: '/repo', source: SOURCE, spawn: fakeGit(answer).spawn }), null, which);
+  }
+  // Nor when it cannot say where the top of the repository is: the paths are then asked about nowhere.
+  const marked = () => ({ status: 0, stdout: attrOutput(['a.js', 'unset'], ['b.js', 'unspecified']) });
+  assert.deepEqual([...leftOutOf(['a.js', 'b.js'], { cwd: '/repo', source: SOURCE, spawn: fakeGit(marked).spawn })], [['a.js', MARKED]]);
+  for (const [which, answer] of Object.entries({ ...failures, 'a folder that is in no repository': () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }) })) {
+    if (/answer/.test(which) && !/not text/.test(which)) continue;
+    const git = fakeGit(marked, answer);
+    assert.equal(leftOutOf(['a.js', 'b.js'], { cwd: '/repo', source: SOURCE, spawn: git.spawn }), null, `the top: ${which}`);
+    assert.equal(git.calls.length, 1, `the top: ${which}`);
   }
 });
 
@@ -169,6 +189,22 @@ test('the attributes are those of the commit that is named: not what the working
   assert.deepEqual([...leftOutOf(paths, { cwd: root, source: before })], []);
   // A name that is no revision of this repository is one git cannot answer for.
   assert.equal(leftOutOf(paths, { cwd: root, source: 'no-such-revision' }), null);
+});
+
+test('a path is from the top of the repository wherever git is asked from: a folder below the top gives the answer the top gives', () => {
+  // git reads a path it is asked about from the folder it runs in, and the paths here are from the top.
+  const root = makeRepo();
+  const head = commit(root, {
+    '.gitattributes': 'evals/results/** -codex-review\n/top.json -codex-review\n',
+    'src/deep/.gitattributes': '*.snap -codex-review\n',
+    'src/deep/a.js': 'code\n',
+  }, 'marks, at the top and in a folder');
+  const paths = ['evals/results/a.json', 'top.json', 'src/top.json', 'src/deep/a.js', 'src/deep/a.snap', 'a.snap', 'README.md'];
+  const fromTop = [...leftOutOf(paths, { cwd: root, source: head })];
+  assert.deepEqual(fromTop, [['README.md', DOCUMENT], ['evals/results/a.json', MARKED], ['top.json', MARKED], ['src/deep/a.snap', MARKED]]);
+  for (const below of ['src', path.join('src', 'deep')]) {
+    assert.deepEqual([...leftOutOf(paths, { cwd: path.join(root, below), source: head })], fromTop, below);
+  }
 });
 
 // --- the files of a range, by what a review does with them ---

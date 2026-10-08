@@ -4172,6 +4172,27 @@ test('an injected `everyFile` makes the run read every file of its range, as eve
   }
 });
 
+test('a run started in a folder below the top of the repository plans what it plans at the top: git is asked at the top, whatever `diff.relative` says', async () => {
+  const { root } = makeMixedRepo();
+  fs.mkdirSync(path.join(root, 'below'));
+  const planFrom = async (cwd) => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', cwd], nothing.deps);
+    assert.equal(result.code, 0, result.err);
+    return result.out.split('\n');
+  };
+  const atTop = await planFrom(root);
+  assert.match(atTop[0], /, 1 part, 4 changed lines in 2 files\.$/);
+  assert.equal(atTop[2], LEFT_OUT_LINE);
+  // The paths of the range are from the top of the repository, and so is the folder every git command of
+  // the run is started in: what is marked, and how large the range is, do not depend on where it was called.
+  assert.deepEqual(await planFrom(path.join(root, 'below')), atTop);
+  // Nor on a configuration that makes git list paths from the folder it runs in and leave out the rest.
+  git(root, 'config', 'diff.relative', 'true');
+  assert.deepEqual(await planFrom(path.join(root, 'below')), atTop);
+  assert.deepEqual(await planFrom(root), atTop);
+});
+
 test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {
   const repoOf = (count) => {
     const names = Array.from({ length: count }, (_, index) => `f${index}.txt`);

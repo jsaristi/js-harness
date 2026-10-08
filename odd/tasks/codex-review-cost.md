@@ -353,6 +353,23 @@ push of that branch.
   - What the plan says of this branch's whole range today, `5663c8c..469e26f`: 8 parts and
     "Left out of the review: 2 Markdown documents, 372 changed lines". Not run: its records
     cover it already, which is what the second half makes the command see by itself.
+- 2026-10-08: the first half of T2 committed as `7ae9cb8` (gate green). gentle-ai on
+  `cd71ae4..7ae9cb8` (1,401 changed lines, medium, consent granted without asking):
+  approved and acknowledged (lineage `review-8b032541eeff840e`), one warning, accepted and
+  closed by the same writer before the Codex review. The writer: the scope module 14 of
+  14, the push check 77 of 77 (153 s), `check` 73 of 73, the command file 217 of 217
+  (545 s).
+  - The warning: the marks were asked of git in the folder `check` was run from, with
+    paths that start at the top of the repository, and git reads such a path against the
+    folder it runs in. Red with a real repository: from a subfolder none of the marked
+    paths read as marked, and the push check counted a commit of eval results as code. The
+    lookup now finds the top first (`git rev-parse --show-cdup`) and asks there: two git
+    processes for a lookup, however many the paths.
+  - A second case of the same kind, found by the same test and older than this slice: with
+    `diff.relative` set, `git log --name-only` and `git diff --numstat` run from a
+    subfolder drop the files outside it, so a code commit elsewhere needed no record. Both
+    calls of `check` pass `--no-relative` now. The command was already right, every git
+    call of it running at the top, which a test now pins.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -372,8 +389,7 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted. A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. gentle-ai and Codex on the first half of T2, from `469e26f`; the plan of the Codex
-   review read first, and what gentle-ai finds closed before it.
+1. Codex on the first half of T2, from `469e26f`, its plan read first.
 2. The second half of T2: a range whose earlier commits a record covers starts where the
    records end, a range the records cover whole starts nothing and records nothing (the
    suggestion gentle-ai made of equal records), and a flag to review again on purpose. With
