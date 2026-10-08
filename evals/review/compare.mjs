@@ -46,6 +46,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { codexArgs, codexReviewMain, LEAN_EFFORT } from '../../bin/codex-review.mjs';
 import { leanHomesDir, realCodexHome } from '../../bin/lib/codex-review-home.mjs';
+import { runSessionModel } from '../../bin/lib/codex-review-runs.mjs';
 import { quoteWindowsArg, windowsCommandLine } from '../../bin/lib/windows-args.mjs';
 import { buildCodexTemplate, removeCodexTemplate, seedCodexHome } from '../codex-home.mjs';
 import { allocatePort as allocateTrialPort, killByPort, releasePort as releaseTrialPort } from '../ports.mjs';
@@ -239,8 +240,9 @@ function tomlString(value) {
 }
 
 /** The `model` and the `model_reasoning_effort` the top of the `config.toml` text `toml` names, each `null`
- * when it names none: what the `current` session runs on, which Codex's events do not say. A profile or a
- * flag could name another; no cell passes either. */
+ * when it names none: what the `current` session is asked to run on. Not what it ran on, which only the
+ * session's own rollout file says (`buildReading`): Codex may run the review's sub-agent on another model.
+ * A profile or a flag could name another; no cell passes either. */
 export function configuredModel(toml) {
   const top = { model: null, model_reasoning_effort: null };
   for (const { table, key, value } of tomlKeys(toml)) {
@@ -276,8 +278,22 @@ function cut(body) {
  *
  * `config` and `range` are the cell's, from the matrix. `key`, for the seeded range, is the answer key the
  * findings are scored against (`./score.mjs`): `found` and `missed` by defect id, how many findings were
- * `extra`, and the `recall`. `configured` is the model and the effort the user's `config.toml` names, kept
- * for a session whose run line names neither, with `modelSource` saying where they were read. */
+ * `extra`, and the `recall`.
+ *
+ * `model` and `effort` are what the session ran with, and `modelSource` says where that was read, which is
+ * how far it can be trusted:
+ *  - `session`: from the session's own rollout file, through its run line (`runSessionModel`). The one
+ *    source that is a measurement. The reading then keeps beside it, as `configuredModel` and
+ *    `configuredEffort`, what was asked for (the next two sources, in that order; `null` when neither names
+ *    one), whether or not it is the same, so that a session that ran another model than the one asked for
+ *    is seen in the file and one that ran the same is not merely assumed to have.
+ *  - `command`: what the command passed, which the lean session's does. What was asked for, not what ran.
+ *  - `config.toml`: what the user's configuration names (`configured`, read by the caller), for a session
+ *    whose command names none. A guess: Codex may run the review's sub-agent on another model.
+ *  - `null`: none of them names a model or an effort.
+ * A reading that is not `session` has no `configuredModel` and no `configuredEffort`: its `model` and
+ * `effort` are already those, and it has the fields every reading had before the session's model was read.
+ * For a range in parts the model is that of the last attempt, as the outcome is. */
 export function buildReading({ config, range, results, recordedAt, key = null, configured = null }) {
   if (!Array.isArray(results) || results.length === 0) return null;
   const runs = results.map((result) => result.run);
@@ -286,9 +302,13 @@ export function buildReading({ config, range, results, recordedAt, key = null, c
   const reviews = results.map((result) => result.review ?? null);
   const answered = reviews.every((review) => review !== null);
   const findings = answered ? reviews.flatMap((review) => review.findings.map((finding) => ({ ...finding, body: cut(finding.body) }))) : null;
+  // What was asked for: by the command when it names a model, else by the user's configuration.
   const named = typeof last.model === 'string';
-  const model = named ? last.model : configured?.model ?? null;
-  const effort = named ? last.effort ?? null : configured?.effort ?? null;
+  const asked = named ? { model: last.model, effort: last.effort ?? null } : { model: configured?.model ?? null, effort: configured?.effort ?? null };
+  const askedSource = named ? 'command' : asked.model !== null || asked.effort !== null ? 'config.toml' : null;
+  // What ran, when the session's own file said it; else what was asked for stands in, and is said to.
+  const ran = runSessionModel(last);
+  const { model, effort } = ran ?? asked;
   const score = () => {
     if (findings === null) return null;
     const { found, missed, counts, recall } = scoreFindings(findings, key);
@@ -303,7 +323,8 @@ export function buildReading({ config, range, results, recordedAt, key = null, c
     session: last.session ?? null,
     model,
     effort,
-    modelSource: named ? 'command' : model !== null || effort !== null ? 'config.toml' : null,
+    modelSource: ran ? 'session' : askedSource,
+    ...(ran ? { configuredModel: asked.model, configuredEffort: asked.effort } : {}),
     prompt: last.prompt ?? null,
     promptVersion: last.promptVersion ?? null,
     outcome: last.outcome,

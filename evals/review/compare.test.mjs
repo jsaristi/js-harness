@@ -134,9 +134,12 @@ const tokenCount = (total, last = total) => ({ type: 'event_msg', payload: { typ
 const SPENT = { inputTokens: 40100, cachedInputTokens: 18176, outputTokens: 480, reasoningOutputTokens: 150 };
 
 /** The rollout file of the review sub-agent: what it spent and, last, its answer with `findings`, each
- * `{ file, start, end }` from the root of the repository `root` (Codex names the file by its absolute path). */
-const rollout = (root, findings, said) => jsonl(
+ * `{ file, start, end }` from the root of the repository `root` (Codex names the file by its absolute path).
+ * With `ran`, `{ model, effort }`, it holds the `turn_context` line a real one does, which names what the
+ * session ran with; without, none, as the files this reader was first written against. */
+const rollout = (root, findings, said, ran = null) => jsonl(
   { type: 'session_meta', payload: { id: 'review', source: { subagent: 'review' } } },
+  ...(ran === null ? [] : [{ type: 'turn_context', payload: { cwd: root, model: ran.model, effort: ran.effort, summary: 'auto' } }]),
   tokenCount(usageOf(18200, 0, 210, 90)),
   tokenCount(usageOf(40100, 18176, 480, 150), usageOf(21900, 18176, 270, 60)),
   {
@@ -186,9 +189,10 @@ function fakeChild({ stdout, status, piped }) {
  * (`gentle-ai`) recorded in `tools` and answered with the exit code `init`. `spawnAsync` is the review: it
  * shows the diff of the checkout's last commit (unless `shows` is false), leaves the rollout file of a review
  * with `findings` in its home when it has one and is not ephemeral (`said` is the text of its answer, in
- * place of one built from the findings), and ends with `status`. `calls` holds each launch with what
- * `during(opts)` saw, and `order` what happened in which order. */
-function fakeCodex({ findings = [], status = 0, shows = true, said, probe = { status: 0, stdout: 'codex-cli 0.160.1\n' }, init = 0, during = () => ({}) } = {}) {
+ * place of one built from the findings; `ran`, the model and the effort that file says the session ran
+ * with), and ends with `status`. `calls` holds each launch with what `during(opts)` saw, and `order` what
+ * happened in which order. */
+function fakeCodex({ findings = [], status = 0, shows = true, said, ran = null, probe = { status: 0, stdout: 'codex-cli 0.160.1\n' }, init = 0, during = () => ({}) } = {}) {
   const calls = [];
   const tools = [];
   const ports = [];
@@ -208,7 +212,7 @@ function fakeCodex({ findings = [], status = 0, shows = true, said, probe = { st
     if (!`${command} ${args.join(' ')}`.includes('--ephemeral') && typeof home === 'string' && fs.existsSync(home)) {
       const dir = path.join(home, 'sessions', '2026', '10', '07');
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'rollout-2026-10-07T05-34-59-review.jsonl'), rollout(opts.cwd, findings, said), 'utf8');
+      fs.writeFileSync(path.join(dir, 'rollout-2026-10-07T05-34-59-review.jsonl'), rollout(opts.cwd, findings, said, ran), 'utf8');
     }
     const child = fakeChild({ stdout: events(patch), status, piped: opts.stdio?.[0] === 'pipe' });
     calls.push({ command, args, opts, child, seen });
@@ -458,6 +462,23 @@ test('a cell runs one review of its range and stores its reading: what ran, what
   assert.deepEqual(entries(m.readings), ['lean__seeded.json']);
   assert.ok(result.out.includes(readingFile(m.readings, 'lean', 'seeded')), result.out);
   assert.equal(readReading(m.readings, 'lean', 'seeded').ok, true);
+});
+
+/** What a reading says of the model: the one it gives, where that was read, and what was asked for. */
+const modelOf = ({ model, effort, modelSource, configuredModel, configuredEffort }) => ({ model, effort, modelSource, configuredModel, configuredEffort });
+
+test('a reading names the model and the effort its session really ran with, read from the session\'s own file, and keeps beside them what the command asked for', async () => {
+  const m = machine();
+  // The lean command passes `gpt-6.1-sol` at medium effort, and the session's file says it ran with another.
+  const result = await run(['--cell', 'lean:seeded'], m, fakeCodex({ findings: FOUND, ran: { model: 'gpt-it-ran', effort: 'low' } }));
+  assert.equal(result.code, 0, result.err);
+  const stored = reading(m, 'lean', 'seeded');
+  assert.deepEqual(modelOf(stored), { model: 'gpt-it-ran', effort: 'low', modelSource: 'session', configuredModel: 'gpt-6.1-sol', configuredEffort: 'medium' });
+  assert.deepEqual(Object.keys(stored).slice(6, 12), ['model', 'effort', 'modelSource', 'configuredModel', 'configuredEffort', 'prompt'], 'what was asked for comes right after what ran');
+  // A session that ran what it was asked to says so as well: the two are there to be seen equal.
+  const same = await run(['--cell', 'lean-high:seeded'], m, fakeCodex({ findings: FOUND, ran: { model: 'gpt-6.1-sol', effort: 'high' } }));
+  assert.equal(same.code, 0, same.err);
+  assert.deepEqual(modelOf(reading(m, 'lean-high', 'seeded')), { model: 'gpt-6.1-sol', effort: 'high', modelSource: 'session', configuredModel: 'gpt-6.1-sol', configuredEffort: 'high' });
 });
 
 test('a review that failed or was not inspected is still recorded, with its outcome and its reason; a recorded cell is refused without --force', async () => {
@@ -739,6 +760,16 @@ test('current is measured in a copy of the user\'s Codex home: his configuration
   assert.equal(fs.readFileSync(m.auth, 'utf8'), LOGIN);
 });
 
+test('current names the model its session ran with, not the one the user\'s configuration names, which is kept beside it', async () => {
+  const m = machine();
+  // His `config.toml` names `gpt-user` at high effort; the review's sub-agent wrote down another.
+  const result = await run(['--cell', 'current:seeded'], m, fakeCodex({ findings: FOUND.slice(0, 1), ran: { model: 'gpt-the-review-ran', effort: 'low' } }), { configToml: m.configToml });
+  assert.equal(result.code, 0, result.err);
+  const stored = reading(m, 'current', 'seeded');
+  assert.deepEqual(modelOf(stored), { model: 'gpt-the-review-ran', effort: 'low', modelSource: 'session', configuredModel: 'gpt-user', configuredEffort: 'high' });
+  assert.equal(stored.session, 'current');
+});
+
 test('current gives its port back and removes its template also when the review never starts', async () => {
   const m = machine();
   const fake = fakeCodex({ probe: { status: 1, stdout: '' } });
@@ -835,6 +866,37 @@ test('buildReading: nothing launched is no reading; a body is cut whole, never i
   assert.deepEqual([current.model, current.effort, current.modelSource], ['gpt-user', null, 'config.toml']);
   const unknown = buildReading({ ...CELL, results: [resultOf({ session: 'current', model: null, effort: null })] });
   assert.deepEqual([unknown.model, unknown.effort, unknown.modelSource], [null, null, null]);
+});
+
+test('buildReading: the model is the one the session ran with when its run line measured one, and says where it was read: `session`, else `command`, else `config.toml`', () => {
+  const one = (over, configured) => buildReading({ ...CELL, results: [resultOf(over)], ...(configured === undefined ? {} : { configured }) });
+  const measured = { sessionModel: 'gpt-it-ran', sessionEffort: 'low' };
+  // The lean session: the command names a model, and the session's own file says which one ran.
+  assert.deepEqual(modelOf(one(measured)), { model: 'gpt-it-ran', effort: 'low', modelSource: 'session', configuredModel: 'gpt-6.1-sol', configuredEffort: 'medium' });
+  // The current session: the command names none, so what was asked for is the user's configuration's.
+  const current = { session: 'current', model: null, effort: null };
+  assert.deepEqual(modelOf(one({ ...current, ...measured }, { model: 'gpt-user', effort: 'high' })), { model: 'gpt-it-ran', effort: 'low', modelSource: 'session', configuredModel: 'gpt-user', configuredEffort: 'high' });
+  // Measured with no configuration to read: what ran is known, and what was asked for is not.
+  assert.deepEqual(modelOf(one({ ...current, ...measured })), { model: 'gpt-it-ran', effort: 'low', modelSource: 'session', configuredModel: null, configuredEffort: null });
+  // A session that wrote down its model and no effort: the effort is not known, and is not the one asked for.
+  assert.deepEqual(modelOf(one({ sessionModel: 'gpt-it-ran', sessionEffort: null })), { model: 'gpt-it-ran', effort: null, modelSource: 'session', configuredModel: 'gpt-6.1-sol', configuredEffort: 'medium' });
+  // Not measured, a reading is what it always was: the model asked for, said to be that, and no field more.
+  // A run line written before the session's model was read, and one whose home named none, are both that.
+  for (const unmeasured of [{}, { sessionModel: null, sessionEffort: null }, { sessionModel: null, sessionEffort: 'low' }, { sessionModel: 7 }]) {
+    const lean = one(unmeasured);
+    assert.deepEqual([lean.model, lean.effort, lean.modelSource], ['gpt-6.1-sol', 'medium', 'command'], JSON.stringify(unmeasured));
+    const user = one({ ...current, ...unmeasured }, { model: 'gpt-user', effort: 'high' });
+    assert.deepEqual([user.model, user.effort, user.modelSource], ['gpt-user', 'high', 'config.toml'], JSON.stringify(unmeasured));
+    const nobody = one({ ...current, ...unmeasured });
+    assert.deepEqual([nobody.model, nobody.effort, nobody.modelSource], [null, null, null], JSON.stringify(unmeasured));
+    for (const reading of [lean, user, nobody]) assert.equal('configuredModel' in reading || 'configuredEffort' in reading, false, JSON.stringify(unmeasured));
+  }
+  // A range in parts is several sessions: the model is that of the last attempt, as its outcome is.
+  const part = (index, over) => resultOf({ part: { index, of: 2, files: 1, changedLines: 3 }, ...over });
+  const parts = buildReading({ ...CELL, results: [part(1, { sessionModel: 'gpt-part-one', sessionEffort: 'high' }), part(2, measured)] });
+  assert.deepEqual(modelOf(parts), { model: 'gpt-it-ran', effort: 'low', modelSource: 'session', configuredModel: 'gpt-6.1-sol', configuredEffort: 'medium' });
+  const stopped = buildReading({ ...CELL, results: [part(1, measured), part(2, { outcome: 'timed-out' })] });
+  assert.deepEqual([stopped.model, stopped.effort, stopped.modelSource], ['gpt-6.1-sol', 'medium', 'command'], 'a last attempt that measured none is not given the model of another');
 });
 
 test('readReading: a file that is not there, is not JSON, or is another cell\'s is not a reading', () => {

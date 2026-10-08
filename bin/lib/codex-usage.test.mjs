@@ -164,7 +164,7 @@ function rollout(home, name, lines, dirs = ['2026', '10', '07']) {
   return file;
 }
 
-const UNREAD = { usage: NOTHING, requests: null, firstRequestInputTokens: null, threads: null };
+const UNREAD = { usage: NOTHING, requests: null, firstRequestInputTokens: null, threads: null, model: null, effort: null };
 
 test('rolloutReading: one thread is its last cumulative count, one request per count, and the first request\'s input', () => {
   const home = fakeHome();
@@ -180,6 +180,8 @@ test('rolloutReading: one thread is its last cumulative count, one request per c
     requests: 3,
     firstRequestInputTokens: 21000,
     threads: 1,
+    model: null,
+    effort: null,
   });
 });
 
@@ -194,6 +196,8 @@ test('rolloutReading: the counts are summed over the threads, each thread by its
     requests: 3,
     firstRequestInputTokens: 100,
     threads: 2,
+    model: null,
+    effort: null,
   });
 });
 
@@ -213,7 +217,7 @@ test('rolloutReading: with no rollout file nothing is known, which is null and n
 test('rolloutReading: a rollout file with no count is a file that was read: no request, no thread, and no token known', () => {
   const home = fakeHome();
   rollout(home, 'rollout-2026-10-07T05-34-00-aaaa.jsonl', [meta, response, tokenCount(null), tokenCount(null)]);
-  assert.deepEqual(rolloutReading(home), { usage: NOTHING, requests: 0, firstRequestInputTokens: null, threads: 0 });
+  assert.deepEqual(rolloutReading(home), { usage: NOTHING, requests: 0, firstRequestInputTokens: null, threads: 0, model: null, effort: null });
 });
 
 test('rolloutReading: rollout files are found at any depth under `sessions`', () => {
@@ -245,6 +249,8 @@ test('rolloutReading: lines it does not know, lines that are not JSON and counts
     requests: 1,
     firstRequestInputTokens: 800,
     threads: 1,
+    model: null,
+    effort: null,
   });
 });
 
@@ -256,6 +262,8 @@ test('rolloutReading: a count that is missing is null, a reported 0 stays 0, and
     requests: 1,
     firstRequestInputTokens: null,
     threads: 1,
+    model: null,
+    effort: null,
   });
   // A count one thread did not report is still the sum of the threads that did.
   rollout(home, 'rollout-b.jsonl', [tokenCount({ input_tokens: 70, output_tokens: 5 }, { input_tokens: 70 })]);
@@ -266,7 +274,7 @@ test('rolloutReading: a count that is missing is null, a reported 0 stays 0, and
     { type: 'event_msg', payload: { type: 'token_count', info: {} } },
     { type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: 'many', last_token_usage: null } } },
   ]);
-  assert.deepEqual(rolloutReading(odd), { usage: NOTHING, requests: 2, firstRequestInputTokens: null, threads: 1 });
+  assert.deepEqual(rolloutReading(odd), { usage: NOTHING, requests: 2, firstRequestInputTokens: null, threads: 1, model: null, effort: null });
 });
 
 test('rolloutReading: the first request is the earliest count by its timestamp, whatever the order of the files', () => {
@@ -293,6 +301,84 @@ test('rolloutReading: with no timestamp to read, the first request is the first 
   assert.equal(rolloutReading(home).firstRequestInputTokens, null);
 });
 
+// --- the model and the effort a session ran with ---
+
+/** One `turn_context` line of a rollout file, as Codex writes one for every turn (seen in a real file of
+ * codex-cli 0.161.0, names only): what the turn runs with, the `model` and the `effort` among it. One left
+ * `undefined` is a field the line does not have. */
+const turnContext = (model, effort) => ({
+  timestamp: '2026-10-07T05:34:00.500Z',
+  type: 'turn_context',
+  payload: { cwd: 'D:\\x', approval_policy: 'never', model, effort, summary: 'auto' },
+});
+const ran = ({ model, effort }) => [model, effort];
+
+test('rolloutReading: the model and the effort are those of the thread that made the requests, from its last `turn_context`', () => {
+  const home = fakeHome();
+  // The parent thread of `exec review` asks the model nothing, so what it would run with is not what ran.
+  rollout(home, 'rollout-2026-10-07T05-34-00-parent.jsonl', [meta, turnContext('gpt-parent', 'high'), tokenCount(null)]);
+  rollout(home, 'rollout-2026-10-07T05-34-02-review.jsonl', [
+    { timestamp: '2026-10-07T05:34:02.000Z', type: 'session_meta', payload: { id: 'review', source: { subagent: 'review' }, model: 'gpt-meta', effort: 'none' } },
+    turnContext('gpt-first-turn', 'low'),
+    tokenCount(tokens(100, 0, 10, 4)),
+    turnContext('gpt-review', 'medium'),
+    tokenCount(tokens(300, 150, 30, 9), tokens(200, 150, 20, 5)),
+  ]);
+  assert.deepEqual(rolloutReading(home), {
+    usage: { inputTokens: 300, cachedInputTokens: 150, outputTokens: 30, reasoningOutputTokens: 9 },
+    requests: 2,
+    firstRequestInputTokens: 100,
+    threads: 1,
+    model: 'gpt-review',
+    effort: 'medium',
+  });
+});
+
+test('rolloutReading: a model or an effort the thread does not name, or that is no text, is null, each on its own', () => {
+  const counted = tokenCount(tokens(3, 0, 1, 0));
+  const reads = (...lines) => {
+    const home = fakeHome();
+    rollout(home, 'rollout-a.jsonl', [...lines, counted]);
+    return ran(rolloutReading(home));
+  };
+  assert.deepEqual(reads(turnContext('gpt-review', 'low')), ['gpt-review', 'low']);
+  assert.deepEqual(reads(), [null, null], 'a thread with no `turn_context` at all');
+  assert.deepEqual(reads(turnContext('gpt-review', undefined)), ['gpt-review', null]);
+  assert.deepEqual(reads(turnContext(undefined, 'low')), [null, 'low']);
+  for (const bad of [null, 7, true, '', ['gpt'], { name: 'gpt' }]) assert.deepEqual(reads(turnContext(bad, bad)), [null, null], JSON.stringify(bad));
+  // The last line is the one read, as it is: an earlier turn does not fill in what the last one leaves out.
+  assert.deepEqual(reads(turnContext('gpt-first-turn', 'high'), turnContext(undefined, 'low')), [null, 'low']);
+  // What is no `turn_context` line is not read as one: another kind of line that names a model, a payload
+  // that is no object, and a tail that was cut.
+  assert.deepEqual(
+    reads(
+      turnContext('gpt-review', 'low'),
+      { type: 'event_msg', payload: { type: 'turn_context', model: 'gpt-event', effort: 'high' } },
+      { type: 'turn_context', payload: null },
+      { type: 'turn_context', payload: 'gpt-text' },
+      { type: 'turn_context' },
+      '{"type":"turn_context","payload":{"model":"gpt-cut","eff',
+    ),
+    ['gpt-review', 'low'],
+  );
+});
+
+test('rolloutReading: when the threads ran with different models, the one given is that of the thread whose request came first', () => {
+  const home = fakeHome();
+  rollout(home, 'rollout-a.jsonl', [turnContext('gpt-later', 'high'), tokenCount(tokens(900, 0, 9, 0), tokens(900, 0, 9, 0), '2026-10-07T05:34:20.000Z')]);
+  rollout(home, 'rollout-b.jsonl', [turnContext('gpt-earlier', 'low'), tokenCount(tokens(4321, 0, 9, 0), tokens(4321, 0, 9, 0), '2026-10-07T05:34:05.000Z')]);
+  const reading = rolloutReading(home);
+  assert.deepEqual([reading.firstRequestInputTokens, ...ran(reading)], [4321, 'gpt-earlier', 'low'], 'the thread the first request is read from');
+  // With no timestamp to read, that is the first file by name; and a first thread that names none leaves
+  // them unknown, not the next thread's.
+  const plain = fakeHome();
+  rollout(plain, 'rollout-2026-10-07T05-34-09-zzzz.jsonl', [turnContext('gpt-second', 'high'), tokenCount(tokens(30, 0, 1, 0))]);
+  rollout(plain, 'rollout-2026-10-07T05-34-02-aaaa.jsonl', [turnContext('gpt-first', 'low'), tokenCount(tokens(10, 0, 1, 0))]);
+  assert.deepEqual(ran(rolloutReading(plain)), ['gpt-first', 'low']);
+  rollout(plain, 'rollout-2026-10-07T05-34-00-0000.jsonl', [tokenCount(tokens(40, 0, 1, 0))]);
+  assert.deepEqual(ran(rolloutReading(plain)), [null, null]);
+});
+
 test('rolloutReading never throws: a home that is no path, a `sessions` that is a file, a rollout that is a folder', () => {
   for (const home of [undefined, null, '', 7, {}, ['x']]) assert.deepEqual(rolloutReading(home), UNREAD, JSON.stringify(home));
   const file = fakeHome();
@@ -301,7 +387,7 @@ test('rolloutReading never throws: a home that is no path, a `sessions` that is 
   const folder = fakeHome();
   fs.mkdirSync(path.join(folder, 'sessions', 'rollout-a-folder.jsonl'), { recursive: true });
   rollout(folder, 'rollout-b.jsonl', [tokenCount(tokens(3, 0, 1, 0))]);
-  assert.deepEqual(rolloutReading(folder), { usage: { inputTokens: 3, cachedInputTokens: 0, outputTokens: 1, reasoningOutputTokens: 0 }, requests: 1, firstRequestInputTokens: 3, threads: 1 });
+  assert.deepEqual(rolloutReading(folder), { usage: { inputTokens: 3, cachedInputTokens: 0, outputTokens: 1, reasoningOutputTokens: 0 }, requests: 1, firstRequestInputTokens: 3, threads: 1, model: null, effort: null });
 });
 
 test('rolloutReading: an empty home path reads nothing, and never the working directory', () => {

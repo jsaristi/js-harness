@@ -67,7 +67,8 @@
 // above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
 // were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time, what
-// the rollout files say it spent (tokens, requests, threads), what Codex's events say it did (turns,
+// the rollout files say it spent (tokens, requests, threads) and ran with (the model and the effort of the
+// session, beside the two the command passed), what Codex's events say it did (turns,
 // items by type, commands), the prompt it was asked with, which part of the range it was when the range was
 // reviewed in parts and, when its answer was read, the findings by severity and the verdict. A reviewed record names its run line by id (`run`), and the record of a range
 // reviewed in parts the lines of all its parts (`runs`, one entry a part, `null` for a line that could not be
@@ -1024,8 +1025,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             ...(reason === undefined ? {} : { reason }),
             cli,
             session,
-            // Under `lean` the command sets both, so they are known. Under `current` the user's Codex
-            // config sets them and Codex's events do not name them, so they are `null`, not a guess.
+            // What the command passed. Under `lean` it sets both, so they are known. Under `current` the
+            // user's Codex config sets them and Codex's events do not name them, so they are `null`, not a
+            // guess. What the session really ran with is `sessionModel` and `sessionEffort`, below.
             model: lean ? LEAN_MODEL : null,
             effort: lean ? effort : null,
             // What the review was asked with, and the version of the text when it is this command's own.
@@ -1039,6 +1041,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             requests: spent.requests,
             firstRequestInputTokens: spent.firstRequestInputTokens,
             threads: spent.threads,
+            // The model and the effort the session itself wrote in its rollout file: what ran, where `model`
+            // and `effort` above are what this command passed. Each `null` when it is not known, which is
+            // every `current` attempt as a person runs it, and a home that held no such line.
+            sessionModel: spent.model,
+            sessionEffort: spent.effort,
             turns: reading.turns,
             items: reading.items,
             commands: reading.commands,

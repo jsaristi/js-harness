@@ -1,0 +1,38 @@
+{
+  "schema": "js-harness.review-reading/v1",
+  "config": "current",
+  "range": {
+    "name": "real",
+    "base": "338386a6de63e4a47ef0515ceb6fda5f99846df8",
+    "head": "e3aad4802d4604fbc4976e2ad5c4a40e2f5de42e"
+  },
+  "recordedAt": "2026-10-08T03:15:58.144Z",
+  "cli": "0.161.0",
+  "session": "current",
+  "model": "gpt-6-astra",
+  "effort": "low",
+  "modelSource": "session",
+  "configuredModel": "gpt-6-astra",
+  "configuredEffort": "low",
+  "prompt": "codex",
+  "promptVersion": null,
+  "outcome": "reviewed",
+  "reason": null,
+  "usage": {
+    "inputTokens": 228539,
+    "cachedInputTokens": 172416,
+    "outputTokens": 814,
+    "reasoningOutputTokens": 31
+  },
+  "requests": 5,
+  "firstRequestInputTokens": 28936,
+  "durationMs": 46907,
+  "coverage": {
+    "seen": 216,
+    "total": 216
+  },
+  "parts": 1,
+  "findings": [],
+  "findingBodyMax": 600,
+  "verdict": "correct"
+}

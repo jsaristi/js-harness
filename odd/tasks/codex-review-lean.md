@@ -149,7 +149,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
 - [x] T11 The comparison and its report: `evals/review/compare.mjs` runs configurations over
   ranges and stores each reading in `evals/results/review/`; `report.mjs --require-complete`
   sets them side by side — route: same writer
-- [ ] T12 The runs, after Sebastián's go-ahead on the count: the same range under `current` and
+- [x] T12 The runs, after Sebastián's go-ahead on the count: the same range under `current` and
   `lean`; `high` beside `medium`; the seeded diff under each; CodeGraph with and without —
   route: inline runs
 - [ ] T13 The verdict and the switch: `lean` becomes the default only if it found the same or
@@ -962,6 +962,75 @@ What follows from it:
     configuration, so its measured model stands for `current:seeded` too, and that cell is
     not run again.
   - Left: `current:real` and `lean-codegraph:real`, two reviews.
+- 2026-10-08: the seven readings and the rule committed as `9c9b00d` (gate green).
+  gentle-ai assessed `2b67316..9c9b00d` as `medium`, review due (758 lines, 10 files);
+  granted without asking, lineage `review-b59af3f116a5c1f5`, approved and acknowledged.
+  No blocker; two warnings and a suggestion, each answered:
+  - R3-current-model-label (`evals/results/review/readings/current__seeded.json:12-14`):
+    the committed reading keeps a model nobody measured, and letting the model of
+    `current:real` stand for it is an inference across two sessions that the file does not
+    record. Accepted: `current:seeded` is run again with `--force` once the reader is
+    fixed, one review more than the nine. The first reading stays in the history of
+    `9c9b00d`.
+  - R3-single-sample-recall (this document, the entry above): six of seven against seven of
+    seven is one run a cell, and the model of `current` was not known. Accepted as stated:
+    the second run of `current:seeded` is a second sample of that side, the lean side has
+    three runs that found D7 (medium, own prompt, high), and the verdict of T13 says how
+    many runs each side rests on instead of calling one run a result.
+  - R3-token-budget-unchecked (`docs/ROADMAP.md:268`): the 1,499 of 1,500 is not left to
+    the prose. `npm run check` counts `AGENTS.md` against the budget and the pre-commit
+    hook ran it for `9c9b00d`; an edit that passes the cap fails the commit. No change.
+- 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
+  file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
+  strings. One delegated writer (route: delegated, four modules and their tests), test
+  first: `rolloutReading` returns them, the run line records them as `sessionModel` and
+  `sessionEffort`, the reading takes them with `modelSource` `session`, the report shows
+  them.
+- 2026-10-08: the fix built by that writer, each behaviour red first (its report names the
+  failing assertion of each). Re-run by the parent: 90 of 90 over the four module files;
+  the command file 189 of 189 by the writer (321 s). What it decided where the brief was
+  open: with threads that disagree, the model is that of the thread the first request
+  comes from; the two fields of the run line are always written, `null` when unknown; a
+  measured reading also keeps what was asked (`configuredModel`, `configuredEffort`), equal
+  or not, so a match is seen and not assumed; the report marks with `*` a model that was
+  not measured and adds a note when a session ran something other than what was asked.
+- 2026-10-08T03:10Z to 03:20Z: the three runs left, with the fix, each inside the login
+  proof, CLI 0.161.0. T12 is checked: `node evals/review/report.mjs --require-complete`
+  exits 0, nine of nine, and the report is `evals/results/review/report.md`. Ten reviews in
+  the batch, fifteen in the feature.
+
+  | Cell | Outcome | Found of 7 | Input | Not cached | Output | Requests | First request | Seconds | Ran with |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `current:seeded`, second run | incorrect | 6 | 151,204 | 44,068 | 1,823 | 4 | 27,912 | 79 | `gpt-6-astra` `low` |
+  | `current:real` | correct, 0 findings | | 228,539 | 56,123 | 814 | 5 | 28,936 | 47 | `gpt-6-astra` `low` |
+  | `lean-codegraph:real` | correct, 0 findings | | 160,383 | 39,423 | 493 | 6 | 7,491 | 30 | `gpt-6.1-sol` `medium` |
+
+  - The model of `current` is now measured, in both its cells: `gpt-6-astra` at `low`,
+    what the top of his `config.toml` names. So the first reading had the right label, by
+    inference; and the row of 2026-09 that named `gpt-6.1-sol` was a review under the
+    configuration he had then. The reading of the first run is in the history of `9c9b00d`:
+    156,564 input, six of seven, the same defect missed.
+  - `current:seeded` missed D7 in both runs, with the same six found. Two runs, not one;
+    still two.
+  - What this makes of the comparison, said before the verdict: `lean` and `current` differ
+    in three things at once, what the session loads, the model and the effort. The seven of
+    seven against six of seven cannot be given to one of them. The tokens of the first
+    request can: 27,912 and 28,936 under `current` against 5,717 to 7,491 under lean is the
+    load, whatever the model.
+  - CodeGraph under the clean session: the settings passed with `-c` held under
+    `--ignore-user-config`, since the first request grew by 780 tokens (7,491 against
+    6,711), which is the server's tools reaching the session. Whether the model called them
+    is not in the reading. The range has no known defect, so the cell could show a cost and
+    not a gain: 19% more input than `lean:real` (160,383 against 134,283), the same
+    answer, in as many requests.
+  - The model of a lean session, measured in that cell: `gpt-6.1-sol`, `medium`, what the
+    command passes. The other lean readings were taken before the fix and carry the mark
+    of a model not measured.
+  - The login: the same file, bytes unchanged, one name, in all three. The rest of his home:
+    `state_5.sqlite` was not touched in either `current` cell, so the change seen once was
+    not the review's. `models_cache.json` changed in both; its `client_version` is
+    `0.159.1` and its `fetched_at` 03:15:02Z, so the desktop app wrote it, not a CLI of
+    0.161.0. `logs_2.sqlite` and its two files came and went, the app's as before.
 
 ## Follow-ups
 - Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
@@ -1041,28 +1110,26 @@ What follows from it:
   injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
 
 ## Next step
-T1 to T11 are checked; T12 has seven of its nine cells (Progress, 2026-10-08). In order:
-1. The model a session ran with, read from its rollout and recorded in the run line and the
-   reading (one delegated writer, test first), so that `current` is not labelled from
-   `config.toml`.
-2. `current:real`, then `lean-codegraph:real`, each as
-   `node evals/review/compare.mjs --cell <cell>` inside the login proof, one at a time,
-   never beside a gate or a test run. Watch `state_5.sqlite` of the real home in the proof
-   of `current:real`.
-3. `node evals/review/report.mjs --require-complete`, then the verdict (T13: lean becomes
-   the default only if it found the same or more with fewer tokens), the proposal for the
-   Codex plugin (T14) and the roadmap (T15).
+T1 to T12 are checked. In order:
+1. T13, the verdict and the switch (one delegated writer, test first): `lean` found the
+   same or more with fewer tokens on both ranges (Progress, 2026-10-08), so it becomes what
+   `codex-review` runs when no `--session` is given; then the roadmap's Review and Effort
+   rows, the installed skill text, and `AGENTS.md` only if needed and within budget. The
+   verdict says what it rests on: two runs of `current` and three lean runs on the seeded
+   range, one run a cell on the real one, and three differences at once between the two.
+2. T14, the proposal for the Codex plugin with these numbers (inline).
+3. T15, the result in `docs/ROADMAP.md` (inline).
 
 Sebastián's rule of 2026-10-08 holds for these: a planned step he would only answer yes to
-is stated with its cost and done. The switch of T13 changes what `codex-review` does by
-default, which the plan names; push, pull request and merge wait for him.
+is stated with its cost and done. Push, pull request and merge wait for him, and so does
+what T14 proposes: it is a proposal for him to decide.
 
 Open, for him:
 1. The Codex review of the code range `7deddfc..HEAD` before any push, or a recorded skip:
    by now over 9,000 changed lines, so more than twenty parts, and the test file of the
    command alone is over 3,000 lines, which may not be read whole. Its count is asked.
 
-On the cap: twelve Codex reviews spent in this feature (one read nothing, eleven read their
+On the cap: fifteen Codex reviews spent in this feature (one read nothing, fourteen read their
 diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655), so the next assessment starts from `2b67316` and the work

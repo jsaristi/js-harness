@@ -69,8 +69,8 @@ const section = (text, name) => text.split(/^## /m).find((part) => part.startsWi
 /** The row of `config` in a section, as its cells. */
 const row = (text, config) => text.split('\n').find((line) => line.startsWith(`| ${config} |`))?.split('|').slice(1, -1).map((cell) => cell.trim());
 
-const REAL_COLUMNS = ['configuration', 'outcome', 'findings', 'input tokens', 'not-cached input', 'output tokens', 'requests', 'first request', 'seconds', 'CLI'];
-const SEEDED_COLUMNS = ['configuration', 'outcome', 'findings', 'found', 'extra', 'input tokens', 'not-cached input', 'output tokens', 'requests', 'first request', 'seconds', 'CLI'];
+const REAL_COLUMNS = ['configuration', 'outcome', 'findings', 'input tokens', 'not-cached input', 'output tokens', 'requests', 'first request', 'seconds', 'CLI', 'model'];
+const SEEDED_COLUMNS = ['configuration', 'outcome', 'findings', 'found', 'extra', 'input tokens', 'not-cached input', 'output tokens', 'requests', 'first request', 'seconds', 'CLI', 'model'];
 
 test('with no reading every cell is a row that says `missing`: one table a range, one row a configuration of that range', () => {
   const repo = repository();
@@ -98,8 +98,8 @@ test('a recorded cell is a row of what its reading holds: the outcome, the findi
   const text = fs.readFileSync(repo.out, 'utf8');
   assert.match(text, /9 of 9 cells are recorded/);
   // Not-cached input is the input less its cached part; the seconds are the wall time, rounded.
-  assert.deepEqual(row(section(text, 'real'), 'lean'), ['lean', 'reviewed', '3', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1']);
-  assert.deepEqual(row(section(text, 'seeded'), 'lean-own'), ['lean-own', 'reviewed', '3', '2/7', '1', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1']);
+  assert.deepEqual(row(section(text, 'real'), 'lean'), ['lean', 'reviewed', '3', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1', 'gpt-6.1-sol medium*']);
+  assert.deepEqual(row(section(text, 'seeded'), 'lean-own'), ['lean-own', 'reviewed', '3', '2/7', '1', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1', 'gpt-6.1-sol medium*']);
   assert.equal(text.includes('missing'), false);
   assert.doesNotMatch(text, /default|should|recommend|better|winner/i, 'it reports, and chooses nothing');
 });
@@ -112,10 +112,44 @@ test('a reading that is no review shows its outcome, and a count that is not kno
   record(repo, 'lean-high', 'seeded', { usage: { ...nothing, inputTokens: 500, outputTokens: 20 } });
   const text = reportMarkdown({ readingsDir: repo.readings }).text;
   const seeded = section(text, 'seeded');
-  assert.deepEqual(row(seeded, 'current'), ['current', 'not-inspected', '0', '0/7', '0', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1']);
-  assert.deepEqual(row(seeded, 'lean'), ['lean', 'failed', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', '0.160.1']);
+  assert.deepEqual(row(seeded, 'current'), ['current', 'not-inspected', '0', '0/7', '0', '40,100', '21,924', '480', '2', '18,200', '60', '0.160.1', 'gpt-6.1-sol medium*']);
+  assert.deepEqual(row(seeded, 'lean'), ['lean', 'failed', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown', '0.160.1', 'gpt-6.1-sol medium*']);
   assert.deepEqual(row(seeded, 'lean-high').slice(5, 8), ['500', 'unknown', '20'], 'input with no cached count has no not-cached part to give');
   assert.deepEqual(row(seeded, 'lean-own')[1], 'missing');
+});
+
+/** What a reading holds once the model its session ran with was read from the session's own file. */
+const measured = (model, effort, configuredModel, configuredEffort) => ({ model, effort, modelSource: 'session', configuredModel, configuredEffort });
+const modelCell = (text, range, config) => row(section(text, range), config).at(-1);
+
+test('the model of a row is the one its session ran with, and one that was not measured is marked and explained', () => {
+  const repo = repository();
+  // Read from the session's own file: the model as it is, whatever was asked for.
+  record(repo, 'current', 'seeded', measured('gpt-the-review-ran', 'low', 'gpt-user', 'high'));
+  record(repo, 'lean', 'seeded', measured('gpt-6.1-sol', 'medium', 'gpt-6.1-sol', 'medium'));
+  // Not measured: what the command passed, and what the user's configuration names. Both are marked.
+  record(repo, 'lean-own', 'seeded', { model: 'gpt-6.1-sol', effort: 'medium', modelSource: 'command' });
+  record(repo, 'lean-high', 'seeded', { model: 'gpt-user', effort: 'high', modelSource: 'config.toml' });
+  // A model with no effort, the other way round, and neither: what is not known is said, never left blank.
+  record(repo, 'current', 'real', measured('gpt-the-review-ran', null, null, null));
+  record(repo, 'lean', 'real', { model: null, effort: 'high', modelSource: 'config.toml' });
+  record(repo, 'lean-own', 'real', { model: null, effort: null, modelSource: null });
+  const text = reportMarkdown({ readingsDir: repo.readings }).text;
+  assert.equal(modelCell(text, 'seeded', 'current'), 'gpt-the-review-ran low');
+  assert.equal(modelCell(text, 'seeded', 'lean'), 'gpt-6.1-sol medium');
+  assert.equal(modelCell(text, 'seeded', 'lean-own'), 'gpt-6.1-sol medium*');
+  assert.equal(modelCell(text, 'seeded', 'lean-high'), 'gpt-user high*');
+  assert.equal(modelCell(text, 'real', 'current'), 'gpt-the-review-ran unknown');
+  assert.equal(modelCell(text, 'real', 'lean'), 'unknown high*');
+  assert.equal(modelCell(text, 'real', 'lean-own'), 'unknown');
+  assert.equal(modelCell(text, 'real', 'lean-high'), '-', 'a cell with no reading');
+  // One line says what the mark means, above the tables.
+  assert.match(text.split('## ')[0], /`\*` .*not measured/);
+  // Under a table, a session that ran another model than the one asked for is named; one that ran the same is not.
+  assert.match(section(text, 'seeded'), /^- `current` ran on gpt-the-review-ran low, and was asked for gpt-user high\.$/m);
+  assert.doesNotMatch(section(text, 'seeded'), /`lean` ran on/);
+  assert.doesNotMatch(section(text, 'real'), /ran on gpt/, 'with nothing asked for there is nothing to differ from');
+  assert.doesNotMatch(text, /default|should|recommend|better|winner/i, 'it reports, and chooses nothing');
 });
 
 test('under a table, each configuration read on another CLI version than the others is named: the comparison is fair on one version', () => {

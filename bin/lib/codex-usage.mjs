@@ -6,7 +6,8 @@
 // nothing here may import `evals/`.
 //
 // `rolloutReading` reads the rollout files of the Codex home it is given, which is where the tokens of a
-// review are: the events of `exec review` report none (see there).
+// review are: the events of `exec review` report none (see there). The model and the effort the review
+// ran with are there too, and nowhere else: the events do not name them.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -72,6 +73,8 @@ export function noRolloutReading() {
     requests: null,
     firstRequestInputTokens: null,
     threads: null,
+    model: null,
+    effort: null,
   };
 }
 
@@ -111,19 +114,28 @@ export function rolloutPaths(home) {
   return rolloutFiles(path.join(home, 'sessions')).sort(byFileName);
 }
 
-/** The `token_count` lines of one rollout file that carry counts, in order, each as `{ info, at }`:
- * `at` is the line's `timestamp` in milliseconds, or `null` when it has none that parses. A file that
- * cannot be read holds none, and so does a line that is not JSON (a truncated tail) or is anything else.
- * Only the payload's type is asked for: the line's own `type` names the kind of rollout item, and no
- * other kind has a payload of this type. */
-function tokenCounts(file) {
+/** What one rollout file says of its thread, read once, as `{ counts, context }`.
+ *
+ * `counts` are its `token_count` lines that carry counts, in order, each as `{ info, at }`: `at` is the
+ * line's `timestamp` in milliseconds, or `null` when it has none that parses. Only the payload's type is
+ * asked for: the line's own `type` names the kind of rollout item, and no other kind has a payload of this
+ * type.
+ *
+ * `context` is the payload of its last `turn_context` line, or `null` when it has none. Codex writes one
+ * such line a turn, `{"type":"turn_context","payload":{…,"model":"…","effort":"…",…}}`, with what the turn
+ * runs with; that shape was SEEN in a real file of codex-cli 0.161.0, and only those two names of it are
+ * leaned on. Here it is the line's own `type` that is asked for, since this payload names none.
+ *
+ * A file that cannot be read holds neither, and a line that is not JSON (a truncated tail) or is anything
+ * else is passed over. */
+function threadOf(file) {
+  const thread = { counts: [], context: null };
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {
-    return [];
+    return thread;
   }
-  const counts = [];
   for (const line of text.split('\n')) {
     let parsed;
     try {
@@ -131,13 +143,20 @@ function tokenCounts(file) {
     } catch {
       continue;
     }
-    const info = parsed?.payload?.type === 'token_count' ? parsed.payload.info : null;
+    const payload = parsed?.payload;
+    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) continue;
+    if (parsed.type === 'turn_context') thread.context = payload;
+    const info = payload.type === 'token_count' ? payload.info : null;
     if (info === null || typeof info !== 'object' || Array.isArray(info)) continue;
     const at = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) : Number.NaN;
-    counts.push({ info, at: Number.isFinite(at) ? at : null });
+    thread.counts.push({ info, at: Number.isFinite(at) ? at : null });
   }
-  return counts;
+  return thread;
 }
+
+/** A name as a reading holds it: the text, or `null` for what is no name (missing, not a string, empty),
+ * so that it is never taken for one. */
+const nameOf = (value) => (typeof value === 'string' && value !== '' ? value : null);
 
 /** Whether count `a` comes before count `b`: by their timestamps when both have one, and a count with a
  * timestamp before one without. Otherwise it does not, so the order they were read in stands. */
@@ -153,7 +172,8 @@ const comesBefore = (a, b) => (a.at !== null && b.at !== null ? a.at < b.at : a.
  * The lines read are `{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":
  * {…},"last_token_usage":{…}}}}`, where `info` may be `null`. That shape is READ FROM SOURCE
  * (`protocol/src/protocol.rs:2241-2282`, `rollout/src/policy.rs:113-119`) and was not yet seen in a real
- * file when this was written, so nothing here leans on anything else of a line.
+ * file when this was written, so nothing here leans on anything else of such a line. The one other line
+ * read is `turn_context`, for the model and the effort (`threadOf` has its shape).
  *
  *  - `usage`: the four counts of `sessionReading`, each the sum over the threads of that thread's LAST
  *    `total_token_usage`, which is cumulative for the thread. `null` when no thread reported it.
@@ -167,6 +187,15 @@ const comesBefore = (a, b) => (a.at !== null && b.at !== null ? a.at < b.at : a.
  *    Earliest by the lines' `timestamp`; among lines with none, the first of the first file by name.
  *    `null` when there is no such line or it did not report that count.
  *  - `threads`: how many rollout files held at least one such line; `null` when there is no file at all.
+ *  - `model` and `effort`: the model and the reasoning effort the session that made the requests ran
+ *    with, as its own file says: the `model` and the `effort` of the last `turn_context` line (`threadOf`)
+ *    of a file that is counted in `threads`. A file with no count is never asked, so the parent thread of
+ *    `exec review`, which asks the model nothing, does not answer for the review's sub-agent. When several
+ *    files hold counts, the one asked is the one `firstRequestInputTokens` is read from, the thread whose
+ *    request came first, whether or not the others agree with it. Each is `null` on its own when that
+ *    file has no such line or the line does not name it as a text; neither is filled in from an earlier
+ *    turn or from another thread. This is a MEASUREMENT of what ran, unlike the model a command passes or a
+ *    `config.toml` names, which is why a run line keeps it apart from those.
  * Never throws: a home that is not a path, a missing `sessions` folder, a file that cannot be read and a
  * line that is not JSON all read as nothing. */
 export function rolloutReading(home) {
@@ -176,14 +205,19 @@ export function rolloutReading(home) {
   reading.requests = 0;
   reading.threads = 0;
   let first = null;
+  // What the thread of the first request ran with: the `turn_context` of the file `first` was read from.
+  let ranWith = null;
   for (const file of files) {
-    const counts = tokenCounts(file);
+    const { counts, context } = threadOf(file);
     if (counts.length === 0) continue;
     reading.requests += counts.length;
     reading.threads += 1;
     let total = null;
     for (const count of counts) {
-      if (first === null || comesBefore(count, first)) first = count;
+      if (first === null || comesBefore(count, first)) {
+        first = count;
+        ranWith = context;
+      }
       if (count.info.total_token_usage !== null && typeof count.info.total_token_usage === 'object') total = count.info.total_token_usage;
     }
     for (const [name, field] of Object.entries(COUNTS)) {
@@ -192,5 +226,7 @@ export function rolloutReading(home) {
     }
   }
   reading.firstRequestInputTokens = countOf(first?.info.last_token_usage?.input_tokens);
+  reading.model = nameOf(ranWith?.model);
+  reading.effort = nameOf(ranWith?.effort);
   return reading;
 }

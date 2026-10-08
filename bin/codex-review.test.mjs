@@ -2119,6 +2119,12 @@ const reviewThread = [
 ];
 const REVIEW_SPENT = { inputTokens: 297479, cachedInputTokens: 240640, outputTokens: 2396, reasoningOutputTokens: 703 };
 
+/** One `turn_context` line of a rollout file, which Codex writes for every turn with what the turn runs
+ * with: the `model` and the `effort` among it (seen in a real file of codex-cli 0.161.0, names only). */
+const turnContext = (model, effort) => ({ type: 'turn_context', payload: { cwd: 'D:\\x', approval_policy: 'never', model, effort, summary: 'auto' } });
+/** What a run line says its session ran with. */
+const sessionRan = (line) => [line.sessionModel, line.sessionEffort];
+
 test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, what it spent and how long it took', async () => {
   const { root, base, head } = makeRepo();
   // The wall clock is read when the review starts and when the record is written; the time between
@@ -2149,6 +2155,9 @@ test('a reviewed attempt leaves one run line: the range, the outcome, the CLI, w
     requests: null,
     firstRequestInputTokens: null,
     threads: null,
+    // Nor is the model it ran with, which the user's configuration decides and that file alone would say.
+    sessionModel: null,
+    sessionEffort: null,
     turns: 1,
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
@@ -2169,7 +2178,7 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
   const { root, base, head } = makeRepo();
   const mine = fakeHome();
   // Codex's own events report zeros for a review, and they are not what is kept.
-  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), parentThread, reviewThread);
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), parentThread, [turnContext('gpt-6.1-sol', 'medium'), ...reviewThread]);
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir, monotonicNow: ticking(5000.4, 112000.2) });
   assert.equal(result.code, 0, result.err);
   const expected = {
@@ -2192,6 +2201,9 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
     requests: 7,
     firstRequestInputTokens: 18200,
     threads: 1,
+    // The model and the effort the session itself wrote down, apart from the two the command passed above.
+    sessionModel: 'gpt-6.1-sol',
+    sessionEffort: 'medium',
     turns: 1,
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
@@ -2274,6 +2286,37 @@ test('the current session reads no rollout file: not of the home the user named,
     assert.deepEqual(logged.usage, UNKNOWN_USAGE);
     assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null]);
   }
+});
+
+test('a run line says which model and effort its session really ran with, read from its rollout file and kept apart from what the command passed', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const lean = (...threads) => run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), ...threads), homedir: mine.homedir });
+  // The command asked for one model at one effort, and the session's own file says it ran with another:
+  // the line keeps both, and neither is written over the other.
+  await lean(parentThread, [turnContext('gpt-first-turn', 'high'), ...reviewThread, turnContext('gpt-it-ran', 'low')]);
+  const differs = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([differs.model, differs.effort], ['gpt-6.1-sol', 'medium'], 'what the command passed');
+  assert.deepEqual(sessionRan(differs), ['gpt-it-ran', 'low'], 'what the last turn of the session ran with');
+  // The parent thread asks the model nothing, so what it names is not what the review ran with.
+  await lean([turnContext('gpt-parent', 'high'), ...parentThread], reviewThread);
+  assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, null], 'a review thread that names none');
+  // A model with no effort beside it, and a value that is no name: each is known or not on its own.
+  await lean([turnContext('gpt-it-ran', undefined), ...reviewThread]);
+  assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), ['gpt-it-ran', null]);
+  await lean([turnContext(7, 'low'), ...reviewThread]);
+  assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, 'low']);
+  // It is read on a way out that is no review too, as the tokens are.
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewedWith(cmd('git status'))), [turnContext('gpt-it-ran', 'low'), ...reviewThread]), homedir: mine.homedir });
+  const fell = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([fell.outcome, ...sessionRan(fell)], ['not-inspected', 'gpt-it-ran', 'low']);
+  // The `current` session as a person runs it reads no home, so it measures no model: not the one a
+  // session of the user's own home ran with, which is another session.
+  writeRollouts(mine.codexHome, [turnContext('gpt-another-session', 'high'), ...reviewThread]);
+  await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir });
+  const current = readCodexReviewRuns(root).at(-1);
+  assert.deepEqual([current.session, current.model, current.effort, ...sessionRan(current)], ['current', null, null, null, null]);
+  assert.equal(readCodexReviewRuns(root).every((line) => 'sessionModel' in line && 'sessionEffort' in line), true, 'every line has both fields, `null` when not known');
 });
 
 test('the run log is a second file in the folder of the review record, and a run line is not a record', async () => {
@@ -2734,6 +2777,22 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
   assert.ok(lines.includes(`Codex is reviewing part 1 of 2 of ${short} (2 files, 6 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
   assert.ok(lines.includes(`Codex is reviewing part 2 of 2 of ${short} (1 file, 2 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
   assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short}, made in 2 parts, in .*codex-reviews\\.jsonl\\.$`));
+});
+
+test('the run line of each part says what its own session ran with', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const mine = fakeHome();
+  const fake = fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [parentThread, [turnContext('gpt-part-one', 'low'), ...reviewThread]] },
+    { stdout: partShown(root, base, head, 'c.txt'), threads: [parentThread, reviewThread] },
+  );
+  const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  // Each part is a session in a home of its own, so the second does not repeat what the first one measured.
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part.index, line.model, line.effort, ...sessionRan(line)]), [
+    [1, 'gpt-6.1-sol', 'medium', 'gpt-part-one', 'low'],
+    [2, 'gpt-6.1-sol', 'medium', null, null],
+  ]);
 });
 
 test('a run line of a part that cannot be written leaves its place empty in the record: `runs` has an entry for every part, and `run` is there only when the last part has its line', async () => {
@@ -3306,7 +3365,7 @@ test('a measured current session runs in a seeded copy of the Codex home, with t
   fs.writeFileSync(path.join(mine.codexHome, 'config.toml'), 'model = "real"\n', 'utf8');
   const seen = {};
   const at = {};
-  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), {}, PROBE_OK, answerWith(root)), parentThread, reviewThread);
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), {}, PROBE_OK, answerWith(root)), parentThread, [turnContext('gpt-the-review-ran', 'low'), ...reviewThread]);
   const watched = {
     ...fake,
     spawnAsync: (command, args, opts) => {
@@ -3347,6 +3406,9 @@ test('a measured current session runs in a seeded copy of the Codex home, with t
   // The run line: the current session, whose model the user's configuration sets, with what it really spent.
   const logged = onlyRun(root);
   assert.deepEqual([logged.id, logged.session, logged.model, logged.effort, logged.prompt], [RUN_ID, 'current', null, null, 'codex']);
+  // The command names no model for it, and here the session's own file says which one it ran with: not
+  // the one the configuration of the copy names, which is only what was asked for.
+  assert.deepEqual(sessionRan(logged), ['gpt-the-review-ran', 'low']);
   assert.deepEqual(logged.usage, REVIEW_SPENT);
   assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], ['rollout', 7, 18200, 1]);
   assert.deepEqual([logged.findings, logged.verdict, logged.answerSource], [THREE_FOUND, 'incorrect', 'rollout']);

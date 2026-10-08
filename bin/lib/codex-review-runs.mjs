@@ -26,6 +26,14 @@
 // and not a measurement (`rolloutReading` in ./codex-usage.mjs has the source). Read such a `usage` as
 // unknown, not as a review that cost nothing.
 //
+// What an attempt ran with. `model` and `effort` are what the COMMAND passed: both set under `lean`, both
+// `null` under `current`, where the user's configuration decides and the command names neither. They say
+// what was asked for, not what ran. `sessionModel` and `sessionEffort` are what the session itself wrote
+// in its rollout file (`rolloutReading`), read from the same home as the tokens and so for the same
+// sessions: a measurement, each `null` when it is not known. The schema stayed `v1` here as well, so a
+// line written before these two fields has neither, and a reader takes that as no measurement
+// (`runSessionModel`), never as the model the command passed.
+//
 // What a review was asked and what it answered. `prompt` is `codex`, a `--base` review with the sentence
 // Codex writes itself, or `own`, this harness's prompt (`./codex-review-prompt.mjs`), whose version is then
 // `promptVersion`; under `codex` that is `null`. `findings` (`total`, and `bySeverity` with `P0` to `P3` and
@@ -66,6 +74,18 @@ export function runPrompt(run) {
 export function runFindings(run) {
   const findings = run?.answerSource === 'rollout' ? run.findings : null;
   return Number.isInteger(findings?.total) && findings.total >= 0 ? findings : null;
+}
+
+const isName = (value) => typeof value === 'string' && value !== '';
+
+/** The model and the effort the session of a run line really ran with, `{ model, effort }`, as its own
+ * rollout file said (`sessionModel`, `sessionEffort`), or `null` when the line measured no model: it was
+ * written before the two fields existed, it ran in the `current` session as a person runs it, whose home
+ * is never read, or its home held no line that names one. `effort` is `null` for a session that named its
+ * model and no effort. Never the line's `model` and `effort`, which are what the command passed. */
+export function runSessionModel(run) {
+  if (!isName(run?.sessionModel)) return null;
+  return { model: run.sessionModel, effort: isName(run.sessionEffort) ? run.sessionEffort : null };
 }
 
 const isCount = (value, least) => Number.isInteger(value) && value >= least;

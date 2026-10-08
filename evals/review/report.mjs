@@ -5,13 +5,19 @@
 //
 // One table a range, one row a configuration, each row what the reading of that cell holds: how the review
 // ended, how many findings it gave, for the seeded range how many of the seven known defects those found
-// and how many findings were none of them, what it spent, how long it took and on which codex-cli. A cell
-// with no reading is a row too, so that what is not yet measured is seen and not left out.
+// and how many findings were none of them, what it spent, how long it took, on which codex-cli and with
+// which model at which effort. A cell with no reading is a row too, so that what is not yet measured is
+// seen and not left out.
+//
+// The model of a row is the one its session ran with, read from the session's own rollout file. A reading
+// that holds only what the command passed or what the user's configuration names is marked as not
+// measured, because Codex may run the review on another model than the one asked for, and a comparison of
+// two configurations says little while it is not known that both ran the same one.
 //
 // It reports and chooses nothing: which configuration `codex-review` runs is decided by a person reading
 // these numbers (odd/tasks/codex-review-lean.md, T13). The one thing it says of its own is where the rows
-// of a table cannot be compared as they stand: a reading taken on another codex-cli than the others, or
-// over other commits than the range's.
+// of a table cannot be compared as they stand: a reading taken on another codex-cli than the others, over
+// other commits than the range's, or by a session that ran another model than the one it was asked for.
 //
 // `--require-complete` is the gate of the feature: it exits 1, naming them, while a cell has no reading,
 // and 0 once every cell is recorded. A recorded cell counts whatever its outcome, which the row shows.
@@ -29,6 +35,25 @@ const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 /** A count as a cell: grouped by thousands, and `unknown` for one the run did not report, never a zero. */
 const counted = (count) => (Number.isFinite(count) ? thousands(count) : 'unknown');
 
+// What follows a model that was not measured, in its cell; the top of the report says what it means.
+const NOT_MEASURED = '*';
+
+/** A model and an effort as one text, `<model> <effort>`: each `unknown` when it is no name, and the one
+ * word `unknown` when neither is. */
+function ranWith(model, effort) {
+  const [name, level] = [model, effort].map((text) => (typeof text === 'string' && text !== '' ? text : null));
+  return name === null && level === null ? 'unknown' : `${name ?? 'unknown'} ${level ?? 'unknown'}`;
+}
+
+/** The model of a reading as a cell: what its session ran with. Marked, unless it was read from the
+ * session's own file (`modelSource` is `session`): it is then what the command passed or the user's
+ * configuration names, which is what was asked for and may not be what ran. What is not known at all
+ * claims nothing, so it has no mark. */
+function modelCell({ model, effort, modelSource }) {
+  const text = ranWith(model, effort);
+  return text === 'unknown' || modelSource === 'session' ? text : `${text}${NOT_MEASURED}`;
+}
+
 /** The columns of the table of a range, each `[heading, what a reading gives for it]`. The two of the
  * score are there for a range that has a key to score against. */
 function columns(scored) {
@@ -45,6 +70,8 @@ function columns(scored) {
     ['first request', (reading) => counted(reading.firstRequestInputTokens)],
     ['seconds', (reading) => (Number.isFinite(reading.durationMs) ? counted(Math.round(reading.durationMs / 1000)) : 'unknown')],
     ['CLI', (reading) => reading.cli ?? 'unknown'],
+    // Last, beside the CLI: the two that say what ran, and that the rows of a table are compared on.
+    ['model', modelCell],
   ];
 }
 
@@ -86,6 +113,13 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
     for (const reading of read) {
       if (reading.cli !== usual) notes.push(`- \`${reading.config}\` ran on codex-cli ${reading.cli}, the others on ${usual}: the comparison is only fair on one version.`);
     }
+    // A session that was measured and ran something else than what it was asked for: the row shows what
+    // ran, and what was asked for is in the reading alone, so it is said here.
+    for (const reading of read) {
+      const asked = ranWith(reading.configuredModel, reading.configuredEffort);
+      const ran = ranWith(reading.model, reading.effort);
+      if (reading.modelSource === 'session' && asked !== 'unknown' && asked !== ran) notes.push(`- \`${reading.config}\` ran on ${ran}, and was asked for ${asked}.`);
+    }
     const headings = ['configuration', ...shown.map(([heading]) => heading)];
     sections.push([
       `## ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}`,
@@ -105,6 +139,9 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
     '',
     `One Codex review a cell, read by \`evals/review/compare.mjs\`: ${recorded} of ${CELLS.length} cells are recorded. A cell with no reading is a row of dashes; ` +
       'a count the run did not report is `unknown`. Findings are those the review gave as data; for the seeded range, `found` is how many of its known defects they name and `extra` how many findings name none.',
+    '',
+    `\`model\` is the model and the reasoning effort the review session ran with, as its own rollout file says. One followed by \`${NOT_MEASURED}\` was not measured: ` +
+      'it is what the command passed or what the user\'s configuration names, and the session may have run another.',
     '',
     ...sections,
   ].join('\n');
