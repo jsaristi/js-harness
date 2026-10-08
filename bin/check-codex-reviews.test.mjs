@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkCodexReviews, main } from './check.mjs';
-import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
+import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -229,6 +229,21 @@ test('a record whose head lies past the pushed tip still covers the commits of i
   const row = checkCodexReviews(root, first);
   assert.equal(row.pass, true, `${row.detail}`);
   assert.match(row.detail, /1 code commit since origin.main/);
+});
+
+test('a record of nothing to review covers its commits only when what is pushed holds its head', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const change = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const revert = git(root, 'rev-parse', 'HEAD');
+  record(root, base, revert, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const both = checkCodexReviews(root, revert);
+  assert.equal(both.pass, true, `the change and its revert are pushed together: ${both.detail}`);
+  // The range changes no file only as a whole: the change alone is a patch nobody reviewed.
+  const alone = checkCodexReviews(root, change);
+  assert.equal(alone.pass, false, 'the change pushed without its revert is not covered');
+  assert.match(alone.detail, /1 of 1 code commit/);
 });
 
 test('a record on an unrelated branch is still not expanded, even when checking an older head', () => {

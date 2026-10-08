@@ -247,6 +247,27 @@ push of that branch.
   command file 211 of 211 (492 s); re-run by the parent, the first two, 57 of 57.
   - Left as it was: the push check's passing sentence says "all covered by a Codex review
     record" of skips and of this record too; the lines listed under it say which is which.
+- 2026-10-08: that fix committed as `da71985` (gate green), and its two reviews.
+  - gentle-ai on `0c71389..da71985` (the two fix commits, 436 changed lines, medium,
+    consent granted without asking): approved and acknowledged (lineage
+    `review-e34e4e64cad7d08c`), one suggestion: a second run over a range with nothing to
+    review appends a second, equal record. Not a defect against what was asked; it goes
+    with "nothing twice" in T2, where a range the records already cover records nothing.
+  - Codex on `7936a1f..da71985`, its plan read first (1 part, 304 changed lines, about
+    200,000 input tokens, from the seven parts at `high`), inside the login proof (PASS):
+    287,707 input tokens (235,136 cached), 3,128 output, 116 s, recorded. One finding, P2,
+    real: the push check lets a record cover commits when its head lies past the pushed
+    tip, which is right of a review and wrong of this record, since a range changes no file
+    only as a whole. With a change and its revert recorded, pushing the change alone
+    passed, its patch reviewed by nobody.
+  - Fixed by the parent inline (route: inline, one condition in `bin/check.mjs` and its
+    test), red first: the new test failed on "the change pushed without its revert is not
+    covered". A record of nothing to review now covers only when what is pushed holds its
+    head. The push check's tests, the record's and the hook's: 65 of 65; the three tests of
+    the command about such a range: 3 of 3.
+  - That fix is 22 changed lines. Its reviews go with the next slice, from `da71985`: a
+    Codex session costs at least what the cheapest measured one did (72,828 input tokens),
+    whatever the size of what it reads.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -262,13 +283,13 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted. A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. The fix of the Codex finding is committed; gentle-ai and Codex on it, from `7936a1f`.
-2. The second half of T3: what `check` says of code committed since the last record.
-3. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
+1. The second half of T3: what `check` says of code committed since the last record. Its
+   reviews start at `da71985`, so they take in the fix of the push check too.
+2. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
    attribute marks), with what is left of F1; a range whose earlier commits a record covers
    starts where the records end. With it, the rule decided on 2026-10-08: a lean review
    whose rollout names no model does not stand.
-4. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
+3. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
    measurement of the part size, is put to Sebastián with its count before any of it runs.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin

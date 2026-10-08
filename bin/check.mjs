@@ -461,7 +461,10 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     // A record can cover part of the range only when its head is in it, or lies past the pushed tip
     // (a review of base..D still covers C when C is what is pushed). Any other record is unrelated,
     // and expanding it would cost one git process per record ever written.
-    if (!rangeIds.has(rec.head) && !gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, rec.head])) continue;
+    // A record of nothing to review is the exception to the second case: its range changes no file only
+    // as a whole (a commit and its revert), so a tip short of its head pushes a patch nobody reviewed.
+    const pastTip = !rangeIds.has(rec.head);
+    if (pastTip && (rec.outcome === NOTHING_TO_REVIEW || !gitYes(spawn, cwd, ['merge-base', '--is-ancestor', tip, rec.head]))) continue;
     const covered = coveredBy(spawn, cwd, rec);
     if (covered) covers.push({ rec, covered });
     else ignored += 1;
