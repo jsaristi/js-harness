@@ -847,6 +847,29 @@ What follows from it:
     a `current` reading takes its model and effort from the top of `config.toml`, marked
     as such; finding bodies are cut at 600 characters; `--require-complete` counts a
     recorded cell whatever its outcome.
+- 2026-10-07: T11 committed as `2b67316` (gate green). gentle-ai assessed
+  `b0053cf..2b67316` as `medium`, review due (2,518 lines); granted without asking, lineage
+  `review-781fa6b171d13d37`. The bound status after the start failed again in gentle-ai
+  itself, with the envelope of the time before: `operation_timeout`, `pre_native`,
+  `retry_safe` false, next action `stop`. Put to Sebastián again, since the choice is by
+  candidate; this time he chose to report and continue.
+  - The four candidates of this session, same host and worktree: 1,870 lines (14 files)
+    and 1,876 (10 files) were reviewed; 2,430 (42 files) and 2,518 (10 files) timed out.
+    Lines separate them, files do not. An observation, not a cause.
+  - The report: gentle-ai's issues, open and closed, were searched first. The defect is
+    already tracked as `Gentleman-Programming/gentle-ai#4655` (bound STATUS times out
+    `pre_native` after a granted START), open, with occurrences on 4.0.0, the latest
+    published release, so there is no published fix to install. One occurrence comment was
+    added there, with the table above and the envelope, scanned first for paths, names and
+    ids: https://github.com/Gentleman-Programming/gentle-ai/issues/4655#issuecomment-6049717902
+    (read back, body equal). No issue created, no label touched.
+  - Then the captured decline of that candidate, once: `declined`,
+    `declined_this_candidate`, the same target; the preflight status answers normally
+    again. So `b0053cf..2b67316` has no gentle-ai review either: its checks are the
+    writer's tests, the parent's re-run (61 of 61) and the gate. The next assessment starts
+    from `2b67316`.
+  - What follows for the work left: a candidate is kept under about 1,900 changed lines, by
+    committing smaller units, since that is what gentle-ai 4.0.0 has reviewed here.
 
 ## Follow-ups
 - Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
@@ -950,5 +973,7 @@ Open, for him:
    command alone is over 3,000 lines, which may not be read whole. Its count is asked.
 
 On the cap: five Codex reviews spent in this feature (one read nothing, four read their
-diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` was declined after a
-timeout of gentle-ai itself (Progress), and the commit of T11 is assessed from `b0053cf`.
+diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
+were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
+occurrence on its issue 4655), so the next assessment starts from `2b67316` and the work
+left is committed in units under about 1,900 changed lines.
