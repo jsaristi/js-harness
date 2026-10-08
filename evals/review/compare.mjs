@@ -4,17 +4,27 @@
 //   node evals/review/compare.mjs --list
 //   node evals/review/compare.mjs --cell <config>:<range> [--force] [--dry-run] [--keep-checkout]
 //
-// Why. `js-harness codex-review` has two sessions, and which one is the default was decided by what each
+// Why. `js-harness codex-review` had two sessions, and which one was the default was decided by what each
 // finds and what it costs (odd/tasks/codex-review-lean.md, T11 to T13): `current` was the default while
-// the cells were read, and `lean` is since. A cell is one configuration reviewing one range. What it spent
+// the cells were read, `lean` became it, and on 2026-10-08 `current` was removed, so the lean session is
+// the one there is. A cell is one configuration reviewing one range. What it spent
 // and what it found is written to one JSON file, the reading, and `./report.mjs` sets the readings side by
-// side. This tool decides nothing, and no cell rests on the default: each names its session to the command,
-// so a cell run again measures the configuration it measured the first time.
+// side. This tool decides nothing, and no cell rests on a default of the command: each hands its effort
+// to it, so a cell run again measures the configuration it measured the first time. The command's own
+// effort went from `medium` to `high` on 2026-10-08, and three of the four lean configurations were
+// measured at `medium`.
 //
 // The matrix is data, below: five configurations over two ranges. `real` is a range of this repository
 // with no known defect, where a configuration shows what it costs and what it reports on ordinary work.
 // `seeded` is the repository `./seeded.mjs` builds, wrong in seven known places, where a reading is scored
 // against the key (`./score.mjs`). The CodeGraph configuration runs on the real range alone.
+//
+// One configuration is retired, `current`, and can no longer be run (2026-10-08,
+// odd/tasks/codex-review-cost.md). It measured the review on the model the user's own Codex configuration
+// named, and a review now runs on one model alone; the session it measured, `--session current`, was
+// removed from the command the same day. Its two readings stay, with the rest, as the record of the
+// comparison: `--list` and the report show its cells as they show the others,
+// and `--cell current:<range>` is refused before anything is made, as a dry run too.
 //
 // One cell an invocation, on purpose. Every cell is a call to the model through Codex, which draws on a
 // cap that cannot be measured in advance, so nothing here runs a batch: a second cell is a second command,
@@ -23,7 +33,9 @@
 //
 // How a configuration is varied. The command line of `codex-review` is not: it fixes the model and the
 // effort. This tool calls its entry, `codexReviewMain`, with injected `deps` (the effort, more `-c`
-// settings, the measured `current` session) and collects each attempt through `onResult`.
+// settings) and collects each attempt through `onResult`. The effort that is injected is also the one the
+// review is held to: a session whose own rollout file says it ran at another does not stand, and the
+// reading of its cell says so.
 //
 // Where a range is reviewed. Never in this repository's own tree: `codex-review` reviews `base..HEAD` of
 // the folder it runs in and writes its record and its run log into that folder's git dir. `real` is a
@@ -33,12 +45,13 @@
 // an index there, and CodeGraph does not index a temporary folder. `seeded` is built under the temp folder.
 // Both are removed after the cell.
 //
-// How `current` is measured. As a person runs it, that session is ephemeral, in the user's own Codex home,
-// so what it spends is written nowhere. Here it runs in a copy of that home, made by `../codex-home.mjs` as for the
-// eval suite: `config.toml` without the desktop app's pieces and with an engram of the run's own, the
-// global `AGENTS.md`, the hooks, the skills and the plugin cache. The login is not part of the copy and is
-// never copied or opened: `codexReviewMain` hard-links the real `auth.json` into the copy, as it does for
-// the lean home (bin/lib/codex-review-home.mjs). Nothing is written into the real home.
+// How `current` was measured, while it could be. As a person ran it, that session was ephemeral, in the
+// user's own Codex home, so what it spent was written nowhere. For its two readings it ran in a copy of that
+// home (`config.toml` without the desktop app's pieces and with an engram of the run's own, the global
+// `AGENTS.md`, the hooks, the skills and the plugin cache), with the login hard-linked into the copy and
+// never copied. That is why those readings name a model that was measured and one that was asked for, the
+// one his `config.toml` named (their `configuredModel`, with `modelSource` saying where each was read).
+// Nothing here reads that file for a model any more: the code that did went with the session.
 //
 // It calls the model only through a cell that is really run. `--list` and `--dry-run` start nothing.
 import { spawnSync } from 'node:child_process';
@@ -46,12 +59,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { codexArgs, codexReviewMain, LEAN_EFFORT } from '../../bin/codex-review.mjs';
-import { leanHomesDir, realCodexHome } from '../../bin/lib/codex-review-home.mjs';
+import { codexArgs, codexReviewMain, REVIEW_EFFORT, REVIEW_MODEL } from '../../bin/codex-review.mjs';
+import { realCodexHome } from '../../bin/lib/codex-review-home.mjs';
 import { runSessionModel } from '../../bin/lib/codex-review-runs.mjs';
 import { quoteWindowsArg, windowsCommandLine } from '../../bin/lib/windows-args.mjs';
-import { buildCodexTemplate, removeCodexTemplate, seedCodexHome } from '../codex-home.mjs';
-import { allocatePort as allocateTrialPort, killByPort, releasePort as releaseTrialPort } from '../ports.mjs';
 import { scoreFindings } from './score.mjs';
 import { buildSeededRepo, gitEnv, SEEDED_DIR } from './seeded.mjs';
 
@@ -61,23 +72,29 @@ export const READING_SCHEMA = 'js-harness.review-reading/v1';
 // committed. A longer one is cut, and the reading says at which length (`findingBodyMax`).
 export const FINDING_BODY_MAX = 600;
 
-// The folders made beside the repository: the clone of the real range, and the template the copy of the
-// Codex home is seeded from (which `../codex-home.mjs` refuses to build inside the user's home).
+// The folder made beside the repository: the clone of the real range.
 export const CHECKOUT_NAME = 'codex-review-lean-range';
-export const TEMPLATE_NAME = 'codex-review-lean-home-template';
 
 const SEEDED_KEY = JSON.parse(fs.readFileSync(path.join(SEEDED_DIR, 'key.json'), 'utf8'));
 
-/** The configurations, in the order of the report. `session` and `prompt` are `codex-review`'s; `effort` is
- * the lean session's (`null` under `current`, whose effort is the user's configuration's); `doc` is whether
- * the review is given the range's feature document; `codegraph`, whether the CodeGraph MCP server of the
- * user's configuration is added; `only`, the ranges it runs on when not all. */
+/** The configurations, in the order of the report. `session` is the session of `codex-review` the
+ * configuration was measured in, of the two it had then (it has one since 2026-10-08, the lean one, and no
+ * cell names it to the command); `prompt` is `codex-review`'s; `effort` is
+ * the one the lean session is launched at and held to, written out and never taken from the command's own
+ * (`null` under `current`, which was handed none: the user's configuration named its effort then); `doc` is
+ * whether the review is given the range's feature document; `codegraph`, whether the CodeGraph MCP server
+ * of the user's configuration is added; `only`, the ranges it runs on when not all; `retired`, the day
+ * since which it is no longer run, `null` for one that still is (`compareMain` refuses a retired cell).
+ *
+ * The efforts are the ones the committed readings were measured with: `medium` was the command's own until
+ * 2026-10-08 and `high` is since, so a `lean` that followed it would have become `lean-high` under its own
+ * name. A test holds each to its readings (`./compare.test.mjs`). */
 export const CONFIGS = [
-  { name: 'current', session: 'current', prompt: 'codex', effort: null, doc: false, codegraph: false, only: null, what: 'the current session, the default while the cells were read: the user\'s whole Codex configuration, measured in a copy of his Codex home' },
-  { name: 'lean', session: 'lean', prompt: 'codex', effort: LEAN_EFFORT, doc: false, codegraph: false, only: null, what: 'the lean session, asked with the sentence Codex writes for `--base`' },
-  { name: 'lean-own', session: 'lean', prompt: 'own', effort: LEAN_EFFORT, doc: true, codegraph: false, only: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
-  { name: 'lean-high', session: 'lean', prompt: 'codex', effort: 'high', doc: false, codegraph: false, only: null, what: 'the lean session at high effort' },
-  { name: 'lean-codegraph', session: 'lean', prompt: 'codex', effort: LEAN_EFFORT, doc: false, codegraph: true, only: ['real'], what: 'the lean session with the CodeGraph MCP server of the user\'s configuration' },
+  { name: 'current', session: 'current', prompt: 'codex', effort: null, doc: false, codegraph: false, only: null, retired: '2026-10-08', what: 'the current session, the default while the cells were read: the user\'s whole Codex configuration, measured in a copy of his Codex home' },
+  { name: 'lean', session: 'lean', prompt: 'codex', effort: 'medium', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session, asked with the sentence Codex writes for `--base`' },
+  { name: 'lean-own', session: 'lean', prompt: 'own', effort: 'medium', doc: true, codegraph: false, only: null, retired: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
+  { name: 'lean-high', session: 'lean', prompt: 'codex', effort: 'high', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session at high effort' },
+  { name: 'lean-codegraph', session: 'lean', prompt: 'codex', effort: 'medium', doc: false, codegraph: true, only: ['real'], retired: null, what: 'the lean session with the CodeGraph MCP server of the user\'s configuration' },
 ];
 
 /** The ranges. `base` and `head` are full commit ids, `doc` the feature document of the range, from the
@@ -101,10 +118,16 @@ export const CELLS = CONFIGS.flatMap((config) => RANGES.filter((range) => config
 /** What is left out of the matrix, and why. */
 export const EXCLUDED = [{ config: 'lean-codegraph', range: 'seeded', why: 'an index means nothing on a toy project' }];
 
+/** Whether the configuration named `config` is retired: its cells are listed and reported, and not run. */
+const isRetired = (config) => CONFIGS.some((one) => one.name === config && one.retired !== null);
+
+const cellNames = (cells) => cells.map(({ config, range }) => `${config}:${range}`).join(', ');
+
 const USAGE =
   'Usage: node evals/review/compare.mjs --list\n' +
   '       node evals/review/compare.mjs --cell <config>:<range> [--force] [--dry-run] [--keep-checkout]\n' +
-  `Cells: ${CELLS.map(({ config, range }) => `${config}:${range}`).join(', ')}.\n` +
+  `Cells: ${cellNames(CELLS.filter((cell) => !isRetired(cell.config)))}.\n` +
+  `Retired, kept as readings and not run: ${cellNames(CELLS.filter((cell) => isRetired(cell.config)))}.\n` +
   'One cell an invocation: each is one Codex review, a call to the model. --dry-run prints what a cell would start and starts nothing.';
 
 /** The file of a cell's reading in `readingsDir`. */
@@ -229,30 +252,6 @@ export function codegraphSettings(toml) {
   return settings;
 }
 
-/** The text of a TOML string `value` as written (`"gpt"` or `'gpt'`), or `null` for anything else. */
-function tomlString(value) {
-  if (typeof value !== 'string') return null;
-  if (/^'[^']*'$/.test(value)) return value.slice(1, -1);
-  if (!/^"(?:[^"\\]|\\.)*"$/.test(value)) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null; // an escape TOML has and JSON has not
-  }
-}
-
-/** The `model` and the `model_reasoning_effort` the top of the `config.toml` text `toml` names, each `null`
- * when it names none: what the `current` session is asked to run on. Not what it ran on, which only the
- * session's own rollout file says (`buildReading`): Codex may run the review's sub-agent on another model.
- * A profile or a flag could name another; no cell passes either. */
-export function configuredModel(toml) {
-  const top = { model: null, model_reasoning_effort: null };
-  for (const { table, key, value } of tomlKeys(toml)) {
-    if (table.length === 0 && key?.length === 1 && Object.hasOwn(top, key[0])) top[key[0]] = tomlString(value);
-  }
-  return { model: top.model, effort: top.model_reasoning_effort };
-}
-
 // ---- the reading ---------------------------------------------------------------------------------------
 
 const isCount = (value) => Number.isFinite(value) && value >= 0;
@@ -294,17 +293,22 @@ function cut(body) {
  * how far it can be trusted:
  *  - `session`: from the session's own rollout file, through its run line (`runSessionModel`). The one
  *    source that is a measurement. The reading then keeps beside it, as `configuredModel` and
- *    `configuredEffort`, what was asked for (the next two sources, in that order; `null` when neither names
- *    one), whether or not it is the same, so that a session that ran another model than the one asked for
- *    is seen in the file and one that ran the same is not merely assumed to have.
- *  - `command`: what the command passed, which the lean session's does. What was asked for, not what ran.
- *  - `config.toml`: what the user's configuration names (`configured`, read by the caller), for a session
- *    whose command names none. A guess: Codex may run the review's sub-agent on another model.
- *  - `null`: none of them names a model or an effort.
+ *    `configuredEffort`, what was asked for (what the command passed; `null` when it named none), whether
+ *    or not it is the same, so that a session that ran another model than the one asked for is seen in the
+ *    file and one that ran the same is not merely assumed to have.
+ *  - `command`: what the command passed. What was asked for, not what ran.
+ *  - `null`: the run line names no model and no effort, and measured none.
+ * A stored reading may say a fourth, `config.toml`: the two of the retired `current` configuration were
+ * built while the command named that session no model, from what the user's configuration named, which
+ * this function was then handed. It no longer is, and no new reading says so; `./report.mjs` still reads
+ * the stored ones as they are.
+ * Since 2026-10-08 the session of a run line that was measured and is `reviewed` ran what the command passed
+ * (`codex-review` fails the attempt otherwise), so the two pairs of a new reading differ only under an
+ * outcome that says the review did not stand.
  * A reading that is not `session` has no `configuredModel` and no `configuredEffort`: its `model` and
  * `effort` are already those, and it has the fields every reading had before the session's model was read.
  * For a range in parts the model is that of the last attempt, as the outcome is. */
-export function buildReading({ config, range, results, recordedAt, exit, key = null, configured = null }) {
+export function buildReading({ config, range, results, recordedAt, exit, key = null }) {
   if (!Array.isArray(results) || results.length === 0) return null;
   const runs = results.map((result) => result.run);
   const last = runs.at(-1);
@@ -324,10 +328,10 @@ export function buildReading({ config, range, results, recordedAt, exit, key = n
   const reviews = results.map((result) => result.review ?? null);
   const answered = reviews.every((review) => review !== null);
   const findings = answered ? reviews.flatMap((review) => review.findings.map((finding) => ({ ...finding, body: cut(finding.body) }))) : null;
-  // What was asked for: by the command when it names a model, else by the user's configuration.
+  // What was asked for: what the command passed, when its run line names a model; else it is not known.
   const named = typeof last.model === 'string';
-  const asked = named ? { model: last.model, effort: last.effort ?? null } : { model: configured?.model ?? null, effort: configured?.effort ?? null };
-  const askedSource = named ? 'command' : asked.model !== null || asked.effort !== null ? 'config.toml' : null;
+  const asked = named ? { model: last.model, effort: last.effort ?? null } : { model: null, effort: null };
+  const askedSource = named ? 'command' : null;
   // What ran, when the session's own file said it; else what was asked for stands in, and is said to.
   const ran = runSessionModel(last);
   const { model, effort } = ran ?? asked;
@@ -485,20 +489,18 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL('../../', import.meta.url))
 
 /** Runs the command and returns its exit code: 0 when the reading of the cell was written, whatever the
  * review came to (and for `--list` and a dry run); 1 when it could not be, the review that was never
- * launched included; 2 with the usage on a bad command line.
+ * launched included, and for a cell of a retired configuration, which is refused whatever its flags; 2 with
+ * the usage on a bad command line.
  *
  * `deps` (all optional) injects `log` and `error`; `env`, `platform` and `homedir`, as `codexReviewMain`
  * takes them; `spawn`, the synchronous one (git, `gentle-ai`, and the review's own git and probe);
  * `review`, more `deps` for `codexReviewMain` (its `spawnAsync`, for one); `repoRoot`, the repository the
- * real range is cloned from; `checkoutParent`, where the clone and the template of the home go;
- * `tmpdir`, where the seeded repository is built; `readingsDir`; `ranges`, in place of `RANGES`;
- * `configToml`, the user's Codex configuration, in place of the one in his Codex home; `now`; and
- * `allocatePort`, `releasePort` and `killPort`, the engram port of a measured `current` session
- * (`../ports.mjs`). */
+ * real range is cloned from; `checkoutParent`, where the clone goes; `tmpdir`, where the seeded repository
+ * is built; `readingsDir`; `ranges`, in place of `RANGES`; `configToml`, the user's Codex configuration, in
+ * place of the one in his Codex home, which the CodeGraph cell reads its server from; and `now`. */
 export async function compareMain(argv = process.argv.slice(2), deps = {}) {
   const { log = console.log, error = console.error, env = process.env, platform = process.platform, homedir = os.homedir, spawn = spawnSync, now = () => new Date() } = deps;
   const { repoRoot = REPO_ROOT, tmpdir = os.tmpdir(), ranges = RANGES } = deps;
-  const { allocatePort = allocateTrialPort, releasePort = releaseTrialPort, killPort = killByPort } = deps;
   const checkoutParent = deps.checkoutParent ?? path.dirname(repoRoot);
   const readingsDir = deps.readingsDir ?? path.join(repoRoot, 'evals', 'results', 'review', 'readings');
   let args;
@@ -529,14 +531,20 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
 
   const { config, range } = args;
   const cell = `${config.name}:${range.name}`;
+  // A retired configuration is not run again, and nothing is looked at to say so: not its reading, not the
+  // user's configuration, not a checkout. Before the dry run and before `--force`, which would otherwise
+  // print what it would start, or start it. What it measured stays where it is.
+  if (config.retired !== null) {
+    error(
+      `Cell ${cell} cannot be run: the \`${config.name}\` configuration was retired on ${config.retired}, because a Codex review runs only on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort (odd/tasks/codex-review-cost.md) ` +
+        'and this configuration measured one on the model the user\'s own Codex configuration names. Its readings stay as the record of the comparison; nothing was started.',
+    );
+    return 1;
+  }
   const file = readingFile(readingsDir, config.name, range.name);
   const recorded = readReading(readingsDir, config.name, range.name).ok;
-  const codexHome = realCodexHome(env, homedir(), platform);
-  const configToml = deps.configToml ?? path.join(codexHome, 'config.toml');
+  const configToml = deps.configToml ?? path.join(realCodexHome(env, homedir(), platform), 'config.toml');
   const clone = path.join(checkoutParent, CHECKOUT_NAME);
-  const templateDir = path.join(checkoutParent, TEMPLATE_NAME);
-  // As `codexReviewMain` finds it: the state dir the home of a run is made in.
-  const homes = leanHomesDir(path.resolve(env.JS_HARNESS_HOME || homedir()));
 
   // The CodeGraph server, read before anything is made: a configuration that names none is a cell that
   // cannot run, and a dry run says so too.
@@ -559,12 +567,14 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
   }
 
   /** What `codex-review` is called with for the tree at `checkout`, and what Codex is launched with: the
-   * one place both a dry run and a real one take them from. The session is always named, `current` too:
-   * left out, it would be whichever one the command runs by default, and the `current` cell would then
-   * measure the lean session with the seam of the measured one ignored. */
+   * one place both a dry run and a real one take them from. Nothing is left to a default of the command
+   * that could change under a cell: the effort is the cell's own, handed over as it is, since left out it
+   * would be the command's, which changed once already, and the cell would measure another configuration
+   * under its name. No session is named: the command has one since 2026-10-08, and `--session` is a flag
+   * it only still reads. */
   const reviewOf = (checkout) => ({
-    command: ['--base', range.base, '--session', config.session, ...(config.prompt === 'own' ? ['--prompt', 'own', '--doc', range.doc] : []), '--cwd', checkout],
-    codexArgv: codexArgs(range.base, config.session, platform, config.prompt, { effort: config.effort ?? LEAN_EFFORT, extraConfig, ephemeral: config.session !== 'current' }),
+    command: ['--base', range.base, ...(config.prompt === 'own' ? ['--prompt', 'own', '--doc', range.doc] : []), '--cwd', checkout],
+    codexArgv: codexArgs(range.base, platform, config.prompt, { effort: config.effort, extraConfig }),
   });
 
   if (args.dryRun) {
@@ -577,12 +587,6 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
       ? `Checkout: the seeded repository, built by evals/review/seeded.mjs in a new folder, ${checkout}; removed after the cell unless --keep-checkout.`
       : `Checkout: git clone ${repoRoot} ${clone}, then detached at ${range.head}; a clone and not a worktree, so its record and run log stay in its own git folder; removed after the cell unless --keep-checkout.`);
     if (config.codegraph) log(`Index: gentle-ai codegraph init --cwd ${checkout}, when ${path.join(checkout, '.codegraph')} is missing.`);
-    if (config.session === 'current') {
-      log(
-        `Home: a copy of ${codexHome} (config.toml without the desktop app's pieces and with an engram of its own, the global AGENTS.md, hooks, skills, the plugin cache; never auth.json), ` +
-          `from a template built at ${templateDir}, in ${path.join(homes, '<run id>', '.codex')}; the login is a hard link to the real auth.json, never a copy; both are removed after the cell.`,
-      );
-    }
     log(`Command: js-harness codex-review ${command.join(' ')}`);
     log(`Codex argv: ${JSON.stringify(codexArgv)}`);
     log(`Reading: ${file} (${recorded ? 'recorded: --force replaces it' : 'missing'})`);
@@ -595,62 +599,23 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
   }
 
   let checkout = null;
-  let template = false;
-  let port = null;
   let reading = null;
   let exit = null;
   const results = [];
   try {
     checkout = range.seeded ? buildSeeded({ spawn, env, tmpdir, range }) : cloneRange({ spawn, env, repoRoot, dir: clone, range });
     if (config.codegraph) ensureIndex({ spawn, env, platform, checkout, log });
-    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result) };
-    let configured = null;
-    if (config.session === 'lean') Object.assign(reviewDeps, { effort: config.effort, extraCodexConfig: extraConfig });
-    else {
-      // The copy is made from a home directory with `.codex` in it, which is what the template reads.
-      if (path.basename(codexHome) !== '.codex') throw new Error(`The Codex home ${codexHome} is not a \`.codex\` folder, and the copy the current session is measured in is made from one (evals/codex-home.mjs).`);
-      try {
-        configured = configuredModel(fs.readFileSync(configToml, 'utf8'));
-      } catch {
-        // No configuration to read: the model the session runs on is then not known, and the reading says so.
-      }
-      port = await allocatePort();
-      // What a killed run left; a folder that is not a template is refused, and left alone.
-      removeCodexTemplate(templateDir);
-      const built = buildCodexTemplate({ realHome: path.dirname(codexHome), templateDir });
-      template = true;
-      log(`The copy of ${codexHome}: ${built.files} files, ${built.bytes} bytes, from the template ${templateDir}.`);
-      for (const warning of built.warnings) log(`  note: ${warning}`);
-      const engramPort = port;
-      reviewDeps.measuredCurrent = {
-        // The engram of the copy is the run's own: its store is in the run's folder and its port is free, so
-        // neither the MCP server nor a hook of the copied configuration reaches the real one.
-        seed: ({ folder }) => {
-          seedCodexHome(templateDir, folder, { engramPort });
-          return {
-            env: { ENGRAM_PORT: String(engramPort), ENGRAM_DATA_DIR: path.join(folder, '.engram'), ENGRAM_URL: null, ENGRAM_SOCKET: null },
-            release: () => killPort(engramPort),
-          };
-        },
-      };
-    }
+    // Every cell that is run is a lean one. Its effort and its extra settings are injected after what a
+    // caller hands over for the review (`deps.review`), so that nothing stands in for what the cell is.
+    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result), effort: config.effort, extraCodexConfig: extraConfig };
     const { command } = reviewOf(checkout);
     log(`Cell ${cell}: js-harness codex-review ${command.join(' ')}`);
     exit = await codexReviewMain(command, env, reviewDeps);
-    reading = buildReading({ config, range, results, recordedAt: now().toISOString(), exit, key: range.seeded ? SEEDED_KEY : null, configured });
+    reading = buildReading({ config, range, results, recordedAt: now().toISOString(), exit, key: range.seeded ? SEEDED_KEY : null });
   } catch (err) {
     error(`Cell ${cell} could not be run: ${err.message}`);
     return 1;
   } finally {
-    // Whatever happened: the template holds a copy of the user's configuration, and the port is one of a pool.
-    if (template) {
-      try {
-        removeCodexTemplate(templateDir);
-      } catch (err) {
-        error(`Warning: the template ${templateDir} could not be removed (${err.message}); delete that folder by hand.`);
-      }
-    }
-    if (port !== null) releasePort(port);
     if (checkout !== null && !args.keepCheckout) {
       try {
         removeDir(checkout);

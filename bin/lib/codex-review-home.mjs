@@ -31,23 +31,21 @@
 // it at any time. Removing a hard link removes one name, never the file: the real `auth.json` stays, with
 // its bytes.
 //
-// A seeded home. The comparison of the review's configurations (`evals/review/compare.mjs`) measures the
-// session that runs on the user's own configuration, and that one cannot run in an empty home: it is given
-// a copy of his configuration instead, made by a `seed` the caller hands over. The login is still the hard
-// link and never part of the copy: the seed runs first, in a home that holds no login, so nothing it copies
-// can be written through the link, and a seed that leaves an `auth.json` of its own is refused. Such a
-// run's folder is laid out as a home directory, with the Codex home in its `.codex`, because that is the
-// shape the copy is made in (`evals/codex-home.mjs`). It is made, removed and swept by the same code.
+// No seeded home any more. Until 2026-10-08 a home could also be made with a copy of the user's
+// configuration in it (a `seed` the caller handed over), for the session that ran with that configuration,
+// `current`, when the comparison of the review's configurations measured it. That session was removed, and
+// with it the seed: a home is the folder of its run, holding the login and nothing else. One thing of it is
+// kept, in the removal alone: the folder of such a run was laid out as a home directory, with the Codex
+// home, and so the login's name, in its `.codex`. A run of that kind that was killed may have left its
+// folder on a machine, and the sweep still takes the name out of it before the folder goes (`LOGIN_PLACES`).
 import fs from 'node:fs';
 import path from 'node:path';
 
 const AUTH = 'auth.json';
 
-// The folder of a seeded run that is its Codex home; a run with no seed is its own Codex home.
-const SEEDED_CODEX_DIR = '.codex';
-
-// Where a run folder may hold a name of the login, from the folder: its own top, or its `.codex`.
-const LOGIN_PLACES = [AUTH, path.join(SEEDED_CODEX_DIR, AUTH)];
+// Where a run folder may hold a name of the login, from the folder: its own top, which is where a home
+// holds it, or its `.codex`, where a run of the removed measured session did (see the top of this file).
+const LOGIN_PLACES = [AUTH, path.join('.codex', AUTH)];
 
 /** The Codex home the user's login lives in: `CODEX_HOME` when it is set and not empty, as Codex itself
  * reads it, else `.codex` under the OS home `homedir`. On Windows (`platform` is `win32`) the name of a
@@ -94,9 +92,9 @@ function removeEmptyHomesDir(parent, rmdir = fs.rmdirSync) {
 /** Removes a lean home: the login's second name first, then the folder. The order is deliberate: the one
  * entry that is also the user's login goes by a call that removes exactly one name, never by the
  * recursive removal, whose handling of an entry it cannot delete is the runtime's and not this module's.
- * The name is looked for in both places a run folder holds one (`LOGIN_PLACES`), since the sweep cannot
- * know which kind of run left the folder. When the name cannot be removed the folder is left as it is, for
- * the next run's sweep or a person.
+ * The name is looked for in both places a run folder may hold one (`LOGIN_PLACES`), since the sweep cannot
+ * know which kind of run left an old folder. When the name cannot be removed the folder is left as it is,
+ * for the next run's sweep or a person.
  * With `keep` the folder is left on purpose and only the name goes, so a kept folder never holds a login.
  * Once the folder is gone, the one it was in goes too when that left it empty (`removeEmptyHomesDir`):
  * here, so that every way a home is removed takes it, the end of a run, a run that could not be set up,
@@ -136,25 +134,18 @@ function identity(file) {
  * person to read what the session wrote (its rollout files). The login's name goes either way. A kept
  * folder is still under `leanHomesDir`, so a later `dispose()` or the sweep of a later run removes it.
  *
- * With `seed`, a function, the folder of the run is `folder` and its Codex home `home` is the `.codex` in
- * it (without one the two are the same path). `seed({ folder, home })` is called once, after both are made
- * and BEFORE the login is linked, to copy a configuration in; what it returns is handed back as `seeded`.
- * It must leave no `auth.json` in `home`: the login is the link, made after it, and never a copy.
- *
  * Throws, with nothing left behind, when `id` is not a plain folder name, when the folder is already
- * there, when the real home holds no `auth.json` (Codex is not logged in), when the seed throws or left an
- * `auth.json`, when the link cannot be made (another volume, no permission), or when what was made is not
+ * there, when the real home holds no `auth.json` (Codex is not logged in), when the link cannot be made
+ * (another volume, no permission), or when what was made is not
  * the same file. "Nothing" includes `parent` and the state dir above it, when making the home is what
  * made them: a folder that goes takes them with it while they are empty (`removeEmptyHomesDir`), and
  * `dispose()` does the same. A folder of the homes that another review removed while this home was being
  * made is made again, once (see below). `link`, `rm`, `rmdir` and `mkdir` are the file system calls,
  * replaced in tests. */
-export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, rmdir = fs.rmdirSync, mkdir = fs.mkdirSync, seed }) {
+export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = fs.rmSync, rmdir = fs.rmdirSync, mkdir = fs.mkdirSync }) {
   if (typeof id !== 'string' || !SAFE_ID.test(id)) throw new Error(`The id of a lean Codex home must be a plain folder name, got ${JSON.stringify(id)}.`);
-  if (seed !== undefined && typeof seed !== 'function') throw new Error('The seed of a Codex home must be a function.');
   const realAuth = path.join(path.resolve(realHome), AUTH);
-  const folder = path.join(path.resolve(parent), id);
-  const home = seed ? path.join(folder, SEEDED_CODEX_DIR) : folder;
+  const home = path.join(path.resolve(parent), id);
   const leanAuth = path.join(home, AUTH);
 
   const real = fs.statSync(realAuth, { bigint: true, throwIfNoEntry: false });
@@ -171,8 +162,8 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
   // no parent, `ENOENT`. So both are made again, once. One more try and no loop: a second `ENOENT` is not
   // that race, and is said. Any other failure is said at once, a folder that is already there among them.
   const makeFolder = () => {
-    mkdir(path.dirname(folder), { recursive: true });
-    mkdir(folder);
+    mkdir(path.dirname(home), { recursive: true });
+    mkdir(home);
   };
   try {
     try {
@@ -183,19 +174,10 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
     }
   } catch (err) {
     // What was made to hold the home goes when the home could not be made, while it holds nothing.
-    removeEmptyHomesDir(path.dirname(folder), rmdir);
-    throw new Error(`Could not make the lean Codex home ${folder} (${err.code ?? err.message}).`);
+    removeEmptyHomesDir(path.dirname(home), rmdir);
+    throw new Error(`Could not make the lean Codex home ${home} (${err.code ?? err.message}).`);
   }
-  let seeded;
   try {
-    if (seed) {
-      fs.mkdirSync(home);
-      seeded = seed({ folder, home });
-      // The link below would fail on a name that is taken; said here in the words of the rule it keeps.
-      if (fs.lstatSync(leanAuth, { throwIfNoEntry: false })) {
-        throw new Error(`The seed of ${home} left an ${AUTH} there, and a copy of the login is never used: the login of a review is a hard link to the real one, made after the seed.`);
-      }
-    }
     try {
       link(realAuth, leanAuth);
     } catch (err) {
@@ -209,7 +191,7 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
       throw new Error(`${leanAuth} is not the same file as ${realAuth} after linking, so it is not used: a copy could take a refresh of the login alone.`);
     }
   } catch (err) {
-    removeLeanHome(folder, rm, { rmdir });
+    removeLeanHome(home, rm, { rmdir });
     throw err;
   }
 
@@ -223,9 +205,9 @@ export function createLeanHome({ realHome, parent, id, link = fs.linkSync, rm = 
     } catch {
       // The name cannot be read: removing it below says what is wrong, if anything is.
     }
-    return removeLeanHome(folder, rm, { keep, rmdir }) ?? replaced;
+    return removeLeanHome(home, rm, { keep, rmdir }) ?? replaced;
   };
-  return { home, folder, seeded, dispose };
+  return { home, dispose };
 }
 
 /** Removes the run folders in `parent` last changed more than `olderThanMs` before `now` (milliseconds
