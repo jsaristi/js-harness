@@ -92,13 +92,15 @@
 // It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
 // prints the same plan before its first session; one whose range changes no file has no part, so it starts
-// nothing either, records nothing and exits 0. And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
+// nothing either and exits 0, having recorded, when the range holds a commit, that there was nothing to
+// review in it (`NOTHING_TO_REVIEW`). And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
 // refused before anything is started, with its plan, until it names its count with `--max-parts <n>`: one
 // run of 28 parts, started without either number having been seen, was more than half of what fifty
 // reviews spent (odd/tasks/codex-review-cost.md).
 //
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
-// above: a line for a review that met the evidence rule, or for an explicit skip. `codex-review-runs.jsonl`
+// above: a line for a review that met the evidence rule, for an explicit skip, or for a range that held
+// commits and nothing to review, which started no session. `codex-review-runs.jsonl`
 // is the run log: a line for EVERY attempt that launched Codex, also the ones that failed, timed out or
 // were interrupted, with its outcome, the range, the session, the codex-cli version, the wall time, what
 // the rollout files say it spent (tokens, requests, threads) and ran with (the model and the effort of the
@@ -127,7 +129,7 @@ import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } fro
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
-import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './lib/codex-reviews.mjs';
+import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
@@ -832,7 +834,8 @@ function answerFailure({ reason, errors = [] }) {
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete, and for a run of more
  * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing,
- * and for a run over a range that changes no file, which has nothing to review and records nothing.
+ * and for a run over a range that changes no file, which has nothing to review, starts nothing, and
+ * records that when the range holds a commit.
  *
  * Three more `deps` are what the comparison of the configurations varies, and nothing on the command line
  * reaches them (see the top of this file):
@@ -920,6 +923,18 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return 0;
   }
 
+  /** Appends the record of this range, `base..head` at this moment with `fields` after them (its `outcome`
+   * and what goes with it), and returns the file it is in; or says why it could not be written and returns
+   * `null`, for the caller to exit 1 on. */
+  const writeRecord = (fields) => {
+    try {
+      return appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: now().toISOString(), ...fields }, { spawn });
+    } catch (err) {
+      error(`Could not write the record: ${err.message}`);
+      return null;
+    }
+  };
+
   let outcome = 'unavailable';
   // The id of the run line of a reviewed attempt, for its record; a skip launches nothing and has none.
   let runId;
@@ -975,11 +990,24 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const plan = planOf(split.groups);
     for (const line of planLines(plan)) log(line);
     // A range that changes no file has no part, and a run with no part starts nothing: no Codex is looked
-    // for, no home is made, and there is no session to log. Nothing is recorded either, since a record
-    // says a review was made, and none was: the run says so and exits 0, having done all there was to do.
-    // It used to start one session all the same, over an empty diff.
+    // for, no home is made, and there is no session to log. The run says so and exits 0, having done all
+    // there was to do. It used to start one session all the same, over an empty diff.
+    //
+    // What it records depends on whether the range holds a commit. One that holds none (`--base HEAD`)
+    // has nothing a record could cover, so nothing is recorded. One that does, a change and its revert
+    // for one, is recorded as what it is, a range with nothing to review (`NOTHING_TO_REVIEW`), with why:
+    // `check --push` asks for a record over every code commit, and without this one it would send a
+    // person back to this command, which would again record nothing. It is not recorded as `reviewed`,
+    // which would say Codex looked at it. The range holds a commit when HEAD is past the merge-base.
     if (plan.parts.length === 0) {
-      log(`There was nothing to review: ${plan.range} changes no file. Nothing was started and nothing was recorded.`);
+      const nothing = `There was nothing to review: ${plan.range} changes no file. Nothing was started`;
+      if (from === head) {
+        log(`${nothing} and nothing was recorded.`);
+        return 0;
+      }
+      const file = writeRecord({ outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+      if (file === null) return 1;
+      log(`${nothing}, and the range was recorded as having nothing to review in ${file}.`);
       return 0;
     }
     // A bound of parts. A run over it is one nobody chose the size of: it is not started until it names
@@ -1324,11 +1352,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     outcome = 'reviewed';
   }
 
-  const record = {
-    schema: CODEX_REVIEW_SCHEMA,
-    base,
-    head,
-    reviewedAt: now().toISOString(),
+  const file = writeRecord({
     outcome,
     ...(outcome === 'unavailable' ? { reason: args.unavailable } : {}),
     // The run line this review was measured in; absent when that line could not be written. For a range
@@ -1337,14 +1361,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // written: `runs` is as long as the parts were many, and `run`, when it is there, is its last entry.
     ...(runId === undefined ? {} : { run: runId }),
     ...(runIds.length === 0 ? {} : { runs: runIds }),
-  };
-  let file;
-  try {
-    file = appendCodexReview(root, record, { spawn });
-  } catch (err) {
-    error(`Could not write the record: ${err.message}`);
-    return 1;
-  }
+  });
+  if (file === null) return 1;
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;
   const how = parts === null ? '' : `, made in ${parts.length} parts,`;
   log(`Recorded ${what} of ${base.slice(0, 7)}..${head.slice(0, 7)}${how} in ${file}.`);

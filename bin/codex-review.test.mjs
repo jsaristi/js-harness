@@ -9,6 +9,7 @@ import { PassThrough, Writable } from 'node:stream';
 import {
   childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
@@ -3665,13 +3666,21 @@ test('the parts must show every changed line of the range between them: a split 
 
 // --- the plan: what a run would start and send, said before anything is started ---
 
-/** The content of `file`, or `null` when it is not there. */
-const contentOf = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+/** The content of `file`, `null` when it is not there, and why it cannot be read when it is something else
+ * than a file (a folder a test put in its place). */
+function contentOf(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return err.code === 'ENOENT' ? null : err.code;
+  }
+}
 
 /** A machine where nothing may be started: no `codex` is on it, and a Codex home that is made, a session
  * that is launched or an OS home that is asked for fails the run. `deps` are those of such a run, `home` the
  * `--home` flag of a state dir of its own, and `untouched(which)` asserts that nothing was looked for,
- * launched, made, logged or recorded, by what the repository and that state dir hold. */
+ * launched, made, logged or recorded, by what the repository and that state dir hold. `started(which)`
+ * asserts all of that but the record, for a run that starts nothing and still records what it found. */
 function startsNothing(root) {
   const state = tmp('js-harness-codex-review-state-');
   const fake = fakeCodexInParts();
@@ -3684,14 +3693,18 @@ function startsNothing(root) {
   const never = (what) => () => {
     throw new Error(`nothing ${what} here`);
   };
-  const before = [codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf);
-  const untouched = (which) => {
+  const [records, runLog] = [codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf);
+  const started = (which) => {
     assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
     assert.deepEqual(lookedFor, [], `${which}: Codex was not looked for`);
-    assert.deepEqual([codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf), before, `${which}: no record and no run line`);
+    assert.equal(contentOf(codexReviewRunsPath(root)), runLog, `${which}: no run line`);
     assert.deepEqual(listed(state), [], `${which}: no home was made`);
   };
-  return { deps: { ...fake, spawn, createLeanHome: never('makes a Codex home'), homedir: never('asks for the OS home, where the login is') }, home: ['--home', state], untouched };
+  const untouched = (which) => {
+    started(which);
+    assert.equal(contentOf(codexReviewsPath(root)), records, `${which}: no record`);
+  };
+  return { deps: { ...fake, spawn, createLeanHome: never('makes a Codex home'), homedir: never('asks for the OS home, where the login is') }, home: ['--home', state], untouched, started };
 }
 
 /** The lines of the plan of `root`'s review of `base..head` in `parts` (each `{ files, changedLines }`), from
@@ -3859,23 +3872,13 @@ test('a base that shares no history with HEAD has no range: --plan exits 1 and s
   nothing.untouched('a run');
 });
 
-test('a run over a range that changes no file starts nothing: after its plan it says there was nothing to review and that nothing was recorded, and exits 0', async () => {
-  const { root, base, head } = makeRepo();
-  // The range from HEAD to itself, and one whose two commits cancel out: `f.txt` is back to what it was.
-  fs.writeFileSync(path.join(root, 'f.txt'), 'one', 'utf8');
-  git(root, 'commit', '-am', 'back to one');
-  const back = git(root, 'rev-parse', 'HEAD');
-  assert.notEqual(back, head);
-  for (const [flags, from] of [
-    [['--base', 'HEAD'], back],
-    [['--base', 'HEAD~2'], base],
-    [['--base', 'HEAD~2', '--session', 'lean', '--prompt', 'own', '--keep-home'], base],
-    [['--base', 'HEAD', '--part-lines', '2', '--max-parts', '1'], back],
-  ]) {
-    const which = flags.join(' ');
-    const range = `${from.slice(0, 7)}..${back.slice(0, 7)}`;
+test('a run over a range that holds no commit starts nothing and records nothing: after its plan it says there was nothing to review, and exits 0', async () => {
+  const { root, head } = makeRepo();
+  const range = `${head.slice(0, 7)}..${head.slice(0, 7)}`;
+  for (const flags of [[], ['--session', 'lean', '--prompt', 'own', '--keep-home'], ['--part-lines', '2', '--max-parts', '1']]) {
+    const which = flags.join(' ') || 'no flag';
     const nothing = startsNothing(root);
-    const result = await run([...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    const result = await run(['--base', 'HEAD', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 0, `${which}: ${result.err}`);
     assert.deepEqual([result.err, result.shown], ['', ''], which);
     assert.deepEqual(result.out.split('\n'), [
@@ -3893,6 +3896,69 @@ test('a run over a range that changes no file starts nothing: after its plan it 
   assert.deepEqual([dirty.code, dirty.out], [1, '']);
   assert.match(dirty.err, /^Tracked files have uncommitted changes/);
   nothing.untouched('a dirty tree');
+});
+
+/** `makeRepo`, as a clone whose remote's default branch is at `base`, and with a third commit, `back`, that
+ * puts `f.txt` back to what it was: the commit `head` and its revert, which `check --push` both counts as
+ * code commits of the branch, and which change no file between them. */
+function makeRevertedRepo() {
+  const { root, base, head } = makeRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'one', 'utf8');
+  git(root, 'commit', '-am', 'back to one');
+  return { root, base, head, back: git(root, 'rev-parse', 'HEAD') };
+}
+
+test('a range whose commits cancel out has nothing to review: the run starts nothing and records that, and the push check then counts its commits as covered', async () => {
+  const { root, base, head, back } = makeRevertedRepo();
+  const range = `${base.slice(0, 7)}..${back.slice(0, 7)}`;
+  // The finding: both commits need a record, and the command the check names is the one that follows.
+  const before = checkCodexReviews(root, 'HEAD');
+  assert.equal(before.pass, false);
+  assert.match(before.detail, /^2 of 2 code commits since origin\/main have no Codex review record/);
+  assert.equal(before.lines.at(-1), `make the record with: js-harness codex-review --base ${head.slice(0, 7)}^`);
+  const nothingRecord = { schema: 'js-harness.codex-review/v1', base, head: back, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'nothing-to-review', reason: 'the range changes no file' };
+  const runs = [['--base', `${head.slice(0, 7)}^`], ['--base', 'HEAD~2', '--session', 'lean', '--prompt', 'own', '--keep-home', '--max-parts', '1']];
+  for (const [at, flags] of runs.entries()) {
+    const which = flags.join(' ');
+    const nothing = startsNothing(root);
+    const result = await run([...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), [
+      `Plan of the Codex review of ${range}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+      'No estimate: the range changes no file, so there is no part to review.',
+      `There was nothing to review: ${range} changes no file. Nothing was started, and the range was recorded as having nothing to review in ${codexReviewsPath(root)}.`,
+    ], which);
+    // No Codex, no home, no session and no run line, as for any range with no part. What there is, is the record.
+    nothing.started(which);
+    // It says what happened, in an outcome that is neither a review nor a skip, and names no run: there was none.
+    assert.deepEqual(readCodexReviews(root), Array.from({ length: at + 1 }, () => nothingRecord), which);
+    assert.equal(isValidCodexReview(readCodexReviews(root).at(-1)), true, which);
+  }
+  // The check counts both commits as covered, and says by what: a line names the range and why no review
+  // stands behind its record, as it does for a skip.
+  const after = checkCodexReviews(root, 'HEAD');
+  assert.equal(after.pass, true, `${after.detail}\n${(after.lines ?? []).join('\n')}`);
+  assert.match(after.detail, /^2 code commits since origin\/main, all covered by a Codex review record/);
+  const line = `nothing to review ${range}: the range changes no file`;
+  assert.deepEqual(after.lines, [line, line]);
+  // Beside a skip, each is listed as what it is.
+  await run(['--base', 'HEAD~2', '--unavailable', 'model rejected', '--cwd', root], fakeCodex(''));
+  assert.deepEqual(checkCodexReviews(root, 'HEAD').lines, [line, line, `unavailable ${range}: model rejected`]);
+});
+
+test('a range with nothing to review whose record cannot be written exits 1 and says so, having started nothing', async () => {
+  const { root } = makeRevertedRepo();
+  blockRecord(root);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~2', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /^Could not write the record: /);
+  assert.doesNotMatch(result.out, /recorded/);
+  nothing.untouched('a record that cannot be written');
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
 });
 
 test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {

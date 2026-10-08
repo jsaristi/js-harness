@@ -278,6 +278,21 @@ recorded it and carry what the command passed.
    finding, and four reviews repeated a range already reviewed. Sebastián, 2026-10-08: a
    Codex review runs only on `gpt-6.1-sol` at `high`; it covers only code, never the same
    commits twice, and prints its plan before it spends.
+8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
+   in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
+   5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
+   many measurements as the runs give, and put it in the harness only if it helps. He had
+   read that the pairing costs 75% less at the same quality and much faster. What Anthropic
+   published (anthropic.com/claude-haiku-5-5, read on 2026-10-08) is narrower: the 75% is
+   Haiku 5.5 against Haiku 4.5; Sonnet 5.5 and Opus 5.5 "remain better choices" for complex
+   agentic coding (Terminal-Bench 4.0: 39.2% against Sonnet's 70.6%); Haiku is recommended as
+   a subagent for narrowly scoped work; and no figure is given for the pairing against Opus
+   alone. So the question to measure is the same quality on scoped work, cheaper and faster,
+   read by kind of work (exploring, running tests and reporting, writing code): quality by the
+   hidden graders as a pass rate over repeated runs, cost in list dollars and tokens of each
+   model, wall time, and how many subagents a run spawned. A run that spawns none measures
+   nothing of this, so the design has to make delegation happen. Its start prompt was handed
+   to him on 2026-10-08.
 6. Session signals, asked by Sebastián on 2026-10-07 and not started: he runs several sessions
    from the phone and wants three things said by the harness itself rather than remembered by
    the agent. Whose turn it is in every reply: a prompt for him only when the work waits on

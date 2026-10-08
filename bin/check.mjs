@@ -7,7 +7,7 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
-import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
 export { estimateTokens };
@@ -400,9 +400,10 @@ function coveredBy(spawn, cwd, rec) {
 }
 
 /** The `--push` row: every non-merge commit between the remote's default branch and `head` that
- * changes a file other than Markdown must lie in a range some `codex-review` record covers (either
- * outcome: an `unavailable` record is an explicit, listed skip). Plain `check` never runs it, because
- * a slice under gentle-ai's review budget is committed before it is reviewed. */
+ * changes a file other than Markdown must lie in a range some `codex-review` record covers (any
+ * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
+ * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
+ * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
   const name = 'codex-review';
   const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
@@ -476,21 +477,26 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
     // A root commit has no `<id>^` to use as a base; a range from the unrelated default branch does
-    // reach it, and `--unavailable` records a skip instead of a review.
+    // reach it, and `--unavailable` records a skip instead of a review. The command "makes the record",
+    // not "the review": over a range with nothing to review it records that, and starts no review.
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
-      : `record the review with: js-harness codex-review --base ${oldest.shortId}^`;
+      : `make the record with: js-harness codex-review --base ${oldest.shortId}^`;
     const lines = [...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
-  const skips = covers
-    .filter(({ rec, covered }) => rec.outcome === 'unavailable' && codeCommits.some((commit) => covered.has(commit.id)))
-    .map(({ rec }) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
+  // The records that cover a code commit here and are no review of Codex's, each as a line that says which
+  // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits
+  // as covered by a record, which they are; these lines are what keeps that from reading as "reviewed".
+  const kinds = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };
+  const notReviews = covers
+    .filter(({ rec, covered }) => Object.hasOwn(kinds, rec.outcome) && codeCommits.some((commit) => covered.has(commit.id)))
+    .map(({ rec }) => `${kinds[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason ?? 'no reason given'}`);
   const detail = codeCommits.length
     ? `${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base}, all covered by a Codex review record${note}`
     : `no code commits since ${base}${note}`;
-  return { name, pass: true, detail, ...(skips.length ? { lines: skips } : {}) };
+  return { name, pass: true, detail, ...(notReviews.length ? { lines: notReviews } : {}) };
 }
 
 const USAGE =

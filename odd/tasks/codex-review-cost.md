@@ -214,28 +214,58 @@ push of that branch.
   - What the plan says of the review this branch owes, `5663c8c..0c71389`: 7 parts, 3,439
     changed lines in 12 files, about 1,016,000 input tokens, from 36 parts measured at
     `medium` and none at `high`, so a floor. Over the bound: it waits for Sebastián.
-- Not known until the first real run: that a rollout writes the effort `high` as `high`.
-  Every measured line so far passed `medium` and read `medium`. If it is written another
-  way, the first review fails with the mismatch message and the reader is corrected.
+- 2026-10-08: the fix of the three findings committed as `7936a1f` (gate green). gentle-ai
+  on `0c71389..7936a1f`: medium, 196 changed lines, not due (`under_budget`), so it stays
+  in the slice until a later commit reaches the budget.
+- 2026-10-08: the Codex review this branch owed, `5663c8c..7936a1f`, run on Sebastián's yes
+  to its plan (7 parts, about 1,045,000 input tokens as a floor, 2.9 million as a ceiling),
+  with `--max-parts 7`, inside the login proof (PASS: the login is the file it was, under
+  one name). All 7 parts passed and the range is recorded.
+  - It is the first real run at `high`, and a rollout writes that effort as `high`: each of
+    the seven lines of the run log says the command passed `gpt-6.1-sol` at `high` and the
+    session ran on it. What was not known is known.
+  - Cost: 2,314,747 input tokens (1,840,640 of them cached) and 9,709 output, in 610 s over
+    53 requests. That is 2.2 times the floor the plan gave, as the plan said it could be:
+    its estimate rested on runs at `medium`. The part of `bin/codex-review.mjs` (654
+    lines) alone was 965,028, since the reviewer built a reproduction of what it found; the
+    other six ran from 72,828 to 515,020. From here the log holds seven parts at `high`, so
+    an estimate rests on those alone.
+  - Six verdicts "correct", the commit of T1 among them, which had no review of its own.
+  - One finding, P2, in the first part: a range whose commits cancel out exited 0 with no
+    record, while the push check still asked for one over each of those commits. It is
+    follow-up F1, which the writer had reported and the parent had written down for T2
+    instead of fixing. The parent's error, to not repeat: a defect that is known is fixed
+    before a review is paid for, not noted for later; here the review spent its dearest
+    part on finding it again.
+- 2026-10-08: that finding fixed by the same writer, red first with the finding's own
+  reproduction (a code commit and its revert). A run whose range has no part still starts
+  nothing; when the range holds a commit it now appends a record of a third outcome,
+  `nothing-to-review`, with its reason, and the push check counts those commits as covered
+  and lists the record as what it is. Nothing is recorded when the range holds no commit.
+  A reader from before this change finds the record invalid and covers nothing with it, so
+  it fails closed. The writer: the record's tests 14 of 14, the push check's 43 of 43, the
+  command file 211 of 211 (492 s); re-run by the parent, the first two, 57 of 57.
+  - Left as it was: the push check's passing sentence says "all covered by a Codex review
+    record" of skips and of this record too; the lines listed under it say which is which.
+- 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
+  Haiku 5.5 subagents would help. What was verified and what he decided are in
+  `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
 
 ## Follow-ups
-- F1-empty-range-with-code-commits: a range whose commits cancel out (a commit and its
-  revert) changes no file, so a run over it now records nothing, while `check --push`
-  (`bin/check.mjs:474`) still wants a record over each of those code commits. Before, the
-  session over the empty diff gave that record. The way out today is `--unavailable`. To
-  settle in T2, which is where what a record covers is touched, together with the same case
-  for a range of documents alone: the two commands have to agree on what code is.
+- F1-what-code-is: closed in part on 2026-10-08 (the fix above: a range with nothing to
+  review that holds commits is recorded as such). What is left for T2: the push check counts
+  as code every file that is not Markdown, and "only code is reviewed" will leave out more
+  than that (eval readings, paths a git attribute marks), so the two have to read one
+  definition, and a range of left-out files alone is recorded with the same outcome.
 
 ## Next step
 In this order, each slice committed when it is green and kept under about 1,900 changed
-lines, deletions counted:
-1. The Codex review of `5663c8c..HEAD`, inside the login proof. It is over the bound of
-   six parts, so its plan, with its count and its estimate, is put to Sebastián before it
-   runs, with `--max-parts` and its count. It is also the first real run at `high`, which
-   shows how a rollout writes that effort.
+lines, deletions counted. A defect that is known is fixed before the Codex review of its
+slice, and the plan of that review is read first:
+1. The fix of the Codex finding is committed; gentle-ai and Codex on it, from `7936a1f`.
 2. The second half of T3: what `check` says of code committed since the last record.
 3. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
-   attribute marks), with follow-up F1; a range whose earlier commits a record covers
+   attribute marks), with what is left of F1; a range whose earlier commits a record covers
    starts where the records end. With it, the rule decided on 2026-10-08: a lean review
    whose rollout names no model does not stand.
 4. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the

@@ -1,4 +1,5 @@
-// The record of Codex reviews: one JSON line per review, or per explicit skip, of a commit range.
+// The record of Codex reviews: one JSON line per review of a commit range, per explicit skip of one, or
+// per range that held nothing to review.
 //
 // It lives in the git common dir, not in the working tree, so it adds no file to the project and
 // every worktree of a clone shares it; deleting that one file undoes everything this module writes.
@@ -10,6 +11,16 @@ import { spawnSync } from 'node:child_process';
 import { gitDirs } from './project.mjs';
 
 export const CODEX_REVIEW_SCHEMA = 'js-harness.codex-review/v1';
+
+// The outcome of a record of a range that held nothing to review: the range was read, there was nothing in
+// it for a review to look at (its `reason` says what: it changes no file, for one), and no Codex session was
+// started. It is an outcome of its own because it is neither of the other two. `reviewed` says Codex
+// reviewed the range, which it did not; `unavailable` says a review could not be made, and here there was
+// none to make. The range still needs a record: it can hold commits, a change and its revert for one, and
+// `check --push` asks for a record over every code commit. The schema stays `v1`: a reader written before
+// this outcome takes such a record as one it does not know (`isValidCodexReview` was false for it), so it
+// counts it as invalid and covers nothing with it, and never takes it for a review.
+export const NOTHING_TO_REVIEW = 'nothing-to-review';
 
 // The three functions below are the plumbing of a JSON Lines file in the git common dir. The record of
 // reviews is one such file and the log of review runs (`codex-review-runs.mjs`) another, in the same folder.
@@ -98,7 +109,8 @@ const COMMIT_ID = /^[0-9a-f]{40,64}$/;
 
 /** Whether `rec` is a record a check may treat as evidence: the v1 schema, full commit ids for
  * `base` and `head` (which also keeps a hand-edited id from ever reaching git as an option), a
- * string `reviewedAt`, and an outcome of `reviewed`, or `unavailable` with a reason that says why. */
+ * string `reviewedAt`, and an outcome of `reviewed`, or one of the two that are no review of Codex's,
+ * `unavailable` and `NOTHING_TO_REVIEW`, with a reason that says why there is none. */
 export function isValidCodexReview(rec) {
   if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return false;
   if (rec.schema !== CODEX_REVIEW_SCHEMA) return false;
@@ -106,5 +118,5 @@ export function isValidCodexReview(rec) {
   if (typeof rec.head !== 'string' || !COMMIT_ID.test(rec.head)) return false;
   if (typeof rec.reviewedAt !== 'string') return false;
   if (rec.outcome === 'reviewed') return true;
-  return rec.outcome === 'unavailable' && typeof rec.reason === 'string' && rec.reason.trim() !== '';
+  return (rec.outcome === 'unavailable' || rec.outcome === NOTHING_TO_REVIEW) && typeof rec.reason === 'string' && rec.reason.trim() !== '';
 }
