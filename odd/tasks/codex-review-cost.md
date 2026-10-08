@@ -195,27 +195,50 @@ push of that branch.
   - Found by the writer, decided by the parent for T2: a run over a range that changes
     nothing still starts one session. With "only code" a range of documents alone becomes
     the same case, so in T2 a run with no part starts nothing, says so and exits 0.
+- 2026-10-08: the first half of T3 committed as `0c71389` (gate green). gentle-ai on
+  `b7609b2..0c71389`, 931 changed lines, medium, consent granted without asking: approved
+  and acknowledged (lineage `review-924bafd789442be4`), with one warning and two
+  suggestions, all three accepted and fixed by the same writer before any Codex review is
+  paid for, since paying a review to find what is already known is the spend this feature
+  cuts. The writer: the plan module 19 of 19, the command file 209 of 209 (470 s), the
+  comparison's tests 103 of 103.
+  - The warning: a run over a range that changes no file printed a plan of no part and
+    then started a session all the same. It now starts nothing, says so and exits 0, with
+    no record. Red first. It was planned for T2 and moved here.
+  - Two failure paths had no test: a run log that cannot be read (the plan says there is no
+    estimate and the run goes on), and `--plan` from a base that shares no history. Both
+    held on the code as it was; each test was seen to fail with its guard removed.
+  - The sentence of what an estimate rests on said "at another effort" of parts that had
+    all run on the fixed pair. It now says how many ran on the pair and speaks of another
+    effort only when some did not. Red first.
+  - What the plan says of the review this branch owes, `5663c8c..0c71389`: 7 parts, 3,439
+    changed lines in 12 files, about 1,016,000 input tokens, from 36 parts measured at
+    `medium` and none at `high`, so a floor. Over the bound: it waits for Sebastián.
 - Not known until the first real run: that a rollout writes the effort `high` as `high`.
   Every measured line so far passed `medium` and read `medium`. If it is written another
   way, the first review fails with the mismatch message and the reader is corrected.
 
 ## Follow-ups
+- F1-empty-range-with-code-commits: a range whose commits cancel out (a commit and its
+  revert) changes no file, so a run over it now records nothing, while `check --push`
+  (`bin/check.mjs:474`) still wants a record over each of those code commits. Before, the
+  session over the empty diff gave that record. The way out today is `--unavailable`. To
+  settle in T2, which is where what a record covers is touched, together with the same case
+  for a range of documents alone: the two commands have to agree on what code is.
 
 ## Next step
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted:
-1. The first half of T3 is committed (`--plan`, the bound of parts). Its gentle-ai review
-   runs on that commit alone.
-2. The Codex review of `5663c8c..HEAD`, inside the login proof. It is over the bound of
+1. The Codex review of `5663c8c..HEAD`, inside the login proof. It is over the bound of
    six parts, so its plan, with its count and its estimate, is put to Sebastián before it
-   runs. It is also the first real run at `high`, which shows how a rollout writes that
-   effort.
-3. The second half of T3: what `check` says of code committed since the last record.
-4. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
-   attribute marks), and a run with no part starts nothing; a range whose earlier commits a
-   record covers starts where the records end. With it, the rule decided on 2026-10-08: a
-   lean review whose rollout names no model does not stand.
-5. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
+   runs, with `--max-parts` and its count. It is also the first real run at `high`, which
+   shows how a rollout writes that effort.
+2. The second half of T3: what `check` says of code committed since the last record.
+3. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
+   attribute marks), with follow-up F1; a range whose earlier commits a record covers
+   starts where the records end. With it, the rule decided on 2026-10-08: a lean review
+   whose rollout names no model does not stand.
+4. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
    measurement of the part size, is put to Sebastián with its count before any of it runs.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin

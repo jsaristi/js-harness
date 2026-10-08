@@ -150,15 +150,19 @@ const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 /** `count` things, with `noun` in the singular for one: `1 part`, `2 parts`. */
 const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
 
-/** What the estimate of `plan` is and what it rests on, as one line; or that there is none, and why. */
+/** What the estimate of `plan` is and what it rests on, as one line; or that there is none, and why.
+ *
+ * It says how many parts the estimate rests on and how many of them ran on the model and at the effort of
+ * the review. When all of them did, that is all there is to say, whether they are the five that stand alone
+ * or fewer: another effort is spoken of only when some part ran at one, or named none. */
 function estimateLine({ parts, inputTokens, model, effort, basis }) {
   if (parts.length === 0) return 'No estimate: the range changes no file, so there is no part to review.';
   if (inputTokens === null) return 'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.';
   const pair = `on ${model} at ${effort} effort`;
-  const rests = basis.samePair
+  const rests = basis.atPair === basis.runs
     ? `${counted(basis.runs, 'part')} this machine's run log measured ${pair}`
-    : `${counted(basis.runs, 'part')} this machine's run log measured, at another effort or in a session that named none ` +
-      `(${thousands(basis.atPair)} of them ran ${pair}, and from ${RUNS_TO_STAND_ALONE} on it rests on those alone)`;
+    : `${counted(basis.runs, 'part')} this machine's run log measured, ${thousands(basis.atPair)} of them ${pair} and the rest at another effort or in a session that named none ` +
+      `(with ${RUNS_TO_STAND_ALONE} or more of the first kind it would rest on those alone)`;
   return (
     `Estimate: about ${thousands(inputTokens)} input tokens in all. It rests on ${rests}: a part is put at its changed lines times the median input tokens a changed line cost in them, ` +
     `the parts of up to ${thousands(basis.bandAt)} changed lines apart from the larger ones, and never under what the cheapest of them cost.`

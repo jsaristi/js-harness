@@ -214,11 +214,27 @@ test('an estimate from runs at another effort says so, with how many parts it re
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 1 part, 200 changed lines in 1 file.',
     '  part 1 of 1: 1 file, 200 changed lines, about 60,000 input tokens',
-    'Estimate: about 60,000 input tokens in all. It rests on 4 parts this machine\'s run log measured, at another effort or in a session that named none ' +
-      `(1 of them ran on gpt-6.1-sol at high effort, and from 5 on it rests on those alone): ${METHOD}`,
+    'Estimate: about 60,000 input tokens in all. It rests on 4 parts this machine\'s run log measured, 1 of them on gpt-6.1-sol at high effort and the rest at another effort or in a session that named none ' +
+      `(with 5 or more of the first kind it would rest on those alone): ${METHOD}`,
   ]);
-  // One measured part is said as one.
-  assert.match(planLines(planOf([part(1, 200)], [atMedium(100, 30000)])).at(-1), /It rests on 1 part this machine's run log measured, at another effort/);
+  // One measured part is said as one, and none on the model and at the effort of the review as none.
+  assert.match(planLines(planOf([part(1, 200)], [atMedium(100, 30000)])).at(-1), /It rests on 1 part this machine's run log measured, 0 of them on gpt-6\.1-sol at high effort and the rest at another effort/);
+  // A session whose rollout file named no model is one of the rest.
+  const unnamed = partRun(100, 30000, { sessionModel: null, sessionEffort: null });
+  assert.match(planLines(planOf([part(1, 200)], [partRun(100, 30000), unnamed])).at(-1), /It rests on 2 parts this machine's run log measured, 1 of them on gpt-6\.1-sol at high effort and the rest at another effort or in a session that named none /);
+});
+
+test('an estimate from fewer than five parts, all of them on the model and at the effort of the review, says nothing of another effort', () => {
+  for (const [runs, rests] of [
+    [[partRun(100, 30000)], '1 part'],
+    [[partRun(100, 30000), partRun(200, 60000)], '2 parts'],
+    [[partRun(100, 30000), partRun(200, 60000), partRun(300, 90000), partRun(100, 30000)], '4 parts'],
+  ]) {
+    const plan = planOf([part(1, 200)], runs);
+    assert.deepEqual(plan.basis, { runs: runs.length, samePair: false, atPair: runs.length, bandAt: 400 }, rests);
+    assert.equal(planLines(plan).at(-1), `Estimate: about 60,000 input tokens in all. It rests on ${rests} this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}`, rests);
+    assert.doesNotMatch(planLines(plan).at(-1), /another effort|named none/, rests);
+  }
 });
 
 test('the plan is of the review the command runs: it names the model and the effort it is handed, and the estimate is held to them', () => {

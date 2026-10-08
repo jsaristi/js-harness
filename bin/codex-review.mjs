@@ -91,7 +91,8 @@
 // an estimate of the input tokens made from this machine's own run log, never from a number written here.
 // It starts nothing: no Codex is looked for, no home is made, no login is looked at, and nothing is logged
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
-// prints the same plan before its first session. And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
+// prints the same plan before its first session; one whose range changes no file has no part, so it starts
+// nothing either, records nothing and exits 0. And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
 // refused before anything is started, with its plan, until it names its count with `--max-parts <n>`: one
 // run of 28 parts, started without either number having been seen, was more than half of what fifty
 // reviews spent (odd/tasks/codex-review-cost.md).
@@ -830,7 +831,8 @@ function answerFailure({ reason, errors = [] }) {
  * to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete, and for a run of more
- * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing.
+ * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing,
+ * and for a run over a range that changes no file, which has nothing to review and records nothing.
  *
  * Three more `deps` are what the comparison of the configurations varies, and nothing on the command line
  * reaches them (see the top of this file):
@@ -972,6 +974,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // about to spend is on the screen before any of it is spent.
     const plan = planOf(split.groups);
     for (const line of planLines(plan)) log(line);
+    // A range that changes no file has no part, and a run with no part starts nothing: no Codex is looked
+    // for, no home is made, and there is no session to log. Nothing is recorded either, since a record
+    // says a review was made, and none was: the run says so and exits 0, having done all there was to do.
+    // It used to start one session all the same, over an empty diff.
+    if (plan.parts.length === 0) {
+      log(`There was nothing to review: ${plan.range} changes no file. Nothing was started and nothing was recorded.`);
+      return 0;
+    }
     // A bound of parts. A run over it is one nobody chose the size of: it is not started until it names
     // its count, and the refusal says the count, so that going on is a decision made with the plan above
     // it. The bound is the count the run named when it named one, larger or smaller than the default.

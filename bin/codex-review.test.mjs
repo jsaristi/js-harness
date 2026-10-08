@@ -3779,10 +3779,8 @@ test('a run prints its plan before its first session starts, and the estimate of
   // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
   const measured = planned(root, base, head, AS_TWO);
   assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
-  assert.ok(measured[3].startsWith(
-    'Estimate: about 890,000 input tokens in all. It rests on 2 parts this machine\'s run log measured, at another effort or in a session that named none ' +
-      '(2 of them ran on gpt-6.1-sol at high effort, and from 5 on it rests on those alone): ',
-  ), measured[3]);
+  // Both ran on the model and at the effort of a review, so nothing is said of another effort.
+  assert.ok(measured[3].startsWith('Estimate: about 890,000 input tokens in all. It rests on 2 parts this machine\'s run log measured on gpt-6.1-sol at high effort: '), measured[3]);
   const nothing = startsNothing(root);
   const plan = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(plan.code, 0, plan.err);
@@ -3800,6 +3798,101 @@ test('a run prints its plan before its first session starts, and the estimate of
   assert.equal(onScreen[0][0], `Plan of the Codex review of ${base.slice(0, 7)}..${head.slice(0, 7)}: gpt-6.1-sol at high effort, 1 part, 8 changed lines in 3 files.`);
   assert.match(onScreen[0][1], /^ {2}part 1 of 1: 3 files, 8 changed lines, about [\d,]+ input tokens$/);
   assert.match(onScreen[0][3], /^Codex is reviewing /);
+});
+
+test('a run log that cannot be read is one that measured nothing: the plan says there is no estimate, and a run goes on as it would', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ran = [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]];
+  const twoSessions = () => fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran }, { stdout: partShown(root, base, head, 'c.txt'), threads: ran });
+  // A run that leaves two measured parts in the log, so that there is an estimate to lose.
+  const first = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
+  assert.equal(first.code, 0, first.err);
+  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 input tokens/);
+  const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
+  assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
+  /** `spawn`, but the first time git is asked where the common dir is, which is how the run log is found,
+   * the answer is that of `instead`. The later times, when the run writes its lines there, git answers. */
+  const logNotFound = (spawn, instead) => {
+    let asked = 0;
+    return (command, args, opts) => (command === 'git' && args.includes('--git-common-dir') && (asked += 1) === 1 ? instead() : spawn(command, args, opts));
+  };
+  const failures = [
+    ['git cannot say where the log is', () => ({ status: 128, stdout: '', stderr: 'fatal' })],
+    ['git cannot be started', () => {
+      throw new Error('spawn git EACCES');
+    }],
+    // An answer the reader of the log throws on: what it cannot take never reaches the run.
+    ['the reader of the log throws', () => ({ status: 0, stdout: 7 })],
+  ];
+  for (const [which, instead] of failures) {
+    const nothing = startsNothing(root);
+    const plan = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: logNotFound(nothing.deps.spawn, instead) });
+    assert.equal(plan.code, 0, `${which}: ${plan.err}`);
+    assert.equal(plan.err, '', which);
+    assert.deepEqual(plan.out.split('\n'), none, which);
+    nothing.untouched(`${which}, --plan`);
+    // The run prints the same plan and then goes on: its two sessions, their two lines in the log, its record.
+    const [records, lines] = [readCodexReviews(root).length, readCodexReviewRuns(root).length];
+    const fake = twoSessions();
+    const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, spawn: logNotFound(fake.spawn, instead), randomUUID: runIds() });
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.equal(result.err, '', which);
+    assert.deepEqual(result.out.split('\n').slice(0, none.length), none, which);
+    assert.equal(fake.calls.length, 2, which);
+    assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records + 1, lines + 2], which);
+  }
+});
+
+test('a base that shares no history with HEAD has no range: --plan exits 1 and says so, as a run does, and nothing is started', async () => {
+  const { root, head: other } = makeRepo();
+  // A branch with a first commit of its own: no commit is an ancestor of both it and `other`.
+  git(root, 'checkout', '--orphan', 'alone');
+  git(root, 'commit', '-m', 'alone');
+  const nothing = startsNothing(root);
+  const plan = await run(['--base', other, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([plan.code, plan.out], [1, '']);
+  assert.equal(plan.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
+  nothing.untouched('--plan');
+  const result = await run(['--base', other, ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.out], [1, '']);
+  assert.equal(result.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
+  nothing.untouched('a run');
+});
+
+test('a run over a range that changes no file starts nothing: after its plan it says there was nothing to review and that nothing was recorded, and exits 0', async () => {
+  const { root, base, head } = makeRepo();
+  // The range from HEAD to itself, and one whose two commits cancel out: `f.txt` is back to what it was.
+  fs.writeFileSync(path.join(root, 'f.txt'), 'one', 'utf8');
+  git(root, 'commit', '-am', 'back to one');
+  const back = git(root, 'rev-parse', 'HEAD');
+  assert.notEqual(back, head);
+  for (const [flags, from] of [
+    [['--base', 'HEAD'], back],
+    [['--base', 'HEAD~2'], base],
+    [['--base', 'HEAD~2', '--session', 'lean', '--prompt', 'own', '--keep-home'], base],
+    [['--base', 'HEAD', '--part-lines', '2', '--max-parts', '1'], back],
+  ]) {
+    const which = flags.join(' ');
+    const range = `${from.slice(0, 7)}..${back.slice(0, 7)}`;
+    const nothing = startsNothing(root);
+    const result = await run([...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), [
+      `Plan of the Codex review of ${range}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+      'No estimate: the range changes no file, so there is no part to review.',
+      `There was nothing to review: ${range} changes no file. Nothing was started and nothing was recorded.`,
+    ], which);
+    nothing.untouched(which);
+    assert.deepEqual([wrote(root), loggedRun(root)], [false, false], which);
+  }
+  // What stops a run before its plan still does: uncommitted changes are refused as they were, exit 1.
+  fs.writeFileSync(path.join(root, 'f.txt'), 'not committed', 'utf8');
+  const nothing = startsNothing(root);
+  const dirty = await run(['--base', 'HEAD', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([dirty.code, dirty.out], [1, '']);
+  assert.match(dirty.err, /^Tracked files have uncommitted changes/);
+  nothing.untouched('a dirty tree');
 });
 
 test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {
