@@ -78,7 +78,9 @@ const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 
 test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text and its version', () => {
   // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
-  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v2');
+  // `v3`: it says so when the range leaves files out of the review, and a range of one part that does is
+  // asked with it.
+  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v3');
   assert.notEqual(REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION);
   // The text a whole range was asked with in the runs recorded under `v1`, to the character.
   assert.equal(
@@ -177,6 +179,47 @@ test('reviewPrompt refuses a part that is not one: a number out of its range, a 
   ];
   for (const part of bad) assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part }), /part/i, JSON.stringify(part));
   assert.throws(() => reviewPrompt({ from: 'main', head: HEAD, part: PART }), /commit id/);
+});
+
+// --- a range that leaves files out of the review ---
+
+test('a part of a range that leaves files out says the other files are in the other parts or left out, and is the text it was when none is', () => {
+  const none = reviewPrompt({ from: FROM, head: HEAD, part: PART });
+  assert.equal(reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut: 0 }), none);
+  assert.ok(none.endsWith('The other files the range changes are reviewed in the other parts: read them for context, and report nothing about them.\n'), none);
+  const some = reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut: 4 });
+  const lines = some.split('\n');
+  assert.deepEqual(lines.slice(0, 3), none.split('\n').slice(0, 3), 'what is reviewed, and how it is shown, are said as they were');
+  assert.equal(lines[3], 'The other files the range changes are reviewed in the other parts, or left out of the review: read them for context, and report nothing about them.');
+  // How many are left out, and which, is not in the prompt: it is paid on every request of the review.
+  assert.equal(some, reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut: 40 }));
+  assert.doesNotMatch(some, /\b4\b|\.json|evals/);
+});
+
+test('a range of one part that leaves files out is asked by its files, as a part is, and is not called a part', () => {
+  const sole = { index: 1, of: 1, files: ['bin/a.mjs', 'src/my code.js'] };
+  const prompt = reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2 });
+  assert.equal(
+    prompt,
+    `Review the code changes in the committed range ${FROM}..${HEAD}. This review covers the files the command below names.\n` +
+      `Run \`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'src/my code.js'\` to inspect them: its output is the whole change under review.\n` +
+      'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.\n' +
+      'The other files the range changes are left out of this review: read them for context, and report nothing about them.\n',
+  );
+  assert.doesNotMatch(prompt, /\bparts?\b/);
+  // The intent goes after it, as after any other.
+  const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0' };
+  const withIntent = reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2, intent });
+  assert.ok(withIntent.startsWith(prompt), withIntent);
+  assert.equal(withIntent.slice(prompt.length), reviewPrompt({ from: FROM, head: HEAD, intent }).slice(reviewPrompt({ from: FROM, head: HEAD }).length));
+});
+
+test('reviewPrompt refuses what cannot be: a whole range that leaves files out, one part of a range that leaves none out, a count that is none', () => {
+  // The prompt of a whole range names no file, so its command would show the files that were left out.
+  assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, leftOut: 1 }), /leaves files out/);
+  // A range of one part that leaves nothing out is reviewed whole, with the prompt of a whole range.
+  assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['a.js'] } }), /part/i);
+  for (const leftOut of [-1, 1.5, '2', null, Number.NaN]) assert.throws(() => reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut }), /left out/, JSON.stringify(leftOut));
 });
 
 // --- the intent, from a feature document ---

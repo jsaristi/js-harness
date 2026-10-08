@@ -157,6 +157,132 @@ test('a merge commit needs no review of its own', () => {
   assert.match(row.detail, /1 code commit since origin\/main/);
 });
 
+// --- what a review leaves out: documents, and what the project marks (`./lib/codex-review-scope.mjs`) ---
+
+/** `makeRepo`, with a `.gitattributes` of `marks` that the default branch of the remote already holds, so
+ * that the commit of the marks is none of the branch's own. */
+function makeMarkedRepo(marks = 'evals/results/** -codex-review\n') {
+  const { root } = makeRepo();
+  const base = commit(root, '.gitattributes', marks, 'chore: say what a review leaves out');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  feature(root);
+  return { root, base };
+}
+
+/** Commits `content` at `file` through the index alone and returns the commit's full id: a name the file
+ * system of this machine may refuse (a quote, on Windows) is still one a repository can hold. The working
+ * tree is left without the file, so no `commit` follows it in a test. `core.protectNTFS` is off for the one
+ * command that would refuse the name on Windows. */
+function commitInIndex(root, file, content, message) {
+  const hashed = spawnSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: content, encoding: 'utf8' });
+  assert.equal(hashed.status, 0, hashed.stderr);
+  git(root, '-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', `100644,${hashed.stdout.trim()},${file}`);
+  git(root, 'commit', '-m', message);
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+test('a commit that changes only what a review leaves out needs no record, and one that changes code beside it still does', () => {
+  const { root } = makeMarkedRepo();
+  commit(root, 'evals/results/a.json', '{}', 'chore: the results of an eval');
+  fs.writeFileSync(path.join(root, 'notes.md'), 'words', 'utf8');
+  commit(root, 'evals/results/deep/b.json', '{}', 'chore: more results, and a note');
+  commit(root, 'docs/notes.md', 'words', 'docs: notes');
+  const { spawn, started } = countingSpawn();
+  const row = checkCodexReviews(root, 'HEAD', { spawn });
+  assert.equal(row.pass, true, row.detail);
+  assert.equal(row.detail, 'no code commits since origin/main');
+  // What is marked is asked of git once, for the paths of every commit together.
+  assert.equal(started.filter((command) => command === 'check-attr').length, 1, started.join(' '));
+  assert.equal(checkCodexReviewDebt(root).detail, 'no code commits since origin/main');
+  // A file outside the marked folder, in the same commit as results and a document: that commit is code.
+  fs.writeFileSync(path.join(root, 'evals/results/c.json'), '{}', 'utf8');
+  fs.writeFileSync(path.join(root, 'more.md'), 'words', 'utf8');
+  const mixed = commit(root, 'evals/run.mjs', 'code', 'feat: an eval, its results and a note');
+  const failing = checkCodexReviews(root, 'HEAD');
+  assert.equal(failing.pass, false);
+  assert.match(failing.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.ok(failing.lines[0].startsWith(short(root, mixed)), failing.lines.join('\n'));
+  assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main/);
+});
+
+test('what the project marks is read from the commit that is checked, for every commit under it: not from the working tree, nor from the index', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const data = commit(root, 'data/a.json', '{}', 'chore: data, before anything marks it');
+  commit(root, '.gitattributes', 'data/** -codex-review\n.gitattributes -codex-review\n', 'chore: mark the data, and this file');
+  // Checked at the commit that marks them, both commits change only what a review leaves out.
+  assert.equal(checkCodexReviews(root, 'HEAD').detail, 'no code commits since origin/main');
+  // Checked at the commit before, nothing is marked yet, whatever the tree that is checked out says.
+  const earlier = checkCodexReviews(root, data);
+  assert.equal(earlier.pass, false);
+  assert.match(earlier.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  // Marks nobody committed say nothing of a commit: taken away in the tree and then in the index, they
+  // still hold for HEAD, and `check` runs before every commit over a tree that is being edited.
+  fs.writeFileSync(path.join(root, '.gitattributes'), '', 'utf8');
+  assert.equal(checkCodexReviews(root, 'HEAD').detail, 'no code commits since origin/main');
+  assert.equal(checkCodexReviewDebt(root).detail, 'no code commits since origin/main');
+  git(root, 'add', '.gitattributes');
+  assert.equal(checkCodexReviews(root, 'HEAD').detail, 'no code commits since origin/main');
+});
+
+test('a document or a marked file is left out whatever its name holds: a quote, a space, a letter outside ASCII', () => {
+  // git writes such a name in quotes and escapes unless it is asked for the names as they are.
+  const { root } = makeMarkedRepo('*.json -codex-review\n');
+  commitInIndex(root, 'docs/say "hi".md', 'words', 'docs: a quote in a name');
+  commitInIndex(root, 'data/caf\u00e9 "au lait".json', '{}', 'chore: data with a quote in its name');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.equal(row.detail, 'no code commits since origin/main');
+  // And code with such a name is code.
+  const code = commitInIndex(root, 'src/say "hi".md.js', 'code', 'feat: code with a quote in its name');
+  const failing = checkCodexReviews(root, 'HEAD');
+  assert.match(failing.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.ok(failing.lines[0].startsWith(short(root, code)), failing.lines.join('\n'));
+});
+
+test('when git cannot say what the project marks, the push check fails and says so, and the plain row says what it cannot tell', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  const old = { status: 129, stdout: '', stderr: 'error: unknown option `source\'' };
+  const spawn = (cmd, args, opts) => (args[0] === 'check-attr' ? old : spawnSync(cmd, args, opts));
+  const row = checkCodexReviews(root, 'HEAD', { spawn });
+  assert.equal(row.pass, false);
+  assert.equal(row.detail, 'cannot read which files of origin/main..HEAD a Codex review leaves out (`git check-attr --source` failed; it needs git 2.40 or later)');
+  const plain = checkCodexReviewDebt(root, { spawn });
+  assert.ok(isInformation(plain), JSON.stringify(plain));
+  assert.equal(plain.detail, `cannot tell how much code waits for a Codex review: ${row.detail}`);
+  // Once the commits are counted, a size git cannot give is said as any other.
+  let asked = 0;
+  const later = (cmd, args, opts) => (args[0] === 'check-attr' && (asked += 1) > 1 ? old : spawnSync(cmd, args, opts));
+  assert.equal(
+    checkCodexReviewDebt(root, { spawn: later }).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: how large the review of ${short(root, head)}^..HEAD is today could not be told`,
+  );
+});
+
+test('the plain row sizes the review without what it leaves out, so it says what a review would read', () => {
+  const { root } = makeMarkedRepo();
+  fs.mkdirSync(path.join(root, 'evals', 'results'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'evals', 'results', 'a.json'), lines(900), 'utf8');
+  fs.writeFileSync(path.join(root, 'notes.md'), lines(50), 'utf8');
+  const oldest = commit(root, 'b.js', lines(4), 'feat: code, with the results of its eval and a note');
+  commit(root, 'c.js', lines(3), 'feat: more code');
+  const { spawn, started } = countingSpawn();
+  const row = checkCodexReviewDebt(root, { spawn });
+  assert.ok(isInformation(row), JSON.stringify(row));
+  // 957 changed lines in four files, of which a review reads seven in two: one part, not three.
+  assert.equal(row.detail, `no Codex review record for 2 of 2 code commits since origin/main: the review of ${short(root, oldest)}^..HEAD is 1 part today, 7 changed lines in 2 files`);
+  assert.equal(started.filter((command) => command === 'check-attr').length, 2, 'once for the commits and once for the size');
+  // A range that changes, as a whole, only what a review leaves out has no part, and the row says which it is.
+  git(root, 'rm', '--quiet', 'b.js', 'c.js');
+  git(root, 'commit', '-m', 'revert: the code goes, the results and the note stay');
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 3 of 3 code commits since origin/main: the review of ${short(root, oldest)}^..HEAD has no part today, since the range changes no file a review reads as a whole`,
+  );
+});
+
 test('an unavailable record covers its range and shows up as a line, still passing', () => {
   const { root, base } = makeRepo();
   feature(root);

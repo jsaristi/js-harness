@@ -37,6 +37,11 @@
 // review is held to: a session whose own rollout file says it ran at another does not stand, and the
 // reading of its cell says so.
 //
+// What a cell reviews is not varied, and is kept as it was measured. Since 2026-10-08 `codex-review` leaves
+// documents and what a project marks out of a review, and asks a range that leaves files out by its files.
+// Both ranges here change a Markdown file, which every reading was taken with under review, so each cell is
+// run with `everyFile`: it reads every file of its range, and is asked what it was asked.
+//
 // Where a range is reviewed. Never in this repository's own tree: `codex-review` reviews `base..HEAD` of
 // the folder it runs in and writes its record and its run log into that folder's git dir. `real` is a
 // `git clone` beside the repository, detached at the head of the range: a clone and not a worktree,
@@ -607,7 +612,11 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
     if (config.codegraph) ensureIndex({ spawn, env, platform, checkout, log });
     // Every cell that is run is a lean one. Its effort and its extra settings are injected after what a
     // caller hands over for the review (`deps.review`), so that nothing stands in for what the cell is.
-    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result), effort: config.effort, extraCodexConfig: extraConfig };
+    // So is `everyFile`: a cell is an instrument whose stored readings are the record, and each of them was
+    // taken with every file of its range under review, the Markdown file both ranges change among them. A
+    // review that left it out, as `codex-review` does for a person, would be asked by its files with another
+    // prompt, and would not be the cell its reading is of.
+    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result), effort: config.effort, extraCodexConfig: extraConfig, everyFile: true };
     const { command } = reviewOf(checkout);
     log(`Cell ${cell}: js-harness codex-review ${command.join(' ')}`);
     exit = await codexReviewMain(command, env, reviewDeps);

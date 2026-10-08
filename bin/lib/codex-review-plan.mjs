@@ -18,8 +18,14 @@
 //
 // It estimates input tokens alone, the cached ones included, which is what `usage.inputTokens` counts: the
 // number the cost of the reviews was counted in when this was asked for. What a review writes is not estimated.
+//
+// What is left out. A review reads code, and leaves out the documents and what the project marks
+// (`./codex-review-scope.mjs`). The parts of a plan, their sizes and its estimate are of what the review
+// reads; what it leaves out is said in a line of its own, with how much it is and why, so that a run never
+// passes over a file without having said so.
 import { PART_MAX_CHANGED_LINES } from './codex-review-parts.mjs';
 import { runPart, runSession, runSessionModel } from './codex-review-runs.mjs';
+import { leftOutSaid } from './codex-review-scope.mjs';
 
 // How many parts a run starts without being told to; `--max-parts <n>` names another count (T3 of
 // odd/tasks/codex-review-cost.md). At the 400 changed lines of a part, six parts are a range of up to about
@@ -108,17 +114,19 @@ function twoFigures(tokens) {
 
 /** The plan of the review of `base..head` (full commit ids) on `model` at `effort`: what a run would start,
  * and what it is estimated to send. `parts` are the parts of the range as `reviewParts` gives them, each
- * `{ files, changedLines }`, none for a range that changes no file; `runs` the lines of this machine's run
- * log, which the estimate is made from (`inputEstimator`); `maxParts` how many parts the run may start,
- * `MAX_PARTS_WITHOUT_FLAG` unless the run named a count.
+ * `{ files, changedLines }`, none for a range that changes no file a review reads; `runs` the lines of this
+ * machine's run log, which the estimate is made from (`inputEstimator`); `maxParts` how many parts the run
+ * may start, `MAX_PARTS_WITHOUT_FLAG` unless the run named a count; `leftOut` the count of the files the
+ * review leaves out, as `reviewScope` gives it, which are in none of the parts.
  *
  * It is data, and `planLines` says it: the `range` by short ids, the `model` and the `effort`, each part
  * with its `index` of `of`, how many `files` and `changedLines` it has and its `inputTokens`, the totals of
  * the three, the `basis` of the estimate (how many `runs`, whether they are on the same model and effort
  * alone, `samePair`, how many are, `atPair`, and where the two bands part, `bandAt`), and whether the plan is
  * `over` the bound of parts. `inputTokens` is `null`, of each part and of the whole, when there is no
- * estimate; otherwise each is to two figures, and that of the whole is the sum of those of the parts. */
-export function reviewPlan({ base, head, model, effort, parts, runs = [], maxParts }) {
+ * estimate; otherwise each is to two figures, and that of the whole is the sum of those of the parts.
+ * `leftOut` is the count it was handed, or `null` when no file is left out. */
+export function reviewPlan({ base, head, model, effort, parts, runs = [], maxParts, leftOut = null }) {
   const bandAt = PART_MAX_CHANGED_LINES;
   const { runs: measured, samePair, atPair, estimate } = inputEstimator(runs, { model, effort, bandAt });
   const planned = parts.map((part, at) => ({
@@ -142,6 +150,7 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
     maxParts: bound,
     maxPartsGiven: maxParts !== undefined,
     over: planned.length > bound,
+    leftOut: leftOut !== null && leftOut.files > 0 ? leftOut : null,
   };
 }
 
@@ -155,8 +164,12 @@ const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' 
  * It says how many parts the estimate rests on and how many of them ran on the model and at the effort of
  * the review. When all of them did, that is all there is to say, whether they are the five that stand alone
  * or fewer: another effort is spoken of only when some part ran at one, or named none. */
-function estimateLine({ parts, inputTokens, model, effort, basis }) {
-  if (parts.length === 0) return 'No estimate: the range changes no file, so there is no part to review.';
+function estimateLine({ parts, inputTokens, model, effort, basis, leftOut }) {
+  if (parts.length === 0) {
+    return leftOut === null
+      ? 'No estimate: the range changes no file, so there is no part to review.'
+      : 'No estimate: every file the range changes is left out of the review, so there is no part to review.';
+  }
   if (inputTokens === null) return 'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.';
   const pair = `on ${model} at ${effort} effort`;
   const rests = basis.atPair === basis.runs
@@ -170,16 +183,18 @@ function estimateLine({ parts, inputTokens, model, effort, basis }) {
 }
 
 /** A plan (`reviewPlan`) as the lines a person reads: what is reviewed, on what and in how many parts; a
- * line for each part; and the estimate with what it rests on. Nothing in them says whether a run would be
- * started: that is `needsFlagLine`, and the refusal of the run itself. */
+ * line for each part; what the review leaves out, when it leaves something out; and the estimate with what
+ * it rests on, which is always the last line. Nothing in them says whether a run would be started: that is
+ * `needsFlagLine`, and the refusal of the run itself. */
 export function planLines(plan) {
-  const { range, model, effort, parts, files, changedLines } = plan;
+  const { range, model, effort, parts, files, changedLines, leftOut } = plan;
   return [
     `Plan of the Codex review of ${range}: ${model} at ${effort} effort, ${counted(parts.length, 'part')}, ${counted(changedLines, 'changed line')} in ${counted(files, 'file')}.`,
     ...parts.map((part) => {
       const sends = part.inputTokens === null ? '' : `, about ${thousands(part.inputTokens)} input tokens`;
       return `  part ${part.index} of ${part.of}: ${counted(part.files, 'file')}, ${counted(part.changedLines, 'changed line')}${sends}`;
     }),
+    ...(leftOut === null ? [] : [`Left out of the review: ${leftOutSaid(leftOut)}.`]),
     estimateLine(plan),
   ];
 }

@@ -178,6 +178,7 @@ test('the plan names the range, the model, the effort, the parts with their file
     maxParts: 6,
     maxPartsGiven: false,
     over: false,
+    leftOut: null,
   });
   assert.deepEqual(planLines(plan), [
     'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
@@ -251,6 +252,51 @@ test('a range that changes nothing is a plan of no part, which still names the m
     assert.deepEqual(planLines(plan), [
       'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.',
       'No estimate: the range changes no file, so there is no part to review.',
+    ]);
+  }
+});
+
+// --- what a review leaves out ---
+
+/** The count of what a range leaves out, as `reviewScope` gives it: `documents` and `marked`, each `[files, changedLines]`. */
+const leftOut = (documents, marked) => ({
+  files: documents[0] + marked[0],
+  changedLines: documents[1] + marked[1],
+  documents: { files: documents[0], changedLines: documents[1] },
+  marked: { files: marked[0], changedLines: marked[1] },
+});
+
+test('a plan says what the review leaves out, how much of it and why, in a line of its own between its parts and its estimate', () => {
+  const plan = planOf([part(2, 380), part(1, 914)], MEASURED, { leftOut: leftOut([3, 1300], [2, 120]) });
+  assert.deepEqual(plan.leftOut, leftOut([3, 1300], [2, 120]));
+  // The parts, their sizes and the estimate are of what the review reads, as they were.
+  assert.deepEqual([plan.files, plan.changedLines, plan.inputTokens], [3, 1294, 201000]);
+  assert.deepEqual(planLines(plan), [
+    'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 2 parts, 1,294 changed lines in 3 files.',
+    '  part 1 of 2: 2 files, 380 changed lines, about 110,000 input tokens',
+    '  part 2 of 2: 1 file, 914 changed lines, about 91,000 input tokens',
+    'Left out of the review: 5 files, 1,420 changed lines (3 Markdown documents, 1,300 changed lines; 2 files the project marks `-codex-review`, 120 changed lines).',
+    `Estimate: about 201,000 input tokens in all. It rests on 6 parts this machine's run log measured on gpt-6.1-sol at high effort: ${METHOD}`,
+  ]);
+  assert.equal(planLines(planOf([part(1, 10)], [], { leftOut: leftOut([1, 1], [0, 0]) }))[2], 'Left out of the review: 1 Markdown document, 1 changed line.');
+});
+
+test('a plan that leaves nothing out says nothing of it, whether it was handed no count or a count of none', () => {
+  const none = planOf([part(2, 6), part(1, 2)]);
+  const counted = planOf([part(2, 6), part(1, 2)], [], { leftOut: leftOut([0, 0], [0, 0]) });
+  assert.deepEqual([none.leftOut, counted.leftOut], [null, null]);
+  assert.deepEqual(planLines(counted), planLines(none));
+  assert.equal(planLines(none).some((line) => /left out/i.test(line)), false);
+});
+
+test('a range whose files are all left out is a plan of no part that says so, and not that the range changes no file', () => {
+  for (const runs of [[], MEASURED]) {
+    const plan = planOf([], runs, { leftOut: leftOut([2, 40], [0, 0]) });
+    assert.deepEqual([plan.parts, plan.files, plan.changedLines, plan.inputTokens, plan.over], [[], 0, 0, null, false]);
+    assert.deepEqual(planLines(plan), [
+      'Plan of the Codex review of aaaaaaa..bbbbbbb: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.',
+      'Left out of the review: 2 Markdown documents, 40 changed lines.',
+      'No estimate: every file the range changes is left out of the review, so there is no part to review.',
     ]);
   }
 });

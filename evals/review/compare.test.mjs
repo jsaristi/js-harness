@@ -652,6 +652,19 @@ test('lean-own asks with this command\'s own prompt and the range\'s feature doc
   assert.deepEqual(entries(m.readings), ['lean-high__seeded.json', 'lean-own__seeded.json']);
 });
 
+test('a cell reads every file of its range, as it did when it was measured: nothing is left out of its review, whatever a caller hands over for it', async () => {
+  // The seeded range changes `README.md`, and since 2026-10-08 `codex-review` leaves documents out of a
+  // review, which it then asks by its files. A cell that did so would not be the cell its reading is of.
+  const m = machine();
+  const fake = fakeCodex({ findings: FOUND });
+  const result = await run(['--cell', 'lean:seeded'], m, fake, { review: { ...reviewDeps(fake), everyFile: false } });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(launched(fake.calls[0]), launchedWith(leanCell(KEY.base)), 'asked with the sentence Codex writes for `--base`, of the whole range');
+  assert.match(result.out, /Plan of the Codex review of [^\n]*, 1 part, /);
+  assert.doesNotMatch(result.out, /Left out of the review|by its files/);
+  assert.deepEqual([reading(m, 'lean', 'seeded').outcome, reading(m, 'lean', 'seeded').promptVersion], ['reviewed', null]);
+});
+
 // --- a cell over the real range: a clone beside the repository ---
 
 const MARKER = ['.git', 'js-harness-review-range.json'];

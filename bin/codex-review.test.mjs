@@ -1100,7 +1100,11 @@ test('the usage names no session: its flags are those of a review, and its secon
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
   );
   // What a person has to know of the cost before starting: how to see it, and that a large run is not started by itself.
-  assert.deepEqual(more, ['--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.']);
+  // And what a review reads, with how a project says what it does not.
+  assert.deepEqual(more, [
+    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
+  ]);
   assert.ok(loads.includes('on gpt-6.1-sol at high effort'), loads);
   // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
   assert.doesNotMatch(result.err, /--session|current|medium|own model|your own Codex configuration loaded/);
@@ -3961,6 +3965,213 @@ test('a range with nothing to review whose record cannot be written exits 1 and 
   assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
 });
 
+// --- only code is reviewed: documents and what the project marks are left out (`./lib/codex-review-scope.mjs`) ---
+
+// A document whose name git writes in quotes and escapes, in the header of its section of a patch.
+const DOC = 'caf\u00e9.md';
+const MARKS = { '.gitattributes': '*.json -codex-review\n' };
+const LEFT_BEFORE = { [DOC]: 'n1\n', 'data.json': 'd1\nd2\n' };
+const LEFT_AFTER = { [DOC]: 'N1 changed\n', 'data.json': 'D1 changed\nD2 changed\n' };
+
+/** `makeTwoFileRepo`, whose second commit also changes a document (two changed lines) and a file the project
+ * marks with `-codex-review` (four): a review reads the four changed lines of `a.txt` and `b.txt`. */
+function makeMixedRepo() {
+  return makeRepoWith(
+    { ...MARKS, 'a.txt': 'a1\na2\na3\n', 'b.txt': 'b1\nb2\nb3\n', ...LEFT_BEFORE },
+    { 'a.txt': 'a1\nA2 changed\na3\n', 'b.txt': 'b1\nB2 changed\nb3\n', ...LEFT_AFTER },
+  );
+}
+
+const LEFT_OUT_LINE = 'Left out of the review: 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines).';
+const BY_ITS_FILES = 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.';
+
+test('a range that also changes a document and a file the project marks is asked by the files it reads, held to their changed lines alone, and says what it left out', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const sole = { index: 1, of: 1, files: ['a.txt', 'b.txt'] };
+  // The session ran the command of its prompt, which shows the two files a review reads and no other.
+  for (const flags of [[], ['--prompt', 'codex'], ['--prompt', 'own']]) {
+    const which = flags.join(' ') || 'no flag';
+    const fake = fakeCodex(partShown(root, base, head, 'a.txt', 'b.txt'));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    const lines = result.out.split('\n');
+    // The plan is of what the review reads, and says what it leaves out, how much of it and why.
+    assert.deepEqual(lines.slice(0, 4), [
+      `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`,
+      lines[1],
+      LEFT_OUT_LINE,
+      lines[3],
+    ], which);
+    assert.match(lines[1], /^ {2}part 1 of 1: 2 files, 4 changed lines/, which);
+    // Codex's own review of a range reads every file of it, so the range is asked the way a part is: with
+    // this command's prompt on stdin, naming its files, and no `--base`. The files left out are in no prompt.
+    assert.equal(fake.calls.length, 1, which);
+    assert.deepEqual(fake.calls[0].args, ownArgv(), which);
+    assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head, part: sole, leftOut: 2 }), which);
+    assert.doesNotMatch(fake.calls[0].child.received.text, /\.md|\.json|\bparts?\b/, which);
+    // That is said when the prompt is not the one that was asked for, and not when it is.
+    assert.equal(afterPlan(result.out)[0] === BY_ITS_FILES, flags.at(-1) !== 'own', which);
+    assert.ok(lines.includes(`Codex is reviewing 2 files of ${short} (4 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
+    // It is one session, so what it answered is shown as it ends, as for any range reviewed whole.
+    assert.ok(result.shown.includes(FINDINGS), which);
+    assert.ok(lines.some((line) => line.startsWith('Codex\'s verdict: ')), which);
+    // The run line says what the session covered, so the estimate of a later plan can rest on it.
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual(
+      [logged.outcome, logged.part, logged.coverage, logged.prompt, logged.promptVersion],
+      ['reviewed', { index: 1, of: 1, files: 2, changedLines: 4 }, { seen: 4, total: 4 }, 'own', REVIEW_PART_PROMPT_VERSION],
+      which,
+    );
+    // One record, which `check --push` reads as any other, with what the review did not read; it is not one made in parts.
+    const record = readCodexReviews(root).at(-1);
+    assert.deepEqual(record, { ...reviewedRecord(base, head), leftOut: { files: 2, changedLines: 6 } }, which);
+    assert.equal(isValidCodexReview(record), true, which);
+    assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short} in .*codex-reviews\\.jsonl\\.$`), which);
+  }
+  // `--doc` goes into that prompt as into any other of this command's.
+  const withDoc = fakeCodex(partShown(root, base, head, 'a.txt', 'b.txt'));
+  assert.equal((await run(['--base', 'HEAD~1', '--prompt', 'own', '--doc', featureDoc(), '--cwd', root], withDoc)).code, 0);
+  assert.equal(withDoc.calls[0].child.received.text, reviewPrompt({ from: base, head, part: sole, leftOut: 2, intent: { goal: GOAL, doneWhen: DONE_WHEN } }));
+  // The evidence rule is held for the files a review reads: a session that showed one of the two did not
+  // inspect them, whatever it showed of the files that are left out.
+  const records = readCodexReviews(root).length;
+  const half = fakeCodex(partShown(root, base, head, 'a.txt', DOC, 'data.json'));
+  const refused = await run(['--base', 'HEAD~1', '--cwd', root], half);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /showed 2 of 4 changed lines of the files under review of [0-9a-f]{7}\.\.HEAD; nothing was recorded/);
+  assert.match(refused.err, /not read in full: b\.txt \(2 of 2 changed lines missing\)/);
+  assert.equal(readCodexReviews(root).length, records);
+});
+
+test('in parts, the files left out are in no part and in no prompt, and the parts still add up to what the review reads', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt') }, { stdout: partShown(root, base, head, 'b.txt') });
+  const result = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(result.out.split('\n').slice(0, 4), [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 2 parts, 4 changed lines in 2 files.`,
+    '  part 1 of 2: 1 file, 2 changed lines',
+    '  part 2 of 2: 1 file, 2 changed lines',
+    LEFT_OUT_LINE,
+  ]);
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 4 lines in 2 files that a review reads, more than the 2 a part holds, so it is reviewed in 2 parts, one after another.`);
+  // Each part says the other files are in the other part or left out, and names none of them.
+  ['a.txt', 'b.txt'].forEach((name, at) => {
+    const asked = fake.calls[at].child.received.text;
+    assert.equal(asked, reviewPrompt({ from: base, head, part: { index: at + 1, of: 2, files: [name] }, leftOut: 2 }));
+    assert.match(asked, /reviewed in the other parts, or left out of the review/);
+    assert.doesNotMatch(asked, /\.md|\.json/);
+  });
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [1, 2].map((index) => [{ index, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }]));
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(2), runs: [idOf(1), idOf(2)], leftOut: { files: 2, changedLines: 6 } }]);
+  // The check that the parts leave nothing out is made against the patch without the sections of the files
+  // left out, told apart by their place. A patch that is not one section a file refuses the run.
+  const cut = (command, args, opts) => {
+    const answer = fake.spawn(command, args, opts);
+    const whole = command === 'git' && args.includes('--no-renames') && !args.includes('--numstat') && !args.includes('--');
+    return whole ? { ...answer, stdout: answer.stdout.slice(0, answer.stdout.lastIndexOf('diff --git ')) } : answer;
+  };
+  const none = fakeCodexInParts();
+  const refused = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
+  assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
+});
+
+test('a range that changes only what a review leaves out has no part: the run starts nothing, and records that when the range holds a commit', async () => {
+  const { root, base, head } = makeRepoWith({ ...MARKS, ...LEFT_BEFORE }, LEFT_AFTER);
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const plan = [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+    LEFT_OUT_LINE,
+    'No estimate: every file the range changes is left out of the review, so there is no part to review.',
+  ];
+  // The plan alone, also over a tree whose marks nobody committed: those are not the marks of the range.
+  fs.writeFileSync(path.join(root, '.gitattributes'), '', 'utf8');
+  const planned = startsNothing(root);
+  const shown = await run(['--base', 'HEAD~1', '--plan', ...planned.home, '--cwd', root], planned.deps);
+  assert.deepEqual([shown.code, shown.err, shown.out.split('\n')], [0, '', plan]);
+  planned.untouched('--plan');
+  git(root, 'checkout', '--', '.gitattributes');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual([result.err, result.shown], ['', '']);
+  assert.deepEqual(result.out.split('\n'), [
+    ...plan,
+    `There was nothing to review: ${short} changes no file a review reads. Nothing was started, and the range was recorded as having nothing to review in ${codexReviewsPath(root)}.`,
+  ]);
+  nothing.started('a range of files left out');
+  // The outcome that exists for a range with nothing to review, with a reason that says which kind it is.
+  const [record] = readCodexReviews(root);
+  assert.deepEqual(record, {
+    schema: 'js-harness.codex-review/v1',
+    base,
+    head,
+    reviewedAt: '2026-09-29T12:00:00.000Z',
+    outcome: 'nothing-to-review',
+    reason: 'the range changes no file a review reads: it leaves out 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines)',
+    leftOut: { files: 2, changedLines: 6 },
+  });
+  assert.equal(isValidCodexReview(record), true);
+});
+
+test('when git cannot say what the project marks, nothing is planned or started: a file is never left out, nor read, by guess', async () => {
+  const { root } = makeMixedRepo();
+  const nothing = startsNothing(root);
+  const old = (command, args, opts) => (command === 'git' && args[0] === 'check-attr' ? { status: 129, stdout: '', stderr: 'error: unknown option `source\'' } : nothing.deps.spawn(command, args, opts));
+  const why = 'Could not ask git which files of the range the project leaves out of a review \\(`git check-attr --source [0-9a-f]{7}` failed; it needs git 2\\.40 or later\\)';
+  const plan = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
+  assert.deepEqual([plan.code, plan.out], [1, '']);
+  assert.match(plan.err, new RegExp(`^${why}, so there is no plan of its review\\.$`));
+  const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
+  assert.deepEqual([result.code, result.out], [1, '']);
+  assert.match(result.err, new RegExp(`^${why}\\.\\nThe review was not started and nothing was recorded\\.$`));
+  nothing.untouched('a git that cannot say what is marked');
+});
+
+test('an injected `everyFile` makes the run read every file of its range, as every run did: nothing is left out, a range of one part is asked whole, and no flag reaches it', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  /** `fake`, with every question to git about what is marked kept in `asked`. */
+  const watchingMarks = (fake, asked) => ({ ...fake, spawn: (command, args, opts) => {
+    if (command === 'git' && args[0] === 'check-attr') asked.push(args);
+    return fake.spawn(command, args, opts);
+  } });
+  // Under either prompt the review is the one of a whole range: Codex's own with `--base`, or this command's
+  // prompt of a range, and it is held to every changed line of the range, the document's and the marked file's too.
+  for (const [flags, argv, version] of [[[], leanArgv(base), null], [['--prompt', 'own'], ownArgv(), REVIEW_PROMPT_VERSION]]) {
+    const which = flags.join(' ') || 'no flag';
+    const asked = [];
+    const fake = watchingMarks(fakeCodex(reviewed(root, base)), asked);
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, everyFile: true });
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.equal(result.out.split('\n')[0], `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 10 changed lines in 4 files.`, which);
+    assert.doesNotMatch(result.out, /Left out|by its files/, which);
+    assert.deepEqual(fake.calls[0].args, argv, which);
+    if (version !== null) assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head }), which);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual(['part' in logged, logged.coverage, logged.promptVersion], [false, { seen: 10, total: 10 }, version], which);
+    assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(base, head), which);
+    // What the project marks is not asked of git at all: the run needs no git that can answer it.
+    assert.deepEqual(asked, [], which);
+  }
+  // In parts, every file of the range is in a part.
+  const all = startsNothing(root);
+  const inParts = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '2', ...all.home, '--cwd', root], { ...all.deps, everyFile: true });
+  assert.equal(inParts.out.split('\n')[0], `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 4 parts, 10 changed lines in 4 files.`);
+  // It is injected, for the comparison of the configurations, whose cells stay what they measured. Nothing
+  // on the command line is it: the usage names no such flag, and one spelled after it changes nothing.
+  assert.doesNotMatch((await run(['--cwd', root])).err, /every.?file/i);
+  for (const flag of ['--every-file', '--everyFile', '--read-every-file']) {
+    const nothing = startsNothing(root);
+    const plan = await run(['--base', 'HEAD~1', '--plan', flag, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([plan.code, plan.out.split('\n')[0], plan.out.split('\n')[2]], [0, `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`, LEFT_OUT_LINE], flag);
+  }
+});
+
 test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {
   const repoOf = (count) => {
     const names = Array.from({ length: count }, (_, index) => `f${index}.txt`);
@@ -4113,15 +4324,16 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.equal(usage.code, 2);
   // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
-  // one that says how its cost is seen first.
+  // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
     'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       'the review runs on gpt-6.1-sol at high effort, which the command fixes.',
     '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
   ]);
-  const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x'];
+  const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
   for (const flags of [[], ['--session', 'lean']]) {
     const lean = fakeCodex(reviewed(root, base));
     assert.equal((await run(['--base', 'HEAD~1', ...flags, ...seams, '--cwd', root], lean)).code, 0, flags.join(' '));

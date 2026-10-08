@@ -10,6 +10,7 @@ import { discoverContracts, validateEntries } from './contract.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { codexReviewsPath, isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 
 export { estimateTokens };
@@ -425,9 +426,15 @@ function headsPastTip(spawn, cwd, tip, heads) {
  * `{ unknown }` when it cannot be told: the `detail` and `lines` of the `--push` row and, where those words
  * speak of a push, the `why` of the plain one. Otherwise the commit `tip` that `head` names, the default
  * branch as the ref `baseRef` and its label `base`, the `codeCommits` of `base..tip` (newest first: every
- * non-merge commit that changes a file other than Markdown), the `covers` (each valid record that reaches
+ * non-merge commit that changes a file a review reads), the `covers` (each valid record that reaches
  * the range, with the commits it covers), the `uncovered` code commits, and the `note` that counts the
- * records that were left out. */
+ * records that were left out.
+ *
+ * A file a review reads is one `js-harness codex-review` does not leave out, by the one definition the two
+ * share (`./lib/codex-review-scope.mjs`): not a document, and not a path the project marks with
+ * `-codex-review`. What is marked is read from the commit `tip`, for the paths of every commit under it in
+ * one git process: the commit that is checked, never the tree or the index, which at a commit hold the
+ * change being made. */
 function codexReviewCoverage(cwd, head, { spawn, remote }) {
   const unknown = (detail, lines, why) => ({ unknown: { detail, ...(lines ? { lines } : {}), ...(why ? { why } : {}) } });
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
@@ -459,20 +466,27 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   const rangeIds = new Set(inRange.split('\n').filter(Boolean));
 
   // `%x01` starts each commit; its `<id>\t<short id>\t<parents>\t<subject>` line (four fields, the
-  // subject last so a tab inside it survives) is followed by the names of the files it changes.
-  const log = gitOut(spawn, cwd, ['-c', 'core.quotePath=false', 'log', '--no-merges', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
+  // subject last so a tab inside it survives) is followed by the names of the files it changes. With `-z`
+  // every name is written as it is and ends with a NUL, as the line of the commit does, with a newline
+  // between that NUL and the first name. Without it git writes a name that holds a quote, a backslash, a
+  // control character or a letter outside ASCII in quotes and escapes (a Markdown file then ends in
+  // `.md"`), and that is not a path its attributes can be asked for.
+  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--name-only', '--format=%x01%H\t%h\t%P\t%s', `${baseRef}..${tip}`]);
   if (log === null) return unknown(`cannot list the commits in ${base}..${head}`);
-  const codeCommits = log
+  const commits = log
     .split('\x01')
     .filter(Boolean)
     .map((chunk) => {
-      const [first, ...files] = chunk.split('\n');
+      const [first, ...names] = chunk.split('\0');
       const [id, shortId, parents, ...subject] = first.split('\t');
-      return { id, shortId, isRoot: !parents, subject: subject.join('\t'), files: files.map((f) => f.trim()).filter(Boolean) };
-    })
-    // git C-quotes a path holding a quote, a backslash or a control character (`core.quotePath=false`
-    // only stops it quoting non-ASCII), wrapping it in `"`: a Markdown file may end in `.md"`.
-    .filter((commit) => commit.files.some((file) => !/\.md"?$/i.test(file)));
+      const files = names.map((name, at) => (at === 0 ? name.replace(/^\n/, '') : name)).filter(Boolean);
+      return { id, shortId, isRoot: !parents, subject: subject.join('\t'), files };
+    });
+  const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn });
+  if (leftOut === null) {
+    return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`);
+  }
+  const codeCommits = commits.filter((commit) => commit.files.some((file) => !leftOut.has(file)));
 
   const records = readCodexReviews(cwd, { spawn });
   const valid = records.filter(isValidCodexReview);
@@ -521,7 +535,8 @@ function coveredDetail({ codeCommits, base }) {
 }
 
 /** The `--push` row: every non-merge commit between the remote's default branch and `head` that
- * changes a file other than Markdown must lie in a range some `codex-review` record covers (any
+ * changes a file a review reads (not a document, not a path the project marks: `codexReviewCoverage`)
+ * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
  * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
  * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
@@ -556,15 +571,20 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
 const counted = (count, noun) => `${String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${noun}${count === 1 ? '' : 's'}`;
 
 /** How large the review of `from..tip` is today, sized as `js-harness codex-review` sizes a range: how many
- * `parts` it is reviewed in at the default bound of a part, and the `changedLines` and `files` they hold.
- * `null` when git cannot say. Renames are off, as in that command. */
+ * `parts` it is reviewed in at the default bound of a part, and the `changedLines` and `files` they hold,
+ * which are those of the files a review reads; `leftOut` is how many files of the range it leaves out, by
+ * the marks of the commit `tip`, as that command reads them. `null` when git cannot say. Renames are off,
+ * as in that command. */
 function reviewSize(spawn, cwd, from, tip) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
   const numstat = from === null ? null : gitOut(spawn, cwd, ['diff', '--numstat', '-z', '--no-renames', from, tip]);
   if (numstat === null) return null;
   try {
     const files = numstatFiles(numstat);
-    return { parts: reviewParts(files).length, files: files.length, changedLines: files.reduce((sum, file) => sum + file.changedLines, 0) };
+    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tip, spawn });
+    if (why === null) return null;
+    const { read, leftOut } = reviewScope(files, why);
+    return { parts: reviewParts(read).length, files: read.length, changedLines: read.reduce((sum, file) => sum + file.changedLines, 0), leftOut: leftOut.files };
   } catch {
     return null;
   }
@@ -579,7 +599,8 @@ function reviewSize(spawn, cwd, from, tip) {
  * branch to `HEAD`) and fails nothing, a state it cannot tell included. For the code commits no record
  * covers it says how many they are and how large the review that covers them is today, which is that of the
  * range from the parent of the oldest one to `HEAD`, the range `js-harness codex-review --base <oldest>^`
- * reviews; and it names the command that prints the plan of that review and starts nothing.
+ * reviews, without the files that review leaves out; and it names the command that prints the plan of that
+ * review and starts nothing.
  *
  * It fails nothing by throwing either. Every git call under it answers `null` where it fails and the
  * records are read by a reader that passes over what it cannot read, but the plain check ran none of this
@@ -617,7 +638,7 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
-  if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file as a whole`;
+  if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file ${size.leftOut > 0 ? 'a review reads ' : ''}as a whole`;
   else if (size) {
     sized =
       `the review of ${baseArg}..HEAD is ${counted(size.parts, 'part')} today, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +

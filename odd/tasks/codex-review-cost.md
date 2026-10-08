@@ -309,31 +309,76 @@ push of that branch.
     could not be told.
   - Left as it is, the same in both rows: a records file that cannot be read or parsed
     reads as no record, not as "cannot tell".
+- 2026-10-08: the fix of the row committed as `469e26f` (gate green). Codex on
+  `da71985..469e26f`, its plan read first (2 parts, 739 changed lines, about 490,000 input
+  tokens), inside the login proof (PASS): both parts "correct", no finding, 562,328 input
+  tokens (444,672 cached), 3,311 output, 170 s, recorded. The estimate was 15% under, where
+  the first one, made from runs at `medium`, was 120% under. With the three findings of
+  gentle-ai closed before it ran, Codex had nothing known to find again. gentle-ai on
+  `469e26f` alone is under its budget and goes with the next slice.
+- 2026-10-08: T2, first half, by one delegated writer (route: delegated), red first for each
+  behaviour; T2 stays open until "nothing twice". The writer: the scope module 13 of 13,
+  the plan 22 of 22, the parts 16 of 16, the prompt 27 of 27, the push check 76 of 76
+  (140 s), `check` 73 of 73, the hook 7 of 7, the command file 216 of 216 (524 s), the
+  comparison's tests 104 of 104; re-run by the parent, the scope, plan and prompt files, 62
+  of 62.
+  - One definition, in `bin/lib/codex-review-scope.mjs`, read by the command and by
+    `check`: a review leaves out Markdown files and the paths a project marks
+    `-codex-review` in `.gitattributes`. Nothing of this repository's folders is in the
+    code. Tests are code and stay in. A Markdown file cannot be marked back in.
+  - This repository marks `evals/results/**` and `evals/review/seeded/**`: 46 files.
+  - Left-out files are in no part, no prompt and not in the lines a session must have
+    seen. The plan, and so every run, says how many files and changed lines it left out
+    and of which kind. A range whose files are all left out has no part: nothing is
+    started, and when it holds a commit it is recorded as `nothing-to-review` with that
+    reason. A record and a run line say what was left out.
+  - A range of one part that leaves a file out cannot be asked with Codex's own review of
+    a range, which reads everything, so it is asked by its files, as a part is, under
+    either `--prompt`, and the run says so in one line. The part prompt is `v3`: the same
+    bytes as `v2` when nothing is left out. Such a run logs its part, so it enters later
+    estimates, which is most of follow-up F2.
+  - The marks are read from the head commit of the range (`git check-attr --source`), in
+    one process: the working tree and the index hold the change being made, which is wrong
+    for `check`. It needs git 2.40; this machine has 2.54. With an older git nothing is
+    guessed: the command starts nothing and exits 1, the push check fails saying so, and
+    the plain row says it cannot tell.
+  - `check`: a code commit is one that changes a file a review reads, in both rows, and the
+    row sizes the review with the left-out files out.
+  - Decided by the parent on the writer's gap: the cells of the finished comparison stay as
+    they were measured. Both its ranges change a Markdown file, so under the new rule a
+    cell would ask something other than what its stored reading measured. A seam in
+    `deps`, `everyFile`, which no flag of the command line reaches (a test pins it), makes
+    a run read every file; `evals/review/compare.mjs` passes it for every cell, as it pins
+    each cell's effort. The readings and the report are byte for byte as they were.
+  - What the plan says of this branch's whole range today, `5663c8c..469e26f`: 8 parts and
+    "Left out of the review: 2 Markdown documents, 372 changed lines". Not run: its records
+    cover it already, which is what the second half makes the command see by itself.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
 
 ## Follow-ups
 - F2-whole-range-runs-feed-no-estimate: a run line of a range reviewed whole holds no count
-  of changed lines, so the one-part reviews, the commonest kind once slices are reviewed as
-  they close, never enter the estimate of a plan. The line of such a run could carry the
-  changed lines of its range.
-- F1-what-code-is: closed in part on 2026-10-08 (the fix above: a range with nothing to
-  review that holds commits is recorded as such). What is left for T2: the push check counts
-  as code every file that is not Markdown, and "only code is reviewed" will leave out more
-  than that (eval readings, paths a git attribute marks), so the two have to read one
-  definition, and a range of left-out files alone is recorded with the same outcome.
+  of changed lines, so it never enters the estimate of a plan. Smaller since the first half
+  of T2: a one-part range that leaves a file out is asked by its files and logs its part,
+  and nearly every slice changes its feature document. What is left is the one-part range
+  that changes no document and no marked file.
+- F3-old-git: reading the marks needs git 2.40 (`check-attr --source`). `doctor` could say
+  so of a machine with an older one, before a review refuses to start there.
+- F1-what-code-is: closed on 2026-10-08. A range with nothing to review that holds commits is
+  recorded as such, and the command and `check` read one definition of what a review reads.
 
 ## Next step
 In this order, each slice committed when it is green and kept under about 1,900 changed
 lines, deletions counted. A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. gentle-ai and Codex on the second half of T3, from `da71985`, so they take in the fix
-   of the push check too; the plan of the Codex review read first.
-2. T2, in two commits: only code is reviewed (documents, eval readings, paths a git
-   attribute marks), with what is left of F1; a range whose earlier commits a record covers
-   starts where the records end. With it, the rule decided on 2026-10-08: a lean review
-   whose rollout names no model does not stand.
+1. gentle-ai and Codex on the first half of T2, from `469e26f`; the plan of the Codex
+   review read first, and what gentle-ai finds closed before it.
+2. The second half of T2: a range whose earlier commits a record covers starts where the
+   records end, a range the records cover whole starts nothing and records nothing (the
+   suggestion gentle-ai made of equal records), and a flag to review again on purpose. With
+   it, the rule decided on 2026-10-08: a lean review whose rollout names no model does not
+   stand. The row of `check` sizes what such a review would read.
 3. gentle-ai and Codex on each of those commits when it closes (T4), then T6. T5, the
    measurement of the part size, is put to Sebastián with its count before any of it runs.
 

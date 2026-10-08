@@ -86,6 +86,18 @@
 // the parts that passed are no review of the range. A range within both bounds is one part, and
 // its review is the one described above, unchanged.
 //
+// A review reads code, and leaves the rest out (`bin/lib/codex-review-scope.mjs`): Markdown files, and the
+// paths the project marks with `-codex-review` in a `.gitattributes`, as the commit at the head of the range
+// holds it. One review of a whole branch found all it found in the quarter of its lines that was code, and
+// nothing in its documents, the fixture of an eval and the JSON readings of evals
+// (odd/tasks/codex-review-cost.md). A file that is left out is in no part, in no prompt and not among the
+// changed lines a session must have seen, and the plan of every run says how many were left out and why.
+// `--base` reviews every file of a range, so a range that leaves some out is asked by its files with this
+// command's own prompt, under either `--prompt`, also when those files fit in one part: that one session is
+// then shown and recorded as the review of a whole range is, its run line says which files it covered
+// (`part`, 1 of 1), and the record says what was left out (`leftOut`). A range whose files are all left
+// out has no part, like one that changes no file.
+//
 // What a run will cost is said before it is spent (`bin/lib/codex-review-plan.mjs`). `--plan` prints the
 // plan and exits 0: the range, the model and the effort, the parts with their files and changed lines, and
 // an estimate of the input tokens made from this machine's own run log, never from a number written here.
@@ -93,7 +105,7 @@
 // or recorded, so it works on a machine with no Codex and over a tree with uncommitted changes. A real run
 // prints the same plan before its first session; one whose range changes no file has no part, so it starts
 // nothing either and exits 0, having recorded, when the range holds a commit, that there was nothing to
-// review in it (`NOTHING_TO_REVIEW`). And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
+// review in it (`NOTHING_TO_REVIEW`); so does one whose files are all left out. And a run of more parts than `MAX_PARTS_WITHOUT_FLAG` is
 // refused before anything is started, with its plan, until it names its count with `--max-parts <n>`: one
 // run of 28 parts, started without either number having been seen, was more than half of what fifty
 // reviews spent (odd/tasks/codex-review-cost.md).
@@ -115,8 +127,10 @@
 // on purpose: the command fixes the model and the effort, and a person who runs it gets exactly the
 // session above. The comparison calls `codexReviewMain` with injected `deps` instead: `effort`, the effort
 // the command passes, in place of `REVIEW_EFFORT` (its cells were measured at `medium` and at `high`, and
-// stay what they measured); `extraCodexConfig`, more `-c` settings for the session (an MCP server); and
-// `onResult`, which hands back each attempt's run line and answer.
+// stay what they measured); `extraCodexConfig`, more `-c` settings for the session (an MCP server);
+// `everyFile`, which makes the review read every file of the range, as every review did while the cells were
+// measured, so that none of them leaves a document out or is asked by its files; and `onResult`, which hands
+// back each attempt's run line and answer.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { randomUUID as newUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -131,6 +145,7 @@ import { IntentError, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewI
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
+import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
@@ -150,14 +165,16 @@ export const REVIEW_EFFORT = 'high';
 //
 // The second line of the usage is there because a person has to know that their own Codex configuration
 // is not loaded, and that nothing they pass or configure changes the model and the effort. The third, because
-// what a review costs is theirs to see before it is spent. `--session` is not in the usage: there is one
-// session, so there is nothing to choose (see `SESSION`).
+// what a review costs is theirs to see before it is spent. The fourth, because a project has to know that a
+// review does not read every file, and how it says which others to leave out. `--session` is not in the
+// usage: there is one session, so there is nothing to choose (see `SESSION`).
 const USAGE =
   'Usage: js-harness codex-review --base <rev> [--plan] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
-  `--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.`;
+  `--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
+  'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -746,16 +763,33 @@ function totalsLine(attempts) {
   );
 }
 
-/** The files `from..head` changes (both full commit ids), grouped as a review of the range takes them
- * (`reviewParts`): `{ groups }`, each `{ files, changedLines }`, of at most `maxChangedLines` changed lines
- * and `PART_MAX_FILES` files, one group for a range within both bounds and none for a range that changes no
- * file. `{ error }`, a sentence, when git cannot say how large the range is. It is the one git command a
- * plan needs, so `--plan` runs this and nothing else of a review. Renames are off, as in `planParts`. */
-function rangeGroups(spawn, root, { from, head, maxChangedLines }) {
+/** The files `from..head` changes (both full commit ids), as a review of the range takes them. The files it
+ * reads are grouped (`reviewParts`): `groups`, each `{ files, changedLines }`, of at most `maxChangedLines`
+ * changed lines and `PART_MAX_FILES` files, one group for a range within both bounds and none for a range
+ * that changes no file a review reads. The files it leaves out, the documents and what the project marks
+ * (`bin/lib/codex-review-scope.mjs`), are in no group: `leftOut` counts them, by why, and `paths` (every
+ * file of the range, in git's order) with `why` (which of them are left out) are what tells their sections
+ * of a patch apart (`patchOfRead`). What is marked is read from the commit `head`, the one the range is
+ * reviewed up to, so a plan made over a tree that is being edited is the plan of the run.
+ *
+ * `{ error }`, a sentence, when git cannot say how large the range is or what the project marks: a file is
+ * never left out, nor read, by guess. These are the two git commands a plan needs, so `--plan` runs this
+ * and nothing else of a review. Renames are off, as in `planParts`.
+ *
+ * With `everyFile`, which only a caller of `codexReviewMain` can ask for, nothing is left out and git is
+ * not asked what is marked: every file of the range is in a group, as it was before a review left any out. */
+function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile }) {
   const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
   if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
   try {
-    return { groups: reviewParts(numstatFiles(numstat), maxChangedLines) };
+    const files = numstatFiles(numstat);
+    const paths = files.map((changed) => changed.path);
+    const why = everyFile ? new Map() : leftOutOf(paths, { cwd: root, source: head, spawn });
+    if (why === null) {
+      return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)` };
+    }
+    const { read, leftOut } = reviewScope(files, why);
+    return { groups: reviewParts(read, maxChangedLines), leftOut, paths, why };
   } catch (err) {
     return { error: `Could not read which files the range changes (${err.message})` };
   }
@@ -769,6 +803,11 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines }) {
  * known to show all of it; nothing is launched then. `intent` is what `--doc` gave, for the prompt of every
  * part.
  *
+ * A range that leaves files out of its review (`paths` and `why`, from `rangeGroups`) is never reviewed
+ * whole, since the review of a whole range reads every file of it: it has parts also when its files fit in
+ * one, and that one part, 1 of 1, is asked and held to its files as any other. The files left out are in no
+ * part, so the proof below is made against the patch of the range without their sections.
+ *
  * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
  * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
  * the other files are, so that the parts add up to the range. A renamed file is then two files, the old
@@ -777,18 +816,19 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines }) {
  * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
  * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
  * with `:`, would stand for other files than itself. The count and the check of the whole range name no file. */
-function planParts(spawn, root, { from, head, groups, intent }) {
+function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
-  if (groups.length <= 1) return { parts: null };
+  if (groups.length <= 1 && why.size === 0) return { parts: null };
   const parts = [];
   for (const [at, group] of groups.entries()) {
     const part = { index: at + 1, of: groups.length, files: group.files, changedLines: group.changedLines };
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size });
     } catch (err) {
-      return { error: `The range needs ${part.of} parts, and the prompt of ${which} cannot be written. ${err.message}` };
+      const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
+      return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
     }
     // `--literal-pathspecs`, as in the command the prompt of the part names: a file name is a pathspec to
     // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
@@ -800,12 +840,25 @@ function planParts(spawn, root, { from, head, groups, intent }) {
   }
   // The proof that the split leaves nothing out: every changed line of the range is one a part must have
   // seen. A path a pathspec reads as something else, or one cut on its way here, would be a file in no part.
+  // The files a review leaves out are in no part on purpose, so their sections are taken out of the patch
+  // of the range first, by their place in it and never by a name (`patchOfRead`).
   const whole = git(spawn, root, ['diff', '--no-color', '--no-ext-diff', '--no-renames', from, head], room);
   if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
+  let read;
+  try {
+    read = patchOfRead(whole, paths, why);
+  } catch (err) {
+    return { error: `Could not check the parts against the range. ${err.message}` };
+  }
   const inAPart = new Set(parts.flatMap((part) => part.expected));
-  const left = patchKeys(whole).filter((rangeKey) => !inAPart.has(rangeKey));
+  const left = patchKeys(read).filter((rangeKey) => !inAPart.has(rangeKey));
   if (left.length > 0) {
-    return { error: `The ${parts.length} parts the range would be reviewed in do not show ${thousands(left.length)} of the changed lines of the range between them (the first: ${truncate(left[0].replace('\n', ': '), 100)}), so their reviews would not be a review of the range` };
+    const first = `(the first: ${truncate(left[0].replace('\n', ': '), 100)})`;
+    // One part is the files of a range that leaves the others out, which is not said to be in parts.
+    if (parts.length === 1) {
+      return { error: `The files the range would be reviewed by do not show ${thousands(left.length)} of the changed lines a review of the range reads ${first}, so their review would not be a review of the range` };
+    }
+    return { error: `The ${parts.length} parts the range would be reviewed in do not show ${thousands(left.length)} of the changed lines of the range between them ${first}, so their reviews would not be a review of the range` };
   }
   return { parts };
 }
@@ -834,14 +887,17 @@ function answerFailure({ reason, errors = [] }) {
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete, and for a run of more
  * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing,
- * and for a run over a range that changes no file, which has nothing to review, starts nothing, and
- * records that when the range holds a commit.
+ * and for a run over a range that changes no file a review reads, which has nothing to review, starts
+ * nothing, and records that when the range holds a commit.
  *
- * Three more `deps` are what the comparison of the configurations varies, and nothing on the command line
+ * Four more `deps` are what the comparison of the configurations varies, and nothing on the command line
  * reaches them (see the top of this file):
  *  - `effort`: the effort the command passes, in place of `REVIEW_EFFORT`; the run line says it, and it is
  *    the effort the session is then held to (`ranOnAnother`).
  *  - `extraCodexConfig`: `key=value` settings added to the argv (`codexArgs`).
+ *  - `everyFile`: `true` makes the review read every file of the range, the documents and what the project
+ *    marks too (`rangeGroups`): nothing is left out, so a range of one part is reviewed whole, with Codex's
+ *    own review under `--prompt codex` and the prompt of a range under `--prompt own`.
  *  - `onResult`: called with `{ run, logged, review }` for every attempt that launched Codex: its run line,
  *    whether the line reached the run log, and its answer as `normalizeAnswer` gives it (`null` when none
  *    was read). */
@@ -849,7 +905,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
-  const { effort = REVIEW_EFFORT, extraCodexConfig = [], onResult = null } = deps;
+  const { effort = REVIEW_EFFORT, extraCodexConfig = [], onResult = null, everyFile = false } = deps;
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -888,17 +944,18 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return 1;
   }
 
-  /** The plan of the review of this range in `groups` (`rangeGroups`), on the model and at the effort the
-   * command passes, with its estimate from the run log of this repository's machine. A log that cannot be
-   * read is one that measured nothing: the plan then says there is no estimate, and a run goes on as it would. */
-  const planOf = (groups) => {
+  /** The plan of the review of this range in `groups`, with what it leaves out, `leftOut` (`rangeGroups`),
+   * on the model and at the effort the command passes, with its estimate from the run log of this
+   * repository's machine. A log that cannot be read is one that measured nothing: the plan then says there
+   * is no estimate, and a run goes on as it would. */
+  const planOf = ({ groups, leftOut }) => {
     let runs = [];
     try {
       runs = readCodexReviewRuns(root, { spawn });
     } catch {
       // Nothing measured.
     }
-    return reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs, maxParts: args.maxParts });
+    return reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs, maxParts: args.maxParts, leftOut });
   };
 
   // `--plan`: the plan, and nothing else. It needs the range and how its files group, which is git alone:
@@ -911,12 +968,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
       return 1;
     }
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines });
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile });
     if (split.error) {
       error(`${split.error}, so there is no plan of its review.`);
       return 1;
     }
-    const plan = planOf(split.groups);
+    const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
     const needs = needsFlagLine(plan);
     if (needs !== null) log(needs);
@@ -942,6 +999,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // a line that could not be written); `null` and none for a range reviewed whole, and for a skip.
   let parts = null;
   let runIds = [];
+  // What the review of the range left out, `{ files, changedLines }`, for its record; `null` when it left
+  // nothing out, and for a skip, which looked at no file.
+  let leftOut = null;
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
@@ -983,15 +1043,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
       return 1;
     };
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines });
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile });
     if (split.error) return notSplit(split.error);
     // The plan, where the progress of the run is written and before its first session: what the run is
     // about to spend is on the screen before any of it is spent.
-    const plan = planOf(split.groups);
+    const plan = planOf(split);
     for (const line of planLines(plan)) log(line);
+    if (split.leftOut.files > 0) leftOut = { files: split.leftOut.files, changedLines: split.leftOut.changedLines };
     // A range that changes no file has no part, and a run with no part starts nothing: no Codex is looked
     // for, no home is made, and there is no session to log. The run says so and exits 0, having done all
-    // there was to do. It used to start one session all the same, over an empty diff.
+    // there was to do. It used to start one session all the same, over an empty diff. A range whose files
+    // are all left out of a review is the same case, and says which of the two it is.
     //
     // What it records depends on whether the range holds a commit. One that holds none (`--base HEAD`)
     // has nothing a record could cover, so nothing is recorded. One that does, a change and its revert
@@ -1000,12 +1062,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // person back to this command, which would again record nothing. It is not recorded as `reviewed`,
     // which would say Codex looked at it. The range holds a commit when HEAD is past the merge-base.
     if (plan.parts.length === 0) {
-      const nothing = `There was nothing to review: ${plan.range} changes no file. Nothing was started`;
+      const changes = leftOut === null ? 'changes no file' : 'changes no file a review reads';
+      const nothing = `There was nothing to review: ${plan.range} ${changes}. Nothing was started`;
       if (from === head) {
         log(`${nothing} and nothing was recorded.`);
         return 0;
       }
-      const file = writeRecord({ outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+      const reason = leftOut === null ? `the range ${changes}` : `the range ${changes}: it leaves out ${leftOutSaid(split.leftOut)}`;
+      const file = writeRecord({ outcome: NOTHING_TO_REVIEW, reason, ...(leftOut === null ? {} : { leftOut }) });
       if (file === null) return 1;
       log(`${nothing}, and the range was recorded as having nothing to review in ${file}.`);
       return 0;
@@ -1020,8 +1084,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
-    // `null` for a range that is one part.
-    const made = planParts(spawn, root, { from, head, groups: split.groups, intent });
+    // `null` for a range that is one part and leaves no file out.
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     // The environment of the `--version` probe, and what the session's is made from: the session adds a
@@ -1054,6 +1118,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
      * its commands must have shown (`patchKeys`), `prompt` what it is asked with (`codex` or `own`),
      * `promptText` the text of the own prompt and `promptVersion` the version of that text.
      *
+     * A part that is 1 of 1 is the one session of a range that leaves files out: it is asked and held to
+     * its files as a part is, and what it answered is shown as that of a whole range is, since no other
+     * part is waited for.
+     *
      * Resolves with `{ exit }`, the exit code of the command when the attempt does not stand, whatever
      * the reason; or, when it stands, `{ exit: 0, runId, review, rendered, spent, durationMs }`: the id of
      * its run line (`undefined` when the line could not be written), its answer as data, the review as
@@ -1062,6 +1130,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
      * verdict of a part wait for the other parts, and are shown by the caller or not at all. */
     const attempt = async ({ expectedKeys, prompt, promptText: asked, promptVersion, part = null }) => {
       const ownPrompt = prompt === 'own';
+      // Whether this is the only session of its run, whose answer waits for no other.
+      const alone = part === null || part.of === 1;
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
       // cannot go on a command line is the caller's mistake, and leaves no home behind.
       const codexArgv = codexArgs(from, platform, prompt, { effort, extraConfig: extraCodexConfig });
@@ -1109,7 +1179,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         // The session, and the model and the effort it is handed: said before every launch, so that what
         // a review runs on is never something to look up afterwards.
         const how = ` with the lean session (${REVIEW_MODEL}, ${effort})${ownPrompt ? ' and this command\'s own prompt' : ''}`;
-        const what = part === null ? range : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
+        const what = part === null ? range
+          : part.of === 1 ? `${counted(part.files.length, 'file')} of ${range} (${counted(part.changedLines, 'changed line')})`
+            : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
         log(`Codex is reviewing ${what}${how}; this can take several minutes.`);
         startedAt = now();
         launchedAt = readClock(monotonicNow);
@@ -1165,7 +1237,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             from,
             head,
             // Which part of that range the line measured. The line of a review of the whole range has no
-            // such field, as no line had before a range was reviewed in parts (`runPart`).
+            // such field, as no line had before a range was reviewed in parts (`runPart`). That of a range
+            // reviewed by its files in one session has it, 1 of 1, with the files and the lines it covered.
             ...(part === null ? {} : { part: { index: part.index, of: part.of, files: part.files.length, changedLines: part.changedLines } }),
             outcome: runOutcome,
             ...(reason === undefined ? {} : { reason }),
@@ -1237,10 +1310,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // handed back instead (`rendered`), and shown with the others once every part has passed. Nor is that
       // of a session that ran on another model, however it ended: the other attempts that do not stand show
       // what the model that was asked for rendered, and this would be the review of one that was not.
-      if (evidence.review && part === null && another === null) write(`${evidence.review}\n`);
+      if (evidence.review && alone && another === null) write(`${evidence.review}\n`);
       if (review && !stands) {
         log(NOT_STANDING);
-      } else if (review && part === null) {
+      } else if (review && alone) {
         // The answer of a part is not printed here: it waits for the other parts, and the findings of a
         // range are printed together once every part has passed.
         for (const line of [...review.findings.map(findingLine), verdictLine(review)]) log(line);
@@ -1279,7 +1352,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       if (!evidence.inspected) {
         const { seen, total } = evidence.coverage;
-        const within = part === null ? '' : `part ${part.index} of ${part.of} of `;
+        const within = part === null ? '' : part.of === 1 ? 'the files under review of ' : `part ${part.index} of ${part.of} of `;
         const why = evidence.review === '' ? 'it ended without a review message'
           : total === 0 ? 'it ran no successful command'
             : `its successful commands showed ${seen} of ${total} changed lines of ${within}${base.slice(0, 7)}..HEAD`;
@@ -1304,12 +1377,23 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const whole = await attempt({ expectedKeys: expected, prompt: args.prompt, promptText, promptVersion: own ? REVIEW_PROMPT_VERSION : null });
       if (whole.exit !== 0) return whole.exit;
       runId = whole.runId;
+    } else if (parts.length === 1) {
+      // A range that leaves files out, whose other files fit in one part: one session, asked by its files
+      // as a part is, since Codex's own review of a range reads every file of it. Said when the prompt
+      // that was asked for, or the default, is not the one that is sent.
+      if (!own) log('The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.');
+      const [part] = parts;
+      const sole = await attempt({ expectedKeys: part.expected, prompt: 'own', promptText: part.prompt, promptVersion: REVIEW_PART_PROMPT_VERSION, part });
+      if (sole.exit !== 0) return sole.exit;
+      runId = sole.runId;
     } else {
       const lines = parts.reduce((sum, part) => sum + part.changedLines, 0);
       const files = parts.reduce((sum, part) => sum + part.files.length, 0);
+      // The lines and the files of the parts, which are those of the range unless it leaves some out.
+      const read = leftOut === null ? '' : ' that a review reads';
       // Which bound of a part the range is over: its changed lines, or, when those would fit, its files alone.
       const over = lines > args.partLines ? `more than the ${thousands(args.partLines)} a part holds` : `more files than the ${thousands(PART_MAX_FILES)} a part holds`;
-      log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}, ${over}, so it is reviewed in ${parts.length} parts, one after another.`);
+      log(`The range ${range} changes ${counted(lines, 'line')} in ${counted(files, 'file')}${read}, ${over}, so it is reviewed in ${parts.length} parts, one after another.`);
       if (!own) log('Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
       // One part at a time, in order, and the next only once the one before it has passed: the first that
       // does not pass ends the run with the exit code of its own failure. The lines of the parts before
@@ -1361,10 +1445,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // written: `runs` is as long as the parts were many, and `run`, when it is there, is its last entry.
     ...(runId === undefined ? {} : { run: runId }),
     ...(runIds.length === 0 ? {} : { runs: runIds }),
+    // What the review did not read, by count: the record says "reviewed" of the range, and this is how
+    // much of the range that is not said of.
+    ...(leftOut === null ? {} : { leftOut }),
   });
   if (file === null) return 1;
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;
-  const how = parts === null ? '' : `, made in ${parts.length} parts,`;
+  // One part is one session, reviewed and recorded as a whole range is.
+  const how = parts === null || parts.length === 1 ? '' : `, made in ${parts.length} parts,`;
   log(`Recorded ${what} of ${base.slice(0, 7)}..${head.slice(0, 7)}${how} in ${file}.`);
   return 0;
 }
