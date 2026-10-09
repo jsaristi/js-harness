@@ -466,6 +466,33 @@ in the session signals asked on 2026-10-07 and pending on `feat/codex-review-cos
 it is in every reply, a notice when a session finishes, the context window watched), together
 with that branch's rewording of "Working with Sebastián", which already fills the budget.
 
+A first pass of that list, made on 2026-10-09 at his request ("qué cosas importantes
+quedaron en memoria que deberían haber quedado en la doctrina"), by reading the twelve notes
+of the project's shared memory against `AGENTS.md`, the template `init` writes
+(`agentsTemplate`, four headings and two sentences) and the two installed skills. Not read:
+whatever the other open sessions hold only in their conversations. Missing from what acts:
+
+- His wording is the need, not the specification (name the problem behind it, recommend the
+  best design): memory only. For `AGENTS.md` here and for the template; it holds in any
+  project.
+- How a reply closes (the four states): in `AGENTS.md` here, not installed. For the
+  template, with the check item 6 of Next already asks for.
+- How he is reported to (what needs him, what runs alone, what was done, everyday words):
+  this file and memory. For the orchestrator skill, with the session channel.
+- The direct channel between sessions: this file and memory. Same place.
+- High effort on every sub-agent: memory and feature documents. Waits on the result of the
+  sub-agent models comparison.
+- The context percentage reported and the cut proposed: half in `AGENTS.md` here. For a
+  check or the status line, not prose.
+- Every proposal judged twice: this file and memory. For `AGENTS.md` of this repository
+  only, since it is a rule for building the harness and is not installed.
+- Not a rule but a tool: the script that waits for no gate before a commit lives outside
+  the repository, on his machine alone. The lock in `check` replaces it.
+
+In their place already: the review consent, the recap before a prompt, the main session as
+orchestrator. Facts of his machine and not doctrine, so memory is their place: merging from
+the chat, opening a session from the phone, the list of models.
+
 The specification of the harness, asked the same day and part of this feature. He asked for one
 complete document that says everything the harness does, how it is designed and the reason for
 each piece; alive, updated as changes are made; and useful to the agent about to change
@@ -644,6 +671,122 @@ on top of work in hand had left him in disorder, and not yet answered: one featu
 table at a time, and none of 2 to 5 starts before 1 closes; a new idea is written here, in
 its place, and does not change the work in hand; and sessions work in parallel only once
 the gate has its lock, since two gates at once make both fail.
+
+The orchestrator as a lead, asked by him on 2026-10-09 and put to him as a proposal, not yet
+answered. His words, in short: with one session working he does not know which one to open
+next; the orchestrator, who knows the whole project, should say what else can be done at
+the same time, without one feature colliding with another and without work that has to be
+redone because it could have been seen that another way, or doing it together with another
+feature, was better; like a lead developer with several programmers; it should know the
+project in detail, ask what it doubts, be curious; and it should not take his words
+literally but order the ideas and propose the better way. Quality comes before speed, and
+speed still matters. What stands today is the opposite on purpose: the installed skill
+makes the orchestrator a watchman ("You read", "Otherwise stay silent"), because reading
+code and discussing a design fill a context that has to last. So the role changes, and the
+knowledge goes to files instead of to the orchestrator's conversation:
+
+- A work plan beside the roadmap's order: for each feature not started, what it touches
+  (files and areas), what it needs finished first, what it blocks, and what it would be
+  better built together with. From it the orchestrator says what can start now.
+- A sensor for collisions rather than a judgment: the board already lists every worktree,
+  so it can print the files two branches both changed.
+- An entry gate for a feature: before it gives an opening prompt the orchestrator answers
+  four things in writing. Does it touch what another one touches? Does it need something
+  unfinished? Is it better joined with another? Is there room (the gate, the plan's
+  limit, his attention)? A work session that wants to widen its scope asks it first.
+- The next one proposed, not waited for: when a session closes or starts waiting, the
+  orchestrator says whether there is room for another, which, and why it collides with
+  nothing. He still decides the start, since a session spends his plan.
+- Questions kept and asked: its doubts about the project go in the relief file and reach
+  him one at a time, in a quiet moment, the one that unblocks most first.
+- His wording is the need, not the specification: for every request, the need behind it,
+  where it falls in the map, the proposal, then the record.
+- Detail without filling its context: the specification planned in the rule hierarchy, the
+  code graph, and a sub-agent sent to read when depth is needed; it keeps the conclusion.
+- It still does not implement and never answers for him.
+
+He then asked whether the lead should be a session of its own, passing what it decides to
+an orchestrator that only controls the sessions, and saw the cost himself: that
+orchestrator would be blind. The recommendation given, his to settle when this feature is
+planned: one session, the orchestrator is the lead. What can start and what collides is
+decided from the board's facts, so the one who decides the order has to be the one who
+sees the state; two sessions add a hop to every notice and one more place that asks for
+his attention, which is the real limit. The watching is the part that needs no judgment,
+and it is already a program (`sessions --watch`, with the gate lock to come), so the split
+that holds is program and session, not two sessions. What is right in his idea is kept: a
+long design conversation is a work session of its own that delivers a document, as the
+skill already says, and the lead reads its conclusion. The measure that would reopen this:
+an orchestrator relieved more than once in a working day because its context filled.
+
+More autonomy, asked the same day, with his yes to the push of this branch (pull request
+#47). His words, in short: knowing the whole picture, say how many more sessions can work
+now, alone or in pairs; he is the limit, so the orchestrator gets permission to handle
+several sessions and go on from the agreed route, interrupting him only for decisions that
+really matter, even compacting by itself and sending the next prompt, without leaving the
+plan. What the tools allow, checked that day in the desktop app: a session can send another
+a message (`SendMessage`), rename it, and read its state; it cannot open a new session
+(`start_session` is named by other tools' descriptions and is not among this session's
+tools, and whether it can be turned on is not known), and nothing compacts another session.
+A session compacts by itself at 93% of its window, and a `SessionStart` hook with the
+matcher `compact` runs right after (engram's did, in this session), so the resume prompt he
+pastes today can be a hook the harness installs: read the feature document's next step and
+go on. The proposal put to him, as a charter with two lists, which he approved as written
+the same day ("te apruebo todo"):
+
+- Alone, told afterwards: which feature starts next within the order and up to three work
+  sessions; plan steps and notices sent to work sessions, and the turn for the gate;
+  pushes and pull requests once the gate and both reviews are green; the merge of a pull
+  request that changes only documents; a Codex review within the cost its plan prints, up
+  to 3 million input tokens for a feature (the session board took 2.96); compaction left to
+  the host, with the feature document as the record.
+- His, asked one at a time: spend outside the plan; anything installed or changed on a
+  machine; a product choice; what cannot be undone; a change of the plan or of its order;
+  a new protocol; and, for now, the merge of code. That last one is measured: when ten
+  merges in a row are ones he would not have stopped, it moves to the first list.
+
+Opening a session stays one paste of his, a short prompt the orchestrator writes, until a
+way to open one from a session is found.
+
+What can run now, from the plans and not from a comparison of branches. Three work sessions
+with the orchestrator: the gate (`bin/check.mjs`; first, because its lock is what makes the
+rest safe), the practice project (a folder outside this repository), and sub-agent models,
+which is open and waiting for him; its trials cannot run while a gate or a test runs, so
+the orchestrator gives them their window. The pair to design together is the session
+channel with the rule hierarchy: both rewrite "Working with Sebastián" and the
+orchestrator skill, so one design session writes both feature documents and they are built
+apart; it starts when one of the three frees a place. F6 needs only his choice.
+
+Context, his condition on that approval. Every session knows how full its window is, so
+that it is never cut in the middle of a piece of work, leaving it short or wrong and costing
+more to repair than it would have cost to do once. It does not stop for the sake of
+stopping either: it measures, and it cuts where nothing is lost. The reading, to be built
+with the session channel and tried first by hand:
+
+- A cut happens at the end of a task, never inside one. A task ends with its commit and
+  with the feature document saying what is next, so at that point the files hold
+  everything and the conversation can go.
+- Before a task starts, the session reads its own percentage and judges whether the task
+  fits. Past the board's limit (73% of the window it measures) it does not start one: it
+  cuts first.
+- The orchestrator sees every session's percentage on the board and tells a session that
+  nears the limit to finish its task and cut there, before the host does it at 93% wherever
+  the session happens to be.
+- Two ways to cut, to be compared: the host's compaction with a `SessionStart` hook that
+  sends the session back to its feature document, and a clean start (the app can clear a
+  session's conversation) followed by the orchestrator's message to resume from the
+  document. The second loses nothing to a summary, since nothing is carried in one, and is
+  not tried yet: whether a session may clear itself while he has it open is not known.
+- The measure: no task reopened because a cut lost what it needed.
+
+For the gate on GitHub, a fact found the same day: the repository is private
+(`gh repo view --json visibility`), so its runs count against the account's minutes.
+
+What it would say today, as an example of the role: of the features in the order above,
+the practice project is a folder outside this repository and the gate lives in
+`bin/check.mjs`, while the two paused pieces of work (F6, sub-agent models) change `evals/`;
+none of the four shares a file with another, so the first two could run side by side, in
+`JH 1` and `JH 2`, once the orchestrator session is open. That reading is from the plans,
+not from a comparison of the branches, which is what the sensor above would give.
 
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The

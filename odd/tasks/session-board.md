@@ -1213,6 +1213,19 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   word. Two findings for the product, true as well in a project that only uses the harness:
   `upgrade` works only from a registry the package is not on, and the version reads `0.1.0`
   before and after, so `status` cannot tell an old copy from a current one.
+- 2026-10-09, on his word ("Si, autorizo todo"): the command on PATH brought up to `main`.
+  `pnpm add -g github:jsaristi/js-harness` installed commit `2e50bbc` (the new folder's
+  `pnpm-lock.yaml`: `resolution: {commit: 2e50bbcb…}`) and the shim on PATH points at it,
+  but pnpm ended with an error after doing so: `remove replaced global install directory …
+  4b68-18d96946940745c8-0: El proceso no tiene acceso al archivo porque está siendo
+  utilizado por otro proceso (os error 32)`. So the folder of the old copy (commit
+  `36f2cee`) was left on disk, unused, with one `.pnpm-bin-backup-*` folder beside the
+  shim; which process held it was not found. `js-harness sync --global` then printed
+  `synced js-harness 0.1.0 (4 files) into C:\Users\Oficina` and the two `registered hook
+  entry` lines; each host's file holds one `doctor --hook` entry, not two (`rg -c`). Proof
+  that the new copy runs: `js-harness sessions` from `D:\js-harness` prints the board,
+  where the old copy had no such command. To go back: `pnpm add -g
+  github:jsaristi/js-harness#36f2cee`.
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
