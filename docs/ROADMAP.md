@@ -441,9 +441,10 @@ gentle-ai's managed block (F2), so this orders the thin layer, not the whole pay
    attempt and runs in a session that loads only what a review needs, on `gpt-6.1-sol` at
    `medium` (Sebastián, 2026-10-06). The comparison of the two configurations decided the
    switch: that session is the default since 2026-10-08, and the Review and Effort rows above
-   say what runs now. The numbers are in "Codex review result" above. Left for Sebastián: the
+   say what runs now. The numbers are in "Codex review result" above. Merged on 2026-10-09
+   (#43), every code commit covered by a Codex review record. Left for Sebastián: the
    proposal for the Codex plugin, in the feature document (the `doctor` row, `codex:rescue`,
-   its three hooks), and the Codex review of the branch's own code before a push.
+   its three hooks).
 7. Codex review, one model and a cost seen first, opened on 2026-10-08
    (`odd/tasks/codex-review-cost.md`, branch `feat/codex-review-cost`, stacked on
    `feat/codex-review-lean`). The fifty reviews of item 5 cost 6.12 million input tokens and
@@ -453,8 +454,8 @@ gentle-ai's managed block (F2), so this orders the thin layer, not the whole pay
    Codex review runs only on `gpt-6.1-sol` at `high`; it covers only code, never the same
    commits twice, and prints its plan before it spends. Built and reviewed that day, and closed
    on 2026-10-09 with the measurement of the part size; the numbers are in "Codex review
-   cost result" above. Left for Sebastián: push, pull request and merge of the two stacked
-   branches.
+   cost result" above. Merged the same day (#44, on top of #43). Whether `high` stays at
+   what it costs is his, with the number in that section.
 8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
    in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
    5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
