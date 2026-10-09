@@ -916,6 +916,23 @@ the chain strategy is asked once, before the commit that crosses the budget.
   - `remote status` answers for the project of the directory it runs in: run from a linked
     worktree it says `not running` and `watchdog task: off`, which is true of that worktree
     and reads as an alarm. It is run from `D:\js-harness`, or with `--cwd`.
+- 2026-10-06, 17:55 local: the first time the task brought the server back, recorded by the
+  main session, which saw it while doing other work. Claude Desktop restarted at 17:53:39 local
+  and the server went down with it: the log then held `server exited (code 0) after 15822s`,
+  which is the 4 h 24 min since the activation of 13:29. `remote status` showed a new supervisor
+  since `2026-10-06T22:55:02.812Z`, that is 17:55:02 local, two seconds after a five-minute
+  mark, where the task runs. The main session did not run `remote start` in that minute and a
+  half; that no other session did is not recorded anywhere.
+  - Checked again at 21:40 local: `remote status` still says `running (supervisor pid 6636,
+    since 2026-10-06T22:55:02.812Z)`, `server: connected`, `watchdog task: on`; the start time
+    of process 6636 is 17:55:02; `Win32_OperatingSystem.LastBootUpTime` is 2026-10-03 14:20, so
+    the PC did not restart and the login launcher did not run; the task's last run is 21:40
+    with result 0.
+  - What this is and is not. It is timing evidence: no line of any log names the task as what
+    started that supervisor, and the `server exited` line is no longer in the log, which the
+    cap keeps at 5 MB (`rg "exited"` over it finds nothing at 21:40). So "seen once, by
+    timing" is the claim, not "proved by a record".
+  - Still not seen: a real login bringing the server up through the launcher.
 
 ## Follow-ups
 - `bin/lib/remote.mjs` imported `quoteWindowsArg` and `windowsCommandLine` from
@@ -1070,7 +1087,8 @@ large to review whole. What is left is Sebastián's to ask for, in this order:
   Progress).
 - Done on 2026-10-06, 18:29 UTC: the live activation (see Progress). `D:\js-harness` is at
   `main`, the supervisor runs the new code, the log is capped and the watchdog task is
-  registered and has run. What is left to see is the task bringing back a server that died.
+  registered and has run. The task bringing back a server that died was seen once, the same
+  day at 17:55 local, by timing (Progress).
 
 What a later session needs to know:
 

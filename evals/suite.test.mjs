@@ -1,5 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { readClaudeOutput, readCodexOutput } from './agent-output.mjs';
 import { CODEX_TEMPLATE_KIND, DEFAULT_MAX_LOGIN_AGE_HOURS } from './codex-home.mjs';
-import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
+import { DELEGATION_MODES, assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import { killByPath, planTrials, resolveAgent, runTrial, trialKey } from './runner.mjs';
 import {
   CODEX_EVAL_MODEL, CODEX_PERMISSION_MODE, EVAL_MODEL, TOKEN_VARIABLE, USAGE, UsageError, diffRun, formatSummary, parseArgs, readCodexStack, readStack, suiteMain, summarizeResults,
@@ -234,6 +235,21 @@ test('the summary is a table of rows and the screen, with unknown written out, a
   assert.match(text, /Headroom screen/);
   assert.match(text, /a\s+incomplete \(1 of 3 trials\)/);
   assert.match(formatSummary(summarizeResults(docOf([]))), /no trial recorded/);
+});
+
+test('the summary of a run that is no screen leaves the screen out and says whose the comparison is', () => {
+  const summary = summarizeResults(docOf([
+    trial('a', 'sub-opus-write', 'medium', 1, { score: 1 }),
+    trial('a', 'sub-haiku-write', 'medium', 1, { score: 0.5, inputTokens: null }),
+  ], { configs: ['sub-opus-write', 'sub-haiku-write'] }));
+  const text = formatSummary(summary, { screen: false });
+  assert.match(text, /a\s+sub-opus-write\s+medium\s+1\s+1\.00\s+1\.00\s+1\.00\s+1\.2k\s+1m00s/);
+  assert.match(text, /a\s+sub-haiku-write\s+medium\s+1\s+0\.50\s+0\.50\s+0\.50\s+unknown\s+1m00s/);
+  // The screen reads the minimal config alone, so it would call every task of this run incomplete.
+  assert.doesNotMatch(text, /Headroom|incomplete|minimal/);
+  assert.match(text, /^The comparison of the two arms is evals\/subagents-report\.mjs's\.$/m);
+  assert.match(formatSummary(summary), /Headroom screen/, 'the screen stays the default');
+  assert.equal(formatSummary(summarizeResults(docOf([])), { screen: false }), 'no trial recorded yet\n');
 });
 
 test('the token variable and the model are what the design names', () => {
@@ -1247,3 +1263,260 @@ for (const [agent, host] of Object.entries(HOSTS)) {
     assert.deepEqual(keysOf(JSON.parse(fs.readFileSync(host.file(m), 'utf8')).trials), ['alpha|minimal|medium|1', 'alpha|minimal|medium|2', 'alpha|minimal|medium|3']);
   });
 }
+
+// ---- the subagent runs ------------------------------------------------------------------------------------------------
+// The six subagent configs (`configs.mjs`, `odd/tasks/subagent-model-routing.md`) are Claude Code runs of the minimal
+// arm with a forced subagent model and a delegation mode. They keep what they write in a `subagents` directory of
+// their own, as the Codex runs do in theirs.
+
+const SUB_MODELS = { 'sub-opus-write': 'claude-opus-5-5', 'sub-haiku-write': 'claude-haiku-5-5' };
+const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+/** What a results document pins of each config of the run: the model it forces and the SHA-256 of what it appends
+ * to the system prompt. Both configs are in `write` mode, so they pin one text. */
+const pinsOf = (models, text = DELEGATION_MODES.write) => Object.fromEntries(Object.entries(models).map(([name, model]) => [name, { model, delegationSha256: sha256(text) }]));
+const SUB_PINS = pinsOf(SUB_MODELS);
+const shortSha = (text) => `sha256 ${sha256(text).slice(0, 12)}`;
+const SUB_NAMES = ['sub-opus-explore', 'sub-opus-verify', 'sub-opus-write', 'sub-haiku-explore', 'sub-haiku-verify', 'sub-haiku-write'];
+/** The argv of a subagent run of the machine's own tasks: 2 tasks x 2 arms in `write` mode x medium x 1 repeat, 4 trials. */
+const subArgv = (m, changes = {}) => runArgv(m, { '--configs': Object.keys(SUB_MODELS).join(','), '--efforts': 'medium', ...changes });
+const subResultsFile = (m, name = 'screen') => path.join(m.resultsDir, 'subagents', `${name}.json`);
+const readSubDoc = (m, name) => JSON.parse(fs.readFileSync(subResultsFile(m, name), 'utf8'));
+const subPlan = (names) => planTrials({ tasks: [{ id: 'alpha' }, { id: 'beta' }], configs: names.map((name) => ({ name })), efforts: ['medium'], repeats: 1 })
+  .map(({ task, config, effort, repeat }) => trialKey({ task: task.id, config: config.name, effort, repeat }));
+const SUB_PLAN = subPlan(Object.keys(SUB_MODELS));
+
+test('the six subagent configs are taken by a Claude run and parse like any other config; a Codex run takes none', () => {
+  assert.deepEqual(parse({ '--configs': SUB_NAMES.join(','), '--efforts': 'medium' }), {
+    mode: 'run', claude: CLAUDE, configs: SUB_NAMES, efforts: ['medium'], repeats: 3, tasks: TASKS, permissionMode: 'bypassPermissions', name: 'ab-run', workRoot: null,
+  });
+  assert.deepEqual(parse({ '--configs': 'sub-haiku-verify' }).configs, ['sub-haiku-verify']);
+  for (const configs of ['sub-sonnet-write', 'sub-opus', 'sub-opus-write,sub-opus-write']) assert.throws(() => parse({ '--configs': configs }), usageError(/--configs/), configs);
+  assert.throws(() => parseCodex({ '--configs': 'sub-opus-write' }), usageError(/"sub-opus-write" is not config \(one of minimal, current\)/));
+});
+
+test('a run that mixes subagent configs with minimal or current is refused before anything is created, and the refusal says why', async () => {
+  for (const configs of ['minimal,sub-opus-write', 'sub-haiku-explore,current', 'sub-opus-write,minimal,current']) {
+    assert.throws(() => parse({ '--configs': configs }), usageError(/--configs: sub-\S+ cannot share a run with (minimal|current): .*evals\/results\/subagents\/.*evals\/report\.mjs/), configs);
+  }
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m, { '--configs': 'minimal,sub-opus-write' }), ENV, deps), 2);
+  assert.match(io.err, /sub-opus-write cannot share a run with minimal/);
+  assert.ok(io.err.includes(USAGE), 'the usage is printed');
+  assert.deepEqual(deps.runTrial.asked, []);
+  nothingCreated(m);
+  assert.match(USAGE, /sub-opus-explore, sub-opus-verify, sub-opus-write, sub-haiku-explore, sub-haiku-verify, sub-haiku-write/);
+  assert.match(USAGE, /evals\/results\/subagents\/<name>\.json and evals\/runs\/subagents\/<name>\//);
+});
+
+test('a subagent run keeps everything in a subagents directory of its own: the results, the raw logs and what each config forces and tells its subagents', async () => {
+  const m = machine();
+  const during = [];
+  const { io, deps } = depsFor(m, { runTrial: fakeRun(() => { during.push(templatesIn(m.workRoot)); }) });
+  assert.equal(await suiteMain(subArgv(m), ENV, deps), 0, io.err);
+  assert.deepEqual(fs.readdirSync(m.resultsDir), ['subagents'], 'nothing is written beside the results the report reads');
+  assert.deepEqual(fs.readdirSync(path.join(m.resultsDir, 'subagents')), ['screen.json'], 'no temporary file is left');
+  const doc = readSubDoc(m);
+  assert.deepEqual({ ...doc, trials: keysOf(doc.trials) }, {
+    format: 1, name: 'screen', createdAt: '2026-10-02T12:00:00.000Z', ...RUN, subagentConfigs: SUB_PINS,
+    args: { claude: m.claude, configs: Object.keys(SUB_MODELS), efforts: ['medium'], repeats: 1, tasks: ['alpha', 'beta'], workRoot: m.workRoot },
+    trials: SUB_PLAN,
+  });
+  assert.deepEqual(deps.runTrial.asked, SUB_PLAN);
+  assert.ok(deps.runTrial.trials.every((trial) => trial.runsDir === path.join(m.runsDir, 'subagents', 'screen')), 'the raw logs of a subagent run are under runs/subagents/<name>/');
+  assert.ok(io.out.includes(`results: ${subResultsFile(m)}`), 'the summary names the file');
+  assert.match(io.out, /alpha\s+sub-opus-write\s+medium\s+1\s+0\.50/);
+  assert.doesNotMatch(io.out, /Headroom/, 'no screen of the minimal arm for a run that has none');
+  assert.match(io.out, /The comparison of the two arms is evals\/subagents-report\.mjs's\./);
+  assert.ok(during.length === SUB_PLAN.length && during.every((entries) => entries.length === 0), 'no home template is built: the configs are minimal-based');
+
+  // A minimal run of the same name on the same machine is another file, beside F5's, and names no subagent model.
+  const plain = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium' }), ENV, plain.deps), 0, plain.io.err);
+  assert.deepEqual(fs.readdirSync(m.resultsDir).sort(), ['screen.json', 'subagents']);
+  assert.equal('subagentConfigs' in readDoc(m), false);
+  assert.match(plain.io.out, /Headroom screen/, 'and its summary is the screen, as ever');
+  assert.equal(plain.deps.runTrial.trials[0].runsDir, path.join(m.runsDir, 'screen'));
+});
+
+test('a subagent trial is the minimal arm\'s plus the delegation mode and the forced subagent model, which survive the token being added', async () => {
+  const m = machine();
+  const sub = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m), ENV, sub.deps), 0, sub.io.err);
+  const minimal = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium' }), ENV, minimal.deps), 0, minimal.io.err);
+  const context = { effort: 'medium', home: path.join(m.base, 'home'), workspace: path.join(m.base, 'ws'), prepared: { engramPort: 41000 } };
+  const base = resolveAgent(minimal.deps.runTrial.trials[0].config, context);
+  const configs = new Map(sub.deps.runTrial.trials.map((trial) => [trial.config.name, trial.config]));
+  assert.deepEqual([...configs.keys()], Object.keys(SUB_MODELS));
+  for (const [name, config] of configs) {
+    const agent = resolveAgent(config, context);
+    assert.equal(agent.command, m.claude, name);
+    assert.deepEqual(agent.args, [...base.args, '--append-system-prompt', DELEGATION_MODES.write], `${name}: the minimal arm's argv, then the mode`);
+    assert.deepEqual(agent.env, { ...base.env, CLAUDE_CODE_SUBAGENT_MODEL: SUB_MODELS[name], CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' }, `${name}: the minimal arm's env, then the two variables`);
+    assert.equal(agent.env.CLAUDE_CODE_OAUTH_TOKEN, FAKE_TOKEN, `${name}: the eval's token`);
+    assert.equal(config.reader, undefined, `${name}: read as Claude Code's output`);
+    assert.deepEqual([typeof config.transcripts?.keep, typeof config.transcripts?.summarize], ['function', 'function'], `${name}: its transcripts are kept, and the token wrapper did not drop that`);
+  }
+  assert.ok(!('transcripts' in minimal.deps.runTrial.trials[0].config), 'the minimal arm keeps none');
+  assert.ok(base.args.includes(EVAL_MODEL) && base.args.includes('bypassPermissions'), 'the main model and the permission mode are the run\'s');
+});
+
+const SUB_RUN = { ...RUN, subagentConfigs: SUB_PINS };
+
+test('a resumed subagent run pins the subagent model and the delegation text of each config it recorded: a changed one is named, a config that is new to the run is not a change', () => {
+  const recorded = { ...SUB_RUN, trials: [{ config: 'sub-opus-write' }, { config: 'sub-haiku-write' }] };
+  assert.deepEqual(diffRun(recorded, SUB_RUN), []);
+  assert.deepEqual(diffRun({ ...recorded, subagentConfigs: { ...SUB_PINS, 'sub-haiku-write': { ...SUB_PINS['sub-haiku-write'], model: 'claude-haiku-4-5' } } }, SUB_RUN), [
+    { field: 'subagent model of sub-haiku-write', recorded: 'claude-haiku-4-5', current: 'claude-haiku-5-5' },
+  ]);
+  // The text a config appends to the system prompt is what its trials were told: one word of it changed, and the
+  // trials already recorded were told something else.
+  assert.deepEqual(diffRun({ ...recorded, subagentConfigs: { ...SUB_PINS, 'sub-haiku-write': { ...SUB_PINS['sub-haiku-write'], delegationSha256: sha256('an earlier text') } } }, SUB_RUN), [
+    { field: 'delegation text of sub-haiku-write', recorded: sha256('an earlier text'), current: sha256(DELEGATION_MODES.write) },
+  ]);
+  assert.deepEqual(diffRun(recorded, { ...SUB_RUN, subagentConfigs: { ...SUB_PINS, ...pinsOf({ 'sub-opus-explore': 'claude-opus-5-5' }, DELEGATION_MODES.explore) } }), [], 'a config added to the run was never recorded');
+  assert.deepEqual(diffRun(recorded, { ...SUB_RUN, subagentConfigs: { 'sub-opus-write': SUB_PINS['sub-opus-write'] } }), [], 'a config this command leaves out is not compared');
+  // A file that holds trials of a config and no pin for it says nothing of what they ran on: unknown, not equal.
+  assert.deepEqual(diffRun({ ...recorded, subagentConfigs: { 'sub-haiku-write': SUB_PINS['sub-haiku-write'] } }, SUB_RUN), [
+    { field: 'subagent model of sub-opus-write', recorded: null, current: 'claude-opus-5-5' },
+    { field: 'delegation text of sub-opus-write', recorded: null, current: sha256(DELEGATION_MODES.write) },
+  ]);
+  // So does a pin that names the model alone.
+  assert.deepEqual(diffRun({ ...recorded, subagentConfigs: { ...SUB_PINS, 'sub-opus-write': { model: 'claude-opus-5-5' } } }, SUB_RUN), [
+    { field: 'delegation text of sub-opus-write', recorded: null, current: sha256(DELEGATION_MODES.write) },
+  ]);
+  assert.deepEqual(diffRun({ ...recorded, stack: { ...STACK, claude: '2.1.200 (Claude Code)' } }, SUB_RUN), [
+    { field: 'claude', recorded: '2.1.200 (Claude Code)', current: STACK.claude },
+  ], 'the stack is pinned as for every run');
+});
+
+test('a subagent run cut by a stop continues with the missing trials only and may gain a config; one whose subagent model or delegation text changed is refused, naming which, with the file left as it was', async () => {
+  const m = machine();
+  const cut = depsFor(m, { runTrial: fakeRun((trial, number) => (number === 3 ? stopped('cap')() : undefined)) });
+  assert.equal(await suiteMain(subArgv(m), ENV, cut.deps), 1);
+  assert.match(cut.io.err, /stopped: cap/);
+  assert.deepEqual(keysOf(readSubDoc(m).trials), SUB_PLAN.slice(0, 2));
+  const before = fs.readFileSync(subResultsFile(m), 'utf8');
+
+  // The same trials, recorded as having run on another subagent model: never continued as this run.
+  const recorded = JSON.parse(before);
+  write(subResultsFile(m, 'other-model'), JSON.stringify({ ...recorded, name: 'other-model', subagentConfigs: { ...SUB_PINS, 'sub-haiku-write': { ...SUB_PINS['sub-haiku-write'], model: 'claude-haiku-4-5' } } }));
+  const otherModel = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m, { '--name': 'other-model' }), ENV, otherModel.deps), 1);
+  assert.match(otherModel.io.err, /other-model\.json was recorded with another subagent model, and the model a config forces on its subagents must not change within a run, so it is not continued:/);
+  assert.match(otherModel.io.err, /subagent model of sub-haiku-write: claude-haiku-4-5 -> claude-haiku-5-5/);
+  assert.match(otherModel.io.err, /--name/, 'it says to use a new name for a new run');
+  assert.doesNotMatch(otherModel.io.err, /another stack|versions/, 'the stack is the one recorded, and the refusal does not say otherwise');
+
+  // The same trials, recorded as told another delegation text: an edited mode is another measurement.
+  write(subResultsFile(m, 'other-text'), JSON.stringify({ ...recorded, name: 'other-text', subagentConfigs: { ...SUB_PINS, 'sub-haiku-write': { ...SUB_PINS['sub-haiku-write'], delegationSha256: sha256('an earlier text') } } }));
+  const otherText = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m, { '--name': 'other-text' }), ENV, otherText.deps), 1);
+  assert.match(otherText.io.err, /other-text\.json was recorded with another delegation text, and the delegation text of a config must not change within a run, so it is not continued:/);
+  assert.ok(otherText.io.err.includes(`  delegation text of sub-haiku-write: ${shortSha('an earlier text')} -> ${shortSha(DELEGATION_MODES.write)}\n`), otherText.io.err);
+  assert.doesNotMatch(otherText.io.err, /another stack|subagent model/);
+
+  const { subagentConfigs: _pins, ...unpinned } = recorded;
+  write(subResultsFile(m, 'unpinned'), JSON.stringify({ ...unpinned, name: 'unpinned' }));
+  const noPin = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m, { '--name': 'unpinned' }), ENV, noPin.deps), 1);
+  assert.match(noPin.io.err, /was recorded with another subagent model and with another delegation text, and /);
+  assert.match(noPin.io.err, /subagent model of sub-opus-write: unknown -> claude-opus-5-5/);
+  assert.ok(noPin.io.err.includes(`  delegation text of sub-opus-write: unknown -> ${shortSha(DELEGATION_MODES.write)}\n`), noPin.io.err);
+
+  // A stack that changed is still said to be the stack, alone or beside a pin.
+  const upgraded = depsFor(m, { readStack: () => ({ ...STACK, claude: '2.2.0 (Claude Code)' }) });
+  assert.equal(await suiteMain(subArgv(m), ENV, upgraded.deps), 1);
+  assert.match(upgraded.io.err, /screen\.json was recorded on another stack, and versions must not change within a run, so it is not continued:/);
+  const both = depsFor(m, { readStack: () => ({ ...STACK, claude: '2.2.0 (Claude Code)' }) });
+  assert.equal(await suiteMain(subArgv(m, { '--name': 'other-text' }), ENV, both.deps), 1);
+  assert.match(both.io.err, /was recorded on another stack and with another delegation text, and versions and the delegation text of a config must not change within a run/);
+  assert.deepEqual([otherModel, otherText, noPin, upgraded, both].map((run) => run.deps.runTrial.asked), [[], [], [], [], []]);
+  assert.equal(fs.readFileSync(subResultsFile(m), 'utf8'), before, 'nothing was rewritten');
+
+  const resumed = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m), ENV, resumed.deps), 0, resumed.io.err);
+  assert.deepEqual(resumed.deps.runTrial.asked, SUB_PLAN.slice(2), 'a recorded trial is never repeated');
+  assert.deepEqual(keysOf(readSubDoc(m).trials), SUB_PLAN);
+
+  // The same run with a config more: only its trials run, and its subagent model joins the recorded ones.
+  const wider = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m, { '--configs': 'sub-opus-write,sub-haiku-write,sub-haiku-explore' }), ENV, wider.deps), 0, wider.io.err);
+  assert.deepEqual(wider.deps.runTrial.asked, ['alpha|sub-haiku-explore|medium|1', 'beta|sub-haiku-explore|medium|1']);
+  assert.deepEqual(readSubDoc(m).subagentConfigs, { ...SUB_PINS, ...pinsOf({ 'sub-haiku-explore': 'claude-haiku-5-5' }, DELEGATION_MODES.explore) });
+});
+
+test('--subagents selects the recorded subagent run a summary reads, and is taken with --summary alone', () => {
+  assert.deepEqual(parseArgs(['--summary', '--subagents', '--name', 'screen'], { taskIds: TASKS }), { mode: 'summary', subagents: true, name: 'screen' });
+  assert.deepEqual(parseArgs(['--subagents', '--name', 'screen', '--summary'], { taskIds: TASKS }), { mode: 'summary', subagents: true, name: 'screen' });
+  assert.deepEqual(parseArgs(['--summary', '--name', 'screen'], { taskIds: TASKS }), { mode: 'summary', name: 'screen' }, 'not given, it is not there: a summary parses as it always did');
+  // A run says which results it writes by the configs it names; a flag that also said so could contradict them.
+  assert.throws(() => parseArgs([...argv(), '--subagents'], { taskIds: TASKS }), usageError(/--subagents selects a recorded subagent run and is taken only with --summary/));
+  assert.equal('subagents' in parse({ '--configs': 'sub-opus-write' }), false, 'a run parses into no such field');
+  assert.throws(() => parseArgs(['--agent', 'codex', '--summary', '--subagents', '--name', 'screen'], { taskIds: TASKS }), usageError(/--subagents is not taken with --agent codex/));
+  assert.throws(() => parseArgs([...codexArgv(), '--subagents'], { taskIds: TASKS }), usageError(/--subagents/));
+  assert.throws(() => parseArgs(['--summary', '--subagents', 'yes', '--name', 'screen'], { taskIds: TASKS }), usageError(/unexpected argument "yes"/), 'it takes no value');
+  assert.match(USAGE, /node evals\/suite\.mjs --summary --subagents --name <run name>/);
+  assert.match(USAGE, /--subagents\s+with --summary: read the run from evals\/results\/subagents\//);
+});
+
+test('a summary reaches a subagent run only with --subagents, and never falls back from one directory to the other', async () => {
+  const m = machine();
+  const run = depsFor(m);
+  assert.equal(await suiteMain(subArgv(m), ENV, run.deps), 0, run.io.err);
+  const before = fs.readFileSync(subResultsFile(m), 'utf8');
+
+  // Without the flag a summary reads what it always read, where there is no run of that name.
+  const plain = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--name', 'screen'], {}, plain.deps), 1);
+  assert.ok(plain.io.err.includes(`no results named screen in ${m.resultsDir}\n`), plain.io.err);
+  assert.equal(plain.io.out, '');
+
+  const sub = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--subagents', '--name', 'screen'], {}, sub.deps), 0, sub.io.err);
+  assert.match(sub.io.out, /alpha\s+sub-opus-write\s+medium\s+1\s+0\.50/);
+  assert.match(sub.io.out, /beta\s+sub-haiku-write\s+medium\s+1\s+0\.50/);
+  assert.doesNotMatch(sub.io.out, /Headroom/);
+  assert.match(sub.io.out, /The comparison of the two arms is evals\/subagents-report\.mjs's\./);
+  assert.deepEqual(sub.deps.runTrial.asked, []);
+  assert.equal(fs.readFileSync(subResultsFile(m), 'utf8'), before);
+
+  // An F5 run of the same name on the same machine: each summary reads its own file, whichever exists.
+  const screen = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium' }), ENV, screen.deps), 0, screen.io.err);
+  const f5 = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--name', 'screen'], {}, f5.deps), 0, f5.io.err);
+  assert.match(f5.io.out, /alpha\s+minimal\s+medium\s+1\s+0\.50/);
+  assert.match(f5.io.out, /Headroom screen/);
+  assert.doesNotMatch(f5.io.out, /sub-opus-write|subagents-report/);
+  const still = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--subagents', '--name', 'screen'], {}, still.deps), 0, still.io.err);
+  assert.equal(still.io.out, sub.io.out);
+
+  // And the other way: a run recorded beside F5's is not found among the subagent runs.
+  const only = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal', '--efforts': 'medium', '--name': 'f5-only' }), ENV, only.deps), 0, only.io.err);
+  const missing = depsFor(m);
+  assert.equal(await suiteMain(['--summary', '--subagents', '--name', 'f5-only'], {}, missing.deps), 1);
+  assert.ok(missing.io.err.includes(`no results named f5-only in ${path.join(m.resultsDir, 'subagents')}\n`), missing.io.err);
+
+  // --subagents on a run is a usage error, before anything is created.
+  const fresh = machine();
+  const wrong = depsFor(fresh);
+  assert.equal(await suiteMain([...subArgv(fresh), '--subagents'], ENV, wrong.deps), 2);
+  assert.match(wrong.io.err, /--subagents selects a recorded subagent run/);
+  assert.deepEqual(wrong.deps.runTrial.asked, []);
+  nothingCreated(fresh);
+});
+
+test('a subagent suite runs a real trial of the fake agent: read as Claude Code\'s output, graded, and its raw output kept under runs/subagents/<name>/', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m, { runTrial: fakeAgentRun(() => 'solve') });
+  assert.equal(await suiteMain(subArgv(m, { '--tasks': 'alpha', '--configs': 'sub-haiku-verify' }), ENV, deps), 0, io.err);
+  assert.deepEqual(deps.runTrial.readers, [undefined]);
+  const [record] = readSubDoc(m).trials;
+  assert.deepEqual([trialKey(record), record.score, record.error], ['alpha|sub-haiku-verify|medium|1', 1, null]);
+  assert.deepEqual(fs.readdirSync(path.join(m.runsDir, 'subagents', 'screen')).filter((name) => name.endsWith('.stdout.log')), ['alpha__sub-haiku-verify__medium__1.stdout.log']);
+  assert.equal(fs.existsSync(path.join(m.runsDir, 'screen')), false, 'nothing under the runs of the minimal and current arms');
+});

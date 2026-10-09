@@ -1,0 +1,63 @@
+{
+  "schema": "js-harness.review-seeded-key/v1",
+  "base": "0366ee039c4985514911e34cb508bd6061c3be39",
+  "head": "80952cafb79cd82f5646a8cb284b1de3f9744d2b",
+  "defects": [
+    {
+      "id": "D1",
+      "kind": "off-by-one",
+      "file": "src/report.mjs",
+      "start": 24,
+      "end": 24,
+      "summary": "pageOf slices to start + size - 1, so a page holds 19 rows and the twentieth row of every page is never shown."
+    },
+    {
+      "id": "D2",
+      "kind": "missing-await",
+      "file": "src/stocktake.mjs",
+      "start": 41,
+      "end": 41,
+      "summary": "undo does not await store.save: the command prints its result before the state is stored, and a write that fails is an unhandled rejection instead of exit 1."
+    },
+    {
+      "id": "D3",
+      "kind": "wrong-condition",
+      "file": "src/validate.mjs",
+      "start": 49,
+      "end": 49,
+      "summary": "wholeNumber refuses only a value that is both not an integer and below min (&& where || is meant), so 0, -3, 2.5 and text that is no number are accepted as a page number or a threshold."
+    },
+    {
+      "id": "D4",
+      "kind": "unvalidated-path",
+      "file": "src/cli.mjs",
+      "start": 100,
+      "end": 100,
+      "summary": "export joins the name from the command line into a path without valid.fileName, so ../ in it writes the report outside exports/."
+    },
+    {
+      "id": "D5",
+      "kind": "lost-update",
+      "file": "src/cli.mjs",
+      "start": 80,
+      "end": 80,
+      "summary": "count runs one load-change-save per pair at once with Promise.all: each loads the same state and the saves overwrite one another (or collide on the temporary file), so counts are lost; a later pair that is refused does not stop the earlier ones."
+    },
+    {
+      "id": "D6",
+      "kind": "swallowed-error",
+      "file": "src/report.mjs",
+      "start": 39,
+      "end": 42,
+      "summary": "exportRows catches a failed mkdir or write, passes it to warn and still gives rows.length, so the command says the rows were written and exits 0."
+    },
+    {
+      "id": "D7",
+      "kind": "contradicts-intent",
+      "file": "src/stocktake.mjs",
+      "start": 17,
+      "end": 21,
+      "summary": "count adds an item for a SKU that is not in the inventory; the feature document's Done when says such a count is refused with exit 1 and nothing stored."
+    }
+  ]
+}

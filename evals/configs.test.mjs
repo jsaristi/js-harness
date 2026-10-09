@@ -1,19 +1,24 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths,
+  DELEGATION_MODES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig, defaultWorkRoot, ensureSandboxDirs, minimalConfig,
+  prepareSandbox, sandboxEnv, sandboxPaths, subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
-import { childEnv, loadTask, runTrial } from './runner.mjs';
+import { childEnv, loadTask, planTrials, runTrial } from './runner.mjs';
+import { withToken } from './suite.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_AGENT = path.join(here, 'fixtures', 'fake-agent.mjs');
 const SAMPLE = path.join(here, 'fixtures', 'tasks', 'sample');
+// The transcripts of a real session with one subagent, trimmed (`transcript-usage.test.mjs`).
+const PROBE_TRANSCRIPTS = path.join(here, 'fixtures', 'transcripts', 'probe');
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-configs-test-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -392,8 +397,9 @@ const DIRTY_PROCESS_ENV = {
 
 /** Runs `repeats` trials of the sample task with the fake agent standing in for the binary of a config
  * built by `build`, under a process env full of things that must not reach it. Returns what the agent
- * reported for each trial (its env redacted by the fake agent itself) and the paths to inspect. */
-async function runThroughFakeAgent(build, repeats = 1) {
+ * reported for each trial (its env redacted by the fake agent itself), the records and the paths to inspect.
+ * `fakeEnv` adds variables the fake agent obeys. */
+async function runThroughFakeAgent(build, repeats = 1, fakeEnv = {}) {
   const reportDir = tmp('report');
   const workRoot = tmp('work');
   const runsDir = tmp('runs');
@@ -404,7 +410,7 @@ async function runThroughFakeAgent(build, repeats = 1) {
     ...config,
     args: (context) => [FAKE_AGENT, ...config.args(context)],
     versionArgs: [FAKE_AGENT, '--version'],
-    env: (context) => ({ ...config.env(context), FAKE_AGENT_MODE: 'noop', FAKE_AGENT_REPORT: path.join(reportDir, `${path.basename(context.home)}.json`) }),
+    env: (context) => ({ ...config.env(context), FAKE_AGENT_MODE: 'noop', FAKE_AGENT_REPORT: path.join(reportDir, `${path.basename(context.home)}.json`), ...fakeEnv }),
     prepare: async (context) => {
       homes.push(context.home);
       const prepared = await config.prepare(context);
@@ -413,14 +419,16 @@ async function runThroughFakeAgent(build, repeats = 1) {
     },
   };
   const reportTexts = [];
+  const records = [];
   await withEnv(DIRTY_PROCESS_ENV, async () => {
     for (let repeat = 1; repeat <= repeats; repeat += 1) {
       const outcome = await runTrial({ task: loadTask(SAMPLE), config: wrapped, effort: 'high', repeat, readVersion: () => '1.0.0', workRoot, runsDir });
       assert.equal(outcome.status, 'recorded');
+      records.push(outcome.record);
       reportTexts.push(fs.readFileSync(path.join(reportDir, `${path.basename(homes[repeat - 1])}.json`), 'utf8'));
     }
   });
-  return { homes, ports, reports: reportTexts.map((text) => JSON.parse(text)), reportTexts, runsDir, workRoot };
+  return { homes, ports, reports: reportTexts.map((text) => JSON.parse(text)), reportTexts, records, runsDir, workRoot };
 }
 
 for (const [name, build] of BUILDERS) {
@@ -463,6 +471,195 @@ test('an OAuth token in the environment reaches the child but never a report or 
   assert.ok(logs.length > 0);
   for (const file of logs) assert.ok(!fs.readFileSync(path.join(runsDir, file), 'utf8').includes(TOKEN), file);
 });
+
+// ---- the subagent configs: two arms across three delegation modes -----------------------------------
+// The model ids and the mode texts are what the feature measures (`odd/tasks/subagent-model-routing.md`), so
+// the tests hold their own copy of each, as they do of the allowlist: a word changed in the module by
+// accident fails here instead of quietly changing what both arms were told.
+
+const EXPECTED_SUBAGENT_MODELS = { 'sub-opus': 'claude-opus-5-5', 'sub-haiku': 'claude-haiku-5-5' };
+const EXPECTED_MODES = {
+  explore: 'Before you change any file, use the Agent tool to delegate the exploration of this repository to one subagent: have it read the code, the docs and the tests that matter for the task and return a brief with file paths. Read for yourself only to check what the brief says. Then write the change yourself.',
+  verify: 'Write the change yourself. Do not run the tests yourself: each time you need to know whether the tests pass, use the Agent tool to delegate that to a subagent that runs them and reports each failure with its message. Fix what it reports and delegate again until it reports no failure.',
+  write: 'Do not edit any file yourself. Plan the change, then use the Agent tool to delegate the writing to one subagent, with instructions complete enough for it to work alone. Review what it wrote; if something is wrong or missing, delegate the correction to a subagent again.',
+};
+const EXPECTED_SUBAGENT_NAMES = ['sub-opus-explore', 'sub-opus-verify', 'sub-opus-write', 'sub-haiku-explore', 'sub-haiku-verify', 'sub-haiku-write'];
+const SUBAGENT_CASES = Object.entries(EXPECTED_SUBAGENT_MODELS).flatMap(([arm, model]) => Object.entries(EXPECTED_MODES).map(([mode, text]) => ({ name: `${arm}-${mode}`, arm, mode, model, text })));
+const SUBAGENT_VARIABLES = ['CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE'];
+
+test('the subagent configs are the two arms across the three delegation modes: six names the runner accepts in a trial key', () => {
+  assert.deepEqual(SUBAGENT_MODELS, EXPECTED_SUBAGENT_MODELS);
+  assert.deepEqual(DELEGATION_MODES, EXPECTED_MODES);
+  assert.deepEqual(Object.keys(SUBAGENT_CONFIGS), EXPECTED_SUBAGENT_NAMES);
+  for (const { name, arm, mode, model } of SUBAGENT_CASES) {
+    assert.deepEqual(SUBAGENT_CONFIGS[name], { arm, mode, subagentModel: model }, name);
+    assert.equal(subagentConfig(name, OPTIONS).name, name);
+  }
+  const plan = planTrials({ tasks: [{ id: 't' }], configs: EXPECTED_SUBAGENT_NAMES.map((name) => subagentConfig(name, OPTIONS)), efforts: ['medium'], repeats: 1 });
+  assert.deepEqual(plan.map((trial) => trial.config.name), EXPECTED_SUBAGENT_NAMES);
+});
+
+test('the Haiku arm names its model in full, never the alias, which this Claude Code resolves to an older model', () => {
+  for (const model of Object.values(SUBAGENT_MODELS)) assert.match(model, /^claude-(opus|haiku)-\d+-\d+$/);
+  assert.equal(SUBAGENT_MODELS['sub-haiku'], 'claude-haiku-5-5');
+});
+
+test('what a results document pins of a subagent config is the model it forces and the SHA-256 of the text it appends', () => {
+  // The digests of the three texts above, as UTF-8: an edited mode is another digest, so a continued run sees it.
+  const digests = {
+    explore: '28abb8958029b25217d22496d2b38201f93e02e25e01d20051c1133fcfad882e',
+    verify: 'c5e2c9401939afb5247f6b175446a5b1df076e5dd748e18e33597f5ad61378b5',
+    write: '25160c8f82fa55c3034b62cff2d9e7cb150265eae98133114625ff7b980d5397',
+  };
+  for (const { name, mode, model, text } of SUBAGENT_CASES) {
+    assert.deepEqual(subagentPin(name), { model, delegationSha256: digests[mode] }, name);
+    assert.equal(crypto.createHash('sha256').update(text, 'utf8').digest('hex'), digests[mode], `${mode}: the digest is of the text the config appends`);
+  }
+  assert.throws(() => subagentPin('minimal'), /is not a subagent config/);
+});
+
+test('a subagent config passes the minimal arm\'s flags, then the delegation mode appended to the system prompt, the same text in both arms', () => {
+  for (const { name, text } of SUBAGENT_CASES) {
+    const config = subagentConfig(name, OPTIONS);
+    for (const effort of ['medium', 'high']) {
+      assert.deepEqual(config.args({ effort, home: HOME }), [...minimalConfig(OPTIONS).args({ effort, home: HOME }), '--append-system-prompt', text], `${name} at ${effort}`);
+    }
+  }
+  for (const mode of Object.keys(EXPECTED_MODES)) {
+    assert.deepEqual(subagentConfig(`sub-opus-${mode}`, OPTIONS).args({ effort: 'medium' }), subagentConfig(`sub-haiku-${mode}`, OPTIONS).args({ effort: 'medium' }), `${mode}: the arms differ in no argument`);
+  }
+  assert.deepEqual(subagentConfig('sub-opus-write', OPTIONS).args({ effort: 'medium' }).slice(0, 13), [...sharedArgs('medium'), ...MINIMAL_ONLY], 'the main model and the effort are the ones given');
+});
+
+test('a subagent config runs under the minimal arm\'s sandbox env plus the forced subagent model, and nothing else', () => {
+  const context = { effort: 'medium', home: HOME, workspace: path.join(scratch, 'ws'), prepared: { engramPort: PORT } };
+  for (const { name, model } of SUBAGENT_CASES) {
+    assert.deepEqual(
+      subagentConfig(name, OPTIONS).env(context),
+      { ...minimalConfig(OPTIONS).env(context), CLAUDE_CODE_SUBAGENT_MODEL: model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' },
+      name,
+    );
+  }
+  // The minimal arm itself never carries them: there the subagent model is whatever the session decides.
+  for (const variable of SUBAGENT_VARIABLES) assert.equal(minimalConfig(OPTIONS).env(context)[variable] ?? null, null, variable);
+});
+
+for (const platform of PLATFORMS) {
+  test(`a subagent config (${platform}) replaces a subagent model inherited from the launching shell, however its name is cased`, () => {
+    const inherited = { ...fakeInherited(platform), Claude_Code_Subagent_Model: 'haiku', CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '0' };
+    // The config a suite runs, built by the code a suite builds it with: the subagent config's own env, which lays
+    // the two variables over the sandbox env of this fake environment, and the suite's token laid over that. Neither
+    // overlay is rebuilt here, so one that dropped a variable would fail.
+    const context = { home: HOME, prepared: { engramPort: PORT }, inherited, platform };
+    const env = childEnv(withToken(subagentConfig('sub-haiku-explore', OPTIONS), TOKEN).env(context), inherited, platform);
+    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-5-5');
+    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE, '1');
+    assert.ok(!Object.hasOwn(env, 'Claude_Code_Subagent_Model'), 'the inherited spelling is gone');
+    assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, TOKEN, 'the token of the eval, not the one the shell held');
+    // The rest is the sandbox of this fake environment as the minimal arm gets it: nothing else was added or lost.
+    const { CLAUDE_CODE_SUBAGENT_MODEL: _model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: _force, CLAUDE_CODE_OAUTH_TOKEN: _token, ...rest } = env;
+    const { CLAUDE_CODE_OAUTH_TOKEN: _inherited, ...minimal } = childEnv(minimalConfig(OPTIONS).env(context), inherited, platform);
+    assert.deepEqual(rest, minimal);
+    // Without the config, the inherited ones are removed like everything else outside the allowlist.
+    const bare = childEnv(sandboxEnv({ home: HOME, engramPort: PORT, inherited, platform }), inherited, platform);
+    assert.deepEqual(Object.keys(bare).filter((name) => /subagent/i.test(name)), []);
+  });
+}
+
+test('subagentConfig refuses a name that is not one of the six, and builds on the same requirements as the minimal arm', () => {
+  for (const name of ['minimal', 'current', 'sub-opus', 'sub-sonnet-write', 'sub-opus-review', 'toString', undefined]) {
+    assert.throws(() => subagentConfig(name, OPTIONS), /is not a subagent config \(one of sub-opus-explore, .*sub-haiku-write\)/, String(name));
+  }
+  assert.throws(() => subagentConfig('sub-opus-write', { command: OPTIONS.command, permissionMode: 'x' }), /sub-opus-write config: "model"/);
+  assert.throws(() => subagentConfig('sub-opus-write', { command: OPTIONS.command, model: 'x' }), /permissionMode/);
+  assert.throws(() => subagentConfig('sub-opus-write', { command: 'claude', model: 'x', permissionMode: 'y' }), /absolute/);
+  assert.throws(() => subagentConfig('sub-opus-write', OPTIONS).args({}), /no effort/);
+});
+
+test('a subagent config has the minimal arm\'s lifecycle: an engram port of its own, a bare home, no seed, and the port freed afterwards', async () => {
+  const home = path.join(tmp('sub'), 'home');
+  const killed = [];
+  const released = [];
+  const config = subagentConfig('sub-haiku-write', {
+    ...OPTIONS, allocatePort: async () => 42101, killPort: (port) => (killed.push(port), { killed: [] }), releasePort: (port) => released.push(port),
+    seed: () => assert.fail('a subagent config must not seed'),
+  });
+  const prepared = await config.prepare({ home, workspace: tmp('ws'), effort: 'medium', task: { id: 't' } });
+  assert.deepEqual(prepared, { engramPort: 42101 });
+  for (const dir of Object.values(sandboxPaths(home))) assert.ok(fs.statSync(dir).isDirectory(), dir);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.claude')), [], 'nothing was copied in');
+  config.cleanup({ home, workspace: path.join(scratch, 'ws'), prepared });
+  assert.deepEqual([killed, released], [[42101], [42101]]);
+  assert.throws(() => config.env({ effort: 'medium', home: HOME }), /engram port/, 'no default port, as for every arm');
+  assert.ok(!('versionArgs' in config) && !('reader' in config), 'probed and read as Claude Code, like the minimal arm');
+});
+
+test('a subagent config: the child process receives the two variables and the appended mode on top of exactly what the minimal arm gets', async () => {
+  const { homes, ports, reports, workRoot } = await runThroughFakeAgent(() => subagentConfig('sub-haiku-verify', OPTIONS));
+  const [report] = reports;
+  assert.equal(report.env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-5-5');
+  assert.equal(report.env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE, '1');
+  assert.deepEqual(report.argv, [...sharedArgs('high'), ...MINIMAL_ONLY, '--append-system-prompt', EXPECTED_MODES.verify], 'the mode text arrives whole, as one argument');
+  for (const [key, value] of nonNull(sandboxEnv({ home: homes[0], engramPort: ports[0] }))) {
+    if (process.platform !== 'win32' && WINDOWS_PATH_NAMES.includes(key)) continue;
+    assert.equal(report.env[key], value, `${key} as the child saw it`);
+  }
+  const fold = (key) => (process.platform === 'win32' ? key.toLowerCase() : key);
+  const osAdded = process.platform === 'win32' ? ['LOGONSERVER'] : [];
+  const allowed = new Set([...EXPECTED_ALLOWLIST, ...PATH_NAMES, 'ENGRAM_PORT', ...(process.platform === 'win32' ? WINDOWS_PATH_NAMES : []), ...Object.keys(EXPECTED_SWITCHES), ...SUBAGENT_VARIABLES, ...osAdded].map(fold));
+  assert.deepEqual(Object.keys(report.env).filter((key) => !allowed.has(fold(key)) && !key.startsWith('FAKE_AGENT_')), [], 'only the allowlist, the paths, the switches and the two variables');
+  for (const key of SCRUBBED) assert.ok(!Object.keys(report.env).some((seen) => fold(seen) === fold(key)), `${key} reached the child`);
+  assert.ok(!fs.existsSync(homes[0]), 'the home is removed after the trial');
+  assert.deepEqual(fs.readdirSync(workRoot), []);
+});
+
+// ---- what a subagent trial keeps: the session transcripts and their list cost -----------------------
+
+const filesBelow = (dir, base = dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (
+  entry.isDirectory() ? filesBelow(path.join(dir, entry.name), base) : [path.relative(base, path.join(dir, entry.name)).split(path.sep).join('/')]
+)).sort();
+
+test('a subagent config keeps the transcripts its agent left in the trial home, and records their list cost split by who asked', async () => {
+  const { records, runsDir, homes, workRoot } = await runThroughFakeAgent(() => subagentConfig('sub-haiku-write', OPTIONS), 1, { FAKE_AGENT_TRANSCRIPTS: PROBE_TRANSCRIPTS });
+  const [record] = records;
+  assert.deepEqual(record.transcripts, { files: 3, errors: [] });
+  const kept = path.join(runsDir, 'sample__sub-haiku-write__high__1.transcripts');
+  assert.deepEqual(filesBelow(kept), filesBelow(PROBE_TRANSCRIPTS), 'the layout below the project directory, in the raw logs of the trial');
+  assert.ok(!fs.existsSync(homes[0]), 'copied before the home was removed');
+  assert.deepEqual(fs.readdirSync(workRoot), []);
+
+  const { listCost } = record;
+  assert.equal(listCost.source, 'transcripts');
+  assert.deepEqual(
+    [listCost.orchestrator.listCostUsd, listCost.subagents.listCostUsd, listCost.total.listCostUsd],
+    [0.3413604, 0.004097825, 0.345458225],
+    'the probe session at list price: Opus orchestrating, one Haiku subagent',
+  );
+  assert.deepEqual(listCost.subagents.agents.map((row) => [row.agentType, row.models, row.requests]), [['general-purpose', ['claude-haiku-5-5'], 1]]);
+  // The fake agent's result names models of its own, so the totals differ: a flag in the record, and a record all the same.
+  assert.equal(listCost.modelUsageCheck.matches, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(record)), record, 'the record is what the results file will hold');
+  for (const file of filesBelow(kept)) assert.ok(!fs.readFileSync(path.join(kept, file), 'utf8').includes(TOKEN), file);
+});
+
+test('a subagent trial whose agent left no transcript records an estimate from the result, marked as one', async () => {
+  const { records, runsDir } = await runThroughFakeAgent(() => subagentConfig('sub-opus-explore', OPTIONS));
+  const [{ transcripts, listCost }] = records;
+  assert.deepEqual(transcripts, { files: 0, errors: [] });
+  assert.deepEqual([listCost.source, listCost.estimated], ['modelUsage', true]);
+  // The fake agent's models have no list price: named, and no cost is made up for them.
+  assert.deepEqual([listCost.unpricedModels, listCost.total.listCostUsd], [['fake-model', 'fake-helper-model'], null]);
+  assert.ok(!fs.existsSync(path.join(runsDir, 'sample__sub-opus-explore__high__1.transcripts')), 'nothing was kept, so nothing was made');
+});
+
+for (const [name, build] of BUILDERS) {
+  test(`${name} keeps no transcript and records no list cost, whatever its agent left: its record is what it always was`, async () => {
+    assert.ok(!('transcripts' in build(OPTIONS)));
+    const { records, runsDir } = await runThroughFakeAgent(() => build(OPTIONS), 1, { FAKE_AGENT_TRANSCRIPTS: PROBE_TRANSCRIPTS });
+    assert.ok(!('transcripts' in records[0]) && !('listCost' in records[0]));
+    assert.deepEqual(fs.readdirSync(runsDir).sort(), [`sample__${name}__high__1.stderr.log`, `sample__${name}__high__1.stdout.log`]);
+  });
+}
 
 // ---- the shared preparation: a git identity and the fixture as the first commit ---------------------
 

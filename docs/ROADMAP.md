@@ -55,11 +55,11 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. Codex model: `gpt-6.1-sol` at `high` (Sebastián, 2026-09-29), held in gentle-ai's `codexOrchestratorAssignment` (`~/.gentle-ai/state.json`) since 2026-10-01, because every `gentle-ai sync` writes that assignment to `~/.codex/config.toml` and one had put `gpt-6-astra` at `medium` back, replacing `gpt-6-sol` at `xhigh`; `codex exec -m gpt-6.1-sol` answered at `high` on 2026-09-29, after a review earlier that day got a 400 for the same model |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. Review model: `gpt-6.1-sol` at `high`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes it, and a review whose session ran on anything else, as its own rollout file says, does not stand. It replaces the `medium` he fixed for the lean session on 2026-10-06. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more than 6 parts without `--max-parts`; `check` says at every commit how much code waits for a review |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
-| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex (`gpt-6.1-sol`): `high` (see Review) |
+| Effort | Claude (Opus 5.5): `medium` by default, `high` for design; the cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): `high`, fixed by the command, in the one session there is, the lean one (2026-10-08, replacing the `medium` of 2026-10-06; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 500000`; `/compact` within a task, a fresh session for a new task; state lives in files, not a handoff ritual |
 
@@ -204,6 +204,218 @@ spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's con
 workflow add cost without adding score; what it may buy (recall across sessions, review, larger
 work) these tasks do not measure.
 
+## Codex review result
+
+Two ways of running `js-harness codex-review`, compared on 2026-10-08 with Codex CLI 0.161.0
+(`node evals/review/report.mjs` over `evals/results/review/readings/`, written to
+`evals/results/review/report.md`; the runs and what each proved are in
+`odd/tasks/codex-review-lean.md`). `current` is the review on the user's whole Codex
+configuration, measured in a copy of his home; `lean` loads the diff, read access to the
+repository, the project's `AGENTS.md` and Codex's review rubric. Two ranges: a diff of 292
+changed lines seeded with seven known defects, and a real range of this repository, 255
+changed lines with no known defect. Input tokens are the sum over the requests of a review,
+cache included; the first request is what the session loads before it reads the diff.
+
+| Range | Configuration | Ran with | Findings | Seeded found | Input tokens | First request | Wall time |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seeded | `current` | `gpt-6-astra` `low` | 6 | 6 of 7 | 151,204 | 27,912 | 79 s |
+| seeded | `lean` | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 54,797 | 5,717 | 60 s |
+| seeded | `lean`, own prompt | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 55,203 | 6,156 | 61 s |
+| seeded | `lean`, high effort | `gpt-6.1-sol` `high` | 8 | 7 of 7 | 57,161 | 5,726 | 87 s |
+| real | `current` | `gpt-6-astra` `low` | 0 | | 228,539 | 28,936 | 47 s |
+| real | `lean` | `gpt-6.1-sol` `medium` | 0 | | 134,283 | 6,711 | 33 s |
+| real | `lean`, own prompt | `gpt-6.1-sol` `medium` | 0 | | 145,842 | 7,063 | 34 s |
+| real | `lean`, high effort | `gpt-6.1-sol` `high` | 0 | | 374,661 | 6,711 | 92 s |
+| real | `lean` with CodeGraph | `gpt-6.1-sol` `medium` | 0 | | 160,383 | 7,491 | 30 s |
+
+The verdict: `lean` found the same or more with fewer tokens on both ranges, 36% of the input
+of `current` on the seeded range and 59% on the real one, so it is what `codex-review` runs by
+default since 2026-10-08; `--session current` stayed that day and was removed in the next
+feature, its model being one nobody could verify (Next, item 7). What it rests on, read plainly: on the
+seeded range two runs of `current`, which missed the same defect both times (the first run,
+156,564 input tokens, is in the history of `9c9b00d`), and three lean runs that found it; on
+the real range one run a cell. `lean` and `current` differ in three things at once, what the
+session loads, the model and the effort, so the defect found cannot be given to one of them.
+The first request can: about 28,000 tokens against 6,000 to 7,500 is the load. High effort
+bought nothing these ranges measure, one more finding outside the key and the same answer for
+2.8 times the input on the real range. The own prompt costs what Codex's sentence costs and
+found the same, so the default prompt stays Codex's. CodeGraph cost 19% more input for the
+same answer on a range with nothing to find, so it stays out. The model of the lean rows was
+measured in the CodeGraph cell; the other lean readings were taken before the reading
+recorded it and carry what the command passed.
+
+## Codex review cost result
+
+Closed on 2026-10-09 (`odd/tasks/codex-review-cost.md`), built on 2026-10-08 and its
+measurement of the part size run the day after. What `js-harness codex-review` does since, each behaviour
+with a test written first and the spending ones run on the real binary:
+
+- One model. `gpt-6.1-sol` at `high`, passed by the command and held to what the rollout
+  file of the session says: a session that ran on another model, or whose file names none,
+  is no review and leaves no record.
+- Only code. Markdown and the paths a project marks `-codex-review` in `.gitattributes` are
+  in no part, and the plan says how many were left out. `check` reads the same definition,
+  so a commit of documents or of eval readings needs no record.
+- Nothing twice. A run reads the review records first and starts where they end; a range
+  they cover whole starts nothing and records nothing; `--again` reviews it on purpose. A
+  merge counts for the code somebody wrote in it. On this branch a run from its fork point
+  says there is nothing to review, where it would have been 12 parts and 5,880 changed
+  lines.
+- The cost first. `--plan` prints the parts, the lines and a range of input tokens from the
+  run log of the machine, and starts nothing; a run prints the same before its first
+  session and refuses more than 6 parts without `--max-parts`; the plain `check` says at
+  every commit how much code waits for a review.
+
+What the reviews of the feature's own code measured, 7 runs in 22 parts over 8,528 changed
+lines, each inside the login proof (`evals/review/login-proof.mjs`: the real `auth.json` was
+the same file after every one):
+
+| Range | Parts | Changed lines | The plan said | Input tokens | Findings |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `5663c8c..7936a1f` | 7 | 3,585 | about 1,045,000 | 2,314,747 | 1 |
+| `7936a1f..da71985` | 1 | 304 | about 200,000 | 287,707 | 1 |
+| `da71985..469e26f` | 2 | 739 | about 490,000 | 562,328 | 0 |
+| `469e26f..ed1fd0e` | 4 | 1,308 | about 890,000 | 1,956,411 | 4 |
+| `ed1fd0e..dbc71f0` | 2 | 642 | 490,000 to 1,460,000 | 803,690 | 1 |
+| `dbc71f0..47c3d02` | 5 | 1,595 | 1,030,000 to 3,160,000 | 1,704,421 | 1 |
+| `47c3d02..ce47f21` | 1 | 355 | 300,000 to 820,000 | 611,377 | 0 |
+
+Read plainly. The plan as one figure was under half the cost twice, the second time from
+runs at the review's own effort; given as a range, from the median and from the most a
+changed line cost, it held the three times since. What a part costs follows how far the
+session looks into the code more than its size: the measured parts at `high` cost from 296
+to 2,278 input tokens a changed line. The 8 findings were all real defects, each fixed with
+a test written first, and gentle-ai's on the same slices too.
+
+And the price. These reviews cost 8.24 million input tokens, more than the 6.12 million of
+the fifty reviews this feature was opened to cut. What it removed is the waste: the other
+model, the documents, the ranges reviewed twice. What is left is the effort: about 966 input
+tokens a changed line at `high`, where the run of 28 parts at `medium` on 2026-10-08 cost
+about 237 (other code, so a rough comparison; most of either is cached input). `high` is
+Sebastián's choice of 2026-10-08, and this is what it costs.
+
+The part size, measured on 2026-10-09 with one run: `469e26f..ed1fd0e` again, in 2 parts of
+up to 1,000 changed lines where the table has it in 4 of up to 400. It cost 1,241,978 input
+tokens against 1,956,411 (37% fewer) and 381 s against 660, and gave three of the four
+defects the first review found, with none it lacked. The one it missed is the one no single
+file shows: a review record read against marks that changed between two tips. One run of
+each size cannot say whether the larger parts miss it or that run did, so the bound stays
+at 400 lines, where the review found all four; `--part-lines` is there for a run where the
+cost matters more.
+
+Left open, in the feature document: its follow-ups, the first of them that the gate of this
+repository runs within two minutes of its own bound of 20, on one test file of 232 tests
+that each build a real repository.
+
+## Rule hierarchy (planned)
+
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08 and not started.
+That session opens `odd/tasks/rule-hierarchy.md`; this section is its starting point and is
+replaced by a pointer to that document once it exists. It sits outside the Next list only so
+that it does not collide with the items `feat/codex-review-cost` adds there.
+
+He approved the design below on 2026-10-08, to be done in a new session with the main session
+told of it. What stays open is the detail that session works out, and each thing it ships is
+his to decide then.
+
+The problem. Working rules live in places that do not act. Two of that day existed only in an
+agent's memory and in a feature document: how a decision is asked of him (what the yes covers
+in everyday words, what it does to him, what it does not authorize, what the other option
+means, one thing per yes), and his directive that what lives in memory is always forgotten, so
+everything is cemented in the harness, in the documentation and in the files that make it act
+here and wherever it is installed. A rule that depends on a session remembering it is repeated
+by him, session after session.
+
+What he asked, and how it is read. He described the rules ranked, with `AGENTS.md` as the
+orchestrator of the most important ones, the rest in another place that matters as much, a
+first rule that nothing is done for the sake of doing it or of complying but in the best and
+correct way, and protocols, knowing that many protocols complicate. He then said not to take
+his wording as the specification and asked to be guided to the best way. So what follows is
+the design recommended to him, for that session to work out and for him to decide; his wording
+is the need, not the plan.
+
+The recommendation: each rule goes where it cannot be forgotten, in this order of preference.
+More written protocols are not the answer: F5 measured the stack with the most instructions at
+about twice the cost for the same score (F5 result).
+
+1. A check a command or a hook runs. It costs no tokens and cannot be forgotten. The example of
+   that day: "never two gates at once" was kept by reading the process list by hand before
+   every test run, and one overlap still made a gate time out after 1,200 s; a lock taken by
+   `check` would make the rule impossible to break and take it out of the prose.
+2. A line in `AGENTS.md`, with its reason, when the rule cannot be checked and applies always.
+   It is paid on every turn and capped at 1,500 tokens (`bin/check.mjs`, `TOKEN_BUDGET`); it
+   stood at 1,497 that day, so a rule that enters makes another leave. It holds the principles
+   and an index of where the rest is.
+3. A protocol loaded on demand, when the rule applies only in some situations: the steps of
+   asking for a decision, of running something that costs, of delivering a slice. `install`
+   already writes a skill on each machine for Claude Code and Codex (`skillContent`,
+   `bin/lib/manifest.mjs`), and `init` writes a base `AGENTS.md` in a project (`agentsTemplate`,
+   `bin/lib/project.mjs`). A skill loads when its description matches the situation, not
+   always, so a rule that applies to every reply needs its line in `AGENTS.md` and a check, not
+   the skill alone.
+
+The record of what was decided is none of the three and already exists: this file and the
+feature documents. An agent's memory is the place of nothing.
+
+His first rule. "Done properly, not to comply" goes at the top of `AGENTS.md` with its reason.
+As a sentence alone it changes little: on that day a rule was stored in memory and nothing
+stopped it. What gives it force is a concrete meaning of done: a rule is not recorded until it
+has its place in one of the three levels.
+
+Protocols start with the four that have already cost something, and another enters only when a
+problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
+is; how something that costs is run (gates, eval batches, reviews), with its count said first;
+and how a new rule is recorded.
+
+The steps of the feature: list every rule that exists today, in `AGENTS.md`, in this file and
+in the agents' memories of this project (twelve entries on that day); place each one with the
+order above; move them, automating first what can be automated; and measure the end by two
+numbers, rules that live only in a memory (zero) and `AGENTS.md` within its budget. It takes
+in the session signals asked on 2026-10-07 and pending on `feat/codex-review-cost` (whose turn
+it is in every reply, a notice when a session finishes, the context window watched), together
+with that branch's rewording of "Working with Sebastián", which already fills the budget.
+
+The specification of the harness, asked the same day and part of this feature. He asked for one
+complete document that says everything the harness does, how it is designed and the reason for
+each piece; alive, updated as changes are made; and useful to the agent about to change
+something. A first answer proposed a description of the pieces as they stand, and he corrected
+it: that reads as the architecture it has today, and what he wants is a document that says what
+the harness really is, from which a more capable model of a later generation could rebuild it
+from nothing and better, with that document alone. That is the reading that stands, and it is
+the document F7's protocol needs. Today `docs/` holds this file (the plan, and each decision
+with its reason) and `origin.md` (the founding reasoning, frozen at the start), the feature
+documents hold how each piece was built and its evidence, and nothing says what the whole must
+achieve. The recommendation:
+
+- One file, `docs/SPEC.md`: what the harness must achieve and why, never how it is coded today,
+  because a description of today's pieces would make a rebuild copy them. Principles alone
+  would not do either: nothing can be rebuilt from a philosophy.
+- It opens with the problem the harness exists for and the bet behind it, then holds one entry
+  per capability, each with the same five parts: the problem, with the incident or measurement
+  that showed it; the requirement, as what must be true; the reason; how a rebuild is known to
+  meet it, as a command or a test that exits 0; and what was tried and discarded, so a later
+  model does not pay for the same lesson twice. A last line, "today", points to the files that
+  implement it: the only part tied to the present, and what the agent about to change a piece
+  reads to find it.
+- It is the contract of the whole harness, in the shape F3 gave a task: a goal, a reason and
+  done-when commands. A rebuild is proved by those commands and by the eval tasks, which are
+  the measure of "better" and so belong to the kit together with this document.
+- Alive by a check, not by remembering: `check` validates it as it validates a contract, and
+  fails a commit when a capability has no command that proves it, when a file its "today" line
+  names does not exist, or when a command, a hook or a file written outside the repository is
+  claimed by no capability.
+- It is not loaded on every turn. `AGENTS.md` carries one line that sends an agent to the entry
+  of the capability it is about to change.
+
+A limit to state plainly: the check proves that every capability is named and provable, not
+that its reason is well told; that part stays with review.
+
+It comes first in the feature, since listing the capabilities and listing the rules are one
+survey.
+
+A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
+gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
+
 ## Next
 
 1. F6 Codex parity, in progress (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
@@ -226,12 +438,91 @@ work) these tasks do not measure.
    18:29 UTC, on Sebastián's word: `D:\js-harness` was brought up to `main`, the server was
    restarted on the new code and `js-harness remote start --at-login` registered the watchdog
    task. The log went from 79 MB to 1.1 MB, and the task has run every five minutes since with
-   result 0 and the server up. Not yet seen: the task bringing back a server that died.
+   result 0 and the server up. The task bringing back a server that died was seen once, the
+   same day, by timing: the desktop app restarted at 17:53 local and a new supervisor was up at
+   17:55:02, two seconds after a run of the task, with no restart of the PC in between.
 3. F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice; the orphaned processes of a
    timed-out `contract run` command are the most concrete. `odd/tasks/stack-v4.md` adds one of
    the same family: two full gates at once are not safe on this host.
 4. F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be
    taken at any time.
+5. Codex review, lean and measured, opened on 2026-10-06 while F6 is paused
+   (`odd/tasks/codex-review-lean.md`, branch `feat/codex-review-lean`, in the linked worktree
+   `D:\js-harness-worktrees\codex-review-lean`): `js-harness codex-review` measures every
+   attempt and runs in a session that loads only what a review needs, on `gpt-6.1-sol` at
+   `medium` (Sebastián, 2026-10-06). The comparison of the two configurations decided the
+   switch: that session is the default since 2026-10-08, and the Review and Effort rows above
+   say what runs now. The numbers are in "Codex review result" above. Left for Sebastián: the
+   proposal for the Codex plugin, in the feature document (the `doctor` row, `codex:rescue`,
+   its three hooks), and the Codex review of the branch's own code before a push.
+7. Codex review, one model and a cost seen first, opened on 2026-10-08
+   (`odd/tasks/codex-review-cost.md`, branch `feat/codex-review-cost`, stacked on
+   `feat/codex-review-lean`). The fifty reviews of item 5 cost 6.12 million input tokens and
+   more than half was avoidable: three ran on `gpt-6-astra` at `low` because his Codex
+   configuration named it, one run of 28 reviewed tests, documents and fixtures that gave no
+   finding, and four reviews repeated a range already reviewed. Sebastián, 2026-10-08: a
+   Codex review runs only on `gpt-6.1-sol` at `high`; it covers only code, never the same
+   commits twice, and prints its plan before it spends. Built and reviewed that day, and closed
+   on 2026-10-09 with the measurement of the part size; the numbers are in "Codex review
+   cost result" above. Left for Sebastián: push, pull request and merge of the two stacked
+   branches.
+8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
+   in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
+   5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
+   many measurements as the runs give, and put it in the harness only if it helps. He had
+   read that the pairing costs 75% less at the same quality and much faster. What Anthropic
+   published (anthropic.com/claude-haiku-5-5, read on 2026-10-08) is narrower: the 75% is
+   Haiku 5.5 against Haiku 4.5; Sonnet 5.5 and Opus 5.5 "remain better choices" for complex
+   agentic coding (Terminal-Bench 4.0: 39.2% against Sonnet's 70.6%); Haiku is recommended as
+   a subagent for narrowly scoped work; and no figure is given for the pairing against Opus
+   alone. So the question to measure is the same quality on scoped work, cheaper and faster,
+   read by kind of work (exploring, running tests and reporting, writing code): quality by the
+   hidden graders as a pass rate over repeated runs, cost in list dollars and tokens of each
+   model, wall time, and how many subagents a run spawned. A run that spawns none measures
+   nothing of this, so the design has to make delegation happen. Its start prompt was handed
+   to him on 2026-10-08.
+6. Session signals, asked by Sebastián on 2026-10-07 and not started: he runs several sessions
+   from the phone and wants three things said by the harness itself rather than remembered by
+   the agent. Whose turn it is in every reply: a prompt for him only when the work waits on
+   him, and a plain "nothing to send" when the agent goes on by itself (he could not tell the
+   two apart and sent stale prompts twice). A notice when a session finishes, saying which
+   session to return to. And the context window watched, with its percentage reported and a
+   cut proposed before auto-compact (this session reached 77% of 500k unnoticed). A feature of
+   its own, in its own session: what a hook, the status line or `js-harness` can check or
+   print, so the prose can shrink.
+
+   The format of the first is decided (Sebastián, 2026-10-07, "usá ese formato y cementalo en
+   el harness"), after a block worded as an instruction ("run the lean review on Codex
+   0.160.1") was read three times as a task for him to do in Codex. Every reply closes with
+   one state of four:
+   - working: he sends nothing; the reply says what wakes the agent and what it reports next.
+     No block.
+   - decision: the work waits on him. One block.
+   - cut: a compact (two numbered blocks, the bare `/compact` and the resume prompt) or a new
+     session.
+   - finished: the session closed; the reply names the session he returns to. No block.
+
+   A block sits under three fixed lines: what it is (for example "leave to spend one Codex
+   review"), where it is sent (this chat) and what sending it does (the agent runs it; he
+   runs nothing). The text of a decision is his answer in his words, as short as "Sí", never
+   a technical instruction; the question, with its cost, goes above it in plain words. The
+   resume prompt of a cut is the one long text, labelled as text to paste, not to understand.
+   A decision is never asked while work still runs: the agent waits for it to end. A decision
+   asked again says first that the earlier answer still holds and what changed.
+
+   Narrowed by Sebastián on 2026-10-08 ("si el siguiente prompt es sí, seguí trabajando; solo
+   pará si es una decisión que debo tomar"), when the nine Codex reviews of a comparison were
+   put to him with a block that held only "Sí": a step already in the plan, whose only answer
+   would be yes, is not a decision. The agent states it, with its cost, and goes on. A
+   decision is a real choice between ways, something outside the plan, or something that
+   cannot be undone. The agent's reading, his to correct: push, pull request and merge still
+   wait for him, as does spend the plan did not name.
+
+   Where it lives today: `AGENTS.md`, "Working with Sebastián", reworded to the four states on
+   `feat/codex-review-lean` (1,499 of 1,500 tokens after the rule of 2026-10-08, so the next one added needs one removed),
+   and the agent's memory. It reaches the other worktrees when that branch merges. Still to
+   build in this feature: a check that refuses a reply that closes with none of the four
+   states, so the rule stops depending on the agent reading prose.
 
 ## Stack doctor notes
 

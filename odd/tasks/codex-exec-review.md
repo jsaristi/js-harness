@@ -184,6 +184,10 @@ Mode: strict (source: user global config). Runner: `node --test`.
   alike; git-quoted versus unquoted paths (Codex, last round).
 - Exact coverage on a large range if Codex truncates output or reads by file; measure real runs
   before any tolerance (R3-exact-coverage-large-range).
+  Closed on 2026-10-08 by `odd/tasks/codex-review-lean.md` (T9, T12), without a tolerance: a
+  range above 400 changed lines is reviewed in parts of whole files, each held to the same
+  exact rule, and the ten real reviews of the comparison saw every changed line (216 of 216
+  and 226 of 226).
 - The `codex --version` probe's timeout on Windows stops only the shim (R3-probe-win32-timeout-
   unbounded), shared with `doctor`'s `spawnProbe`.
 - Failure messages print the constant bounds, not injected ones (R3-stop-reason-ignores-injected-
@@ -192,6 +196,8 @@ Mode: strict (source: user global config). Runner: `node --test`.
   (`winget install --id Microsoft.PowerShell --source winget`) fixes them (Sebastián's call).
 - `mcp_servers.context7.type` in `~/.codex/config.toml` is ignored by Codex 0.159.1 and warns on
   every run.
+  Since 2026-10-08 a review no longer meets it: the lean session, the default of
+  `codex-review`, does not read that file. It still warns in his own Codex sessions.
 
 - 2026-09-29: pushed on Sebastián's go-ahead; the pre-push hook passed on the real push (`PASS
   codex-review 11 code commits since origin/main`). PR `jsaristi/js-harness#15` opened (mergeable,
