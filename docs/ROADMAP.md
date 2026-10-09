@@ -193,6 +193,115 @@ spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's con
 workflow add cost without adding score; what it may buy (recall across sessions, review, larger
 work) these tasks do not measure.
 
+## Rule hierarchy (planned)
+
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08 and not started.
+That session opens `odd/tasks/rule-hierarchy.md`; this section is its starting point and is
+replaced by a pointer to that document once it exists. It sits outside the Next list only so
+that it does not collide with the items `feat/codex-review-cost` adds there.
+
+He approved the design below on 2026-10-08, to be done in a new session with the main session
+told of it. What stays open is the detail that session works out, and each thing it ships is
+his to decide then.
+
+The problem. Working rules live in places that do not act. Two of that day existed only in an
+agent's memory and in a feature document: how a decision is asked of him (what the yes covers
+in everyday words, what it does to him, what it does not authorize, what the other option
+means, one thing per yes), and his directive that what lives in memory is always forgotten, so
+everything is cemented in the harness, in the documentation and in the files that make it act
+here and wherever it is installed. A rule that depends on a session remembering it is repeated
+by him, session after session.
+
+What he asked, and how it is read. He described the rules ranked, with `AGENTS.md` as the
+orchestrator of the most important ones, the rest in another place that matters as much, a
+first rule that nothing is done for the sake of doing it or of complying but in the best and
+correct way, and protocols, knowing that many protocols complicate. He then said not to take
+his wording as the specification and asked to be guided to the best way. So what follows is
+the design recommended to him, for that session to work out and for him to decide; his wording
+is the need, not the plan.
+
+The recommendation: each rule goes where it cannot be forgotten, in this order of preference.
+More written protocols are not the answer: F5 measured the stack with the most instructions at
+about twice the cost for the same score (F5 result).
+
+1. A check a command or a hook runs. It costs no tokens and cannot be forgotten. The example of
+   that day: "never two gates at once" was kept by reading the process list by hand before
+   every test run, and one overlap still made a gate time out after 1,200 s; a lock taken by
+   `check` would make the rule impossible to break and take it out of the prose.
+2. A line in `AGENTS.md`, with its reason, when the rule cannot be checked and applies always.
+   It is paid on every turn and capped at 1,500 tokens (`bin/check.mjs`, `TOKEN_BUDGET`); it
+   stood at 1,497 that day, so a rule that enters makes another leave. It holds the principles
+   and an index of where the rest is.
+3. A protocol loaded on demand, when the rule applies only in some situations: the steps of
+   asking for a decision, of running something that costs, of delivering a slice. `install`
+   already writes a skill on each machine for Claude Code and Codex (`skillContent`,
+   `bin/lib/manifest.mjs`), and `init` writes a base `AGENTS.md` in a project (`agentsTemplate`,
+   `bin/lib/project.mjs`). A skill loads when its description matches the situation, not
+   always, so a rule that applies to every reply needs its line in `AGENTS.md` and a check, not
+   the skill alone.
+
+The record of what was decided is none of the three and already exists: this file and the
+feature documents. An agent's memory is the place of nothing.
+
+His first rule. "Done properly, not to comply" goes at the top of `AGENTS.md` with its reason.
+As a sentence alone it changes little: on that day a rule was stored in memory and nothing
+stopped it. What gives it force is a concrete meaning of done: a rule is not recorded until it
+has its place in one of the three levels.
+
+Protocols start with the four that have already cost something, and another enters only when a
+problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
+is; how something that costs is run (gates, eval batches, reviews), with its count said first;
+and how a new rule is recorded.
+
+The steps of the feature: list every rule that exists today, in `AGENTS.md`, in this file and
+in the agents' memories of this project (twelve entries on that day); place each one with the
+order above; move them, automating first what can be automated; and measure the end by two
+numbers, rules that live only in a memory (zero) and `AGENTS.md` within its budget. It takes
+in the session signals asked on 2026-10-07 and pending on `feat/codex-review-cost` (whose turn
+it is in every reply, a notice when a session finishes, the context window watched), together
+with that branch's rewording of "Working with Sebastián", which already fills the budget.
+
+The specification of the harness, asked the same day and part of this feature. He asked for one
+complete document that says everything the harness does, how it is designed and the reason for
+each piece; alive, updated as changes are made; and useful to the agent about to change
+something. A first answer proposed a description of the pieces as they stand, and he corrected
+it: that reads as the architecture it has today, and what he wants is a document that says what
+the harness really is, from which a more capable model of a later generation could rebuild it
+from nothing and better, with that document alone. That is the reading that stands, and it is
+the document F7's protocol needs. Today `docs/` holds this file (the plan, and each decision
+with its reason) and `origin.md` (the founding reasoning, frozen at the start), the feature
+documents hold how each piece was built and its evidence, and nothing says what the whole must
+achieve. The recommendation:
+
+- One file, `docs/SPEC.md`: what the harness must achieve and why, never how it is coded today,
+  because a description of today's pieces would make a rebuild copy them. Principles alone
+  would not do either: nothing can be rebuilt from a philosophy.
+- It opens with the problem the harness exists for and the bet behind it, then holds one entry
+  per capability, each with the same five parts: the problem, with the incident or measurement
+  that showed it; the requirement, as what must be true; the reason; how a rebuild is known to
+  meet it, as a command or a test that exits 0; and what was tried and discarded, so a later
+  model does not pay for the same lesson twice. A last line, "today", points to the files that
+  implement it: the only part tied to the present, and what the agent about to change a piece
+  reads to find it.
+- It is the contract of the whole harness, in the shape F3 gave a task: a goal, a reason and
+  done-when commands. A rebuild is proved by those commands and by the eval tasks, which are
+  the measure of "better" and so belong to the kit together with this document.
+- Alive by a check, not by remembering: `check` validates it as it validates a contract, and
+  fails a commit when a capability has no command that proves it, when a file its "today" line
+  names does not exist, or when a command, a hook or a file written outside the repository is
+  claimed by no capability.
+- It is not loaded on every turn. `AGENTS.md` carries one line that sends an agent to the entry
+  of the capability it is about to change.
+
+A limit to state plainly: the check proves that every capability is named and provable, not
+that its reason is well told; that part stays with review.
+
+It comes first in the feature, since listing the capabilities and listing the rules are one
+survey.
+
+A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
+gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
+
 ## Next
 
 1. F6 Codex parity, in progress (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
