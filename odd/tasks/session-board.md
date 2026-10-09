@@ -1201,6 +1201,18 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   orchestrator session opened with the skill under the title `JH ORQ · js-harness`, and the
   stretch it supervises. He also asked that everything be proven before it reaches a project
   of his; the order is in the roadmap, under "Session channel (planned)".
+- 2026-10-09: how the command on PATH is brought up to `main`, found by reading and with
+  nothing written. `pnpm ls -g --depth 0` lists `js-harness@0.1.0`, and its folder under
+  `%LOCALAPPDATA%\pnpm\global\v11` (dated 28 Sep) declares `"js-harness":
+  "github:jsaristi/js-harness"`: it was installed from GitHub and is `main` of that day.
+  `js-harness upgrade` cannot do it: `upgradeMain` (`bin/update.mjs`) asks the registry
+  first, `npm view js-harness version` answers `404 Not Found` because the package is not
+  published, and it stops with `could not determine the latest version to upgrade to`; its
+  `--source` wants a folder of tarballs. So the road is the one that installed it, `pnpm add
+  -g github:jsaristi/js-harness`, then `js-harness sync --global`; not run, it waits for his
+  word. Two findings for the product, true as well in a project that only uses the harness:
+  `upgrade` works only from a registry the package is not on, and the version reads `0.1.0`
+  before and after, so `status` cannot tell an old copy from a current one.
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,

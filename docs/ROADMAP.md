@@ -362,6 +362,43 @@ As a sentence alone it changes little: on that day a rule was stored in memory a
 stopped it. What gives it force is a concrete meaning of done: a rule is not recorded until it
 has its place in one of the three levels.
 
+A principle he added on 2026-10-09, and how it is read. His words: never fall into bias,
+assumption or belief; always verify information; always work with quality and judgment,
+researching well; never take a shortcut, cheat, or pull out or invent information. He asked
+how to do it better than writing it down, so this is the recommendation, his to decide in
+this feature. Quality and no shortcut are his first two principles again. What is new is
+one thing: nothing is stated that was not checked. As a prohibition it does little, for two
+reasons seen that same day. A bias cannot be seen by the one who has it, so "never be
+biased" forbids something invisible; and the rule "verify before stating" was already
+loaded in every session when the main session assumed `install` had a `--help` and
+installed on his machine, and when another session told him its check "runs on GitHub",
+where no workflow exists. So each part becomes something that leaves a trace:
+
+- Verify. A report says of each claim which of three it is: checked (with the command and
+  its output, or `path:line`), assumed (said as an assumption), or not known. An assumption
+  is allowed; an unnamed one is the defect. `AGENTS.md` already asks for the evidence; what
+  it lacks is the other two words.
+- Invent nothing. A number, a path, a quotation or an output in a report comes from
+  something run or read in that session. Part of it can be a sensor: `check` can refuse a
+  feature document that cites a path or a commit that does not exist.
+- No shortcut, no cheating. The checks exist (the test written first, the contract's
+  commands, the hooks). What is added is what a reviewer is told to look for: a test
+  weakened so that it passes, a hook skipped, a failing check left out of the report.
+- Bias. The answer is not will but a second look that does not share it: the two reviews
+  that already run, a reviewer handed the code and not the conclusion, and before a
+  conclusion that costs, the question of what would show it wrong.
+- Research well. Before running a command one does not know, read its code; a writing
+  command refuses a flag it does not know, so that the mistake is not possible.
+
+Where it lives, judged twice. Here, `AGENTS.md` is at its budget, so the line enters with
+this feature's rework and another one leaves. In a project that only uses the harness, the
+line is in the `AGENTS.md` that `init` writes and the sensors come with `check`. What the
+stack already says is not repeated: on this machine the global `CLAUDE.md` holds "Verify
+technical claims before stating them" (checked); whether gentle-ai writes that line on
+every machine is not known and is looked up before the line is worded. And the line has to earn its tokens like any other piece (principle 2): an eval task
+whose honest answer is "this could not be verified", scored with and without the line. If
+the score does not move, the sensors stay and the sentence goes.
+
 Protocols start with the four that have already cost something, and another enters only when a
 problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
 is; how something that costs is run (gates, eval batches, reviews), with its count said first;
@@ -536,7 +573,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
    request. In a project that uses the harness the lock comes with `check`; whether `init`
    also writes the GitHub workflow is a product choice, his.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
-4. The rule hierarchy above, with his three principles stated once at its top.
+4. The rule hierarchy above, with his three principles stated once at its top, and the one
+   he added on 2026-10-09 (nothing stated that was not checked).
    Each of the four is proven before it reaches a project of his, as he asked the same day
    ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
    by its tests, then by use on this repository, then in a practice project made for the
