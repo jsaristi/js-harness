@@ -92,7 +92,7 @@ push of that branch.
   writer
 - [x] T4 Each slice of T1 to T3 reviewed by gentle-ai and by Codex when it closes, the plan read
   before each run — route: inline runs
-- [ ] T5 The part-size measurement, after Sebastián's go-ahead on its count: the same code with
+- [x] T5 The part-size measurement, after Sebastián's go-ahead on its count: the same code with
   parts of 400 and of 1,000 lines at `high`, findings against a key and tokens; the bound
   changes only on what it shows — route: inline runs
 - [x] T6 The result in `docs/ROADMAP.md` — route: inline
@@ -599,8 +599,44 @@ push of that branch.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
+- 2026-10-09: T5, inline, on Sebastián's "Si" to its count (one run of 2 parts). The review
+  of `469e26f..ed1fd0e` again, in parts of up to 1,000 changed lines, from a detached
+  checkout of `ed1fd0e` made for it and removed after
+  (`codex-review --base 469e26f --again --part-lines 1000 --cwd <that checkout>`, the
+  command of this branch's tip), its plan read first (2 parts of 810 and 498 changed lines,
+  about 920,000 to 1,930,000 input tokens), inside the login proof (PASS), started once no
+  gate of any session was running. Against the review of the same code in parts of up to
+  400 lines, of 2026-10-08:
+
+  | Parts of up to | Parts | Input tokens | Cached | Output | Time | Of the four known defects |
+  | --- | ---: | ---: | ---: | ---: | ---: | --- |
+  | 400 lines | 4 | 1,956,411 | 1,697,152 | 15,201 | 660 s | 4 |
+  | 1,000 lines | 2 | 1,241,978 | 1,090,560 | 10,438 | 381 s | 3 |
+
+  - The cost: 37% fewer input tokens and 42% less time, about 950 input tokens a changed
+    line against about 1,496. The fourth plan given as a range, and the fourth cost inside
+    it.
+  - The findings: the larger parts gave the rename detection of `check`'s log, the commit
+    list split on a byte a file name can hold, and the refusal under `diff.submodule=log`,
+    each at the line the first review named. They did not give the fourth: a record that
+    left marked files out covering an earlier tip, where the mark did not exist yet. It is
+    the one of the four that no single file shows, since it takes the record, the marks
+    and two tips read together. No finding that the first review lacked.
+  - What it does not show: why. It is one run of each size, and how much two runs of one size
+    differ was not measured, so a defect missed once is not proof that larger
+    parts miss it. Telling the two apart takes several runs of each, about 1.2 to 2 million
+    input tokens a run.
+  - The bound stays at 400 (`PART_MAX_CHANGED_LINES`). The task set that the bound changes
+    only on what the measurement shows, and what it shows is a real defect not found for
+    a third of the cost saved; the review is paid to find defects, and `high` was chosen
+    for that. `--part-lines <n>` stays for the run where the cost matters more, and the
+    plan says what either would cost before anything is spent. The record this run
+    appended covers commits that had one already; the push check still passes.
 
 ## Follow-ups
+- F9-part-size-from-one-run: the measurement of 2026-10-09 is one run of each size. If the
+  cost of the parts of 400 lines comes to matter, the thing to measure is how often each
+  size finds a known defect over several runs of the same range, not one run more.
 - F8-a-merge-is-reviewed-with-its-side: see the entry of 2026-10-08 on the fix of the merge.
 - F7-gate-near-its-timeout: the gate runs the tests under a bound of 20 minutes, and on
   2026-10-08 the first commit of the second half of T2 was refused once on that bound alone
@@ -645,15 +681,9 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,300 changed
 lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. T5, the measurement of the part size, put to Sebastián with its count before any of it
-   runs. The cheapest form that measures something: `469e26f..ed1fd0e` again, the range
-   whose review in 4 parts of up to 400 lines found four defects for 1,956,411 input
-   tokens, in parts of up to 1,000 lines (`--again --part-lines 1000`, from a checkout of
-   `ed1fd0e`): one run of 2 parts, its plan read first, the four known defects as the key.
-   The record it appends covers commits that have one already and changes nothing.
-2. Then, or instead: his word on push, pull request and merge of the two stacked branches.
-   Nothing of either is on the remote.
-3. F7 before the next feature that adds tests to the command: the gate runs within two
+1. Every task is done. What is left is Sebastián's: his word on push, pull request and
+   merge of the two stacked branches. Nothing of either is on the remote.
+2. F7 before the next feature that adds tests to the command: the gate runs within two
    minutes of its bound.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin

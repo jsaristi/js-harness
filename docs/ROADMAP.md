@@ -235,8 +235,8 @@ recorded it and carry what the command passed.
 
 ## Codex review cost result
 
-Closed on 2026-10-08 (`odd/tasks/codex-review-cost.md`), but for its measurement of the part
-size, which waits for Sebastián. What `js-harness codex-review` does since, each behaviour
+Closed on 2026-10-09 (`odd/tasks/codex-review-cost.md`), built on 2026-10-08 and its
+measurement of the part size run the day after. What `js-harness codex-review` does since, each behaviour
 with a test written first and the spending ones run on the real binary:
 
 - One model. `gpt-6.1-sol` at `high`, passed by the command and held to what the rollout
@@ -283,8 +283,16 @@ tokens a changed line at `high`, where the run of 28 parts at `medium` on 2026-1
 about 237 (other code, so a rough comparison; most of either is cached input). `high` is
 Sebastián's choice of 2026-10-08, and this is what it costs.
 
-Left open, in the feature document: the measurement of the part size (400 against 1,000
-lines at `high`), his to start; and its follow-ups, the first of them that the gate of this
+The part size, measured on 2026-10-09 with one run: `469e26f..ed1fd0e` again, in 2 parts of
+up to 1,000 changed lines where the table has it in 4 of up to 400. It cost 1,241,978 input
+tokens against 1,956,411 (37% fewer) and 381 s against 660, and gave three of the four
+defects the first review found, with none it lacked. The one it missed is the one no single
+file shows: a review record read against marks that changed between two tips. One run of
+each size cannot say whether the larger parts miss it or that run did, so the bound stays
+at 400 lines, where the review found all four; `--part-lines` is there for a run where the
+cost matters more.
+
+Left open, in the feature document: its follow-ups, the first of them that the gate of this
 repository runs within two minutes of its own bound of 20, on one test file of 232 tests
 that each build a real repository.
 
@@ -332,10 +340,10 @@ that each build a real repository.
    configuration named it, one run of 28 reviewed tests, documents and fixtures that gave no
    finding, and four reviews repeated a range already reviewed. Sebastián, 2026-10-08: a
    Codex review runs only on `gpt-6.1-sol` at `high`; it covers only code, never the same
-   commits twice, and prints its plan before it spends. Built, reviewed and closed that day
-   but for the measurement of the part size; the numbers are in "Codex review cost result"
-   above. Left for Sebastián: that measurement, and push, pull request and merge of the two
-   stacked branches.
+   commits twice, and prints its plan before it spends. Built and reviewed that day, and closed
+   on 2026-10-09 with the measurement of the part size; the numbers are in "Codex review
+   cost result" above. Left for Sebastián: push, pull request and merge of the two stacked
+   branches.
 8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
    in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
    5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
