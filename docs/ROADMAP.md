@@ -46,7 +46,7 @@ First request of a one-word prompt, estimated tokens:
 | Instruction source | `AGENTS.md` only — Claude Code reads it natively |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
-| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), and a TUI over the same commands |
+| Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), `sessions` (2026-10-06, read-only, no TUI entry), and a TUI over the same commands |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
 | Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
@@ -157,6 +157,17 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Log cap, watchdog task and the `doctor` row for a server that is down
 - [x] The watchdog branch reviewed and merged
 - [x] Live on this machine: the server restarted on the new code, and `remote start --at-login` registering the watchdog
+
+### Session board
+- [x] A session's transcript read into facts: title, last entry, background work with its recorded end, state, tail of the last reply
+- [x] Machine facts: worktrees with their unpushed counts, running gates, open pull requests, each unavailable with its reason
+- [x] `sessions` and `sessions --json`, read-only, in the dispatcher's help
+- [x] Accepted review follow-ups on the library
+- [x] A subagent that is sent a follow-up reads as running again
+- [x] Live check on this machine with two or more sessions open, and the memories point to the command
+- [x] `sessions --watch` returns when the board changes and costs nothing while it does not
+- [x] The orchestrator ships as a skill the installer writes and removes through the manifest
+- [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -404,6 +415,137 @@ survey.
 
 A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
 gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
+
+## Session channel (planned)
+
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09 and not started.
+It builds on the session board (`odd/tasks/session-board.md`) and starts after that feature is
+merged. The design below is the main session's proposal, put to him that day and approved by
+him ("me parece excelente tu propuesta"); point 6 answers the question he asked next. Each
+thing the feature ships is still his to decide then, and what he changes is written here
+before the feature document `odd/tasks/session-channel.md` opens.
+
+The problem. Sessions that work side by side talk to each other only through him: a session
+that finishes hands him a block of text to paste into the orchestrator, and he carries it
+across. On 2026-10-09 he carried one such notice by hand and asked for the sessions to talk
+directly, to be told what was said instead of being given a prompt, and for a session's name
+to say at a glance whether it is the orchestrator or a work session and which orchestrator it
+belongs to (his example: `ORQ1: <name>` and `SES1.1: <name>`).
+
+What exists. Claude Code lists the sessions of the machine (`ListAgents`) and delivers a
+message to one by its title (`SendMessage`). Tested that day between two desktop sessions: the
+message arrived as a new turn, was not held for his approval, and the answer came back within
+a minute. A session can be renamed from another (`set_session_title`, desktop app). Codex has
+no such channel. The board already reads every transcript of the project.
+
+The proposal, in the order it would ship:
+
+1. Names. A title is `<project code> <role> · <what it does>`: `JH ORQ · js-harness` for the
+   orchestrator, `JH 1 · subagent routing`, `JH 2 · codex review` for its work sessions, the
+   number given in the order they open and never reused. The project code replaces his
+   orchestrator number because what tells two orchestrators apart is the project they serve,
+   and a code is read without a legend where `1` is not. The title is also the address of a
+   message, so it is short, unique and never changed while the session lives. The orchestrator
+   gives the title in the opening prompt it writes; the session sets it where the host can,
+   and the orchestrator's relief file keeps the list either way, so the board shows role and
+   number in a host that cannot rename.
+2. Notices, few and of one line, because each one costs the receiver a turn. From a work
+   session to its orchestrator: opened (feature, worktree, branch), waiting for Sebastián (on
+   what), closed (what it delivered). From the orchestrator to a work session: only what that
+   session cannot see (the default branch moved, another feature touches its file, a hint is
+   wrong). Never his decisions: a message between sessions is not his word, and no session
+   takes one as the answer to a question it put to him. Spend, the irreversible, product
+   choices, push and merge are asked and answered in the chat of the session that needs them.
+3. What he reads. A reply no longer ends with a prompt for another session. It ends by saying
+   what was sent and whether it arrived (`Told the orchestrator at 03:04, delivered: closed,
+   #43 and #44 are on main`), and the orchestrator's next reply says what it received and from
+   whom. Only when the send fails does the session fall back to a block for him to paste. A
+   block for him remains for his own decisions, as today.
+4. The board shows it. `js-harness sessions` gains a section with the last messages between
+   sessions (time, from, to, first line, delivered or not), read from the transcripts, so
+   whether the sessions are talking is a command's output and not a session's claim.
+5. One gate at a time, by the gate. A second `check` on the machine waits for the first or
+   refuses beside it, in `bin/check.mjs`, instead of a wait script in every session (three
+   private copies and one collision by 2026-10-09). It is listed here because the message
+   channel must not become the way gates take turns: a lock holds when nobody is listening.
+6. One orchestrator per project, and that is checked. He asked whether there would ever be
+   two, and how not to get lost if so. Two at once are normal across projects (`JH ORQ` and
+   `ABG ORQ`): each has its own board and relief file, both keyed by the project's folder, and
+   its work sessions address it by a title that carries the project code, so nothing of one
+   reaches the other. Two in one project are not allowed: they would keep two boards over the
+   same worktrees, gates and default branch, which is the collision itself. The orchestrator
+   skill already hands over by relief, the new one in before the old one is archived, "so
+   there are never two"; this feature turns that sentence into a check. A session that starts
+   as orchestrator reads the relief file and the board first and refuses when another one of
+   the project is alive, and the board says so in a line when two sessions carry the
+   orchestrator's title. What two projects do share is the machine: the gate lock of point 5
+   is the machine's, not the project's, and the Claude and Codex limits are his to spend.
+   He then asked it of one project alone: three features at once, is that one orchestrator
+   and three work sessions, or is a second orchestrator ever needed? Always one. What caps a
+   project is not what an orchestrator can hold but what the sessions share: one gate at a
+   time on the machine (12 to 18 minutes each, queued all day with three sessions on
+   2026-10-09), one default branch, and his attention for each decision. A second
+   orchestrator adds none of those and splits the one place that knows the order. The cases
+   that look like a need for two have other answers: an orchestrator short of context is
+   relieved, not doubled; a feature too large for one session splits its work among its own
+   sub-agents, or into two features with two work sessions; a second machine on the same
+   repository would be the one real case, one orchestrator per machine meeting through pull
+   requests, and it is out of scope until he has one.
+
+Asked the same day, and answered as advice, not as a plan: how to go faster with several
+teams at once, a second computer included, without collisions and with work that is always
+well done. What was measured that day and what follows from it:
+- The limits are, in this order, his attention (every session asks him), the gate (it runs
+  only on this machine, one at a time, 12 to 18 minutes; the repository has no workflow under
+  `.github/` and no run on GitHub, and branch protection is not offered to a private
+  repository on its plan, checked with `gh`), the plan's weekly limit (86% that morning with
+  one machine), and the files every feature touches (`docs/ROADMAP.md`, `AGENTS.md`,
+  `bin/lib/manifest.mjs`: two re-merges of `main` in one night).
+- So width is added only as far as those four allow. The lever with the most in it is the
+  gate: a lock so two never run together (point 5), a shorter gate, and the same gate run by
+  GitHub on every pull request, where runs do not queue behind one machine. A second machine
+  comes after that, and meets the first through pull requests, not through a new channel.
+- His three principles (work well done, no shortcut taken to hand in a result, everything
+  under the agreed protocols) are not new prose for this feature: each already has a check
+  (the task contract, the test written first, the hooks), and the place that states them
+  once is the rule hierarchy above. The repository's own measurement argues against adding
+  text for its own sake: in F5 the fuller stack cost 1.68 to 2.54 times as much for the same
+  score.
+- His answer, the same day, which corrects that advice in four places. His attention was
+  short because of how progress is told to him, not because of how many sessions asked: the
+  way the orchestrator reports is part of this feature, and the reply that reaches him opens
+  with what needs him, then what runs alone, then what was done, in everyday words. The
+  limits are to be solved here, by building or on top of an existing solution, not only
+  named. The plan is not one of them: he will raise it, with several maximum plans if needed
+  (a second account does not share the first one's messages, so across accounts the meeting
+  point stays the repository). And the shared files are a limit of this repository because
+  the harness is what is being edited here; a project where the harness is installed has it
+  fixed. What such a project still shares is its own plan and specification, so the rule to
+  carry over is who writes them: a work session writes its feature document, and one place
+  writes the shared plan.
+- Every item of this section is therefore judged twice: as it is here, and as it would work
+  in a project that only uses the harness.
+
+The order he asked for, the same day ("quiero que lo que hemos hablado le hagamos un plan y lo
+podamos implementar todo"), each a feature of its own with its own document and session:
+
+1. The session board, finished: the Codex review of its code, the pull requests, the merge,
+   the install on this machine and its T7.
+2. The gate: one at a time on the machine by a lock in `check`, a shorter run (it stands
+   within two minutes of its own bound), and the same gate run by GitHub on every pull
+   request. In a project that uses the harness the lock comes with `check`; whether `init`
+   also writes the GitHub workflow is a product choice, his.
+3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
+4. The rule hierarchy above, with his three principles stated once at its top.
+5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
+   each working three features at once, orchestrated together and able to talk to each
+   other. What is known: the app's messages stay inside one account, so across accounts the
+   meeting point is the repository. He takes it up again after the four above.
+
+Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
+block. A session in another permission mode holds incoming messages for his approval. The
+rule about how a reply ends is paid on every turn, so where it lives is settled by the rule
+hierarchy above, not by this feature.
 
 ## Next
 

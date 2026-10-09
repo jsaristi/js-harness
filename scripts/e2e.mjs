@@ -7,6 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from './lib.mjs';
 
+// The skills `install` writes for each host, one folder each under `<home>/.<host>/skills/`.
+const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -115,14 +118,14 @@ async function main() {
       assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
       const manifest = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8'));
       assertThat(manifest.version === '0.1.0', `expected manifest version 0.1.0, got ${manifest.version}`);
-      assertThat(
-        fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness', 'SKILL.md')),
-        'missing the Claude skill file',
-      );
-      assertThat(
-        fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness', 'SKILL.md')),
-        'missing the Codex skill file',
-      );
+      for (const [host, label] of [['.claude', 'Claude'], ['.codex', 'Codex']]) {
+        for (const skill of SKILLS) {
+          assertThat(
+            fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')),
+            `missing the ${label} skill file of ${skill}`,
+          );
+        }
+      }
     });
 
     step('install added exactly one SessionStart entry to each seeded host file', () => {
