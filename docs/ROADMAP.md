@@ -537,6 +537,11 @@ podamos implementar todo"), each a feature of its own with its own document and 
    also writes the GitHub workflow is a product choice, his.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with his three principles stated once at its top.
+   Each of the four is proven before it reaches a project of his, as he asked the same day
+   ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
+   by its tests, then by use on this repository, then in a practice project made for the
+   purpose, where the harness is only installed and never edited. That third step does not
+   exist yet and is the first thing to build for it.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the

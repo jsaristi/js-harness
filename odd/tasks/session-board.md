@@ -1180,6 +1180,27 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   commits by id, so cutting two slices now means rewriting the commits and paying for their
   reviews a second time, to split a change nobody reads by hand in two. He can still ask for
   two. Push, pull request and merge each wait for his word.
+- 2026-10-09, after the merge (pull request #46, `main` at `2e50bbc`): an install nobody
+  asked for, by the main session's mistake. Meaning to read the options of `install`, it ran
+  `node bin/js-harness.mjs install --help` from this worktree. The command has no help of its
+  own and takes no notice of the flag: it installed. Output: `installed js-harness 0.1.0 (4
+  files) into C:\Users\Oficina`, `registered hook entry in C:\Users\Oficina\.claude\
+  settings.json`, `registered hook entry in C:\Users\Oficina\.codex\hooks.json`. Written at
+  15:09: the two skills (`js-harness`, `js-harness-orchestrator`) under `~/.claude/skills`
+  and `~/.codex/skills`, and one `SessionStart` entry in each host that runs `js-harness
+  doctor --hook`; all of it is in `~/.js-harness/manifest.json`, so `js-harness uninstall`
+  removes exactly that. This was the step of T7 he had asked to be told of first; he was
+  told right after instead, with the choice to keep it or undo it. Two findings for the
+  product: a command that writes outside the repository must not act on `--help` or on a
+  flag it does not know, and the command on this machine's PATH is an older copy (a pnpm
+  global package with no `sessions`, `contract`, `init`, `remote` or `codex-review`), so the
+  orchestrator skill now installed names a command that copy does not have until the global
+  install is brought up to `main`.
+- 2026-10-09: he chose to keep the install ("Sí, dejala"). So of T7 the install is done, by
+  that road; what is left is the global command brought up to `main` (his word), the
+  orchestrator session opened with the skill under the title `JH ORQ · js-harness`, and the
+  stretch it supervises. He also asked that everything be proven before it reaches a project
+  of his; the order is in the roadmap, under "Session channel (planned)".
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
