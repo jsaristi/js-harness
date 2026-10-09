@@ -442,12 +442,60 @@ function readerOf(config) {
   return reader;
 }
 
+/** What a config that keeps its agent's session transcripts carries as `transcripts`, or `null` for a config that
+ * keeps none, which is every config that does not ask. The transcripts are in the trial home, which is removed when
+ * the trial ends, and they hold what the agent's printed result does not (which request a subagent made, on which
+ * model); so a config whose measurement needs them says how to keep them and what to record of them:
+ *
+ *   keep({ home, workspace, prepared, dest })   copies the session's files into `dest`, a directory of the trial's raw
+ *                                               logs, and returns `{ files, errors }`: how many it copied, and a line
+ *                                               for each it could not.
+ *   summarize({ dir, usage })                   what the record holds of the kept copy in `dir`, as its `listCost`:
+ *                                               raw logs are not committed, so a report reads the record alone.
+ *                                               `usage` is the reading's.
+ *
+ * Both may be asynchronous. The runner knows neither where a CLI keeps its transcripts nor what they mean: that is
+ * the config's, as the reading of the output is its reader's. A `transcripts` of another shape throws, before
+ * anything is made: found after the agent ran, it would have cost a session whose transcripts are gone. */
+function transcriptsOf(config) {
+  const keeper = config.transcripts ?? null;
+  if (keeper !== null && (!isObject(keeper) || typeof keeper.keep !== 'function' || typeof keeper.summarize !== 'function')) {
+    throw new Error(`config ${config.name}: "transcripts" must be an object with a keep and a summarize function, got ${JSON.stringify(keeper)}`);
+  }
+  return keeper;
+}
+
+/** Has `keeper` copy the trial's transcripts into `context.dest` and returns `{ files, errors }` for the record. It
+ * never throws: whatever went wrong is logged and is a line of `errors`, because a trial that was paid for is worth
+ * more than its transcripts. A failure of the file system is recorded by its code alone (the message holds a path of
+ * this machine, and the record is committed); the log has it whole.
+ *
+ * What an earlier attempt at the same trial kept is removed first, as its raw output is overwritten: a trial that
+ * stopped and is run again is another session, and two sessions in one directory would be summed as one. */
+async function keepTranscripts(keeper, context, { trial, log }) {
+  const kept = { files: 0, errors: [] };
+  const failed = (detail, recorded = detail) => {
+    log(`could not keep the transcripts of ${trial}: ${detail}`);
+    kept.errors.push(recorded);
+  };
+  try {
+    fs.rmSync(context.dest, { recursive: true, force: true });
+    const result = await keeper.keep(context);
+    if (!isObject(result) || !Number.isInteger(result.files) || !Array.isArray(result.errors)) throw new Error('its keep returned no { files, errors }');
+    kept.files = result.files;
+    for (const error of result.errors) failed(String(error));
+  } catch (err) {
+    failed(err.message, err.code ?? err.message);
+  }
+  return kept;
+}
+
 /** The counts every reading's `usage` carries (`agent-output.mjs`), and whether each is a number: the other two
  * are the agent's own objects, kept as given. */
 const USAGE_KEYS = { inputTokens: true, outputTokens: true, turns: true, usage: false, costUsd: true, modelUsage: false, subagents: true };
-/** The fields of a record that do not come from the usage: the trial's identity, what the grader scored, and
- * what the runner measured. */
-const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt'];
+/** The fields of a record that do not come from the usage: the trial's identity, what the grader scored, what the
+ * runner measured, and the two a config that keeps its transcripts adds (`transcriptsOf`). */
+const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt', 'transcripts', 'listCost'];
 
 /** What `assertReading` throws. A class of its own because a suite treats it apart from every other error
  * (`runSuite`): it is the one failure known to come after a paid session and to be the reader's own. */
@@ -539,6 +587,14 @@ export function removeDir(dir, label, log, sweepAgain) {
  * shape rejects the trial with a `ReadingError` (`assertReading`), after the raw output was kept; a suite
  * turns that rejection into a stop of its own (`runSuite`).
  *
+ * A config that carries `transcripts` (`transcriptsOf`) has its agent's session transcripts copied into the raw
+ * logs, as `<stem>.transcripts/`, once the agent has exited and before its home is removed. They are kept beside the
+ * raw output and for the same reason, so a trial that then stops or whose reading is refused keeps them too. A
+ * recorded trial of such a config holds two fields more, after the ones every record has: `transcripts`, the
+ * `{ files, errors }` of the copy, and `listCost`, what the config's `summarize` made of it, or `null` when that
+ * threw. Neither can fail or lose the trial. A config without `transcripts` keeps nothing and its record has neither
+ * field.
+ *
  * The agent runs in a fresh copy of the fixture under `workRoot`; the hidden grader is copied in only
  * after it exits. A config that defines `prepare` also gets a home directory of its own, a sibling of
  * the workspace and fresh for every trial, because anything an earlier trial left in a shared one (a
@@ -578,6 +634,7 @@ export async function runTrial({
   if (signal?.aborted) return { status: 'interrupted' };
   // Before anything is made or spent: a config that cannot be read would cost a whole agent run to find out.
   const read = readerOf(config);
+  const keeper = transcriptsOf(config);
   const startedAt = now().toISOString();
   // Absolute, whatever the caller passed: the agent runs with the workspace as its cwd, so a relative home
   // would mean one place to `prepare` (the runner's cwd) and another to the agent (inside the graded tree).
@@ -623,6 +680,10 @@ export async function runTrial({
     // would fail the same way, and a recorded one would score the untouched fixture and, on resume, be
     // skipped for good. Stop like a cap instead.
     if (run.spawnError) return { status: 'stopped', reason: 'spawn', message: run.spawnError.message };
+    // Before the reading, like the raw output above: whatever becomes of the trial, the home is gone when it returns.
+    const trial = `${task.id}, ${config.name}, ${effort}, repeat ${repeat}`;
+    const transcriptsDir = path.join(runsDir, `${stem}.transcripts`);
+    const kept = keeper ? await keepTranscripts(keeper, { home, workspace, prepared, dest: transcriptsDir }, { trial, log }) : null;
     // Checked before it is used, and after the raw output was written: a reading of the wrong shape rejects the
     // trial, and what the agent printed is still there to be read again once the reader is fixed.
     const reading = assertReading(read(run), config.name);
@@ -632,6 +693,15 @@ export async function runTrial({
     if (graderAborted) return { status: 'interrupted' };
     // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
     if (graderSpawnError) return { status: 'stopped', reason: 'grader-spawn', message: graderSpawnError.message };
+    let listCost = null;
+    if (keeper) {
+      try {
+        listCost = await keeper.summarize({ dir: transcriptsDir, usage: reading.usage });
+      } catch (err) {
+        log(`could not summarize the transcripts of ${trial}: ${err.message}`);
+        kept.errors.push(`summary: ${err.code ?? err.message}`);
+      }
+    }
     return {
       status: 'recorded',
       record: {
@@ -645,6 +715,7 @@ export async function runTrial({
         cliVersion,
         error: agentError(run, reading) ?? graderError,
         startedAt,
+        ...(keeper && { transcripts: kept, listCost }),
       },
     };
   } finally {
