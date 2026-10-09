@@ -185,6 +185,9 @@ test('runSessionModel: the model and the effort the session ran with, and null f
   assert.equal('sessionModel' in run, false, 'the fixture is a line as they were first written');
   assert.equal(runSessionModel(run), null);
   assert.equal(runSessionModel({ ...run, session: 'lean', model: 'gpt-6.1-sol', effort: 'medium' }), null);
+  // The same of the `current` session, which the command names a model and an effort to since 2026-10-08
+  // and which, as a person runs it, measures none: what was asked for is not read as what ran.
+  assert.equal(runSessionModel({ ...run, session: 'current', model: 'gpt-6.1-sol', effort: 'high', sessionModel: null, sessionEffort: null }), null);
   // A line of a session whose home held no such line: both are there, and `null`.
   assert.equal(runSessionModel({ ...run, sessionModel: null, sessionEffort: null }), null);
   // A session that named its model and no effort is measured, with an effort that is not known.

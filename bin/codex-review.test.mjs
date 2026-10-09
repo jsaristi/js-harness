@@ -7,12 +7,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, LEAN_EFFORT, LEAN_MODEL, parseEvents, patchKeys, quoteWindowsArg, reviewEvidence, windowsCommandLine,
+  childEnv, codexArgs, codexReviewMain, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
+import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
-import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
@@ -168,14 +170,34 @@ const reviewSession = (said = NO_FINDINGS) => [
 
 const ANSWER_FILE = ['sessions', '2026', '10', '07', 'rollout-2026-10-07T05-34-59-review-answer.jsonl'];
 
+// What makes a rollout file name the model its session ran on, and nothing more: the `turn_context` line of
+// a turn, with the model a review runs on and no effort, so that a run at an injected effort is not one at
+// another; and one `token_count` line, since the reader takes the model from a thread that made a request.
+// That line holds no total, so the tokens of such a session stay unknown, as they were before it named a
+// model: one request, in one thread, and nothing counted.
+const RAN_ON_THE_MODEL = [
+  { type: 'turn_context', payload: { cwd: 'D:\\x', approval_policy: 'never', model: REVIEW_MODEL, summary: 'auto' } },
+  { type: 'event_msg', payload: { type: 'token_count', info: {}, rate_limits: null } },
+];
+
+/** Whether the folder `dir` holds a rollout file, at any depth, named as Codex names one. */
+function holdsRollouts(dir) {
+  if (!fs.existsSync(dir)) return false;
+  return fs.readdirSync(dir, { recursive: true }).some((name) => /^rollout-.*\.jsonl$/.test(path.basename(name)));
+}
+
 /** The deps for a run: real git and a fake `codex --version` probe through `spawn`, a fake async
  * review through `spawnAsync`, and a `killTree` that only records. `calls`, `probes` and `killed`
  * log what happened; each call holds its `child`, for what it was sent on stdin.
  *
- * As a real Codex does, the fake leaves the rollout file of the review's sub-agent in its home when the
- * session is not ephemeral and has a home of its own, which is the lean session: `said` is the answer in
- * it (see `reviewSession`), a review that found nothing unless a test says otherwise, and `false` writes
- * no such file at all. */
+ * As a real Codex does in a session that is not ephemeral, the fake leaves the rollout file of the
+ * review's sub-agent in the home it is given: `said` is the answer in it (see `reviewSession`), a review
+ * that found nothing unless a test says otherwise, and `false` writes no such file at all.
+ *
+ * That file names the model the session ran on, the one a review runs on, as every real lean session has:
+ * a review whose file names none does not stand. It does so with the two lines the reader of a home asks
+ * for (`RAN_ON_THE_MODEL`), unless the test has put rollout files of its own in that home before the
+ * session starts (`spending`, the `threads` of `fakeCodexInParts`): those then say what ran, or do not. */
 function fakeCodex(stdout, answer = {}, probe = PROBE_OK, said = NO_FINDINGS) {
   const calls = [];
   const probes = [];
@@ -187,11 +209,12 @@ function fakeCodex(stdout, answer = {}, probe = PROBE_OK, said = NO_FINDINGS) {
   };
   const spawnAsync = (command, args, opts) => {
     const home = opts.env?.CODEX_HOME;
-    const ephemeral = `${command} ${args.join(' ')}`.includes('--ephemeral');
     // A Codex that never started wrote nothing.
-    if (said !== false && !answer.error && !ephemeral && typeof home === 'string' && fs.existsSync(home)) {
+    if (said !== false && !answer.error && typeof home === 'string' && fs.existsSync(home)) {
+      const [first, ...rest] = reviewSession(said);
+      const ran = holdsRollouts(path.join(home, 'sessions')) ? [] : RAN_ON_THE_MODEL;
       fs.mkdirSync(path.join(home, ...ANSWER_FILE.slice(0, -1)), { recursive: true });
-      fs.writeFileSync(path.join(home, ...ANSWER_FILE), jsonl(...reviewSession(said)), 'utf8');
+      fs.writeFileSync(path.join(home, ...ANSWER_FILE), jsonl(first, ...ran, ...rest), 'utf8');
     }
     const child = fakeChild({ stdout, ...answer, piped: opts.stdio?.[0] === 'pipe' });
     calls.push({ command, args, opts, child });
@@ -227,6 +250,15 @@ async function run(argv, extra = {}, env = {}) {
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
+}
+
+/** What a run logged after its plan, as lines. Every run prints its plan first
+ * (`./lib/codex-review-plan.mjs`), and the plan ends with the line of its estimate. */
+function afterPlan(out) {
+  const lines = out.split('\n');
+  const estimate = lines.findIndex((line) => /^(Estimate|No estimate): /.test(line));
+  assert.notEqual(estimate, -1, `no plan in:\n${out}`);
+  return lines.slice(estimate + 1);
 }
 
 const reviewedRecord = (base, head) => ({
@@ -306,34 +338,11 @@ test('output that arrives in chunks split mid-line is still read line by line', 
   assert.equal(result.out.match(/exit 0 {2}/g).length, 1);
 });
 
-test('under --session current Codex is spawned as `codex exec review` with the resolved base, a read-only sandbox and the desktop plugins off', async () => {
+test('how Codex is launched: as `codex`, with the resolved base, stdin ignored, a process group of its own, no shell off Windows; `--session lean` changes none of it', async () => {
   const { root, base } = makeRepo();
-  const fake = fakeCodex(reviewed(root, base));
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fake);
-  assert.equal(result.code, 0);
-  assert.equal(fake.calls.length, 1);
-  assert.equal(fake.calls[0].command, 'codex');
-  // The resolved id, not the raw `HEAD~1`: the record and the review cover the same range.
-  assert.deepEqual(fake.calls[0].args, [
-    'exec', 'review', '--json', '--ephemeral', '--base', base,
-    '-c', 'sandbox_mode=read-only',
-    '-c', 'approval_policy=never',
-    '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
-    '-c', 'plugins."computer-use@openai-bundled".enabled=false',
-  ]);
-  assert.deepEqual(fake.calls[0].args, codexArgs(base, 'current'));
-  const { opts } = fake.calls[0];
-  assert.equal(fs.realpathSync(opts.cwd), fs.realpathSync(root));
-  assert.deepEqual(opts.stdio, ['ignore', 'pipe', 'inherit'], 'Codex would wait on an open stdin');
-  assert.equal(opts.detached, true, 'its own process group, so the whole tree can be killed');
-  assert.ok(!opts.shell, 'no shell off Windows');
-});
-
-test('how Codex is launched does not depend on the session: the resolved base, stdin ignored, a process group of its own, no shell off Windows', async () => {
-  const { root, base } = makeRepo();
-  for (const flags of [[], ['--session', 'lean'], ['--session', 'current']]) {
+  for (const flags of [[], ['--session', 'lean']]) {
     const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
     assert.equal(result.code, 0, flags.join(' '));
     assert.equal(fake.calls.length, 1);
     const { command, args, opts } = fake.calls[0];
@@ -356,45 +365,46 @@ test('Codex runs from the repository root even when --cwd is a subdirectory', as
   assert.equal(fs.realpathSync(fake.calls[0].opts.cwd), fs.realpathSync(root));
 });
 
-test('on Windows the .cmd shim runs through a shell as one quoted command line, not detached, under either session', async () => {
+test('on Windows the .cmd shim runs through a shell as one quoted command line, not detached, with or without `--session lean`', async () => {
   const { root, base } = makeRepo();
-  for (const [flags, session] of [[[], 'lean'], [['--session', 'current'], 'current']]) {
+  for (const flags of [[], ['--session', 'lean']]) {
     const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, platform: 'win32' });
-    assert.equal(result.code, 0, session);
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, platform: 'win32' });
+    const which = flags.join(' ') || 'no flag';
+    assert.equal(result.code, 0, which);
     const { command, args, opts } = fake.calls[0];
-    assert.equal(opts.shell, true, session);
-    assert.ok(!opts.detached, session);
-    assert.deepEqual(args, [], session);
-    assert.equal(command, windowsCommandLine('codex', codexArgs(base, session, 'win32')), session);
-    if (session === 'current') {
-      assert.ok(command.startsWith(`codex exec review --json --ephemeral --base ${base} `), command);
-      assert.ok(command.includes('"plugins.\\"unified-computer-use@openai-bundled\\".enabled=false"'), command);
-    }
+    assert.equal(opts.shell, true, which);
+    assert.ok(!opts.detached, which);
+    assert.deepEqual(args, [], which);
+    assert.equal(command, windowsCommandLine('codex', codexArgs(base, 'win32')), which);
+    // A setting that holds quotes of its own goes through with them escaped, inside one quoted argument.
+    assert.ok(command.includes(' -c "model_reasoning_effort=\\"high\\"" '), command);
+    assert.ok(command.endsWith(` --base ${base}`), command);
   }
 });
 
-/** The variable the default session adds to Codex's environment, the home of the run; `--session current`
- * adds none. Each is `[flags, what is added]`, for the tests of what else the environment holds. */
-const sessionEnvs = () => [[[], { CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) }], [['--session', 'current'], {}]];
+/** The one variable the review adds to Codex's environment, the home of the run, with no session named and
+ * under `--session lean`, which is the same. Each is `[flags, what is added]`, for the tests of what else
+ * the environment holds. */
+const sessionEnvs = () => [[], ['--session', 'lean']].map((flags) => [flags, { CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) }]);
 
 test('on Windows the child PATH drops the WindowsApps entries and keeps the rest of the environment', async () => {
   const { root, base } = makeRepo();
   for (const [flags, added] of sessionEnvs()) {
     const fake = fakeCodex(reviewed(root, base));
     const env = { Path: 'C:\\Windows;C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\;D:\\bin', SystemRoot: 'C:\\Windows' };
-    await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, platform: 'win32' }, env);
+    await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, platform: 'win32' }, env);
     assert.deepEqual(fake.calls[0].opts.env, { Path: 'C:\\Windows;D:\\bin', SystemRoot: 'C:\\Windows', ...added }, flags.join(' '));
     assert.equal(env.Path.includes('WindowsApps'), true, 'the caller\'s environment is not mutated');
   }
 });
 
-test('off Windows the environment is passed through untouched, but for the home of the run under the default session', async () => {
+test('off Windows the environment is passed through untouched, but for the home of the run', async () => {
   const { root, base } = makeRepo();
   for (const [flags, added] of sessionEnvs()) {
     const fake = fakeCodex(reviewed(root, base));
     const env = { PATH: '/usr/bin:/x/Microsoft/WindowsApps' };
-    await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake, env);
+    await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake, env);
     assert.deepEqual(fake.calls[0].opts.env, { ...env, ...added }, flags.join(' '));
     assert.deepEqual(env, { PATH: '/usr/bin:/x/Microsoft/WindowsApps' }, 'the caller\'s environment is not mutated');
   }
@@ -507,7 +517,7 @@ test('a range that changes only blank lines has nothing to match, so one success
   const ok = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
   assert.equal(ok.code, 0);
   for (const commands of [[], [cmd('git status', 1)]]) {
-    const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewedWith(...commands)));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewedWith(...commands)));
     assert.equal(result.code, 1);
     assert.match(result.err, /ran no successful command/);
     assert.doesNotMatch(result.err, /showed/);
@@ -639,7 +649,7 @@ test('the `codex --version` probe goes through the same launch path and environm
 
   const win = fakeCodex(reviewed(root, base));
   const env = { Path: 'C:\\Windows;C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps' };
-  await run(['--base', 'HEAD~1', '--cwd', root], { ...win, platform: 'win32' }, env);
+  await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...win, platform: 'win32' }, env);
   assert.equal(win.probes[0].command, windowsCommandLine('codex', ['--version']));
   assert.deepEqual(win.probes[0].args, []);
   assert.equal(win.probes[0].opts.shell, true);
@@ -852,7 +862,7 @@ test('records accumulate, one line each', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   assert.equal((await run(['--base', 'HEAD~1', '--cwd', root], fake)).code, 0);
-  assert.equal((await run(['--base', 'HEAD~1', '--unavailable', 'later', '--cwd', root], fake)).code, 0);
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--unavailable', 'later', '--cwd', root], fake)).code, 0);
   assert.deepEqual(readCodexReviews(root).map((r) => r.outcome), ['reviewed', 'unavailable']);
 });
 
@@ -902,25 +912,17 @@ test('--base is required, and an empty --unavailable reason is a usage error', a
   assert.equal(wrote(root), false);
 });
 
-test('--home is accepted under the current session, which keeps nothing there', async () => {
-  const { root, base } = makeRepo();
-  const home = tmp('js-harness-codex-review-home-');
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root, '--home', home], fakeCodex(reviewed(root, base)));
-  assert.equal(result.code, 0);
-  assert.deepEqual(listed(home), []);
-});
+// --- the session: one, the lean one. `--session lean` is still read, and `--session current` was removed on 2026-10-08 ---
 
-// --- the session: the lean one, which is the default, or the user's own configuration with `--session current` ---
-
-/** The lean argv, token by token: what the command hands Codex for a review from `base` when no session is
- * named, and under `--session lean`. It is not `--ephemeral`, and on Windows alone it names the sandbox its
- * commands run in. */
+/** The argv of a review, token by token: what the command hands Codex for a review from `base`, with no
+ * session named and under `--session lean`, which is the same. It is not `--ephemeral`, and on Windows
+ * alone it names the sandbox its commands run in. */
 const leanArgv = (base, platform = 'linux') => [
   'exec', 'review', '--json',
   '--ignore-user-config', '--ignore-rules',
   '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
   '-m', 'gpt-6.1-sol',
-  '-c', 'model_reasoning_effort="medium"',
+  '-c', 'model_reasoning_effort="high"',
   '-c', 'sandbox_mode=read-only',
   '-c', 'approval_policy=never',
   ...(platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : []),
@@ -928,30 +930,39 @@ const leanArgv = (base, platform = 'linux') => [
   '--base', base,
 ];
 
-/** The argv of `--session current`, token by token: what the review ran with while that session was the
- * default, which the change of the default must not touch. */
-const currentArgv = (base) => [
-  'exec', 'review', '--json', '--ephemeral', '--base', base,
-  '-c', 'sandbox_mode=read-only',
-  '-c', 'approval_policy=never',
-  '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
-  '-c', 'plugins."computer-use@openai-bundled".enabled=false',
-];
-
-test('the model and the effort of the lean session are named in one place', () => {
-  assert.equal(LEAN_MODEL, 'gpt-6.1-sol');
-  assert.equal(LEAN_EFFORT, 'medium');
+/** The model and the effort Codex is handed in `argv`: every `-m` and every `model_reasoning_effort`
+ * setting, so that a second one, of another value, is seen. */
+const modelAndEffort = (argv) => ({
+  models: argv.filter((_, at) => argv[at - 1] === '-m'),
+  efforts: argv.filter((token, at) => argv[at - 1] === '-c' && token.startsWith('model_reasoning_effort=')),
 });
 
-test('codexArgs: `lean` is the default; `current` is the argv it always was, to the token', () => {
+test('the model and the effort of a review are named in one place: gpt-6.1-sol at high', () => {
+  assert.equal(REVIEW_MODEL, 'gpt-6.1-sol');
+  assert.equal(REVIEW_EFFORT, 'high');
+});
+
+test('codexArgs: there is one argv, the lean one, and no session to choose: the platform comes right after the base', () => {
   const base = 'a'.repeat(40);
-  assert.deepEqual(codexArgs(base), codexArgs(base, 'lean'), 'with no session named, the lean one');
-  assert.deepEqual(codexArgs(base, undefined, 'linux'), leanArgv(base));
-  assert.deepEqual(codexArgs(base, 'current'), currentArgv(base));
-  for (const platform of ['win32', 'linux', 'darwin']) assert.deepEqual(codexArgs(base, 'current', platform), currentArgv(base), platform);
-  assert.deepEqual(codexArgs(base, 'lean', 'linux'), leanArgv(base));
-  assert.ok(!codexArgs(base, 'lean', 'linux').some((token) => token.includes('openai-bundled')), 'plugins are off wholesale, not one by one');
-  assert.throws(() => codexArgs(base, 'other'), /session/);
+  assert.deepEqual(codexArgs(base), codexArgs(base, process.platform), 'with no platform named, the one it runs on');
+  assert.deepEqual(codexArgs(base, 'linux'), leanArgv(base));
+  assert.deepEqual(codexArgs(base, 'win32'), leanArgv(base, 'win32'));
+  for (const platform of ['win32', 'linux', 'darwin']) {
+    const argv = codexArgs(base, platform);
+    assert.ok(!argv.some((token) => token.includes('openai-bundled')), `${platform}: plugins are off wholesale, not one by one`);
+    // What the session that is gone carried, and this one must not: it is read back from its own home.
+    assert.equal(argv.includes('--ephemeral'), false, platform);
+    assert.equal(argv.includes('--ignore-user-config'), true, platform);
+  }
+  // A call written for the signature that took a session is not taken for a platform and a prompt in silence.
+  for (const session of ['lean', 'current']) assert.throws(() => codexArgs(base, session, 'linux'), /Unknown prompt "linux"/, session);
+});
+
+test('codexArgs: on every platform and under either prompt it names one model and one effort: gpt-6.1-sol at high', () => {
+  const base = 'a'.repeat(40);
+  const launches = ['win32', 'linux', 'darwin'].flatMap((platform) => [codexArgs(base, platform), codexArgs(base, platform, 'own')]);
+  assert.equal(launches.length, 6);
+  for (const argv of launches) assert.deepEqual(modelAndEffort(argv), { models: ['gpt-6.1-sol'], efforts: ['model_reasoning_effort="high"'] }, argv.join(' '));
 });
 
 test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () => {
@@ -961,22 +972,22 @@ test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () =>
     '--ignore-user-config', '--ignore-rules',
     '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
     '-m', 'gpt-6.1-sol',
-    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'model_reasoning_effort="high"',
     '-c', 'sandbox_mode=read-only',
     '-c', 'approval_policy=never',
     '-c', 'skills.include_instructions=false',
     '--base', base,
   ];
-  assert.deepEqual(codexArgs(base, 'lean', 'linux'), lean);
-  assert.deepEqual(codexArgs(base, 'lean', 'darwin'), lean);
+  assert.deepEqual(codexArgs(base, 'linux'), lean);
+  assert.deepEqual(codexArgs(base, 'darwin'), lean);
   // On Windows a read-only session that asks nobody refuses every shell command unless it has a sandbox
   // to run them in, and the lean session ignores the config file that names the user's.
-  assert.deepEqual(codexArgs(base, 'lean', 'win32'), [
+  assert.deepEqual(codexArgs(base, 'win32'), [
     'exec', 'review', '--json',
     '--ignore-user-config', '--ignore-rules',
     '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
     '-m', 'gpt-6.1-sol',
-    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'model_reasoning_effort="high"',
     '-c', 'sandbox_mode=read-only',
     '-c', 'approval_policy=never',
     '-c', 'windows.sandbox="unelevated"',
@@ -984,9 +995,7 @@ test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () =>
     '--base', base,
   ]);
   // Its home is thrown away after the run, and only a session that is not ephemeral writes its tokens there.
-  for (const platform of ['win32', 'linux']) assert.equal(codexArgs(base, 'lean', platform).includes('--ephemeral'), false, platform);
-  assert.equal(codexArgs(base, 'current', 'win32').includes('--ephemeral'), true, 'the current session is as it was');
-  assert.equal(codexArgs(base, 'current', 'win32').some((token) => token.includes('windows.sandbox')), false);
+  for (const platform of ['win32', 'linux']) assert.equal(codexArgs(base, platform).includes('--ephemeral'), false, platform);
 });
 
 test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment but for its home', async () => {
@@ -1020,48 +1029,130 @@ test('without --session the review runs in the lean session: the lean argv, in a
   assert.deepEqual(fake.calls[0].opts.env, { ...env, CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
   assert.deepEqual(seen, [true]);
   assert.deepEqual(listed(leanHomesDir(osHome)), []);
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, medium); this can take several minutes.`);
+  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high); this can take several minutes.`);
   const line = onlyRun(root);
-  assert.deepEqual([line.outcome, line.session, line.model, line.effort, line.prompt], ['reviewed', 'lean', 'gpt-6.1-sol', 'medium', 'codex']);
-  // Naming the default changes nothing: the same argv, the same session in the run line.
-  const named = fakeCodex(reviewed(root, base));
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], named, env)).code, 0);
-  assert.deepEqual(named.calls[0].args, fake.calls[0].args);
+  assert.deepEqual([line.outcome, line.session, line.model, line.effort, line.prompt], ['reviewed', 'lean', 'gpt-6.1-sol', 'high', 'codex']);
 });
 
-test('--session current is the review on the user\'s own Codex configuration: the current argv to the token, and no Codex home of its own', async () => {
-  const { root, base, head } = makeRepo();
-  const fake = fakeCodex(reviewed(root, base));
-  const env = { PATH: '/x', HOME: '/home/x' };
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fake, env);
-  assert.equal(result.code, 0, result.err);
-  assert.deepEqual(fake.calls[0].args, currentArgv(base));
-  assert.deepEqual(fake.calls[0].opts.env, env, 'no CODEX_HOME: the session runs in the user\'s own home');
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)}; this can take several minutes.`);
-  const line = onlyRun(root);
-  assert.deepEqual([line.outcome, line.session, line.model, line.effort], ['reviewed', 'current', null, null]);
+test('`--session lean` is still read and means what no flag means: the same argv, the same Codex home of the run made and removed, the same lines printed, the same run line', async () => {
+  for (const platform of ['linux', 'win32']) {
+    const { root, base } = makeRepo();
+    const mine = fakeHome();
+    const state = tmp('js-harness-codex-review-state-');
+    /** One run of the command over the same range, in everything a session could change: what Codex was
+     * launched with and in, what its home held while it ran, what was left of it, and what was printed. */
+    const once = async (flags) => {
+      const during = {};
+      const fake = watching(fakeCodex(reviewed(root, base)), (home) => Object.assign(during, { home, entries: listed(home), links: fs.statSync(mine.auth).nlink }));
+      const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--home', state, '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { PATH: '/x' });
+      const { command, args, opts } = fake.calls[0];
+      return { code: result.code, err: result.err, out: result.out, shown: result.shown, command, args, env: opts.env, stdio: opts.stdio, shell: opts.shell, during, left: [listed(state), fs.statSync(mine.auth).nlink] };
+    };
+    const plain = await once([]);
+    const named = await once(['--session', 'lean']);
+    assert.equal(plain.code, 0, plain.err);
+    assert.deepEqual(named, plain, platform);
+    const [first, second] = readCodexReviewRuns(root);
+    assert.deepEqual(second, first, `${platform}: the run line, to the field`);
+    // And what they share is the lean session: its argv, a home of the run's own holding the login alone, gone afterwards.
+    if (platform === 'win32') assert.equal(plain.command, windowsCommandLine('codex', leanArgv(base, 'win32')));
+    else assert.deepEqual(plain.args, leanArgv(base));
+    assert.deepEqual(plain.during, { home: path.join(leanHomesDir(state), RUN_ID), entries: ['auth.json'], links: 2 }, platform);
+    assert.equal(plain.env.CODEX_HOME, plain.during.home, platform);
+    assert.deepEqual(plain.left, [[], 1], platform);
+    assert.equal(first.session, 'lean', platform);
+  }
+  // Said twice, or beside the flags of a review, it is still the one session.
+  const { root, base } = makeRepo();
+  const twice = fakeCodex(reviewed(root, base));
+  assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', '--session', 'lean', '--prompt', 'codex', '--part-lines', '400', '--cwd', root], twice)).code, 0);
+  assert.deepEqual(twice.calls[0].args, leanArgv(base));
 });
 
-test('the usage names both sessions, lean first, and says that lean is the default and what `current` is for', async () => {
+// What `--session current` answers since the session was removed: the reason, and what a machine where the
+// lean session cannot run does instead. The usage follows it, as it follows every flag given wrong.
+const SESSION_REMOVED =
+  '`--session current` was removed on 2026-10-08: a review runs only on gpt-6.1-sol at high effort, and the model that session ran on could not be verified. ' +
+  'On a machine where the lean session cannot run, record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+
+test('--session current is a usage error since the session was removed: exit 2 with the reason and what to do instead, and nothing is probed, launched, made, logged or recorded', async () => {
+  const doc = featureDoc();
+  const cases = [
+    ['--session', 'current'],
+    ['--session', 'current', '--unavailable', 'model rejected'],
+    ['--unavailable', 'model rejected', '--session', 'current'],
+    // Beside the flags it once refused, and beside the session that is left, in either order.
+    ['--session', 'current', '--keep-home'],
+    ['--prompt', 'own', '--doc', doc, '--session', 'current'],
+    ['--part-lines', '400', '--session', 'current'],
+    ['--session', 'lean', '--session', 'current'],
+    ['--session', 'current', '--session', 'lean'],
+  ];
+  for (const flags of cases) {
+    const { root, base } = makeRepo();
+    const mine = fakeHome();
+    const state = tmp('js-harness-codex-review-state-');
+    const never = () => {
+      throw new Error('a flag given wrong makes no Codex home');
+    };
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', ...flags, '--home', state, '--cwd', root], { ...fake, homedir: mine.homedir, createLeanHome: never });
+    const which = flags.join(' ');
+    assert.equal(result.code, 2, which);
+    assert.equal(result.err.split('\n')[0], SESSION_REMOVED, which);
+    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> /, which);
+    assert.equal(result.out, '', which);
+    assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
+    assert.equal(fake.probes.length, 0, `${which}: nor probed`);
+    assert.equal(wrote(root), false, `${which}: no record, not even of the skip that was asked for`);
+    assert.equal(loggedRun(root), false, which);
+    assert.deepEqual(listed(state), [], `${which}: no home was made`);
+    assert.equal(fs.statSync(mine.auth).nlink, 1, which);
+  }
+  // The message names the model and the effort the command fixes, not a copy of them.
+  assert.ok(SESSION_REMOVED.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`));
+});
+
+// The last line of the usage: a run pays for no review twice, and the flag that reviews again on purpose.
+const STARTS_WHERE_RECORDS_END =
+  'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given.';
+
+test('the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on gpt-6.1-sol at high effort', async () => {
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
-  assert.match(result.err, /Usage: js-harness codex-review .*\[--session <lean\|current>\]/);
-  assert.match(result.err, /--session lean is the default/);
-  assert.ok(result.err.includes(`${LEAN_MODEL} at ${LEAN_EFFORT} effort`), result.err);
-  assert.match(result.err, /--session current .*your own Codex configuration/);
+  const [, , usage, loads, ...more] = result.err.split('\n');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(
+    loads,
+    `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
+  );
+  // What a person has to know of the cost before starting: how to see it, and that a large run is not started by itself.
+  // And what a review reads, with how a project says what it does not; and that it reviews nothing twice.
+  assert.deepEqual(more, [
+    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
+    STARTS_WHERE_RECORDS_END,
+  ]);
+  assert.ok(loads.includes('on gpt-6.1-sol at high effort'), loads);
+  // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
+  assert.doesNotMatch(result.err, /--session|current|medium|own model|your own Codex configuration loaded/);
 });
 
-test('a session that is neither `lean` nor `current` exits 2 with usage and does nothing', async () => {
+test('a `--session` that is not `lean` exits 2 with usage and does nothing', async () => {
   const { root, base } = makeRepo();
-  for (const session of ['fast', 'LEAN', 'lean ', 'default', '']) {
+  for (const session of ['fast', 'LEAN', 'lean ', 'default', '', 'Current', 'current ']) {
     const fake = fakeCodex(reviewed(root, base));
     const result = await run(['--base', 'HEAD~1', '--session', session, '--cwd', root], fake);
     assert.equal(result.code, 2, JSON.stringify(session));
-    assert.match(result.err, /--session must be `lean` or `current`/);
-    assert.match(result.err, /Usage: js-harness codex-review .*\[--session <lean\|current>\]/);
+    assert.equal(result.err.split('\n')[0], '--session must be `lean`: a review runs in one session, and the flag is still read only for the command lines that named it', JSON.stringify(session));
+    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> /);
     assert.equal(fake.calls.length, 0);
     assert.equal(fake.probes.length, 0);
   }
+  // A flag with no value is what it is for every flag.
+  const bare = await run(['--base', 'HEAD~1', '--cwd', root, '--session'], fakeCodex(reviewed(root, base)));
+  assert.equal(bare.code, 2);
+  assert.match(bare.err, /^--session requires a value/);
   assert.equal(wrote(root), false);
   assert.equal(loggedRun(root), false);
 });
@@ -1079,7 +1170,7 @@ test('on Windows the lean argv goes through the shell as one quoted line: no tok
   assert.equal(
     command,
     'codex exec review --json --ignore-user-config --ignore-rules --disable plugins --disable apps --disable hooks ' +
-      '-m gpt-6.1-sol -c "model_reasoning_effort=\\"medium\\"" -c sandbox_mode=read-only -c approval_policy=never ' +
+      '-m gpt-6.1-sol -c "model_reasoning_effort=\\"high\\"" -c sandbox_mode=read-only -c approval_policy=never ' +
       `-c "windows.sandbox=\\"unelevated\\"" -c skills.include_instructions=false --base ${base}`,
   );
 });
@@ -1088,44 +1179,38 @@ test('off Windows the lean argv names no Windows sandbox, whatever the host the 
   const { root, base } = makeRepo();
   for (const platform of ['linux', 'darwin']) {
     const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform });
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fake, platform });
     assert.equal(result.code, 0, result.err);
     assert.deepEqual(fake.calls[0].args, leanArgv(base, platform), platform);
     assert.equal(fake.calls[0].args.some((token) => token.includes('windows')), false, platform);
   }
 });
 
-test('the run line says which session ran: `lean` with its model and effort, `current` with neither', async () => {
+test('the run line says `lean`, the one session there is, with the model and the effort the command passed, however the attempt ends', async () => {
   const { root, base } = makeRepo();
-  await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base)));
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
+  await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   // With no session named the line says `lean`, the one that ran, and never a word for "the default".
-  await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base)));
   const runs = readCodexReviewRuns(root);
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.model, line.effort]), [
-    ['reviewed', 'current', null, null],
-    ['reviewed', 'lean', 'gpt-6.1-sol', 'medium'],
-    ['failed', 'lean', 'gpt-6.1-sol', 'medium'],
-    ['reviewed', 'lean', 'gpt-6.1-sol', 'medium'],
+    ['reviewed', 'lean', 'gpt-6.1-sol', 'high'],
+    ['failed', 'lean', 'gpt-6.1-sol', 'high'],
+    ['reviewed', 'lean', 'gpt-6.1-sol', 'high'],
   ]);
-  assert.deepEqual(Object.keys(runs[1]), Object.keys(runs[0]), 'the same fields in the same order under either session');
-  // The record of the review does not change with the session.
+  assert.deepEqual(Object.keys(runs[2]), Object.keys(runs[0]), 'the same fields in the same order, named or not');
   assert.deepEqual(readCodexReviews(root).map((record) => Object.keys(record)), [
-    ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run'],
     ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run'],
     ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run'],
   ]);
 });
 
-test('the line that announces the review names the lean session, and stays as it was for the current one', async () => {
+test('the line that announces the review names the session, and the model and the effort it runs on', async () => {
   const { root, base, head } = makeRepo();
   const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  const current = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(reviewed(root, base)));
-  assert.equal(current.out.split('\n')[0], `Codex is reviewing ${range}; this can take several minutes.`);
   for (const flags of [[], ['--session', 'lean']]) {
-    const lean = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fakeCodex(reviewed(root, base)));
-    assert.equal(lean.out.split('\n')[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, medium); this can take several minutes.`, flags.join(' '));
+    const lean = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fakeCodex(reviewed(root, base)));
+    assert.equal(afterPlan(lean.out)[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, high); this can take several minutes.`, flags.join(' '));
   }
 });
 
@@ -1216,22 +1301,6 @@ test('the lean session runs in a Codex home of its own: a new folder named after
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
 
-test('the current session is as it was: no CODEX_HOME, no folder made, and no home even asked for', async () => {
-  const { root, base } = makeRepo();
-  const state = tmp('js-harness-codex-review-state-');
-  const never = () => {
-    throw new Error('the current session must not ask where the home is');
-  };
-  const fake = fakeCodex(reviewed(root, base));
-  const env = { PATH: '/x', JS_HARNESS_HOME: state };
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fake, homedir: never, createLeanHome: never }, env);
-  assert.equal(result.code, 0, result.err);
-  assert.deepEqual(fake.calls[0].args, currentArgv(base));
-  assert.deepEqual(fake.calls[0].opts.env, env);
-  assert.equal('CODEX_HOME' in fake.calls[0].opts.env, false);
-  assert.deepEqual(listed(state), [], 'no lean home, and no state dir either');
-});
-
 test('a CODEX_HOME the user set is where the login is taken from, and the child gets the lean home instead', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome({ login: null });
@@ -1284,7 +1353,7 @@ test('off Windows a variable spelled in another case is another variable: the lo
     const fake = watching(fakeCodex(reviewed(root, base)), () => {
       links = { named: fs.statSync(other).nlink, default: fs.statSync(mine.auth).nlink };
     });
-    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { Codex_Home: elsewhere });
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fake, platform, homedir: mine.homedir }, { Codex_Home: elsewhere });
     assert.equal(result.code, 0, `${platform}: ${result.err}`);
     assert.deepEqual(links, { named: 1, default: 2 }, platform);
     assert.deepEqual(fake.calls[0].opts.env, { Codex_Home: elsewhere, CODEX_HOME: path.join(mine.homes, RUN_ID) }, platform);
@@ -1308,7 +1377,7 @@ test('where the lean homes go: --home, else JS_HARNESS_HOME, else the OS home; t
     const fake = watching(fakeCodex(reviewed(root, base)), () => {
       links = fs.statSync(mine.auth).nlink;
     });
-    const result = await run(['--base', 'HEAD~1', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
     assert.equal(result.code, 0, result.err);
     assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID));
     assert.equal(links, 2, 'the login of the real Codex home, wherever the state dir is');
@@ -1322,17 +1391,15 @@ test('a review leaves nothing on the machine: the folder of its homes and an emp
   const mine = fakeHome();
   const state = tmp('js-harness-codex-review-state-');
   const endings = [
-    [0, [], () => ({ ...fakeCodex(reviewed(root, base)) })],
-    [7, [], () => ({ ...fakeCodex(reviewed(root, base), { status: 7 }) })],
-    [1, [], () => ({ ...fakeCodex(reviewedWith(cmd('git status'))) })],
-    [1, [], () => ({ ...fakeCodex('', { hang: true }), timeoutMs: 30 })],
-    // The current session, measured in a home of the run's own, is tidied by the same code.
-    [0, ['--session', 'current'], () => ({ ...fakeCodex(reviewed(root, base)), measuredCurrent: { seed: () => {} } })],
+    [0, () => ({ ...fakeCodex(reviewed(root, base)) })],
+    [7, () => ({ ...fakeCodex(reviewed(root, base), { status: 7 }) })],
+    [1, () => ({ ...fakeCodex(reviewedWith(cmd('git status'))) })],
+    [1, () => ({ ...fakeCodex('', { hang: true }), timeoutMs: 30 })],
   ];
-  for (const [code, flags, fake] of endings) {
+  for (const [code, fake] of endings) {
     let during;
-    const result = await run(['--base', 'HEAD~1', ...flags, '--home', state, '--cwd', root], { ...watching(fake(), () => { during = listed(leanHomesDir(state)); }), homedir: mine.homedir });
-    assert.equal(result.code, code, `${flags.join(' ')}: ${result.err}`);
+    const result = await run(['--base', 'HEAD~1', '--again', '--home', state, '--cwd', root], { ...watching(fake(), () => { during = listed(leanHomesDir(state)); }), homedir: mine.homedir });
+    assert.equal(result.code, code, result.err);
     assert.deepEqual(during, [RUN_ID], 'the home was there while Codex ran');
     assert.deepEqual(listed(state), [], `exit ${code}: no \`.js-harness\` is left behind`);
     assert.doesNotMatch(result.err, /Warning/);
@@ -1340,10 +1407,10 @@ test('a review leaves nothing on the machine: the folder of its homes and an emp
   // A state dir that holds something else, as an installed harness's does, stays with what it held.
   fs.mkdirSync(path.join(state, '.js-harness'));
   fs.writeFileSync(path.join(state, '.js-harness', 'manifest.json'), '{}', 'utf8');
-  assert.equal((await run(['--base', 'HEAD~1', '--home', state, '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir })).code, 0);
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--home', state, '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir })).code, 0);
   assert.deepEqual(listed(path.join(state, '.js-harness')), ['manifest.json']);
   // And a home that was asked to be kept keeps the folders it is in.
-  const kept = await run(['--base', 'HEAD~1', '--keep-home', '--home', state, '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir });
+  const kept = await run(['--base', 'HEAD~1', '--again', '--keep-home', '--home', state, '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir });
   assert.equal(kept.code, 0, kept.err);
   assert.deepEqual(listed(leanHomesDir(state)), [RUN_ID]);
   assert.equal(fs.statSync(mine.auth).nlink, 1);
@@ -1368,7 +1435,7 @@ test('an empty --home or JS_HARNESS_HOME counts as unset: the next source is use
     ];
     for (const [flags, env, expected] of cases) {
       const fake = fakeCodex(reviewed(root, base));
-      const result = await run(['--base', 'HEAD~1', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
+      const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir }, env);
       const name = JSON.stringify([flags, env]);
       assert.equal(result.code, 0, `${name}: ${result.err}`);
       assert.equal(fake.calls[0].opts.env.CODEX_HOME, path.join(leanHomesDir(expected), RUN_ID), name);
@@ -1402,7 +1469,7 @@ test('the lean home is removed on every way out, and the login is left as it was
       codexWrites(home);
       seen = { home, links: fs.statSync(mine.auth).nlink };
     });
-    const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...watched, ...extra, homedir: mine.homedir });
+    const result = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...watched, ...extra, homedir: mine.homedir });
     assert.equal(result.code, code, name);
     assert.equal(seen.links, 2, name);
     assert.equal(fs.existsSync(seen.home), false, `${name}: the folder is gone`);
@@ -1414,7 +1481,7 @@ test('the lean home is removed on every way out, and the login is left as it was
   }
 
   // A spawn that throws launches nothing, and still leaves nothing.
-  const thrown = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(''), spawnAsync: spawnThrows, homedir: mine.homedir });
+  const thrown = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fakeCodex(''), spawnAsync: spawnThrows, homedir: mine.homedir });
   assert.equal(thrown.code, 1);
   assert.match(thrown.err, /could not start it: spawn EINVAL/);
   assert.deepEqual(listed(mine.homes), []);
@@ -1492,12 +1559,14 @@ test('a lean home that cannot be made launches nothing: exit 1 with the reason, 
   assert.equal(fs.statSync(mine.auth).nlink, 1);
 });
 
-// The last line of the refusal when the home of the lean session cannot be made. Lean is what a review
-// runs in when no session is named, so a machine it cannot run on is told the session that needs no home.
-const WAY_OUT = 'The way out: `--session current` runs the review on your own Codex configuration, which needs no Codex home of its own.';
+// The last line of the refusal when the home of the review cannot be made. There is no other session to
+// send a person to since 2026-10-08, so the way out of a machine the review cannot run on is the one the
+// command has for a review that could not be made at all: the explicit skip, in the words it uses elsewhere.
+const WAY_OUT = 'The way out, on a machine where the lean session cannot run: record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
 
-test('with no session named, a home that cannot be made is a refusal that names the way out, `--session current`: nothing launched, nothing left', async () => {
+test('a home that cannot be made is a refusal whose way out is to record the skip, whatever the flags: nothing launched, nothing left, and the skip it names is recorded', async () => {
   const { root, base, head } = makeRepo();
+  const doc = featureDoc();
   const failing = (code) => (options) => createLeanHome({
     ...options,
     link: () => {
@@ -1515,8 +1584,11 @@ test('with no session named, a home that cannot be made is a refusal that names 
     ['EPERM', {}, failing('EPERM'), /Could not hard-link .*\(EPERM\)/],
     ['mkdir', {}, noFolder, /Could not make the lean Codex home X \(EACCES\)/],
   ];
+  // The sentence names no flag to leave out, as it did while the way out was a session that refused some:
+  // it is the same one beside every flag of a review.
+  const commands = [[], ['--session', 'lean'], ['--keep-home'], ['--part-lines', '400'], ['--prompt', 'own', '--doc', doc], ['--keep-home', '--part-lines', '400', '--doc', doc, '--prompt', 'own', '--session', 'lean']];
   for (const [name, home, createHome, reason] of cases) {
-    for (const flags of [[], ['--session', 'lean']]) {
+    for (const flags of commands) {
       const mine = fakeHome(home);
       const fake = fakeCodex(reviewed(root, base));
       const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, homedir: mine.homedir, ...(createHome ? { createLeanHome: createHome } : {}) });
@@ -1524,6 +1596,7 @@ test('with no session named, a home that cannot be made is a refusal that names 
       assert.equal(result.code, 1, which);
       assert.match(result.err, reason, which);
       assert.deepEqual(result.err.split('\n').slice(-2), ['The lean review was not started and nothing was recorded.', WAY_OUT], which);
+      assert.doesNotMatch(result.err, /--session|current|Leave out/, which);
       assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
       assert.equal(wrote(root), false);
       assert.equal(loggedRun(root), false);
@@ -1531,62 +1604,20 @@ test('with no session named, a home that cannot be made is a refusal that names 
       if (home.login !== null) assert.equal(fs.statSync(mine.auth).nlink, 1);
     }
   }
-  // And the way out is one: on the machine with no `auth.json`, the session it names does review.
+  // And the way out is one: on the machine with no `auth.json`, the command it names records the skip.
   const loggedOut = fakeHome({ login: null });
-  const current = fakeCodex(reviewed(root, base));
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...current, homedir: loggedOut.homedir });
+  const skip = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--unavailable', 'no auth.json on this machine', '--cwd', root], { ...skip, homedir: loggedOut.homedir });
   assert.equal(result.code, 0, result.err);
-  assert.equal(current.calls.length, 1);
-  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+  assert.equal(skip.calls.length, 0);
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'no auth.json on this machine')]);
+  assert.deepEqual(listed(loggedOut.home), ['.codex']);
 });
 
-/** `argv` without the flags `names`, each with the value after it when it takes one (`valued`). */
-function withoutFlags(argv, names, valued = ['--prompt', '--doc', '--part-lines', '--session']) {
-  const kept = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    if (!names.includes(argv[i])) kept.push(argv[i]);
-    else if (valued.includes(argv[i])) i += 1;
-  }
-  return kept;
-}
-
-test('the way out names the flags to leave out when the refused command carried ones that go with the lean session alone, and the command it describes is taken', async () => {
-  const { root, base } = makeRepo();
-  const doc = featureDoc();
-  const leaveOut = (named, one) => `${WAY_OUT} Leave out ${named} with it: ${one ? 'that belongs' : 'those belong'} to the lean session, and the command refuses ${one ? 'it' : 'them'} beside \`--session current\`.`;
-  // `[the flags of the refused command, the way out it is told, the flags that sentence names]`.
-  const cases = [
-    [['--keep-home'], leaveOut('`--keep-home`', true), ['--keep-home']],
-    [['--part-lines', '400'], leaveOut('`--part-lines`', true), ['--part-lines']],
-    [['--prompt', 'own'], leaveOut('`--prompt own`', true), ['--prompt']],
-    [['--prompt', 'own', '--doc', doc], leaveOut('`--prompt own` and `--doc`', false), ['--prompt', '--doc']],
-    // All of them, in whatever order they were given: named in the order of the usage.
-    [['--keep-home', '--part-lines', '400', '--doc', doc, '--prompt', 'own', '--session', 'lean'], leaveOut('`--prompt own`, `--doc`, `--part-lines` and `--keep-home`', false), ['--prompt', '--doc', '--part-lines', '--keep-home']],
-    // None of them: the sentence is the one it was. `--prompt codex` is the current session's prompt too, and `--home` any session's.
-    [[], WAY_OUT, []],
-    [['--session', 'lean', '--prompt', 'codex', '--home', fakeHome().home], WAY_OUT, []],
-  ];
-  for (const [flags, wayOut, named] of cases) {
-    const which = flags.join(' ') || 'no flag';
-    const loggedOut = fakeHome({ login: null });
-    const refusedFake = fakeCodex(reviewed(root, base));
-    const refused = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...refusedFake, homedir: loggedOut.homedir });
-    assert.equal(refused.code, 1, which);
-    assert.deepEqual(refused.err.split('\n').slice(-2), ['The lean review was not started and nothing was recorded.', wayOut], which);
-    assert.equal(refusedFake.calls.length, 0, which);
-    // The command the sentence describes: the same one, with `--session current` and without what it names.
-    const described = ['--base', 'HEAD~1', ...withoutFlags(flags, [...named, '--session']), '--session', 'current', '--cwd', root];
-    const taken = fakeCodex(reviewed(root, base));
-    const result = await run(described, { ...taken, homedir: loggedOut.homedir });
-    assert.equal(result.code, 0, `${which}: ${result.err}`);
-    assert.equal(taken.calls.length, 1, which);
-    // And with any one of them left in, it is the usage error the sentence is there to spare.
-    for (const kept of named) {
-      const stillThere = ['--base', 'HEAD~1', ...withoutFlags(flags, [...named.filter((name) => name !== kept), '--session']), '--session', 'current', '--cwd', root];
-      assert.equal((await run(stillThere, { ...fakeCodex(reviewed(root, base)), homedir: loggedOut.homedir })).code, 2, `${which}: with ${kept} kept`);
-    }
-  }
-});
+/** An id source that fails. */
+const noId = () => {
+  throw new Error('no entropy');
+};
 
 test('a run id that cannot be made stops a lean review before it starts, since it names the home', async () => {
   const { root, base } = makeRepo();
@@ -1619,7 +1650,7 @@ test('a lean home that cannot be removed is a warning that names it, and the rev
   assert.match(reviewedRun.err, /^Warning: /m);
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 
-  const failed = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), homedir: mine.homedir, createLeanHome: stuck });
+  const failed = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), homedir: mine.homedir, createLeanHome: stuck });
   assert.equal(failed.code, 7);
   assert.ok(failed.err.includes(`could not remove ${homes[1]} (EBUSY)`), failed.err);
   assert.match(failed.err, /did not complete.*exited 7/is);
@@ -1722,7 +1753,7 @@ test('--keep-home when the login could not be taken out of the kept home: a warn
   assert.match(line, /next lean review removes/);
   // The attempt stands, and a failed one still keeps its exit code.
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
-  const failed = await run(['--base', 'HEAD~1', '--session', 'lean', '--keep-home', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), homedir: mine.homedir, createLeanHome: held, randomUUID: () => 'second-run' });
+  const failed = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--keep-home', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), homedir: mine.homedir, createLeanHome: held, randomUUID: () => 'second-run' });
   assert.equal(homes[1].dispose(), null);
   assert.equal(failed.code, 7);
   assert.match(failed.err, /^Warning: .*not left clean: could not remove .*second-run.*\(EPERM\)\.$/m);
@@ -1741,7 +1772,7 @@ test('a kept lean home is removed by a later lean review once it is older than t
   const kept = path.join(mine.homes, 'kept-run');
   assert.equal(fs.existsSync(kept), true);
   fs.utimesSync(kept, new Date(at - 21 * minute), new Date(at - 21 * minute));
-  const second = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir, timeoutMs: 10 * minute });
+  const second = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir, timeoutMs: 10 * minute });
   assert.equal(second.code, 0, second.err);
   assert.deepEqual(listed(mine.homes), []);
   assert.equal(fs.statSync(mine.auth).nlink, 1);
@@ -1756,22 +1787,7 @@ test('without --keep-home nothing is said about a kept home, and none is kept', 
   assert.deepEqual(listed(mine.homes), []);
 });
 
-test('--keep-home with --session current is a usage error: exit 2, and nothing runs', async () => {
-  const { root, base } = makeRepo();
-  for (const flags of [['--session', 'current', '--keep-home'], ['--keep-home', '--session', 'current'], ['--session', 'current', '--keep-home', '--unavailable', 'model rejected']]) {
-    const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
-    assert.equal(result.code, 2, flags.join(' '));
-    assert.match(result.err, /--keep-home does not go with --session current: only the lean session has a Codex home of its own to keep/);
-    assert.match(result.err, /Usage: js-harness codex-review .*\[--keep-home\]/);
-    assert.equal(fake.calls.length, 0);
-    assert.equal(fake.probes.length, 0);
-  }
-  assert.equal(wrote(root), false);
-  assert.equal(loggedRun(root), false);
-});
-
-test('the flags of the lean session need no --session, since lean is the default: --keep-home, --prompt own and --part-lines', async () => {
+test('the flags of a review need no --session, since there is one session: --keep-home, --prompt own and --part-lines', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome();
   const kept = await run(['--base', 'HEAD~1', '--keep-home', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir });
@@ -1779,13 +1795,13 @@ test('the flags of the lean session need no --session, since lean is the default
   assert.deepEqual(listed(mine.homes), [RUN_ID], 'the home of the run was kept');
   assert.ok(kept.out.includes(path.join(mine.homes, RUN_ID)));
   const asked = fakeCodex(reviewedWith(cmd(`git diff ${base} HEAD`, 0, patchOf(root, base))));
-  const own = await run(['--base', 'HEAD~1', '--prompt', 'own', '--cwd', root], asked);
+  const own = await run(['--base', 'HEAD~1', '--again', '--prompt', 'own', '--cwd', root], asked);
   assert.equal(own.code, 0, own.err);
   assert.equal(asked.calls[0].args.at(-1), '-', 'the own prompt goes in on stdin');
   assert.equal(asked.calls[0].args.includes('--base'), false);
   assert.ok(asked.calls[0].child.received.text.length > 0);
   const bounded = fakeCodex(reviewed(root, base));
-  const parts = await run(['--base', 'HEAD~1', '--part-lines', '400', '--cwd', root], bounded);
+  const parts = await run(['--base', 'HEAD~1', '--again', '--part-lines', '400', '--cwd', root], bounded);
   assert.equal(parts.code, 0, parts.err);
   assert.deepEqual(bounded.calls[0].args, leanArgv(base));
 });
@@ -1799,7 +1815,7 @@ const ownArgv = (platform = 'linux') => [
   '--ignore-user-config', '--ignore-rules',
   '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
   '-m', 'gpt-6.1-sol',
-  '-c', 'model_reasoning_effort="medium"',
+  '-c', 'model_reasoning_effort="high"',
   '-c', 'sandbox_mode=read-only',
   '-c', 'approval_policy=never',
   ...(platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : []),
@@ -1823,29 +1839,27 @@ function featureDoc(markdown = FEATURE_DOC) {
 
 test('codexArgs: under the own prompt the lean argv names no base and ends with `-`, the prompt on stdin', () => {
   const base = 'a'.repeat(40);
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'own'), [
+  assert.deepEqual(codexArgs(base, 'linux', 'own'), [
     'exec', 'review', '--json',
     '--ignore-user-config', '--ignore-rules',
     '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
     '-m', 'gpt-6.1-sol',
-    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'model_reasoning_effort="high"',
     '-c', 'sandbox_mode=read-only',
     '-c', 'approval_policy=never',
     '-c', 'skills.include_instructions=false',
     '-',
   ]);
   for (const platform of ['win32', 'linux', 'darwin']) {
-    const argv = codexArgs(base, 'lean', platform, 'own');
+    const argv = codexArgs(base, platform, 'own');
     assert.deepEqual(argv, ownArgv(platform), platform);
     // `--base` and a prompt exclude each other on Codex's command line: the range is in the prompt.
     assert.equal(argv.some((token) => token === '--base' || token.includes(base)), false, platform);
     assert.equal(argv.includes('--ephemeral'), false, platform);
   }
   // The default prompt is the argv as it was.
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex'), leanArgv(base));
-  assert.deepEqual(codexArgs(base, 'current', 'linux', 'codex'), currentArgv(base));
-  assert.throws(() => codexArgs(base, 'current', 'linux', 'own'), /lean/);
-  assert.throws(() => codexArgs(base, 'lean', 'linux', 'mine'), /prompt/);
+  assert.deepEqual(codexArgs(base, 'linux', 'codex'), leanArgv(base));
+  assert.throws(() => codexArgs(base, 'linux', 'mine'), /prompt/);
 });
 
 test('--prompt own hands Codex this command\'s prompt on stdin: the committed range, and no --base', async () => {
@@ -1865,11 +1879,11 @@ test('--prompt own hands Codex this command\'s prompt on stdin: the committed ra
 
 test('without --prompt, and with --prompt codex, the review is the `--base` one: nothing is sent on stdin', async () => {
   const { root, base } = makeRepo();
-  for (const flags of [[], ['--prompt', 'codex'], ['--session', 'lean'], ['--session', 'lean', '--prompt', 'codex'], ['--session', 'current'], ['--session', 'current', '--prompt', 'codex']]) {
+  for (const flags of [[], ['--prompt', 'codex'], ['--session', 'lean'], ['--session', 'lean', '--prompt', 'codex']]) {
     const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
     assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
-    assert.deepEqual(fake.calls[0].args, flags.includes('current') ? currentArgv(base) : leanArgv(base), flags.join(' '));
+    assert.deepEqual(fake.calls[0].args, leanArgv(base), flags.join(' '));
     assert.deepEqual(fake.calls[0].opts.stdio, ['ignore', 'pipe', 'inherit'], 'Codex would wait on an open stdin');
     assert.equal(fake.calls[0].child.stdin, null);
   }
@@ -1883,7 +1897,7 @@ test('--doc adds the Goal and the Done when of the feature document to the own p
   fs.writeFileSync(path.join(root, 'odd', 'feature.md'), FEATURE_DOC, 'utf8');
   for (const doc of [featureDoc(), path.join('odd', 'feature.md')]) {
     const fake = fakeCodex(reviewed(root, base));
-    const result = await run(['--base', 'HEAD~1', ...OWN, '--doc', doc, '--cwd', root], fake);
+    const result = await run(['--base', 'HEAD~1', '--again', ...OWN, '--doc', doc, '--cwd', root], fake);
     assert.equal(result.code, 0, result.err);
     assert.deepEqual(fake.calls[0].args, ownArgv(), 'the document changes the prompt and no argument');
     assert.equal(fake.calls[0].child.received.text, expected);
@@ -1912,43 +1926,38 @@ test('on Windows the own prompt never goes through cmd.exe: the line ends with `
 
 test('the run line says which prompt the review was asked with, and the version of this command\'s own', async () => {
   const { root, base } = makeRepo();
-  await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
-  await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
-  await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
+  await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
+  await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   const runs = readCodexReviewRuns(root);
   assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
-    ['reviewed', 'current', 'codex', null],
     ['reviewed', 'lean', 'codex', null],
     ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],
     ['failed', 'lean', 'own', REVIEW_PROMPT_VERSION],
   ]);
-  assert.deepEqual(runs.map(runPrompt), ['codex', 'codex', 'own', 'own']);
+  assert.deepEqual(runs.map(runPrompt), ['codex', 'own', 'own']);
   for (const line of runs) assert.deepEqual(Object.keys(line).filter((name) => name !== 'reason'), Object.keys(runs[0]), 'the same fields in the same order under either prompt');
   // The record of the review does not change with the prompt.
-  assert.deepEqual(readCodexReviews(root).map((record) => Object.keys(record)), Array.from({ length: 3 }, () => ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run']));
+  assert.deepEqual(readCodexReviews(root).map((record) => Object.keys(record)), Array.from({ length: 2 }, () => ['schema', 'base', 'head', 'reviewedAt', 'outcome', 'run']));
 });
 
 test('the line that announces the review names this command\'s own prompt when it is the one sent', async () => {
   const { root, base, head } = makeRepo();
   const result = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   assert.equal(
-    result.out.split('\n')[0],
-    `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`,
+    afterPlan(result.out)[0],
+    `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`,
   );
 });
 
-test('--prompt and --doc: a prompt that is not one, the own prompt under the current session, and a document with no own prompt are usage errors', async () => {
+test('--prompt and --doc: a prompt that is not one, and a document with no own prompt, are usage errors', async () => {
   const { root, base } = makeRepo();
   const doc = featureDoc();
   const cases = [
     [['--session', 'lean', '--prompt', 'mine'], /--prompt must be `codex` or `own`/],
     [['--prompt', 'OWN'], /--prompt must be `codex` or `own`/],
     [['--session', 'lean', '--prompt'], /--prompt requires a value/],
-    [['--session', 'current', '--prompt', 'own'], /--prompt own does not go with --session current: this command's own prompt is a configuration of the lean session/],
-    [['--prompt', 'own', '--session', 'current', '--unavailable', 'model rejected'], /--prompt own does not go with --session current/],
-    [['--session', 'current', '--doc', doc], /--doc needs --prompt own/],
     [['--session', 'lean', '--doc', doc], /--doc needs --prompt own/],
     [['--session', 'lean', '--prompt', 'codex', '--doc', doc], /--doc needs --prompt own/],
     [['--doc', doc], /--doc needs --prompt own/],
@@ -1998,7 +2007,7 @@ test('the evidence rule holds under the own prompt: every changed line in the ou
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 
   // A review that answered without reading the diff: a valid answer is not evidence that it did.
-  const unseen = await run(['--base', 'HEAD~1', ...OWN, '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
+  const unseen = await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
   assert.equal(unseen.code, 1);
   assert.match(unseen.err, /showed 0 of 2 changed lines/);
   const logged = readCodexReviewRuns(root).at(-1);
@@ -2024,7 +2033,7 @@ test('the evidence rule holds under the lean session with either prompt: a sessi
   for (const flags of [['--session', 'lean'], ['--session', 'lean', '--prompt', 'codex'], OWN]) {
     // The diff read file by file, as a model does on a range it does not print at once.
     const fake = fakeCodex(reviewedWith(...['a.txt', 'b.txt', 'c.txt'].map((file) => cmd(`git diff ${base} ${head} -- ${file}`, 0, diffOfFiles(root, base, head, file)))));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fake);
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
     assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
     const logged = readCodexReviewRuns(root).at(-1);
     assert.deepEqual([logged.outcome, logged.session, logged.coverage], ['reviewed', 'lean', { seen: 8, total: 8 }], flags.join(' '));
@@ -2068,15 +2077,6 @@ test('the files a refusal names are bounded: eight of them, and the rest counted
   const exact = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', atBound.root], fakeCodex(reviewedWith(cmd('git status'))));
   assert.match(exact.err, /not read in full: f00\.txt .*f07\.txt \(2 of 2 changed lines missing\)$/m);
   assert.doesNotMatch(exact.err, /more/);
-});
-
-test('the current session refuses as it did: the same words, and no list of files', async () => {
-  const { root } = makeThreeFileRepo();
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(reviewedWith(cmd('git status'))));
-  assert.equal(result.code, 1);
-  const [first, ...rest] = result.err.split('\n');
-  assert.match(first, /^Codex's turn completed, but its successful commands showed 0 of 8 changed lines of [0-9a-f]{7}\.\.HEAD; nothing was recorded\.$/);
-  assert.deepEqual(rest, ['  missing: a.txt: -a2', '  missing: a.txt: +A2 changed', '  missing: b.txt: -b2', 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.']);
 });
 
 test('a child that ends before it has read the prompt: the failed write is not an error of its own, and how the child ended is what is reported', async () => {
@@ -2163,7 +2163,7 @@ test('a lean review prints each finding as `file:line severity title` and then t
   // The host's own platform: the paths of the findings are the host's, as git gives them.
   for (const flags of [['--session', 'lean'], OWN]) {
     const fake = fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root));
-    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, platform: process.platform });
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, platform: process.platform });
     assert.equal(result.code, 0, result.err);
     const lines = result.out.split('\n');
     const at = lines.indexOf('f.txt:1 P1 [P1] Drops the last record');
@@ -2227,18 +2227,18 @@ test('the findings and the verdict are printed only for an attempt that stands: 
   assert.equal(wrote(root), false);
 });
 
-test('an attempt that stands is not said to fall, and one with no answer read has nothing to say of one', async () => {
+test('an attempt that stands is not said to fall, and one whose answer could not be read has nothing to say of one', async () => {
   const { root, base } = makeRepo();
   const stands = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root)), platform: process.platform });
   assert.equal(stands.code, 0, stands.err);
   assert.match(stands.out, /^Codex's verdict: the patch is incorrect/m);
   assert.doesNotMatch(stands.out, /does not stand/);
-  // An answer that could not be read is its own failure, said in the error; and the current session reads none.
-  const unread = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base), {}, PROBE_OK, 'not an answer'));
+  // An answer that could not be read is its own failure, said in the error, whether or not Codex completed.
+  const unread = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], fakeCodex(reviewed(root, base), {}, PROBE_OK, 'not an answer'));
   assert.equal(unread.code, 1);
-  const current = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
-  assert.equal(current.code, 7);
-  for (const result of [unread, current]) assert.doesNotMatch(result.out, /does not stand|verdict/);
+  const none = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, false));
+  assert.equal(none.code, 7);
+  for (const result of [unread, none]) assert.doesNotMatch(result.out, /does not stand|verdict/);
 });
 
 test('a lean review whose answer cannot be read as data is a failed attempt: logged with the reason, exit 1, and no record', async () => {
@@ -2297,21 +2297,24 @@ test('a Codex that did not complete fails as it did, with its own reason and exi
   assert.equal(wrote(root), false);
 });
 
-test('the current session reads no answer: nothing is printed of one and its run line holds none, whatever the home the user named holds', async () => {
+test('the answer is read from the home of the run and from no other: what the user\'s own Codex home holds of another review is never taken for this one', async () => {
   const { root, base, head } = makeRepo();
   const mine = fakeHome();
   const named = path.join(mine.home, 'named-codex-home');
-  // A review session with findings, as a real home may hold of a review that is not this one.
+  fs.mkdirSync(named);
+  fs.writeFileSync(path.join(named, 'auth.json'), LOGIN, 'utf8');
+  // A review session with three findings, as a real home may hold of a review that is not this one.
   writeRollouts(mine.codexHome, reviewSession(answerWith(root)));
   writeRollouts(named, reviewSession(answerWith(root)));
   for (const env of [{}, { CODEX_HOME: named }]) {
-    const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir }, env);
+    // This review found nothing, and says so in the home of its own run.
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir }, env);
     assert.equal(result.code, 0, result.err);
-    assert.equal(result.out.includes('Codex\'s verdict'), false);
+    assert.match(result.out, /^Codex's verdict: the patch is correct/m);
     assert.equal(result.out.split('\n').some((line) => FINDING_LINE.test(line)), false, result.out);
     const logged = readCodexReviewRuns(root).at(-1);
-    assert.deepEqual([logged.prompt, logged.promptVersion, logged.findings, logged.verdict, logged.answerSource], ['codex', null, null, null, null]);
-    assert.equal(runFindings(logged), null);
+    assert.deepEqual([logged.prompt, logged.promptVersion, logged.verdict, logged.answerSource], ['codex', null, 'correct', 'rollout']);
+    assert.deepEqual(runFindings(logged), { total: 0, bySeverity: { P0: 0, P1: 0, P2: 0, P3: 0, none: 0 } });
   }
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head), reviewedRecord(base, head)]);
 });
@@ -2373,54 +2376,24 @@ const REVIEW_SPENT = { inputTokens: 297479, cachedInputTokens: 240640, outputTok
 /** One `turn_context` line of a rollout file, which Codex writes for every turn with what the turn runs
  * with: the `model` and the `effort` among it (seen in a real file of codex-cli 0.161.0, names only). */
 const turnContext = (model, effort) => ({ type: 'turn_context', payload: { cwd: 'D:\\x', approval_policy: 'never', model, effort, summary: 'auto' } });
+/** `reviewThread` as a session that ran with what the command passes leaves it: a review of it stands. */
+const ranThread = [turnContext(REVIEW_MODEL, REVIEW_EFFORT), ...reviewThread];
 /** What a run line says its session ran with. */
 const sessionRan = (line) => [line.sessionModel, line.sessionEffort];
 
-test('a reviewed attempt of the current session leaves one run line: the range, the outcome, the CLI and how long it took, and nothing of what it spent', async () => {
+test('a reviewed attempt leaves one run line, dated when the review started and timed on the monotonic clock, and the record is written after the run ended and names it', async () => {
   const { root, base, head } = makeRepo();
-  // The wall clock is read when the review starts and when the record is written; the time between
-  // comes from the monotonic clock, in milliseconds with a fraction.
-  const now = clock('2026-09-29T12:00:00.000Z', '2026-09-29T12:02:00.000Z');
+  // The wall clock is read for the sweep of the old homes, then when the review starts and when the
+  // record is written; the time between comes from the monotonic clock, in milliseconds with a fraction.
+  const now = clock('2026-09-29T11:59:59.000Z', '2026-09-29T12:00:00.000Z', '2026-09-29T12:02:00.000Z');
   const monotonicNow = ticking(5000.4, 112000.2);
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now, monotonicNow });
-  assert.equal(result.code, 0);
-  const expected = {
-    schema: 'js-harness.codex-review-run/v1',
-    id: RUN_ID,
-    startedAt: '2026-09-29T12:00:00.000Z',
-    durationMs: 107000,
-    base,
-    from: base,
-    head,
-    outcome: 'reviewed',
-    cli: '0.159.1',
-    session: 'current',
-    model: null,
-    effort: null,
-    // The `--base` review, asked with the sentence Codex writes itself.
-    prompt: 'codex',
-    promptVersion: null,
-    // An ephemeral session in the user's own home: what it spent is written nowhere this command reads.
-    usage: UNKNOWN_USAGE,
-    usageSource: null,
-    requests: null,
-    firstRequestInputTokens: null,
-    threads: null,
-    // Nor is the model it ran with, which the user's configuration decides and that file alone would say.
-    sessionModel: null,
-    sessionEffort: null,
-    turns: 1,
-    items: { agent_message: 1, command_execution: 1 },
-    commands: { total: 1, failed: 0 },
-    coverage: { seen: 2, total: 2 },
-    // Nor is its answer: the rollout file that holds it as data is never written.
-    findings: null,
-    verdict: null,
-    answerSource: null,
-  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now, monotonicNow });
+  assert.equal(result.code, 0, result.err);
   const logged = onlyRun(root);
-  assert.deepEqual(logged, expected);
-  assert.deepEqual(Object.keys(logged), Object.keys(expected), 'the fields come in a fixed order');
+  assert.deepEqual(
+    [logged.id, logged.startedAt, logged.durationMs, logged.base, logged.from, logged.head, logged.outcome, logged.cli, logged.session],
+    [RUN_ID, '2026-09-29T12:00:00.000Z', 107000, base, base, head, 'reviewed', '0.159.1', 'lean'],
+  );
   // The record is written after the run ended, and names the run by its id.
   assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), reviewedAt: '2026-09-29T12:02:00.000Z' }]);
 });
@@ -2429,7 +2402,7 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
   const { root, base, head } = makeRepo();
   const mine = fakeHome();
   // Codex's own events report zeros for a review, and they are not what is kept.
-  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), parentThread, [turnContext('gpt-6.1-sol', 'medium'), ...reviewThread]);
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros)), parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]);
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, homedir: mine.homedir, monotonicNow: ticking(5000.4, 112000.2) });
   assert.equal(result.code, 0, result.err);
   const expected = {
@@ -2444,7 +2417,7 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
     cli: '0.159.1',
     session: 'lean',
     model: 'gpt-6.1-sol',
-    effort: 'medium',
+    effort: 'high',
     prompt: 'codex',
     promptVersion: null,
     usage: REVIEW_SPENT,
@@ -2454,7 +2427,7 @@ test('a lean attempt\'s run line holds what its rollout files say it spent: the 
     threads: 1,
     // The model and the effort the session itself wrote down, apart from the two the command passed above.
     sessionModel: 'gpt-6.1-sol',
-    sessionEffort: 'medium',
+    sessionEffort: 'high',
     turns: 1,
     items: { agent_message: 1, command_execution: 1 },
     commands: { total: 1, failed: 0 },
@@ -2476,7 +2449,7 @@ test('the counts of several threads are added up, and a lean home with no rollou
   const { root, base } = makeRepo();
   const mine = fakeHome();
   const second = [tokenCount(usageOf(1000, 512, 40, 10)), tokenCount(usageOf(2521, 1360, 104, 97), usageOf(1521, 848, 64, 87))];
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), reviewThread, second), homedir: mine.homedir });
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), ranThread, second), homedir: mine.homedir });
   const summed = onlyRun(root);
   assert.deepEqual(summed.usage, { inputTokens: 300000, cachedInputTokens: 242000, outputTokens: 2500, reasoningOutputTokens: 800 });
   assert.deepEqual([summed.usageSource, summed.requests, summed.firstRequestInputTokens, summed.threads], ['rollout', 9, 18200, 2]);
@@ -2484,7 +2457,7 @@ test('the counts of several threads are added up, and a lean home with no rollou
   // Codex wrote no rollout file (an older CLI, another layout): unknown, said as `null`, and never zeros.
   // With no file there is no answer to read either, which is what fails the attempt, not the tokens.
   const noFile = fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), {}, PROBE_OK, false);
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...noFile, homedir: mine.homedir });
+  await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...noFile, homedir: mine.homedir });
   const unknown = readCodexReviewRuns(root)[1];
   assert.deepEqual(unknown.usage, UNKNOWN_USAGE);
   assert.deepEqual([unknown.usageSource, unknown.requests, unknown.firstRequestInputTokens, unknown.threads], [null, null, null, null]);
@@ -2492,12 +2465,13 @@ test('the counts of several threads are added up, and a lean home with no rollou
   assert.match(unknown.reason, /no session of the review sub-agent/);
 
   // Rollout files with no count in them: the files were read, so no request and no thread, and still no
-  // token. What was not measured does not change how the review ends.
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), parentThread), homedir: mine.homedir });
+  // token. A thread that made no request names no model either, which is what fails the attempt.
+  await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), parentThread), homedir: mine.homedir });
   const empty = readCodexReviewRuns(root)[2];
   assert.deepEqual(empty.usage, UNKNOWN_USAGE);
   assert.deepEqual([empty.usageSource, empty.requests, empty.firstRequestInputTokens, empty.threads], [null, 0, null, 0]);
-  assert.equal(empty.outcome, 'reviewed');
+  assert.equal(empty.outcome, 'failed');
+  assert.match(empty.reason, /names no model/);
 });
 
 test('the tokens are read on every way out that launched Codex, before its home is removed', async () => {
@@ -2512,7 +2486,7 @@ test('the tokens are read on every way out that launched Codex, before its home 
     ['failed', fakeCodex(['x'.repeat(20), 'y'.repeat(20)]), { maxBuffer: 30 }],
   ];
   for (const [outcome, fake, extra] of endings) {
-    await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fake, parentThread, reviewThread), ...extra, homedir: mine.homedir });
+    await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...spending(fake, parentThread, ranThread), ...extra, homedir: mine.homedir });
     const logged = readCodexReviewRuns(root).at(-1);
     assert.equal(logged.outcome, outcome);
     assert.deepEqual(logged.usage, REVIEW_SPENT, outcome);
@@ -2523,19 +2497,25 @@ test('the tokens are read on every way out that launched Codex, before its home 
   assert.equal(fs.statSync(mine.auth).nlink, 1);
 });
 
-test('the current session reads no rollout file: not of the home the user named, nor of the one under the OS home', async () => {
+test('what a review spent and ran on is read from the home of the run and from no other: not from the home the user named, nor from the one under the OS home', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome();
   const named = path.join(mine.home, 'named-codex-home');
-  // Both hold rollout files with counts, as a real home does, of sessions that are not this review.
-  writeRollouts(mine.codexHome, reviewThread);
-  writeRollouts(named, reviewThread);
+  fs.mkdirSync(named);
+  fs.writeFileSync(path.join(named, 'auth.json'), LOGIN, 'utf8');
+  // Both hold rollout files with counts and a model, as a real home does, of sessions that are not this review.
+  writeRollouts(mine.codexHome, [turnContext('gpt-another-session', 'low'), ...reviewThread]);
+  writeRollouts(named, [turnContext('gpt-another-session', 'low'), ...reviewThread]);
   for (const env of [{}, { CODEX_HOME: named }]) {
-    const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent)), homedir: mine.homedir }, env);
-    assert.equal(result.code, 0, result.err);
+    // The home of this run holds the answer of one request and no total: nothing is known of what it spent,
+    // and that is what is said.
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), spent)), homedir: mine.homedir }, env);
+    assert.deepEqual([result.code, result.err], [0, '']);
     const logged = readCodexReviewRuns(root).at(-1);
     assert.deepEqual(logged.usage, UNKNOWN_USAGE);
-    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null]);
+    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, 1, null, 1]);
+    // Nor is the model of another session held against this review: it stands on the model its own file names.
+    assert.deepEqual([logged.outcome, ...sessionRan(logged)], ['reviewed', REVIEW_MODEL, null]);
   }
 });
 
@@ -2544,10 +2524,10 @@ test('a run line says which model and effort its session really ran with, read f
   const mine = fakeHome();
   const lean = (...threads) => run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), ...threads), homedir: mine.homedir });
   // The command asked for one model at one effort, and the session's own file says it ran with another:
-  // the line keeps both, and neither is written over the other.
+  // the line keeps both, and neither is written over the other. (Such an attempt does not stand: see below.)
   await lean(parentThread, [turnContext('gpt-first-turn', 'high'), ...reviewThread, turnContext('gpt-it-ran', 'low')]);
   const differs = readCodexReviewRuns(root).at(-1);
-  assert.deepEqual([differs.model, differs.effort], ['gpt-6.1-sol', 'medium'], 'what the command passed');
+  assert.deepEqual([differs.model, differs.effort], ['gpt-6.1-sol', 'high'], 'what the command passed');
   assert.deepEqual(sessionRan(differs), ['gpt-it-ran', 'low'], 'what the last turn of the session ran with');
   // The parent thread asks the model nothing, so what it names is not what the review ran with.
   await lean([turnContext('gpt-parent', 'high'), ...parentThread], reviewThread);
@@ -2558,16 +2538,134 @@ test('a run line says which model and effort its session really ran with, read f
   await lean([turnContext(7, 'low'), ...reviewThread]);
   assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, 'low']);
   // It is read on a way out that is no review too, as the tokens are.
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewedWith(cmd('git status'))), [turnContext('gpt-it-ran', 'low'), ...reviewThread]), homedir: mine.homedir });
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewedWith(cmd('git status'))), [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]), homedir: mine.homedir });
   const fell = readCodexReviewRuns(root).at(-1);
-  assert.deepEqual([fell.outcome, ...sessionRan(fell)], ['not-inspected', 'gpt-it-ran', 'low']);
-  // The `current` session as a person runs it reads no home, so it measures no model: not the one a
-  // session of the user's own home ran with, which is another session.
-  writeRollouts(mine.codexHome, [turnContext('gpt-another-session', 'high'), ...reviewThread]);
-  await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir });
-  const current = readCodexReviewRuns(root).at(-1);
-  assert.deepEqual([current.session, current.model, current.effort, ...sessionRan(current)], ['current', null, null, null, null]);
+  assert.deepEqual([fell.outcome, ...sessionRan(fell)], ['not-inspected', 'gpt-6.1-sol', 'high']);
   assert.equal(readCodexReviewRuns(root).every((line) => 'sessionModel' in line && 'sessionEffort' in line), true, 'every line has both fields, `null` when not known');
+});
+
+// --- one model: a review whose session ran on anything but what the command passed does not stand ---
+
+// What a refusal over the model or the effort ends with, after the two it names.
+const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+
+/** A lean review of `root` that showed the whole patch, rendered `FINDINGS` and answered with three
+ * findings, in a session whose own rollout file says it ran with `ran` (a `turnContext`, or none). */
+const leanReviewThatRan = (root, base, ran, mine, extra = {}) => run(
+  ['--base', 'HEAD~1', '--cwd', root],
+  { ...spending(fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root)), parentThread, [...(ran ? [ran] : []), ...reviewThread]), homedir: mine.homedir, platform: process.platform, ...extra },
+);
+
+test('a lean review whose session ran on another model does not stand: no record, nothing of its answer shown, exit 1, and a failed run line that names what was asked and what ran', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const result = await leanReviewThatRan(root, base, turnContext('gpt-6-astra', 'high'), mine);
+  assert.equal(result.code, 1);
+  const why = 'its session ran on gpt-6-astra at high effort, and the command passed gpt-6.1-sol at high effort';
+  assert.equal(result.err, `Codex's turn completed, but ${why}${RAN_ON_ANOTHER}`);
+  // Nothing of the answer: not the review as Codex rendered it, not a finding, not the verdict.
+  assert.equal(result.shown, '', 'what Codex rendered is not passed through');
+  const lines = result.out.split('\n');
+  assert.equal(lines.some((line) => FINDING_LINE.test(line) || /verdict|the patch is/.test(line)), false, result.out);
+  assert.equal(lines.filter((line) => line === NOT_STANDING).length, 1, result.out);
+  assert.doesNotMatch(result.out, /Recorded/);
+  assert.equal(wrote(root), false, 'no record');
+  // The run line: a failed attempt, with the reason, both pairs, and what it measured all the same.
+  const logged = onlyRun(root);
+  assert.deepEqual([logged.outcome, logged.reason], ['failed', why]);
+  assert.deepEqual([logged.model, logged.effort, ...sessionRan(logged)], ['gpt-6.1-sol', 'high', 'gpt-6-astra', 'high']);
+  assert.deepEqual([logged.usage, logged.findings, logged.coverage], [REVIEW_SPENT, THREE_FOUND, { seen: 2, total: 2 }]);
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
+});
+
+test('a lean review whose session ran at another effort does not stand either, and each of the two is held to on its own', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const asked = 'and the command passed gpt-6.1-sol at high effort';
+  const refusals = [
+    // The effort the command passed until 2026-10-08, on the right model.
+    [turnContext('gpt-6.1-sol', 'medium'), 'its session ran on gpt-6.1-sol at medium effort'],
+    [turnContext('gpt-6-astra', 'low'), 'its session ran on gpt-6-astra at low effort'],
+    // One of the two is not known and the other differs: what is known is enough.
+    [turnContext('gpt-6-astra', undefined), 'its session ran on gpt-6-astra at an effort its rollout file does not name'],
+    [turnContext(7, 'low'), 'its session ran on a model its rollout file does not name at low effort'],
+  ];
+  for (const [ran, said] of refusals) {
+    const result = await leanReviewThatRan(root, base, ran, mine);
+    assert.equal(result.code, 1, said);
+    assert.equal(result.err, `Codex's turn completed, but ${said}, ${asked}${RAN_ON_ANOTHER}`);
+    assert.equal(result.shown, '', said);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual([logged.outcome, logged.reason], ['failed', `${said}, ${asked}`]);
+  }
+  assert.equal(wrote(root), false);
+});
+
+test('a lean review whose session names no model does not stand: a review that cannot say which model it ran on is refused as one that ran on another', async () => {
+  const mine = fakeHome();
+  const why = 'its session\'s rollout file names no model, so nothing says that it ran on gpt-6.1-sol, the model the command passed';
+  const unnamed = [
+    // No `turn_context` line at all, as the files this reader was first written against.
+    [null, [null, null]],
+    // The effort the command passed, beside a model that is no name: the effort does not stand in for it.
+    [turnContext(7, 'high'), [null, 'high']],
+  ];
+  for (const [ran, measured] of unnamed) {
+    const { root, base } = makeRepo();
+    const result = await leanReviewThatRan(root, base, ran, mine);
+    assert.equal(result.code, 1, JSON.stringify(measured));
+    assert.equal(
+      result.err,
+      `Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n` +
+        'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.',
+    );
+    // Nothing of the answer, as for a session that ran on another model: nobody can say whose review it is.
+    assert.equal(result.shown, '', 'what Codex rendered is not passed through');
+    const lines = result.out.split('\n');
+    assert.equal(lines.some((line) => FINDING_LINE.test(line) || /verdict|the patch is/.test(line)), false, result.out);
+    assert.equal(lines.filter((line) => line === NOT_STANDING).length, 1, result.out);
+    assert.equal(wrote(root), false, 'no record');
+    // The run line: a failed attempt, with the reason, what was asked and what it measured all the same.
+    const logged = onlyRun(root);
+    assert.deepEqual([logged.outcome, logged.reason, logged.model, logged.effort, ...sessionRan(logged)], ['failed', why, 'gpt-6.1-sol', 'high', ...measured]);
+    assert.deepEqual([logged.usage, logged.findings, logged.coverage], [REVIEW_SPENT, THREE_FOUND, { seen: 2, total: 2 }]);
+  }
+  assert.deepEqual(listed(mine.homes), []);
+});
+
+test('the effort keeps its rule: a lean review whose session names the model and no effort stands, since what was not measured of the effort is not held against it', async () => {
+  const mine = fakeHome();
+  const named = [
+    // The model the command passed and no effort.
+    [turnContext('gpt-6.1-sol', undefined), ['gpt-6.1-sol', null]],
+    // And both, as asked.
+    [turnContext('gpt-6.1-sol', 'high'), ['gpt-6.1-sol', 'high']],
+  ];
+  for (const [ran, measured] of named) {
+    const { root, base, head } = makeRepo();
+    const result = await leanReviewThatRan(root, base, ran, mine);
+    assert.deepEqual([result.code, result.err], [0, ''], JSON.stringify(measured));
+    assert.ok(result.shown.includes(FINDINGS), 'the review is passed through');
+    assert.match(result.out, /^Codex's verdict: the patch is incorrect/m);
+    assert.doesNotMatch(result.out, /does not stand/);
+    const logged = onlyRun(root);
+    assert.deepEqual([logged.outcome, 'reason' in logged, ...sessionRan(logged)], ['reviewed', false, ...measured]);
+    assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+  }
+});
+
+test('when the turn did not complete, that is what is said, whatever the session ran on: the model is asked of a review that completed', async () => {
+  const { root, base } = makeRepo();
+  const mine = fakeHome();
+  const fake = spending(fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, answerWith(root)), parentThread, [turnContext('gpt-6-astra', 'low'), ...reviewThread]);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, homedir: mine.homedir, platform: process.platform });
+  assert.equal(result.code, 7);
+  assert.match(result.err, /The Codex review did not complete \(it exited 7\)/);
+  assert.doesNotMatch(result.err, /its session ran on/);
+  assert.deepEqual([onlyRun(root).outcome, onlyRun(root).reason, ...sessionRan(onlyRun(root))], ['failed', 'it exited 7', 'gpt-6-astra', 'low']);
+  // Nor is what it rendered shown: it is the review of a model the command did not ask for.
+  assert.equal(result.shown, '');
 });
 
 test('the run log is a second file in the folder of the review record, and a run line is not a record', async () => {
@@ -2584,7 +2682,7 @@ test('without an injected id each run gets a UUID of its own, and the record nam
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, randomUUID: undefined });
-  await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, randomUUID: undefined });
+  await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, randomUUID: undefined });
   const ids = readCodexReviewRuns(root).map((line) => line.id);
   assert.equal(ids.length, 2);
   for (const id of ids) assert.match(id, UUID);
@@ -2592,22 +2690,17 @@ test('without an injected id each run gets a UUID of its own, and the record nam
   assert.deepEqual(readCodexReviews(root).map((record) => record.run), ids);
 });
 
-test('the run line holds the turns and every item by type, known or not; the usage of Codex\'s events is not kept, under either session', async () => {
+test('the run line holds the turns and every item by type, known or not; the usage of Codex\'s events is not kept', async () => {
   const { root, base } = makeRepo();
   const other = { type: 'item.completed', item: { id: 'x', type: 'mcp_tool_call', server: 's', tool: 't' } };
   const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
   const events = jsonl(thread, turn, reasoning, cmd('git status', 128), spent, turn, other, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), spent);
-  // Under `lean` too, with no rollout file to read: a `usage` in the events is never taken instead.
-  const lean = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], fakeCodex(events));
-  assert.equal(lean.code, 0, lean.err);
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex(events));
-  assert.equal(result.code, 0);
-  const [leanRun, logged] = readCodexReviewRuns(root);
-  assert.deepEqual([leanRun.session, logged.session], ['lean', 'current']);
-  for (const line of [leanRun, logged]) {
-    assert.deepEqual(line.usage, UNKNOWN_USAGE);
-    assert.equal(line.usageSource, null);
-  }
+  // With no count in the rollout files of its home, a `usage` in the events is never taken instead.
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(events));
+  assert.equal(result.code, 0, result.err);
+  const logged = onlyRun(root);
+  assert.deepEqual(logged.usage, UNKNOWN_USAGE);
+  assert.equal(logged.usageSource, null);
   assert.equal(logged.turns, 2);
   assert.deepEqual(logged.items, { agent_message: 1, command_execution: 2, mcp_tool_call: 1, reasoning: 2 });
   assert.deepEqual(logged.commands, { total: 2, failed: 1 });
@@ -2682,12 +2775,13 @@ test('a failed attempt still holds what Codex spent before it failed', async () 
 
 test('an attempt that never started has a run line with nothing measured: null counts, not zeros', async () => {
   const { root } = makeRepo();
-  for (const session of ['current', 'lean']) {
-    await run(['--base', 'HEAD~1', '--session', session, '--cwd', root], fakeCodex('', { error: new Error('boom') }));
+  for (const flags of [[], ['--session', 'lean']]) {
+    const which = flags.join(' ') || 'no flag';
+    await run(['--base', 'HEAD~1', ...flags, '--cwd', root], fakeCodex('', { error: new Error('boom') }));
     const logged = readCodexReviewRuns(root).at(-1);
-    assert.equal(logged.session, session);
-    assert.deepEqual(logged.usage, UNKNOWN_USAGE, session);
-    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null], session);
+    assert.equal(logged.session, 'lean', which);
+    assert.deepEqual(logged.usage, UNKNOWN_USAGE, which);
+    assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], [null, null, null, null], which);
     assert.equal(logged.turns, 0);
     assert.deepEqual(logged.items, {});
     assert.deepEqual(logged.commands, { total: 0, failed: 0 });
@@ -2738,16 +2832,16 @@ test('what launches no Codex leaves no run line: a skip, a refusal, a missing CL
   const unknown = await run(['--base', 'no-such-rev', '--cwd', root], fakeCodex(reviewed(root, base)));
   assert.equal(unknown.code, 1);
 
-  const missing = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base), {}, { status: 1, stdout: '' }));
+  const missing = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base), {}, { status: 1, stdout: '' }));
   assert.match(missing.err, /npm i -g @openai\/codex/);
 
   const fake = fakeCodex(reviewed(root, base));
   const noDiff = (command, args, opts) =>
     command === 'git' && args[0] === 'diff' ? { status: 128, stdout: '', stderr: 'fatal: bad object' } : fake.spawn(command, args, opts);
-  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawn: noDiff })).code, 1);
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, spawn: noDiff })).code, 1);
 
   fs.writeFileSync(path.join(root, 'f.txt'), 'dirty', 'utf8');
-  const dirty = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  const dirty = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base)));
   assert.match(dirty.err, /commit or stash/i);
 
   assert.equal(loggedRun(root), false);
@@ -2778,7 +2872,7 @@ test('a monotonic clock that gives no finite number leaves the wall time unknown
   const { root, base, head } = makeRepo();
   const broken = [() => Number.NaN, ticking(0, Infinity), ticking(-Infinity, 0), () => undefined, () => '2500', ticking(0, null)];
   for (const monotonicNow of broken) {
-    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow });
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base)), monotonicNow });
     assert.equal(result.code, 0, result.err);
     assert.match(result.out, /^Codex ran for unknown s; /m);
     assert.doesNotMatch(result.out, /NaN|Infinity/);
@@ -2799,7 +2893,7 @@ test('a monotonic clock that throws does not change how an attempt ends: the wal
   assert.equal(result.code, 0, result.err);
   assert.equal(onlyRun(root).durationMs, null);
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
-  const failed = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), monotonicNow: noClock });
+  const failed = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), monotonicNow: noClock });
   assert.equal(failed.code, 7);
   assert.match(failed.err, /did not complete.*exited 7/is);
 });
@@ -2839,34 +2933,34 @@ test('a record that cannot be written after a reviewed run: exit 1, the error sa
   assert.deepEqual(readCodexReviews(root), []);
 });
 
-/** An id source that fails: the run line cannot even be built. */
-const noId = () => {
-  throw new Error('no entropy');
-};
+/** A wall clock whose reading at the start of the review is no date, so that the run line cannot even be
+ * built (its `startedAt` cannot be written). The readings around it are dates: the one before, for the
+ * sweep of the old homes, and the one after, for the record. The id of the run is no way to the same
+ * failure: it is made before the launch, to name the home, and a source that fails starts no review
+ * (tested with the lean home, above). */
+const noStartDate = () => clock('2026-09-29T12:00:00.000Z', 'no date at all', '2026-09-29T12:00:00.000Z');
 
-// Under the current session, which makes its id when the run line is built. The lean session makes it
-// before the launch, to name its home, so an id source that fails starts no review there (tested with the
-// lean home, above).
-test('under the current session a run line that cannot be built is the same warning: the reviewed attempt still writes its record, naming no run', async () => {
+test('a run line that cannot be built is the same warning: the reviewed attempt still writes its record, naming no run', async () => {
   const { root, base, head } = makeRepo();
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), randomUUID: noId });
-  assert.equal(result.code, 0);
-  assert.match(result.err, /Could not write the run log.*no entropy/);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base)), now: noStartDate() });
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.err, /^Could not write the run log, so what this attempt measured was not kept: Invalid time value$/);
   const { run: _run, ...withoutRun } = reviewedRecord(base, head);
   assert.deepEqual(readCodexReviews(root), [withoutRun]);
   assert.match(result.out, /Recorded the Codex review/);
   assert.equal(loggedRun(root), false);
+  assert.deepEqual(listed(leanHomesDir(osHome)), [], 'and its home went as it does');
 });
 
-test('under the current session a run line that cannot be built does not change how a failed attempt ends', async () => {
+test('a run line that cannot be built does not change how a failed attempt ends', async () => {
   const { root, base } = makeRepo();
-  const failed = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), randomUUID: noId });
+  const failed = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), now: noStartDate() });
   assert.equal(failed.code, 7);
-  assert.match(failed.err, /Could not write the run log.*no entropy/);
+  assert.match(failed.err, /Could not write the run log.*Invalid time value/);
   assert.match(failed.err, /did not complete.*exited 7/is);
-  const unseen = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewedWith(cmd('git status'))), randomUUID: noId });
+  const unseen = await run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(reviewedWith(cmd('git status'))), now: noStartDate() });
   assert.equal(unseen.code, 1);
-  assert.match(unseen.err, /Could not write the run log.*no entropy/);
+  assert.match(unseen.err, /Could not write the run log.*Invalid time value/);
   assert.match(unseen.err, /showed 0 of 2 changed lines/);
   assert.equal(wrote(root), false);
   assert.equal(loggedRun(root), false);
@@ -2900,7 +2994,7 @@ test('a run log that cannot be written does not change how a failed attempt ends
 test('after a lean run one line says what Codex spent: tokens, wall time, requests and the items, most frequent first', async () => {
   const { root, base } = makeRepo();
   const statuses = Array.from({ length: 5 }, () => cmd('git status'));
-  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), zeros)), parentThread, reviewThread);
+  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), ...statuses, msg(FINDINGS), zeros)), parentThread, ranThread);
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, monotonicNow: ticking(0, 107000) });
   assert.equal(result.code, 0);
   const lines = result.out.split('\n');
@@ -2913,36 +3007,31 @@ test('after a lean run one line says what Codex spent: tokens, wall time, reques
 test('the summary says `unknown` for a count the rollout files did not report, and one request is one `request`', async () => {
   const { root, base } = makeRepo();
   const reasoning = { type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'thinking' } };
-  const partial = spending(fakeCodex(jsonl(thread, turn, reasoning, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), zeros)), [tokenCount({ input_tokens: 1200, output_tokens: 0 })]);
+  const partial = spending(fakeCodex(jsonl(thread, turn, reasoning, cmd(diffCmd(base), 0, patchOf(root, base)), reasoning, msg(FINDINGS), zeros)), [turnContext(REVIEW_MODEL, REVIEW_EFFORT), tokenCount({ input_tokens: 1200, output_tokens: 0 })]);
   const reviewedRun = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], partial);
   assert.ok(reviewedRun.out.includes('Codex used 1,200 input tokens (unknown cached) and 0 output (unknown reasoning) in 0 s over 1 request: 2 reasoning, 1 agent_message, 1 command_execution.'), reviewedRun.out);
   // A wall time that was not measured is said in this line as in the other.
-  const untimed = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), reviewThread), monotonicNow: () => Number.NaN });
+  const untimed = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), ranThread), monotonicNow: () => Number.NaN });
   assert.match(untimed.out, /\(703 reasoning\) in unknown s over 7 requests: /);
 });
 
 test('when the tokens are not known the summary says so plainly, with no zeros and no row of `unknown`', async () => {
   const { root, base } = makeRepo();
-  // The current session: ephemeral, so Codex writes its tokens nowhere, whatever its events carry.
+  // The home of the run held no token count, whatever Codex's own events carry: they are never taken instead.
   for (const completed of [zeros, spent, done]) {
-    const current = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), completed)), monotonicNow: ticking(0, 18000) });
-    assert.equal(current.code, 0);
-    const lines = current.out.split('\n');
-    const at = lines.indexOf('Codex ran for 18 s; its tokens are not known for this session (an ephemeral review reports none): 1 agent_message, 1 command_execution.');
-    assert.notEqual(at, -1, current.out);
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), completed)), monotonicNow: ticking(0, 18000) });
+    assert.equal(result.code, 0, result.err);
+    const lines = result.out.split('\n');
+    const at = lines.indexOf('Codex ran for 18 s; its tokens are not known for this session (its Codex home held no token count): 1 agent_message, 1 command_execution.');
+    assert.notEqual(at, -1, result.out);
     assert.ok(at > lines.findIndex((line) => /exit 0 {2}/.test(line)), 'after the commands');
     assert.ok(at < lines.findIndex((line) => /^Recorded/.test(line)), 'before the record');
-    assert.doesNotMatch(current.out, /Codex used|unknown| 0 input| 0 output/);
+    assert.doesNotMatch(result.out, /Codex used|unknown| 0 input| 0 output|ephemeral/);
   }
   // It is printed for a failed attempt too.
-  const failed = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
+  const failed = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
   assert.equal(failed.code, 1);
-  assert.ok(failed.out.includes('Codex ran for 0 s; its tokens are not known for this session (an ephemeral review reports none): no items.'), failed.out);
-  // The lean session, the default, is not ephemeral, so its reason is another: its home held nothing to read.
-  const lean = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
-  assert.equal(lean.code, 0, lean.err);
-  assert.ok(lean.out.includes('Codex ran for 0 s; its tokens are not known for this session (its Codex home held no token count): 1 agent_message, 1 command_execution.'), lean.out);
-  assert.doesNotMatch(lean.out, /Codex used|ephemeral/);
+  assert.ok(failed.out.includes('Codex ran for 0 s; its tokens are not known for this session (its Codex home held no token count): no items.'), failed.out);
 });
 
 // --- a large range, in parts: several lean sessions, one after another, each over some of the files ---
@@ -3035,10 +3124,10 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
   // What is said: that the range is split and why each part is asked as it is, each part as it starts, and the record.
   const lines = result.out.split('\n');
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  assert.equal(lines[0], `The range ${short} changes 8 lines in 3 files, more than the 6 a part holds, so it is reviewed in 2 parts, one after another.`);
-  assert.equal(lines[1], 'Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
-  assert.ok(lines.includes(`Codex is reviewing part 1 of 2 of ${short} (2 files, 6 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
-  assert.ok(lines.includes(`Codex is reviewing part 2 of 2 of ${short} (1 file, 2 changed lines) with the lean session (gpt-6.1-sol, medium) and this command's own prompt; this can take several minutes.`), result.out);
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 8 lines in 3 files, more than the 6 a part holds, so it is reviewed in 2 parts, one after another.`);
+  assert.equal(afterPlan(result.out)[1], 'Each part is asked with this command\'s own prompt: the sentence Codex writes for `--base` cannot be limited to some files.');
+  assert.ok(lines.includes(`Codex is reviewing part 1 of 2 of ${short} (2 files, 6 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
+  assert.ok(lines.includes(`Codex is reviewing part 2 of 2 of ${short} (1 file, 2 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
   assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short}, made in 2 parts, in .*codex-reviews\\.jsonl\\.$`));
 });
 
@@ -3046,16 +3135,43 @@ test('the run line of each part says what its own session ran with', async () =>
   const { root, base, head } = makeThreeFileRepo();
   const mine = fakeHome();
   const fake = fakeCodexInParts(
-    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [parentThread, [turnContext('gpt-part-one', 'low'), ...reviewThread]] },
-    { stdout: partShown(root, base, head, 'c.txt'), threads: [parentThread, reviewThread] },
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]] },
+    { stdout: partShown(root, base, head, 'c.txt'), threads: [parentThread, [turnContext('gpt-6.1-sol', undefined), ...reviewThread]] },
   );
   const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
   // Each part is a session in a home of its own, so the second does not repeat what the first one measured.
   assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part.index, line.model, line.effort, ...sessionRan(line)]), [
-    [1, 'gpt-6.1-sol', 'medium', 'gpt-part-one', 'low'],
-    [2, 'gpt-6.1-sol', 'medium', null, null],
+    [1, 'gpt-6.1-sol', 'high', 'gpt-6.1-sol', 'high'],
+    [2, 'gpt-6.1-sol', 'high', 'gpt-6.1-sol', null],
   ]);
+});
+
+test('a part whose session ran on another model fails the range: the parts after it are not started, nothing any part answered is shown, and no review is recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const mine = fakeHome();
+  // Three parts. The first passes, with findings, on the model the command passed; the second ran another.
+  const fake = fakeCodexInParts(
+    { stdout: partSaid(RENDERED[0], root, base, head, 'a.txt'), said: answerWith(root), threads: [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]] },
+    { stdout: partSaid(RENDERED[1], root, base, head, 'b.txt'), said: answerWith(root), threads: [parentThread, [turnContext('gpt-6-astra', 'low'), ...reviewThread]] },
+  );
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, platform: process.platform, randomUUID: runIds() });
+  assert.equal(result.code, 1);
+  assert.equal(fake.calls.length, 2, 'the third part was never started');
+  const why = 'its session ran on gpt-6-astra at low effort, and the command passed gpt-6.1-sol at high effort';
+  assert.ok(result.err.includes(`Codex's turn completed, but ${why}; a review that ran on anything else does not stand`), result.err);
+  assert.match(result.err, /^Part 2 of 3 \(b\.txt\) did not pass, so the part after it was not started and no review of [0-9a-f]{7}\.\.[0-9a-f]{7} was recorded\.\nThe part before it passed, and what it answered is not shown: without every part it is no review of [0-9a-f]{7}\.\.[0-9a-f]{7}\.$/m);
+  // Nothing of what either part answered, in either form.
+  assert.equal(result.shown, '');
+  assert.equal(result.out.split('\n').some((line) => FINDING_LINE.test(line) || /verdict|the patch is|as Codex rendered/.test(line)), false, result.out);
+  assert.doesNotMatch(`${result.out}\n${result.err}`, /Rendered of|Recorded|All \d parts/);
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part.index, line.outcome, line.reason ?? null, ...sessionRan(line)]), [
+    [1, 'reviewed', null, 'gpt-6.1-sol', 'high'],
+    [2, 'failed', why, 'gpt-6-astra', 'low'],
+  ]);
+  assert.equal(wrote(root), false);
+  assert.deepEqual(listed(mine.homes), []);
+  assert.equal(fs.statSync(mine.auth).nlink, 1);
 });
 
 test('a run line of a part that cannot be written leaves its place empty in the record: `runs` has an entry for every part, and `run` is there only when the last part has its line', async () => {
@@ -3113,7 +3229,7 @@ test('a lean range of more files than a part holds is reviewed in parts though i
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  assert.equal(result.out.split('\n')[0], `The range ${short} changes 82 lines in 41 files, more files than the 40 a part holds, so it is reviewed in 2 parts, one after another.`);
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 82 lines in 41 files, more files than the 40 a part holds, so it is reviewed in 2 parts, one after another.`);
   assert.deepEqual(readCodexReviewRuns(root).map((line) => line.part), [{ index: 1, of: 2, files: 40, changedLines: 80 }, { index: 2, of: 2, files: 1, changedLines: 2 }]);
   // The command the first part is told to run names forty files and stops there.
   const asked = fake.calls[0].child.received.text;
@@ -3135,8 +3251,8 @@ test('the findings of every part are printed once, after the last part, by file 
   const lines = [];
   let beforeLastPart;
   const fake = fakeCodexInParts(
-    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), said: first, threads: [parentThread, reviewThread] },
-    { stdout: partShown(root, base, head, 'c.txt'), said: second, threads: [parentThread, reviewThread], during: () => { beforeLastPart = [...lines]; } },
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), said: first, threads: [parentThread, ranThread] },
+    { stdout: partShown(root, base, head, 'c.txt'), said: second, threads: [parentThread, ranThread], during: () => { beforeLastPart = [...lines]; } },
   );
   const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: runIds(), monotonicNow: ticking(0, 10000, 20000, 40000), log: (line) => lines.push(line) });
   assert.equal(result.code, 0, result.err);
@@ -3172,8 +3288,8 @@ test('the totals of a range reviewed in parts say what is not known instead of a
   assert.equal(none.code, 0, none.err);
   assert.ok(none.out.split('\n').includes('All 2 parts passed, in 9 s; the tokens of the whole are not known, since the Codex home of a part held no token count.'), none.out);
   // One part did and one did not, and one wall time was not measured: neither total is known, and none is made up.
-  const some = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], {
-    ...fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [reviewThread] }, { stdout: partShown(root, base, head, 'c.txt') }), randomUUID: runIds(), monotonicNow: ticking(0, 4000, Number.NaN),
+  const some = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], {
+    ...fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: [ranThread] }, { stdout: partShown(root, base, head, 'c.txt') }), randomUUID: runIds(), monotonicNow: ticking(0, 4000, Number.NaN),
   });
   assert.equal(some.code, 0, some.err);
   assert.ok(some.out.split('\n').includes('All 2 parts passed, in unknown s; the tokens of the whole are not known, since the Codex home of a part held no token count.'), some.out);
@@ -3193,19 +3309,20 @@ test('--doc goes into the prompt of every part, and under --prompt own nothing i
   assert.match(result.out, /reviewed in 2 parts/);
 });
 
-test('a lean range at or under the bound is one part: the review is the one it was, under either prompt, and nothing is said or logged of parts', async () => {
+test('a lean range at or under the bound is one part: the review is the one it was, under either prompt, and nothing is said or logged of parts but its plan, which is of one', async () => {
   const { root, base, head } = makeThreeFileRepo();
   // Eight changed lines: under the default bound, and exactly at one of eight.
   for (const bound of [[], ['--part-lines', '8'], ['--part-lines', '5000']]) {
     for (const [flags, argv] of [[['--session', 'lean'], leanArgv(base)], [OWN, ownArgv()]]) {
       const fake = fakeCodex(reviewed(root, base));
-      const result = await run(['--base', 'HEAD~1', ...flags, ...bound, '--cwd', root], fake);
+      const result = await run(['--base', 'HEAD~1', '--again', ...flags, ...bound, '--cwd', root], fake);
       const name = [...flags, ...bound].join(' ');
       assert.equal(result.code, 0, `${name}: ${result.err}`);
       assert.equal(fake.calls.length, 1, name);
       assert.deepEqual(fake.calls[0].args, argv, name);
       if (flags === OWN) assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head }), name);
-      assert.doesNotMatch(result.out, /\bparts?\b/i, name);
+      assert.match(result.out.split('\n')[0], /, 1 part, 8 changed lines in 3 files\.$/, name);
+      assert.doesNotMatch(afterPlan(result.out).join('\n'), /\bparts?\b/i, name);
       const logged = readCodexReviewRuns(root).at(-1);
       assert.equal('part' in logged, false, name);
       assert.equal(runPart(logged), null, name);
@@ -3380,13 +3497,11 @@ test('a review that is not in parts shows what Codex rendered as it always did: 
   assert.deepEqual(stands.written(), [`${FINDINGS}\n`]);
   assert.ok(stands.said.findIndex(([how]) => how === 'write') < stands.said.findIndex(([how, text]) => how === 'log' && /^Codex (used|ran) /.test(text)), 'before what the session spent');
   assert.equal(stands.said.some(([, text]) => /as Codex rendered/.test(text)), false);
-  // One that does not stand passes it through too, above the error that says so: the current session's review always did.
-  for (const session of ['lean', 'current']) {
-    const falls = inOrder();
-    const short = await run(['--base', 'HEAD~1', '--session', session, '--cwd', root], { ...fakeCodex(reviewedWith(cmd('git status'))), log: falls.log, write: falls.write });
-    assert.equal(short.code, 1, session);
-    assert.deepEqual(falls.written(), [`${FINDINGS}\n`], session);
-  }
+  // One that does not stand passes it through too, above the error that says so, as a review always did.
+  const falls = inOrder();
+  const short = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewedWith(cmd('git status'))), log: falls.log, write: falls.write });
+  assert.equal(short.code, 1);
+  assert.deepEqual(falls.written(), [`${FINDINGS}\n`]);
 });
 
 test('Ctrl-C during a part stops that part, removes its home and starts no further part', async () => {
@@ -3501,12 +3616,12 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   // And the lines of the file the pattern also matches are no evidence for this part: a session that showed
   // that other file alone did not show its own.
   const other = fakeCodexInParts({ stdout: partShown(root, base, head, 'a1.txt') }, { stdout: partShown(root, base, head, 'a1.txt') });
-  const refused = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...other, randomUUID: runIds() });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...other, randomUUID: runIds() });
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 0 of 2 changed lines of part 2 of 3/);
 });
 
-test('--part-lines takes a positive integer and does not go with the current session: anything else is a usage error, and nothing runs', async () => {
+test('--part-lines takes a positive integer: anything else is a usage error, and nothing runs', async () => {
   const { root, base } = makeRepo();
   const cases = [
     [['--session', 'lean', '--part-lines', '0'], /--part-lines must be a positive integer/],
@@ -3518,8 +3633,7 @@ test('--part-lines takes a positive integer and does not go with the current ses
     [['--session', 'lean', '--part-lines', '99999999999999999999'], /--part-lines must be a positive integer/],
     [['--part-lines'], /--part-lines requires a value/],
     [['--part-lines', '0'], /--part-lines must be a positive integer/],
-    [['--session', 'current', '--part-lines', '400'], /--part-lines does not go with --session current: only the lean session reviews a large range in parts/],
-    [['--part-lines', '400', '--session', 'current', '--unavailable', 'model rejected'], /--part-lines does not go with --session current/],
+    [['--part-lines', '0', '--unavailable', 'model rejected'], /--part-lines must be a positive integer/],
   ];
   for (const [flags, message] of cases) {
     const fake = fakeCodex(reviewed(root, base));
@@ -3534,32 +3648,21 @@ test('--part-lines takes a positive integer and does not go with the current ses
   assert.equal(loggedRun(root), false);
 });
 
-test('the current session reviews a range of any size as it did: one session, never asked how large the range is', async () => {
+test('a range over the default bound of 400 changed lines is reviewed in parts with no flag at all, and with `--session lean`: three parts of two files', async () => {
   const names = Array.from({ length: 6 }, (_, index) => `f${index}.txt`);
   const body = (mark) => Array.from({ length: 100 }, (_, line) => `${mark} ${line}`).join('\n');
-  // 1,200 changed lines, 200 a file, which the lean session reviews in three parts.
+  // 1,200 changed lines, 200 a file. No session reviews a range of that size whole any more.
   const { root, base, head } = makeRepoWith(Object.fromEntries(names.map((name) => [name, `${body('old')}\n`])), Object.fromEntries(names.map((name) => [name, `${body('new')}\n`])));
-  const gitCalls = [];
-  const fake = fakeCodex(reviewed(root, base));
-  const spawn = (command, args, opts) => {
-    if (command === 'git') gitCalls.push(args);
-    return fake.spawn(command, args, opts);
-  };
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fake, spawn });
-  assert.equal(result.code, 0, result.err);
-  assert.equal(fake.calls.length, 1);
-  assert.deepEqual(fake.calls[0].args, currentArgv(base));
-  assert.deepEqual(gitCalls.filter((args) => args[0] === 'diff'), [['diff', '--no-color', '--no-ext-diff', base, 'HEAD']], 'the one diff it always ran, and no count of the range');
-  const logged = onlyRun(root);
-  assert.deepEqual([logged.coverage, 'part' in logged], [{ seen: 1200, total: 1200 }, false]);
-  assert.doesNotMatch(result.out, /\bparts?\b/i);
-  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
-  // The same range under the lean session is over the default bound of 400: three parts of two files.
-  const lean = fakeCodexInParts(...[0, 2, 4].map((at) => ({ stdout: partShown(root, base, head, names[at], names[at + 1]) })));
-  const inParts = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...lean, randomUUID: runIds() });
-  assert.equal(inParts.code, 0, inParts.err);
-  assert.match(inParts.out, /^The range .* changes 1,200 lines in 6 files, more than the 400 a part holds, so it is reviewed in 3 parts, one after another\.$/m);
-  assert.deepEqual(readCodexReviewRuns(root).slice(1).map((line) => line.part), [1, 2, 3].map((index) => ({ index, of: 3, files: 2, changedLines: 400 })));
+  for (const flags of [[], ['--session', 'lean']]) {
+    const which = flags.join(' ') || 'no flag';
+    const before = readCodexReviewRuns(root).length;
+    const fake = fakeCodexInParts(...[0, 2, 4].map((at) => ({ stdout: partShown(root, base, head, names[at], names[at + 1]) })));
+    const inParts = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], { ...fake, randomUUID: runIds() });
+    assert.equal(inParts.code, 0, `${which}: ${inParts.err}`);
+    assert.equal(fake.calls.length, 3, which);
+    assert.match(inParts.out, /^The range .* changes 1,200 lines in 6 files, more than the 400 a part holds, so it is reviewed in 3 parts, one after another\.$/m, which);
+    assert.deepEqual(readCodexReviewRuns(root).slice(before).map((line) => line.part), [1, 2, 3].map((index) => ({ index, of: 3, files: 2, changedLines: 400 })), which);
+  }
 });
 
 test('a renamed file and a binary one, in parts: the renamed file is shown whole under both its names, and a part of binary files alone needs one command that worked', async () => {
@@ -3597,7 +3700,7 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   // not show every line of its part: the file is new there, and all of it is to be read.
   const renamed = git(root, 'diff', '--no-color', base, head, '--', 'old.txt', 'new.txt');
   const partial = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin') }, { stdout: reviewedWith(cmd('git diff', 0, renamed)) });
-  const refused = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 1 of 8 changed lines of part 2 of 4/);
   assert.equal(readCodexReviews(root).length, 1, 'no second record');
@@ -3626,58 +3729,1119 @@ test('the parts must show every changed line of the range between them: a split 
   assert.equal(loggedRun(root), false);
 });
 
+// --- the plan: what a run would start and send, said before anything is started ---
+
+/** The content of `file`, `null` when it is not there, and why it cannot be read when it is something else
+ * than a file (a folder a test put in its place). */
+function contentOf(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return err.code === 'ENOENT' ? null : err.code;
+  }
+}
+
+/** A machine where nothing may be started: no `codex` is on it, and a Codex home that is made, a session
+ * that is launched or an OS home that is asked for fails the run. `deps` are those of such a run, `home` the
+ * `--home` flag of a state dir of its own, and `untouched(which)` asserts that nothing was looked for,
+ * launched, made, logged or recorded, by what the repository and that state dir hold. `started(which)`
+ * asserts all of that but the record, for a run that starts nothing and still records what it found. */
+function startsNothing(root) {
+  const state = tmp('js-harness-codex-review-state-');
+  const fake = fakeCodexInParts();
+  const lookedFor = [];
+  const spawn = (command, args, opts) => {
+    if (command === 'git') return spawnSync(command, args, opts);
+    lookedFor.push(command);
+    return { error: new Error('spawn codex ENOENT') };
+  };
+  const never = (what) => () => {
+    throw new Error(`nothing ${what} here`);
+  };
+  const [records, runLog] = [codexReviewsPath(root), codexReviewRunsPath(root)].map(contentOf);
+  const started = (which) => {
+    assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
+    assert.deepEqual(lookedFor, [], `${which}: Codex was not looked for`);
+    assert.equal(contentOf(codexReviewRunsPath(root)), runLog, `${which}: no run line`);
+    assert.deepEqual(listed(state), [], `${which}: no home was made`);
+  };
+  const untouched = (which) => {
+    started(which);
+    assert.equal(contentOf(codexReviewsPath(root)), records, `${which}: no record`);
+  };
+  return { deps: { ...fake, spawn, createLeanHome: never('makes a Codex home'), homedir: never('asks for the OS home, where the login is') }, home: ['--home', state], untouched, started };
+}
+
+/** The lines of the plan of `root`'s review of `base..head` in `parts` (each `{ files, changedLines }`), from
+ * the run log the repository holds now; `over` is `maxParts`, for a run that named a count. */
+const planned = (root, base, head, parts, over = {}) =>
+  planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts, runs: readCodexReviewRuns(root), ...over }));
+
+// The three files of `makeThreeFileRepo` as one part, and as the two of `--part-lines 6`.
+const AS_ONE = [{ files: ['a.txt', 'b.txt', 'c.txt'], changedLines: 8 }];
+const AS_TWO = [{ files: ['a.txt', 'b.txt'], changedLines: 6 }, { files: ['c.txt'], changedLines: 2 }];
+
+test('--plan prints the plan of the run and exits 0, and starts nothing: no Codex is looked for, no home is made, nothing is logged or recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  for (const [flags, parts] of [[[], AS_ONE], [['--part-lines', '6'], AS_TWO], [['--session', 'lean', '--prompt', 'own', '--keep-home', '--part-lines', '6'], AS_TWO]]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), planned(root, base, head, parts), which);
+    nothing.untouched(which);
+  }
+  // What it says, with `--part-lines` changing the parts as it does for a run. No part was ever measured in
+  // this repository, so there is no estimate, and the plan says that instead of a number.
+  const nothing = startsNothing(root);
+  const two = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual(two.out.split('\n'), [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 2 parts, 8 changed lines in 3 files.`,
+    '  part 1 of 2: 2 files, 6 changed lines',
+    '  part 2 of 2: 1 file, 2 changed lines',
+    'No estimate: the run log of this machine holds no part whose changed lines and input tokens were measured, and an estimate is never a guess.',
+  ]);
+  // A plan is of the committed range and records nothing, so uncommitted changes, which stop a review, do not stop it.
+  fs.writeFileSync(path.join(root, 'a.txt'), 'not committed\n', 'utf8');
+  const dirty = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(dirty.code, 0, dirty.err);
+  assert.deepEqual(dirty.out, two.out);
+  nothing.untouched('a dirty tree');
+  // A range git cannot size has no plan: that is an error, exit 1, and not a plan of no part.
+  const unsized = (command, args, opts) => (command === 'git' && args.includes('--numstat') ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
+  const failed = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: unsized });
+  assert.deepEqual([failed.code, failed.out], [1, '']);
+  assert.match(failed.err, /^Could not run `git diff --numstat` over [0-9a-f]{7}\.\.[0-9a-f]{7} to know how large the range is, so there is no plan of its review\.$/);
+  nothing.untouched('a range that cannot be sized');
+});
+
+test('--plan over a range that changes nothing is a plan of no part, which still names the model and the effort, and exits 0', async () => {
+  const { root, head } = makeRepo();
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(result.err, '');
+  assert.deepEqual(result.out.split('\n'), [
+    `Plan of the Codex review of ${head.slice(0, 7)}..${head.slice(0, 7)}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+    'No estimate: the range changes no file, so there is no part to review.',
+  ]);
+  nothing.untouched('an empty range');
+});
+
+test('a run prints its plan before its first session starts, and the estimate of a plan is made from the run lines this machine wrote', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  // Each session leaves the rollout files a real one does: 297,479 input tokens, on the model and at the effort of a review.
+  const ran = [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]];
+  const twoSessions = (during) => fakeCodexInParts(
+    { stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran, during },
+    { stdout: partShown(root, base, head, 'c.txt'), threads: ran, during },
+  );
+  /** A run in two parts, with what it had logged by the time each of its sessions started. */
+  const inTwoParts = async () => {
+    const out = [];
+    const onScreen = [];
+    const result = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], { ...twoSessions(() => onScreen.push([...out])), randomUUID: runIds(), log: (line) => out.push(line) });
+    assert.equal(result.code, 0, result.err);
+    return { out, onScreen };
+  };
+  // The first run of this repository: nothing was measured yet, and its plan says so before anything is spent.
+  const none = planned(root, base, head, AS_TWO);
+  assert.match(none.at(-1), /^No estimate: /);
+  const first = await inTwoParts();
+  assert.deepEqual(first.onScreen[0].slice(0, none.length), none, 'on screen when the first session started');
+  assert.ok(first.onScreen[0].findIndex((line) => line.startsWith('Codex is reviewing part 1 of 2')) >= none.length, 'and before the session is announced');
+  assert.equal(first.out.filter((line) => line.startsWith('Plan of the Codex review')).length, 1, 'once a run, not once a part');
+  // Its two parts are in the run log now, 6 and 2 changed lines at 297,479 input tokens each, and the plan
+  // is made from them: the median of 49,580 and 148,740 a changed line, and no part under 297,479.
+  const measured = planned(root, base, head, AS_TWO);
+  assert.deepEqual(measured.slice(1, 3), ['  part 1 of 2: 2 files, 6 changed lines, about 590,000 input tokens', '  part 2 of 2: 1 file, 2 changed lines, about 300,000 input tokens']);
+  // Both ran on the model and at the effort of a review, so nothing is said of another effort. The whole is
+  // a range: its high figure puts both parts at the 148,740 a changed line of the dearer one, 890,000 and 300,000.
+  assert.ok(measured[3].startsWith('Estimate: about 890,000 to 1,190,000 input tokens in all. It rests on 2 parts this machine\'s run log measured on gpt-6.1-sol at high effort: '), measured[3]);
+  assert.ok(measured[3].endsWith(' The higher figure puts every part at the most a changed line cost in them, in place of the median, and is no ceiling: how far a session looks into the code moves what it costs more than the size of its part does.'), measured[3]);
+  const nothing = startsNothing(root);
+  const plan = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(plan.code, 0, plan.err);
+  assert.deepEqual(plan.out.split('\n'), measured);
+  nothing.untouched('--plan');
+  // And the next run prints that same plan, before its first session.
+  const second = await inTwoParts();
+  assert.deepEqual(second.onScreen[0].slice(0, measured.length), measured);
+  // A range reviewed whole is planned as its one part, on the same stream, before its session.
+  const out = [];
+  const onScreen = [];
+  const whole = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), () => onScreen.push([...out])), log: (line) => out.push(line) });
+  assert.equal(whole.code, 0, whole.err);
+  assert.equal(onScreen[0].length, 4, 'the header, the part and the estimate, and the session that is announced');
+  assert.equal(onScreen[0][0], `Plan of the Codex review of ${base.slice(0, 7)}..${head.slice(0, 7)}: gpt-6.1-sol at high effort, 1 part, 8 changed lines in 3 files.`);
+  assert.match(onScreen[0][1], /^ {2}part 1 of 1: 3 files, 8 changed lines, about [\d,]+ input tokens$/);
+  assert.match(onScreen[0][3], /^Codex is reviewing /);
+});
+
+test('a run log that cannot be read is one that measured nothing: the plan says there is no estimate, and a run goes on as it would', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const ran = [parentThread, [turnContext('gpt-6.1-sol', 'high'), ...reviewThread]];
+  const twoSessions = () => fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), threads: ran }, { stdout: partShown(root, base, head, 'c.txt'), threads: ran });
+  // A run that leaves two measured parts in the log, so that there is an estimate to lose.
+  const first = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...twoSessions(), randomUUID: runIds() });
+  assert.equal(first.code, 0, first.err);
+  assert.match(planned(root, base, head, AS_TWO).at(-1), /^Estimate: about 890,000 to 1,190,000 input tokens/);
+  const none = planLines(reviewPlan({ base, head, model: REVIEW_MODEL, effort: REVIEW_EFFORT, parts: AS_TWO }));
+  assert.match(none.at(-1), /^No estimate: the run log of this machine holds no part /);
+  /** `spawn`, but the first time git is asked where the common dir is, which is how the run log is found,
+   * the answer is that of `instead`. The later times, when the run writes its lines there, git answers. */
+  const logNotFound = (spawn, instead) => {
+    let asked = 0;
+    return (command, args, opts) => (command === 'git' && args.includes('--git-common-dir') && (asked += 1) === 1 ? instead() : spawn(command, args, opts));
+  };
+  const failures = [
+    ['git cannot say where the log is', () => ({ status: 128, stdout: '', stderr: 'fatal' })],
+    ['git cannot be started', () => {
+      throw new Error('spawn git EACCES');
+    }],
+    // An answer the reader of the log throws on: what it cannot take never reaches the run.
+    ['the reader of the log throws', () => ({ status: 0, stdout: 7 })],
+  ];
+  for (const [which, instead] of failures) {
+    const nothing = startsNothing(root);
+    const plan = await run(['--base', 'HEAD~1', '--again', '--plan', '--part-lines', '6', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: logNotFound(nothing.deps.spawn, instead) });
+    assert.equal(plan.code, 0, `${which}: ${plan.err}`);
+    assert.equal(plan.err, '', which);
+    assert.deepEqual(plan.out.split('\n'), none, which);
+    nothing.untouched(`${which}, --plan`);
+    // The run prints the same plan and then goes on: its two sessions, their two lines in the log, its record.
+    const [records, lines] = [readCodexReviews(root).length, readCodexReviewRuns(root).length];
+    const fake = twoSessions();
+    const result = await run(['--base', 'HEAD~1', '--again', ...TWO_PARTS, '--cwd', root], { ...fake, spawn: logNotFound(fake.spawn, instead), randomUUID: runIds() });
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.equal(result.err, '', which);
+    assert.deepEqual(result.out.split('\n').slice(0, none.length), none, which);
+    assert.equal(fake.calls.length, 2, which);
+    assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records + 1, lines + 2], which);
+  }
+});
+
+test('a base that shares no history with HEAD has no range: --plan exits 1 and says so, as a run does, and nothing is started', async () => {
+  const { root, head: other } = makeRepo();
+  // A branch with a first commit of its own: no commit is an ancestor of both it and `other`.
+  git(root, 'checkout', '--orphan', 'alone');
+  git(root, 'commit', '-m', 'alone');
+  const nothing = startsNothing(root);
+  const plan = await run(['--base', other, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([plan.code, plan.out], [1, '']);
+  assert.equal(plan.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
+  nothing.untouched('--plan');
+  const result = await run(['--base', other, ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.out], [1, '']);
+  assert.equal(result.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
+  nothing.untouched('a run');
+});
+
+test('a run over a range that holds no commit starts nothing and records nothing: after its plan it says there was nothing to review, and exits 0', async () => {
+  const { root, head } = makeRepo();
+  const range = `${head.slice(0, 7)}..${head.slice(0, 7)}`;
+  for (const flags of [[], ['--session', 'lean', '--prompt', 'own', '--keep-home'], ['--part-lines', '2', '--max-parts', '1']]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), [
+      `Plan of the Codex review of ${range}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+      'No estimate: the range changes no file, so there is no part to review.',
+      `There was nothing to review: ${range} changes no file. Nothing was started and nothing was recorded.`,
+    ], which);
+    nothing.untouched(which);
+    assert.deepEqual([wrote(root), loggedRun(root)], [false, false], which);
+  }
+  // What stops a run before its plan still does: uncommitted changes are refused as they were, exit 1.
+  fs.writeFileSync(path.join(root, 'f.txt'), 'not committed', 'utf8');
+  const nothing = startsNothing(root);
+  const dirty = await run(['--base', 'HEAD', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([dirty.code, dirty.out], [1, '']);
+  assert.match(dirty.err, /^Tracked files have uncommitted changes/);
+  nothing.untouched('a dirty tree');
+});
+
+/** `makeRepo`, as a clone whose remote's default branch is at `base`, and with a third commit, `back`, that
+ * puts `f.txt` back to what it was: the commit `head` and its revert, which `check --push` both counts as
+ * code commits of the branch, and which change no file between them. */
+function makeRevertedRepo() {
+  const { root, base, head } = makeRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'one', 'utf8');
+  git(root, 'commit', '-am', 'back to one');
+  return { root, base, head, back: git(root, 'rev-parse', 'HEAD') };
+}
+
+test('a range whose commits cancel out has nothing to review: the run starts nothing and records that, and the push check then counts its commits as covered', async () => {
+  const { root, base, head, back } = makeRevertedRepo();
+  const range = `${base.slice(0, 7)}..${back.slice(0, 7)}`;
+  // The finding: both commits need a record, and the command the check names is the one that follows.
+  const before = checkCodexReviews(root, 'HEAD');
+  assert.equal(before.pass, false);
+  assert.match(before.detail, /^2 of 2 code commits since origin\/main have no Codex review record/);
+  assert.equal(before.lines.at(-1), `make the record with: js-harness codex-review --base ${head.slice(0, 7)}^`);
+  const nothingRecord = { schema: 'js-harness.codex-review/v1', base, head: back, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'nothing-to-review', reason: 'the range changes no file' };
+  // The second is asked for with `--again`: its two commits have a record by then, the one the first wrote.
+  const runs = [['--base', `${head.slice(0, 7)}^`], ['--base', 'HEAD~2', '--again', '--session', 'lean', '--prompt', 'own', '--keep-home', '--max-parts', '1']];
+  for (const [at, flags] of runs.entries()) {
+    const which = flags.join(' ');
+    const nothing = startsNothing(root);
+    const result = await run([...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown], ['', ''], which);
+    assert.deepEqual(result.out.split('\n'), [
+      `Plan of the Codex review of ${range}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+      'No estimate: the range changes no file, so there is no part to review.',
+      `There was nothing to review: ${range} changes no file. Nothing was started, and the range was recorded as having nothing to review in ${codexReviewsPath(root)}.`,
+    ], which);
+    // No Codex, no home, no session and no run line, as for any range with no part. What there is, is the record.
+    nothing.started(which);
+    // It says what happened, in an outcome that is neither a review nor a skip, and names no run: there was none.
+    assert.deepEqual(readCodexReviews(root), Array.from({ length: at + 1 }, () => nothingRecord), which);
+    assert.equal(isValidCodexReview(readCodexReviews(root).at(-1)), true, which);
+  }
+  // The check counts both commits as covered, and says by what: a line names the range and why no review
+  // stands behind its record, as it does for a skip.
+  const after = checkCodexReviews(root, 'HEAD');
+  assert.equal(after.pass, true, `${after.detail}\n${(after.lines ?? []).join('\n')}`);
+  assert.match(after.detail, /^2 code commits since origin\/main, all covered by a Codex review record/);
+  const line = `nothing to review ${range}: the range changes no file`;
+  assert.deepEqual(after.lines, [line, line]);
+  // A run that is not asked to go again finds both commits covered, by records that are no review, and
+  // appends no third: a skip of the range is not recorded either.
+  const covered =
+    `Nothing to review: ${range} holds 2 code commits, and a Codex review record already covers all of them (2 of the records that do are a skip or a range with nothing to review, not a review: \`js-harness check --push\` lists them). ` +
+    'Nothing was started and nothing was recorded; `--again` takes the range as it was given.';
+  for (const flags of [[], ['--unavailable', 'model rejected']]) {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~2', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([result.code, result.err, result.out], [0, '', covered], flags.join(' '));
+    nothing.started(flags.join(' '));
+    assert.equal(readCodexReviews(root).length, 2, flags.join(' '));
+  }
+  // Beside a skip, each is listed as what it is.
+  await run(['--base', 'HEAD~2', '--again', '--unavailable', 'model rejected', '--cwd', root], fakeCodex(''));
+  assert.deepEqual(checkCodexReviews(root, 'HEAD').lines, [line, line, `unavailable ${range}: model rejected`]);
+});
+
+test('a range with nothing to review whose record cannot be written exits 1 and says so, having started nothing', async () => {
+  const { root } = makeRevertedRepo();
+  blockRecord(root);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~2', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /^Could not write the record: /);
+  assert.doesNotMatch(result.out, /recorded/);
+  nothing.untouched('a record that cannot be written');
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+});
+
+// --- only code is reviewed: documents and what the project marks are left out (`./lib/codex-review-scope.mjs`) ---
+
+// A document whose name git writes in quotes and escapes, in the header of its section of a patch.
+const DOC = 'caf\u00e9.md';
+const MARKS = { '.gitattributes': '*.json -codex-review\n' };
+const LEFT_BEFORE = { [DOC]: 'n1\n', 'data.json': 'd1\nd2\n' };
+const LEFT_AFTER = { [DOC]: 'N1 changed\n', 'data.json': 'D1 changed\nD2 changed\n' };
+
+/** `makeTwoFileRepo`, whose second commit also changes a document (two changed lines) and a file the project
+ * marks with `-codex-review` (four): a review reads the four changed lines of `a.txt` and `b.txt`. */
+function makeMixedRepo() {
+  return makeRepoWith(
+    { ...MARKS, 'a.txt': 'a1\na2\na3\n', 'b.txt': 'b1\nb2\nb3\n', ...LEFT_BEFORE },
+    { 'a.txt': 'a1\nA2 changed\na3\n', 'b.txt': 'b1\nB2 changed\nb3\n', ...LEFT_AFTER },
+  );
+}
+
+const LEFT_OUT_LINE = 'Left out of the review: 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines).';
+// The same, as a record holds it: the documents apart from what the project marks, which `check --push` reads.
+const LEFT_OUT = { files: 2, changedLines: 6, documents: { files: 1, changedLines: 2 }, marked: { files: 1, changedLines: 4 } };
+const BY_ITS_FILES = 'The review is asked with this command\'s own prompt, by its files: the sentence Codex writes for `--base` cannot be limited to some files.';
+
+test('a range that also changes a document and a file the project marks is asked by the files it reads, held to their changed lines alone, and says what it left out', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const sole = { index: 1, of: 1, files: ['a.txt', 'b.txt'] };
+  // The session ran the command of its prompt, which shows the two files a review reads and no other.
+  for (const flags of [[], ['--prompt', 'codex'], ['--prompt', 'own']]) {
+    const which = flags.join(' ') || 'no flag';
+    const fake = fakeCodex(partShown(root, base, head, 'a.txt', 'b.txt'));
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    const lines = result.out.split('\n');
+    // The plan is of what the review reads, and says what it leaves out, how much of it and why.
+    assert.deepEqual(lines.slice(0, 4), [
+      `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`,
+      lines[1],
+      LEFT_OUT_LINE,
+      lines[3],
+    ], which);
+    assert.match(lines[1], /^ {2}part 1 of 1: 2 files, 4 changed lines/, which);
+    // Codex's own review of a range reads every file of it, so the range is asked the way a part is: with
+    // this command's prompt on stdin, naming its files, and no `--base`. The files left out are in no prompt.
+    assert.equal(fake.calls.length, 1, which);
+    assert.deepEqual(fake.calls[0].args, ownArgv(), which);
+    assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head, part: sole, leftOut: 2 }), which);
+    assert.doesNotMatch(fake.calls[0].child.received.text, /\.md|\.json|\bparts?\b/, which);
+    // That is said when the prompt is not the one that was asked for, and not when it is.
+    assert.equal(afterPlan(result.out)[0] === BY_ITS_FILES, flags.at(-1) !== 'own', which);
+    assert.ok(lines.includes(`Codex is reviewing 2 files of ${short} (4 changed lines) with the lean session (gpt-6.1-sol, high) and this command's own prompt; this can take several minutes.`), result.out);
+    // It is one session, so what it answered is shown as it ends, as for any range reviewed whole.
+    assert.ok(result.shown.includes(FINDINGS), which);
+    assert.ok(lines.some((line) => line.startsWith('Codex\'s verdict: ')), which);
+    // The run line says what the session covered, so the estimate of a later plan can rest on it.
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual(
+      [logged.outcome, logged.part, logged.coverage, logged.prompt, logged.promptVersion],
+      ['reviewed', { index: 1, of: 1, files: 2, changedLines: 4 }, { seen: 4, total: 4 }, 'own', REVIEW_PART_PROMPT_VERSION],
+      which,
+    );
+    // One record, which `check --push` reads as any other, with what the review did not read; it is not one made in parts.
+    const record = readCodexReviews(root).at(-1);
+    assert.deepEqual(record, { ...reviewedRecord(base, head), leftOut: LEFT_OUT }, which);
+    assert.equal(isValidCodexReview(record), true, which);
+    assert.match(lines.at(-1), new RegExp(`^Recorded the Codex review of ${short} in .*codex-reviews\\.jsonl\\.$`), which);
+  }
+  // `--doc` goes into that prompt as into any other of this command's.
+  const withDoc = fakeCodex(partShown(root, base, head, 'a.txt', 'b.txt'));
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--prompt', 'own', '--doc', featureDoc(), '--cwd', root], withDoc)).code, 0);
+  assert.equal(withDoc.calls[0].child.received.text, reviewPrompt({ from: base, head, part: sole, leftOut: 2, intent: { goal: GOAL, doneWhen: DONE_WHEN } }));
+  // The evidence rule is held for the files a review reads: a session that showed one of the two did not
+  // inspect them, whatever it showed of the files that are left out.
+  const records = readCodexReviews(root).length;
+  const half = fakeCodex(partShown(root, base, head, 'a.txt', DOC, 'data.json'));
+  const refused = await run(['--base', 'HEAD~1', '--again', '--cwd', root], half);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /showed 2 of 4 changed lines of the files under review of [0-9a-f]{7}\.\.HEAD; nothing was recorded/);
+  assert.match(refused.err, /not read in full: b\.txt \(2 of 2 changed lines missing\)/);
+  assert.equal(readCodexReviews(root).length, records);
+});
+
+test('in parts, the files left out are in no part and in no prompt, and the parts still add up to what the review reads', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt') }, { stdout: partShown(root, base, head, 'b.txt') });
+  const result = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(result.out.split('\n').slice(0, 4), [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 2 parts, 4 changed lines in 2 files.`,
+    '  part 1 of 2: 1 file, 2 changed lines',
+    '  part 2 of 2: 1 file, 2 changed lines',
+    LEFT_OUT_LINE,
+  ]);
+  assert.equal(afterPlan(result.out)[0], `The range ${short} changes 4 lines in 2 files that a review reads, more than the 2 a part holds, so it is reviewed in 2 parts, one after another.`);
+  // Each part says the other files are in the other part or left out, and names none of them.
+  ['a.txt', 'b.txt'].forEach((name, at) => {
+    const asked = fake.calls[at].child.received.text;
+    assert.equal(asked, reviewPrompt({ from: base, head, part: { index: at + 1, of: 2, files: [name] }, leftOut: 2 }));
+    assert.match(asked, /reviewed in the other parts, or left out of the review/);
+    assert.doesNotMatch(asked, /\.md|\.json/);
+  });
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [1, 2].map((index) => [{ index, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }]));
+  assert.deepEqual(readCodexReviews(root), [{ ...reviewedRecord(base, head), run: idOf(2), runs: [idOf(1), idOf(2)], leftOut: LEFT_OUT }]);
+  // The check that the parts leave nothing out is made against the patch without the sections of the files
+  // left out, told apart by their place. A patch that is not one section a file refuses the run.
+  const cut = (command, args, opts) => {
+    const answer = fake.spawn(command, args, opts);
+    const whole = command === 'git' && args.includes('--no-renames') && !args.includes('--numstat') && !args.includes('--');
+    return whole ? { ...answer, stdout: answer.stdout.slice(0, answer.stdout.lastIndexOf('diff --git ')) } : answer;
+  };
+  const none = fakeCodexInParts();
+  const refused = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
+  assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
+});
+
+/** A repo whose second commit moves a submodule (`sub`, from one commit to another, neither of them here),
+ * changes `a.txt` (two changed lines) and changes a document. The folder of the submodule is there and
+ * empty, as that of one that was never fetched, so the tree is clean. */
+function makeSubmoduleRepo() {
+  const root = tmp('js-harness-codex-review-');
+  git(root, 'init');
+  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(root, 'config', 'user.name', 'js-harness test');
+  fs.mkdirSync(path.join(root, 'sub'));
+  const committed = (pointer, files, message) => {
+    for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(root, name), content, 'utf8');
+    git(root, 'add', ...Object.keys(files));
+    git(root, 'update-index', '--add', '--cacheinfo', `160000,${pointer.repeat(40)},sub`);
+    git(root, 'commit', '-m', message);
+    return git(root, 'rev-parse', 'HEAD');
+  };
+  const base = committed('1', { 'a.txt': 'a1\n', 'README.md': 'one\n' }, 'one');
+  const head = committed('2', { 'a.txt': 'A1 changed\n', 'README.md': 'two\n' }, 'two');
+  assert.equal(git(root, 'status', '--porcelain'), '');
+  return { root, base, head };
+}
+
+test('a range that moves a submodule beside a file left out is checked and reviewed whatever `diff.submodule` the repository sets', async () => {
+  // The finding this is the test of. Under `log` and `diff` git writes one line of summary for a submodule
+  // where the patch of a range has a section, so the patch held a section fewer than the range has files,
+  // and the run was refused before it started.
+  const { root, base, head } = makeSubmoduleRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const pointers = ['-Subproject commit 1111111111111111111111111111111111111111', '+Subproject commit 2222222222222222222222222222222222222222'];
+  for (const format of ['log', 'diff', 'short', null]) {
+    const which = `diff.submodule ${format ?? 'not set'}`;
+    if (format === null) git(root, 'config', '--unset', 'diff.submodule');
+    else git(root, 'config', 'diff.submodule', format);
+    // What the session's own `git diff` prints of its files, under that configuration.
+    const asShown = partDiff(root, base, head, 'a.txt', 'sub');
+    const summarized = format === 'log' || format === 'diff';
+    assert.equal(asShown.includes('Submodule sub 1111111...2222222'), summarized, which);
+    assert.equal(pointers.every((line) => asShown.includes(line)), !summarized, which);
+    const fake = fakeCodex(partShown(root, base, head, 'a.txt', 'sub'));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fake);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual(result.out.split('\n').slice(0, 3), [
+      `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`,
+      '  part 1 of 1: 2 files, 4 changed lines',
+      'Left out of the review: 1 Markdown document, 2 changed lines.',
+    ], which);
+    assert.equal(fake.calls.length, 1, which);
+    // A session is held to the changed lines its own git prints: those of `a.txt`, and the two of the
+    // submodule where git writes them as a patch.
+    const total = summarized ? 2 : 4;
+    assert.deepEqual(readCodexReviewRuns(root).at(-1).coverage, { seen: total, total }, which);
+    assert.equal(readCodexReviews(root).at(-1).outcome, 'reviewed', which);
+  }
+  // In parts too, and the check that they leave no changed line of the range out still holds them to it:
+  // a part whose files do not show the submodule refuses the run, under the configuration that summarizes it.
+  git(root, 'config', 'diff.submodule', 'log');
+  const parts = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt') }, { stdout: partShown(root, base, head, 'sub') });
+  const inParts = await run(['--base', 'HEAD~1', '--again', '--part-lines', '2', '--cwd', root], { ...parts, randomUUID: runIds() });
+  assert.equal(inParts.code, 0, inParts.err);
+  assert.deepEqual(readCodexReviewRuns(root).slice(-2).map((line) => [line.part, line.coverage]), [
+    [{ index: 1, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 2, of: 2, files: 1, changedLines: 2 }, { seen: 0, total: 0 }],
+  ]);
+  const none = fakeCodexInParts();
+  const missing = (command, args, opts) => {
+    const answer = none.spawn(command, args, opts);
+    const ofTheSubmodule = command === 'git' && args.includes('--') && args.at(-1) === 'sub';
+    return ofTheSubmodule ? { ...answer, stdout: '' } : answer;
+  };
+  const refused = await run(['--base', 'HEAD~1', '--again', '--part-lines', '2', '--cwd', root], { ...none, spawn: missing });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /^The 2 parts the range would be reviewed in do not show 2 of the changed lines of the range between them \(the first: sub: -Subproject commit 1{40}\)/);
+  assert.equal(none.calls.length, 0);
+});
+
+test('a range that changes only what a review leaves out has no part: the run starts nothing, and records that when the range holds a commit', async () => {
+  const { root, base, head } = makeRepoWith({ ...MARKS, ...LEFT_BEFORE }, LEFT_AFTER);
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const plan = [
+    `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 0 parts, 0 changed lines in 0 files.`,
+    LEFT_OUT_LINE,
+    'No estimate: every file the range changes is left out of the review, so there is no part to review.',
+  ];
+  // The range is taken as it was given (`--again`): left to the records it holds no code commit, and a run
+  // then says so and records nothing. The plan alone, also over a tree whose marks nobody committed: those
+  // are not the marks of the range.
+  fs.writeFileSync(path.join(root, '.gitattributes'), '', 'utf8');
+  const planned = startsNothing(root);
+  const shown = await run(['--base', 'HEAD~1', '--again', '--plan', ...planned.home, '--cwd', root], planned.deps);
+  assert.deepEqual([shown.code, shown.err, shown.out.split('\n')], [0, '', plan]);
+  planned.untouched('--plan');
+  git(root, 'checkout', '--', '.gitattributes');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~1', '--again', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual([result.err, result.shown], ['', '']);
+  assert.deepEqual(result.out.split('\n'), [
+    ...plan,
+    `There was nothing to review: ${short} changes no file a review reads. Nothing was started, and the range was recorded as having nothing to review in ${codexReviewsPath(root)}.`,
+  ]);
+  nothing.started('a range of files left out');
+  // The outcome that exists for a range with nothing to review, with a reason that says which kind it is.
+  const [record] = readCodexReviews(root);
+  assert.deepEqual(record, {
+    schema: 'js-harness.codex-review/v1',
+    base,
+    head,
+    reviewedAt: '2026-09-29T12:00:00.000Z',
+    outcome: 'nothing-to-review',
+    reason: 'the range changes no file a review reads: it leaves out 2 files, 6 changed lines (1 Markdown document, 2 changed lines; 1 file the project marks `-codex-review`, 4 changed lines)',
+    leftOut: LEFT_OUT,
+  });
+  assert.equal(isValidCodexReview(record), true);
+});
+
+test('a review that left out a file which a later commit of its range marks does not cover the commit before the mark, where that file is code', async () => {
+  // The finding this is the test of: one commit changes `app.js`, the next marks it. The marks are read at
+  // the head of the range, so the review through the second leaves `app.js` out, and says so in its record.
+  const { root, head: main } = makeRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  const committed = (name, content, message) => {
+    fs.writeFileSync(path.join(root, name), content, 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-m', message);
+    return git(root, 'rev-parse', 'HEAD');
+  };
+  const app = committed('app.js', 'code\n', 'feat: the application');
+  const marks = committed('.gitattributes', 'app.js -codex-review\n', 'chore: mark the application as left out');
+  // The range as it was given: a run left to the records would start at the commit that marks, the only
+  // one of the two that is code at this head, and would have the application in no range to leave out.
+  const result = await run(['--base', 'origin/main', '--again', '--cwd', root], fakeCodex(partShown(root, main, marks, '.gitattributes')));
+  assert.equal(result.code, 0, result.err);
+  assert.ok(result.out.split('\n').includes('Left out of the review: 1 file the project marks `-codex-review`, 1 changed line.'), result.out);
+  assert.deepEqual(readCodexReviews(root), [{
+    ...reviewedRecord(main, marks),
+    leftOut: { files: 1, changedLines: 1, documents: { files: 0, changedLines: 0 }, marked: { files: 1, changedLines: 1 } },
+  }]);
+  // Pushed up to the commit that marks it, the application is left out and the record covers the rest.
+  const both = checkCodexReviews(root, marks);
+  assert.equal(both.pass, true, both.detail);
+  assert.equal(both.detail, '1 code commit since origin/main, all covered by a Codex review record');
+  // Pushed alone, the application is code that no review read: that record does not cover it.
+  const alone = checkCodexReviews(root, app);
+  assert.equal(alone.pass, false, alone.detail);
+  assert.match(alone.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+});
+
+test('when git cannot say what the project marks, nothing is planned or started: a file is never left out, nor read, by guess', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const nothing = startsNothing(root);
+  const old = (command, args, opts) => (command === 'git' && args[0] === 'check-attr' ? { status: 129, stdout: '', stderr: 'error: unknown option `source\'' } : nothing.deps.spawn(command, args, opts));
+  const why = 'Could not ask git which files of the range the project leaves out of a review \\(`git check-attr --source [0-9a-f]{7}` failed; it needs git 2\\.40 or later\\)';
+  // Nor can the records be read against the range without it: that is said first, and the range is taken as given.
+  const unread = `Could not tell which commits of ${rangeOf(base, head)} a Codex review record already covers (git could not say which of their files a review leaves out), so the range is taken as it was given.`;
+  const plan = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
+  assert.deepEqual([plan.code, plan.out], [1, unread]);
+  assert.match(plan.err, new RegExp(`^${why}, so there is no plan of its review\\.$`));
+  const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
+  assert.deepEqual([result.code, result.out], [1, unread]);
+  assert.match(result.err, new RegExp(`^${why}\\.\\nThe review was not started and nothing was recorded\\.$`));
+  nothing.untouched('a git that cannot say what is marked');
+});
+
+test('an injected `everyFile` makes the run read every file of its range, as every run did: nothing is left out, a range of one part is asked whole, and no flag reaches it', async () => {
+  const { root, base, head } = makeMixedRepo();
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  /** `fake`, with every question to git about what is marked kept in `asked`. */
+  const watchingMarks = (fake, asked) => ({ ...fake, spawn: (command, args, opts) => {
+    if (command === 'git' && args[0] === 'check-attr') asked.push(args);
+    return fake.spawn(command, args, opts);
+  } });
+  // Under either prompt the review is the one of a whole range: Codex's own with `--base`, or this command's
+  // prompt of a range, and it is held to every changed line of the range, the document's and the marked file's too.
+  for (const [flags, argv, version] of [[[], leanArgv(base), null], [['--prompt', 'own'], ownArgv(), REVIEW_PROMPT_VERSION]]) {
+    const which = flags.join(' ') || 'no flag';
+    const asked = [];
+    const fake = watchingMarks(fakeCodex(reviewed(root, base)), asked);
+    const result = await run(['--base', 'HEAD~1', ...flags, '--cwd', root], { ...fake, everyFile: true });
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.equal(result.out.split('\n')[0], `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 10 changed lines in 4 files.`, which);
+    assert.doesNotMatch(result.out, /Left out|by its files/, which);
+    assert.deepEqual(fake.calls[0].args, argv, which);
+    if (version !== null) assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: base, head }), which);
+    const logged = readCodexReviewRuns(root).at(-1);
+    assert.deepEqual(['part' in logged, logged.coverage, logged.promptVersion], [false, { seen: 10, total: 10 }, version], which);
+    assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(base, head), which);
+    // What the project marks is not asked of git at all: the run needs no git that can answer it. Nor are
+    // the records read: the second of these two runs reviews a range the first left a record of, whole.
+    assert.deepEqual(asked, [], which);
+    assert.equal(fake.calls.length, 1, which);
+  }
+  // In parts, every file of the range is in a part.
+  const all = startsNothing(root);
+  const inParts = await run(['--base', 'HEAD~1', '--plan', '--part-lines', '2', ...all.home, '--cwd', root], { ...all.deps, everyFile: true });
+  assert.equal(inParts.out.split('\n')[0], `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 4 parts, 10 changed lines in 4 files.`);
+  // It is injected, for the comparison of the configurations, whose cells stay what they measured. Nothing
+  // on the command line is it: the usage names no such flag, and one spelled after it changes nothing.
+  assert.doesNotMatch((await run(['--cwd', root])).err, /every.?file/i);
+  for (const flag of ['--every-file', '--everyFile', '--read-every-file']) {
+    const nothing = startsNothing(root);
+    const plan = await run(['--base', 'HEAD~1', '--again', '--plan', flag, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([plan.code, plan.out.split('\n')[0], plan.out.split('\n')[2]], [0, `Plan of the Codex review of ${short}: gpt-6.1-sol at high effort, 1 part, 4 changed lines in 2 files.`, LEFT_OUT_LINE], flag);
+  }
+});
+
+test('a run started in a folder below the top of the repository plans what it plans at the top: git is asked at the top, whatever `diff.relative` says', async () => {
+  const { root } = makeMixedRepo();
+  fs.mkdirSync(path.join(root, 'below'));
+  const planFrom = async (cwd) => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', cwd], nothing.deps);
+    assert.equal(result.code, 0, result.err);
+    return result.out.split('\n');
+  };
+  const atTop = await planFrom(root);
+  assert.match(atTop[0], /, 1 part, 4 changed lines in 2 files\.$/);
+  assert.equal(atTop[2], LEFT_OUT_LINE);
+  // The paths of the range are from the top of the repository, and so is the folder every git command of
+  // the run is started in: what is marked, and how large the range is, do not depend on where it was called.
+  assert.deepEqual(await planFrom(path.join(root, 'below')), atTop);
+  // Nor on a configuration that makes git list paths from the folder it runs in and leave out the rest.
+  git(root, 'config', 'diff.relative', 'true');
+  assert.deepEqual(await planFrom(path.join(root, 'below')), atTop);
+  assert.deepEqual(await planFrom(root), atTop);
+});
+
+test('a run of more than six parts is refused before anything is started, with its plan and how to go on; `--max-parts` with the count runs it, and `--plan` never refuses', async () => {
+  const repoOf = (count) => {
+    const names = Array.from({ length: count }, (_, index) => `f${index}.txt`);
+    return { names, ...makeRepoWith(Object.fromEntries(names.map((name) => [name, 'one\n'])), Object.fromEntries(names.map((name) => [name, 'two\n']))) };
+  };
+  // Seven files of two changed lines each, a part a file.
+  const SEVEN = ['--part-lines', '2'];
+  const { names, root, base, head } = repoOf(7);
+  const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  const plan = planned(root, base, head, names.map((name) => ({ files: [name], changedLines: 2 })));
+  assert.match(plan[0], / 7 parts, 14 changed lines in 7 files\.$/);
+  const HOW = 'To run it all the same, pass `--max-parts 7`. The cheaper way is to review each slice when it closes, from the commit before it (`--base`).';
+  for (const [flags, bound] of [
+    [[], 'the 6 a run starts without `--max-parts`'],
+    [['--session', 'lean', '--prompt', 'own', '--keep-home'], 'the 6 a run starts without `--max-parts`'],
+    [['--max-parts', '6'], '`--max-parts 6` allows'],
+    [['--max-parts', '1'], '`--max-parts 1` allows'],
+  ]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 1, which);
+    assert.deepEqual(result.out.split('\n'), plan, `${which}: the plan is shown`);
+    assert.equal(result.err, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}`, which);
+    nothing.untouched(which);
+  }
+  // `--plan` never refuses: it says what the run would need, or nothing when the run names its count.
+  for (const [flags, said] of [
+    [[], ['This is more parts than the 6 a run starts without `--max-parts`: the run would need `--max-parts 7`.']],
+    [['--max-parts', '3'], ['This is more parts than `--max-parts 3` allows: the run would need `--max-parts 7`.']],
+    [['--max-parts', '7'], []],
+  ]) {
+    const which = `--plan ${flags.join(' ')}`;
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', '--plan', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, which);
+    assert.equal(result.err, '', which);
+    assert.deepEqual(result.out.split('\n'), [...plan, ...said], which);
+    nothing.untouched(which);
+  }
+  // With its count named, the run goes on: seven sessions and one record.
+  const seven = fakeCodexInParts(...names.map((name) => ({ stdout: partShown(root, base, head, name) })));
+  const allowed = await run(['--base', 'HEAD~1', ...SEVEN, '--max-parts', '7', '--cwd', root], { ...seven, randomUUID: runIds() });
+  assert.equal(allowed.code, 0, allowed.err);
+  assert.equal(seven.calls.length, 7);
+  assert.equal(readCodexReviews(root).length, 1);
+  // Six parts are at the bound, and run with no flag.
+  const six = repoOf(6);
+  const fake = fakeCodexInParts(...six.names.map((name) => ({ stdout: partShown(six.root, six.base, six.head, name) })));
+  const atBound = await run(['--base', 'HEAD~1', ...SEVEN, '--cwd', six.root], { ...fake, randomUUID: runIds() });
+  assert.equal(atBound.code, 0, atBound.err);
+  assert.equal(fake.calls.length, 6);
+  assert.doesNotMatch(`${atBound.out}\n${atBound.err}`, /--max-parts/);
+});
+
+test('--max-parts takes a positive integer, and --plan does not stand beside --unavailable: each is a usage error, and nothing runs', async () => {
+  const { root, base, head } = makeRepo();
+  const cases = [
+    [['--max-parts', '0'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '-3'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '1.5'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '1e1'], /^--max-parts must be a positive integer/],
+    [['--max-parts', 'all'], /^--max-parts must be a positive integer/],
+    [['--max-parts', ''], /^--max-parts must be a positive integer/],
+    [['--max-parts', '99999999999999999999'], /^--max-parts must be a positive integer/],
+    [['--max-parts'], /^--max-parts requires a value/],
+    [['--max-parts', '0', '--plan'], /^--max-parts must be a positive integer/],
+    [['--max-parts', '0', '--unavailable', 'model rejected'], /^--max-parts must be a positive integer/],
+    [['--plan', '--unavailable', 'model rejected'], /^--plan does not go with --unavailable: a plan starts nothing and records nothing, and a skip is a record/],
+    [['--unavailable', 'model rejected', '--plan'], /^--plan does not go with --unavailable/],
+  ];
+  for (const [flags, message] of cases) {
+    const which = flags.join(' ');
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 2, which);
+    assert.match(result.err, message, which);
+    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> \[--plan\] .*\[--part-lines <n>\] \[--max-parts <n>\]/, which);
+    assert.equal(result.out, '', which);
+    nothing.untouched(which);
+  }
+  // Beside `--unavailable` a count of parts is taken and changes nothing, as the other flags of a run are: a
+  // skip launches nothing, so there are no parts to count.
+  const skip = await run(['--base', 'HEAD~1', '--max-parts', '3', '--unavailable', 'model rejected', '--cwd', root], fakeCodex(''));
+  assert.equal(skip.code, 0, skip.err);
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(base, head, 'model rejected')]);
+});
+
+// --- nothing twice: a run starts where the Codex review records end (`./lib/codex-review-coverage.mjs`) ---
+
+/** A repository of four commits: `base`, then `one`, `two` and `three`, each of which changes two lines in
+ * a file of its own, `a.txt`, `b.txt` and `c.txt`. `HEAD~3` is `base`. */
+function makeSlicedRepo() {
+  const { root, base, head: one } = makeRepoWith({ 'a.txt': 'a1\n', 'b.txt': 'b1\n', 'c.txt': 'c1\n' }, { 'a.txt': 'A1 changed\n' });
+  const change = (name, message) => {
+    fs.writeFileSync(path.join(root, name), `${name} changed\n`, 'utf8');
+    git(root, 'commit', '-am', message);
+    return git(root, 'rev-parse', 'HEAD');
+  };
+  return { root, base, one, two: change('b.txt', 'three'), three: change('c.txt', 'four') };
+}
+
+const rangeOf = (from, to) => `${from.slice(0, 7)}..${to.slice(0, 7)}`;
+
+/** What a run says, before its plan, when it starts later than the range it was given: `given` holds `held`
+ * code commits, a record covers `covered` of them, and it starts at `start`. `notReviews`, when given, is
+ * what it says in brackets of the covering records that are no review. */
+const startsAt = (given, held, covered, start, notReviews = '') =>
+  `${given} holds ${held} code commits, and a Codex review record already covers ${covered === 0 ? 'none' : covered} of them${notReviews && ` (${notReviews})`}: ` +
+  `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`;
+
+// What a run over a range the records leave nothing of ends with.
+const NOTHING_DONE = 'Nothing was started and nothing was recorded';
+const AGAIN_TAKES_IT = `${NOTHING_DONE}; \`--again\` takes the range as it was given.`;
+
+// The files of `makeSlicedRepo` that `one..three` changes, as one part; and all three, as one part.
+const LAST_TWO = [{ files: ['b.txt', 'c.txt'], changedLines: 4 }];
+const ALL_THREE = [{ files: ['a.txt', 'b.txt', 'c.txt'], changedLines: 6 }];
+
+test('a run starts where the records end: the plan, what Codex is asked, the lines it must have seen, the run line and the record are those of the range that is left', async () => {
+  for (const flags of [[], ['--prompt', 'own']]) {
+    const which = flags.join(' ') || 'no flag';
+    const { root, base, one, three } = makeSlicedRepo();
+    appendCodexReview(root, reviewedRecord(base, one));
+    // The session showed the patch of `one..three` and no line of the commit a record covers.
+    const fake = fakeCodex(reviewed(root, one));
+    const result = await run(['--base', 'HEAD~3', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    const lines = result.out.split('\n');
+    // Said before the plan: how many code commits the range holds, how many are covered, where the run starts.
+    assert.equal(lines[0], startsAt(rangeOf(base, three), 3, 1, one), which);
+    assert.deepEqual(lines.slice(1, 4), planned(root, one, three, LAST_TWO), which);
+    assert.ok(lines[4].startsWith(`Codex is reviewing ${rangeOf(one, three)} with the lean session`), lines[4]);
+    // Codex is asked from there: by `--base`, or by the range this command's own prompt names.
+    if (flags.length === 0) assert.deepEqual(fake.calls[0].args, leanArgv(one));
+    else assert.equal(fake.calls[0].child.received.text, reviewPrompt({ from: one, head: three, intent: null }));
+    const logged = onlyRun(root);
+    assert.deepEqual([logged.outcome, logged.base, logged.from, logged.head, logged.coverage], ['reviewed', one, one, three, { seen: 4, total: 4 }], which);
+    // The record is of where the review started, so the two records cover the range between them.
+    assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, one), reviewedRecord(one, three)], which);
+    assert.equal(lines.at(-1), `Recorded the Codex review of ${rangeOf(one, three)} in ${codexReviewsPath(root)}.`, which);
+  }
+});
+
+test('the parts and the bound of parts are those of the range that is left: a run that would be refused as it was given starts', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  // Given whole, the range is three parts of two changed lines, one more than this run may start.
+  const asGiven = startsNothing(root);
+  const refused = await run(['--base', 'HEAD~3', '--part-lines', '2', '--max-parts', '2', ...asGiven.home, '--cwd', root], asGiven.deps);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /its 3 parts are more than `--max-parts 2` allows/);
+  appendCodexReview(root, reviewedRecord(base, one));
+  const fake = fakeCodexInParts({ stdout: partShown(root, one, three, 'b.txt') }, { stdout: partShown(root, one, three, 'c.txt') });
+  const result = await run(['--base', 'HEAD~3', '--part-lines', '2', '--max-parts', '2', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  const parts = [{ index: 1, of: 2, files: ['b.txt'] }, { index: 2, of: 2, files: ['c.txt'] }];
+  fake.calls.forEach((call, at) => assert.equal(call.child.received.text, reviewPrompt({ from: one, head: three, part: parts[at] }), `part ${at + 1}`));
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.base, line.from, line.part.of, line.coverage]), [[one, one, 2, { seen: 2, total: 2 }], [one, one, 2, { seen: 2, total: 2 }]]);
+  assert.deepEqual(readCodexReviews(root).at(-1), { ...reviewedRecord(one, three), run: idOf(2), runs: [idOf(1), idOf(2)] });
+});
+
+test('where starting later is not safe, the range is reviewed as it was given: a commit of a branch that forked before it', async () => {
+  const { root, base: first, head: from } = makeRepoWith({ 'a.txt': 'a1\n', 'b.txt': 'b1\n', 's.txt': 's1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'b.txt'), 'B1 changed\n', 'utf8');
+  git(root, 'commit', '-am', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', first);
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed\n', 'utf8');
+  git(root, 'commit', '-am', 'side work, forked before the range starts');
+  git(root, 'checkout', '--quiet', trunk);
+  git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(from, mine));
+  // The one commit no record covers has `first` as its parent: from there the review would read `a.txt`,
+  // which the range never held.
+  const fake = fakeCodex(reviewed(root, from));
+  const result = await run(['--base', from, '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(result.out.split('\n').slice(0, 2), planned(root, from, head, [{ files: ['b.txt', 's.txt'], changedLines: 4 }]).slice(0, 2));
+  assert.deepEqual(fake.calls[0].args, leanArgv(from));
+  assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(from, head));
+});
+
+test('a merge somebody wrote in is a commit of the range: with a record for every other commit the range is not covered, and is reviewed from the first parent of the merge', async () => {
+  const { root, base, head: mine } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed\n', 'utf8');
+  git(root, 'commit', '-am', 'side work');
+  const side = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', trunk);
+  // The finding this is the test of: an edit made in the merge is in the patch of neither side, and with
+  // a record for each of them the run said "Nothing to review" of a range that holds it.
+  git(root, 'merge', '--no-ff', '--no-commit', 'side');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 edited in the merge\n', 'utf8');
+  git(root, 'commit', '-am', 'merge side, with an edit of its own');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  appendCodexReview(root, reviewedRecord(base, side));
+  const plan = async (which) => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', base, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([result.code, result.err], [0, ''], which);
+    nothing.untouched(which);
+    return result.out.split('\n');
+  };
+  // The oldest commit no record covers is the merge: the run starts at its first parent, and reads the edit
+  // with what the merge brought in beside it.
+  assert.deepEqual(await plan('the merge has no record'), [
+    startsAt(rangeOf(base, head), 3, 2, mine),
+    ...planned(root, mine, head, [{ files: ['m.txt', 's.txt'], changedLines: 4 }]),
+  ]);
+  // Covered as any commit is, by a record whose range holds it: then the range is covered whole.
+  appendCodexReview(root, reviewedRecord(mine, head));
+  assert.deepEqual(await plan('a record covers the merge'), [`Nothing to review: ${rangeOf(base, head)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
+});
+
+test('when the records cannot be read against the range, the range is reviewed as it was given, and one line says so', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  const given = rangeOf(base, three);
+  const cannotTell = (why) => new RegExp(`^Could not tell which commits of ${given.replace(/\./g, '\\.')} a Codex review record already covers \\(${why}\\), so the range is taken as it was given\\.$`);
+  // Each is what git answers the first time it is asked that: the later times, for the plan and the run
+  // itself, it answers as it does. The last is an answer the reader of the records throws on: the line then
+  // ends with the message of what was thrown, which is the engine's wording of a TypeError and not this
+  // command's to keep, so it is held to say that reading failed and to say something after it.
+  const failures = [
+    ['git could not list them', (args) => (args[0] === 'log' ? { status: 128, stdout: '', stderr: 'fatal' } : null)],
+    ['git could not say which of their files a review leaves out', (args) => (args[0] === 'check-attr' ? { status: 129, stdout: '', stderr: 'usage' } : null)],
+    ['reading them failed: .+', (args) => (args.includes('--git-common-dir') ? { status: 0, stdout: Buffer.from('.git\n'), stderr: '' } : null)],
+  ];
+  for (const [why, instead] of failures) {
+    const fake = fakeCodex(reviewed(root, base));
+    let answered = false;
+    const spawn = (command, args, opts) => {
+      const answer = command === 'git' && !answered ? instead(args) : null;
+      answered ||= answer !== null;
+      return answer ?? fake.spawn(command, args, opts);
+    };
+    const result = await run(['--base', 'HEAD~3', '--cwd', root], { ...fake, spawn });
+    assert.equal(result.code, 0, `${why}: ${result.err}`);
+    const lines = result.out.split('\n');
+    assert.match(lines[0], cannotTell(why));
+    assert.deepEqual(lines.slice(1, 3), planned(root, base, three, ALL_THREE).slice(0, 2), why);
+    assert.deepEqual(fake.calls[0].args, leanArgv(base), why);
+    assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(base, three), why);
+  }
+});
+
+test('a range the records cover whole starts nothing and records nothing: the run says how many code commits it holds, that all are covered and by what, and exits 0', async () => {
+  const { root, base, one, two, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  appendCodexReview(root, skippedRecord(one, two, 'model rejected'));
+  appendCodexReview(root, reviewedRecord(two, three));
+  // Covered is not reviewed: one of the three records is a skip, and the run says so.
+  const covered =
+    `Nothing to review: ${rangeOf(base, three)} holds 3 code commits, and a Codex review record already covers all of them ` +
+    `(1 of the records that do is a skip or a range with nothing to review, not a review: \`js-harness check --push\` lists them). ${AGAIN_TAKES_IT}`;
+  for (const flags of [[], ['--session', 'lean', '--prompt', 'own', '--keep-home', '--max-parts', '1'], ['--unavailable', 'quota']]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~3', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.shown, result.out], ['', '', covered], which);
+    nothing.untouched(which);
+  }
+  // One commit, covered by a review: said of the one, with nothing in brackets.
+  const single = makeRepo();
+  appendCodexReview(single.root, reviewedRecord(single.base, single.head));
+  const nothing = startsNothing(single.root);
+  const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', single.root], nothing.deps);
+  assert.deepEqual([result.code, result.out], [0, `Nothing to review: ${rangeOf(single.base, single.head)} holds 1 code commit, and a Codex review record already covers it. ${AGAIN_TAKES_IT}`]);
+  nothing.untouched('one commit');
+});
+
+test('a range that holds commits and no code commit starts nothing and records nothing: the push check asks a record of code commits alone', async () => {
+  const { root, base, head } = makeRepoWith({ 'notes.md': 'n1\n', 'f.txt': 'one' }, { 'notes.md': 'N1 changed\n' });
+  for (const flags of [[], ['--plan'], ['--unavailable', 'quota']]) {
+    const which = flags.join(' ') || 'no flag';
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~1', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.deepEqual([result.err, result.out], ['', `Nothing to review: ${rangeOf(base, head)} holds no code commit, since none of its commits changes a file a review reads. ${NOTHING_DONE}.`], which);
+    nothing.untouched(which);
+    assert.equal(wrote(root), false, which);
+  }
+});
+
+test('--again reviews the range as it was given, whatever the records say, and records it as a run always did', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  // Part of it is covered: the whole of it is reviewed all the same, and nothing is said of the records.
+  const partly = fakeCodex(reviewed(root, base));
+  const first = await run(['--base', 'HEAD~3', '--again', '--cwd', root], partly);
+  assert.equal(first.code, 0, first.err);
+  assert.deepEqual(first.out.split('\n').slice(0, 2), planned(root, base, three, ALL_THREE).slice(0, 2));
+  assert.deepEqual(partly.calls[0].args, leanArgv(base));
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, one), reviewedRecord(base, three)]);
+  // Now all of it is covered, and a run without the flag would start nothing.
+  const whole = fakeCodex(reviewed(root, base));
+  const second = await run(['--base', 'HEAD~3', '--cwd', root, '--again'], whole);
+  assert.equal(second.code, 0, second.err);
+  assert.equal(whole.calls.length, 1);
+  assert.doesNotMatch(second.out, /Nothing to review|already covers/);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, one), reviewedRecord(base, three), reviewedRecord(base, three)]);
+  assert.equal(readCodexReviewRuns(root).at(-1).from, base);
+});
+
+test('--unavailable follows the records as a review does: the skip is recorded for the range that is left, and --again records it for the range as it was given', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  const narrowed = await run(['--base', 'HEAD~3', '--unavailable', 'quota', '--cwd', root], fakeCodex(''));
+  assert.equal(narrowed.code, 0, narrowed.err);
+  assert.deepEqual(narrowed.out.split('\n'), [
+    startsAt(rangeOf(base, three), 3, 1, one),
+    `Recorded an unavailable Codex review (quota) of ${rangeOf(one, three)} in ${codexReviewsPath(root)}.`,
+  ]);
+  assert.deepEqual(readCodexReviews(root).at(-1), skippedRecord(one, three, 'quota'));
+  const asGiven = await run(['--base', 'HEAD~3', '--unavailable', 'quota', '--again', '--cwd', root], fakeCodex(''));
+  assert.equal(asGiven.out, `Recorded an unavailable Codex review (quota) of ${rangeOf(base, three)} in ${codexReviewsPath(root)}.`);
+  assert.deepEqual(readCodexReviews(root).at(-1), skippedRecord(base, three, 'quota'));
+  assert.equal(readCodexReviews(root).length, 3);
+});
+
+test('--plan says what a run would: where it starts and the plan of the range that is left, or that the records cover it whole, and --again plans the range as it was given', async () => {
+  const { root, base, one, two, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  const plan = async (flags, which) => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', 'HEAD~3', '--plan', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([result.code, result.err, result.shown], [0, '', ''], which);
+    nothing.untouched(which);
+    return result.out.split('\n');
+  };
+  assert.deepEqual(await plan([], 'partly covered'), [startsAt(rangeOf(base, three), 3, 1, one), ...planned(root, one, three, LAST_TWO)]);
+  assert.deepEqual(await plan(['--again'], 'partly covered, --again'), planned(root, base, three, ALL_THREE));
+  appendCodexReview(root, reviewedRecord(one, two));
+  appendCodexReview(root, reviewedRecord(two, three));
+  assert.deepEqual(await plan([], 'covered whole'), [`Nothing to review: ${rangeOf(base, three)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
+  assert.deepEqual(await plan(['--again'], 'covered whole, --again'), planned(root, base, three, ALL_THREE));
+});
+
+test('a run that starts later says how many of the covering records are no review, as a range covered whole does: a skip covers its commits and reviewed none', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  // The first commit was skipped, never reviewed: every later run leaves it out, and has to say what it leaves.
+  appendCodexReview(root, skippedRecord(base, one, 'model rejected'));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'HEAD~3', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.deepEqual(result.out.split('\n'), [
+    startsAt(rangeOf(base, three), 3, 1, one, '1 of the records that do is a skip or a range with nothing to review, not a review'),
+    ...planned(root, one, three, LAST_TWO),
+  ]);
+  nothing.untouched('a plan past a skip');
+});
+
+test('the row of the plain check and the plan of the command size the same review: the same history, the same start, the same count', async () => {
+  /** A branch off `origin/main` whose first code commit a record covers and whose other two none does. */
+  const sliced = () => {
+    const { root, base, one } = makeSlicedRepo();
+    git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+    git(root, 'update-ref', 'refs/remotes/origin/main', base);
+    appendCodexReview(root, reviewedRecord(base, one));
+    return root;
+  };
+  /** A default branch that moved on, and a branch that merged in work which forked before it moved. */
+  const merged = () => {
+    const { root, base: first, head: moved } = makeRepoWith({ 'a.txt': 'a1\n', 'b.txt': 'b1\n', 's.txt': 's1\n' }, { 'a.txt': 'A1 changed\n' });
+    git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+    git(root, 'update-ref', 'refs/remotes/origin/main', moved);
+    git(root, 'checkout', '--quiet', '-b', 'feature');
+    fs.writeFileSync(path.join(root, 'b.txt'), 'B1 changed\n', 'utf8');
+    git(root, 'commit', '-am', 'mine');
+    appendCodexReview(root, reviewedRecord(moved, git(root, 'rev-parse', 'HEAD')));
+    git(root, 'checkout', '--quiet', '-b', 'side', first);
+    fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed\n', 'utf8');
+    git(root, 'commit', '-am', 'side work');
+    git(root, 'checkout', '--quiet', 'feature');
+    git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
+    return root;
+  };
+  for (const [which, make, rowBase] of [['a record covers the first commit', sliced, /^[0-9a-f]+\^$/], ['a merged branch that forked earlier', merged, /^origin\/main$/]]) {
+    const root = make();
+    const row = checkCodexReviewDebt(root);
+    const said = /: the review of (\S+)\.\.HEAD is (\d+ parts?) today, (\d+ changed lines? in \d+ files?)$/.exec(row.detail);
+    assert.ok(said, `${which}: ${row.detail}`);
+    const [, base, parts, size] = said;
+    assert.match(base, rowBase, which);
+    // From the default branch, and from the base the row names: the command starts the same review.
+    for (const asked of ['origin/main', base]) {
+      const nothing = startsNothing(root);
+      const plan = await run(['--base', asked, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+      assert.equal(plan.code, 0, `${which}, --base ${asked}: ${plan.err}`);
+      const header = plan.out.split('\n').find((line) => line.startsWith('Plan of the Codex review of '));
+      assert.ok(header.endsWith(`: gpt-6.1-sol at high effort, ${parts}, ${size}.`), `${which}, --base ${asked}: the row says ${parts}, ${size}; the plan: ${header}`);
+      assert.deepEqual(row.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${base} --plan`], which);
+    }
+  }
+});
+
 // --- what the comparison of the configurations varies: by injection alone, never by a flag ---
 
 const CODEGRAPH_CONFIG = ['mcp_servers.codegraph.command="codegraph"', 'mcp_servers.codegraph.args=["serve", "--mcp"]'];
 const asFlags = (settings) => settings.flatMap((setting) => ['-c', setting]);
-const atEffort = (argv, effort) => argv.map((token) => (token === 'model_reasoning_effort="medium"' ? `model_reasoning_effort="${effort}"` : token));
-/** The argv of the current session but for `--ephemeral`: what a measured one is launched with. */
-const measuredArgv = (base) => currentArgv(base).filter((token) => token !== '--ephemeral');
+const atEffort = (argv, effort) => argv.map((token) => (token === 'model_reasoning_effort="high"' ? `model_reasoning_effort="${effort}"` : token));
 
-test('codexArgs: the effort, the extra configuration and the ephemeral flag are options, and without them the argv of each session is unchanged', () => {
+test('codexArgs: the effort and the extra configuration are options, and without them the argv is unchanged', () => {
   const base = 'a'.repeat(40);
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex', {}), leanArgv(base));
-  assert.deepEqual(codexArgs(base, 'current', 'linux', 'codex', {}), currentArgv(base));
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex', { effort: 'high' }), atEffort(leanArgv(base), 'high'));
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', {}), leanArgv(base));
+  // The effort is the one the command passes: the same token, in its place.
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { effort: 'medium' }), atEffort(leanArgv(base), 'medium'));
+  assert.equal(atEffort(leanArgv(base), 'medium').includes('model_reasoning_effort="medium"'), true, 'the fixture does change the token');
   // The extra settings come after the session's own and before what is reviewed, where every `-c` is.
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex', { extraConfig: CODEGRAPH_CONFIG }), [...leanArgv(base).slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]);
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'own', { extraConfig: CODEGRAPH_CONFIG }), [...ownArgv().slice(0, -1), ...asFlags(CODEGRAPH_CONFIG), '-']);
-  assert.deepEqual(codexArgs(base, 'current', 'linux', 'codex', { ephemeral: false }), measuredArgv(base));
-  assert.deepEqual(measuredArgv(base), ['exec', 'review', '--json', '--base', base, ...currentArgv(base).slice(6)]);
-  // The lean session is never ephemeral, whatever is asked.
-  assert.deepEqual(codexArgs(base, 'lean', 'linux', 'codex', { ephemeral: true }), leanArgv(base));
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { extraConfig: CODEGRAPH_CONFIG }), [...leanArgv(base).slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]);
+  assert.deepEqual(codexArgs(base, 'linux', 'own', { extraConfig: CODEGRAPH_CONFIG }), [...ownArgv().slice(0, -1), ...asFlags(CODEGRAPH_CONFIG), '-']);
+  // The session is never ephemeral, whatever is asked: the option that said so went with the session it was for.
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { ephemeral: true }), leanArgv(base));
   // An effort is one word, and a setting is `key=value`: either goes into a TOML value or a command line.
-  for (const effort of ['hi"gh', '', 'High', 7]) assert.throws(() => codexArgs(base, 'lean', 'linux', 'codex', { effort }), /effort/, JSON.stringify(effort));
-  for (const extraConfig of [['novalue'], ['=x'], [7], 'a=b']) assert.throws(() => codexArgs(base, 'lean', 'linux', 'codex', { extraConfig }), /key=value/, JSON.stringify(extraConfig));
-  assert.throws(() => codexArgs(base, 'current', 'linux', 'codex', { extraConfig: CODEGRAPH_CONFIG }), /lean session/);
+  for (const effort of ['hi"gh', '', 'High', 7]) assert.throws(() => codexArgs(base, 'linux', 'codex', { effort }), /effort/, JSON.stringify(effort));
+  for (const extraConfig of [['novalue'], ['=x'], [7], 'a=b']) assert.throws(() => codexArgs(base, 'linux', 'codex', { extraConfig }), /key=value/, JSON.stringify(extraConfig));
 });
 
-test('an injected effort is the effort of the lean session: in the argv, in the run line and in the line that announces the review', async () => {
+test('an injected effort is the effort the command passes: in the argv, in the run line and in the line that announces the review', async () => {
   const { root, base, head } = makeRepo();
+  const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
   const fake = fakeCodex(reviewed(root, base));
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, effort: 'high' });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, effort: 'medium' });
   assert.equal(result.code, 0, result.err);
-  assert.deepEqual(fake.calls[0].args, atEffort(leanArgv(base), 'high'));
-  assert.deepEqual([onlyRun(root).model, onlyRun(root).effort], ['gpt-6.1-sol', 'high']);
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the lean session (gpt-6.1-sol, high); this can take several minutes.`);
-  // The current session takes its effort from the user's configuration: nothing injected names it.
-  const current = fakeCodex(reviewed(root, base));
-  await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...current, effort: 'high' });
-  assert.deepEqual(current.calls[0].args, currentArgv(base));
-  assert.equal(readCodexReviewRuns(root).at(-1).effort, null);
+  assert.deepEqual(fake.calls[0].args, atEffort(leanArgv(base), 'medium'));
+  assert.deepEqual([onlyRun(root).model, onlyRun(root).effort], ['gpt-6.1-sol', 'medium']);
+  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${range} with the lean session (gpt-6.1-sol, medium); this can take several minutes.`);
 });
 
-test('injected extra configuration is added to the lean argv, before what is reviewed, and to no other session', async () => {
+test('an injected effort is what the session is held to: a review that ran at it stands, and one that ran at the command\'s own does not', async () => {
+  const mine = fakeHome();
+  // The comparison asks a lean session for `medium`, and the session's own file says it ran at `medium`.
+  const kept = makeRepo();
+  const stands = await leanReviewThatRan(kept.root, kept.base, turnContext('gpt-6.1-sol', 'medium'), mine, { effort: 'medium' });
+  assert.deepEqual([stands.code, stands.err], [0, '']);
+  assert.deepEqual([onlyRun(kept.root).outcome, onlyRun(kept.root).effort, ...sessionRan(onlyRun(kept.root))], ['reviewed', 'medium', 'gpt-6.1-sol', 'medium']);
+  // Asked for `medium` and ran at `high`, the effort of a review nobody varies: not what was asked, so it falls.
+  const other = makeRepo();
+  const falls = await leanReviewThatRan(other.root, other.base, turnContext('gpt-6.1-sol', 'high'), mine, { effort: 'medium' });
+  assert.equal(falls.code, 1);
+  assert.equal(falls.err, `Codex's turn completed, but its session ran on gpt-6.1-sol at high effort, and the command passed gpt-6.1-sol at medium effort${RAN_ON_ANOTHER}`);
+  assert.equal(wrote(other.root), false);
+});
+
+test('injected extra configuration is added to the argv, before what is reviewed', async () => {
   const { root, base } = makeRepo();
   const lean = fakeCodex(reviewed(root, base));
   assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...lean, extraCodexConfig: CODEGRAPH_CONFIG })).code, 0);
   assert.deepEqual(lean.calls[0].args, [...leanArgv(base).slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]);
-  const current = fakeCodex(reviewed(root, base));
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...current, extraCodexConfig: CODEGRAPH_CONFIG })).code, 0);
-  assert.deepEqual(current.calls[0].args, currentArgv(base));
   // On Windows the settings go through the shell with the rest of the line, quoted.
   const windows = fakeCodex(reviewed(root, base));
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...windows, extraCodexConfig: CODEGRAPH_CONFIG, platform: 'win32' })).code, 0);
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...windows, extraCodexConfig: CODEGRAPH_CONFIG, platform: 'win32' })).code, 0);
   assert.equal(windows.calls[0].command, windowsCommandLine('codex', [...leanArgv(base, 'win32').slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]));
 });
 
@@ -3685,24 +4849,61 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   const { root, base } = makeRepo();
   const usage = await run(['--cwd', root], fakeCodex(''));
   assert.equal(usage.code, 2);
-  // The whole usage: the flags, then the line that says which session is the default.
+  // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
+  // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--session <lean|current>] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
-    '--session lean is the default: Codex gets the diff, the repository to read and the project\'s AGENTS.md, on gpt-6.1-sol at medium effort, ' +
-      'and none of your Codex configuration. --session current runs the review on your own Codex configuration instead.',
+    'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
+      'the review runs on gpt-6.1-sol at high effort, which the command fixes.',
+    '--plan prints what the run would start and what it is estimated to send, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
+    'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
+    STARTS_WHERE_RECORDS_END,
   ]);
-  const seams = ['--effort', 'high', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x'];
-  const lean = fakeCodex(reviewed(root, base));
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', ...seams, '--cwd', root], lean)).code, 0);
-  assert.deepEqual(lean.calls[0].args, leanArgv(base));
-  assert.equal(onlyRun(root).effort, 'medium');
-  const current = fakeCodex(reviewed(root, base));
-  const env = { PATH: '/x' };
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'current', ...seams, '--cwd', root], current, env)).code, 0);
-  assert.deepEqual(current.calls[0].args, currentArgv(base));
-  assert.deepEqual(current.calls[0].opts.env, env, 'no home of its own');
-  assert.deepEqual([readCodexReviewRuns(root).at(-1).usageSource, readCodexReviewRuns(root).at(-1).answerSource], [null, null]);
+  const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
+  for (const flags of [[], ['--session', 'lean']]) {
+    const lean = fakeCodex(reviewed(root, base));
+    assert.equal((await run(['--base', 'HEAD~1', '--again', ...flags, ...seams, '--cwd', root], lean)).code, 0, flags.join(' '));
+    assert.deepEqual(lean.calls[0].args, leanArgv(base), flags.join(' '));
+    assert.equal(readCodexReviewRuns(root).at(-1).effort, 'high', flags.join(' '));
+  }
+  // The seam that ran the removed session in a seeded copy of the Codex home is gone with it: a caller that
+  // still hands it over gets the one session there is, in a home that holds the login and nothing else.
+  const mine = fakeHome();
+  const seen = {};
+  const never = () => {
+    throw new Error('no home is seeded any more');
+  };
+  const handed = watching(fakeCodex(reviewed(root, base)), (home) => Object.assign(seen, { home, entries: listed(home) }));
+  assert.equal((await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...handed, homedir: mine.homedir, measuredCurrent: { seed: never } })).code, 0);
+  assert.deepEqual([seen.home, seen.entries], [path.join(mine.homes, RUN_ID), ['auth.json']]);
+  assert.deepEqual(handed.calls[0].args, leanArgv(base));
+  assert.equal(readCodexReviewRuns(root).at(-1).session, 'lean');
+});
+
+test('nothing on the command line selects another model or effort: the usage names no flag for either, and one spelled as Codex spells it is not passed on', async () => {
+  const { root, base } = makeRepo();
+  const usage = await run(['--cwd', root], fakeCodex(''));
+  assert.doesNotMatch(usage.err.split('\n').find((line) => line.startsWith('Usage: ')), /model|effort|-m\b|-c\b/);
+  // Every way a person might try, as this command's flags are spelled and as Codex's are.
+  const tries = [
+    ['--model', 'gpt-6-astra'], ['-m', 'gpt-6-astra'], ['--effort', 'low'], ['--reasoning-effort', 'low'],
+    ['-c', 'model="gpt-6-astra"'], ['-c', 'model_reasoning_effort="low"'], ['--config', 'model_reasoning_effort="low"'],
+    ['--model=gpt-6-astra'], ['--effort=low'],
+  ];
+  for (const session of [[], ['--session', 'lean']]) {
+    for (const flags of [...tries, tries.flat()]) {
+      const fake = fakeCodex(reviewed(root, base));
+      const result = await run(['--base', 'HEAD~1', '--again', ...session, ...flags, '--cwd', root], fake);
+      const which = [...session, ...flags].join(' ');
+      assert.equal(result.code, 0, `${which}: ${result.err}`);
+      assert.deepEqual(fake.calls[0].args, leanArgv(base), which);
+      assert.deepEqual(modelAndEffort(fake.calls[0].args), { models: ['gpt-6.1-sol'], efforts: ['model_reasoning_effort="high"'] }, which);
+      assert.equal(fake.calls[0].args.some((token) => /astra|low/.test(token)), false, which);
+      const logged = readCodexReviewRuns(root).at(-1);
+      assert.deepEqual([logged.model, logged.effort], ['gpt-6.1-sol', 'high'], which);
+    }
+  }
 });
 
 test('onResult is handed every attempt that launched Codex: its run line, whether it was logged, and the answer as data', async () => {
@@ -3719,10 +4920,10 @@ test('onResult is handed every attempt that launched Codex: its run line, whethe
   assert.deepEqual(results[0].review.findings.map(({ file, start, end, severity }) => [file, start, end, severity]), [['f.txt', 1, 1, 'P1'], ['lib/deep.mjs', 3, 9, 'P3'], ['f.txt', 2, 4, null]]);
   assert.equal(results[0].review.findings[0].body, 'The loop stops one short, so the last line is never written.');
   assert.deepEqual([results[0].review.verdict, results[0].review.confidence], ['incorrect', 0.7]);
-  // An attempt that failed is handed over too, and so is one of the current session, which reads no answer.
-  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), onResult });
-  await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), onResult });
-  assert.deepEqual(results.map(({ run: line, review }) => [line.session, line.outcome, review === null ? null : review.findings.length]), [['lean', 'reviewed', 3], ['lean', 'failed', 0], ['current', 'reviewed', null]]);
+  // An attempt that failed is handed over too, and so is one whose answer could not be read: `null`, and no review of nothing.
+  await run(['--base', 'HEAD~1', '--again', '--session', 'lean', '--cwd', root], { ...fakeCodex(reviewed(root, base), { status: 7 }), onResult });
+  await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fakeCodex(reviewed(root, base), {}, PROBE_OK, false), onResult });
+  assert.deepEqual(results.map(({ run: line, review }) => [line.session, line.outcome, review === null ? null : review.findings.length]), [['lean', 'reviewed', 3], ['lean', 'failed', 0], ['lean', 'failed', null]]);
   assert.deepEqual(results.map(({ run: line }) => line), readCodexReviewRuns(root));
   // What launched nothing has no result: a skip, and a tree with uncommitted changes.
   await run(['--base', 'HEAD~1', '--unavailable', 'quota', '--cwd', root], { ...fakeCodex(''), onResult });
@@ -3756,153 +4957,6 @@ test('onResult is handed each part of a range reviewed in parts, in order', asyn
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(results.map(({ run: line }) => [line.id, line.part.index, line.part.of]), [[idOf(1), 1, 2], [idOf(2), 2, 2]]);
   assert.deepEqual(results.map(({ run: line }) => line), readCodexReviewRuns(root));
-});
-
-/** A seed as the comparison hands one over: it copies a configuration into the Codex home, says which
- * variables the session gets, and gives back what stops what it started. `seen` records what happened. */
-const seedOf = (seen) => ({ folder, home }) => {
-  Object.assign(seen, { folder, home, order: ['seed'] });
-  fs.writeFileSync(path.join(home, 'config.toml'), 'model = "the-user-model"\n', 'utf8');
-  fs.writeFileSync(path.join(home, 'AGENTS.md'), 'the global instructions', 'utf8');
-  return {
-    env: { ENGRAM_PORT: '45678', ENGRAM_URL: null },
-    release: () => {
-      seen.order.push('release');
-      seen.atRelease = { home: fs.existsSync(home), sessions: fs.existsSync(path.join(home, 'sessions')) };
-    },
-  };
-};
-
-test('a measured current session runs in a seeded copy of the Codex home, with the login as a hard link, not ephemeral, and its run line holds what it spent and answered', async () => {
-  const { root, base, head } = makeRepo();
-  const mine = fakeHome();
-  fs.writeFileSync(path.join(mine.codexHome, 'config.toml'), 'model = "real"\n', 'utf8');
-  const seen = {};
-  const at = {};
-  const fake = spending(fakeCodex(jsonl(thread, turn, cmd(diffCmd(base), 0, patchOf(root, base)), msg(FINDINGS), zeros), {}, PROBE_OK, answerWith(root)), parentThread, [turnContext('gpt-the-review-ran', 'low'), ...reviewThread]);
-  const watched = {
-    ...fake,
-    spawnAsync: (command, args, opts) => {
-      const home = opts.env.CODEX_HOME;
-      seen.order.push('launch');
-      Object.assign(at, { home, entries: listed(home).sort(), id: fileId(path.join(home, 'auth.json')), links: fs.statSync(mine.auth).nlink });
-      return fake.spawnAsync(command, args, opts);
-    },
-  };
-  const env = { PATH: '/x', ENGRAM_URL: 'http://127.0.0.1:7437', ENGRAM_PORT: '7437' };
-  const results = [];
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...watched, homedir: mine.homedir, platform: process.platform, measuredCurrent: { seed: seedOf(seen) }, onResult: (one) => results.push(one) }, env);
-  assert.equal(result.code, 0, result.err);
-  assert.equal(result.err, '');
-  // The current argv but for `--ephemeral`: only a session that is not ephemeral leaves its rollout files.
-  const call = fake.calls[0];
-  if (process.platform === 'win32') assert.equal(call.command, windowsCommandLine('codex', measuredArgv(base)));
-  else assert.deepEqual(call.args, measuredArgv(base));
-  // Its home: the `.codex` of a folder named after the run, under the harness's state dir.
-  assert.equal(seen.folder, path.join(mine.homes, RUN_ID));
-  assert.equal(at.home, path.join(mine.homes, RUN_ID, '.codex'));
-  assert.equal(call.opts.env.CODEX_HOME, at.home);
-  assert.deepEqual(at.entries, ['AGENTS.md', 'auth.json', 'config.toml']);
-  assert.equal(at.id, fileId(mine.auth), 'the same file as the real login, not a copy');
-  assert.equal(at.links, 2);
-  // What the seed said of the environment: a variable set, and one taken away.
-  assert.equal(call.opts.env.ENGRAM_PORT, '45678');
-  assert.equal('ENGRAM_URL' in call.opts.env, false);
-  assert.deepEqual(env, { PATH: '/x', ENGRAM_URL: 'http://127.0.0.1:7437', ENGRAM_PORT: '7437' }, 'the caller\'s environment is not mutated');
-  // What the seed started is stopped after Codex ended and while the home is still there; then the home goes.
-  assert.deepEqual(seen.order, ['seed', 'launch', 'release']);
-  assert.deepEqual(seen.atRelease, { home: true, sessions: true });
-  assert.deepEqual(listed(mine.homes), []);
-  assert.equal(fs.statSync(mine.auth).nlink, 1);
-  assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
-  assert.deepEqual(listed(mine.codexHome).sort(), ['auth.json', 'config.toml'], 'nothing is written into the real Codex home');
-  assert.equal(fs.readFileSync(path.join(mine.codexHome, 'config.toml'), 'utf8'), 'model = "real"\n');
-  // The run line: the current session, whose model the user's configuration sets, with what it really spent.
-  const logged = onlyRun(root);
-  assert.deepEqual([logged.id, logged.session, logged.model, logged.effort, logged.prompt], [RUN_ID, 'current', null, null, 'codex']);
-  // The command names no model for it, and here the session's own file says which one it ran with: not
-  // the one the configuration of the copy names, which is only what was asked for.
-  assert.deepEqual(sessionRan(logged), ['gpt-the-review-ran', 'low']);
-  assert.deepEqual(logged.usage, REVIEW_SPENT);
-  assert.deepEqual([logged.usageSource, logged.requests, logged.firstRequestInputTokens, logged.threads], ['rollout', 7, 18200, 1]);
-  assert.deepEqual([logged.findings, logged.verdict, logged.answerSource], [THREE_FOUND, 'incorrect', 'rollout']);
-  assert.equal(results[0].review.findings.length, 3);
-  assert.equal(result.out.split('\n')[0], `Codex is reviewing ${base.slice(0, 7)}..${head.slice(0, 7)} with the current session, measured in a copy of the Codex home; this can take several minutes.`);
-  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
-});
-
-test('a measured current session leaves nothing behind however it ends, and one whose answer cannot be read is a failed attempt, as a lean one is', async () => {
-  const { root, base } = makeRepo();
-  const mine = fakeHome();
-  const endings = [
-    ['failed', 7, fakeCodex(reviewed(root, base), { status: 7 }), {}],
-    ['not-inspected', 1, fakeCodex(reviewedWith(cmd('git status'))), {}],
-    ['timed-out', 1, fakeCodex('', { hang: true }), { timeoutMs: 30 }],
-    // No session of the review sub-agent in its home: nothing to compare its findings by.
-    ['failed', 1, fakeCodex(reviewed(root, base), {}, PROBE_OK, false), {}],
-  ];
-  for (const [outcome, code, fake, extra] of endings) {
-    const seen = {};
-    const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...spending(fake, parentThread, reviewThread), ...extra, homedir: mine.homedir, measuredCurrent: { seed: seedOf(seen) } });
-    assert.equal(result.code, code, outcome);
-    const logged = readCodexReviewRuns(root).at(-1);
-    assert.deepEqual([logged.outcome, logged.session, logged.usageSource], [outcome, 'current', 'rollout'], outcome);
-    assert.deepEqual(logged.usage, REVIEW_SPENT, outcome);
-    assert.deepEqual(seen.order.at(-1), 'release', outcome);
-    assert.deepEqual(listed(mine.homes), [], outcome);
-    assert.equal(fs.statSync(mine.auth).nlink, 1, outcome);
-  }
-  assert.match(readCodexReviewRuns(root).at(-1).reason, /no session of the review sub-agent/);
-  assert.equal(wrote(root), false);
-});
-
-test('a measured current session whose home cannot be seeded is not started: no launch, no run line, nothing left', async () => {
-  const { root, base } = makeRepo();
-  const mine = fakeHome();
-  const fake = fakeCodex(reviewed(root, base));
-  const seed = () => {
-    throw new Error('the template of the home is gone');
-  };
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fake, homedir: mine.homedir, measuredCurrent: { seed } });
-  assert.equal(result.code, 1);
-  assert.match(result.err, /the template of the home is gone/);
-  assert.match(result.err, /The review was not started and nothing was recorded/);
-  assert.doesNotMatch(result.err, /--session current/, 'it is the current session already: there is no other to name');
-  assert.equal(fake.calls.length, 0);
-  assert.equal(loggedRun(root), false);
-  assert.deepEqual(listed(mine.homes), []);
-  assert.equal(fs.statSync(mine.auth).nlink, 1);
-  // A seam given wrong is a mistake of the caller, said before anything is made.
-  await assert.rejects(run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fake, homedir: mine.homedir, measuredCurrent: {} }), /seed/);
-  assert.deepEqual(listed(mine.homes), []);
-});
-
-test('a measured home is swept like a lean one, a release that throws is a warning, and the lean session is never measured this way', async () => {
-  const { root, base } = makeRepo();
-  const mine = fakeHome();
-  // What a killed measured run left: a home directory with a name of the login in its `.codex`.
-  const killed = createLeanHome({ realHome: mine.codexHome, parent: mine.homes, id: 'killed', seed: () => {} });
-  fs.utimesSync(killed.folder, new Date(0), new Date(0));
-  assert.equal(fs.statSync(mine.auth).nlink, 2);
-  const seed = () => ({
-    release: () => {
-      throw new Error('the port is held');
-    },
-  });
-  const result = await run(['--base', 'HEAD~1', '--session', 'current', '--cwd', root], { ...fakeCodex(reviewed(root, base)), homedir: mine.homedir, measuredCurrent: { seed } });
-  assert.equal(result.code, 0, result.err);
-  assert.match(result.err, /Warning: .*the port is held/);
-  assert.deepEqual(listed(mine.homes), []);
-  assert.equal(fs.statSync(mine.auth).nlink, 1);
-  // Under the lean session the seam does nothing: its home holds the login and nothing else.
-  const seen = {};
-  const lean = watching(fakeCodex(reviewed(root, base)), (home) => Object.assign(seen, { home, entries: listed(home) }));
-  const never = () => {
-    throw new Error('the lean session is not seeded');
-  };
-  assert.equal((await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...lean, homedir: mine.homedir, measuredCurrent: { seed: never } })).code, 0);
-  assert.deepEqual([seen.home, seen.entries], [path.join(mine.homes, RUN_ID), ['auth.json']]);
-  assert.deepEqual(lean.calls[0].args, leanArgv(base));
 });
 
 // --- the evidence rule ---

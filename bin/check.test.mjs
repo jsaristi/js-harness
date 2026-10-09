@@ -1141,6 +1141,26 @@ test('main runs the review row after the sensor rows', async () => {
   }
 });
 
+// The row itself is tested against real repositories in check-codex-reviews.test.mjs; here, where it sits.
+test('main prints the codex-review row last, as information, and runs its git through deps.git', async () => {
+  const dir = sensorProject({ tests: exits(0) });
+  try {
+    const asked = [];
+    const git = (cmd, args) => {
+      asked.push(`${cmd} ${args.join(' ')}`);
+      return { status: 128, stdout: '', stderr: 'fatal: not a git repository' };
+    };
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi: fakeGentleAi(), git });
+    assert.equal(code, 0, output);
+    const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
+    assert.match(rows.at(-2), /^INFO {2}review /);
+    assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
+    assert.ok(asked.length > 0 && asked.every((line) => line.startsWith('git rev-parse ')), asked.join('\n'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('main exits 0 with a review row when gentle-ai is missing', async () => {
   const dir = sensorProject({ tests: exits(0) });
   try {
@@ -1157,7 +1177,9 @@ test('main runs no review row when it is the inner run, or a push', async () => 
   try {
     const gentleAi = fakeGentleAi();
     const inner = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir }, { gentleAi });
-    assert.doesNotMatch(inner.output, /review/);
+    // Anchored to the row's name: the inner run does print the `codex-review` row, which asks gentle-ai nothing.
+    assert.doesNotMatch(inner.output, /^(PASS|FAIL|INFO) {2}review /m);
+    assert.match(inner.output, /^INFO {2}codex-review /m);
     const push = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
     assert.doesNotMatch(push.output, /^(PASS|FAIL|INFO) {2}review /m);
     assert.equal(gentleAi.calls.length, 0);

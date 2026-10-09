@@ -20,6 +20,11 @@
 // (`./codex-review-parts.mjs`). `--base` cannot be limited to files, and a prompt can: the prompt of a part
 // names its files in the command that shows them, so every part of a range is asked with this prompt,
 // whatever the range would have been asked with as a whole.
+//
+// A range that leaves files out. A review reads code, and leaves the documents and what the project marks
+// out (`./codex-review-scope.mjs`). `--base` reviews every file, so a range that leaves some out is asked
+// by its files too, also when they fit in one part: that one part is asked with the text of a part, which
+// then says nothing of parts. Which files were left out, and how many, is not in the prompt.
 import { parseContract } from './contract.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
@@ -31,7 +36,9 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v1';
 // It is a version of its own because it is another text: a change to the wording of a part leaves the
 // reviews of whole ranges comparable with one another, and the other way round. `v2` is `v1` with the file
 // names of the part read literally by the command it names (`git --literal-pathspecs diff`, see `scope`).
-export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v2';
+// `v3` is `v2` where the range leaves no file out of the review, to the character; where it does, the last
+// line says so, and a range of one part is asked with this text as well.
+export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v3';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -63,21 +70,29 @@ export function quotedPath(path) {
   return PLAIN_PATH.test(path) ? path : `'${path}'`;
 }
 
-const isPart = (part) =>
-  part !== null && typeof part === 'object' && Number.isInteger(part.of) && part.of >= 2 && Number.isInteger(part.index) && part.index >= 1 && part.index <= part.of &&
+/** Whether `part` is a part of a range of which `leftOut` files are left out of the review. One part of one
+ * is a part only of a range that leaves files out: one that leaves none out is reviewed whole. */
+const isPart = (part, leftOut) =>
+  part !== null && typeof part === 'object' && Number.isInteger(part.of) && part.of >= (leftOut > 0 ? 1 : 2) && Number.isInteger(part.index) && part.index >= 1 && part.index <= part.of &&
   Array.isArray(part.files) && part.files.length > 0;
 
-/** The lines that say what to review: the whole range, or the `part` of it. */
-function scope(from, head, part) {
+/** The lines that say what to review: the whole range, or the `part` of it, in a range that leaves `leftOut`
+ * files out of the review. */
+function scope(from, head, part, leftOut) {
   const findings = 'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.';
+  if (!Number.isInteger(leftOut) || leftOut < 0) throw new Error(`How many files are left out of the review must be a count, got ${JSON.stringify(leftOut)}.`);
   if (part === null) {
+    // Its command names no file, so it would show the files that were left out as well.
+    if (leftOut > 0) throw new Error('A range that leaves files out of the review is asked by its files, as a part is: the prompt of a whole range names none.');
     return [
       `Review the code changes in the committed range ${from}..${head}.`,
       `Run \`git diff ${from} ${head}\` to inspect them: its output is the whole change under review.`,
       findings,
     ];
   }
-  if (!isPart(part)) throw new Error(`Not a part of a range reviewed in parts (\`{ index, of, files }\`, with two parts or more and a file at least): ${JSON.stringify(part)}.`);
+  if (!isPart(part, leftOut)) {
+    throw new Error(`Not a part of a range reviewed in parts (\`{ index, of, files }\`, with a file at least, and two parts or more unless the range leaves files out of the review): ${JSON.stringify(part)}.`);
+  }
   // `--no-renames`: with it the diff of some files is the diff of each of them, whatever the others are. A
   // file that was renamed is then shown whole, as one removed and one added, also when its two names are in
   // different parts, which a rename could not be shown across.
@@ -89,11 +104,22 @@ function scope(from, head, part) {
   // is an option of `git`, not of `diff`, so it goes before the subcommand. The command that says what a
   // part must have seen is run with it too (`planParts` in `../codex-review.mjs`).
   const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${part.files.map(quotedPath).join(' ')}`;
+  const context = 'read them for context, and report nothing about them.';
+  // The one part of a range that leaves files out: the review is of its files, and there is no other part
+  // to speak of.
+  if (part.of === 1) {
+    return [
+      `Review the code changes in the committed range ${from}..${head}. This review covers the files the command below names.`,
+      `Run \`${command}\` to inspect them: its output is the whole change under review.`,
+      findings,
+      `The other files the range changes are left out of this review: ${context}`,
+    ];
+  }
   return [
     `Review the code changes in the committed range ${from}..${head}. This is part ${part.index} of ${part.of} of that review: it covers the files the command below names.`,
     `Run \`${command}\` to inspect them: its output is the whole change under review in this part.`,
     findings,
-    'The other files the range changes are reviewed in the other parts: read them for context, and report nothing about them.',
+    `The other files the range changes are reviewed in the other parts${leftOut > 0 ? ', or left out of the review' : ''}: ${context}`,
   ];
 }
 
@@ -106,12 +132,17 @@ function scope(from, head, part) {
  * With a `part` (`{ index, of, files }`: the `index`-th of `of` parts, from 1, and the paths it covers, from
  * the root of the repository) the text is that of one part of a range reviewed in parts: it says which part
  * it is, names its files in the command, and says the other files are reviewed elsewhere. Throws when the
- * part is not one, or when one of its paths cannot be written on a command line (`quotedPath`). */
-export function reviewPrompt({ from, head, intent = null, part = null }) {
+ * part is not one, or when one of its paths cannot be written on a command line (`quotedPath`).
+ *
+ * `leftOut` is how many files the range leaves out of the review (`./codex-review-scope.mjs`), 0 when none.
+ * A range that leaves some out has no prompt as a whole, since that prompt's command shows every file: it
+ * is asked in parts, each of which then says the other files are in the other parts or left out, and when
+ * its files fit in one part that part is `{ index: 1, of: 1, files }`, whose text speaks of no part. */
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0 }) {
   for (const id of [from, head]) {
     if (typeof id !== 'string' || !COMMIT_ID.test(id)) throw new Error(`The review prompt names its range by full commit id, got ${JSON.stringify(id)}.`);
   }
-  const range = scope(from, head, part);
+  const range = scope(from, head, part, leftOut);
   if (intent === null) return `${range.join('\n')}\n`;
   const purpose = [
     '## What the change is for',

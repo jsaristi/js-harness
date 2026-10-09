@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
+import { appendCodexReview, codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -137,6 +137,42 @@ test('a well-formed reviewed or unavailable record is valid', () => {
   assert.equal(isValidCodexReview(record), true);
   assert.equal(isValidCodexReview({ ...record, base: 'a'.repeat(64), head: 'b'.repeat(64) }), true);
   assert.equal(isValidCodexReview({ ...record, outcome: 'unavailable', reason: 'model rejected' }), true);
+});
+
+test('a range with nothing to review has an outcome of its own, which is neither a review nor a skip, and its record is valid with the reason', () => {
+  assert.equal(NOTHING_TO_REVIEW, 'nothing-to-review');
+  assert.notEqual(NOTHING_TO_REVIEW, 'reviewed');
+  assert.notEqual(NOTHING_TO_REVIEW, 'unavailable');
+  assert.equal(isValidCodexReview({ ...record, outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' }), true);
+  // Like a skip, it has to say why no review stands behind it.
+  for (const reason of [undefined, '', '  ', 3]) {
+    assert.equal(isValidCodexReview({ ...record, outcome: NOTHING_TO_REVIEW, reason }), false, JSON.stringify(reason));
+  }
+});
+
+test('a record says whether its review left out a file the project marks, and one that does not say is read as one that did', () => {
+  const counts = (documents, marked) => ({
+    files: documents + marked,
+    changedLines: 10 * (documents + marked),
+    documents: { files: documents, changedLines: 10 * documents },
+    marked: { files: marked, changedLines: 10 * marked },
+  });
+  // Nothing left out, and documents alone: what no later commit can turn into code.
+  assert.equal(leftMarkedFilesOut(record), false);
+  assert.equal(leftMarkedFilesOut({ ...record, leftOut: counts(3, 0) }), false);
+  // A marked file among them, with or without documents, under any outcome that can hold the count.
+  assert.equal(leftMarkedFilesOut({ ...record, leftOut: counts(0, 1) }), true);
+  assert.equal(leftMarkedFilesOut({ ...record, leftOut: counts(3, 2) }), true);
+  assert.equal(leftMarkedFilesOut({ ...record, outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file a review reads', leftOut: counts(0, 2) }), true);
+  // A record written before the count of the marked files was kept apart holds the two totals alone: it
+  // cannot say that none was marked, so it is not read as saying so. Nor is anything else that is no such count.
+  for (const untold of [{ files: 2, changedLines: 6 }, { ...counts(1, 0), marked: {} }, { ...counts(1, 0), marked: { files: '0' } }, { ...counts(1, 0), marked: { files: -0.5 } }, { ...counts(1, 0), marked: null }, 'two', 0, null, []]) {
+    assert.equal(leftMarkedFilesOut({ ...record, leftOut: untold }), true, JSON.stringify(untold));
+  }
+  // None of it makes a record more or less valid than it was: the count is what a check reads of a valid record.
+  for (const leftOut of [counts(3, 0), counts(0, 1), { files: 2, changedLines: 6 }, 'two', null]) {
+    assert.equal(isValidCodexReview({ ...record, leftOut }), true, JSON.stringify(leftOut));
+  }
 });
 
 test('every way a record can be malformed makes it invalid', () => {

@@ -10,15 +10,18 @@
 // outcome is `reviewed` and that no record names means the record could not be written afterwards: the
 // session met the evidence rule and was measured, and the command still exited 1 with no review recorded.
 //
-// Reading old lines. The schema stayed `v1` when `session` was added, so lines written before it have
-// none: they were all run in the `current` session, the only one there was, and a reader takes a missing
-// `session` as `current` (`runSession`), never as unknown. `durationMs` is `null` when the wall time of
-// the attempt could not be measured; it is never a guess.
+// Reading old lines. `session` says which session the attempt ran in. There were two, `current` (the
+// user's whole Codex configuration) and `lean`, until `current` was removed on 2026-10-08: a line written
+// since only ever says `lean`, and the lines that say `current` stay as they are, valid history that
+// nothing rewrites. The schema stayed `v1` when `session` was added, so lines written before it have
+// none: they were all run in the `current` session, the only one there was then, and a reader takes a
+// missing `session` as `current` (`runSession`), never as unknown. `durationMs` is `null` when the wall
+// time of the attempt could not be measured; it is never a guess.
 //
 // What an attempt spent. `usage` holds the four token counts, each `null` when it is not known, and
-// `usageSource` says where they were read: `rollout`, the rollout files of the lean session's own Codex
-// home, or `null` when no count was read, which is every `current` attempt (ephemeral, in the user's home,
-// which the command never reads). With them come `requests` (the token counts those files held, taken as
+// `usageSource` says where they were read: `rollout`, the rollout files of the session's own Codex
+// home, or `null` when no count was read, which is every line of the `current` session as a person ran it
+// (ephemeral, in the user's home, which the command never read). With them come `requests` (the token counts those files held, taken as
 // requests to the model), `firstRequestInputTokens` (the input of the session's first request: what it
 // loads before it has run anything) and `threads` (the rollout files that held a count), each `null` when
 // unknown. A line with NO `usageSource` field was written before it existed: its `usage` is what Codex's
@@ -26,20 +29,27 @@
 // and not a measurement (`rolloutReading` in ./codex-usage.mjs has the source). Read such a `usage` as
 // unknown, not as a review that cost nothing.
 //
-// What an attempt ran with. `model` and `effort` are what the COMMAND passed: both set under `lean`, both
-// `null` under `current`, where the user's configuration decides and the command names neither. They say
-// what was asked for, not what ran. `sessionModel` and `sessionEffort` are what the session itself wrote
-// in its rollout file (`rolloutReading`), read from the same home as the tokens and so for the same
-// sessions: a measurement, each `null` when it is not known. The schema stayed `v1` here as well, so a
+// What an attempt ran with. `model` and `effort` are what the COMMAND passed: one model at one effort,
+// in the one session there is since 2026-10-08. A line of the `current` session
+// written before that day has `null` in both, since the command named neither then and the user's
+// configuration decided; a reader takes that `null` as "the command asked for none", never as the model of
+// today. They say what was asked for, not what ran. `sessionModel` and `sessionEffort` are what the session
+// itself wrote in its rollout file (`rolloutReading`), read from the same home as the tokens and so for the
+// same sessions: a measurement, each `null` when it is not known. The schema stayed `v1` here as well, so a
 // line written before these two fields has neither, and a reader takes that as no measurement
 // (`runSessionModel`), never as the model the command passed.
+//
+// The two pairs are compared when the attempt ends: a session whose measured model or effort differs from
+// what the command passed is an attempt that does not stand, logged as `failed` with a `reason` that names
+// both. So a line whose outcome is `reviewed` never holds a `sessionModel` or a `sessionEffort` other than
+// its `model` and its `effort`, unless it was written before 2026-10-08, when nothing compared them.
 //
 // What a review was asked and what it answered. `prompt` is `codex`, a `--base` review with the sentence
 // Codex writes itself, or `own`, this harness's prompt (`./codex-review-prompt.mjs`), whose version is then
 // `promptVersion`; under `codex` that is `null`. `findings` (`total`, and `bySeverity` with `P0` to `P3` and
 // `none`), `verdict` (`correct` or `incorrect`) and `answerSource` (`rollout`) are there when the review's
-// answer was read as data (`./codex-review-answer.mjs`), which only a lean attempt can be; otherwise all
-// three are `null`. The schema stayed `v1` here too, so a line written before these fields has none of
+// answer was read as data (`./codex-review-answer.mjs`), which no line of the `current` session's ever
+// was; otherwise all three are `null`. The schema stayed `v1` here too, so a line written before these fields has none of
 // them: a reader takes a missing `prompt` as `codex`, the only one there was (`runPrompt`), and missing
 // findings as no data (`runFindings`), which is never a review that found nothing.
 //
@@ -56,7 +66,8 @@ export const CODEX_REVIEW_RUN_SCHEMA = 'js-harness.codex-review-run/v1';
 const FILE = 'codex-review-runs.jsonl';
 
 /** The session a run line was measured in: its `session` when that is `current` or `lean`, else
- * `current`, which is what every line written before the field existed ran in. */
+ * `current`, which is what every line written before the field existed ran in. `current` is history: that
+ * session was removed on 2026-10-08, no new line says it, and the old ones are still read as what they are. */
 export function runSession(run) {
   return run?.session === 'lean' ? 'lean' : 'current';
 }
@@ -80,8 +91,8 @@ const isName = (value) => typeof value === 'string' && value !== '';
 
 /** The model and the effort the session of a run line really ran with, `{ model, effort }`, as its own
  * rollout file said (`sessionModel`, `sessionEffort`), or `null` when the line measured no model: it was
- * written before the two fields existed, it ran in the `current` session as a person runs it, whose home
- * is never read, or its home held no line that names one. `effort` is `null` for a session that named its
+ * written before the two fields existed, it ran in the `current` session as a person ran it, whose home
+ * was never read, or its home held no line that names one. `effort` is `null` for a session that named its
  * model and no effort. Never the line's `model` and `effort`, which are what the command passed. */
 export function runSessionModel(run) {
   if (!isName(run?.sessionModel)) return null;
