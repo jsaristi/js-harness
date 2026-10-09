@@ -148,12 +148,21 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   base with both variables, the mode text appended to the prompt, a suite entry that writes to
   `evals/results/subagents/` (route: delegated writer, `evals/configs.mjs`, `evals/suite.mjs` and
   their tests). Six configs, `<arm>-<mode>`, because the runner's trial key has no place for a
-  mode; the mode goes in `--append-system-prompt`; the results document pins `subagentModels`.
+  mode; the mode goes in `--append-system-prompt`; the results document pins each config (`subagentModels` in T1, reshaped by T2 into `subagentConfigs`).
   Writer's evidence, RED then GREEN: `node --test evals/configs.test.mjs` 74 pass, 0 fail;
   `node --test evals/suite.test.mjs` 76 pass, 0 fail
-- [ ] T2 What a trial records: the whole `subagent_stats`, the session transcript kept before
-  the trial home is deleted, and the list cost recomputed from tokens with a dated price table
-  (route: delegated writer, `evals/agent-output.mjs`, `evals/runner.mjs` and their tests)
+- [x] T2 What a trial records, and the fixes the reviews of T1 asked for (route: delegated writer).
+  Every Claude record holds `subagentStats`, the object Claude Code printed. A subagent config
+  keeps its session transcripts in the raw logs before the trial home is removed and records
+  `transcripts` (`{ files, errors }`) and `listCost`: tokens of the orchestrator and of each
+  subagent at dated list prices (`evals/prices.mjs`, `evals/transcript-usage.mjs`), with a check
+  that the transcript totals equal `modelUsage`, and a low and high estimate when no transcript
+  was kept. Fixes: `--summary --subagents` reaches a subagent run and prints no headroom
+  screen; the results document pins `subagentConfigs` (model and the SHA-256 of the delegation
+  text) and a refusal names what changed; the env test exercises the real `withToken`. Writer's
+  evidence, RED then GREEN: `agent-output` 22 pass, `prices` 8, `transcript-usage` 16,
+  `configs` 79, `suite` 79, `runner` 162 pass and 1 skipped (POSIX only), `report` 55, 0 fail.
+  The probe session is reproduced exactly: $0.3413604 for Opus 5.5, $0.004097825 for Haiku 5.5
 - [ ] T3 `evals/subagents-report.mjs`: the two arms side by side per mode and task, trials
   without delegation apart, `--require-complete` (route: delegated writer)
 - [ ] T4 Smoke: 2 trials, one per arm, `house-rules` in `write` mode
@@ -187,3 +196,56 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   these always touch the harness, so the rule belongs with the session signals the harness
   ships (`AGENTS.md`, "Working with Sebastián"; the reworded text lives on
   `feat/codex-review-lean`), not only in an agent's memory.
+- 2026-10-08 — T1 committed as `f0df385` (gate 2: budget, contracts and tests pass). gentle-ai
+  assessed the range `4226cd2..f0df385` as medium risk, review due (`slice_budget_reached`);
+  consent is pre-granted and the review runs under lineage `review-494e565015e32cc4`. The gate
+  left an untracked `Microsoft/Windows/PowerShell/ModuleAnalysisCache` at the worktree root,
+  the same stray file seen on 2026-10-05 in the `codex-parity` worktree; removed.
+- 2026-10-08 — Reviews of `4226cd2..f0df385`. gentle-ai: approved and acknowledged (lineage
+  `review-494e565015e32cc4`, authority burned), with three informational findings. Codex:
+  reviewed and recorded (`js-harness codex-review --base 4226cd2`), two P2 findings, the same
+  two that gentle-ai marked as warnings and the writer had noted: `--summary --name <run>` reads
+  `evals/results/<run>.json` and so cannot reach a subagent run, or reads an F5 run of the same
+  name (`evals/suite.mjs:561`); and a continued run is not refused when a delegation text
+  changed, because only the subagent model is pinned (`evals/suite.mjs:692`). Both are accepted
+  and go into T2, with gentle-ai's suggestion that a test of the inherited env reimplements the
+  overlay it tests (`evals/configs.test.mjs:530`). The first Codex attempt refused to start
+  because this document had an uncommitted note; nothing was spent.
+- 2026-10-08 — Asked where to cement the two rules, Sebastián did not pick a place for a patch.
+  He asked for the rules to be ranked properly: `AGENTS.md` as the orchestrator of the main and
+  most important rules, the rest of the harness's information in another place that matters as
+  much, and as the first rule of all that nothing is done for the sake of doing it or of
+  complying, but in the best and correct way, one that works better than expected, with
+  protocols, knowing that many protocols complicate. Proposed in answer, not yet decided: three
+  levels (principles and an index in `AGENTS.md`; protocols loaded on demand, as the skill
+  `install` already writes; checks a command or hook runs), a placement test for every new
+  rule that prefers the lowest level able to enforce it, and a feature of its own in its own
+  session, which also absorbs the session signals pending on `feat/codex-review-cost`.
+- 2026-10-08 — His answer: a feature of its own, in its own session. Its plan is written in
+  `docs/ROADMAP.md` ("Rule hierarchy (planned)") on the branch `docs/rule-hierarchy-plan`, cut
+  from `main` in `D:\js-harness-worktrees\rule-hierarchy-plan`, a delivery apart from this
+  feature's slices; nothing in `AGENTS.md` changes here. This feature goes on with T2.
+- 2026-10-08 — He then said not to take his wording as the specification and asked to be guided
+  to the best way, and asked for one document from which a later, more capable model could
+  rebuild the harness from nothing and better. The plan on `docs/rule-hierarchy-plan` was
+  rewritten as the recommended design: each rule where it cannot be forgotten (a check, then a
+  line in `AGENTS.md`, then a protocol on demand), and `docs/SPEC.md`, what the harness must
+  achieve and why with a command that proves each capability, never how it is coded today. He
+  approved it ("hagámoslo como dices"), in a new session, with the main session told. The first
+  gate of that branch timed out after 1,200 s because it ran while the T2 writer ran its tests:
+  nothing was committed, and gates run one at a time after the writer from here on.
+- 2026-10-09 — The plan of the rule hierarchy and of `docs/SPEC.md` is on `main`: commit `e2710da`
+  (gate passed alone; review not due, passive), pull request `jsaristi/js-harness#41`, merged on
+  his go-ahead as `ee74d18`, and the main checkout fast-forwarded to it. That feature is another
+  session's from here; this one goes on with T2's commit and reviews, then T3.
+- 2026-10-08 — Directive (Sebastián), said after the note above was all that recorded the rule:
+  what lives in an agent's memory is always forgotten, so everything is saved and cemented in
+  the harness, in the documentation and also in the files where it must go for the harness to
+  work here and wherever it is installed. A note in a feature document or a memory entry alone
+  does not count as recorded. The files that carry a working rule, checked the same day: this
+  repository's `AGENTS.md` (1,497 of its 1,500 tokens, `bin/check.mjs:15`), the base `AGENTS.md`
+  that `init` writes in a project (`agentsTemplate`, `bin/lib/project.mjs`), and the skill that
+  `install` writes on a machine for Claude Code and Codex (`skillContent`,
+  `bin/lib/manifest.mjs`). Pending his decision: which session and delivery cements the two
+  rules of today there, since `feat/codex-review-cost` already rewrote that section of
+  `AGENTS.md` up to the budget.

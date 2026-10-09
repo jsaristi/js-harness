@@ -23,6 +23,9 @@
 //   FAKE_AGENT_READ_FILE   path; its contents (or null) go into the report as `fileRead`, so a test can see
 //                      from inside the agent what was prepared before it started
 //   FAKE_AGENT_GIT_LOG     any value; the workspace's `git log` goes into the report as `gitLog`
+//   FAKE_AGENT_TRANSCRIPTS path of a directory; its files are left as the session's transcripts, where Claude Code
+//                      leaves its own: `<CLAUDE_CONFIG_DIR>/projects/<a name made from the cwd>/`. It needs
+//                      CLAUDE_CONFIG_DIR and never falls back to a default, which would be the real `~/.claude`
 //
 // The reported environment holds the value of every variable except those whose name looks like a
 // credential (TOKEN, KEY, SECRET, PASSWORD), which are replaced by a fixed marker: a real token in the
@@ -73,6 +76,13 @@ const report = {
   fileRead: readFile && fs.existsSync(readFile) ? fs.readFileSync(readFile, 'utf8') : null,
   gitLog: gitLogRequested ? gitLog() : null,
 };
+
+// The transcripts of the session, in every mode: a real session writes them as it goes, whatever way it ends.
+if (process.env.FAKE_AGENT_TRANSCRIPTS) {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  if (!configDir) throw new Error('FAKE_AGENT_TRANSCRIPTS needs CLAUDE_CONFIG_DIR: the fake agent writes transcripts only where it is told to');
+  fs.cpSync(process.env.FAKE_AGENT_TRANSCRIPTS, path.join(configDir, 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-')), { recursive: true });
+}
 
 // Like the real result, `usage` is the main thread's; the cost, `modelUsage` and `subagent_stats` cover the session,
 // a helper model's subagents included. `no-cost` leaves those three out.

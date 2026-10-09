@@ -34,6 +34,9 @@ export function parseAgentOutput(stdout) {
  * too, because they are all tokens the plan's usage cap charges for. Those counts and `usage` are the main
  * thread's only. The whole session, subagents included, is `costUsd` (`total_cost_usd`, Claude Code's list
  * cost), `modelUsage` (the per-model token counts, as given) and `subagents` (`subagent_stats.spawned`).
+ * `subagentStats` is the whole `subagent_stats`, as given: how many subagents completed, failed, were killed or
+ * were refused, and of which type, which a count of the spawned does not say. `subagents` stays beside it because
+ * the recorded results and their report read it.
  * Missing data is `null`, never 0: a zero would read as a measurement. */
 export function summarizeUsage(output) {
   const usage = isObject(output?.usage) ? output.usage : null;
@@ -49,6 +52,7 @@ export function summarizeUsage(output) {
     costUsd: Number.isFinite(output?.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null,
     modelUsage: isObject(output?.modelUsage) ? output.modelUsage : null,
     subagents: Number.isFinite(output?.subagent_stats?.spawned) ? output.subagent_stats.spawned : null,
+    subagentStats: isObject(output?.subagent_stats) ? output.subagent_stats : null,
   };
 }
 

@@ -19,7 +19,7 @@ test('readClaudeOutput reads a successful result: no stop, parsed, not failed, a
     stop: null,
     parsed: true,
     failed: false,
-    usage: { inputTokens: 60, outputTokens: 5, turns: 4, usage, costUsd: 0.5, modelUsage: null, subagents: null },
+    usage: { inputTokens: 60, outputTokens: 5, turns: 4, usage, costUsd: 0.5, modelUsage: null, subagents: null, subagentStats: null },
   });
 });
 
@@ -39,7 +39,7 @@ test('readClaudeOutput reads output that is no result as unparsed, with every co
     stop: null,
     parsed: false,
     failed: false,
-    usage: { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null },
+    usage: { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null, subagentStats: null },
   });
 });
 

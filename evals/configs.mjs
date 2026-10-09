@@ -6,12 +6,14 @@
 // state (transcripts, memory, engram, gentle-ai), and so the arms differ only in the layers under test.
 // What the sandbox is made of, and why each part is needed, is in `odd/tasks/evals.md` ("T2 map and
 // decisions").
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { exists, isWithin, resolveReal } from './paths.mjs';
 import { allocatePort as allocateTrialPort, assertTrialPort, killByPort, releasePort as releaseTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
+import { keepTranscripts, trialListCost } from './transcript-usage.mjs';
 
 /** The names Claude Code loads as project memory from every ancestor directory of its cwd (`CLAUDE.md`,
  * `CLAUDE.local.md`, `.claude/`), plus `AGENTS.md`, which the harness's own instructions use. A trial
@@ -200,7 +202,9 @@ export function prepareSandbox({ home, workspace, engramPort, env: extra = {} })
  *
  * Every trial gets an engram port of its own (see `sandboxEnv` and `sandboxLifecycle`). Both arms get it, so
  * they differ only in the layers under test. `allocatePort`, `releasePort` and `killPort` are injectable, for
- * tests that must not touch real ports or processes. */
+ * tests that must not touch real ports or processes. So is the environment the sandbox env is built against: the
+ * runner's context names neither `inherited` nor `platform`, which are then this process's, and a test passes them to
+ * see what a config makes of another shell. */
 function buildConfig(name, { command, model, permissionMode, allocatePort, releasePort, killPort } = {}, extraArgs, seed) {
   if (!isNonEmptyString(command)) throw new Error(`${name} config: "command" is required, the absolute path of the claude binary`);
   if (!path.isAbsolute(command)) throw new Error(`${name} config: "command" must be an absolute path, got ${JSON.stringify(command)}: no PATH lookup is made`);
@@ -213,7 +217,7 @@ function buildConfig(name, { command, model, permissionMode, allocatePort, relea
       if (!isNonEmptyString(effort)) throw new Error(`${name} config: the trial has no effort`);
       return ['--print', '--output-format', 'json', '--model', model, '--effort', effort, '--permission-mode', permissionMode, ...extraArgs];
     },
-    env: ({ home, prepared }) => sandboxEnv({ home, engramPort: prepared?.engramPort }),
+    env: ({ home, prepared, inherited, platform }) => sandboxEnv({ home, engramPort: prepared?.engramPort, inherited, platform }),
     ...sandboxLifecycle({ allocatePort, releasePort, killPort }, seed),
   };
 }
@@ -294,6 +298,30 @@ export const SUBAGENT_CONFIGS = Object.fromEntries(Object.entries(SUBAGENT_MODEL
   Object.keys(DELEGATION_MODES).map((mode) => [`${arm}-${mode}`, { arm, mode, subagentModel }])
 )));
 
+/** The `{ arm, mode, subagentModel }` of the subagent config `name`; any other name throws, listing the six. */
+const subagentSpec = (name) => {
+  if (!Object.hasOwn(SUBAGENT_CONFIGS, name)) throw new Error(`${JSON.stringify(name)} is not a subagent config (one of ${Object.keys(SUBAGENT_CONFIGS).join(', ')})`);
+  return SUBAGENT_CONFIGS[name];
+};
+
+/** What a results document pins of the subagent config `name`, `{ model, delegationSha256 }`: the two things its
+ * trials were measured under that are no version of the stack. The model is what the arms differ in, and the
+ * delegation text is what every trial was told, so a continued run whose pin differs is another measurement
+ * (`suite.mjs`, `diffRun`). The text is pinned by the SHA-256 of its UTF-8 bytes, not copied: it is one long sentence
+ * per config, and the digest is enough to say that it changed. */
+export function subagentPin(name) {
+  const { mode, subagentModel } = subagentSpec(name);
+  return { model: subagentModel, delegationSha256: crypto.createHash('sha256').update(DELEGATION_MODES[mode], 'utf8').digest('hex') };
+}
+
+/** What a subagent config carries as `transcripts` (`runner.mjs`, `transcriptsOf`): Claude Code's session
+ * transcripts, copied from the trial's own config directory, and their list cost split between the orchestrator and
+ * its subagents (`transcript-usage.mjs`). The two arms and F5's report need neither, so only these configs ask. */
+const SUBAGENT_TRANSCRIPTS = {
+  keep: ({ home, dest }) => keepTranscripts({ projectsDir: path.join(sandboxPaths(home).CLAUDE_CONFIG_DIR, 'projects'), dest }),
+  summarize: ({ dir, usage }) => trialListCost({ dir, modelUsage: usage.modelUsage }),
+};
+
 /** One of the six subagent configs: the minimal arm exactly (its flags, its sandbox, no seed, the same main
  * model and effort), plus the two things under test. The delegation mode goes after the minimal flags as
  * `--append-system-prompt`. The subagent model goes in the trial's env, laid over the sandbox's because that
@@ -301,10 +329,14 @@ export const SUBAGENT_CONFIGS = Object.fromEntries(Object.entries(SUBAGENT_MODEL
  *  - `CLAUDE_CODE_SUBAGENT_MODEL`, the model;
  *  - `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, without which the first is only a default that the Agent tool's
  *    `model` parameter and an agent's frontmatter override. Both arms set it, the Opus one too, because it
- *    also changes the system prompt: an arm without it would differ in more than the model (E1). */
+ *    also changes the system prompt: an arm without it would differ in more than the model (E1).
+ * It is also the one kind of config that keeps the transcripts of its trials (`SUBAGENT_TRANSCRIPTS`). */
 export function subagentConfig(name, options) {
-  if (!Object.hasOwn(SUBAGENT_CONFIGS, name)) throw new Error(`${JSON.stringify(name)} is not a subagent config (one of ${Object.keys(SUBAGENT_CONFIGS).join(', ')})`);
-  const { mode, subagentModel } = SUBAGENT_CONFIGS[name];
+  const { mode, subagentModel } = subagentSpec(name);
   const config = buildConfig(name, options, [...MINIMAL_FLAGS, '--append-system-prompt', DELEGATION_MODES[mode]]);
-  return { ...config, env: (context) => ({ ...config.env(context), CLAUDE_CODE_SUBAGENT_MODEL: subagentModel, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' }) };
+  return {
+    ...config,
+    env: (context) => ({ ...config.env(context), CLAUDE_CODE_SUBAGENT_MODEL: subagentModel, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' }),
+    transcripts: SUBAGENT_TRANSCRIPTS,
+  };
 }
