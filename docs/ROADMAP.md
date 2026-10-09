@@ -365,8 +365,10 @@ has its place in one of the three levels.
 A principle he added on 2026-10-09, and how it is read. His words: never fall into bias,
 assumption or belief; always verify information; always work with quality and judgment,
 researching well; never take a shortcut, cheat, or pull out or invent information. He asked
-how to do it better than writing it down, so this is the recommendation, his to decide in
-this feature. Quality and no shortcut are his first two principles again. What is new is
+how to do it better than writing it down, so this is the recommendation. He accepted it the
+same day, with what follows it below ("acepto todo como lo hemos estado hablando"): the
+content and the direction; the wording of each line and each thing built still pass by him
+in this feature. Quality and no shortcut are his first two principles again. What is new is
 one thing: nothing is stated that was not checked. As a prohibition it does little, for two
 reasons seen that same day. A bias cannot be seen by the one who has it, so "never be
 biased" forbids something invisible; and the rule "verify before stating" was already
@@ -398,6 +400,58 @@ technical claims before stating them" (checked); whether gentle-ai writes that l
 every machine is not known and is looked up before the line is worded. And the line has to earn its tokens like any other piece (principle 2): an eval task
 whose honest answer is "this could not be verified", scored with and without the line. If
 the score does not move, the sensors stay and the sentence goes.
+
+Working as a team, asked and accepted the same day. His words: always pass clear information
+between sessions and agents, verified, without hiding what matters. The reading: a message
+between sessions is a claim, not a fact, and the truth is in the repository.
+
+- Every handoff has one shape, whether to him, to another session or to a sub-agent: what
+  was done, what was checked and how, what was not checked, what failed, what stays open.
+  "Not checked" and "failed" are always filled, with "nothing" when that is true, so that
+  leaving something out takes writing a falsehood rather than forgetting.
+- Whoever receives checks one thing before building on it. `AGENTS.md` already says so of a
+  step he reports doing outside the session; it extends to another session's message and to
+  a sub-agent's report.
+- Bad news goes first, and at once.
+- Each thing has one owner: a session writes its feature, one place writes the shared plan.
+- What looks wrong is said, with its evidence, before it is done.
+
+Three things he had not named, proposed and accepted with the rest:
+
+- Each mistake leaves a control. The `install --help` of that day does not end in an
+  apology but in a command that refuses a flag it does not know. A mistake made twice is a
+  defect of the harness, not of the agent.
+- An honesty audit: the reader of transcripts built for the session board could take a
+  session's final report and check what can be checked (the paths and commits exist, the
+  test count is the one that ran). That it can be built cheaply on that reader is an
+  assumption, to be confirmed by reading the code before it is promised.
+- Reversible by default: what cannot be undone asks first, the rest records how it is
+  undone. The harness already does this for what it installs.
+
+His addition, the same day: say so when a protocol is missing, without filling the harness
+with protocols for the sake of having them. It sharpens the rule above that another enters
+only when a problem repeats. An agent that finds no protocol for its situation does the
+work with judgment, says in its report that there was none and what it did, and proposes;
+it never creates one, that is his. A proposal passes five questions first. Did the problem
+happen, with its evidence, or could it only happen? Twice, or once at a cost or with
+something that could not be undone? Can a check do it, so that nothing is written? Does a
+protocol that exists cover part of it, so that one is amended? What does it cost, and what
+leaves in exchange? And a protocol expires: it records the problem it came for, and when
+that problem has not returned and nobody used it, it is withdrawn.
+
+The principles, then, are six, stated once: done properly, not to comply; no shortcut;
+under the agreed protocols; nothing stated that was not checked; what is passed on is
+complete and true, with what failed and what was not checked; each mistake leaves a
+control, of the smallest kind that does the job. Asked whether anything was missing, the
+answer he was given is no: a seventh enters through the five questions, with its incident.
+
+How far is far enough, his question. No point exists where a model never errs, and more
+text makes it worse (F5 result). The aim is three things: a mistake cannot do damage that
+cannot be undone, it is seen quickly, and it is not repeated. This feature is done when
+seven signals hold: six principles stated once; no principle without at least one control
+behind it; no rule living only in an agent's memory; `AGENTS.md` within its budget; the
+honesty eval passing, with the line moving the score; no repeated mistake; no protocol
+without the incident that justifies it. From there a rule enters only by replacing another.
 
 Protocols start with the four that have already cost something, and another enters only when a
 problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
@@ -573,8 +627,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
    request. In a project that uses the harness the lock comes with `check`; whether `init`
    also writes the GitHub workflow is a product choice, his.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
-4. The rule hierarchy above, with his three principles stated once at its top, and the one
-   he added on 2026-10-09 (nothing stated that was not checked).
+4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
+   at its top.
    Each of the four is proven before it reaches a project of his, as he asked the same day
    ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
    by its tests, then by use on this repository, then in a practice project made for the
@@ -584,6 +638,12 @@ podamos implementar todo"), each a feature of its own with its own document and 
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
    meeting point is the repository. He takes it up again after the four above.
+
+How the list is worked, proposed to him on 2026-10-09 when he said that so many ideas added
+on top of work in hand had left him in disorder, and not yet answered: one feature on the
+table at a time, and none of 2 to 5 starts before 1 closes; a new idea is written here, in
+its place, and does not change the work in hand; and sessions work in parallel only once
+the gate has its lock, since two gates at once make both fail.
 
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The
