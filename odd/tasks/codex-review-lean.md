@@ -1376,9 +1376,10 @@ T1 to T15 are checked. What is left is Sebastián's:
 1. The proposal for the Codex plugin (the section above Follow-ups): the `doctor` row,
    `codex:rescue`, the plugin's three hooks. Each part is his to accept or not; an accepted
    part is a small feature of its own or one command of his.
-2. Push, pull request and merge of `feat/codex-review-lean`. The pre-push rule passes on
-   `4f32fd9`: every code commit of the branch is covered by a Codex review record
-   (Progress, 2026-10-08). A commit made after it needs its own.
+2. Done on 2026-10-09: push, pull request and merge of `feat/codex-review-lean`
+   (jsaristi/js-harness#43, merged as `ba7bf03`, after `main` was merged into the branch
+   in `3bd9162` for a conflict in the roadmap). The feature built on it,
+   `odd/tasks/codex-review-cost.md`, went in with jsaristi/js-harness#44.
 
 Open, for him (item 1 is done: the review of the whole branch ran on 2026-10-08 and is
 recorded, Progress; kept as it was put to him):

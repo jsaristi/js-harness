@@ -632,6 +632,26 @@ push of that branch.
     for that. `--part-lines <n>` stays for the run where the cost matters more, and the
     plan says what either would cost before anything is spent. The record this run
     appended covers commits that had one already; the push check still passes.
+- 2026-10-09: committed as `d2eacb0` (gate green), then delivered, each step on Sebastián's
+  "Si": push and two stacked pull requests, then their merge.
+  - `main` had moved twice since the branches were cut (#41, the plan of the rule
+    hierarchy; #42, the subagent arms of the evals) and both branches conflicted with it in
+    one file, `docs/ROADMAP.md`, where each side had added a section. Resolved with two
+    merge commits that keep every section whole, `3bd9162` (`main` into
+    `feat/codex-review-lean`) and `d322fb0` (that into this branch), each through the gate.
+    A merge and not a rebase: the review records name the commits by id. Neither is a code
+    commit, only Markdown was written in them, and the push check passed on both tips (15
+    and 28 code commits, all covered).
+  - The gate's `review` row said a gentle-ai review was due on the second merge (medium, 20
+    paths, 2,227 lines). None was started: those lines are the code of #42, which `main`
+    already held, and what this branch wrote in the merge is the roadmap.
+  - jsaristi/js-harness#43 (`feat/codex-review-lean`) merged as `ba7bf03`, and
+    jsaristi/js-harness#44 (this branch, pointed at `main` after the first) as `005507c`,
+    both with a merge commit. The repository has no CI: what stands behind them is the gate
+    on every commit and the reviews of each slice. The tree of `main` at `005507c` is the
+    tree of this branch (`git diff origin/main feat/codex-review-cost`: empty).
+  - Not done, and his to time: the main checkout `D:\js-harness`, which the remote-control
+    server runs from, is not brought up to `main`.
 
 ## Follow-ups
 - F9-part-size-from-one-run: the measurement of 2026-10-09 is one run of each size. If the
@@ -681,11 +701,11 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,300 changed
 lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. Every task is done. What is left is Sebastián's: his word on push, pull request and
-   merge of the two stacked branches. Nothing of either is on the remote.
+1. Every task is done and both branches are in `main` (#43 and #44, 2026-10-09). Nothing
+   is left of this feature.
 2. F7 before the next feature that adds tests to the command: the gate runs within two
    minutes of its bound.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
 (asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which
-opened this feature), and push, pull request and merge of both branches.
+opened this feature). Push, pull request and merge of both branches are done.
