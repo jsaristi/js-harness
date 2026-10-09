@@ -387,6 +387,22 @@ test('an end naming only the task, written between a follow-up and its result, d
   assert.deepEqual(other.work.map((w) => [w.toolUseId, w.ended]), [['toolu_1', false]]);
 });
 
+// Codex review of 764c9b0, finding 2: an end was kept for a later result only when it had closed nothing,
+// so the end of a follow-up that also closed a first run with no recorded end was lost to the follow-up.
+test('an end that names a follow-up, written before its result, closes a first run still open and is that follow-up\'s end too', () => {
+  const [sent, answered] = followUp('toolu_s', 'a1', 8);
+  const stillOpen = asyncAgent('toolu_a', 'a1', 2);
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...stillOpen, sent, notified({ task: 'a1', toolUse: 'toolu_s', status: 'completed' }, 9), answered, reply('Both are done.', 10)));
+  assert.deepEqual(facts.work.map((w) => [w.toolUseId, w.ended, w.endedAt, w.status]), [['toolu_a', true, at(9), 'completed'], ['toolu_s', true, at(9), 'completed']]);
+  assert.equal(facts.state, 'waiting');
+  // An end that names only the task is used up by the run it closed: it is never a follow-up's end.
+  const byTask = lib.sessionFacts(transcript(prompt('go', 1), ...stillOpen, sent, notified({ task: 'a1', status: 'completed' }, 9), answered, reply('It is running again.', 10)));
+  assert.deepEqual(byTask.work.map((w) => [w.toolUseId, w.ended]), [['toolu_a', true], ['toolu_s', false]]);
+  // Kept for the call it names and for no other: a later follow-up to the same subagent stays open.
+  const later = lib.sessionFacts(transcript(prompt('go', 1), ...stillOpen, sent, notified({ task: 'a1', toolUse: 'toolu_s', status: 'completed' }, 9), answered, ...followUp('toolu_t', 'a1', 12)));
+  assert.deepEqual(later.work.map((w) => [w.toolUseId, w.ended]), [['toolu_a', true], ['toolu_s', true], ['toolu_t', false]]);
+});
+
 // --- T5 A: the context a session carries ---
 
 const usage = (input, read, created) => ({ input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: created, output_tokens: 50 });
@@ -733,6 +749,49 @@ test('findGates keeps the node processes that run bin/check.mjs, with their work
   ]);
 });
 
+// Codex review of 764c9b0, finding 1: the pre-commit hook `js-harness init` writes runs `js-harness check`
+// (bin/lib/project.mjs), and the dispatcher runs the gate in its own process, so no command line names
+// bin/check.mjs. Pids 1 and 2 are the shapes this machine's process listing gave on 2026-10-09 for a
+// dispatcher started by an install's `.cmd` shim and by its `sh` shim, which is how a git hook starts it.
+test('findGates keeps the node processes that run the gate through the dispatcher, js-harness check', () => {
+  const INSTALL = 'AppData\\Local\\pnpm\\bin\\\\..\\global\\node_modules\\js-harness\\bin\\js-harness.mjs';
+  const gatesIn = [
+    { pid: 1, createdAt: 1767261600000, commandLine: `node "C:\\Users\\me\\${INSTALL}" check` },
+    { pid: 2, createdAt: 1767261600000, commandLine: 'C:\\nvm4w\\nodejs\\node.exe C:/Users/me/AppData/Local/pnpm/bin/../global/node_modules/js-harness/bin/js-harness.mjs check --push --remote origin' },
+    { pid: 3, createdAt: 1767261660000, commandLine: '"C:\\Program Files\\nodejs\\node.exe" "D:\\PROJ\\bin\\js-harness.mjs" "check"' },
+    { pid: 4, createdAt: null, commandLine: 'node bin/js-harness.mjs check' },
+    { pid: 5, createdAt: null, commandLine: 'node /usr/local/bin/js-harness check' }, // a POSIX install links the file with no extension
+    { pid: 6, createdAt: null, commandLine: 'node /elsewhere/bin/js-harness.mjs check' },
+  ];
+  const others = [
+    'node bin/js-harness.mjs sessions --watch',
+    'node bin/js-harness.mjs contract check odd/tasks/board.md',
+    'node bin/js-harness.mjs sessions --self check',
+    'node bin/js-harness.mjs checkout',
+    'node --test bin/js-harness.test.mjs check',
+    'node --test --test-name-pattern "js-harness check" bin/js-harness.test.mjs',
+    'node --test --test-name-pattern js-harness check', // the same in a `ps` listing, which drops the quotes
+    'node -e "spawn(\'node\', [\'bin/js-harness.mjs check\'])"',
+    'node D:/proj/bin/not-js-harness.mjs check',
+    'sh -c "js-harness check"',
+    'cmd.exe /d /s /c "js-harness.cmd check"',
+    '"C:\\Program Files\\Git\\usr\\bin\\sh.exe" /c/Users/me/AppData/Local/pnpm/bin/js-harness check',
+  ].map((commandLine, index) => ({ pid: 100 + index, createdAt: 1767261600000, commandLine }));
+  const unnamed = { unavailable: 'js-harness check checks the folder it runs in, and its command line names none' };
+  const noStart = { unavailable: 'the process listing gave no start time' };
+  assert.deepEqual(lib.findGates([...gatesIn, ...others], ['D:/proj', 'D:/proj-worktrees/board']), [
+    { pid: 1, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, commandLine: gatesIn[0].commandLine },
+    // `check --push` is listed as `bin/check.mjs --push` is: it is the push's gate.
+    { pid: 2, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, commandLine: gatesIn[1].commandLine },
+    // The dispatcher of a checkout the board knows is taken to check that checkout, as its bin/check.mjs is.
+    { pid: 3, startedAt: '2026-01-01T10:01:00.000Z', worktree: 'D:/proj', commandLine: gatesIn[2].commandLine },
+    { pid: 4, startedAt: noStart, worktree: unnamed, commandLine: 'node bin/js-harness.mjs check' },
+    { pid: 5, startedAt: noStart, worktree: unnamed, commandLine: 'node /usr/local/bin/js-harness check' },
+    // Any other folder is where a dispatcher is installed, not what it checks.
+    { pid: 6, startedAt: noStart, worktree: unnamed, commandLine: 'node /elsewhere/bin/js-harness.mjs check' },
+  ]);
+});
+
 test('readGates is unavailable, with the reason, when the processes cannot be listed', () => {
   const broken = () => {
     throw new Error('powershell could not run');
@@ -889,6 +948,20 @@ test('boardChanges: a worktree removed or added while a gate keeps its pid is ne
   assert.deepEqual(changes(on(['D:/a']), on(['D:/a', 'D:/b'], running)), ['gate started in D:/b (pid 5)']);
   // And a gate in a folder that is no worktree yet is still not the "another" a new gate runs beside.
   assert.deepEqual(changes(on(['D:/a'], running), on(['D:/a'], running, gate(6, 'D:/a'))), ['gate started in D:/a (pid 6)']);
+});
+
+// Codex review of 764c9b0, finding 3: a gate was known by its pid alone, so a gate that ended and another
+// that took its pid between two looks read as one gate still running.
+test('boardChanges: a pid that carries another start time is another gate, and the same gate when either look has no start time', () => {
+  const startedAt = (seconds, item) => ({ ...item, startedAt: before(seconds) });
+  const first = startedAt(300, gate(5, 'D:/a'));
+  assert.deepEqual(changes(gates(first), gates(startedAt(20, gate(5, 'D:/b')))), ['gate started in D:/b (pid 5)', 'gate ended in D:/a (pid 5)']);
+  // The gate that took the pid starts beside one that was running all along, and that is still said.
+  assert.deepEqual(changes(gates(first, gate(7, 'D:/b')), gates(startedAt(20, gate(5, 'D:/a')), gate(7, 'D:/b'))), ['gate started in D:/a (pid 5) while another runs in D:/b (pid 7)', 'gate ended in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(first), gates(startedAt(300, gate(5, 'D:/a')))), []);
+  // `ps` gives no start time, and a row of the Windows listing may have none: then the pid is all there is.
+  const untimed = { ...gate(5, 'D:/a'), startedAt: { unavailable: 'the process listing gave no start time' } };
+  assert.deepEqual([changes(gates(untimed), gates(untimed)), changes(gates(first), gates(untimed)), changes(gates(untimed), gates(first))], [[], [], []]);
 });
 
 test('boardChanges: a pull request that opens and one that is no longer open', () => {

@@ -183,7 +183,8 @@ function end(work, at, status) {
  * older piece of the same id still open; one that names only the task closes every open piece of that
  * id. A piece launched afterwards under the same id (a follow-up to the same subagent) is open until
  * its own end. An end that arrives before the result that gives its work an id is kept, and used once,
- * for the call it names or, when it names none, for a call that is not a follow-up.
+ * for the call it names (whatever older work it closed on the way) or, when it names none and closed
+ * nothing, for a call that is not a follow-up.
  *
  * `turnEndedAt` is the time of the entry that ended the turn, and `null` while the session works: two
  * looks that both find the session waiting tell by it whether it finished another turn in between.
@@ -240,8 +241,10 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
         closed = true;
       }
       // An end that closed nothing may be early: a quick task can end before the tool result that gives
-      // its work the id. It is kept by task id for the call that was made before it, and no other.
-      if (!closed && !named && task !== undefined) endsByTask.set(task, { at, status, index, toolUse });
+      // its work the id. It is kept by task id for the call that was made before it, and no other. One
+      // that names a call with no work yet is kept as well when it closed older work of the same id: a
+      // follow-up's work starts with its result, and its end closes a first run that recorded none.
+      if (!named && task !== undefined && (!closed || toolUse !== undefined)) endsByTask.set(task, { at, status, index, toolUse });
     }
     if (entry.isSidechain) continue;
 
@@ -489,24 +492,61 @@ function comparable(somePath) {
   return /^[A-Za-z]:/.test(flat) ? flat.toLowerCase() : flat;
 }
 
+// The dispatcher as one whole argument: `js-harness.mjs`, alone or after a separator, or `js-harness` after
+// one, which is how an install links the file where a shebang runs it (`/usr/local/bin/js-harness`). The
+// folder before it is the first or the second group.
+const DISPATCHER_PATTERN = /^(?:(.*)[\\/])?js-harness\.mjs$|^(.*)[\\/]js-harness$/;
+
+/** The arguments of a command line, each without its quotes: a stretch between double quotes is part of
+ * one argument, spaces and all. A `ps` listing has no quotes, so there every space ends an argument. */
+function argumentsOf(commandLine) {
+  return (commandLine.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((argument) => argument.replace(/"/g, ''));
+}
+
+/** The dispatcher a command line runs the gate through, as `js-harness check`: the argument that is the
+ * dispatcher and has `check` as the very next one. That is the gate in the dispatcher's own process, with
+ * no `bin/check.mjs` on any command line, and it is what the pre-commit hook of `js-harness init` runs.
+ * `undefined` when there is none: `contract check`, `checkout` and a test whose name says "js-harness
+ * check" are not that. */
+function gateDispatcher(args) {
+  return args.find((argument, index) => DISPATCHER_PATTERN.test(argument) && args[index + 1] === 'check');
+}
+
+/** The one of `worktrees` whose own dispatcher `dispatcher` is (`<worktree>/bin/js-harness.mjs`), which
+ * is taken to check that checkout as its `bin/check.mjs` is. Any other dispatcher is an install, or a
+ * relative path: the gate checks the folder it runs in, and nothing on the command line says which. */
+function dispatcherWorktree(dispatcher, worktrees) {
+  const [, inFolder, linkedIn] = DISPATCHER_PATTERN.exec(dispatcher);
+  const checkout = /^(.*)[\\/]bin$/.exec(inFolder ?? linkedIn ?? '')?.[1];
+  const known = checkout === undefined ? undefined : worktrees.find((tree) => comparable(tree) === comparable(checkout));
+  return known ?? { unavailable: 'js-harness check checks the folder it runs in, and its command line names none' };
+}
+
+/** The worktree a command line names `bin/check.mjs` under: `folder`, in the spelling of `worktrees` when
+ * it is one of them. A relative path names none. */
+function gateFileWorktree(folder, worktrees) {
+  const known = worktrees.find((tree) => comparable(tree) === comparable(folder));
+  return /^([A-Za-z]:|[\\/])/.test(folder) ? (known ?? folder) : { unavailable: 'its command line names bin/check.mjs by a relative path' };
+}
+
 /** The running gates among `processes`: every process whose program is `node` and whose command line
- * names `bin/check.mjs` as an argument. A shell whose text mentions the file is not one, and neither is
- * `bin/check.test.mjs`. `worktree` is the folder the command line names the file under (in the
- * spelling of `worktrees` when it is one of them); a relative path names none, and a process has no
- * working directory the listing could read instead. */
+ * names `bin/check.mjs` as an argument, or runs `check` through the dispatcher (`gateDispatcher`). A
+ * shell whose text mentions either is not one, and neither is `bin/check.test.mjs`. `worktree` is the
+ * folder the gate checks as far as the command line says (`gateFileWorktree`, `dispatcherWorktree`): a
+ * process has no working directory the listing could read instead. */
 export function findGates(processes, worktrees = []) {
   const gates = [];
   for (const { pid, createdAt, commandLine } of processes) {
     const program = /^\s*(?:"([^"]+)"|(\S+))/.exec(commandLine);
     if (!program || !/(^|[\\/])node(\.exe)?$/i.test(program[1] ?? program[2])) continue;
-    const named = GATE_PATTERN.exec(commandLine.slice(program[0].length));
-    if (!named) continue;
-    const folder = named[1] ?? named[2] ?? '';
-    const known = worktrees.find((tree) => comparable(tree) === comparable(folder));
+    const rest = commandLine.slice(program[0].length);
+    const named = GATE_PATTERN.exec(rest);
+    const dispatcher = named ? undefined : gateDispatcher(argumentsOf(rest));
+    if (!named && dispatcher === undefined) continue;
     gates.push({
       pid,
       startedAt: Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : { unavailable: 'the process listing gave no start time' },
-      worktree: /^([A-Za-z]:|[\\/])/.test(folder) ? (known ?? folder) : { unavailable: 'its command line names bin/check.mjs by a relative path' },
+      worktree: named ? gateFileWorktree(named[1] ?? named[2] ?? '', worktrees) : dispatcherWorktree(dispatcher, worktrees),
       commandLine,
     });
   }
@@ -593,32 +633,38 @@ const gatePlace = (gate) => `in ${gate.worktree?.unavailable ? 'an unknown workt
 /** The gates of `board` a watch compares, or `null` when it cannot tell which they are (the gates or the
  * worktrees could not be listed). A gate whose command line names a folder that is none of the board's
  * worktrees is left out: the test suite of a running gate starts `bin/check.mjs` in temporary folders, and
- * those start and end all through it. One started by a relative path names no folder and stays in:
- * `npm run check` is one. */
+ * those start and end all through it. One whose command line names no folder stays in: `npm run check`,
+ * started by a relative path, is one, and so is the `js-harness check` of a pre-commit hook. */
 function watchedGates(board) {
   if (!board.gates.available || !board.worktrees.available) return null;
   const trees = new Set(board.worktrees.items.map((tree) => comparable(tree.path)));
   return board.gates.items.filter((gate) => gate.worktree?.unavailable || trees.has(comparable(String(gate.worktree))));
 }
 
-/** A gate started when its pid is on no gate of the older board, and ended when it is on none of the
- * newer one: the worktrees say which gates are watched, never whether one runs. So a worktree removed or
- * added under a running gate is neither its end nor its start. */
+/** Whether two gates, of two looks, are one process: the same pid and the same start time. A pid is free
+ * again once its process ends, so between two looks another gate can take it, and its start time is what
+ * tells them apart. A look that has no start time for the gate (`ps` gives none) has the pid alone. */
+function sameGate(one, other) {
+  const timed = typeof one.startedAt === 'string' && typeof other.startedAt === 'string';
+  return one.pid === other.pid && (!timed || one.startedAt === other.startedAt);
+}
+
+/** A gate started when it is no gate of the older board, and ended when it is none of the newer one
+ * (`sameGate`): the worktrees say which gates are watched, never whether one runs. So a worktree removed
+ * or added under a running gate is neither its end nor its start. */
 function gateChanges(before, after) {
   const was = watchedGates(before);
   const is = watchedGates(after);
   if (was === null || is === null) return []; // a listing that failed is not a gate that ended
-  const earlier = byKey(before.gates.items, 'pid');
-  const now = byKey(after.gates.items, 'pid');
   const lines = [];
   for (const gate of is) {
-    if (earlier.has(gate.pid)) continue;
+    if (before.gates.items.some((earlier) => sameGate(earlier, gate))) continue;
     // Two gates at once is what the board exists to catch: they share the machine and one of them is
     // probably a mistake.
     const other = is.find((item) => item.pid !== gate.pid);
     lines.push(`gate started ${gatePlace(gate)}${other ? ` while another runs ${gatePlace(other)}` : ''}`);
   }
-  for (const gate of was) if (!now.has(gate.pid)) lines.push(`gate ended ${gatePlace(gate)}`);
+  for (const gate of was) if (!after.gates.items.some((now) => sameGate(now, gate))) lines.push(`gate ended ${gatePlace(gate)}`);
   return lines;
 }
 

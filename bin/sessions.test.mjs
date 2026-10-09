@@ -222,6 +222,60 @@ test('sessionsMain resolves a relative common dir against the folder it runs in'
   assert.equal(JSON.parse(stdout).root, machine.root);
 }));
 
+// Codex review of 764c9b0, finding 4: the checkout was taken to be the folder that holds the common git
+// dir, or that dir itself when it is not named `.git`, which is the case of a submodule and of a checkout
+// made with `--separate-git-dir`: the board then looked for the sessions of the git dir and found none.
+
+const NO_WORK_TREE = () => ({ status: 128, stdout: '', stderr: 'fatal: this operation must be run in a work tree\n' });
+
+/** A fake `git rev-parse` for a repository whose git dir is `commonDir`, away from its checkout
+ * `machine.root`, with `machine.worktree` linked to it. It answers as git 2.54 did on 2026-10-09 in real
+ * repositories of each layout: `--git-common-dir` is `commonDir` from anywhere; in the git dir itself
+ * `--show-toplevel` is the working tree it records (`recorded`, which a submodule's has and a
+ * `--separate-git-dir` one has not) or a failure; in a working tree it is that tree's top, and `--git-dir`
+ * is `commonDir` in the main one and a folder under its `worktrees` in a linked one. */
+function gitDirApart(machine, commonDir, { recorded = null } = {}) {
+  return (args, { cwd }) => {
+    if (args.includes('--git-common-dir')) return ok(`${commonDir}\n`);
+    if (slashes(cwd) === commonDir) return recorded === null ? NO_WORK_TREE() : ok(`${recorded}\n`);
+    const gitDir = slashes(cwd) === slashes(machine.worktree) ? `${commonDir}/worktrees/board` : commonDir;
+    return ok([...(args.includes('--git-dir') ? [gitDir] : []), ...(args.includes('--show-toplevel') ? [slashes(cwd)] : [])].join('\n') + '\n');
+  };
+}
+
+test('a checkout made with --separate-git-dir is the project, not the git dir kept elsewhere', withMachine(async (machine) => {
+  writeSessions(machine);
+  const fake = fakeRun(machine, { 'rev-parse': gitDirApart(machine, `${slashes(machine.dir)}/meta`) });
+  const { code, stdout, stderr } = await runSessions(machine, ['--json', '--cwd', machine.root], { run: fake.run });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.equal(JSON.parse(stdout).root, machine.root);
+  assert.equal(JSON.parse(stdout).projectDir, machine.projectDir);
+  // Nothing but `rev-parse` is asked to find it: the command stays read-only.
+  const asked = fake.calls.slice(0, fake.calls.findIndex((made) => made.args[0] !== 'rev-parse'));
+  assert.deepEqual(asked.map((made) => made.args.slice(1)), [['--git-common-dir'], ['--show-toplevel'], ['--git-dir', '--show-toplevel']]);
+}));
+
+test('a submodule is the project, from its checkout and from a worktree linked to it', withMachine(async (machine) => {
+  writeSessions(machine);
+  const modules = `${slashes(machine.dir)}/super/.git/modules/proj`;
+  const { run } = fakeRun(machine, { 'rev-parse': gitDirApart(machine, modules, { recorded: slashes(machine.root) }) });
+  const fromCheckout = await runSessions(machine, ['--json', '--cwd', machine.root], { run });
+  const fromWorktree = await runSessions(machine, ['--json'], { run });
+  assert.deepEqual([fromCheckout.code, fromWorktree.code], [0, 0]);
+  assert.deepEqual([JSON.parse(fromCheckout.stdout).root, JSON.parse(fromWorktree.stdout).root], [machine.root, machine.root]);
+}));
+
+test('where git cannot say which checkout a git dir belongs to, the project is still that git dir: a worktree of a --separate-git-dir checkout, a bare repository', withMachine(async (machine) => {
+  writeSessions(machine);
+  const meta = path.join(machine.dir, 'meta');
+  // Nothing in such a git dir names its checkout, and from a linked worktree `--show-toplevel` is that worktree.
+  const linked = await runSessions(machine, ['--json'], { run: fakeRun(machine, { 'rev-parse': gitDirApart(machine, slashes(meta)) }).run });
+  assert.equal(linked.code, 1);
+  assert.match(linked.stderr, new RegExp(`^js-harness sessions: no sessions folder for ${meta.replace(/\\/g, '\\\\')}: `));
+  const bare = await runSessions(machine, ['--json', '--cwd', machine.root], { run: fakeRun(machine, { 'rev-parse': (args) => (args.includes('--git-common-dir') ? ok('.\n') : NO_WORK_TREE()) }).run });
+  assert.equal(JSON.parse(bare.stdout).root, machine.root);
+}));
+
 test('outside a git repository the folder itself is the project, and the git facts are unavailable with the reason', withMachine(async (machine) => {
   writeSessions(machine);
   const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
@@ -495,6 +549,46 @@ test('on Windows the gates come from one PowerShell listing, and a listing that 
   assert.deepEqual(JSON.parse(half.stdout).gates, { available: false, reason: 'the process listing: the listing did not finish' });
 }));
 
+/** The board read on Windows from a PowerShell listing that prints `listing`, and the script the command
+ * handed to `powershell -EncodedCommand` to get it. `answers` replaces other commands, as in `fakeRun`. */
+async function listingScript(machine, listing, answers = {}) {
+  const fake = fakeRun(machine, { ...answers, powershell: () => ok(listing) });
+  const { stdout } = await runSessions(machine, ['--json'], { run: fake.run, listProcesses: undefined, platform: 'win32' });
+  return { board: JSON.parse(stdout), script: Buffer.from(fake.calls.find((made) => made.command === 'powershell').args[3], 'base64').toString('utf16le') };
+}
+
+// Codex review of 764c9b0, finding 1: the listing kept only the command lines that mention `check.mjs`,
+// and `js-harness check`, which a project's pre-commit hook runs, mentions none.
+test('the Windows listing keeps the command line of a dispatcher that runs check, and the board lists that gate', withMachine(async (machine) => {
+  writeSessions(machine);
+  const hook = 'C:\\nvm4w\\nodejs\\node.exe C:/Users/me/AppData/Local/pnpm/global/node_modules/js-harness/bin/js-harness.mjs check';
+  const { board, script } = await listingScript(machine, ['4242\t1\t1767268620000\tnode.exe', `C\t4242\t${hook}`, 'OK\t1', ''].join('\r\n'));
+  assert.deepEqual(board.gates.items, [{ pid: 4242, startedAt: '2026-01-01T11:57:00.000Z', worktree: { unavailable: 'js-harness check checks the folder it runs in, and its command line names none' }, commandLine: hook }]);
+  // What the listing keeps is one `-notmatch`, case-insensitive as PowerShell's is. Its pattern uses nothing
+  // the two engines read differently, so it is tried here on command lines as the listing has them.
+  const kept = new RegExp(/\$line -notmatch '([^']+)'/.exec(script)?.[1] ?? '$^', 'i');
+  for (const line of [hook, 'node "C:\\Users\\me\\npm\\node_modules\\js-harness\\bin\\js-harness.mjs" check --push', 'node bin/js-harness.mjs "check"', 'node /usr/local/bin/js-harness check', 'node D:/proj/bin/check.mjs', 'NODE.EXE D:\\PROJ\\BIN\\JS-HARNESS.MJS CHECK']) {
+    assert.match(line, kept);
+  }
+  for (const line of ['node bin/js-harness.mjs sessions --watch', 'node D:\\js-harness\\bin\\remote.mjs start', 'claude.exe --resume']) assert.doesNotMatch(line, kept);
+}));
+
+// Codex review of 764c9b0, finding 5: PowerShell writes in the console's code page (850 or 437 on a Windows
+// in Spanish or English) and the command reads UTF-8, so a letter outside ASCII in a worktree's path
+// arrived as U+FFFD and its gate matched no worktree: a watch then left it out without a word.
+test('the Windows listing writes UTF-8 whatever the console code page, so a gate under a path outside ASCII is matched to its worktree', withMachine(async (machine) => {
+  writeSessions(machine);
+  const tree = `${slashes(machine.dir)}/año/proj`;
+  const worktree = () => ok([`worktree ${tree}`, 'HEAD 1111111111111111111111111111111111111111', 'branch refs/heads/main', ''].join('\n'));
+  const { board, script } = await listingScript(machine, ['4242\t1\t1767268620000\tnode.exe', `C\t4242\tnode ${tree}/bin/check.mjs`, 'OK\t1', ''].join('\r\n'), { worktree });
+  assert.deepEqual(board.gates.items.map((gate) => gate.worktree), [tree]);
+  // The script asks for it before it writes anything, and without a byte order mark, which would be read
+  // as part of the first row.
+  const asks = script.indexOf('[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false');
+  assert.ok(asks !== -1, 'the listing sets the output encoding to UTF-8 with no byte order mark');
+  assert.ok(asks < script.indexOf('Get-CimInstance'), 'and does so before the first line it writes');
+}));
+
 test('elsewhere the gates come from ps, which gives no start time', withMachine(async (machine) => {
   writeSessions(machine);
   const fake = fakeRun(machine, { ps: () => ok(`  812 node ${slashes(machine.root)}/bin/check.mjs\n    9 /sbin/init\n`) });
@@ -744,6 +838,19 @@ test('--watch does not return for a gate that starts and ends in a folder that i
 
   const board = await runSessions(machine, [], { listProcesses: () => [real, stray] });
   assert.match(board.stdout, /^ {2}pid 32036 {2}C:\/Temp\/js-harness-pre-push-x {2}/m);
+}));
+
+// Codex review of 764c9b0, finding 1: a gate run as `js-harness check` names no `bin/check.mjs`, so the
+// watch saw neither its start nor its end.
+test('--watch returns for a gate a pre-commit hook started as js-harness check, and for its end', withMachine(async (machine) => {
+  writeSessions(machine);
+  const hook = { pid: 5150, createdAt: NOW, commandLine: 'C:\\nvm4w\\nodejs\\node.exe C:/Users/me/AppData/Local/pnpm/global/node_modules/js-harness/bin/js-harness.mjs check' };
+  const started = [[], [hook]];
+  const start = await watch(machine, ['--interval', '5', '--timeout', '60'], [], { listProcesses: () => started.shift() });
+  assert.deepEqual(start.lines.slice(0, 2), ['sessions --watch: 1 change after 5s', '  gate started in an unknown worktree (pid 5150)']);
+  const ended = [[hook], []];
+  const end = await watch(machine, ['--interval', '5', '--timeout', '60'], [], { listProcesses: () => ended.shift() });
+  assert.deepEqual(end.lines.slice(0, 2), ['sessions --watch: 1 change after 5s', '  gate ended in an unknown worktree (pid 5150)']);
 }));
 
 // --- read-only ---

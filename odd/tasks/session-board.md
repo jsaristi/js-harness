@@ -54,8 +54,8 @@ something can be checked by a command, it belongs in `bin/`. He asked for it on 
   with no install step.
 - Read-only: it opens transcripts, task outputs, feature documents and the orchestrator's relief
   file for reading and runs only
-  `git worktree list`, `git rev-list`, `git status`, `git diff --name-only`, `git ls-files`, the
-  process listing and `gh pr list` — because it runs while other sessions work in the same
+  `git rev-parse` (to find the checkout), `git worktree list`, `git rev-list`, `git status`,
+  `git diff --name-only`, `git ls-files`, the process listing and `gh pr list` — because it runs while other sessions work in the same
   checkout. `--watch` runs the same and nothing more, again at every look.
 - Every path and every external command is injectable (`--claude-home`, `--tmp`, a `deps` object
   for `git`, `gh` and the process listing) — because tests use fixture folders, never this
@@ -74,7 +74,10 @@ something can be checked by a command, it belongs in `bin/`. He asked for it on 
 What a session is: one `<id>.jsonl` under `<claude home>/projects/<slug>/`, where `<slug>` is the
 main checkout's absolute path with every character outside `[A-Za-z0-9]` turned into `-`
 (`D:\js-harness` is `D--js-harness`). The main checkout is found with `git rev-parse
---git-common-dir`, so the board is the same from any worktree. `--hours <n>` (default 12) limits
+--git-common-dir`, so the board is the same from any worktree; where that directory is not a
+`.git` inside the checkout (a submodule, `--separate-git-dir`) git is asked for the top of the
+working tree instead. One case stays unresolved: a worktree linked to a `--separate-git-dir`
+checkout, which git itself traces back only to the git directory. `--hours <n>` (default 12) limits
 the board to sessions whose transcript changed in that window.
 
 Per session the board gives:
@@ -97,8 +100,9 @@ Per session the board gives:
 Machine facts, each one unavailable with a reason when its command fails:
 - worktrees: path, branch, head, commits not on `origin/main`, commits not on the upstream (or "no
   upstream"), count of changed files;
-- running gates: every process whose command line runs `bin/check.mjs`, with its worktree and its
-  start time (`bin/lib/process-tree.mjs` may already list processes; reuse it if it does);
+- running gates: every process whose command line runs `bin/check.mjs`, or the dispatcher with
+  `check` as its subcommand (`js-harness check`, the form the hook of an initialized project
+  runs), with its worktree and its start time (`bin/lib/process-tree.mjs` may already list processes; reuse it if it does);
 - open pull requests: number, title, head branch, from `gh pr list`.
 
 Text output: the sessions first, most recent first, then worktrees, gates and pull requests, and a
@@ -412,8 +416,8 @@ per worktree (about four seconds in all on this machine, with six worktrees), so
 Limits. Something that happens and is undone between two looks is not seen: a gate shorter than
 the interval, a pull request opened and closed. The output of a local command also ends a turn,
 so "finished another turn" can be a `/` command Sebastián ran in that session. A gate is known
-by its pid alone, so one that ends and another that starts with the same pid between two looks
-read as the same gate.
+by its pid and, where the listing gives one, its start time; where it gives none (`ps`), one
+that ends and another that starts with the same pid between two looks read as the same gate.
 
 ## Constraints on the work
 - TDD strict, runner `node --test`: each behavior has its failing test first.
@@ -1129,9 +1133,44 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   claims the committed range base..HEAD`), and these notes were. They are committed first.
   Also seen on the board that hour: this conversation under two session ids with one title
   (`1cca9aae ... (this session)` and `729ed66b ... background`), after the app restarted it.
+- 2026-10-09, the Codex review of the code, run as planned (`js-harness codex-review --base
+  origin/main`, range `d6cf6be..764c9b0`): `All 6 parts passed: Codex used 2,439,619 input
+  tokens (2,062,336 cached) and 15,045 output (7,733 reasoning) in 759 s over 53 requests`,
+  recorded in `.git/js-harness/codex-reviews.jsonl`. That is under the floor put to
+  Sebastián (3,203,000): the three parts that are test files cost about 250,000 each where
+  the plan put 730,000 to 1,100,000, since Codex found nothing to follow in them. Two parts
+  were judged incorrect, five findings, all in the two source files and none in the tests:
+  - P1, `bin/lib/sessions.mjs`: a gate started as `js-harness check`, the form the hook of an
+    initialized project uses, is not seen as a gate, because the matcher looks for
+    `bin/check.mjs`. The board is blind to gates exactly where the harness is installed.
+  - P2, `bin/lib/sessions.mjs`: a resumed sub-agent whose end arrives before the result of
+    its `SendMessage` stays open, and the session stays in `background`.
+  - P2, `bin/lib/sessions.mjs`: a gate that ends and another that takes its pid between two
+    looks of the watch are read as one, so neither the end nor the start is announced.
+  - P2, `bin/sessions.mjs`: the project root is taken from the git common directory, which
+    is wrong in a submodule or with `--separate-git-dir`.
+  - P2, `bin/sessions.mjs`: the Windows process listing is decoded as UTF-8 whatever the
+    console code page, so a worktree path with a non-ASCII letter loses its gates.
+  Each is reproduced by a test first and fixed, by one writer (route: delegated, two source
+  files and their tests); the fix commit then gets its own gentle-ai and Codex review.
+- 2026-10-09, the five fixed. All five were real: red first (three failures in the library's
+  tests, five in the command's), then green: `node --test bin/lib/sessions.test.mjs` 112 of
+  112 (re-run by the parent), `bin/sessions.test.mjs` 105 of 105, `bin/js-harness.test.mjs`
+  22 of 22; 279 lines added and 34 removed in the four files. The change to how a resumed
+  sub-agent's end is kept was compared on the project's real transcripts, old code against
+  new: `37 transcripts, 810 pieces of work; facts differ in 0`. What stays open, by the
+  writer's own account: a worktree linked to a `--separate-git-dir` checkout still resolves
+  to the git directory (git 2.54 traces it no further); no POSIX process listing was looked
+  at, so the `ps` form of a dispatcher gate is covered by the library test alone; the code
+  page defect cannot show on this machine, whose own code page is already UTF-8, and was
+  reproduced with a console switched to 850; a `--cwd` given to `check` is not read for the
+  gate's worktree. The Design, Constraints and Limits above are corrected to match.
 
 ## Next step
-The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). Each on Sebastián's word,
+The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
+the main session brings Sebastián back to the plan in the roadmap ("Session channel
+(planned)" and the order under it) to settle with him how each part should work, before any
+of it is built: he asked for that on 2026-10-09. Each on Sebastián's word,
 in this order: the Codex review of the code commits with `--base origin/main` (6 parts by the
 plan above; never the base the push check hints, see the entry of 2026-10-09), the push and
 the pull requests (two slices stacked to `main`, see Delivery; the merge commit at the tip

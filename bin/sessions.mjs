@@ -108,31 +108,50 @@ function parseArgs(argv) {
   return { ...parsed, contextLimit, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 
-/** The main checkout of the repository `cwd` is in, so the board is the same from any worktree: the
- * folder that holds the common git dir. Outside a repository (or without git) the folder itself is the
- * project, as it is for Claude Code. */
+/** The main checkout of the repository `cwd` is in, so the board is the same from any worktree. Outside a
+ * repository (or without git) the folder itself is the project, as it is for Claude Code.
+ *
+ * It is the folder that holds the common git dir when that dir is a `.git`: an ordinary checkout, and
+ * every worktree linked to it. A common git dir of another name is kept apart from its checkout (a
+ * submodule's is under the superproject's `.git/modules`, `--separate-git-dir` puts it anywhere) and its
+ * place says nothing, so git is asked for the working tree: the one that git dir records, which a
+ * submodule's does, and otherwise the one `cwd` is in when that is the main one, its git dir being the
+ * common one. With neither (a bare repository; a worktree linked to a `--separate-git-dir` checkout,
+ * which nothing in git ties to it) the project is the git dir itself, as it always was. */
 function mainCheckout(run, cwd) {
-  const result = run('git', ['rev-parse', '--git-common-dir'], { cwd });
-  if (result.error || result.status !== 0 || result.stdout.trim() === '') return cwd;
-  const commonDir = path.resolve(cwd, result.stdout.trim());
-  return path.basename(commonDir) === '.git' ? path.dirname(commonDir) : commonDir;
+  const revParse = (args, folder) => {
+    const result = run('git', ['rev-parse', ...args], { cwd: folder });
+    return result.error || result.status !== 0 ? [] : result.stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
+  };
+  const [common] = revParse(['--git-common-dir'], cwd);
+  if (common === undefined) return cwd;
+  const commonDir = path.resolve(cwd, common);
+  if (path.basename(commonDir) === '.git') return path.dirname(commonDir);
+  const [recorded] = revParse(['--show-toplevel'], commonDir);
+  if (recorded !== undefined) return path.resolve(recorded);
+  const [gitDir, top] = revParse(['--git-dir', '--show-toplevel'], cwd);
+  return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
 // One row of the shared listing (`Format-ProcessRow`, bin/lib/process-tree.mjs) and one `C` line per
-// process whose command line mentions `check.mjs`; `findGates` decides which of those are gates. The
-// last line is `OK` with the number of `C` lines written, which `parseProcessList` compares with the
-// lines it read: a listing that stopped half way, or lost a line, is refused. Tabs and line breaks in a
-// command line become spaces, so a line of output is always one fact. Progress output is off: under
-// `-EncodedCommand` it would arrive as CLIXML.
+// process whose command line mentions `check.mjs`, or the dispatcher followed by `check`; `findGates`
+// decides which of those are gates. The last line is `OK` with the number of `C` lines written, which
+// `parseProcessList` compares with the lines it read: a listing that stopped half way, or lost a line, is
+// refused. Tabs and line breaks in a command line become spaces, so a line of output is always one fact.
+// Progress output is off: under `-EncodedCommand` it would arrive as CLIXML. The output is UTF-8 because
+// that is what `run` reads: left alone PowerShell writes in the code page of its console, 850 or 437 on
+// most machines, and a letter outside ASCII in a path would arrive as another. No byte order mark, which
+// would be read as the start of the first row.
 const GATE_LISTING_SCRIPT = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 ${POWERSHELL_ROW_FUNCTION}
 try {
+  [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
   $written = 0
   foreach ($process in @(Get-CimInstance Win32_Process)) {
     $line = $process.CommandLine
-    if (-not $line -or $line.IndexOf('check.mjs', [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+    if (-not $line -or $line -notmatch 'check\.mjs|js-harness(\.mjs)?"?\s+"?check') { continue }
     Format-ProcessRow $process
     'C' + [char]9 + $process.ProcessId + [char]9 + ($line -replace '\s+', ' ')
     $written += 1
