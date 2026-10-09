@@ -1076,12 +1076,66 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   and says so, since every wake is paid in context: at about 88% of the window it did, and
   saw nothing of the other sessions until it was compacted. The watch has no quieter mode
   for that case.
+- 2026-10-09, the wait ended. `codex-review-lean` and `codex-review-cost` reached `main`
+  together (pull requests #43 and #44, then #45 for their record; `main` at `d6cf6be`), so the
+  choice kept on 2026-10-08 between the two merges never had to be made. Before them the rule
+  hierarchy plan (#41) and the first part of the sub-agent routing evals (#42) had gone in.
+  `main` was merged into this branch at `4a2a668`: clean, no file resolved by hand, gate
+  green; neither `AGENTS.md` nor `bin/lib/manifest.mjs` conflicted. The gate marked that merge
+  as due a gentle-ai review (`medium risk, 103 paths, 22650 lines: review due
+  (slice_budget_reached)`). None was started: the merge holds no line written here, only work
+  reviewed on its own branches, and with consent pre-granted nothing would stop a review of
+  that size.
+- 2026-10-09, the plan of the Codex review, read before anything is spent
+  (`js-harness codex-review --base origin/main --plan`): `gpt-6.1-sol at high effort, 6 parts,
+  3,365 changed lines in 9 files`, `Left out of the review: 2 Markdown documents, 1,100
+  changed lines`, `Estimate: about 3,203,000 to 5,463,000 input tokens in all`. By part: 192
+  lines in 4 files (160,000), `bin/lib/sessions.mjs` 868 (830,000), `bin/lib/sessions.test.mjs`
+  1,153 (1,100,000), `bin/sessions.mjs` 367 (310,000), `bin/sessions.test.mjs` 766 (730,000),
+  `scripts/e2e.mjs` 19 (73,000). Tests are 2,028 of the 3,365 lines. The lower figure is put
+  to Sebastián as a floor; the command itself says the higher one is no ceiling.
+- 2026-10-09, a trap in the hint, found by reading the plan first. After the merge of `main`,
+  `check --push` still ends with `make the record with: js-harness codex-review --base
+  875c5d9^`. That base is the `main` this branch left (`3915b88`), and with the merge commit
+  in the range its plan is `41 parts, 21,461 changed lines in 62 files`, 19,653,000 to
+  38,083,000 input tokens: everything `main` gained since, read again. The same hint, printed
+  by the gate just before the merge commit existed, planned the right 6 parts. Nothing was
+  spent: a run of more than 6 parts does not start without `--max-parts`, and the plan showed
+  it. But the hint names a base that is wrong once a branch has merged its default branch in,
+  and a session that trusted it and passed `--max-parts 41` would pay six times over. It
+  belongs to the Codex review feature, not to this one; told to Sebastián.
+- 2026-10-09: the session "Codex review lean integration" closed, with a notice for this one
+  that matched the board (both features on `main`, `main` at `d6cf6be`). It leaves three
+  things to Sebastián: the main checkout `D:\js-harness` still on the old `main`, whether the
+  review stays at high effort, and its proposal for the Codex plugin.
+- 2026-10-09, a direct channel between sessions, asked by Sebastián after he pasted that
+  closing notice by hand ("hay forma que tu te puedas comunicar directamente las sesiones
+  contigo y tu con las sesiones en tiempo real?"). The app has one: `ListAgents` lists the
+  sessions of the machine and `SendMessage` reaches one by its title. Tested once, to the
+  session that had closed: the message arrived there as a new turn, not held for his
+  approval, and the answer came back the same way within a minute. Kept in the project memory
+  as the rule for side sessions (their notices for the main go by message, with the pasted
+  block as fallback, and a message between sessions is never his word). For T7 and the
+  orchestrator skill: the skill's text assumes the parent only reads; with this channel a
+  side session can tell the parent it waits or has closed, which is the wake the watch gets
+  wrong most often, and the parent could warn of a running gate. Whether the parent may
+  write to a working session at all is his to confirm; until then it does not.
+- 2026-10-09: the Codex review was put to Sebastián with its plan, as a floor, and he gave
+  the word after a long exchange on how sessions should work together ("entonces terminemos
+  esto para poder continuar con todo"). What that exchange decided is in the roadmap, under
+  "Session channel (planned)", with the order of the features that follow this one. The
+  first run of the review started nothing and spent nothing: the command refuses while
+  tracked files are uncommitted (`Tracked files have uncommitted changes, but the record
+  claims the committed range base..HEAD`), and these notes were. They are committed first.
+  Also seen on the board that hour: this conversation under two session ids with one title
+  (`1cca9aae ... (this session)` and `729ed66b ... background`), after the app restarted it.
 
 ## Next step
-Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged; see the
-entry of 2026-10-08 for the successor feature and the choice it opens. Then, each on his word,
-in this order: the Codex review of the code commits (its plan shown to him first), the push and
-the pull requests (two slices stacked to `main`, see Delivery), the merge, the global install
-brought up to `main`, and `js-harness install`. T7 closes with an orchestrator session opened
-with the skill's opening prompt and one real stretch supervised by it, recorded here with the
-gaps of T6 and of the wakes above judged.
+The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). Each on Sebastián's word,
+in this order: the Codex review of the code commits with `--base origin/main` (6 parts by the
+plan above; never the base the push check hints, see the entry of 2026-10-09), the push and
+the pull requests (two slices stacked to `main`, see Delivery; the merge commit at the tip
+means the cut is settled again before the push), the merge, the global install brought up to
+`main`, and `js-harness install`. T7 closes with an orchestrator session opened with the
+skill's opening prompt and one real stretch supervised by it, recorded here with the gaps of
+T6 and of the wakes above judged.
