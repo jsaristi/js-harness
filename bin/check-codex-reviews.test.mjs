@@ -157,6 +157,55 @@ test('a merge commit needs no review of its own', () => {
   assert.match(row.detail, /1 code commit since origin\/main/);
 });
 
+test('a merge commit somebody wrote code in needs a record, as the commit it is', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  git(root, 'checkout', '-b', 'side');
+  const side = commit(root, 's.js', 'side', 'feat: side work');
+  git(root, 'checkout', 'feature');
+  // The finding this is the test of: an edit made in the merge is in the patch of no other commit, so with
+  // a record for every other commit it was pushed with no review having read it.
+  git(root, 'merge', '--no-ff', '--no-commit', 'side');
+  const merged = commit(root, 'b.js', 'two, edited in the merge', 'merge side, with an edit of its own');
+  record(root, base, side);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 3 code commits since origin\/main have no Codex review record/);
+  // It has parents, so it is no root commit, and `<id>^` is the first of them: the range from there holds it.
+  const from = `${short(root, merged)}^`;
+  assert.deepEqual(row.lines, [`${short(root, merged)} merge side, with an edit of its own`, `make the record with: js-harness codex-review --base ${from}`]);
+  // The plain row counts it and names the same base: the review starts at that parent, and reads the edit
+  // with what the merge brought in beside it.
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.detail, `no Codex review record for 1 of 3 code commits since origin/main: the review of ${from}..HEAD is 1 part today, 3 changed lines in 2 files`);
+  assert.deepEqual(debt.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${from} --plan`]);
+  // The record that command makes from that base covers it, as it covers any commit.
+  record(root, own, merged);
+  const covered = checkCodexReviews(root, 'HEAD');
+  assert.equal(covered.pass, true, `${covered.detail}\n${(covered.lines ?? []).join('\n')}`);
+  assert.equal(covered.detail, '3 code commits since origin/main, all covered by a Codex review record');
+});
+
+test('a merge in which git merged a file both sides changed, and nobody wrote a line, needs no record', () => {
+  const { root } = makeRepo();
+  const text = (changed = {}) => Array.from({ length: 30 }, (_, at) => changed[at] ?? `line ${at}`).join('\n');
+  const base = commit(root, 'shared.js', text(), 'feat: a file of thirty lines');
+  feature(root);
+  const own = commit(root, 'shared.js', text({ 2: 'mine' }), 'feat: mine');
+  git(root, 'checkout', 'main');
+  commit(root, 'shared.js', text({ 27: 'elsewhere' }), 'feat: elsewhere on main, in the same file');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  // The default branch merged into a branch whose every commit is reviewed: the merge leaves the file as
+  // neither side has it, and a record asked of it would be a second review of the whole branch.
+  git(root, 'merge', '--no-ff', '-m', 'merge main into feature', 'main');
+  record(root, base, own);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, `${row.detail}\n${(row.lines ?? []).join('\n')}`);
+  assert.equal(row.detail, '1 code commit since origin/main, all covered by a Codex review record');
+});
+
 // --- what a review leaves out: documents, and what the project marks (`./lib/codex-review-scope.mjs`) ---
 
 /** `makeRepo`, with a `.gitattributes` of `marks` that the default branch of the remote already holds, so

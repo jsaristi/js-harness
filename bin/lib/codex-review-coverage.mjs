@@ -63,18 +63,28 @@ function headsPastTip(spawn, cwd, tip, heads) {
 const COMMIT_FORMAT = '%x00%H%x09%h%x09%P%x09%s';
 const COMMIT_LINE = /^[0-9a-f]{40,64}\t[0-9a-f]+\t[0-9a-f ]*\t/;
 
-/** The commits of what `git log -z --name-only --format=<COMMIT_FORMAT>` printed, in its order: each
- * `{ id, shortId, parent, isRoot, subject, files }`, the files as git names them, whatever a name holds, and
- * `parent` the full id of its first parent, `null` for a root commit. `null` when the text is not that: a
- * list read as far as it goes would leave out a commit, or the files of one.
+/** The commits of what `git log -z --diff-merges=combined --name-only --format=<COMMIT_FORMAT>` printed, in
+ * its order: each `{ id, shortId, parent, isRoot, parentCount, subject, files }`, the files as git names
+ * them, whatever a name holds, `parent` the full id of its first parent, `null` for a root commit, which is
+ * what `isRoot` says, and `parentCount` how many it has, more than one for a merge. `null` when the text is
+ * not that: a list read as far as it goes would leave out a commit, or the files of one.
  *
  * With `-z` git ends every field with a NUL, the line of a commit and each name after it, and writes a name
  * as it is, with a newline between the line of a commit and its first name. So the fields are told apart by
  * the NULs alone, and a commit starts at the empty field the format writes before its line: two NULs with
  * nothing between them, or the start of the text. No file name can stand for that. A name holds no NUL, and
- * is never empty, so neither one name nor several in a row put two NULs together; and what comes after an
- * empty field is never read as a name. What a name does hold is not looked at: one may be a control
- * character, a newline, or the whole line of a commit, and is still the name it is. */
+ * is never empty, so neither one name nor several in a row put two NULs together. What a name does hold is
+ * not looked at: one may be a control character, a newline, or the whole line of a commit, and is still the
+ * name it is.
+ *
+ * A merge is written in a shape of its own (seen on git 2.54, for two parents and for more): after its line
+ * comes one more empty field, where another commit has the newline, and then its names as they are, the
+ * first one too; a merge that changes no file by itself has that field and no name. The line of a commit
+ * names its parents, so it says which shape follows: the empty field after the line of a merge starts no
+ * commit, the one after its names does, and a merge with no such field, which is how `git log` writes one
+ * whose files it was not asked for, is no list. One such text reads as a list all the same: a merge with
+ * nothing after its line and then a commit, which is also a merge whose first name is the line of that
+ * commit. The two differ in how many commits they hold, which is what `reviewCoverage` holds a list to. */
 function loggedCommits(log) {
   const fields = log.split('\0');
   // Every field ends with a NUL, so what follows the last one is empty unless the text was cut.
@@ -85,16 +95,45 @@ function loggedCommits(log) {
     const line = fields[at + 1];
     if (fields[at] !== '' || line === undefined || !COMMIT_LINE.test(line)) return null;
     const [id, shortId, parents, ...subject] = line.split('\t');
+    const parentIds = parents ? parents.split(' ') : [];
+    const isMerge = parentIds.length > 1;
     const files = [];
-    for (at += 2; at < fields.length && fields[at] !== ''; at += 1) {
-      // The first name of a commit comes after a newline, which is git's and not the name's.
-      const first = files.length === 0;
+    at += 2;
+    if (isMerge) {
+      // The empty field git writes after the line of a merge: one that lacks it was not asked for its files.
+      if (fields[at] !== '') return null;
+      at += 1;
+    }
+    for (; at < fields.length && fields[at] !== ''; at += 1) {
+      // The first name of a commit that is no merge comes after a newline, which is git's and not the name's.
+      const first = !isMerge && files.length === 0;
       if (first && !/^\n./s.test(fields[at])) return null;
       files.push(first ? fields[at].slice(1) : fields[at]);
     }
-    commits.push({ id, shortId, parent: parents.split(' ')[0] || null, isRoot: !parents, subject: subject.join('\t'), files });
+    commits.push({ id, shortId, parent: parentIds[0] ?? null, isRoot: !parents, parentCount: parentIds.length, subject: subject.join('\t'), files });
   }
   return commits;
+}
+
+/** The files that differ between the merge `id`, a full commit id, and what merging its two parents again
+ * gives, as `git show --remerge-diff` names them: an edit made in the merge and a conflict resolved by hand
+ * among them, and no file git merged by itself. `null` when git does not answer that, whole: unknown is not
+ * "none".
+ *
+ * Asked with `-z` and the id as the format, git writes the id and a NUL, then a newline and the names, each
+ * ended by a NUL, or nothing more when no file differs (seen on git 2.54). Anything else is no answer: a git
+ * that fails, as one older than 2.36 does on the option; the id of another commit; and text that is no
+ * names, which is what git writes for a merge of more than two parents, a warning that it merges none of
+ * them again. `--no-relative` and `--no-renames` for the reasons the log has them (`reviewCoverage`): the
+ * names are compared with its names. */
+function writtenInMerge(spawn, cwd, id) {
+  const shown = gitOut(spawn, cwd, ['show', '-z', '--remerge-diff', '--no-show-signature', '--no-relative', '--no-renames', '--no-ext-diff', '--name-only', '--format=%H', id]);
+  const fields = shown?.split('\0') ?? [];
+  if (fields.pop() !== '' || fields.shift() !== id) return null;
+  if (fields.length === 0) return [];
+  // The first name comes after a newline, which is git's and not the name's, and no name is empty.
+  if (!/^\n./s.test(fields[0]) || fields.includes('')) return null;
+  return [fields[0].slice(1), ...fields.slice(1)];
 }
 
 // What a coverage that cannot be told could not read (`reviewCoverage`): the commits of the range, or the
@@ -104,11 +143,11 @@ export const MARKS_UNREAD = 'marks';
 
 /** What the Codex review records say of the code commits of `from..tip`, as git reads that range in `cwd`:
  * `tip` a full commit id, `from` any revision. `{ unknown }` when it cannot be told, `COMMITS_UNREAD` or
- * `MARKS_UNREAD`. Otherwise the `codeCommits` of the range (newest first: every non-merge commit that
- * changes a file a review reads), the `covers` (each valid record that reaches the range, as `{ rec,
- * covered }` with the commits it covers), the `uncovered` code commits, and how many records were left out:
- * `invalid`, the ones that are no evidence, and `ignored`, the valid ones whose base or head is no commit of
- * this repository.
+ * `MARKS_UNREAD`. Otherwise the `codeCommits` of the range (newest first: every commit that changes a file
+ * a review reads, a merge by the files somebody wrote in it), the `covers` (each valid record that reaches
+ * the range, as `{ rec, covered }` with the commits it covers), the `uncovered` code commits, and how many
+ * records were left out: `invalid`, the ones that are no evidence, and `ignored`, the valid ones whose base
+ * or head is no commit of this repository.
  *
  * A file a review reads is one `js-harness codex-review` does not leave out (`./codex-review-scope.mjs`):
  * not a document, and not a path the project marks with `-codex-review`. What is marked is read from the
@@ -142,12 +181,38 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync }) {
   // sets `log.showSignature`, git writes what the program that checks a signature said of a signed commit
   // before the line of that commit, on this same output: a list of another shape, which is read as no list
   // at all, so that a branch whose every commit had a record failed the push check.
-  const log = gitOut(spawn, cwd, ['log', '-z', '--no-merges', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${from}..${tip}`]);
+  //
+  // `--diff-merges=combined`: a merge lists the files it leaves as none of its parents has them, which is
+  // where what somebody wrote in it is: a conflict resolved by hand, an edit made in the merge. `git log`
+  // lists no file of a merge unless it is asked, and this once passed `--no-merges`: such an edit was then
+  // in the patch of no commit a record was asked of, so a range whose other commits each had one was
+  // pushed, and called covered by `js-harness codex-review`, with the edit in no review. A merge that takes
+  // each file from one side or the other lists none, and is done with here.
+  const log = gitOut(spawn, cwd, ['log', '-z', '--diff-merges=combined', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${from}..${tip}`]);
   const commits = log === null ? null : loggedCommits(log);
-  if (commits === null) return { unknown: COMMITS_UNREAD };
+  // The log and the `rev-list` above walk the same range, so what was read is every commit of it, each
+  // once. A list that is not was misread: the one text that reads two ways holds one commit fewer when the
+  // line of a commit is taken for a name of the merge before it (`loggedCommits`).
+  const readIds = new Set(commits?.map((commit) => commit.id));
+  const isTheRange = commits !== null && commits.length === rangeIds.size && readIds.size === rangeIds.size && commits.every((commit) => rangeIds.has(commit.id));
+  if (!isTheRange) return { unknown: COMMITS_UNREAD };
   const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn });
   if (leftOut === null) return { unknown: MARKS_UNREAD };
-  const codeCommits = commits.filter((commit) => commit.files.some((file) => !leftOut.has(file)));
+  const isCode = (commit) => commit.files.some((file) => !leftOut.has(file));
+  // A merge is a code commit by the files somebody wrote in it: those the log lists for it that also differ
+  // from what merging its parents again gives (`writtenInMerge`). Neither list is the rule alone. The log's
+  // holds what git merged by itself, a file both sides changed with no conflict: the default branch merged
+  // into a branch already reviewed became a commit the push check refused, and its record a second review of
+  // code that had one. The other holds what a merge dropped, a conflict resolved as one side, which leaves
+  // the file as a parent has it and no line to review; it costs a merge for each merge of the range; and
+  // for more than two parents git gives none. So it is asked of a merge of two parents that would be a code
+  // commit, and of no other commit: a range with no such merge pays nothing. Where it is not asked or not
+  // answered the files of the log stand, since unknown is written by hand.
+  const ownFiles = (commit) => {
+    const written = commit.parentCount === 2 ? writtenInMerge(spawn, cwd, commit.id) : null;
+    return written === null ? commit : { ...commit, files: commit.files.filter((file) => written.includes(file)) };
+  };
+  const codeCommits = commits.filter(isCode).map(ownFiles).filter(isCode);
 
   const records = readCodexReviews(cwd, { spawn });
   const valid = records.filter(isValidCodexReview);
@@ -218,7 +283,9 @@ export function rangeStart(cwd, { base, tip, spawn = spawnSync }) {
  * of: that commit has a parent; `from` is that parent or an ancestor of it, or the range would grow by
  * history it never held (a branch that forked before `from` and was merged in); and every uncovered commit
  * lies in `<parent>..tip`, or one of them would be in no review (two lines of history, each with a commit
- * no record covers). With nothing uncovered there is nothing to start: `from`, as it was given.
+ * no record covers). With nothing uncovered there is nothing to start: `from`, as it was given. The parent
+ * of a merge is its first one: the patch from there holds all the merge changed against it, what was
+ * written in the merge among it, and the same checks hold that start.
  *
  * In doubt, the range as it was given, never less: an answer git does not give is not a yes. At most two
  * git processes, and none when the parent is `from` itself, where nothing is left to ask. */

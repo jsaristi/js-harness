@@ -521,11 +521,66 @@ push of that branch.
     words of the command and not those of the engine.
   - Left as it is: the command says "share no history" also when `merge-base` failed; it
     refuses either way, with nothing started.
+- 2026-10-08: that fix committed as `47c3d02` (gate green in 1,107 s, started after the gate
+  of the other session had ended, so alone: F7 stands without it). gentle-ai on
+  `d632abf..47c3d02`: 211 changed lines, under its budget, so it waits in the slice. Codex
+  on the three commits, `dbc71f0..47c3d02`, its plan read first (5 parts, 1,595 changed
+  lines in 8 files, "Left out of the review: 1 Markdown document, 148 changed lines", about
+  1,030,000 to 3,160,000 input tokens), inside the login proof (PASS): recorded, 1,704,421
+  input tokens (1,376,768 cached), 10,253 output, 382 s, inside the range of its plan. It
+  was the first run to start where the records end by itself. Four parts "correct"; one
+  finding, P2, accepted:
+  - The coverage lists the commits of a range without its merges, so a merge is never a
+    code commit. A merge can change code by itself, a conflict resolved by hand or an edit
+    made in it; with the other commits of a range already recorded, a run now says there
+    is nothing to review and that edit is in no review, where the command reviewed the
+    whole patch until `d632abf`. The push check always had the same blind spot. The fix
+    goes in the shared definition, so that both read it: a merge that changes a file a
+    review reads by itself is a code commit, covered as any commit is, and a review whose
+    oldest uncovered commit is a merge takes the range as it was given.
+- 2026-10-08: the fix of the merge, by one delegated writer (route: delegated), red first,
+  in two rounds, committed with this entry. The writer, at the end: the four modules 72 of
+  72, the push check 94 of 94 (212 s), `check` 73 of 73, the command file 232 of 232
+  (749 s); the push check of this branch passes (27 code commits, all covered; the range
+  holds no merge). 355 changed lines, 241 of them tests. Re-read by the parent: the
+  function that asks git about a merge. The first round built what the
+  entry above says, on what git 2.54 prints: under `--diff-merges=combined` a merge has an
+  entry of its own shape (its line, one more empty field, then names with no newline
+  before the first), and the parsed list is held to the commits `rev-list` names for the
+  range. Two things it showed changed the rule, decided by the parent and his to correct:
+  - The combined diff also lists a file both sides changed and git merged by itself. Read
+    as code of the merge, every merge of the default branch into a feature branch that
+    shares one such file would be refused by the push check until a review made its
+    record: paying again for code two reviews already read, which this feature exists to
+    stop. So a merge is a code commit only for what somebody wrote in it: the combined diff
+    gives the candidates at no extra process, and for a candidate git is asked what the
+    merge changed against merging its parents again (`--remerge-diff`). Where git gives no
+    clean answer, an octopus among them, the candidate files stand: unknown is read as
+    written by hand.
+  - A review whose oldest uncovered commit is a merge starts at its first parent, under
+    the checks every start is held to, and not at the range as given: the diff from there
+    holds what the merge changed, and is never more than the range.
+  - What git 2.54 prints for the re-merge, probed: the id alone for a clean merge and for
+    a file git merged by itself; the names for a conflict resolved by hand and for an edit
+    added in the merge; a warning on stdout with exit 0 for an octopus, which is therefore
+    told by its count of parents and never asked. It needs `--no-relative`, as the log
+    does. It also names a conflict resolved as one side whole, which the combined diff does
+    not: only what both lists name is read as written in the merge.
+  - Not closed, a follow-up (F8): the review of a merge still reads the whole side the
+    merge brings in, since a review reads the difference of two commits. Reading the edits
+    of the merge alone, the re-merge difference as its patch, would be the cheap one. And a
+    merge that drops work one side had (`-s ours`, a conflict resolved as one side whole)
+    lists no file and asks no record: it adds no code, though it can remove a reviewed fix.
+    And when the default branch is merged into a feature branch by hand, the first parent
+    of the merge is the tip of the feature, which a range from the default branch does not
+    start at, so that run takes the range as given, the whole branch; `--base <merge>^`,
+    which the push check names, reads what the default branch brought in instead.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
 
 ## Follow-ups
+- F8-a-merge-is-reviewed-with-its-side: see the entry of 2026-10-08 on the fix of the merge.
 - F7-gate-near-its-timeout: the gate runs the tests under a bound of 20 minutes, and on
   2026-10-08 the first commit of the second half of T2 was refused once on that bound alone
   ("npm run test timed out after 1200 s", no test failing) and passed on the retry in 1,044
@@ -565,11 +620,10 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,300 changed
 lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. The fix of what gentle-ai found in the two commits of the second half of T2 is
-   committed with this entry; gentle-ai on it, from `d632abf`, and Codex on
-   the three commits in one run from `dbc71f0`, the plan read first (a run of more than 6
-   parts is put to Sebastián first). What they find is fixed and reviewed the same way.
-   That closes T4. Then T6.
+1. The fix of the finding of that Codex review (a merge somebody wrote code in is a code
+   commit) is committed with this entry; gentle-ai on it from `d632abf`, which takes in
+   the fix before it too, and Codex from `47c3d02`, the plan read first.
+   What they find is fixed and reviewed the same way. That closes T4. Then T6.
 2. T5, the measurement of the part size, is put to Sebastián with its count before any of
    it runs.
 

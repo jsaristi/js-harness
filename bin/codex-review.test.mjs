@@ -4569,6 +4569,40 @@ test('where starting later is not safe, the range is reviewed as it was given: a
   assert.deepEqual(readCodexReviews(root).at(-1), reviewedRecord(from, head));
 });
 
+test('a merge somebody wrote in is a commit of the range: with a record for every other commit the range is not covered, and is reviewed from the first parent of the merge', async () => {
+  const { root, base, head: mine } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed\n', 'utf8');
+  git(root, 'commit', '-am', 'side work');
+  const side = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', trunk);
+  // The finding this is the test of: an edit made in the merge is in the patch of neither side, and with
+  // a record for each of them the run said "Nothing to review" of a range that holds it.
+  git(root, 'merge', '--no-ff', '--no-commit', 'side');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 edited in the merge\n', 'utf8');
+  git(root, 'commit', '-am', 'merge side, with an edit of its own');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  appendCodexReview(root, reviewedRecord(base, side));
+  const plan = async (which) => {
+    const nothing = startsNothing(root);
+    const result = await run(['--base', base, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+    assert.deepEqual([result.code, result.err], [0, ''], which);
+    nothing.untouched(which);
+    return result.out.split('\n');
+  };
+  // The oldest commit no record covers is the merge: the run starts at its first parent, and reads the edit
+  // with what the merge brought in beside it.
+  assert.deepEqual(await plan('the merge has no record'), [
+    startsAt(rangeOf(base, head), 3, 2, mine),
+    ...planned(root, mine, head, [{ files: ['m.txt', 's.txt'], changedLines: 4 }]),
+  ]);
+  // Covered as any commit is, by a record whose range holds it: then the range is covered whole.
+  appendCodexReview(root, reviewedRecord(mine, head));
+  assert.deepEqual(await plan('a record covers the merge'), [`Nothing to review: ${rangeOf(base, head)} holds 3 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`]);
+});
+
 test('when the records cannot be read against the range, the range is reviewed as it was given, and one line says so', async () => {
   const { root, base, one, three } = makeSlicedRepo();
   appendCodexReview(root, reviewedRecord(base, one));

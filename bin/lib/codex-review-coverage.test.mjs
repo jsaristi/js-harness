@@ -109,6 +109,137 @@ test('a root commit of the range has no parent', () => {
   assert.deepEqual(codeCommits.map((commit) => [commit.id, commit.parent, commit.isRoot]), [[alone, null, true]]);
 });
 
+// --- a merge: a commit of the range by the files somebody wrote in it ---
+
+/** One commit of `file` on a new branch `name`, off the commit that is checked out on `main`, which stays
+ * checked out: the commit's full id. */
+function sideCommit(root, name, file, content) {
+  git(root, 'checkout', '--quiet', '-b', name);
+  const id = commit(root, file, content, `feat: ${name}`);
+  git(root, 'checkout', '--quiet', 'main');
+  return id;
+}
+
+/** Merges the branch `side`, or the several a space separates, into the one that is checked out, as a merge
+ * commit that also holds `edits`, a map of file name to content, and returns its full id. Where the two
+ * sides conflict git stops by itself and exits 1: the edits are then the resolution, made by hand. */
+function merge(root, side, edits = {}) {
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', ...side.split(' ')], { cwd: root, encoding: 'utf8' });
+  for (const [file, content] of Object.entries(edits)) fs.writeFileSync(path.join(root, file), content, 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', `merge ${side}`);
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+test('a merge somebody wrote in is a commit of the range, and a code commit when a review reads what was written; a clean merge is none', () => {
+  const { root, first } = makeRepo();
+  // Clean: each side has a file of its own, and the merge adds nothing to them.
+  const side = sideCommit(root, 'side', 's.js', 'side');
+  const mine = commit(root, 'm.js', 'mine', 'feat: mine');
+  const clean = merge(root, 'side');
+  // A conflict in `a.js`, resolved by hand as neither side had it.
+  const theirs = sideCommit(root, 'theirs', 'a.js', 'theirs');
+  const ours = commit(root, 'a.js', 'ours', 'feat: ours');
+  const resolved = merge(root, 'theirs', { 'a.js': 'neither' });
+  // An edit made in the merge, of a document alone: a file the merge changes, and none a review reads.
+  const words = sideCommit(root, 'words', 'w.js', 'words');
+  const documented = merge(root, 'words', { 'notes.md': 'words' });
+
+  const coverage = reviewCoverage(root, { from: first, tip: documented });
+  assert.equal(coverage.unknown, undefined, 'the entries of the merges are read');
+  const code = new Map(coverage.codeCommits.map((commit) => [commit.id, commit]));
+  assert.deepEqual([...code.keys()].sort(), [side, mine, theirs, ours, resolved, words].sort(), `neither ${clean} nor ${documented}`);
+  // Its files are those somebody wrote in it, and its parent the first of two: it is no root commit.
+  const { parent, isRoot, parentCount, files } = code.get(resolved);
+  assert.deepEqual([parent, isRoot, parentCount, files], [ours, false, 2, ['a.js']]);
+  assert.equal(code.get(ours).parentCount, 1);
+  // Covered as any commit is: by a record whose range holds it.
+  assert.ok(ids(coverage.uncovered).includes(resolved));
+  record(root, ours, resolved);
+  const after = ids(reviewCoverage(root, { from: first, tip: documented }).uncovered);
+  assert.deepEqual([after.includes(resolved), after.includes(theirs), after.includes(ours)], [false, false, true]);
+});
+
+/** Thirty lines, with those of `changed` (a map of line number to text) in place of their own: two sides
+ * that each change one, far apart, are merged by git with no conflict. */
+const thirtyLines = (changed = {}) => Array.from({ length: 30 }, (_, at) => changed[at] ?? `line ${at}`).join('\n');
+
+/** A file both sides changed, far apart, and the merge of `sides` into the side that is checked out, which
+ * nobody wrote a line of: `{ root, ours, merged }`, the range `ours..merged` being that merge and its sides. */
+function mergedByGit(sides) {
+  const { root } = makeRepo();
+  commit(root, 'shared.js', thirtyLines(), 'feat: a file of thirty lines');
+  sideCommit(root, 'side', 'shared.js', thirtyLines({ 2: 'theirs' }));
+  if (sides.includes('other')) sideCommit(root, 'other', 'o.js', 'other');
+  const ours = commit(root, 'shared.js', thirtyLines({ 27: 'ours' }), 'feat: ours');
+  return { root, ours, merged: merge(root, sides) };
+}
+
+test('a file both sides changed and git merged by itself is no file of the merge: nobody wrote it, and git is asked which of its files somebody did', () => {
+  const { root, ours, merged } = mergedByGit('side');
+  const filesOfMerge = (spawn) => reviewCoverage(root, { from: ours, tip: merged, spawn }).codeCommits.find((commit) => commit.id === merged)?.files;
+  // The merge leaves the file as neither parent has it, so git lists it; merging the two parents again
+  // gives the same file, so nobody wrote it, and the merge is no code commit: one more git process says so.
+  const { spawn, started } = countingSpawn();
+  assert.equal(filesOfMerge(spawn), undefined);
+  assert.deepEqual(started.filter((command) => command === 'show'), ['show']);
+  // An answer that is not the merge and the names of its files, whole: unknown is written by hand.
+  const answering = (result) => (cmd, args, opts) => (args[0] === 'show' ? result : spawnSync(cmd, args, opts));
+  const answers = {
+    'git fails, as one that does not know the option': { status: 128, stdout: '', stderr: 'fatal: unrecognized argument: --remerge-diff' },
+    'a warning where the names are': { status: 0, stdout: `${merged}\0diff: warning: Skipping remerge-diff for octopus merges.\n`, stderr: '' },
+    'the answer of another commit': { status: 0, stdout: `${ours}\0`, stderr: '' },
+    'a first name with no newline before it': { status: 0, stdout: `${merged}\0shared.js\0`, stderr: '' },
+    'nothing at all': { status: 0, stdout: '', stderr: '' },
+  };
+  for (const [which, result] of Object.entries(answers)) assert.deepEqual(filesOfMerge(answering(result)), ['shared.js'], which);
+  // And a name the answer adds is no file of the merge: merging again also differs where the merge dropped
+  // the work of a side, which leaves the file as a parent has it and no line for a review to read.
+  assert.deepEqual(filesOfMerge(answering({ status: 0, stdout: `${merged}\0\ndropped.js\0shared.js\0`, stderr: '' })), ['shared.js']);
+});
+
+test('a merge of more than two parents is not asked about: git merges none of them again, so the files it lists stand', () => {
+  const { root, ours, merged } = mergedByGit('side other');
+  const { spawn, started } = countingSpawn();
+  const { codeCommits } = reviewCoverage(root, { from: ours, tip: merged, spawn });
+  assert.deepEqual(codeCommits.find((commit) => commit.id === merged)?.files, ['shared.js']);
+  assert.ok(!started.includes('show'), started.join(' '));
+});
+
+test('the entry of a merge is read as git writes it, and in no other shape: a list that is not every commit of the range is no list', () => {
+  const { root, first } = makeRepo();
+  sideCommit(root, 'side', 's.js', 'side');
+  const merged = merge(root, 'side', { 'a.js': 'edited in the merge' });
+  // What git answers is kept, and answered again with one thing changed.
+  let log;
+  const keeping = (cmd, args, opts) => {
+    const result = spawnSync(cmd, args, opts);
+    if (args[0] === 'log') log = result.stdout;
+    return result;
+  };
+  const read = reviewCoverage(root, { from: first, tip: merged, spawn: keeping });
+  assert.deepEqual(read.codeCommits?.find((commit) => commit.id === merged)?.files, ['a.js']);
+  // An empty field after the line of the merge, where another commit has none, and no newline before its
+  // first name, where another commit has one.
+  const line = log.split('\0')[1];
+  const entry = `\0${line}\0\0a.js\0`;
+  assert.ok(log.startsWith(entry), JSON.stringify(log));
+  const rest = log.slice(entry.length);
+  assert.match(rest, /^\0[0-9a-f]{40}\t[^\0]*\0\ns\.js\0$/, 'the commit of the side, as any other commit is written');
+  const answering = (stdout) => (cmd, args, opts) => (args[0] === 'log' ? { status: 0, stdout, stderr: '' } : spawnSync(cmd, args, opts));
+  const shapes = {
+    'the names of a merge after a newline, as those of another commit are': `\0${line}\0\na.js\0${rest}`,
+    // What `git log` writes of a merge whose files it was not asked for: the line alone. The empty field
+    // that starts the next commit then stands where the one after the line of a merge does, and the line of
+    // that commit where a name does. Nothing in the text says so: the count of the commits does.
+    'a merge with nothing after its line, and then a commit': `\0${line}\0${rest}`,
+    'a merge with nothing after its line, and nothing else': `\0${line}\0`,
+  };
+  for (const [which, stdout] of Object.entries(shapes)) {
+    assert.deepEqual(reviewCoverage(root, { from: first, tip: merged, spawn: answering(stdout) }), { unknown: COMMITS_UNREAD }, which);
+  }
+});
+
 test('the records that cover a code commit and are no review are told apart from the reviews', () => {
   const { root, first, one, doc, two, three } = fourCommits();
   record(root, first, one);
@@ -175,6 +306,33 @@ test('a root commit has no parent to start at: the range as it was given', () =>
   assert.deepEqual(reviewStart(uncovered, { cwd: root, from: null, tip }), { start: null, before: null });
   // Past the root there is a parent, and with no commit to hold it to, the review starts there.
   assert.equal(reviewStart(uncovered.slice(0, 1), { cwd: root, from: null, tip }).start, alone);
+});
+
+test('a merge that is the oldest commit no record covers is started before as any commit is: at its first parent, under the checks of every start', () => {
+  const { root, first } = makeRepo();
+  const zero = commit(root, 'b.js', 'two', 'feat: two');
+  const one = commit(root, 'c.js', 'three', 'feat: three');
+  const side = sideCommit(root, 'side', 's.js', 'side');
+  const merged = merge(root, 'side', { 'c.js': 'three, edited in the merge' });
+  const tip = commit(root, 'd.js', 'four', 'feat: four');
+  record(root, first, zero);
+  record(root, one, side);
+  // Not the oldest, the merge is a commit like any other: the review starts at the parent of the oldest
+  // one, which the merge lies after.
+  const three = reviewCoverage(root, { from: first, tip }).uncovered;
+  assert.deepEqual(ids(three), [tip, merged, one]);
+  const later = reviewStart(three, { cwd: root, from: first, tip });
+  assert.deepEqual([later.start, later.before.id], [zero, one]);
+  // The oldest, it has two commits before it, and the review starts at the first: the patch from there
+  // holds all the merge changed against it, the edit made in the merge among it.
+  record(root, zero, one);
+  const two = reviewCoverage(root, { from: first, tip }).uncovered;
+  assert.deepEqual(ids(two), [tip, merged]);
+  const atFirstParent = reviewStart(two, { cwd: root, from: first, tip });
+  assert.deepEqual([atFirstParent.start, atFirstParent.before.id], [one, merged]);
+  // Held to the checks of every start: a range that starts at its other parent never held the first one,
+  // and is taken as it was given.
+  assert.deepEqual(reviewStart(two, { cwd: root, from: side, tip }), { start: side, before: null });
 });
 
 test('a parent the range does not start at or before is no start: a branch that forked earlier and was merged in', () => {

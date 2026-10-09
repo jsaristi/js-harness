@@ -434,8 +434,9 @@ function coveredDetail({ codeCommits, base }) {
     : `no code commits since ${base}`;
 }
 
-/** The `--push` row: every non-merge commit between the remote's default branch and `head` that
- * changes a file a review reads (not a document, not a path the project marks: `reviewCoverage`)
+/** The `--push` row: every commit between the remote's default branch and `head` that changes a file
+ * a review reads (not a document, not a path the project marks; a merge by the files somebody wrote
+ * in it, so one that only brings two sides together needs none: `reviewCoverage`)
  * must lie in a range some `codex-review` record covers (any
  * outcome: an `unavailable` record is an explicit skip, and a `nothing-to-review` one a range that held
  * nothing for a review to look at, such as a change and its revert; both are listed). Plain `check` never
@@ -453,6 +454,8 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     // A root commit has no `<id>^` to use as a base; a range from the unrelated default branch does
     // reach it, and `--unavailable` records a skip instead of a review. The command "makes the record",
     // not "the review": over a range with nothing to review it records that, and starts no review.
+    // A merge is no root commit: its `<id>^` is the first of its parents, and the range from there holds
+    // the merge and all it changed against that parent, what was written in it included.
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
       : `make the record with: js-harness codex-review --base ${oldest.shortId}^`;
