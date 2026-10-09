@@ -1,0 +1,16 @@
+{
+  "name": "stockroom",
+  "version": "0.4.0",
+  "description": "A file-backed inventory for one warehouse",
+  "type": "module",
+  "bin": {
+    "stockroom": "src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

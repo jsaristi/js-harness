@@ -1,0 +1,36 @@
+{
+  "schema": "js-harness.review-reading/v1",
+  "config": "lean-own",
+  "range": {
+    "name": "real",
+    "base": "338386a6de63e4a47ef0515ceb6fda5f99846df8",
+    "head": "e3aad4802d4604fbc4976e2ad5c4a40e2f5de42e"
+  },
+  "recordedAt": "2026-10-08T02:36:55.560Z",
+  "cli": "0.161.0",
+  "session": "lean",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "modelSource": "command",
+  "prompt": "own",
+  "promptVersion": "js-harness.codex-review-prompt/v1",
+  "outcome": "reviewed",
+  "reason": null,
+  "usage": {
+    "inputTokens": 145842,
+    "cachedInputTokens": 108288,
+    "outputTokens": 605,
+    "reasoningOutputTokens": 49
+  },
+  "requests": 6,
+  "firstRequestInputTokens": 7063,
+  "durationMs": 33977,
+  "coverage": {
+    "seen": 216,
+    "total": 216
+  },
+  "parts": 1,
+  "findings": [],
+  "findingBodyMax": 600,
+  "verdict": "correct"
+}
