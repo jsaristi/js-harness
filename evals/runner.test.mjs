@@ -80,11 +80,11 @@ test('parseAgentOutput returns null for anything that is not a result object', (
 
 test('summarizeUsage adds the cache tokens to the input and reads the turns', () => {
   const output = { num_turns: 4, usage: { input_tokens: 10, cache_creation_input_tokens: 20, cache_read_input_tokens: 30, output_tokens: 5 } };
-  assert.deepEqual(summarizeUsage(output), { inputTokens: 60, outputTokens: 5, turns: 4, usage: output.usage, costUsd: null, modelUsage: null, subagents: null });
+  assert.deepEqual(summarizeUsage(output), { inputTokens: 60, outputTokens: 5, turns: 4, usage: output.usage, costUsd: null, modelUsage: null, subagents: null, subagentStats: null });
 });
 
 test('summarizeUsage reports unknown, never zero, when the output has no usage', () => {
-  const unknown = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null };
+  const unknown = { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null, subagentStats: null };
   assert.deepEqual(summarizeUsage(null), unknown);
   assert.deepEqual(summarizeUsage({ type: 'result' }), unknown);
 });
@@ -117,6 +117,20 @@ test('summarizeUsage gives null for a cost, model usage or subagent count that i
   }
   assert.equal(summarizeUsage({ total_cost_usd: 0 }).costUsd, 0, 'a recorded zero is a measurement');
   assert.equal(summarizeUsage({ subagent_stats: { spawned: 0 } }).subagents, 0);
+});
+
+test('summarizeUsage keeps the whole subagent_stats as Claude Code printed it, beside the count of the spawned', () => {
+  // What Claude Code 2.1.292 printed for a session that spawned one subagent (`odd/tasks/subagent-model-routing.md`, E3).
+  const stats = {
+    spawned: 1, requested: { background: 0, foreground: 1, unset: 0 }, started_in_background: 0, max_depth: 1, spawned_by_subagents: 0, completed: 1, failed: 0,
+    killed: { parent: 0, user: 0, system: 0 }, refused: { depth_limit: 0, concurrency_limit: 0, budget: 0 }, by_type: { 'general-purpose': 1 },
+  };
+  const summary = summarizeUsage({ subagent_stats: stats });
+  assert.deepEqual(summary.subagentStats, stats);
+  assert.equal(summary.subagents, 1, 'the count F5 recorded is still there, as it was');
+  // As given: an object whose count cannot be read is kept, so what was printed can still be seen.
+  assert.deepEqual(summarizeUsage({ subagent_stats: { spawned: 'two', completed: 2 } }).subagentStats, { spawned: 'two', completed: 2 });
+  for (const none of [undefined, null, 3, 'none', []]) assert.equal(summarizeUsage({ subagent_stats: none }).subagentStats, null, JSON.stringify(none));
 });
 
 test('summarizeUsage gives null, not 0, for a count whose field is missing', () => {
@@ -267,6 +281,7 @@ test('a solved trial scores 1 and records tokens, turns, version and identity', 
         'fake-helper-model': { inputTokens: 4, outputTokens: 6, cacheReadInputTokens: 8, cacheCreationInputTokens: 2, costUSD: 0.25 },
       },
       subagents: 2,
+      subagentStats: { spawned: 2 },
       turns: 3, wallMs: 'number', cliVersion: '9.9.9 (Fake Agent)', error: null, startedAt: 'string',
     },
   );
@@ -282,6 +297,7 @@ test('a result without a cost, model usage or subagent stats is recorded with th
   assert.equal(record.costUsd, null);
   assert.equal(record.modelUsage, null);
   assert.equal(record.subagents, null);
+  assert.equal(record.subagentStats, null);
 });
 
 test('an untouched fixture scores strictly between 0 and 1', async () => {
@@ -2015,7 +2031,8 @@ test('assertReading refuses a reading of the wrong shape, naming the key that is
 test('assertReading lets no key of the usage take the place of a field the runner fills itself', () => {
   // Every field of a record that does not come from the usage: a usage key of the same name would replace
   // a graded field, or be replaced by one, and either way the record would not say what was measured.
-  for (const key of ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt']) {
+  // The last two are filled for a config that keeps its transcripts, and refused for every config all the same.
+  for (const key of ['task', 'config', 'effort', 'repeat', 'score', 'passed', 'total', 'wallMs', 'cliVersion', 'error', 'startedAt', 'transcripts', 'listCost']) {
     assert.throws(
       () => assertReading({ ...READING, usage: { ...NO_USAGE, [key]: null } }, 'fake'),
       (err) => err.message === `config fake: its reader returned a reading of the wrong shape: "usage.${key}" is a field of the record the runner fills itself, and a usage count must not replace it`,
@@ -2034,6 +2051,145 @@ test('a trial whose reader returns the wrong shape, or a usage that would replac
   const greedy = trialEnv('noop', { configExtra: { reader: stubReader({ usage: { ...NO_USAGE, score: 1, passed: 3 } }).reader } });
   await assert.rejects(runTrial(greedy.options), /config fake: its reader returned a reading of the wrong shape: "usage\.score" is a field of the record the runner fills itself/);
   assert.deepEqual(entriesOf(greedy.workRoot), []);
+});
+
+// ---- the transcripts a config keeps ------------------------------------------------------------------
+// A config may carry `transcripts`: `keep`, which copies its agent's session files into the raw logs before the
+// trial home is removed, and `summarize`, which says what the record holds of them. The runner knows neither
+// where those files are nor what they mean, so the tests give it stand-ins for both; the real ones are Claude
+// Code's (`transcript-usage.mjs`), proven through a subagent config in `configs.test.mjs`.
+
+const PROBE_TRANSCRIPTS = path.join(here, 'fixtures', 'transcripts', 'probe');
+const STEM = 'sample__fake__medium__1';
+/** The env of a fake agent that leaves transcripts in its trial home, as Claude Code does in its config directory. */
+const leavesTranscripts = ({ home }) => ({ CLAUDE_CONFIG_DIR: path.join(home, '.claude'), FAKE_AGENT_TRANSCRIPTS: PROBE_TRANSCRIPTS });
+const projectsOf = (home) => path.join(home, '.claude', 'projects');
+
+/** A `transcripts` that keeps what it was called with: `keep` and `summarize` answer as given. */
+function stubTranscripts({ keep = () => ({ files: 1, errors: [] }), summarize = () => ({ source: 'stub' }) } = {}) {
+  const calls = { keep: [], summarize: [] };
+  return {
+    calls,
+    transcripts: {
+      keep: (context) => {
+        calls.keep.push({ ...context, agentWrote: fs.existsSync(projectsOf(context.home)), destThere: fs.existsSync(context.dest) });
+        return keep(context);
+      },
+      summarize: (context) => (calls.summarize.push(context), summarize(context)),
+    },
+  };
+}
+const keepingTrial = (mode, stub, options = {}) => trialEnv(mode, { ...options, configExtra: { prepare: () => ({ port: 1 }), envFor: leavesTranscripts, transcripts: stub.transcripts, ...options.configExtra } });
+
+test('a config that keeps its transcripts has them copied once the agent has exited and before the home is removed, and the record holds what was kept and its summary', async () => {
+  const stub = stubTranscripts({
+    keep: ({ home, dest }) => {
+      const [project] = fs.readdirSync(projectsOf(home));
+      fs.cpSync(path.join(projectsOf(home), project), dest, { recursive: true });
+      return { files: 3, errors: [] };
+    },
+    summarize: ({ dir }) => ({ source: 'stub', sessions: fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')) }),
+  });
+  const { options, runsDir, workRoot } = keepingTrial('solve', stub);
+  const { record } = await runTrial(options);
+  const dest = path.join(runsDir, `${STEM}.transcripts`);
+
+  assert.equal(stub.calls.keep.length, 1);
+  const [{ agentWrote, destThere, ...context }] = stub.calls.keep;
+  assert.deepEqual(Object.keys(context).sort(), ['dest', 'home', 'prepared', 'workspace']);
+  assert.deepEqual([context.dest, context.prepared, path.dirname(context.home)], [dest, { port: 1 }, workRoot]);
+  assert.equal(agentWrote, true, 'the agent had run, and its home was still there');
+  assert.equal(destThere, false);
+  assert.deepEqual(stub.calls.summarize.map(({ dir, usage }) => [dir, usage.inputTokens, usage.modelUsage['fake-model'].outputTokens]), [[dest, 60, 5]], 'the summary gets the kept copy and the usage of the reading');
+
+  assert.deepEqual(record.transcripts, { files: 3, errors: [] });
+  assert.deepEqual(record.listCost, { source: 'stub', sessions: ['d2ddbeb2-f715-40b3-93d0-fd9218c7f2ce.jsonl'] });
+  assert.deepEqual(Object.keys(record).slice(-3), ['startedAt', 'transcripts', 'listCost'], 'after the fields every record has, in their order');
+  assert.equal(record.score, 1);
+  assert.deepEqual(entriesOf(runsDir).sort(), [`${STEM}.stderr.log`, `${STEM}.stdout.log`, `${STEM}.transcripts`], 'beside the raw output, under the same stem');
+  assert.ok(fs.existsSync(path.join(dest, 'd2ddbeb2-f715-40b3-93d0-fd9218c7f2ce', 'subagents', 'agent-ab860aba0e9ba7266.meta.json')));
+  assert.deepEqual(entriesOf(workRoot), [], 'the home and the workspace are removed all the same');
+});
+
+test('a config that does not ask keeps nothing, whatever its agent left in its home', async () => {
+  const { options, runsDir } = trialEnv('solve', { configExtra: { prepare: () => ({}), envFor: leavesTranscripts } });
+  const { record } = await runTrial(options);
+  assert.ok(!('transcripts' in record) && !('listCost' in record));
+  assert.deepEqual(entriesOf(runsDir).sort(), [`${STEM}.stderr.log`, `${STEM}.stdout.log`]);
+});
+
+test('transcripts that cannot be kept are logged and recorded, and never fail or lose the trial', async () => {
+  const cases = [
+    [() => { throw Object.assign(new Error('EBUSY: resource busy or locked, scandir \'C:\\somewhere\''), { code: 'EBUSY' }); }, ['EBUSY'], /could not keep the transcripts of sample, fake, medium, repeat 1: EBUSY: resource busy/],
+    [() => { throw new Error('no such home'); }, ['no such home'], /could not keep the transcripts .*no such home/],
+    // What the keeper itself could not copy: recorded as it says, and logged too.
+    [() => ({ files: 2, errors: ['a/b.jsonl: EPERM'] }), ['a/b.jsonl: EPERM'], /transcripts of sample, fake, medium, repeat 1: a\/b\.jsonl: EPERM/],
+    [() => undefined, ['its keep returned no { files, errors }'], /returned no \{ files, errors \}/],
+  ];
+  for (const [keep, errors, logged] of cases) {
+    const logs = [];
+    const stub = stubTranscripts({ keep });
+    const { options, workRoot } = keepingTrial('solve', stub, { log: (message) => logs.push(message) });
+    const outcome = await runTrial(options);
+    assert.equal(outcome.status, 'recorded');
+    assert.equal(outcome.record.score, 1, 'the trial is graded and recorded as ever');
+    assert.deepEqual(outcome.record.transcripts.errors, errors);
+    assert.equal(outcome.record.transcripts.files, errors[0] === 'a/b.jsonl: EPERM' ? 2 : 0);
+    assert.ok(logs.some((message) => logged.test(message)), logs.join('\n'));
+    assert.equal(stub.calls.summarize.length, 1, 'what was kept, even nothing, is still summarized');
+    assert.deepEqual(outcome.record.listCost, { source: 'stub' });
+    assert.deepEqual(entriesOf(workRoot), []);
+  }
+});
+
+test('a summary that throws is logged and recorded, and leaves the list cost unknown, not the trial', async () => {
+  const logs = [];
+  const stub = stubTranscripts({ summarize: () => { throw new TypeError('cannot read a transcript'); } });
+  const { options } = keepingTrial('noop', stub, { log: (message) => logs.push(message) });
+  const { record } = await runTrial(options);
+  assert.equal(record.score, 2 / 3);
+  assert.equal(record.listCost, null);
+  assert.deepEqual(record.transcripts, { files: 1, errors: ['summary: cannot read a transcript'] });
+  assert.ok(logs.some((message) => /could not summarize the transcripts of sample, fake, medium, repeat 1: cannot read a transcript/.test(message)), logs.join('\n'));
+});
+
+test('what an earlier attempt at the same trial kept is removed first, so a repeated trial never holds two sessions', async () => {
+  const stub = stubTranscripts({ keep: () => ({ files: 0, errors: [] }) });
+  const { options, runsDir } = keepingTrial('noop', stub);
+  const stale = path.join(runsDir, `${STEM}.transcripts`, 'an-earlier-session.jsonl');
+  fs.mkdirSync(path.dirname(stale), { recursive: true });
+  fs.writeFileSync(stale, '{}\n');
+  const { record } = await runTrial(options);
+  assert.equal(stub.calls.keep[0].destThere, false, 'gone before anything is kept');
+  assert.equal(fs.existsSync(stale), false, 'and gone for good when this attempt kept nothing');
+  assert.deepEqual(record.transcripts, { files: 0, errors: [] });
+});
+
+test('a trial that stops, or whose reading is refused, keeps its transcripts with the raw output and summarizes nothing', async () => {
+  const capped = stubTranscripts();
+  const stopped = await runTrial(keepingTrial('cap', capped).options);
+  assert.equal(stopped.status, 'stopped');
+  assert.deepEqual([capped.calls.keep.length, capped.calls.summarize.length], [1, 0]);
+
+  const refused = stubTranscripts();
+  await assert.rejects(runTrial(keepingTrial('noop', refused, { configExtra: { reader: () => ({ stop: null }) } }).options), /reading of the wrong shape/);
+  assert.deepEqual([refused.calls.keep.length, refused.calls.summarize.length], [1, 0], 'kept before the reading, like the raw output');
+});
+
+test('keep and summarize may be asynchronous: both are waited for', async () => {
+  const later = (value) => new Promise((resolve) => { setTimeout(() => resolve(value), 20); });
+  const stub = stubTranscripts({ keep: () => later({ files: 4, errors: [] }), summarize: () => later({ source: 'later' }) });
+  const { record } = await runTrial(keepingTrial('noop', stub).options);
+  assert.deepEqual([record.transcripts, record.listCost], [{ files: 4, errors: [] }, { source: 'later' }]);
+});
+
+test('a config whose transcripts is not a keep and a summarize is refused before anything is made or run', async () => {
+  for (const transcripts of [true, 'claude', {}, { keep: () => ({ files: 0, errors: [] }) }, { keep: 'copy', summarize: () => null }]) {
+    const { options, workRoot, countFile } = trialEnv('noop', { configExtra: { transcripts } });
+    await assert.rejects(runTrial(options), /config fake: "transcripts" must be an object with a keep and a summarize function/, JSON.stringify(transcripts));
+    assert.deepEqual(entriesOf(workRoot), []);
+    assert.equal(fs.existsSync(countFile), false, 'no agent ran');
+  }
 });
 
 // ---- a Codex-shaped agent, end to end ----------------------------------------------------------------
@@ -2199,7 +2355,7 @@ test('a Claude Code result with subagents and per-model usage is a reading the r
   const reading = assertReading(readClaudeOutput({ stdout, stderr: '', exitCode: 0, timedOut: false }), 'claude');
   assert.deepEqual(reading, {
     stop: null, parsed: true, failed: false,
-    usage: { inputTokens: 60, outputTokens: 5, turns: 7, usage, costUsd: 0.75, modelUsage, subagents: 2 },
+    usage: { inputTokens: 60, outputTokens: 5, turns: 7, usage, costUsd: 0.75, modelUsage, subagents: 2, subagentStats: { spawned: 2 } },
   });
   // The same session as an array of messages, which newer CLIs print: the result is its last `result` element.
   const listed = JSON.stringify([{ type: 'system', subtype: 'init' }, JSON.parse(stdout)]);
