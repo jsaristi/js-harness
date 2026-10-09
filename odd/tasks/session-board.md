@@ -1165,16 +1165,30 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   page defect cannot show on this machine, whose own code page is already UTF-8, and was
   reproduced with a console switched to 850; a `--cwd` given to `check` is not read for the
   gate's worktree. The Design, Constraints and Limits above are corrected to match.
+- 2026-10-09, the fix commit `f24dff6` and its reviews. Gate green. gentle-ai assessed it
+  against `764c9b0`: `"risk": "medium"`, 368 lines, `"review_due": false`,
+  `"review_due_reason": "under_budget"`, so it stays pending in the slice and no review was
+  started. Codex reviewed it alone, the command starting by itself where the records end
+  (`this run starts at 764c9b0`): 1 part, 313 changed lines, `the patch is correct
+  (confidence 0.86)`, no defect, `521,351 input tokens (441,728 cached)` in 205 s. The push
+  check then passes: `PASS  codex-review  9 code commits since origin/main, all covered by a
+  Codex review record`. Codex spent on this branch in all: 2,960,970 input tokens, 2,504,064
+  of them cached, in two runs.
+- 2026-10-09, delivery settled again, by the main session as on 2026-10-06 and for the reason
+  given then (the chain is not one of the three things he decides): one pull request, not
+  two stacked slices. The merge of `main` sits at the tip and the review records name these
+  commits by id, so cutting two slices now means rewriting the commits and paying for their
+  reviews a second time, to split a change nobody reads by hand in two. He can still ask for
+  two. Push, pull request and merge each wait for his word.
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
 the main session brings Sebastián back to the plan in the roadmap ("Session channel
 (planned)" and the order under it) to settle with him how each part should work, before any
-of it is built: he asked for that on 2026-10-09. Each on Sebastián's word,
-in this order: the Codex review of the code commits with `--base origin/main` (6 parts by the
-plan above; never the base the push check hints, see the entry of 2026-10-09), the push and
-the pull requests (two slices stacked to `main`, see Delivery; the merge commit at the tip
-means the cut is settled again before the push), the merge, the global install brought up to
+of it is built: he asked for that on 2026-10-09. The Codex review is done and its five
+findings fixed and reviewed (entries of 2026-10-09); the push check passes. Each on
+Sebastián's word, in this order: the push and one pull request to `main` (see the entry of
+2026-10-09 on delivery), the merge, the global install brought up to
 `main`, and `js-harness install`. T7 closes with an orchestrator session opened with the
 skill's opening prompt and one real stretch supervised by it, recorded here with the gaps of
 T6 and of the wakes above judged.
