@@ -452,7 +452,8 @@ function readerOf(config) {
  *                                               for each it could not.
  *   summarize({ dir, usage })                   what the record holds of the kept copy in `dir`, as its `listCost`:
  *                                               raw logs are not committed, so a report reads the record alone.
- *                                               `usage` is the reading's.
+ *                                               `usage` is the reading's. `dir` is `null` when no directory holds
+ *                                               this trial's own copy (`keepTranscripts`): there is nothing to read.
  *
  * Both may be asynchronous. The runner knows neither where a CLI keeps its transcripts nor what they mean: that is
  * the config's, as the reading of the output is its reader's. A `transcripts` of another shape throws, before
@@ -465,13 +466,19 @@ function transcriptsOf(config) {
   return keeper;
 }
 
-/** Has `keeper` copy the trial's transcripts into `context.dest` and returns `{ files, errors }` for the record. It
- * never throws: whatever went wrong is logged and is a line of `errors`, because a trial that was paid for is worth
- * more than its transcripts. A failure of the file system is recorded by its code alone (the message holds a path of
- * this machine, and the record is committed); the log has it whole.
+/** Has `keeper` copy the trial's transcripts into `context.dest` and returns `{ kept, dir }`: `kept`, the
+ * `{ files, errors }` of the record, and `dir`, the directory a summary may read as this trial's, `context.dest` or
+ * `null`. It never throws: whatever went wrong is logged and is a line of `errors`, because a trial that was paid for
+ * is worth more than its transcripts. A failure of the file system is recorded by its code alone (the message holds a
+ * path of this machine, and the record is committed); the log has it whole.
  *
  * What an earlier attempt at the same trial kept is removed first, as its raw output is overwritten: a trial that
- * stopped and is run again is another session, and two sessions in one directory would be summed as one. */
+ * stopped and is run again is another session, and two sessions in one directory would be summed as one. When it
+ * cannot be removed (Windows answers EBUSY or EPERM while something holds a file there, and the removal is retried
+ * for a second or so first) the directory is still the earlier session's, whole or in part. So nothing is copied
+ * into it and `dir` is `null`: the summary then has no transcript to read and says what it can without one, where
+ * reading that directory would record another session's cost as this trial's. The transcripts of this attempt are
+ * lost with its home, which is the price of never recording a cost that is not the trial's own. */
 async function keepTranscripts(keeper, context, { trial, log }) {
   const kept = { files: 0, errors: [] };
   const failed = (detail, recorded = detail) => {
@@ -479,7 +486,12 @@ async function keepTranscripts(keeper, context, { trial, log }) {
     kept.errors.push(recorded);
   };
   try {
-    fs.rmSync(context.dest, { recursive: true, force: true });
+    fs.rmSync(context.dest, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch (err) {
+    failed(`what an earlier attempt kept could not be removed (${err.message})`, `earlier attempt not removed: ${err.code ?? err.message}`);
+    return { kept, dir: null };
+  }
+  try {
     const result = await keeper.keep(context);
     if (!isObject(result) || !Number.isInteger(result.files) || !Array.isArray(result.errors)) throw new Error('its keep returned no { files, errors }');
     kept.files = result.files;
@@ -487,7 +499,7 @@ async function keepTranscripts(keeper, context, { trial, log }) {
   } catch (err) {
     failed(err.message, err.code ?? err.message);
   }
-  return kept;
+  return { kept, dir: context.dest };
 }
 
 /** The counts every reading's `usage` carries (`agent-output.mjs`), and whether each is a number: the other two
@@ -682,8 +694,9 @@ export async function runTrial({
     if (run.spawnError) return { status: 'stopped', reason: 'spawn', message: run.spawnError.message };
     // Before the reading, like the raw output above: whatever becomes of the trial, the home is gone when it returns.
     const trial = `${task.id}, ${config.name}, ${effort}, repeat ${repeat}`;
-    const transcriptsDir = path.join(runsDir, `${stem}.transcripts`);
-    const kept = keeper ? await keepTranscripts(keeper, { home, workspace, prepared, dest: transcriptsDir }, { trial, log }) : null;
+    const { kept, dir: transcriptsDir } = keeper
+      ? await keepTranscripts(keeper, { home, workspace, prepared, dest: path.join(runsDir, `${stem}.transcripts`) }, { trial, log })
+      : { kept: null, dir: null };
     // Checked before it is used, and after the raw output was written: a reading of the wrong shape rejects the
     // trial, and what the agent printed is still there to be read again once the reader is fixed.
     const reading = assertReading(read(run), config.name);

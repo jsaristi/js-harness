@@ -12,6 +12,7 @@ import {
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
 import { parseCodexOutput, readClaudeOutput, readCodexOutput } from './agent-output.mjs';
+import { trialListCost } from './transcript-usage.mjs';
 import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -2163,6 +2164,36 @@ test('what an earlier attempt at the same trial kept is removed first, so a repe
   assert.equal(stub.calls.keep[0].destThere, false, 'gone before anything is kept');
   assert.equal(fs.existsSync(stale), false, 'and gone for good when this attempt kept nothing');
   assert.deepEqual(record.transcripts, { files: 0, errors: [] });
+});
+
+test('an earlier attempt\'s transcripts that cannot be removed are never summarized as this trial\'s: nothing is kept, the record says why and the cost is an estimate', async () => {
+  const logs = [];
+  // The real summary, so the record holds what a subagent config would record (`configs.mjs`, `SUBAGENT_TRANSCRIPTS`).
+  const stub = stubTranscripts({ summarize: ({ dir, usage }) => trialListCost({ dir, modelUsage: usage.modelUsage }) });
+  const { options, runsDir } = keepingTrial('noop', stub, { log: (message) => logs.push(message) });
+  const dest = path.join(runsDir, `${STEM}.transcripts`);
+  // What the earlier attempt kept: a real session, with requests and a cost of its own.
+  fs.cpSync(PROBE_TRANSCRIPTS, dest, { recursive: true });
+  const realRm = fs.rmSync;
+  // What Windows answers while something still holds the directory. Only that removal fails: the trial's own
+  // directories are removed as ever.
+  fs.rmSync = (target, ...rest) => {
+    if (path.resolve(String(target)) === dest) throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${dest}'`), { code: 'EBUSY' });
+    return realRm(target, ...rest);
+  };
+  let record;
+  try {
+    ({ record } = await runTrial(options));
+  } finally {
+    fs.rmSync = realRm;
+  }
+  assert.equal(record.listCost.source, 'modelUsage', 'an estimate from what this trial printed, never the earlier session\'s cost');
+  assert.deepEqual(stub.calls.summarize.map(({ dir }) => dir), [null], 'the summary is given no directory, so it cannot read the earlier session');
+  assert.equal(stub.calls.keep.length, 0, 'nothing is copied in beside another session');
+  assert.deepEqual(record.transcripts, { files: 0, errors: ['earlier attempt not removed: EBUSY'] }, 'by its code alone: the message holds a path of this machine');
+  assert.equal(record.score, 2 / 3, 'the trial is graded and recorded as ever');
+  assert.ok(logs.some((message) => /could not keep the transcripts of sample, fake, medium, repeat 1: what an earlier attempt kept could not be removed \(EBUSY: resource busy/.test(message)), logs.join('\n'));
+  assert.ok(fs.existsSync(path.join(dest, 'd2ddbeb2-f715-40b3-93d0-fd9218c7f2ce.jsonl')), 'what could not be removed is left as it was');
 });
 
 test('a trial that stops, or whose reading is refused, keeps its transcripts with the raw output and summarizes nothing', async () => {
