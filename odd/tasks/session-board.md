@@ -1030,6 +1030,52 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   one for gates. Seen at the same time: with two sessions waiting for him at once, the watch
   announced each as it stopped, and it was the parent's reading of both tails that said which
   to answer first.
+- 2026-10-09: two gates at once on 2026-10-08, both red, and what the watch did about it. The
+  session of "Subagent model routing evaluation" committed a roadmap plan from a second
+  worktree of its own (`rule-hierarchy-plan`) while "Codex review lean integration" committed
+  in `codex-review-lean`. The watch said it in so many words: `gate started in
+  D:/js-harness-worktrees/codex-review-lean (pid 42956) while another runs in
+  D:/js-harness-worktrees/rule-hierarchy-plan (pid 59944)`, then `gate ended` for each. Both
+  ended red past the gate's time bound and neither commit was made; each session retried by
+  itself and the retries ran in turn. Since then both carry a step of their own that waits
+  for a free machine (on the board: `"Wait for a free machine, then commit T2, which runs the
+  pre-commit gate alone"`), as this session does with a script kept outside the repository.
+  Judged for T7: the wake was true, early and worded right, and it changed nothing, because
+  the parent may not write to another session and Sebastián was away. The cost was two gates
+  of about twenty minutes and two commits not made. Three sessions now hold three private
+  copies of the same wait, and each is a look followed by a start, so two can still pass it
+  in the same moment. A candidate for the harness and not for the board: the gate itself
+  waits for, or refuses beside, another gate on the machine. Where it ships is his choice.
+- 2026-10-09, gates in no worktree, seen the same day: `gate started in an unknown worktree
+  (pid 55936)` and, again, `gate ended in an unknown worktree (pid 28632)`. Read at the time
+  as a test of the other session running `bin/check.mjs` in a temporary repository, besides
+  the `check --push` noted above; neither reading was established beyond the timing. Each
+  returned the watch for a run of seconds. For T7: whether a gate outside every worktree of
+  the repository should wake the parent at all, or only count as a gate running.
+- 2026-10-09, the board after a night without the watch. On `main` (`ee74d18`, pull request
+  #41) the roadmap now plans a rule hierarchy, and that plan names `skillContent` in
+  `bin/lib/manifest.mjs` as where a protocol loaded on demand is written: the file where this
+  branch adds 80 lines for the orchestrator skill. The two features meet there, and the one
+  that merges second rebases. `codex-review-cost` stands at 5 of 6 with its measurement (T5)
+  running on his word; neither stacked branch is pushed. Lines of the board that asked
+  nothing, for the judgement of T7:
+  - `c80fe895  unknown (the transcript holds no prompt, reply or tool entry)  (no title)`: a
+    session line for a transcript with nothing in it.
+  - two worktrees under `C:/Users/Oficina/orca/workspaces/js-harness`, made by another tool on
+    2026-09-27 at `1d8b048`, with `0 not on origin/main`: listed like the rest.
+  - `D:/js-harness-worktrees/t5-ed1fd0e  (detached)`, the other session's checkout of an old
+    commit for its measurement, shown with the plans as that commit has them
+    (`codex-review-cost.md ... 2/6  pending T2, T4, T5, T6`) under the live worktree's 5 of 6.
+    Read alone it is open work that does not exist.
+  - `context 523k tokens (109%)` for a session just before its compaction, above the 500,000
+    the app reports as the real window. Not explained.
+- 2026-10-09, two rules for the orchestrator that came from Sebastián getting lost. A closing
+  state that still stands is said in one line: the parent repeated the two blocks of a cut on
+  every wake, and he read two compactions asked of him ("como voy a hacer dos compact
+  seguidos no entendi"). And a parent near its own context limit stops relaunching the watch
+  and says so, since every wake is paid in context: at about 88% of the window it did, and
+  saw nothing of the other sessions until it was compacted. The watch has no quieter mode
+  for that case.
 
 ## Next step
 Waiting, by Sebastián's decision of 2026-10-07, for `codex-review-lean` to be merged; see the
