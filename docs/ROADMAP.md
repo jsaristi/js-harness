@@ -362,6 +362,97 @@ As a sentence alone it changes little: on that day a rule was stored in memory a
 stopped it. What gives it force is a concrete meaning of done: a rule is not recorded until it
 has its place in one of the three levels.
 
+A principle he added on 2026-10-09, and how it is read. His words: never fall into bias,
+assumption or belief; always verify information; always work with quality and judgment,
+researching well; never take a shortcut, cheat, or pull out or invent information. He asked
+how to do it better than writing it down, so this is the recommendation. He accepted it the
+same day, with what follows it below ("acepto todo como lo hemos estado hablando"): the
+content and the direction; the wording of each line and each thing built still pass by him
+in this feature. Quality and no shortcut are his first two principles again. What is new is
+one thing: nothing is stated that was not checked. As a prohibition it does little, for two
+reasons seen that same day. A bias cannot be seen by the one who has it, so "never be
+biased" forbids something invisible; and the rule "verify before stating" was already
+loaded in every session when the main session assumed `install` had a `--help` and
+installed on his machine, and when another session told him its check "runs on GitHub",
+where no workflow exists. So each part becomes something that leaves a trace:
+
+- Verify. A report says of each claim which of three it is: checked (with the command and
+  its output, or `path:line`), assumed (said as an assumption), or not known. An assumption
+  is allowed; an unnamed one is the defect. `AGENTS.md` already asks for the evidence; what
+  it lacks is the other two words.
+- Invent nothing. A number, a path, a quotation or an output in a report comes from
+  something run or read in that session. Part of it can be a sensor: `check` can refuse a
+  feature document that cites a path or a commit that does not exist.
+- No shortcut, no cheating. The checks exist (the test written first, the contract's
+  commands, the hooks). What is added is what a reviewer is told to look for: a test
+  weakened so that it passes, a hook skipped, a failing check left out of the report.
+- Bias. The answer is not will but a second look that does not share it: the two reviews
+  that already run, a reviewer handed the code and not the conclusion, and before a
+  conclusion that costs, the question of what would show it wrong.
+- Research well. Before running a command one does not know, read its code; a writing
+  command refuses a flag it does not know, so that the mistake is not possible.
+
+Where it lives, judged twice. Here, `AGENTS.md` is at its budget, so the line enters with
+this feature's rework and another one leaves. In a project that only uses the harness, the
+line is in the `AGENTS.md` that `init` writes and the sensors come with `check`. What the
+stack already says is not repeated: on this machine the global `CLAUDE.md` holds "Verify
+technical claims before stating them" (checked); whether gentle-ai writes that line on
+every machine is not known and is looked up before the line is worded. And the line has to earn its tokens like any other piece (principle 2): an eval task
+whose honest answer is "this could not be verified", scored with and without the line. If
+the score does not move, the sensors stay and the sentence goes.
+
+Working as a team, asked and accepted the same day. His words: always pass clear information
+between sessions and agents, verified, without hiding what matters. The reading: a message
+between sessions is a claim, not a fact, and the truth is in the repository.
+
+- Every handoff has one shape, whether to him, to another session or to a sub-agent: what
+  was done, what was checked and how, what was not checked, what failed, what stays open.
+  "Not checked" and "failed" are always filled, with "nothing" when that is true, so that
+  leaving something out takes writing a falsehood rather than forgetting.
+- Whoever receives checks one thing before building on it. `AGENTS.md` already says so of a
+  step he reports doing outside the session; it extends to another session's message and to
+  a sub-agent's report.
+- Bad news goes first, and at once.
+- Each thing has one owner: a session writes its feature, one place writes the shared plan.
+- What looks wrong is said, with its evidence, before it is done.
+
+Three things he had not named, proposed and accepted with the rest:
+
+- Each mistake leaves a control. The `install --help` of that day does not end in an
+  apology but in a command that refuses a flag it does not know. A mistake made twice is a
+  defect of the harness, not of the agent.
+- An honesty audit: the reader of transcripts built for the session board could take a
+  session's final report and check what can be checked (the paths and commits exist, the
+  test count is the one that ran). That it can be built cheaply on that reader is an
+  assumption, to be confirmed by reading the code before it is promised.
+- Reversible by default: what cannot be undone asks first, the rest records how it is
+  undone. The harness already does this for what it installs.
+
+His addition, the same day: say so when a protocol is missing, without filling the harness
+with protocols for the sake of having them. It sharpens the rule above that another enters
+only when a problem repeats. An agent that finds no protocol for its situation does the
+work with judgment, says in its report that there was none and what it did, and proposes;
+it never creates one, that is his. A proposal passes five questions first. Did the problem
+happen, with its evidence, or could it only happen? Twice, or once at a cost or with
+something that could not be undone? Can a check do it, so that nothing is written? Does a
+protocol that exists cover part of it, so that one is amended? What does it cost, and what
+leaves in exchange? And a protocol expires: it records the problem it came for, and when
+that problem has not returned and nobody used it, it is withdrawn.
+
+The principles, then, are six, stated once: done properly, not to comply; no shortcut;
+under the agreed protocols; nothing stated that was not checked; what is passed on is
+complete and true, with what failed and what was not checked; each mistake leaves a
+control, of the smallest kind that does the job. Asked whether anything was missing, the
+answer he was given is no: a seventh enters through the five questions, with its incident.
+
+How far is far enough, his question. No point exists where a model never errs, and more
+text makes it worse (F5 result). The aim is three things: a mistake cannot do damage that
+cannot be undone, it is seen quickly, and it is not repeated. This feature is done when
+seven signals hold: six principles stated once; no principle without at least one control
+behind it; no rule living only in an agent's memory; `AGENTS.md` within its budget; the
+honesty eval passing, with the line moving the score; no repeated mistake; no protocol
+without the incident that justifies it. From there a rule enters only by replacing another.
+
 Protocols start with the four that have already cost something, and another enters only when a
 problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
 is; how something that costs is run (gates, eval batches, reviews), with its count said first;
@@ -374,6 +465,33 @@ numbers, rules that live only in a memory (zero) and `AGENTS.md` within its budg
 in the session signals asked on 2026-10-07 and pending on `feat/codex-review-cost` (whose turn
 it is in every reply, a notice when a session finishes, the context window watched), together
 with that branch's rewording of "Working with Sebastián", which already fills the budget.
+
+A first pass of that list, made on 2026-10-09 at his request ("qué cosas importantes
+quedaron en memoria que deberían haber quedado en la doctrina"), by reading the twelve notes
+of the project's shared memory against `AGENTS.md`, the template `init` writes
+(`agentsTemplate`, four headings and two sentences) and the two installed skills. Not read:
+whatever the other open sessions hold only in their conversations. Missing from what acts:
+
+- His wording is the need, not the specification (name the problem behind it, recommend the
+  best design): memory only. For `AGENTS.md` here and for the template; it holds in any
+  project.
+- How a reply closes (the four states): in `AGENTS.md` here, not installed. For the
+  template, with the check item 6 of Next already asks for.
+- How he is reported to (what needs him, what runs alone, what was done, everyday words):
+  this file and memory. For the orchestrator skill, with the session channel.
+- The direct channel between sessions: this file and memory. Same place.
+- High effort on every sub-agent: memory and feature documents. Waits on the result of the
+  sub-agent models comparison.
+- The context percentage reported and the cut proposed: half in `AGENTS.md` here. For a
+  check or the status line, not prose.
+- Every proposal judged twice: this file and memory. For `AGENTS.md` of this repository
+  only, since it is a rule for building the harness and is not installed.
+- Not a rule but a tool: the script that waits for no gate before a commit lives outside
+  the repository, on his machine alone. The lock in `check` replaces it.
+
+In their place already: the review consent, the recap before a prompt, the main session as
+orchestrator. Facts of his machine and not doctrine, so memory is their place: merging from
+the chat, opening a session from the phone, the list of models.
 
 The specification of the harness, asked the same day and part of this feature. He asked for one
 complete document that says everything the harness does, how it is designed and the reason for
@@ -536,11 +654,139 @@ podamos implementar todo"), each a feature of its own with its own document and 
    request. In a project that uses the harness the lock comes with `check`; whether `init`
    also writes the GitHub workflow is a product choice, his.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
-4. The rule hierarchy above, with his three principles stated once at its top.
+4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
+   at its top.
+   Each of the four is proven before it reaches a project of his, as he asked the same day
+   ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
+   by its tests, then by use on this repository, then in a practice project made for the
+   purpose, where the harness is only installed and never edited. That third step does not
+   exist yet and is the first thing to build for it.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
    meeting point is the repository. He takes it up again after the four above.
+
+How the list is worked, proposed to him on 2026-10-09 when he said that so many ideas added
+on top of work in hand had left him in disorder, and not yet answered: one feature on the
+table at a time, and none of 2 to 5 starts before 1 closes; a new idea is written here, in
+its place, and does not change the work in hand; and sessions work in parallel only once
+the gate has its lock, since two gates at once make both fail.
+
+The orchestrator as a lead, asked by him on 2026-10-09 and put to him as a proposal, not yet
+answered. His words, in short: with one session working he does not know which one to open
+next; the orchestrator, who knows the whole project, should say what else can be done at
+the same time, without one feature colliding with another and without work that has to be
+redone because it could have been seen that another way, or doing it together with another
+feature, was better; like a lead developer with several programmers; it should know the
+project in detail, ask what it doubts, be curious; and it should not take his words
+literally but order the ideas and propose the better way. Quality comes before speed, and
+speed still matters. What stands today is the opposite on purpose: the installed skill
+makes the orchestrator a watchman ("You read", "Otherwise stay silent"), because reading
+code and discussing a design fill a context that has to last. So the role changes, and the
+knowledge goes to files instead of to the orchestrator's conversation:
+
+- A work plan beside the roadmap's order: for each feature not started, what it touches
+  (files and areas), what it needs finished first, what it blocks, and what it would be
+  better built together with. From it the orchestrator says what can start now.
+- A sensor for collisions rather than a judgment: the board already lists every worktree,
+  so it can print the files two branches both changed.
+- An entry gate for a feature: before it gives an opening prompt the orchestrator answers
+  four things in writing. Does it touch what another one touches? Does it need something
+  unfinished? Is it better joined with another? Is there room (the gate, the plan's
+  limit, his attention)? A work session that wants to widen its scope asks it first.
+- The next one proposed, not waited for: when a session closes or starts waiting, the
+  orchestrator says whether there is room for another, which, and why it collides with
+  nothing. He still decides the start, since a session spends his plan.
+- Questions kept and asked: its doubts about the project go in the relief file and reach
+  him one at a time, in a quiet moment, the one that unblocks most first.
+- His wording is the need, not the specification: for every request, the need behind it,
+  where it falls in the map, the proposal, then the record.
+- Detail without filling its context: the specification planned in the rule hierarchy, the
+  code graph, and a sub-agent sent to read when depth is needed; it keeps the conclusion.
+- It still does not implement and never answers for him.
+
+He then asked whether the lead should be a session of its own, passing what it decides to
+an orchestrator that only controls the sessions, and saw the cost himself: that
+orchestrator would be blind. The recommendation given, his to settle when this feature is
+planned: one session, the orchestrator is the lead. What can start and what collides is
+decided from the board's facts, so the one who decides the order has to be the one who
+sees the state; two sessions add a hop to every notice and one more place that asks for
+his attention, which is the real limit. The watching is the part that needs no judgment,
+and it is already a program (`sessions --watch`, with the gate lock to come), so the split
+that holds is program and session, not two sessions. What is right in his idea is kept: a
+long design conversation is a work session of its own that delivers a document, as the
+skill already says, and the lead reads its conclusion. The measure that would reopen this:
+an orchestrator relieved more than once in a working day because its context filled.
+
+More autonomy, asked the same day, with his yes to the push of this branch (pull request
+#47). His words, in short: knowing the whole picture, say how many more sessions can work
+now, alone or in pairs; he is the limit, so the orchestrator gets permission to handle
+several sessions and go on from the agreed route, interrupting him only for decisions that
+really matter, even compacting by itself and sending the next prompt, without leaving the
+plan. What the tools allow, checked that day in the desktop app: a session can send another
+a message (`SendMessage`), rename it, and read its state; it cannot open a new session
+(`start_session` is named by other tools' descriptions and is not among this session's
+tools, and whether it can be turned on is not known), and nothing compacts another session.
+A session compacts by itself at 93% of its window, and a `SessionStart` hook with the
+matcher `compact` runs right after (engram's did, in this session), so the resume prompt he
+pastes today can be a hook the harness installs: read the feature document's next step and
+go on. The proposal put to him, as a charter with two lists, which he approved as written
+the same day ("te apruebo todo"):
+
+- Alone, told afterwards: which feature starts next within the order and up to three work
+  sessions; plan steps and notices sent to work sessions, and the turn for the gate;
+  pushes and pull requests once the gate and both reviews are green; the merge of a pull
+  request that changes only documents; a Codex review within the cost its plan prints, up
+  to 3 million input tokens for a feature (the session board took 2.96); compaction left to
+  the host, with the feature document as the record.
+- His, asked one at a time: spend outside the plan; anything installed or changed on a
+  machine; a product choice; what cannot be undone; a change of the plan or of its order;
+  a new protocol; and, for now, the merge of code. That last one is measured: when ten
+  merges in a row are ones he would not have stopped, it moves to the first list.
+
+Opening a session stays one paste of his, a short prompt the orchestrator writes, until a
+way to open one from a session is found.
+
+What can run now, from the plans and not from a comparison of branches. Three work sessions
+with the orchestrator: the gate (`bin/check.mjs`; first, because its lock is what makes the
+rest safe), the practice project (a folder outside this repository), and sub-agent models,
+which is open and waiting for him; its trials cannot run while a gate or a test runs, so
+the orchestrator gives them their window. The pair to design together is the session
+channel with the rule hierarchy: both rewrite "Working with Sebastián" and the
+orchestrator skill, so one design session writes both feature documents and they are built
+apart; it starts when one of the three frees a place. F6 needs only his choice.
+
+Context, his condition on that approval. Every session knows how full its window is, so
+that it is never cut in the middle of a piece of work, leaving it short or wrong and costing
+more to repair than it would have cost to do once. It does not stop for the sake of
+stopping either: it measures, and it cuts where nothing is lost. The reading, to be built
+with the session channel and tried first by hand:
+
+- A cut happens at the end of a task, never inside one. A task ends with its commit and
+  with the feature document saying what is next, so at that point the files hold
+  everything and the conversation can go.
+- Before a task starts, the session reads its own percentage and judges whether the task
+  fits. Past the board's limit (73% of the window it measures) it does not start one: it
+  cuts first.
+- The orchestrator sees every session's percentage on the board and tells a session that
+  nears the limit to finish its task and cut there, before the host does it at 93% wherever
+  the session happens to be.
+- Two ways to cut, to be compared: the host's compaction with a `SessionStart` hook that
+  sends the session back to its feature document, and a clean start (the app can clear a
+  session's conversation) followed by the orchestrator's message to resume from the
+  document. The second loses nothing to a summary, since nothing is carried in one, and is
+  not tried yet: whether a session may clear itself while he has it open is not known.
+- The measure: no task reopened because a cut lost what it needed.
+
+For the gate on GitHub, a fact found the same day: the repository is private
+(`gh repo view --json visibility`), so its runs count against the account's minutes.
+
+What it would say today, as an example of the role: of the features in the order above,
+the practice project is a folder outside this repository and the gate lives in
+`bin/check.mjs`, while the two paused pieces of work (F6, sub-agent models) change `evals/`;
+none of the four shares a file with another, so the first two could run side by side, in
+`JH 1` and `JH 2`, once the orchestrator session is open. That reading is from the plans,
+not from a comparison of the branches, which is what the sensor above would give.
 
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The

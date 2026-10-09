@@ -1180,6 +1180,52 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   commits by id, so cutting two slices now means rewriting the commits and paying for their
   reviews a second time, to split a change nobody reads by hand in two. He can still ask for
   two. Push, pull request and merge each wait for his word.
+- 2026-10-09, after the merge (pull request #46, `main` at `2e50bbc`): an install nobody
+  asked for, by the main session's mistake. Meaning to read the options of `install`, it ran
+  `node bin/js-harness.mjs install --help` from this worktree. The command has no help of its
+  own and takes no notice of the flag: it installed. Output: `installed js-harness 0.1.0 (4
+  files) into C:\Users\Oficina`, `registered hook entry in C:\Users\Oficina\.claude\
+  settings.json`, `registered hook entry in C:\Users\Oficina\.codex\hooks.json`. Written at
+  15:09: the two skills (`js-harness`, `js-harness-orchestrator`) under `~/.claude/skills`
+  and `~/.codex/skills`, and one `SessionStart` entry in each host that runs `js-harness
+  doctor --hook`; all of it is in `~/.js-harness/manifest.json`, so `js-harness uninstall`
+  removes exactly that. This was the step of T7 he had asked to be told of first; he was
+  told right after instead, with the choice to keep it or undo it. Two findings for the
+  product: a command that writes outside the repository must not act on `--help` or on a
+  flag it does not know, and the command on this machine's PATH is an older copy (a pnpm
+  global package with no `sessions`, `contract`, `init`, `remote` or `codex-review`), so the
+  orchestrator skill now installed names a command that copy does not have until the global
+  install is brought up to `main`.
+- 2026-10-09: he chose to keep the install ("Sí, dejala"). So of T7 the install is done, by
+  that road; what is left is the global command brought up to `main` (his word), the
+  orchestrator session opened with the skill under the title `JH ORQ · js-harness`, and the
+  stretch it supervises. He also asked that everything be proven before it reaches a project
+  of his; the order is in the roadmap, under "Session channel (planned)".
+- 2026-10-09: how the command on PATH is brought up to `main`, found by reading and with
+  nothing written. `pnpm ls -g --depth 0` lists `js-harness@0.1.0`, and its folder under
+  `%LOCALAPPDATA%\pnpm\global\v11` (dated 28 Sep) declares `"js-harness":
+  "github:jsaristi/js-harness"`: it was installed from GitHub and is `main` of that day.
+  `js-harness upgrade` cannot do it: `upgradeMain` (`bin/update.mjs`) asks the registry
+  first, `npm view js-harness version` answers `404 Not Found` because the package is not
+  published, and it stops with `could not determine the latest version to upgrade to`; its
+  `--source` wants a folder of tarballs. So the road is the one that installed it, `pnpm add
+  -g github:jsaristi/js-harness`, then `js-harness sync --global`; not run, it waits for his
+  word. Two findings for the product, true as well in a project that only uses the harness:
+  `upgrade` works only from a registry the package is not on, and the version reads `0.1.0`
+  before and after, so `status` cannot tell an old copy from a current one.
+- 2026-10-09, on his word ("Si, autorizo todo"): the command on PATH brought up to `main`.
+  `pnpm add -g github:jsaristi/js-harness` installed commit `2e50bbc` (the new folder's
+  `pnpm-lock.yaml`: `resolution: {commit: 2e50bbcb…}`) and the shim on PATH points at it,
+  but pnpm ended with an error after doing so: `remove replaced global install directory …
+  4b68-18d96946940745c8-0: El proceso no tiene acceso al archivo porque está siendo
+  utilizado por otro proceso (os error 32)`. So the folder of the old copy (commit
+  `36f2cee`) was left on disk, unused, with one `.pnpm-bin-backup-*` folder beside the
+  shim; which process held it was not found. `js-harness sync --global` then printed
+  `synced js-harness 0.1.0 (4 files) into C:\Users\Oficina` and the two `registered hook
+  entry` lines; each host's file holds one `doctor --hook` entry, not two (`rg -c`). Proof
+  that the new copy runs: `js-harness sessions` from `D:\js-harness` prints the board,
+  where the old copy had no such command. To go back: `pnpm add -g
+  github:jsaristi/js-harness#36f2cee`.
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
