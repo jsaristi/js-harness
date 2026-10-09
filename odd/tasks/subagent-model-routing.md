@@ -304,3 +304,25 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   three task ids are a constant in the report; `table` and the text helpers of
   `evals/report.mjs` are private and copied; the comment on the transcripts hook in
   `evals/configs.mjs` does not say its directory may be `null`.
+- 2026-10-09 — T3 committed as `779bb4a` (gate 6 passed alone). Reviews of `c96eda7..779bb4a`.
+  gentle-ai: medium risk, review due (`slice_budget_reached`), approved and acknowledged (lineage
+  `review-e43f994da38f38b7`, authority burned), three informational findings, all in
+  `evals/subagents-report.mjs`: the comparison row subtracts counts of passed trials, not pass
+  rates, so 2 of 2 against 3 of 3 reads as -1 (`R3-passdiff-unequal-counts`, a warning); a
+  missing delegation digest is accepted where a missing model is refused
+  (`R3-missing-digest-accepted`); and a star can be printed with no footnote
+  (`R3-star-without-footnote`). Its first bound STATUS failed with `operation_timeout` while
+  another session's gate loaded the machine (nothing had been mutated); the same STATUS, asked
+  again, answered. Codex: one P2, recorded (`js-harness codex-review --base c96eda7`): the
+  delegation digests are compared per config and never across the two arms of a mode, so arms
+  collected before and after an edit of a delegation text would be compared as if they had been
+  given the same prompt. The four are accepted and fixed in one follow-up commit of this slice,
+  by the same writer, before any trial runs.
+- 2026-10-09 — The four fixed, each with its failing test seen first (`subagents-report` 21
+  pass, 0 fail; 115 lines added, 20 deleted). The report now compares the delegation digests by
+  mode across both arms and every run, also inside one run, and refuses a config that has
+  trials and no digest; the comparison row gives the difference of pass rates in percentage
+  points, each rate over its own cell (2 of 2 against 3 of 3 reads `0pp`); and one predicate
+  decides both the star and its footnote. Noted by the writer: a continued run that gains an arm
+  keeps the first arm's pin, so one results document can hold two digests for one mode, which
+  the report now refuses.

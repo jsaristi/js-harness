@@ -163,14 +163,47 @@ test('each row compares the second arm with the first: the score as a difference
   ]);
   const row = report.efforts[0].modes.find((entry) => entry.mode === 'verify').rows.find((entry) => entry.task === 'house-rules');
   assert.deepEqual(row.compared, [{
-    arm: 'sub-haiku', against: 'sub-opus', scoreDiff: -0.25, passDiff: -2, cost: { orchestrator: 1.25, subagents: 0.05, total: 0.65 }, wallMs: 0.5, turns: 1.5,
-  }]);
+    arm: 'sub-haiku', against: 'sub-opus', scoreDiff: -0.25, passRateDiff: -0.666666667, cost: { orchestrator: 1.25, subagents: 0.05, total: 0.65 }, wallMs: 0.5, turns: 1.5,
+  }], 'one pass in three against three in three');
   // A cell without a counted trial has nothing to compare, and a cost of nothing has no ratio.
   const alone = reportOf([trial({ config: 'sub-haiku-verify', listCost: measured(1, 0, 1) }), trial({ config: 'sub-opus-verify', listCost: measured(1, 0, 1) })]);
   const [compared] = alone.efforts[0].modes.find((entry) => entry.mode === 'verify').rows.find((entry) => entry.task === 'house-rules').compared;
   assert.deepEqual([compared.cost.subagents, compared.cost.total, compared.scoreDiff], [null, 1, 0]);
   const [missing] = alone.efforts[0].modes.find((entry) => entry.mode === 'write').rows[0].compared;
-  assert.deepEqual([missing.scoreDiff, missing.cost.total, missing.wallMs], [null, null, null]);
+  assert.deepEqual([missing.scoreDiff, missing.passRateDiff, missing.cost.total, missing.wallMs], [null, null, null, null]);
+});
+
+test('passes are compared as rates: arms with different numbers of counted trials and no failed trial show no difference', async () => {
+  const comparedOf = (trials) => reportOf(trials).efforts[0].modes.find((entry) => entry.mode === 'write').rows.find((entry) => entry.task === 'house-rules').compared[0];
+  const opus = [1, 2, 3].map((repeat) => trial({ repeat }));
+  // The third Haiku trial did the work alone, so its arm has two counted trials against three.
+  const alone = trial({ config: 'sub-haiku-write', repeat: 3, score: 0, subagents: 0, subagentStats: statsOf(0) });
+  const even = [...opus, ...[1, 2].map((repeat) => trial({ config: 'sub-haiku-write', repeat })), alone];
+  assert.equal(comparedOf(even).passRateDiff, 0, 'two of two against three of three');
+
+  const { out } = await run([], { run: docOf('run', even) });
+  const write = modeOf(out, 'write');
+  assert.deepEqual(rowsOf(write, 'house-rules', 'sub-opus')[0].slice(2, 5), ['3 of 3', '1.00 [1.00-1.00]', '3/3']);
+  assert.deepEqual(rowsOf(write, 'house-rules', 'sub-haiku')[0].slice(2, 5), ['2 of 3', '1.00 [1.00-1.00]', '2/2']);
+  assert.deepEqual(rowsOf(write, 'house-rules', 'sub-haiku vs sub-opus')[0].slice(2, 5), ['-', '0.00', '0pp'], 'fewer counted trials is not a regression');
+  assert.match(out, /pass as a difference of pass rates in percentage points \(pp\)/);
+
+  // A trial that failed is a difference, of the rates: one of two against three of three.
+  const failed = [...opus, trial({ config: 'sub-haiku-write', repeat: 1 }), trial({ config: 'sub-haiku-write', repeat: 2, score: 0.5 }), alone];
+  assert.equal(comparedOf(failed).passRateDiff, -0.5);
+  const worse = await run([], { run: docOf('run', failed) });
+  assert.deepEqual(rowsOf(modeOf(worse.out, 'write'), 'house-rules', 'sub-haiku vs sub-opus')[0].slice(3, 5), ['-0.25', '-50pp']);
+});
+
+test('the star marks a mean over some of the counted trials, never an unknown value, and the footnote is printed exactly when a star is', async () => {
+  const blind = { score: null, wallMs: null, turns: null };
+  const none = await run([], { run: docOf('run', [1, 2].map((repeat) => trial({ repeat, ...blind }))) });
+  assert.deepEqual(rowsOf(modeOf(none.out, 'write'), 'house-rules', 'sub-opus')[0].slice(2), ['2 of 2', '? [?-?]', '0/0', '$1.0000', '$0.5000', '$1.5000', '?', '?']);
+  assert.ok(!none.out.includes('*'), 'an unknown value is "?" alone: no star, and so no footnote');
+
+  const some = await run([], { run: docOf('run', [trial({ repeat: 1 }), trial({ repeat: 2, ...blind })]) });
+  assert.deepEqual(rowsOf(modeOf(some.out, 'write'), 'house-rules', 'sub-opus')[0].slice(2), ['2 of 2', '1.00 [1.00-1.00]*', '1/1', '$1.0000', '$0.5000', '$1.5000', '1m00s*', '10.0*']);
+  assert.match(some.out, /\n\* a mean over the counted trials that know the value/);
 });
 
 test('an estimated cost is kept out of every measured mean and is shown as an estimate with its range', async () => {
@@ -257,7 +290,7 @@ test('the report prints, per effort and mode, the two arms of each task side by 
   assert.equal(rowsOf(out, 'format-v2', 'sub-opus').length, 6, 'a results row and an outcomes row in each of the three modes');
   assert.deepEqual(rowsOf(modeOf(out, 'verify'), 'lost-updates', 'sub-opus')[0], ['lost-updates', 'sub-opus', '3 of 3', '1.00 [1.00-1.00]', '3/3', '$1.0000', '$0.5000', '$1.5000', '1m30s', '10.0']);
   assert.deepEqual(rowsOf(modeOf(out, 'verify'), 'lost-updates', 'sub-haiku')[0], ['lost-updates', 'sub-haiku', '3 of 3', '0.97 [0.90-1.00]', '2/3', '$1.2000', '$0.0300', '$1.2300', '45s', '12.0']);
-  assert.deepEqual(rowsOf(modeOf(out, 'verify'), 'lost-updates', 'sub-haiku vs sub-opus')[0], ['lost-updates', 'sub-haiku vs sub-opus', '-', '-0.03', '-1', '1.20x', '0.06x', '0.82x', '0.50x', '1.20x']);
+  assert.deepEqual(rowsOf(modeOf(out, 'verify'), 'lost-updates', 'sub-haiku vs sub-opus')[0], ['lost-updates', 'sub-haiku vs sub-opus', '-', '-0.03', '-33pp', '1.20x', '0.06x', '0.82x', '0.50x', '1.20x']);
   assert.deepEqual(rowsOf(modeOf(out, 'verify'), 'lost-updates', 'sub-haiku')[1], ['lost-updates', 'sub-haiku', '3', '3', '0', '0', '0', 'general-purpose 3']);
   assert.match(out, /runs: run/);
   assert.match(out, /model claude-opus-5-5, permission mode bypassPermissions/);
@@ -372,13 +405,56 @@ test('runs that cannot be read together are refused with exit 1 and nothing prin
     // The arm names the model: a run that forced another one on that config measured something else.
     [{ a: docOf('a', [trial()], { subagentConfigs: { 'sub-opus-write': { ...subagentPin('sub-opus-write'), model: 'claude-haiku-5-5' } } }) }, /run a pins sub-opus-write to subagent model "claude-haiku-5-5", and the sub-opus arm is claude-opus-5-5/],
     [{ a: docOf('a', [trial()], { subagentConfigs: {} }) }, /run a pins sub-opus-write to subagent model missing/],
-    [{ a: docOf('a', [trial()]), b: docOf('b', [trial({ repeat: 2 })], { subagentConfigs: { 'sub-opus-write': { ...subagentPin('sub-opus-write'), delegationSha256: 'another' } } }) }, /runs a and b gave sub-opus-write different delegation texts/],
     [{ a: '{ nope' }, /a\.json/],
   ];
   for (const [docs, message] of cases) {
     const { code, out, err } = await run([], docs);
     assert.deepEqual([code, out], [1, ''], String(message));
     assert.match(err, message);
+  }
+});
+
+test('a delegation mode is one text in both arms and in every run: digests that differ are refused, naming the mode, the runs and the configs', async () => {
+  const pin = (config, over = {}) => ({ [config]: { ...subagentPin(config), ...over } });
+  const recorded = subagentPin('sub-opus-write').delegationSha256;
+  const opus = trial();
+  const haiku = trial({ config: 'sub-haiku-write' });
+  const cases = [
+    // The two arms collected in separate runs, before and after the text was edited: a whole matrix, of two prompts.
+    [{ a: docOf('a', [opus]), b: docOf('b', [haiku], { subagentConfigs: pin('sub-haiku-write', { delegationSha256: 'edited' }) }) },
+      [`delegation mode write was not one text: run a gave sub-opus-write SHA-256 "${recorded}" and run b gave sub-haiku-write "edited"`]],
+    // One run that gained the second arm after the edit keeps the pin of the first (`suite.mjs`).
+    [{ a: docOf('a', [opus, haiku], { subagentConfigs: { ...pin('sub-opus-write'), ...pin('sub-haiku-write', { delegationSha256: 'edited' }) } }) },
+      [`delegation mode write was not one text: run a gave sub-opus-write SHA-256 "${recorded}" and run a gave sub-haiku-write "edited"`]],
+    // The same config in two runs is the same mode.
+    [{ a: docOf('a', [opus]), b: docOf('b', [trial({ repeat: 2 })], { subagentConfigs: pin('sub-opus-write', { delegationSha256: 'edited' }) }) },
+      [`run a gave sub-opus-write SHA-256 "${recorded}" and run b gave sub-opus-write "edited"`]],
+  ];
+  for (const [docs, messages] of cases) {
+    const { code, out, err } = await run([], docs);
+    assert.deepEqual([code, out], [1, ''], messages[0]);
+    for (const message of messages) assert.ok(err.includes(message), `${message}\n${err}`);
+  }
+  // Two modes are two texts: their digests differ in every run, and that is no problem.
+  const modes = await run([], { a: docOf('a', [opus, trial({ config: 'sub-haiku-explore' })]) });
+  assert.deepEqual([modes.code, modes.err], [0, '']);
+});
+
+test('a config with trials and no recorded delegation digest is refused like a missing model, in one run as in two', async () => {
+  const pin = (config, over = {}) => ({ [config]: { ...subagentPin(config), ...over } });
+  const opus = trial();
+  const haiku = trial({ config: 'sub-haiku-write' });
+  const cases = [
+    // What the trials were told cannot be compared with anything, and two missing digests are not two equal ones.
+    [{ a: docOf('a', [opus], { subagentConfigs: { 'sub-opus-write': { model: 'claude-opus-5-5' } } }) }, ['run a records no delegation digest for sub-opus-write']],
+    [{ a: docOf('a', [opus], { subagentConfigs: pin('sub-opus-write', { delegationSha256: '' }) }) }, ['run a records no delegation digest for sub-opus-write']],
+    [{ a: docOf('a', [opus], { subagentConfigs: { 'sub-opus-write': { model: 'claude-opus-5-5' } } }), b: docOf('b', [haiku], { subagentConfigs: { 'sub-haiku-write': { model: 'claude-haiku-5-5' } } }) },
+      ['run a records no delegation digest for sub-opus-write', 'run b records no delegation digest for sub-haiku-write']],
+  ];
+  for (const [docs, messages] of cases) {
+    const { code, out, err } = await run([], docs);
+    assert.deepEqual([code, out], [1, ''], messages[0]);
+    for (const message of messages) assert.ok(err.includes(message), `${message}\n${err}`);
   }
 });
 

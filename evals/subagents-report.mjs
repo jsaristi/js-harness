@@ -187,10 +187,14 @@ function buildCell(trials) {
   };
 }
 
-/** One arm against the baseline, from their cells: the score and the passes as a difference (the arm minus the
+/** One arm against the baseline, from their cells: the score and the pass rate as a difference (the arm minus the
  * baseline), the measured costs, the wall time and the turns as a ratio (the arm over the baseline). Each is `null`
  * when either side does not know it, and a ratio also when the baseline is 0. An estimated cost is compared with
- * nothing. */
+ * nothing.
+ *
+ * The passes are compared as rates, each over the trials of its own cell whose score is known, and never as counts:
+ * the two cells need not hold as many counted trials (one that did not delegate is in neither figure), and two
+ * passes of two against three of three is no trial failed, not one pass fewer. */
 function compareCells(arm, cell, baseline) {
   const ratio = (a, b) => (finite(a) && finite(b) && b !== 0 ? round(a / b) : null);
   const both = cell.score.known > 0 && baseline.score.known > 0;
@@ -198,7 +202,7 @@ function compareCells(arm, cell, baseline) {
     arm,
     against: BASELINE,
     scoreDiff: both ? round(cell.score.mean - baseline.score.mean) : null,
-    passDiff: both ? cell.passes - baseline.passes : null,
+    passRateDiff: both ? round(cell.passes / cell.score.known - baseline.passes / baseline.score.known) : null,
     cost: Object.fromEntries(['orchestrator', 'subagents', 'total'].map((part) => [part, ratio(cell.cost[part].mean, baseline.cost[part].mean)])),
     wallMs: ratio(cell.wallMs.mean, baseline.wallMs.mean),
     turns: ratio(cell.turns.mean, baseline.turns.mean),
@@ -247,20 +251,29 @@ export function loadRuns({ dir, names }) {
 /** Throws a `ReportError` when what the runs pinned of their configs (`subagentConfigs`: `configs.mjs`,
  * `subagentPin`) does not let them be read as the arms of this report. A config with a trial must be pinned to the
  * model of its arm: the arm is named for that model, so a run that forced another one measured something else. And
- * two runs must have given a config the same delegation text, by its digest: half the trials told one thing and
- * half another are no cell. The text is not compared with today's `configs.mjs`: a recorded run stays a measurement
- * of what it was told when the text is later edited. */
+ * a delegation mode must have been one text, by its digest, in both arms and in every run: the mode is what the arms
+ * are told alike (the feature document, Constraints), so arms collected before and after an edit of the text differ
+ * in more than the model, and half the trials of a config told one thing and half another are no cell. One run can
+ * hold two digests of a mode too: a continued run that gains an arm keeps the pin of the first (`suite.mjs`). A
+ * config with a trial and no digest is refused for the same reason as one with no model: what its trials were told
+ * cannot be compared, and two missing digests are not two equal ones. The text is not compared with today's
+ * `configs.mjs`: a recorded run stays a measurement of what it was told when the text is later edited. */
 function checkPins(runs) {
   const problems = [];
   const texts = new Map();
   for (const run of runs) {
     for (const config of new Set(run.doc.trials.map((entry) => entry.config))) {
       const pin = isObject(run.doc.subagentConfigs) && isObject(run.doc.subagentConfigs[config]) ? run.doc.subagentConfigs[config] : {};
-      const { arm, subagentModel } = SUBAGENT_CONFIGS[config];
+      const { arm, mode, subagentModel } = SUBAGENT_CONFIGS[config];
       if (pin.model !== subagentModel) problems.push(`run ${run.name} pins ${config} to subagent model ${shown(pin.model)}, and the ${arm} arm is ${subagentModel}`);
-      const earlier = texts.get(config);
-      if (earlier === undefined) texts.set(config, { run: run.name, digest: pin.delegationSha256 });
-      else if (earlier.digest !== pin.delegationSha256) problems.push(`runs ${earlier.run} and ${run.name} gave ${config} different delegation texts (SHA-256 ${shown(earlier.digest)} vs ${shown(pin.delegationSha256)})`);
+      const digest = pin.delegationSha256;
+      if (typeof digest !== 'string' || digest === '') {
+        problems.push(`run ${run.name} records no delegation digest for ${config}: what its trials were told cannot be compared with the other arm's`);
+        continue;
+      }
+      const earlier = texts.get(mode);
+      if (earlier === undefined) texts.set(mode, { run: run.name, config, digest });
+      else if (earlier.digest !== digest) problems.push(`delegation mode ${mode} was not one text: run ${earlier.run} gave ${earlier.config} SHA-256 ${shown(earlier.digest)} and run ${run.name} gave ${config} ${shown(digest)}`);
     }
   }
   if (problems.length > 0) throw new ReportError(`the runs cannot be read as the arms of this report:\n${problems.map((problem) => `  ${problem}`).join('\n')}`);
@@ -411,8 +424,11 @@ const table = (header, body) => {
 const stackText = (stack) => Object.entries(stack ?? {}).map(([key, value]) => `${key} ${value ?? 'unknown'}`).join(', ');
 /** A column no value belongs in: an arm with no counted trial, a comparison either side of which is unknown. */
 const NONE = '-';
-/** The mark of a mean over fewer trials than were counted: the others did not know the value. */
-const partial = (stats, cell) => (stats.known < cell.counted ? '*' : '');
+/** Whether a figure is a mean over some of the counted trials and not all: the others did not know the value. A
+ * figure no trial knows is no mean at all: it reads `?`, which says so by itself. */
+const isPartial = (stats, cell) => stats.known > 0 && stats.known < cell.counted;
+/** The mark of such a mean; the footnote that explains it is printed whenever one is (`formatSubagentsReport`). */
+const partial = (stats, cell) => (isPartial(stats, cell) ? '*' : '');
 
 /** The three cost columns of a cell: the measured means, and the total as `est.` with its range for a cell whose
  * counted trials have estimates alone, so that an estimate is never read as a measurement. */
@@ -440,7 +456,9 @@ function modeLines({ mode, rows }, effort) {
     ...row.compared.map((entry) => {
       const times = (value) => (value === null ? NONE : `${value.toFixed(2)}x`);
       const signed = (value, digits) => (value === null ? NONE : `${value > 0 ? '+' : ''}${value.toFixed(digits)}`);
-      return [row.task, `${entry.arm} vs ${entry.against}`, NONE, signed(entry.scoreDiff, 2), signed(entry.passDiff, 0), times(entry.cost.orchestrator), times(entry.cost.subagents), times(entry.cost.total), times(entry.wallMs), times(entry.turns)];
+      // In percentage points, so the difference of two rates is not read as a count of trials.
+      const points = entry.passRateDiff === null ? NONE : `${signed(round(entry.passRateDiff * 100), 0)}pp`;
+      return [row.task, `${entry.arm} vs ${entry.against}`, NONE, signed(entry.scoreDiff, 2), points, times(entry.cost.orchestrator), times(entry.cost.subagents), times(entry.cost.total), times(entry.wallMs), times(entry.turns)];
     }),
   ]);
   const count = (value) => (value === null ? '?' : String(value));
@@ -475,12 +493,13 @@ export function formatSubagentsReport(report) {
     'counted: the trials that spawned at least one subagent, of those recorded; every figure is over the counted trials alone',
     `cost: each model's tokens at list price, in US dollars, split between the orchestrator and its subagents from the session transcripts (${priceText}); `
       + 'a mean holds measured costs only, and a cost estimated from modelUsage is marked "est." and compared with nothing',
-    `compared: each "vs ${baseline.arm}" row is that arm against ${baseline.arm}: score and pass as a difference, cost, wall time and turns as a ratio`,
+    `compared: each "vs ${baseline.arm}" row is that arm against ${baseline.arm}: score as a difference, pass as a difference of pass rates in percentage points (pp), `
+      + 'each rate over its own arm\'s counted trials, and cost, wall time and turns as a ratio',
     'subagents: spawned, completed, failed, killed and refused are totals over the counted trials, as Claude Code printed them',
   ];
   for (const { effort, modes } of report.efforts) for (const entry of modes) lines.push('', ...modeLines(entry, effort));
   const cells = report.efforts.flatMap(({ modes }) => modes.flatMap(({ rows }) => rows.flatMap((row) => Object.values(row.cells))));
-  if (cells.some((cell) => [cell.score, cell.wallMs, cell.turns, cell.cost.orchestrator, cell.cost.subagents, cell.cost.total].some((stats) => stats.known < cell.counted && stats.known > 0))) {
+  if (cells.some((cell) => [cell.score, cell.wallMs, cell.turns, cell.cost.orchestrator, cell.cost.subagents, cell.cost.total].some((stats) => isPartial(stats, cell)))) {
     lines.push('', '* a mean over the counted trials that know the value: fewer than were counted');
   }
   lines.push('', report.notCounted.length === 0 ? 'Trials not counted: none' : `Trials not counted: ${report.notCounted.length} of ${report.trials} recorded, in no figure above`);
