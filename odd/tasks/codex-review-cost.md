@@ -90,12 +90,12 @@ push of that branch.
   and starts nothing; a run above a bound of parts refuses without an explicit flag; `check`
   says how much code has been committed since the last Codex review record — route: delegated
   writer
-- [ ] T4 Each slice of T1 to T3 reviewed by gentle-ai and by Codex when it closes, the plan read
+- [x] T4 Each slice of T1 to T3 reviewed by gentle-ai and by Codex when it closes, the plan read
   before each run — route: inline runs
 - [ ] T5 The part-size measurement, after Sebastián's go-ahead on its count: the same code with
   parts of 400 and of 1,000 lines at `high`, findings against a key and tokens; the bound
   changes only on what it shows — route: inline runs
-- [ ] T6 The result in `docs/ROADMAP.md` — route: inline
+- [x] T6 The result in `docs/ROADMAP.md` — route: inline
 
 ## Progress
 - 2026-10-08: opened from the analysis of the fifty reviews (Why). Branch cut at `5663c8c`.
@@ -575,6 +575,27 @@ push of that branch.
     of the merge is the tip of the feature, which a range from the default branch does not
     start at, so that run takes the range as given, the whole branch; `--base <merge>^`,
     which the push check names, reads what the default branch brought in instead.
+- 2026-10-08: that fix committed as `ce47f21` (gate green in 1,040 s), and its two reviews,
+  which close T4: every code commit of the branch has its Codex record, and gentle-ai read
+  every slice but `14cd8bf`, which it refused for its size (above).
+  - gentle-ai on `d632abf..ce47f21`, the two fix commits (620 changed lines, medium, consent
+    granted without asking): approved and acknowledged (lineage `review-2be5b70f2e1ee5b9`),
+    one warning and one suggestion, neither a change to make now. The warning: the entry of
+    a merge is read in the shape one release of git writes, and the log now passes an
+    option an old git may not know; both fail closed, the push check saying that it cannot
+    list the commits, with nothing naming the version of git as the cause. It joins F3. The
+    suggestion is F7 again.
+  - Codex on `47c3d02..ce47f21`, its plan read first (1 part, 355 changed lines in 5 files,
+    about 300,000 to 820,000 input tokens), inside the login proof (PASS): "correct", no
+    finding, 611,377 input tokens (539,904 cached), 5,612 output, 190 s, recorded. The third
+    plan given as a range, and the third cost inside it.
+- 2026-10-08: T6, inline: `docs/ROADMAP.md` holds "Codex review cost result", with what the
+  command does now, the seven reviews of this feature's own code (22 parts, 8,528 changed
+  lines, 8,240,681 input tokens, 8 findings, all real and all fixed) and the price said
+  plainly: those reviews cost more than the 6.12 million of the fifty this feature was
+  opened to cut. The waste is gone (the other model, the documents, the repeats); what is
+  left is the effort, about 966 input tokens a changed line at `high` against about 237 in
+  the run of 28 parts at `medium`. `high` is his choice; the number is there for him.
 - 2026-10-08: Sebastián asked, beside this feature, whether an Opus 5.5 orchestrator with
   Haiku 5.5 subagents would help. What was verified and what he decided are in
   `docs/ROADMAP.md`, Next, item 8: it is measured in a session of its own.
@@ -612,7 +633,11 @@ push of that branch.
 - F6-high-figure-widens: the higher figure of an estimate is the most a changed line cost,
   so one very small part in the log, a few lines at a session's fixed cost, will widen it.
 - F3-old-git: reading the marks needs git 2.40 (`check-attr --source`). `doctor` could say
-  so of a machine with an older one, before a review refuses to start there.
+  so of a machine with an older one, before a review refuses to start there. The same for
+  the merges (2026-10-08, gentle-ai): the log passes `--diff-merges=combined` and a merge is
+  asked about with `--remerge-diff`, both older than 2.40, and the entry of a merge is read
+  in the shape git 2.54 writes. Another shape fails closed, with a message that names the
+  commits and not the version of git.
 - F1-what-code-is: closed on 2026-10-08. A range with nothing to review that holds commits is
   recorded as such, and the command and `check` read one definition of what a review reads.
 
@@ -620,12 +645,16 @@ push of that branch.
 In this order, each slice committed when it is green and kept under about 1,300 changed
 lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
 slice, and the plan of that review is read first:
-1. The fix of the finding of that Codex review (a merge somebody wrote code in is a code
-   commit) is committed with this entry; gentle-ai on it from `d632abf`, which takes in
-   the fix before it too, and Codex from `47c3d02`, the plan read first.
-   What they find is fixed and reviewed the same way. That closes T4. Then T6.
-2. T5, the measurement of the part size, is put to Sebastián with its count before any of
-   it runs.
+1. T5, the measurement of the part size, put to Sebastián with its count before any of it
+   runs. The cheapest form that measures something: `469e26f..ed1fd0e` again, the range
+   whose review in 4 parts of up to 400 lines found four defects for 1,956,411 input
+   tokens, in parts of up to 1,000 lines (`--again --part-lines 1000`, from a checkout of
+   `ed1fd0e`): one run of 2 parts, its plan read first, the four known defects as the key.
+   The record it appends covers commits that have one already and changes nothing.
+2. Then, or instead: his word on push, pull request and merge of the two stacked branches.
+   Nothing of either is on the remote.
+3. F7 before the next feature that adds tests to the command: the gate runs within two
+   minutes of its bound.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
 (asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which

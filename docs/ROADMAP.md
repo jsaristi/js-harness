@@ -55,7 +55,7 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap; it never installs or configures another tool |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. Review model: `gpt-6.1-sol` at `high`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes it, and a review whose session ran on anything else, as its own rollout file says, does not stand. It replaces the `medium` he fixed for the lean session on 2026-10-06 |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. Review model: `gpt-6.1-sol` at `high`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes it, and a review whose session ran on anything else, as its own rollout file says, does not stand. It replaces the `medium` he fixed for the lean session on 2026-10-06. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more than 6 parts without `--max-parts`; `check` says at every commit how much code waits for a review |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
@@ -233,6 +233,61 @@ same answer on a range with nothing to find, so it stays out. The model of the l
 measured in the CodeGraph cell; the other lean readings were taken before the reading
 recorded it and carry what the command passed.
 
+## Codex review cost result
+
+Closed on 2026-10-08 (`odd/tasks/codex-review-cost.md`), but for its measurement of the part
+size, which waits for Sebastián. What `js-harness codex-review` does since, each behaviour
+with a test written first and the spending ones run on the real binary:
+
+- One model. `gpt-6.1-sol` at `high`, passed by the command and held to what the rollout
+  file of the session says: a session that ran on another model, or whose file names none,
+  is no review and leaves no record.
+- Only code. Markdown and the paths a project marks `-codex-review` in `.gitattributes` are
+  in no part, and the plan says how many were left out. `check` reads the same definition,
+  so a commit of documents or of eval readings needs no record.
+- Nothing twice. A run reads the review records first and starts where they end; a range
+  they cover whole starts nothing and records nothing; `--again` reviews it on purpose. A
+  merge counts for the code somebody wrote in it. On this branch a run from its fork point
+  says there is nothing to review, where it would have been 12 parts and 5,880 changed
+  lines.
+- The cost first. `--plan` prints the parts, the lines and a range of input tokens from the
+  run log of the machine, and starts nothing; a run prints the same before its first
+  session and refuses more than 6 parts without `--max-parts`; the plain `check` says at
+  every commit how much code waits for a review.
+
+What the reviews of the feature's own code measured, 7 runs in 22 parts over 8,528 changed
+lines, each inside the login proof (`evals/review/login-proof.mjs`: the real `auth.json` was
+the same file after every one):
+
+| Range | Parts | Changed lines | The plan said | Input tokens | Findings |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `5663c8c..7936a1f` | 7 | 3,585 | about 1,045,000 | 2,314,747 | 1 |
+| `7936a1f..da71985` | 1 | 304 | about 200,000 | 287,707 | 1 |
+| `da71985..469e26f` | 2 | 739 | about 490,000 | 562,328 | 0 |
+| `469e26f..ed1fd0e` | 4 | 1,308 | about 890,000 | 1,956,411 | 4 |
+| `ed1fd0e..dbc71f0` | 2 | 642 | 490,000 to 1,460,000 | 803,690 | 1 |
+| `dbc71f0..47c3d02` | 5 | 1,595 | 1,030,000 to 3,160,000 | 1,704,421 | 1 |
+| `47c3d02..ce47f21` | 1 | 355 | 300,000 to 820,000 | 611,377 | 0 |
+
+Read plainly. The plan as one figure was under half the cost twice, the second time from
+runs at the review's own effort; given as a range, from the median and from the most a
+changed line cost, it held the three times since. What a part costs follows how far the
+session looks into the code more than its size: the measured parts at `high` cost from 296
+to 2,278 input tokens a changed line. The 8 findings were all real defects, each fixed with
+a test written first, and gentle-ai's on the same slices too.
+
+And the price. These reviews cost 8.24 million input tokens, more than the 6.12 million of
+the fifty reviews this feature was opened to cut. What it removed is the waste: the other
+model, the documents, the ranges reviewed twice. What is left is the effort: about 966 input
+tokens a changed line at `high`, where the run of 28 parts at `medium` on 2026-10-08 cost
+about 237 (other code, so a rough comparison; most of either is cached input). `high` is
+Sebastián's choice of 2026-10-08, and this is what it costs.
+
+Left open, in the feature document: the measurement of the part size (400 against 1,000
+lines at `high`), his to start; and its follow-ups, the first of them that the gate of this
+repository runs within two minutes of its own bound of 20, on one test file of 232 tests
+that each build a real repository.
+
 ## Next
 
 1. F6 Codex parity, in progress (`odd/tasks/codex-parity.md`, branch `feat/codex-parity`, in the
@@ -277,7 +332,10 @@ recorded it and carry what the command passed.
    configuration named it, one run of 28 reviewed tests, documents and fixtures that gave no
    finding, and four reviews repeated a range already reviewed. Sebastián, 2026-10-08: a
    Codex review runs only on `gpt-6.1-sol` at `high`; it covers only code, never the same
-   commits twice, and prints its plan before it spends.
+   commits twice, and prints its plan before it spends. Built, reviewed and closed that day
+   but for the measurement of the part size; the numbers are in "Codex review cost result"
+   above. Left for Sebastián: that measurement, and push, pull request and merge of the two
+   stacked branches.
 8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
    in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
    5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
