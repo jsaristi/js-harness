@@ -243,7 +243,7 @@ run itself.
 - [x] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
 - [x] T3c Accepted follow-ups of the review of T3b, test first: `R3-non-error-throw-detail`, `R3-report-throw-aborts-walk`, `R3-recordline-foreign-ids`, `R3-setup-wiring-unproved` — route: inline (three small changes in the library, one call changed in the command, four tests)
 - [x] T3d The three findings of the Codex review, test first: the ceiling of git's search kept in the child environment, a root resolved before it is judged, a hook of the machine taken for the one `init` wrote — route: inline (the library, its test, two places of the command)
-- [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
+- [x] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
 - 2026-10-10: session opened by Sebastián's paste of the orchestrator's opening prompt. Worktree
@@ -624,11 +624,50 @@ run itself.
   its step and what the run does not prove. `main` moved meanwhile (`d3bc399`, two merges of
   documents) and changes other lines of the roadmap, none of that paragraph.
 
+- 2026-10-10: T3d and the roadmap entry committed as `3c71fa0`; gate green (07:33:35 to
+  07:44:32), tree clean afterwards.
+  - The gentle-ai assessment of `d639bdf..3c71fa0` (T3c and T3d together): medium, 372 lines,
+    `under_budget`, no review due. Outcome for both tasks: under budget; Codex read both.
+  - The Codex review of `709ba20..3c71fa0` (one part, 100 changed lines in 3 files, recorded):
+    `the patch is correct (confidence 0.94)`, no finding; 164,255 input tokens (118,272
+    cached), 43 seconds. With the first, every code commit of the branch has its record.
+  - The run for the record, from the clean commit: `candidate feat/practice-project 3c71fa0
+    (clean): 10 of 10 steps passed; real home: unchanged`, exit 0, 11 seconds (07:45:54 to
+    07:46:05). `record.jsonl` holds six lines, the last one `ok: true`, `dirty: false`, node
+    `v24.15.0`, `win32`. The practice project's `git log` shows six commits made through the
+    hook `init` wrote, from `9966f1e` to `bfce37c` (`practice: run of js-harness 3c71fa0`).
+  - `node bin/js-harness.mjs contract check odd/tasks/practice-project.md` prints `PASS` and
+    exits 0.
+- 2026-10-10, T4 closed: the orchestrator is told in the tail of this session's reply, the one
+  road that reached it (a `SendMessage` from this session is held and expires). What it is
+  told: the third step exists and how a feature adds its step (the roadmap paragraph); what
+  was met on the road (the section above, none repaired here); and what is left for the
+  merge.
+- Spent by the whole feature: eight gates of this repository with this commit's (11 to 17
+  minutes each); four delegated agents (three before the
+  compaction, about 600,000 tokens, and the writer of T3b, about 170,000); three gentle-ai
+  reviews of one reviewer each; Codex, 1,062,210 input tokens in two runs. No model spend in
+  any practice run.
+- Slices, as planned under Delivery, for whoever opens the pull requests: slice 1 is
+  `ac2c18a..d0bcb16` (this document, the pure part, its tests); slice 2 is `d0bcb16..HEAD`
+  (the command, the three rounds of review fixes, the roadmap entry). The fixes of slice 2
+  touch the files of slice 1, so the two only merge in that order. The branch was cut at
+  `20911ea` and `main` is at `d3bc399`: it needs `main` brought in first; the two change
+  different lines of `docs/ROADMAP.md`.
+
 ## Next step
-The commit of T3d with the roadmap entry. Then the gentle-ai assessment from `d639bdf`, and
-the Codex review of the part no record covers (`node bin/js-harness.mjs codex-review --base
-709ba20`, `--plan` first): the pre-push hook asks a record for every code commit. Then a run
-from the clean commit for the record, the notice to the orchestrator, and one last commit of
-this document that records those and closes T4. Every start of a gate, a test, a review or a
-run is one command that first waits on any live `check.mjs` process and starts only when none
-is left.
+Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's
+to do alone:
+- Push, the pull requests and the merge, on his word or under the orchestrator's charter.
+  At the merge, a `practice` script in `package.json` beside `e2e` and `sandbox` (left out
+  here so that this branch shares no file with another).
+- The gate lock, the session channel, the rule hierarchy and the gate on GitHub each add
+  their step to `JOURNEY` and put `node scripts/practice.mjs run --root
+  D:\js-harness-practice` in their contract.
+- Open with him, his decision: whether to replace `JS_HARNESS_EVAL_OAUTH_TOKEN`, whose value
+  a delegated agent printed into its own output on 2026-10-10.
+- Not proven, each needing a change on his machine: `setup` to its end with the order of
+  T3b (a second folder), and the failure of `project-adopt` under a machine-wide
+  `core.hooksPath`.
+A session that takes this up again starts a gate, a test, a review or a run with one command
+that first waits on any live `check.mjs` process, until the gate lock is merged.
