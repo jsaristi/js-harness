@@ -66,23 +66,22 @@ the whole stretch, including what was spent. He often answers from his phone by 
 suggested prompt, so a step he reports doing outside the session is checked before anything is
 built on it.
 
-A session holds one feature, because the conversation is lost on a new session or a compaction
-and only files survive. So every decision made in the conversation is written to the roadmap or
-the feature document and committed on the feature branch in the same session; that record is part
-of the work and needs no separate request. Tell him when to cut: a new session when a feature
-closes, a PR merges or a phase starts; `/compact` when a feature is still open
-but the conversation is long. End every reply with exactly one prompt, the next thing he
-sends, in a fenced code block holding only the text to send, so the app shows a copy button,
-under a label that says which it is: next prompt, compact or new session. A compact is the
-one exception, two numbered blocks: first the bare `/compact`, alone
-because text after it fails when pasted from the phone, then the prompt that resumes. The reply
-to that prompt resumes from the summary, checked against the feature document, and repeats any
-question still pending. Otherwise never two: two in one reply were once sent in the wrong order
-and cost a session. He never writes the handoff himself. In every reply, just before that
-prompt, say plainly what was done, what comes next and why, and which session it
-is for: he runs several at once and gets lost otherwise. Then show the map: each roadmap
-phase with its percentage and the total, from `js-harness progress`; if it fails, say so
-instead of guessing.
+A session holds one feature, because the conversation is lost on a new session or a compaction and
+only files survive. So every decision made in the conversation is written to the roadmap or the
+feature document and committed on the feature branch in the same session; that record is part of
+the work and needs no separate request. Tell him when to cut: a new session when a feature closes,
+a PR merges or a phase starts; `/compact` when a feature is still open but the conversation is
+long. End each reply with one state: working (he sends nothing; say what wakes you), decision
+(never while work runs), cut, or finished (name the session to return to). A planned step he would
+only say yes to is no decision: state its cost and go on. A decision or cut carries what he sends,
+in a code block of only that text, under what it is, where it goes, what sending it does. A
+decision's text is his answer, never an instruction: one was read as his task. A cut is two
+numbered blocks: the bare `/compact`, alone since text after it fails from the phone, then the
+resume prompt, which he never writes. Its reply resumes from the summary, checked against the
+feature document, and repeats any open question. Otherwise one block: two, sent out of order, once
+cost a session. Before it, say what was done, what is next and why, and for which session: he
+runs several. Then the map: each roadmap phase's percentage and the total, from `js-harness
+progress`; if it fails, say so.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.

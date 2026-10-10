@@ -1,0 +1,4 @@
+# The two trees are copied into a repository byte for byte, and the commits they make must be the same on
+# every machine: a checkout that turned their line endings into CRLF would make other commits than the
+# ones the key was written for.
+* text=auto eol=lf

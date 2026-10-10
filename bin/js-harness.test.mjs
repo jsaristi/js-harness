@@ -245,6 +245,35 @@ test('--help says what --at-login does to remote start and stop, and so does the
   assert.match(run(['remote']).stderr, /start also takes .*\[--watchdog\]/);
 });
 
+test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*worktrees.*feature plan.*gates.*pull requests.*relief file.*--watch waits/m);
+  const result = run(['sessions', '--bogus']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /unknown argument: --bogus/);
+  assert.match(result.stderr, /Usage: js-harness sessions/);
+});
+
+// Hermetic: an empty temp `--claude-home`, so the command stops at "no sessions folder" before it would
+// read this machine's sessions, processes or pull requests — and the message naming that temp home is
+// what proves dispatch reached `sessionsMain`. Which project the message names is not asserted: the
+// command asks the real git, and a temp root that sits inside a repository answers with that repository
+// (R3-dispatch-test-not-hermetic).
+test('sessions dispatches to a temp cwd and Claude home and exits 1 for a project with no sessions folder', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-sessions-cwd-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-sessions-home-'));
+  try {
+    const result = run(['sessions', '--cwd', cwd, '--claude-home', home, '--json']);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.ok(result.stderr.startsWith('js-harness sessions: no sessions folder for '), result.stderr);
+    assert.ok(result.stderr.includes(`: ${path.join(home, 'projects')}${path.sep}`), result.stderr);
+    assert.equal(result.stderr.trim().split('\n').length, 1, 'one line, and no board');
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.
 test('runs when invoked through a linked directory', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));

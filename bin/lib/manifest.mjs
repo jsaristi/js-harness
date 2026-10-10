@@ -21,9 +21,79 @@ js-harness commands:
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
+- \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
+`;
+}
+
+/** The second skill: how several sessions share one project. A session that supervises the others reads
+ * the orchestrator's part, a session that works next to others reads the work session's; the design is
+ * in odd/tasks/session-board.md ("The orchestrator"). Every line is paid each time a host loads it. */
+function orchestratorSkillContent(version) {
+  return `---
+name: js-harness-orchestrator
+description: Use when asked to orchestrate, supervise or watch the other sessions of a project, and in a work session that runs while other sessions of the project are open, for how it prompts and how it closes (js-harness v${version}).
+---
+
+# Several sessions, one project
+
+Two kinds of session. A work session owns one feature: its worktree, its feature document (\`odd/tasks/<feature>.md\`) and its own prompts. The orchestrator is a dedicated session that owns no feature. Follow the part that is yours.
+
+A change does not exist until it is in a file. Where each thing lives:
+- the project's plan (the order of the features, the decisions): the roadmap on the default branch, changed through small documentation pull requests;
+- a feature's plan (tasks, progress, next step): its feature document on its branch, written only by the session that owns the feature;
+- what is in flight between sessions and in neither file yet (the user's decisions, open questions, notices not yet delivered, what each session is for): the orchestrator's relief file;
+- the facts (who works, what runs, gates, branches, context sizes): stored nowhere, computed by \`js-harness sessions\`.
+
+## The orchestrator
+
+What you run:
+- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the worktrees with their feature plans, the running gates, the open pull requests and your relief file.
+- \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
+- \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes.
+
+What you may do:
+- You read. The only file you write is your relief file.
+- You never implement, never commit, never write in a worktree and never answer for the user. Reading code, running tests and discussing a design are what fill a context, and yours has to last.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared.
+
+When the user asks for something, place it with the roadmap and the board:
+- work of a feature whose session is open goes to that session, and the user says it there in their own words;
+- new work gets the opening prompt of a new work session; a design conversation is a session of its own too;
+- note in the relief file what was asked and where it went, and go back to waiting.
+
+Write to the user only when:
+1. a session starts waiting on them;
+2. a session finished with nothing running behind it;
+3. a gate is about to start while another runs;
+4. a prompt they hold became stale;
+5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
+6. a session's context passed the limit.
+Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise stay silent.
+
+The relief file. \`js-harness sessions\` prints its path and its last lines under \`Relief\`.
+- Append one dated line per event as it happens: a decision of the user, a request and where it went, a question still open, a notice not yet delivered, what a session is for. Your first line says that an orchestrator started and gives your session id, the one the board marks \`(this session)\`.
+- Never rewrite or summarize it, and never leave a line for later: this session can die without warning, and what is not in the file dies with it.
+
+Relief, not compaction. You hold nothing the files do not, so you are replaced instead of compacted.
+- A watch never reports the session that runs it, so read your own row on every board. When it says your context is past the limit, tell the user and give them this opening prompt for a new session, always the same:
+
+\`\`\`
+You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
+\`\`\`
+
+- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you are watching. The user archives the old orchestrator only after that, so there are never two.
+- When you come back from a compaction, do what a new orchestrator does: the files are the record, your summary is not.
+
+## A work session
+
+- Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
+- Before a commit, check \`Gates\` in \`js-harness sessions\`, and never start a gate while another runs.
+- When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
+- When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
+- You are not finished while background work you started is still running, even when your next prompt is already written.
 `;
 }
 
@@ -38,6 +108,16 @@ export const components = [
     id: 'codex-skill',
     target: (home) => path.join(home, '.codex', 'skills', 'js-harness', 'SKILL.md'),
     content: skillContent,
+  },
+  {
+    id: 'claude-orchestrator-skill',
+    target: (home) => path.join(home, '.claude', 'skills', 'js-harness-orchestrator', 'SKILL.md'),
+    content: orchestratorSkillContent,
+  },
+  {
+    id: 'codex-orchestrator-skill',
+    target: (home) => path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'),
+    content: orchestratorSkillContent,
   },
 ];
 

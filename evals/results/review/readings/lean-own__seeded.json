@@ -1,0 +1,115 @@
+{
+  "schema": "js-harness.review-reading/v1",
+  "config": "lean-own",
+  "range": {
+    "name": "seeded",
+    "base": "0366ee039c4985514911e34cb508bd6061c3be39",
+    "head": "80952cafb79cd82f5646a8cb284b1de3f9744d2b"
+  },
+  "recordedAt": "2026-10-08T02:31:04.027Z",
+  "cli": "0.161.0",
+  "session": "lean",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "modelSource": "command",
+  "prompt": "own",
+  "promptVersion": "js-harness.codex-review-prompt/v1",
+  "outcome": "reviewed",
+  "reason": null,
+  "usage": {
+    "inputTokens": 55203,
+    "cachedInputTokens": 35200,
+    "outputTokens": 2034,
+    "reasoningOutputTokens": 103
+  },
+  "requests": 4,
+  "firstRequestInputTokens": 6156,
+  "durationMs": 61002,
+  "coverage": {
+    "seen": 226,
+    "total": 226
+  },
+  "parts": 1,
+  "findings": [
+    {
+      "file": "src/cli.mjs",
+      "start": 80,
+      "end": 80,
+      "severity": "P1",
+      "title": "[P1] Apply all counts in one state transaction",
+      "body": "For a command counting multiple SKUs, each concurrent `count` loads and saves the entire state independently, so saves overwrite one another's quantities and journal entries. They also share the same temporary filename in `openStore`, which can cause rename failures. Validate the complete batch, load once, apply every count, and save once, as required by [AGENTS.md:19](AGENTS.md#L19).",
+      "confidence": 1
+    },
+    {
+      "file": "src/stocktake.mjs",
+      "start": 17,
+      "end": 20,
+      "severity": "P1",
+      "title": "[P1] Refuse counts for unknown SKUs",
+      "body": "Counting a SKU absent from the inventory currently creates an item named after its SKU, saves it, and returns success. The feature explicitly requires this command to exit 1 and store nothing; new items must instead enter through `receive` with a name. Throw a `StockError` rather than creating the item.",
+      "confidence": 1
+    },
+    {
+      "file": "src/stocktake.mjs",
+      "start": 41,
+      "end": 41,
+      "severity": "P1",
+      "title": "[P1] Await the undo save before returning",
+      "body": "On a successful undo, this unawaited save lets the command print success before the restored quantity and removed journal entry are persisted. A save rejection also bypasses the CLI's error handler and becomes an unhandled rejection. Await the save, consistent with [AGENTS.md:9–10](AGENTS.md#L9-L10).",
+      "confidence": 1
+    },
+    {
+      "file": "src/report.mjs",
+      "start": 24,
+      "end": 24,
+      "severity": "P2",
+      "title": "[P2] Include the twentieth row in each report page",
+      "body": "`slice` excludes its end index, so this returns only 19 rows per full page while subsequent pages advance by 20. Consequently, every twentieth item is omitted from all report pages. Use `start + size` as the exclusive end to satisfy the 20-items-per-page requirement.",
+      "confidence": 1
+    },
+    {
+      "file": "src/cli.mjs",
+      "start": 101,
+      "end": 101,
+      "severity": "P1",
+      "title": "[P1] Validate the export name before constructing its path",
+      "body": "An export name such as `../stockroom` escapes the exports directory and can overwrite `stockroom.json` with report rows, destroying the inventory state. Pass the name through `valid.fileName` before constructing the target, as explicitly required by [AGENTS.md:11–12](AGENTS.md#L11-L12).",
+      "confidence": 1
+    },
+    {
+      "file": "src/report.mjs",
+      "start": 39,
+      "end": 42,
+      "severity": "P2",
+      "title": "[P2] Propagate export failures to the CLI",
+      "body": "If directory creation or file writing fails, this catch merely warns and then returns the row count, causing `stockroom export` to print that rows were written and exit 0. The feature requires exit 1 when the file cannot be written. Let the error reach the CLI instead of swallowing it, following [AGENTS.md:21](AGENTS.md#L21).",
+      "confidence": 1
+    },
+    {
+      "file": "src/validate.mjs",
+      "start": 48,
+      "end": 48,
+      "severity": "P2",
+      "title": "[P2] Reject noninteger values and values below the minimum",
+      "body": "The conjunction rejects a value only when it is both noninteger and below the minimum. It therefore accepts page numbers `0`, `-1`, `1.5`, `many` (`NaN`), and `Infinity`, as well as invalid thresholds, producing misleading successful reports. Combine the noninteger and minimum checks with `||` so these command-line values are rejected before use, as required by [AGENTS.md:11–12](AGENTS.md#L11-L12).",
+      "confidence": 1
+    }
+  ],
+  "findingBodyMax": 600,
+  "verdict": "incorrect",
+  "score": {
+    "defects": 7,
+    "found": [
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5",
+      "D6",
+      "D7"
+    ],
+    "missed": [],
+    "extra": 0,
+    "recall": 1
+  }
+}

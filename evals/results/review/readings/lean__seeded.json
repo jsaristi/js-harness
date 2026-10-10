@@ -1,0 +1,115 @@
+{
+  "schema": "js-harness.review-reading/v1",
+  "config": "lean",
+  "range": {
+    "name": "seeded",
+    "base": "0366ee039c4985514911e34cb508bd6061c3be39",
+    "head": "80952cafb79cd82f5646a8cb284b1de3f9744d2b"
+  },
+  "recordedAt": "2026-10-08T02:29:34.238Z",
+  "cli": "0.161.0",
+  "session": "lean",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "modelSource": "command",
+  "prompt": "codex",
+  "promptVersion": null,
+  "outcome": "reviewed",
+  "reason": null,
+  "usage": {
+    "inputTokens": 54797,
+    "cachedInputTokens": 33536,
+    "outputTokens": 2001,
+    "reasoningOutputTokens": 105
+  },
+  "requests": 4,
+  "firstRequestInputTokens": 5717,
+  "durationMs": 60389,
+  "coverage": {
+    "seen": 226,
+    "total": 226
+  },
+  "parts": 1,
+  "findings": [
+    {
+      "file": "src/cli.mjs",
+      "start": 80,
+      "end": 80,
+      "severity": "P1",
+      "title": "[P1] Apply multiple counts in a single load/save operation",
+      "body": "When two or more counts are supplied, each concurrent `count()` loads its own state and overwrites the whole file. Updates and journal entries can be lost, and the saves also race on the same temporary filename, potentially causing rename failures. Validate all pairs first, then apply them to one loaded state and save once, consistent with [AGENTS.md:19](AGENTS.md#L19).",
+      "confidence": 1
+    },
+    {
+      "file": "src/cli.mjs",
+      "start": 102,
+      "end": 102,
+      "severity": "P1",
+      "title": "[P1] Validate the export name before constructing its path",
+      "body": "An export name such as `../stockroom` escapes the exports directory and overwrites `stockroom.json` with report rows, corrupting the inventory. Pass the name through `valid.fileName()` before constructing the target, as required by [AGENTS.md:11–12](AGENTS.md#L11-L12) and already done for snapshots.",
+      "confidence": 1
+    },
+    {
+      "file": "src/stocktake.mjs",
+      "start": 41,
+      "end": 41,
+      "severity": "P1",
+      "title": "[P1] Await the undo save before returning",
+      "body": "For a successful undo, this returns and lets the command print success before the restored quantity and journal are stored. If saving fails, the rejection also bypasses the CLI's error handler. Await `store.save(state)` to preserve the persistence-before-success invariant in [AGENTS.md:9–10](AGENTS.md#L9-L10).",
+      "confidence": 1
+    },
+    {
+      "file": "src/stocktake.mjs",
+      "start": 17,
+      "end": 20,
+      "severity": "P2",
+      "title": "[P2] Refuse counts for unknown SKUs",
+      "body": "Counting an unknown SKU currently creates an item named after its SKU and saves it successfully. The feature specification explicitly requires exit code 1 and no stored changes for unknown SKUs, because new items must enter through `receive` with a name ([stocktake task:18–19](odd/tasks/stocktake.md#L18-L19)). Throw a `StockError` instead of creating the item.",
+      "confidence": 1
+    },
+    {
+      "file": "src/report.mjs",
+      "start": 24,
+      "end": 24,
+      "severity": "P2",
+      "title": "[P2] Include the last row of each report page",
+      "body": "With at least 20 items, the first page contains only 19 rows and the twentieth item never appears on any page; the same omission repeats for every full page. Since `slice()` excludes its end index, use `start + size` so pagination does not silently hide inventory items.",
+      "confidence": 1
+    },
+    {
+      "file": "src/report.mjs",
+      "start": 39,
+      "end": 42,
+      "severity": "P2",
+      "title": "[P2] Propagate export failures to the CLI",
+      "body": "If directory creation or file writing fails, this catch only emits a warning and then returns the full row count. Consequently, `export` prints that rows were written and exits 0 even though no report was produced. Let the error reach the CLI so it returns 1, following [AGENTS.md:14–15](AGENTS.md#L14-L15) and [AGENTS.md:21](AGENTS.md#L21).",
+      "confidence": 1
+    },
+    {
+      "file": "src/validate.mjs",
+      "start": 49,
+      "end": 49,
+      "severity": "P2",
+      "title": "[P2] Reject nonintegers and values below the minimum independently",
+      "body": "The conjunction accepts negative integers, page zero, fractions above the minimum, `NaN`, and infinity. For example, `report --low abc` succeeds with no low-stock markings, while invalid page numbers produce misleading or empty pages. Join the integer and minimum checks with `||` so each invalid condition is rejected before use, as required by [AGENTS.md:11–12](AGENTS.md#L11-L12).",
+      "confidence": 1
+    }
+  ],
+  "findingBodyMax": 600,
+  "verdict": "incorrect",
+  "score": {
+    "defects": 7,
+    "found": [
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5",
+      "D6",
+      "D7"
+    ],
+    "missed": [],
+    "extra": 0,
+    "recall": 1
+  }
+}

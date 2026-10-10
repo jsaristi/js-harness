@@ -1,0 +1,1401 @@
+# Codex review, lean and measured
+
+Locator: `odd/tasks/codex-review-lean.md` · Engram mirror: `odd/codex-review-lean/tasks` · Branch:
+`feat/codex-review-lean`, in the linked worktree `D:\js-harness-worktrees\codex-review-lean`
+
+## Goal
+`js-harness codex-review` runs the Codex review in a session that loads only what a review needs,
+measures every attempt, and replaces today's configuration only on numbers that show it finds the
+same or more with fewer tokens.
+
+## Why
+A review session today starts from Sebastián's whole Codex home: 25,698 estimated tokens of
+instructions from files on every request, none of them about reviewing (the 87,563 bytes of the
+global `AGENTS.md` are delegation, routing, gentle-ai's own review, engram and persona). That
+block costs tokens and also steers the reviewer: three saved reviews refused a range because it
+"exceeds the repository's mandatory delegation budget". And nothing measures a review: the
+command drops the usage Codex reports, so "it costs more than it did" cannot be checked
+(`odd/tasks/codex-parity.md` in `feat/codex-parity`, Progress, 2026-10-06). The reviews draw on
+the same subscription cap as his own Codex work, so a review that is complete and cheap is worth
+a feature; a cheaper one that finds less is not, which is why the switch waits on a comparison.
+
+## Done when
+- `npm run check` exits 0
+- `node bin/js-harness.mjs contract check odd/tasks/codex-review-lean.md` exits 0
+- `node --test bin/codex-review.test.mjs` exits 0
+- `node --test "evals/review/*.test.mjs"` exits 0
+- `node evals/review/report.mjs --require-complete` exits 0, so every cell of the comparison is
+  recorded
+- `docs/ROADMAP.md` records the result of the comparison (per configuration: findings, seeded
+  defects found, tokens, wall time) and which configuration `codex-review` runs by default
+- This document holds the proposal for the Codex plugin (the `doctor` row, `codex:rescue`, the
+  SessionStart hook), with the numbers it rests on, for Sebastián to decide
+
+## In scope / Out of scope
+- In: `bin/codex-review.mjs`, `bin/lib/` (the run log, the usage reader, the review prompt and
+  its schema, the session builder), their tests, `evals/review/` (the seeded diff, the scorer,
+  the comparison and its report), `evals/results/review/`, `docs/ROADMAP.md`, the installed skill
+  text in `bin/lib/manifest.mjs`, this document, and `AGENTS.md` only if a line must change and
+  the result fits its budget.
+- Out: the Codex plugin for Claude Code (`codex@openai-codex`): this feature proposes, it removes
+  and changes nothing of it. The worktree `D:\js-harness-worktrees\codex-parity` and F6's files
+  (`evals/codex-*.mjs`, `evals/suite.mjs`, `evals/results/codex/`): F6 is paused there and
+  resumes on them. gentle-ai's review. The real `~/.codex`, engram store and gentle-ai state.
+
+## Constraints
+- Decided, not reopened (Sebastián, 2026-10-06): the review runs on `gpt-6.1-sol` at `medium`,
+  set by the command itself; it loads the diff, read access to the repository, the project's
+  `AGENTS.md` and Codex's own review rubric, and leaves out gentle-ai's orchestrator, ODD,
+  engram, persona, skills, plugins, MCP servers and hooks; it is an integration of this
+  repository over `codex exec review`, not over the plugin.
+- Nothing writes into the real `~/.codex`, and the content of `auth.json` is never read, parsed,
+  printed, logged or committed — because Codex refreshes that file in place and a refresh inside
+  a copy may leave the real login invalid (unverified; `odd/tasks/codex-parity.md`, Constraints),
+  and the login is his. The one exception is his own (2026-10-06, Progress): the lean home's
+  `auth.json` is a hard link to the real one, never a copy, so a refresh during a review
+  writes the real file as his own Codex would. The real home is read before and after a first
+  run, before any review rests on it.
+- Every call to the model through Codex is asked first, with the number of reviews — because
+  they draw on the subscription's usage cap, which cannot be measured in advance. T5 and T12
+  call the model; no other task does.
+- Codex, gentle-ai and engram are not updated while this feature is open — because F6 resumes on
+  the stack it started on (codex-cli 0.160.0, gentle-ai 4.0.0, engram 3.1.0) and its suite
+  refuses another.
+- The new configuration lives beside today's until T13 — because the switch is decided by the
+  comparison: it replaces the current one only if it finds the same or more with fewer tokens.
+- `check --push` keeps reading `codex-reviews.jsonl` as it does — because a failed attempt must
+  never count as a review. Attempts and their measurements go to a second file in the same
+  folder of the git common dir, which deleting undoes exactly.
+- `AGENTS.md` is at 1,500 of 1,500 estimated tokens (1,497 when this feature opened) — so a
+  line changes there only by replacing words, and the gate measures it.
+- Zero dependencies, and the review's prompt and schema ship inside `bin/` — because
+  `package.json` publishes `bin/` and `AGENTS.md` only, and every command runs with no install.
+- Never two gates at once; a commit runs in the background; after a failed gate `git config
+  --local core.bare` is read in `D:\js-harness` before anything else, and `git status --short`
+  after every gate — because parallel spawns on this host fail with `0xC0000142`, a gate from a
+  linked worktree turned the repository bare twice on 2026-10-04, and a gate once left an
+  untracked file behind (`odd/tasks/codex-parity.md`, Constraints and Follow-ups).
+
+## Effort
+high
+
+## Ask me before
+Any call to the model through Codex (the probes of T5, the runs of T12), with the count of
+reviews; copying `auth.json` anywhere, if T4 finds no way without it; changing the default
+configuration of `codex-review` (T13); anything about the plugin (T14 only proposes); push, pull
+request, merge.
+
+## TDD
+Mode: strict (source: user global config). Runner: `node --test`. Exceptions: T4 is reading and
+writing down; T5's proof and T12 are runs of the real CLI, checked by their recorded output.
+
+## Delivery
+Forecast: ~1,900 authored lines with tests (usage reader and run log ~350, session builder ~200,
+home if needed ~300, prompt, schema and parser ~350, splitting ~300, `evals/review/` ~400), above
+the ~400 slice budget. Strategy: `ask-on-risk`; chain strategy `stacked-to-main`, reusing
+Sebastián's choice for the earlier features (`odd/tasks/evals.md`, Delivery): each slice its own
+pull request against `main`, merged in order. Slices: A = T1–T2, B = T3–T5, C = T6–T7,
+D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88`.
+
+## Tasks
+### Slice A — measure
+- [x] T1 A reader of what a review session spent, in `bin/lib/`: from Codex's JSONL, tokens
+  (input, cached, output, reasoning) summed over every `turn.completed`, the count of turns,
+  and the items by type (shell commands, MCP calls, sub-agent calls, messages) — route:
+  delegated writer (the reader and its test; `evals/agent-output.mjs` is the reference, `bin/`
+  cannot import it)
+- [x] T2 Every attempt of `codex-review` leaves a line in a run log beside the review record:
+  outcome (reviewed, not inspected, failed, timed out, interrupted), the reading of T1, wall
+  time, codex-cli version, model and effort (`null` while the user's config sets them), and the
+  review record names its run — route: same writer
+
+### Slice B — a clean session
+- [x] T3 `codex-review --session lean`: `--ignore-user-config`, `-m gpt-6.1-sol`,
+  `-c model_reasoning_effort="medium"`, read-only sandbox, no approvals, with the exact argv
+  under test; `current` stays the default — route: delegated writer
+- [x] T4 What a session still loads from the Codex home under `--ignore-user-config` (the global
+  `AGENTS.md`, `hooks.json`, skills, plugin caches), and every way to leave the global
+  `AGENTS.md` out, read from the installed CLI's help and Codex's source and written here with
+  its sources; no model call — route: one read-only explorer
+- [x] T5 The way T4 finds, implemented, and proven on the real binary before a review rests on
+  it: the real `~/.codex` hashed before and after, the real login still answering, the first
+  request's size recorded. Calls the model: asked first, with the count — route: delegated writer,
+  then inline runs
+
+### Slice C — own instructions, structured answer
+- [x] T6 The answer as data and the prompt of our own, both in `bin/lib/`: a schema for the
+  answer the rubric already gives in JSON (findings with file, line range, severity, title,
+  explanation, confidence; the verdict) and its reader from the review sub-agent's rollout
+  file; a versioned review prompt that names the range and carries the intent, chosen with
+  `--prompt own` and fed by `--doc <feature document>` (its Goal and Done when). The default
+  stays `--base` with Codex's own sentence; `--output-schema` is not used, since a review
+  ignores it — route: delegated writer
+- [x] T7 The answer read as data under the lean session: findings validated against the
+  schema, printed as `file:line severity title`, counted by severity in the run log; an
+  answer off the schema is a failed attempt, recorded — route: same writer
+
+### Slice D — completeness
+- [x] T8 The evidence rule holds under the lean session and the own prompt: every changed line
+  of every changed file in the output of a successful command, and a refusal names the files not
+  read — route: delegated writer
+- [x] T9 A large range is reviewed in parts instead of refused: whole files grouped up to a
+  bound of changed lines, a larger file alone, each part its own session with its own evidence
+  and its own line in the run log; the review is recorded only when every part passed, with the
+  findings merged — route: same writer
+
+### Slice E — quality before the switch
+- [x] T10 A diff with seeded defects and its answer key in `evals/review/`, and a scorer that
+  matches findings to the key by file and line — route: delegated writer
+- [x] T11 The comparison and its report: `evals/review/compare.mjs` runs configurations over
+  ranges and stores each reading in `evals/results/review/`; `report.mjs --require-complete`
+  sets them side by side — route: same writer
+- [x] T12 The runs, after Sebastián's go-ahead on the count: the same range under `current` and
+  `lean`; `high` beside `medium`; the seeded diff under each; CodeGraph with and without —
+  route: inline runs
+- [x] T13 The verdict and the switch: `lean` becomes the default only if it found the same or
+  more with fewer tokens; then the roadmap's Review and Effort rows, the installed skill text,
+  and `AGENTS.md` only if needed and within budget — route: delegated writer
+- [x] T14 The proposal for the Codex plugin, with the numbers: the `doctor` row, `codex:rescue`,
+  the SessionStart hook — route: inline
+- [x] T15 The result in `docs/ROADMAP.md`, the carried follow-ups of
+  `odd/tasks/codex-exec-review.md` that this feature closed marked there — route: inline
+
+## Evidence at the start (2026-10-06, `main` at `3915b88`, codex-cli 0.160.0)
+- What runs today: `codex exec review --json --ephemeral --base <merge-base>` with
+  `-c sandbox_mode=read-only -c approval_policy=never` and two desktop plugins off
+  (`bin/codex-review.mjs:57-67`). No model, no effort and no `--ignore-user-config`: the session
+  takes `high` and everything else from `~/.codex/config.toml`.
+- What is dropped: `reviewEvidence` keeps the turn's state, the last message and the shell
+  commands; the `usage` of `turn.completed` and every other item type are not read
+  (`bin/codex-review.mjs:169-186`). The record holds base, head, date and outcome
+  (`bin/codex-review.mjs:430-437`), and an attempt that fails writes nothing
+  (`bin/codex-review.mjs:404-426`).
+- What the installed CLI offers (`codex exec review --help`): `--ignore-user-config` ("Do not
+  load `$CODEX_HOME/config.toml`; auth still uses `CODEX_HOME`"), `--ignore-rules`,
+  `-m`, `-c`, `--output-schema <FILE>`, `-o`, `--base`, `--commit`, `--uncommitted`, `--title`,
+  and a positional `[PROMPT]` ("Custom review instructions"). No flag names the global
+  `AGENTS.md`.
+- The one review of this repository with full usage (2026-09-30, cli 0.159.1, `high`, before
+  gentle-ai 4): 107 s, 7 requests, 297,479 input tokens (240,640 cached), 2,396 output of which
+  703 reasoning, 6 shell calls. The fixed payload from files grew from 10,510 to 25,515
+  estimated tokens on 2026-10-01 (`odd/tasks/codex-parity.md` in `feat/codex-parity`, Progress,
+  2026-10-06).
+- A reader of Codex's JSONL usage exists in `evals/agent-output.mjs:160-197`; `input_tokens`
+  holds `cached_input_tokens` as a part, and `reasoning_output_tokens` is kept apart since
+  whether it is inside `output_tokens` is not known.
+
+## What Codex loads, and what `exec review` accepts (T4, 2026-10-06)
+Read from `openai/codex` at the tag `rust-v0.160.0` (paths under `codex-rs/`) by a read-only
+explorer, three claims read again by the parent (`login/src/auth/storage.rs:206-223`,
+`exec/src/cli.rs:283-305`, `exec/src/lib.rs:884-889`). No model was called and `auth.json` was
+not opened. "Read" below means the code path was read, not that a run showed it.
+
+- `--ignore-user-config` swaps the user layer for an empty table whose path is still
+  `$CODEX_HOME/config.toml` (`config/src/loader/mod.rs:511-518`). So what is a key of
+  `config.toml` goes: `[mcp_servers.*]`, `[plugins]`, `model_instructions_file`, the model and
+  the effort. What is found through the home's folder stays:
+  - the global `AGENTS.override.md` or `AGENTS.md`, read with no gate and no size cap
+    (`codex-home/src/instructions/mod.rs:43-79`, `core/src/thread_manager.rs:1824-1832`);
+  - `$CODEX_HOME/skills`, and `~/.agents/skills`, which is under the OS home and not the Codex
+    home (`ext/skills/src/host_roots.rs:95-113`), so a home of the review's own does not leave
+    it out;
+  - execpolicy `.rules`, unless `--ignore-rules` (`core/src/exec_policy.rs:669-682`);
+  - `hooks.json` is read (`hooks/src/engine/discovery.rs:129-148`), and a handler runs only if
+    trusted, with the trust hashes in the ignored `config.toml`, so none should run: inferred,
+    and `--disable hooks` makes it certain;
+  - the built-in `codex_apps` MCP server while the `apps` feature is on
+    (`core/src/mcp.rs:353-363`); `--disable apps` and `--disable plugins` remove it and the
+    plugins (`core-plugins/src/manager.rs:813-815`).
+- No `-c` key, environment variable or flag leaves the global `AGENTS.md` out with the real home
+  in place. `project_doc_max_bytes=0` does the opposite: it bounds the project's file only
+  (`core/src/agents_md.rs:68,133`). The one way is a `CODEX_HOME` of the review's own, which
+  must exist already (`utils/home-dir/src/lib.rs:13-50`); the project's `AGENTS.md` is still
+  read there, since it is skipped only when the project is marked untrusted
+  (`core/src/agents_md.rs:64`).
+- The login in such a home. The store is the file `<home>/auth.json` by default
+  (`login/src/auth/storage.rs:154-155`) and this machine's `config.toml` has no
+  `cli_auth_credentials_store` key. No supported way shares a login between two homes: the
+  keyring entry is keyed by a hash of the home's path (`storage.rs:238-248`),
+  `CODEX_ACCESS_TOKEN` takes no ChatGPT login (`login/src/auth/manager.rs:1536-1557`), and
+  `CODEX_API_KEY` is API billing. A refresh rewrites the tokens (`manager.rs:1599-1621`) by
+  truncating and writing the same path, not by renaming a new file over it
+  (`storage.rs:206-223`); it happens when the access token is within 5 minutes of its expiry or
+  the last refresh is older than 8 days (`manager.rs:203-204,3014-3025`). The client has a
+  message for the server's `refresh_token_reused` (`manager.rs:207,1687`), so a refresh from a
+  copy leaving the original invalid is likely, and not shown.
+- `exec review` and a prompt. `--base` conflicts with the positional prompt
+  (`exec/src/cli.rs:283-305`). A prompt alone is a custom target: the user message is the prompt
+  as written, with no range (`prompts/src/review_request.rs:91-97`), while a `--base` review
+  gets a fixed sentence with the merge-base and `git diff <sha>` (`review_request.rs:62-70`).
+  Codex's rubric applies to either, since it replaces the base instructions whatever the target
+  (`core/src/tasks/review.rs:119-120`).
+- `--output-schema` does nothing in a review: the review branch never loads it
+  (`exec/src/lib.rs:884-889`) and core passes no schema (`core/src/tasks/review.rs:137`). The
+  rubric already asks the model for findings with title, body, priority, confidence and a file
+  with a line range (`prompts/templates/review/rubric.md:67-94`); `exec --json` then gives them
+  as one `agent_message` of rendered text, a line `- <title> — <path>:<start>-<end>` per
+  finding with the priority as a `[P1]` tag in the title
+  (`protocol/src/review_format.rs:23-82`). The confidence and the overall verdict are dropped.
+- Model and effort. `-m` applies, since `review_model` would win and neither exec nor the real
+  config sets it (`core/src/session/review.rs:14-17`, `exec/src/lib.rs:573`); the effort
+  carries over from the session (`session/review.rs:49-69`); that
+  `-c model_reasoning_effort` reaches it is inferred.
+- Both `AGENTS.md` files reach a review as one user message (`core/src/codex_delegate.rs:76`,
+  `core/src/context/user_instructions.rs:15-34`).
+
+What this changes, and waits on Sebastián:
+- The lean session needs a home of its own, so the login question is his (Ask me before): a
+  copy of `auth.json` per run, or a hard link to it. Neither is documented by Codex.
+- `--output-schema` and a prompt beside `--base` cannot both hold over `exec review`. The
+  nearest that keeps his three decisions is a custom-target review: the versioned prompt names
+  the range and carries the intent, Codex's rubric still applies, and the findings by file,
+  line and severity are read from the rubric's own rendered format. The flag is dropped
+  because the CLI ignores it there. T6 and T7 are written for that once he agrees.
+- Skills in `~/.agents/skills` are outside any Codex home: `-c skills.include_instructions=false`
+  is the key read at `core/src/config/mod.rs:4010-4014`, its effect inferred. T5's first run
+  shows whether they still reach the session.
+
+## Why the first lean review ran no command and reported no tokens (2026-10-07)
+Read from the same tag by a read-only explorer after the run of 05:34Z, two claims read again
+by the parent (`core/src/exec_policy.rs:787-814`, `core/src/codex_delegate.rs:306-322`). No
+model was called.
+
+- The refusal. On Windows a shell command that no rule matches is forbidden when approvals are
+  `never`, the profile restricts the file system (read-only does) and no Windows sandbox is
+  set: `windows_managed_fs_restrictions_without_sandbox_backend`, `AskForApproval::Never =>
+  Decision::Forbidden` (`core/src/exec_policy.rs:789-806`); with a sandbox the same function
+  allows it (`:810-813`). The sandbox is the key `windows.sandbox`, one of `elevated`,
+  `unelevated`, `mxc` (`config/src/types.rs:164-176`), which his `config.toml` sets to
+  `unelevated` and the lean session did not load. `unelevated` needs no administrator and no
+  setup; it writes `cap_sid` and `.sandbox/` into the home
+  (`windows-sandbox-rs/src/cap.rs:35-36`, `spawn_prep.rs:108-109`). In read-only mode it adds
+  no access entry to the workspace or to the home, only to the NUL device
+  (`spawn_prep.rs:289-342`), so the linked `auth.json` keeps its access list. `--ignore-rules`
+  changes nothing here: there are no built-in allow rules (`exec_policy.rs:662-716`).
+- The zeros. `exec` fills `turn.completed.usage` from the last token update of the primary
+  thread and prints zeros when none came (`exec/src/event_processor_with_jsonl_output.rs:118-127`).
+  A review runs in a sub-agent whose `TokenCount` events are dropped before they reach the
+  parent (`core/src/codex_delegate.rs:311-319`), and the parent makes no request of its own
+  (`core/src/tasks/review.rs:76-91`). So `exec review --json` reports no tokens in any
+  session, by construction. The review of 2026-09-30 that F6's evidence cites was read from a
+  database of a run that was not ephemeral, not from this stream.
+- Where the tokens are. With `--ephemeral` nowhere on disk (`core/src/session/session.rs:1008-1009`,
+  `:1112-1113`), and the sub-agent inherits it (`core/src/tasks/review.rs:105-106`). Without it
+  each thread writes `sessions/YYYY/MM/DD/rollout-<timestamp>-<thread id>.jsonl`
+  (`rollout/src/rollout_file_name.rs:67`) with `token_count` lines whose `info` holds
+  `total_token_usage` and `last_token_usage` (`protocol/src/protocol.rs:2241-2282`,
+  `rollout/src/policy.rs:113-119`). That the sub-agent gets a file of its own is read from
+  code and not yet seen.
+
+What follows from it:
+- The lean session sets `windows.sandbox` itself on Windows and drops `--ephemeral`: its home
+  is thrown away after the run, so the tokens are read from its rollout files before that.
+- The `current` session cannot be measured as it runs today, ephemeral in his real home.
+  Measuring it for the comparison of T12 means either a run that is not ephemeral, which
+  leaves session files in his `~/.codex` and has this command read them, or a home that
+  copies his configuration. That is his decision, put to him before T12.
+
+## Open questions, each with the task that answers it
+- Answered by T4 (section above): `--ignore-user-config` leaves the global `AGENTS.md`, the
+  skills and the rules in; only a home of the review's own leaves the global `AGENTS.md` out;
+  `exec review` takes a prompt or `--base`, not both, and ignores `--output-schema`.
+- Does a refresh of the login inside a copy leave the real one invalid? Not shown, and not to
+  be tried on his login. (T5 is designed so that it never has to be.)
+- Do the skills of `~/.agents/skills`, a hook or the apps server still reach a lean session?
+  Answered for the text of the first request by the run of 2026-10-07T08:20Z (Progress): no
+  skill, plugin or MCP text and no global `AGENTS.md`. The tool list of that request is not
+  in the rollout file, so what tools were offered is not shown.
+- With the orchestrator block gone, does Codex still refuse a range above about a thousand
+  lines? T9's bound is set from a measured run, not from that number. (T12)
+
+## Progress
+- 2026-10-06: Sebastián opened the feature and fixed its decisions and order (Constraints).
+  Worktree and branch created from `main` at `3915b88`; this document written from the evidence
+  of F6's Progress of the same day, `bin/codex-review.mjs` and `odd/tasks/codex-exec-review.md`.
+  No model called. Committed as `7deddfc` (gate green, `core.bare` `false`, the worktree
+  clean); gentle-ai assessed `3915b88..7deddfc` as `passive`, review not due, so the reviewed
+  boundary is `7deddfc`.
+- 2026-10-06: T4 by a read-only explorer (route: delegated, as planned), its three load-bearing
+  claims read again by the parent at the tag. Findings in "What Codex loads, and what
+  `exec review` accepts". Two of them reach Sebastián's decisions and are put to him, one at a
+  time: the login of a home of the review's own, then `--output-schema`. T1's wording is
+  corrected by the same reading: Codex's JSONL reports usage per turn, not the number of
+  requests in it, so the reader counts turns.
+- 2026-10-06: T1 and T2 by the delegated writer, with nothing staged by it and no model called.
+  T1: `sessionReading(events)` in `bin/lib/codex-usage.mjs` gives the four token counts summed
+  over the turns (`null` for one Codex never reported, so it is told apart from zero), the
+  turns, the items by type and the commands with how many failed. T2: every attempt that
+  launches Codex appends a line to `<git common dir>/js-harness/codex-review-runs.jsonl`
+  (`bin/lib/codex-review-runs.mjs`, schema `js-harness.codex-review-run/v1`): outcome
+  (`reviewed`, `not-inspected`, `failed`, `timed-out`, `interrupted`) with its reason, the
+  range, the cli version read from the `--version` probe, wall time, the reading of T1 and the
+  coverage; `model` and `effort` are `null` until T3. The review record names its run, and a
+  line of one summary is printed. Nothing before the launch writes a run line, nor does
+  `--unavailable`. RED: T1 13 tests, 11 failing on assertions against a stub; the run-log
+  module failed to load; the command 91 tests, 21 failing. GREEN: 13/13, 24/24, 91/91. The
+  writer's verification over the five test files: 171 tests, 171 pass, 117 s. Parent: read the
+  diff of the command, and ran the three library files again, 37 of 37.
+  - Chosen by the writer and kept: a run line that cannot be written is a warning, and the
+    record then omits `run`; the `reviewed` run line is written before the review record, so
+    a record that then fails to write leaves a measured run with no record, which
+    `check --push` never reads; the append and read plumbing is shared from
+    `bin/lib/codex-reviews.mjs`, whose own tests pass unedited.
+- 2026-10-06: T1 and T2 committed as `73ec5ae` (gate green, `core.bare` `false`, the worktree
+  clean). gentle-ai assessed `7deddfc..73ec5ae` as `medium`, review due
+  (`slice_budget_reached`, 933 lines); granted without asking, as agreed. Lineage
+  `review-1792335775ecde79`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `73ec5ae`. Its three findings, none blocking, all accepted and fixed
+  by the writer, resumed:
+  - R3-reviewed-run-without-record (WARNING): the order is kept and now proven, with a test
+    where the record cannot be written after the run was logged: exit 1, the message, one
+    `reviewed` run line and no record; the run log's header says what such a line means. The
+    behavior existed, so the test passed at once: a guard, not a RED.
+  - R3-wall-clock-duration: the wall time is read off a monotonic clock (`monotonicNow`,
+    `performance.now()` by default), whole milliseconds, never below zero; `startedAt` stays
+    on the wall clock. RED: 3 failing, `-3600000 !== 2501` with the wall clock set back an hour.
+  - R3-logrun-build-outside-try: the run line is built inside the `try`, so a failing id or
+    date source never changes how an attempt ends. RED: 2 failing, the injected error escaping.
+  RED over the file: 97 tests, 5 failing. GREEN, the writer's verification over the five test
+  files: 177 of 177, 129 s. Parent: read the diff of the command and of the run log.
+- 2026-10-06: the corrections committed as `338386a` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai assessed `73ec5ae..338386a` as `medium`, review not due
+  (`under_budget`, 191 lines): pending in the slice, the reviewed boundary stays `73ec5ae`.
+- 2026-10-06: T3 by the writer, resumed. `--session <current|lean>`, `current` the default and
+  its argv unchanged to the token. The lean argv, pinned by a test, also through the Windows
+  launch path: `exec review --json --ephemeral --ignore-user-config --ignore-rules --disable
+  plugins --disable apps --disable hooks -m gpt-6.1-sol -c model_reasoning_effort="medium" -c
+  sandbox_mode=read-only -c approval_policy=never -c skills.include_instructions=false --base
+  <base>`. The model and the effort are the exported constants `LEAN_MODEL` and `LEAN_EFFORT`;
+  the run line gains `session` and, under `lean`, holds them instead of `null`. RED: the
+  import failed, then 106 tests with 8 failing on assertions. GREEN: 106/106; the writer's
+  verification over the five test files: 186 of 186, 236 s. Parent: `--session fast` exits 2
+  with the usage, and both argv lists printed from the module read as above.
+  - Not shown yet, and T5's first real run shows it: that Codex accepts the feature names
+    `plugins`, `apps` and `hooks` after `--disable`, and that each flag does what T4 read
+    from source. `lean` sets no `CODEX_HOME`, so until T5 it still loads the global
+    `AGENTS.md`.
+- 2026-10-06: T3 committed as `e3aad48` (gate green, `core.bare` `false`, the worktree clean).
+  gentle-ai assessed `73ec5ae..e3aad48` as `medium`, review due (`slice_budget_reached`, 438
+  lines, the corrections of `338386a` with T3); granted without asking. Lineage
+  `review-b49708c1e845a7d1`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `e3aad48`. Its three findings, none blocking, all accepted and
+  carried to T5, which touches the same lines (Follow-ups). Recorded as `2c74d42` (gate green,
+  `passive`).
+- 2026-10-06: Sebastián decided the login of the lean home: "Hard link al auth.json real,
+  recreado en cada corrida. Probalo primero con el hash antes y después." So the lean session
+  runs in a home of its own under `<home>/.js-harness/codex-review-homes/<run id>`, made and
+  removed by every run, whose `auth.json` is a hard link to the real one and never a copy.
+  Why the link: Codex saves the login by truncating and writing the same path
+  (`login/src/auth/storage.rs:206-223`), so the two names always hold one token and a refresh
+  cannot leave the real login stale. What it costs, said to him before he chose: a refresh
+  during a review writes the real `auth.json` through the link, as his own Codex would. The
+  constraint "nothing writes into the real `~/.codex`" stands for everything else, and the
+  proof he asked for comes first: the real home read before and after one lean review
+  (`evals/review/login-proof.mjs`), which calls the model and is asked with its count.
+- 2026-10-06: engram refused the update of this document's mirror ("Claude host session
+  registration could not be confirmed"), as it did to F6's session. The mirror
+  `odd/codex-review-lean/tasks` holds the document as it was opened; this file is whole. The
+  mirror is pending until engram takes a write.
+- 2026-10-07: Sebastián approved the model calls of T5 and of the slice's review, two reviews
+  and no more: "Dale con las 2 revisiones cuando T5 esté commiteado". One `lean` over
+  `338386a..HEAD` inside the proof of the login, then one `current` over `7deddfc..HEAD`.
+- 2026-10-07: T5's build by a new writer, no model called and the real `~/.codex` never
+  touched (every test makes its own fake home).
+  - `bin/lib/codex-review-home.mjs`: `createLeanHome` makes `<parent>/<id>`, hard-links the
+    real `auth.json` into it and checks that the two names are one file (device and file id);
+    a missing login, another volume (`EXDEV`) or any failed link is an error that leaves
+    nothing behind and says no copy is made. `dispose` removes the login's second name first,
+    by a call that removes one name, and then the folder; it never throws. A run that was
+    killed leaves its folder, and `sweepStaleLeanHomes` removes those older than twice the
+    review's timeout. The module never opens the file.
+  - `bin/codex-review.mjs`: under `lean` only, the run's id is made before the launch, the
+    home is created under `<home>/.js-harness/codex-review-homes/` and given as
+    `CODEX_HOME`, and it is disposed on every way out; a home that cannot be made launches
+    nothing and exits 1. `--home` names the harness's state dir again. `current` makes no
+    folder and sets nothing, pinned by a test.
+  - The two smaller findings of the review of `e3aad48`: `runSession(run)` reads a run line
+    with no `session` as `current`; a duration that is not finite is `null` on purpose.
+  - `evals/review/login-proof.mjs`: reads the real home before and after a wrapped command
+    (for `auth.json` its size, date, link count, file id and digest; for the rest of the top
+    level sizes, dates and digests, folders by count) and writes a report with no byte of any
+    file; it exits 1 if `auth.json` is another file afterwards or its link count did not
+    return.
+  - RED: the home module 17 of 18 failing against a stub; the command 14 failing; the proof
+    18 of 18. GREEN, the writer's verification over seven test files: 239 of 239, 171 s.
+    Parent: read `bin/lib/codex-review-home.mjs` whole and ran three of the files again, 50
+    of 50.
+  - Added by the writer beyond its brief and kept: `dispose` warns when the lean name had
+    become another file (Codex renaming instead of truncating), an id that is not a plain
+    folder name is refused, and an existing folder is never taken over.
+  - Seen by the parent and not covered by the script: a hard link shares the file's access
+    list too, and Codex on Windows prepares its sandbox per home (`cap_sid`, `.sandbox` in
+    the real one). So the proof run also reads `icacls` of the real `auth.json` before and
+    after, by hand.
+- 2026-10-07: T5's build committed as `e531c1f` (gate green, `core.bare` `false`, the
+  worktree clean), 1,601 lines against the roughly 300 the parent had told Sebastián, so the
+  two ranges he approved had grown to 1,826 and 2,832 lines. Told to him; the first review was
+  kept to what he approved by running it from a temporary worktree at `e3aad48`
+  (`D:js-harness-worktreescodex-review-lean-probe`), over `338386a..e3aad48`, 255 lines;
+  the second is not run without asking again.
+- 2026-10-07: gentle-ai assessed `e3aad48..e531c1f` as `medium`, review due; granted without
+  asking. Lineage `review-ad600fc281d41934`, one lens (`review-reliability`): approved and
+  acknowledged, so the reviewed boundary is `e531c1f`. Four findings, none blocking, all
+  accepted, fixed with the next change to these files (Follow-ups); none bears on a run with
+  `JS_HARNESS_HOME` and `CODEX_HOME` unset, which was checked before the run below.
+- 2026-10-07T05:34Z, the first real lean review, inside the proof of the login
+  (`evals/results/review/login-proof.md`), after a dry run of the proof around an empty
+  command had read the real home twice without a difference.
+  - The login: PASS. `auth.json` is the same file before and after (device and file id), its
+    bytes unchanged, its names 1 before and 1 after, 4,009 bytes, last written
+    2026-09-27T21:45:10Z; none of the other 55 top-level entries of the real home changed.
+    `icacls` of the real `auth.json`, of the reviewed worktree and of its `bin` read the same
+    before and after. No lean home was left under `<home>/.js-harness/codex-review-homes`.
+  - The CLI took the lean argv: every flag and the three feature names after `--disable`
+    (R3-lean-argv-unproven-against-codex, closed for acceptance; what each does is not shown).
+  - The review did not happen. Every shell command the model tried was refused before it ran,
+    "rejected: blocked by policy", for `powershell.exe`, `bash.exe` and `cmd.exe` alike, and
+    the model answered that it could not see the diff. The command recorded nothing as a
+    review and one run line, `not-inspected`, 0 of 216 changed lines, 18 s. Likely cause, read
+    from his config and not yet from Codex's source: `[windows] sandbox = "unelevated"` is a
+    key of the `config.toml` the lean session ignores, so the session had no sandbox to run a
+    command in and no one to ask.
+  - The measurement did not happen either: the one `turn.completed` carried a `usage` of four
+    zeros, present and not missing, although the model made four tool attempts and wrote a
+    message. So Codex's JSONL may not report a review's tokens at all, and T1 reads the only
+    place the command looks. What this attempt drew from the cap is not known.
+  - Both are being read from Codex's source by a read-only explorer before another call to
+    the model is asked for.
+- 2026-10-07: that run recorded as `4c8af4b` (gate green, `passive`). The explorer's reading
+  is in "Why the first lean review ran no command and reported no tokens".
+- 2026-10-07: the correction, by a new writer, no model called and no real home touched.
+  - The lean argv sets `-c windows.sandbox="unelevated"` on Windows and nothing elsewhere,
+    and no longer passes `--ephemeral`; `current` is unchanged to the token. Both lean lists
+    are pinned, and the Windows command line.
+  - The tokens come from the lean home's rollout files, read after Codex exits and before the
+    home is removed (`rolloutReading` in `bin/lib/codex-usage.mjs`): per count the sum over
+    threads of each thread's last total, the requests (the `token_count` lines that hold a
+    count, an inferred reading), the input of the first request and the threads. The run line
+    gains `requests`, `firstRequestInputTokens`, `threads` and `usageSource`
+    (`rollout` or `null`). The command no longer takes tokens from Codex's JSONL: under
+    `current` every count is `null` and the summary says the tokens are not known, where it
+    printed zeros.
+  - `--keep-home`, lean only: the run removes the login's name from its home and keeps the
+    rest, so the rollout files of a first run can be read by a person; the sweep removes the
+    folder later.
+  - The four findings of the review of `e531c1f`: an empty `--home` or `JS_HARNESS_HOME`
+    counts as unset; `CODEX_HOME` is found in any case on Windows; the proof writes its report
+    when the second reading throws; its usage says the wrapped command must be an executable.
+  - RED: the usage reader 11 of 24 failing, the command 24 of 134, the home module 4 of 22,
+    the proof 3 of 21. GREEN, the writer's verification over seven test files: 271 of 271,
+    223 s. Parent: printed the three argv lists from the module, ran four of the files again
+    (81 of 81), saw `--keep-home` without `--session lean` exit 2, read the home module's diff.
+  - Left open by the writer, settled by the first kept home: `requests` may count a line
+    Codex writes when only the rate limits change. The shape of a rollout line is read from
+    source and has not been seen in a real file.
+- 2026-10-07: the correction committed as `7529f67` (gate green, `core.bare` `false`, the
+  worktree clean). gentle-ai assessed `e531c1f..7529f67` as `medium`, review due (1,330
+  lines); granted without asking. Lineage `review-04599bf4472ce38a`, one lens
+  (`review-reliability`): approved and acknowledged, so the reviewed boundary is `7529f67`.
+  Two suggestions, both about tests, accepted and carried (Follow-ups).
+- 2026-10-07: asked for one more lean review of `338386a..e3aad48` with `--keep-home`, inside
+  the proof of the login; not yet answered. Sebastián asked instead where to run it (here, in
+  this session; F6's stays paused) and for three things to be built into the harness: whose
+  turn it is in every reply, a notice when a session finishes, and the context window watched.
+  Recorded in `docs/ROADMAP.md`, Next, item 6, as a feature of its own; applied by hand until
+  then. This session's context read 77% of 500k at that moment (auto-compact at 93%), so it is
+  compacted before the next run.
+- 2026-10-07, after the compact: Sebastián approved that one lean review. It was not run,
+  because the Codex CLI on this host changed under the feature. Evidence:
+  - `codex --version` now prints `codex-cli 0.160.1`; the run line of 05:34Z records
+    `0.160.0`.
+  - The global pnpm package `@openai/codex` was replaced at 2026-10-07T05:51:18Z (its
+    `package.json` time; the global `package.json` now asks for `^0.160.1`).
+  - `~/.codex/version.json` holds `latest_version` `0.160.1`, checked at 05:51:04Z.
+  - One session file in the real home starts at 05:51:03Z and ends a second later with a
+    turn aborted: originator `codex-tui`, source `vscode`, `cli_version` `0.159.1`, cwd
+    `C:\Users\Oficina`. So another Codex client started then, and the update followed within
+    15 seconds.
+  - No command of this session did it: a search of every Claude transcript under
+    `~/.claude/projects` for a pnpm, npm or bun install of `@openai/codex` found none (the
+    pattern would match the command text of any Bash call that ran one).
+  What this session did in the real home to learn it: listed names and times, read
+  `version.json` and the six lines of that session file. It wrote nothing and did not open
+  `auth.json`.
+  Consequences: the reading of the source in this document is of tag `rust-v0.160.0`, and
+  F6 (`codex-parity`) was paused on 0.160.0. Whether the review runs on 0.160.1 or waits for
+  0.160.0 to be put back is Sebastián's decision; the question is pending. The `icacls`
+  reading taken before the run that did not happen is discarded.
+- 2026-10-07: the question above was read three times as a task for him to run in Codex,
+  because its block was worded as an instruction. Sebastián approved a closing format of
+  four states for every reply and asked for it to be fixed in the harness. Done here, as
+  prose: `AGENTS.md` reworded (1,500 of 1,500 tokens) and `docs/ROADMAP.md`, Next, item 6,
+  which holds the format and what is left to build (a check, in that feature's own
+  session). No code changed. The question about the CLI version is still pending and is
+  asked again in that format once this commit is in.
+- 2026-10-07T08:20Z: Sebastián said yes to the one lean review on CLI 0.160.1. Run from this
+  worktree at `5fe0510` over `338386a..e3aad48` (the temporary worktree), with `--keep-home`,
+  inside the proof of the login. It is the second Codex review of this feature and the first
+  that read its diff. T5 is checked off on it. Run id
+  `f439089a-2ca4-4c4f-aea4-8221594c76f4`; the run line holds every number below.
+  - Outcome `reviewed`, coverage 216 of 216 changed lines, no finding, 39 s.
+  - Tokens, from the rollout file: 145,852 input, of which 109,184 cached (36,668 not
+    cached), 634 output, 98 reasoning; 6 requests; the first request 6,714 input tokens.
+  - The login: PASS (`evals/results/review/login-proof.md`): the same file, bytes unchanged,
+    names 1 → 1, 51 entries in the real home before and after, nothing else changed.
+    `icacls` of the real `auth.json` printed the same before and after. The kept home holds
+    no `auth.json`.
+  - The Windows sandbox: `-c windows.sandbox="unelevated"` let the session run its commands;
+    5 ran, none was rejected by policy (2 ended with exit 1, see below).
+  - The model and the effort reached the review: its `turn_context` line says
+    `gpt-6.1-sol`, `medium`, approval `never`, sandbox `read-only`.
+  - What the home shows of the session. Two rollout files: the parent thread (17 lines, no
+    `token_count`, so it made no request) and the review sub-agent (source
+    `{"subagent":"review"}`, 44 lines, 6 `token_count` lines). `threads` is 1 because only
+    one file holds usage. Each `token_count` line is one request with its own
+    `last_token_usage`; none was a line written for rate limits alone, so `requests` did not
+    overcount here.
+  - What the first request held, read from the sub-agent's file: base instructions of 8,043
+    characters (the review rubric); a developer message of 1,263 characters (permissions and
+    collaboration mode); a user message of 6,588 characters with the project's `AGENTS.md`
+    and the environment; a user message of 353 characters, the review prompt Codex writes
+    for `--base` ("Review the code changes against the base branch … Run `git diff …`").
+    Absent from all of them: the global `AGENTS.md` (searched for its persona wording), any
+    skill, plugin or MCP text.
+  - Where the input went: the model read the diff (23 KB of output), then `AGENTS.md`,
+    `docs/ROADMAP.md` and this document in one command (41 KB, cut by its own
+    `max_output_tokens`), then parts of the changed files. So most of the uncached input is
+    reading it chose to do, not what the session loaded.
+  - New, for T6: the sub-agent's last message is JSON, not rendered text:
+    `{"findings": [], "overall_correctness": "patch is correct", "overall_explanation": …}`.
+    So the rubric already answers in a structure, and it is in the rollout file of a home
+    that is kept until read. With no finding in this run, the shape of one finding is still
+    only known from source.
+  - New, a follow-up: the model ran `codex exec review --help` (exit 1),
+    `codex --ignore-user-config features list` (exit 0) and
+    `codex --disable plugins --disable apps --disable hooks features list` (exit 1) inside
+    its sandbox, to check the flags the diff names. None calls the model. A review of a
+    change to this command can start the Codex binary from inside the review.
+  The kept home stays at `~/.js-harness/codex-review-homes/<run id>` until the next lean
+  review sweeps it (60 minutes old) or it is deleted by hand.
+- 2026-10-07: the design of slice C, settled. Asked whether to read the rubric's JSON now and
+  leave the prompt of our own for the comparison, Sebastián answered "no me importa si gasta
+  cupo de codex la idea es eso que se pueda tener una revision". Taken as: the cap is not the
+  criterion, a working review is; so both are built now and the numbers of T12 choose the
+  default. T6 and T7 are rewritten for it:
+  - The answer is read from the review sub-agent's rollout file (the session whose
+    `session_meta` source is `{"subagent":"review"}`, its last assistant message), which
+    exists only under the lean session, so structured findings are a lean-session feature.
+  - The schema is the one the rubric sends (read from the kept home, CLI 0.160.1):
+    `findings[]` of `title`, `body`, `confidence_score` 0 to 1, `priority` 0 to 3
+    (optional), `code_location.absolute_file_path`, `code_location.line_range.start|end`;
+    `overall_correctness` ("patch is correct" or "patch is incorrect"),
+    `overall_explanation`, `overall_confidence_score`.
+  - `--prompt own` is a custom-target review: no `--base` on Codex's command line, the
+    prompt names the range and the command to see it, and `--doc` adds the Goal and the
+    Done when of the feature document. `--prompt codex` (default) is today's `--base`.
+  - On the cap (my reading of his sentence, to be corrected by him if wrong): a single run
+    that proves a piece on the real binary is announced with its count and run without
+    waiting; the batch of T12 is still put to him with its count first, as he asked at the
+    start.
+- 2026-10-07: T6 and T7 built by one delegated writer (route: delegated, the writer trigger:
+  ten files), test first. Not checked off until a real review under `--prompt own` shows
+  the answer read from a real rollout file.
+  - RED seen, then GREEN, per piece: the shared walk `rolloutPaths` (missing export → 25 of
+    25); `bin/lib/codex-review-answer.mjs` (module not found → 28 of 28);
+    `bin/lib/codex-review-prompt.mjs` (module not found → 14 of 14); `runFindings` and
+    `runPrompt` in the run log's reader (missing export → 19 of 19); the command (16 of 19
+    new tests red → 150 of 150 for the whole file, 209 s). The parent re-ran the four module
+    files: 86 of 86, 8 s.
+  - The prompt goes on stdin: `codex exec review --help` (0.160.1) says a PROMPT of `-` is
+    read from stdin, so no multi-line text crosses the Windows command line. The lean argv
+    under `--prompt own` is the lean one with `-` in place of `--base <base>`.
+  - What the writer decided where the brief was open: a failure of Codex itself keeps its own
+    reason and exit code, then an unreadable answer is `failed` (exit 1, no review record),
+    then the evidence rule; a lean home with no rollout file is now `failed` where it was
+    `reviewed`; the five new fields of a run line (`prompt`, `promptVersion`, `findings`,
+    `verdict`, `answerSource`) are always present and `null` under `current`; Codex's
+    rendered review is still printed, with the `file:line severity title` lines and the
+    verdict after it; the schema lets unknown fields pass, does not enforce the 80-character
+    title, takes `null` for `priority` and `overall_confidence_score`, refuses an end before
+    a start, and accepts JSON inside a fence or after a sentence, as Codex's own parser
+    does; the prompt takes full commit ids, and with an intent says the change may be one
+    step, so a criterion not reached yet is not a finding by itself; `--doc` is resolved
+    from `--cwd`, each section cut at 2,000 characters, read with `parseContract`.
+  - The evidence rule is unchanged and holds under `own`, since the prompt names
+    `git diff <from> <head>`.
+- 2026-10-07: T6 and T7 committed as `81250a4` (gate green). gentle-ai assessed
+  `7529f67..81250a4` as `medium`, review due (1,870 lines, `slice_budget_reached`);
+  granted without asking. Lineage `review-43ed9ea7c48748ff`, one lens
+  (`review-reliability`): approved and acknowledged, so the reviewed boundary is `81250a4`.
+  Four findings, none blocking, carried in Follow-ups.
+- 2026-10-07T09:38Z: the third Codex review of this feature, announced with its count and
+  run without waiting (the reading of his sentence above): the same range
+  `338386a..e3aad48` under `--session lean --prompt own --doc
+  odd/tasks/codex-review-lean.md --keep-home`, inside the proof of the login, CLI 0.160.1.
+  Run id `1529f49e-8df4-4306-b0de-71288c113d95`. T6 and T7 are checked off on it.
+  - Outcome `reviewed`, coverage 216 of 216, no finding, verdict `correct` with confidence
+    0.85, read from the real rollout file (`answerSource` `rollout`); 37 s.
+  - Tokens: 107,236 input, of which 71,936 cached (35,300 not cached), 656 output, 106
+    reasoning; 5 requests; the first request 7,066 input tokens. 6 commands, none failed.
+  - The kept home shows the prompt of our own was what the review got: a user message of
+    1,742 characters that starts "Review the code changes in the committed range …" and
+    holds the Goal heading; the project's `AGENTS.md` beside it; no global persona text.
+  - The login: PASS again, `icacls` unchanged, 51 entries before and after.
+    Corrected on the same day: that report also lists three files of the real home whose
+    bytes changed during the run (`logs_2.sqlite-shm`, `logs_2.sqlite-wal`,
+    `models_cache.json`), which this entry and the message to Sebastián left out; see the
+    entry on the real home below.
+  - Beside the run of 08:20Z (Codex's own sentence, `--base`):
+
+    | | `--prompt codex` | `--prompt own` + `--doc` |
+    |---|---|---|
+    | input tokens | 145,852 | 107,236 |
+    | of them not cached | 36,668 | 35,300 |
+    | output tokens | 634 | 656 |
+    | requests | 6 | 5 |
+    | first request | 6,714 | 7,066 |
+    | seconds | 39 | 37 |
+    | findings | 0 | 0 |
+
+    One run each, so this says only that both work and that the intent costs about 350
+    tokens in the first request. It is not a comparison: the model chose different files to
+    read in each, and neither found anything on a range with no known defect. T10 to T12
+    are what compare.
+- 2026-10-07: T8 and T9 built by one delegated writer (route: delegated, the writer trigger:
+  eight files), test first. T8 is checked: the rule held in both real lean runs (216 of 216
+  under each prompt) and is now pinned by tests. T9 is not checked until a real range is
+  reviewed in parts.
+  - RED seen, then GREEN: `bin/lib/codex-review-parts.mjs` (module not found → 13 of 13);
+    the part prompt (missing export); the cut inside a surrogate pair (a lone `\ud83d` →
+    cut before it); `runPart` (missing export → 22 of 22); the refusal that names files
+    (no "not read in full" line); the verdict printed only when the attempt stands (the
+    one-line notice absent). The 15 command tests of T9 were written after the code, then
+    run against the committed command: 14 failed for the right reason and the one that says
+    a single part is as today passed, as it should. Whole command file: 174 of 174, 273 s;
+    the five module files: 110 of 110, 9 s (re-run by the parent).
+  - T8, what was there and what was added: the rule and one test under `--prompt own`
+    existed. Added: the lean session with either prompt, reviewed and not-inspected; under
+    lean the refusal lists the files not read in full with how many changed lines of each
+    were missing (eight at most, then "and N more"); `reviewEvidence().missingFiles`. The
+    `current` refusal keeps its exact words.
+  - The findings of the last two reviews, closed here: the finding lines and the verdict
+    print only when the attempt stands; a child that closes stdin early (EPIPE) leaves the
+    outcome to its own exit; the cut of an intent section never leaves half a surrogate
+    pair; the off-Windows case test passes `linux` and `darwin`; `--keep-home` with a
+    login that could not be removed has a test at the command's level. The two that passed
+    at once were checked by breaking the code, and then failed.
+  - T9 as built: under the lean session a range above `PART_MAX_CHANGED_LINES` (400,
+    provisional; `--part-lines <n>` overrides) is split into parts of whole files in path
+    order, a larger file alone. Each part is its own session in its own lean home, one after
+    another, with the prompt of our own naming its files, its own evidence check and its own
+    run line (`part: {index, of, files, changedLines}`, absent on a single-part run). The
+    review is recorded only when every part passed; the first that fails stops the run.
+    Findings are merged in file and line order, one verdict line per part.
+  - What the writer decided where the brief was open: `--no-renames` in the count, in each
+    command of a part and in each expected set, so that parts provably add up to the range
+    (a rename split over two parts otherwise does not); a refusal before any launch when
+    the parts together would not show every changed line; the review record gains `runs`,
+    every part id, beside `run`, the last part line; the part prompt has its own version
+    constant and the whole-range text stays `v1` to the character; a path with a quote or
+    a control character refuses the split; stale homes are swept once per run, so a later
+    part cannot remove an earlier kept home.
+- 2026-10-07: T8 and T9 committed as `b5c8766` (gate green). gentle-ai assessed
+  `81250a4..b5c8766` as `medium`, review due (1,876 lines); granted without asking. Lineage
+  `review-ee9a819d44c3c251`, one lens (`review-reliability`): approved and acknowledged, so
+  the reviewed boundary is `b5c8766`. Four findings, none blocking, in Follow-ups; one of
+  them corrected a claim of this document (next entry).
+- 2026-10-07, the real home during a lean run, corrected. The proof report of the run of
+  09:38Z did not say "nothing else changed": it listed `logs_2.sqlite-shm`,
+  `logs_2.sqlite-wal` and `models_cache.json` as changed. The parent had read the report
+  through a filter that dropped those lines. What was then checked:
+  - Four Codex processes are alive that this session did not start: the desktop app's
+    `app-server` and its daemon of 0.159.1 (started 2026-10-05T20:21Z), the app's own
+    `codex.exe app-server` and `exec-server` (2026-10-06T11:23Z), and a sandbox service
+    (2026-10-06T11:22Z).
+  - `models_cache.json` of the real home says who wrote it: `client_version` `0.159.1`,
+    `fetched_at` 2026-10-07T10:46:39Z. The review command runs the CLI of 0.160.1.
+  - A control, the proof around a command that waits 70 seconds and starts nothing of
+    Codex: both log files changed again.
+  - `codex --version` given an empty home leaves no file in it, so the version probe of the
+    command is not the writer.
+  So the changes belong to his own running Codex app, and the login proof says only what it
+  measures: the login untouched. It cannot say "the lean session wrote nothing in the real
+  home" while another client writes there; carried as a follow-up for the proof tool. The
+  same app is the likely origin of the CLI becoming 0.160.1 at 05:51Z (a session of
+  `codex-tui` 0.159.1 started 15 seconds before).
+- 2026-10-07T10:45Z: T9 proven on the real binary, announced as two Codex reviews (the
+  fourth and fifth of the feature) and run: `338386a..e3aad48` with `--part-lines 200
+  --prompt own --doc … --keep-home`. T9 is checked off on it.
+  - The split: 255 changed lines in 3 files, part 1 `bin/codex-review.mjs` (89), part 2
+    the test file and this document (166). One after another, each in its own lean home.
+  - Part 1: `reviewed`, coverage 85 of 85, verdict correct (0.88), 144,027 input tokens
+    (105,984 cached), 573 output, 6 requests, first request 7,126, 34 s.
+  - Part 2: `reviewed`, coverage 131 of 131, verdict correct (0.88), 87,960 input (35,840
+    cached), 547 output, 4 requests, first request 7,136, 35 s.
+  - Together: 231,987 input (141,824 cached, 90,163 not cached), 1,120 output, 10 requests,
+    69 s; one review record for the range, with `runs` naming both parts. 85 + 131 is the
+    216 of the whole range, so the parts add up.
+  - Against the same range whole under the same prompt (107,236 input, 35,300 not cached):
+    two parts cost about twice the input, because each part reads its own context again.
+    Splitting is the price of a range that cannot be read whole, not a saving.
+  - Seen again: the model started the `codex` binary inside its sandbox in part 1
+    (`codex features list`), and in part 2 tried `node --test`, which the sandbox refused
+    (spawn EPERM); it said so in its explanation.
+  - The login: PASS, `icacls` unchanged. The same three files of the real home changed,
+    explained above.
+- 2026-10-07: decided for slice E, without a question to Sebastián, each for a stated reason:
+  - The `current` session is measured in a home that copies his configuration with the
+    login linked, not by leaving session files in his `~/.codex`: the second would write
+    in his real home, which he ruled out. `evals/codex-home.mjs` already seeds such a home
+    for F6.
+  - The comparison runs on the CLI that is installed, 0.160.1, and every reading records
+    its version; if he puts 0.160.0 back, the cells are run again. (Since then the CLI
+    became 0.161.0, see the entry of 2026-10-08: the rule is the same, one version for the
+    nine.)
+  - The effort and CodeGraph are varied by the comparison through injection, not by new
+    flags of `codex-review`: the command keeps fixing the model and the effort, as he
+    decided.
+- 2026-10-07: the documents committed as `1c7b561` (gate green). After that gate an
+  untracked `Microsoft/Windows/PowerShell/ModuleAnalysisCache` sat in the worktree root,
+  created at 10:50:36Z, while the gate ran: the cache PowerShell writes under the current
+  folder when it is started without `LOCALAPPDATA`. Removed by hand. Which test starts
+  PowerShell that way is not found; it did not appear in the next writer's test runs
+  (Follow-ups).
+- 2026-10-07: T10 built by one delegated writer (route: delegated), test first, with the
+  four findings of the review of `b5c8766`. T10 is checked: the fixture builds, and its
+  tests and the scorer's pass (74 of 74 over the four files, re-run by the parent; the
+  command file 176 of 176, 290 s).
+  - The seeded project, `evals/review/seeded/`: `stockroom`, a file-backed inventory CLI.
+    `head` adds a stocktake (count, undo, a paged low-stock report, export): 292 changed
+    lines in 6 files, under the 400 of a part, so it is reviewed whole. Built by
+    `evals/review/seeded.mjs` into a repository of two commits whose ids are the same on
+    every build (`0366ee03…` and `80952caf…`, held by a test).
+  - Seven defects, each on lines the diff adds, none hinted at in a name, a comment or a
+    spec: D1 off-by-one `src/report.mjs:24`; D2 missing await `src/stocktake.mjs:41`; D3
+    wrong condition `src/validate.mjs:49`; D4 unvalidated path `src/cli.mjs:100`; D5 lost
+    update `src/cli.mjs:80`; D6 swallowed error `src/report.mjs:39-42`; D7 against the
+    intent `src/stocktake.mjs:17-21`. The key, `key.json`, is never copied into the built
+    repository. The writer showed all seven misbehaving in a built copy.
+  - A limit to read the results with: the feature document of the seeded project is in
+    both trees, so a reviewer without `--doc` can still open it; D7 measures whether the
+    intent is used, not strictly whether it was passed.
+  - The scorer, `evals/review/score.mjs`: a finding matches a defect in the same file whose
+    range, widened by 3 lines, it overlaps; a defect is found once, a finding counts for
+    one defect, the rest is extra; it returns found, missed, extra and recall. Known limit:
+    a reviewer that places D6 in `cli.mjs` scores a miss and an extra.
+  - RED seen, then GREEN: the file bound of a part (parts of 100 files → 40, 40, 20); the
+    record of a run in parts whose run line could not be written (no `runs` → one entry
+    per part, `null` where a line was lost); the proof's sentence about another writer (7
+    red against a stub → 30 of 30); the scorer (13 red against a stub → 13 of 13). The
+    fixture's tests mostly passed at once, so each was checked by breaking the fixture (a
+    hint word, a key line on unchanged code, a failing spec), and then failed.
+  - The four findings, closed: a part holds 40 files at most (`PART_MAX_FILES`); the record
+    of a run in parts is honest when a run line is lost; `isValidCodexReview` takes a
+    record with `runs`; the login proof, when anything but `auth.json` changed, says that
+    another running Codex client may be the writer and lists the Codex processes alive.
+- 2026-10-07: T10 committed as `b0053cf` (gate green). gentle-ai assessed
+  `b5c8766..b0053cf` as `medium`, review due (2,430 lines); granted without asking, lineage
+  `review-b03a2a43f62f5e1d`. The bound status that follows a start then failed in gentle-ai
+  itself: `gentle-ai.review-integration.failure/v2`, code `operation_timeout`, phase
+  `pre_native`, cause "context deadline exceeded", `retry_safe` false, next action `stop`.
+  Nothing was mutated. Put to Sebastián as the three choices the workflow asks for (report
+  and continue, continue without reporting, stop); he chose to continue without reporting.
+  The captured decline of that candidate was run once: `action` `declined`, `consent`
+  `declined_this_candidate`, the same target. No GitHub operation. So `b5c8766..b0053cf`
+  has no gentle-ai review: its checks are the writer's tests, the parent's re-run (74 of
+  74) and the gate. The next assessment starts from `b0053cf`, so that the candidate that
+  timed out is not offered again inside a larger one; the Codex review before a push still
+  covers this range.
+- 2026-10-07: T11 built by one delegated writer (route: delegated), test first. T11 is
+  checked: the tools exist and their tests pass (61 of 61 over the three module files,
+  re-run by the parent; the command file 187 of 187, 390 s). No cell has been run.
+  - `evals/review/compare.mjs`: `--list` shows the nine cells and which are recorded;
+    `--cell <config>:<range>` runs exactly one cell an invocation, which is the control on
+    spend; `--dry-run` shows the plan and starts nothing; a recorded cell is refused without
+    `--force`. A reading is one JSON file in `evals/results/review/readings/`, written
+    whatever the outcome of the review, so a failed cell shows in the report.
+  - `evals/review/report.mjs`: one table a range, one row a configuration (outcome,
+    findings, for the seeded range found of 7 and extra, tokens, requests, seconds, CLI);
+    `--require-complete` exits 1 while a cell has no reading (today: nine of nine).
+  - The ranges are checked out apart from the repository: the real one as a `git clone` in
+    a sibling folder (`<parent of the repo>/codex-review-lean-range`, marked, removed after
+    the cell), so its review record and run log do not land in the real git dir; the seeded
+    one built in the temp folder. Only the CodeGraph cell initialises an index, in that
+    clone.
+  - Seams in `bin/codex-review.mjs`, reached only through `deps`, never from the command
+    line (a test holds that): the effort of a lean session, extra `-c` settings, a measured
+    `current`, and a callback with the structured outcome.
+  - How `current` is measured: a home under `~/.js-harness/codex-review-homes/<run id>`
+    seeded by F6's `buildCodexTemplate` and `seedCodexHome` (his `config.toml` without the
+    desktop pieces and with an engram port of its own, the global `AGENTS.md`, hooks,
+    skills, the plugin cache), the seed run before the login is hard-linked and refused if
+    it left an `auth.json`; `current`'s argv without `--ephemeral`. The template of that
+    copy is built at `<parent of the repo>/codex-review-lean-home-template`.
+  - What a measured `current` is not, to read its row with: no `notify`, no `node_repl`,
+    none of the five desktop plugins, an empty engram store; `HOME` is not moved, so
+    gentle-ai's hooks still see his real state. It is his configuration as F6 copies it,
+    not the session byte for byte.
+  - Not proven with fakes, so the first real cells are the proof: that a review that is
+    not ephemeral, in the copy, writes the sub-agent's rollout with a JSON answer; that
+    `-c mcp_servers.codegraph.*` holds under `--ignore-user-config`; whether the copied
+    hooks start engram.
+  - The argv of the five configurations, from `--dry-run`: `lean` as in T3 and T5;
+    `lean-own` the same ending in `-`; `lean-high` with
+    `model_reasoning_effort="high"`; `lean-codegraph` with
+    `-c mcp_servers.codegraph.command="codegraph" -c mcp_servers.codegraph.args=["serve",
+    "--mcp"]` before `--base`; `current` as today without `--ephemeral`.
+  - What the writer decided where the brief was open: a review that never launched writes
+    no reading; the findings of a review that does not stand are kept beside its outcome;
+    a `current` reading takes its model and effort from the top of `config.toml`, marked
+    as such; finding bodies are cut at 600 characters; `--require-complete` counts a
+    recorded cell whatever its outcome.
+- 2026-10-07: T11 committed as `2b67316` (gate green). gentle-ai assessed
+  `b0053cf..2b67316` as `medium`, review due (2,518 lines); granted without asking, lineage
+  `review-781fa6b171d13d37`. The bound status after the start failed again in gentle-ai
+  itself, with the envelope of the time before: `operation_timeout`, `pre_native`,
+  `retry_safe` false, next action `stop`. Put to Sebastián again, since the choice is by
+  candidate; this time he chose to report and continue.
+  - The four candidates of this session, same host and worktree: 1,870 lines (14 files)
+    and 1,876 (10 files) were reviewed; 2,430 (42 files) and 2,518 (10 files) timed out.
+    Lines separate them, files do not. An observation, not a cause.
+  - The report: gentle-ai's issues, open and closed, were searched first. The defect is
+    already tracked as `Gentleman-Programming/gentle-ai#4655` (bound STATUS times out
+    `pre_native` after a granted START), open, with occurrences on 4.0.0, the latest
+    published release, so there is no published fix to install. One occurrence comment was
+    added there, with the table above and the envelope, scanned first for paths, names and
+    ids: https://github.com/Gentleman-Programming/gentle-ai/issues/4655#issuecomment-6049717902
+    (read back, body equal). No issue created, no label touched.
+  - Then the captured decline of that candidate, once: `declined`,
+    `declined_this_candidate`, the same target; the preflight status answers normally
+    again. So `b0053cf..2b67316` has no gentle-ai review either: its checks are the
+    writer's tests, the parent's re-run (61 of 61) and the gate. The next assessment starts
+    from `2b67316`.
+  - What follows for the work left: a candidate is kept under about 1,900 changed lines, by
+    committing smaller units, since that is what gentle-ai 4.0.0 has reviewed here.
+- 2026-10-08T02:18Z: resumed after a compaction; state checked against this document (HEAD
+  `3b67920`, clean, T1 to T11 checked, `compare.mjs --list`: 0 of 9 cells recorded). One
+  thing changed outside the session: the CLI is now `codex-cli 0.161.0`.
+  - Evidence: `codex --version`; `npm ls -g` shows `@openai/codex@0.161.0`; the launcher
+    in the pnpm bin folder was rewritten at 2026-10-07T20:00:40Z. This session was at work
+    then (T11, committed at 20:39Z), so its transcripts were searched, the parent's and
+    its writers': no global install by npm or pnpm and no `codex update`; the only matches
+    are the text of the command's own "install it with" message and a comment. That search
+    would have found a command run through the shell tool, not one run by another program.
+    `~/.codex/version.json` still says `latest_version` `0.160.1`, checked at 05:51Z, so
+    it is not what recorded this change. Who changed it is not established.
+  - Checked without a model call: `codex exec review --help` on 0.161.0 still lists
+    `--base`, `--json`, `--ignore-user-config`, `--ignore-rules`, `--disable`,
+    `--ephemeral` and the PROMPT argument, and the dry run of `lean:seeded` builds the argv
+    of T5 unchanged. Whether the sub-agent's rollout and the answer keep their shape on
+    0.161.0 is only known after the first cell.
+  - What it means for T12: the nine cells compare configurations with each other, so they
+    hold as long as all nine run on one version; every reading records it, and a cell read
+    on another version is run again. The numbers of T5 to T9 (0.160.1) are not rows of the
+    comparison. The go-ahead for the nine is asked with this said.
+- 2026-10-08: asked for the nine with their count and what each measures, Sebastián
+  answered with a rule instead of a yes: "si el siguiente prompt es sí, por favor seguí
+  trabajando, o sea no pares, solo pará si es una decisión que debo tomar". Read as the
+  go-ahead for the nine and as a change to how replies close: a planned step he would only
+  answer yes to is stated with its cost and done, not asked. Written in `AGENTS.md`
+  ("Working with Sebastián", 1,499 of 1,500 tokens, three phrases shortened to make room),
+  in the roadmap (Next, item 6) and in the agent's memory. What still waits for him, by the
+  agent's reading: push, pull request, merge, a real choice between ways, and spend the plan
+  did not name. This replaces "ask me before spending Codex quota" for the runs this
+  document already lists; the review of `7deddfc..HEAD` has no count yet, so it is stated
+  with one before it runs.
+- 2026-10-08T02:28Z to 02:45Z: seven of the nine cells of T12 run, one at a time, each as
+  `node evals/review/compare.mjs --cell <cell>` inside `evals/review/login-proof.mjs`, CLI
+  0.161.0. Seven Codex reviews, twelve in the feature. Every reading is in
+  `evals/results/review/readings/`. Input is the sum over the requests, as Codex counts it.
+
+  | Cell | Outcome | Found of 7 | Extra | Input | Not cached | Output | Requests | Seconds |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `lean:seeded` | incorrect | 7 | 0 | 54,797 | 21,261 | 2,001 | 4 | 60 |
+  | `lean-own:seeded` | incorrect | 7 | 0 | 55,203 | 20,003 | 2,034 | 4 | 61 |
+  | `lean-high:seeded` | incorrect | 7 | 1 | 57,161 | 21,961 | 3,308 | 4 | 87 |
+  | `current:seeded` | incorrect | 6 | 0 | 156,564 | 45,716 | 1,819 | 4 | 63 |
+  | `lean:real` | correct, 0 findings | | | 134,283 | 38,283 | 656 | 6 | 33 |
+  | `lean-own:real` | correct, 0 findings | | | 145,842 | 37,554 | 605 | 6 | 34 |
+  | `lean-high:real` | correct, 0 findings | | | 374,661 | 58,373 | 2,413 | 11 | 92 |
+
+  - What the first cells proved, since fakes could not. On 0.161.0 the sub-agent's rollout
+    and the answer keep their shape: tokens, requests and seven findings were read, and the
+    answer schema held against a real answer with findings. A measured `current` works: a
+    review that is not ephemeral, in the seeded copy of his home, wrote the rollout the
+    reader needs. Every changed line was seen in all seven (226 of 226, 216 of 216).
+  - `current:seeded` missed D7, the change that contradicts the stated intent
+    (`src/stocktake.mjs:17-21`); the three lean cells found it. Its first request is 27,927
+    tokens against 5,717 to 6,156 under lean: that difference is what the session loads
+    before the diff.
+  - The seeded range does not tell the lean configurations apart: all three found the
+    seven. High effort cost 4% more input and 65% more output there, and added one finding
+    outside the key (`src/cli.mjs:80`, P2, validate every pair before the first write),
+    which is a true remark and not one of the seven. On the real range high effort cost
+    2.8 times the input of medium (eleven requests against six) for the same answer.
+  - The own prompt with the feature document costs what the sentence of Codex costs, on
+    both ranges, within 9%. The 107,236 of the run of T7 was on 0.160.1 with five requests;
+    here it took six.
+  - The login: the same file, bytes unchanged, one name before and after, in all seven.
+  - The rest of his real home during the cells. `logs_2.sqlite-shm` and `-wal` changed in
+    five of the seven, as before. Two more changes were seen, each once: during
+    `current:seeded`, `state_5.sqlite` was rewritten and its `-shm` and `-wal`, with those
+    of `goals_1.sqlite`, were removed; during `lean-high:real`, the same happened to
+    `thread_history_1.sqlite`. Looked into before going on, since a measured `current` is
+    the one session that carries his configuration:
+    - a copy of `state_5.sqlite` (never the original) holds no thread whose folder is the
+      seeded repository, the range clone or a run home; its newest thread is one of the
+      desktop app, created at 02:17Z and last written at 02:21Z;
+    - his `config.toml` sets no `sqlite_home`, and its one `CODEX_HOME` is in the settings
+      of `node_repl`, which the copy leaves out;
+    - the same kind of change happened during a lean cell, whose session reads none of his
+      configuration; the Codex processes of the app were alive before and after.
+    So a database of the app being folded into its file while nobody uses it is what this
+    looks like, not a write of the review. Not proven: `current:real` is watched for it.
+  - One thing in the tool is wrong, found by reading the reading and not by a failure:
+    `current:seeded` says `gpt-6-astra`, effort `low`, read from the top of his
+    `config.toml`, not from the session. The row of the state database of 2026-09 for a
+    review under `current` names `gpt-6.1-sol`, so what a review under his configuration
+    runs on is not known from the reading, and the verdict compares against that row. The
+    session writes it in its rollout (`turn_context`). To fix before `current:real`: the
+    reader of the rollout returns the model and the effort the session ran with, the run
+    line and the reading record them as measured. `current:real` runs the same
+    configuration, so its measured model stands for `current:seeded` too, and that cell is
+    not run again.
+  - Left: `current:real` and `lean-codegraph:real`, two reviews.
+- 2026-10-08: the seven readings and the rule committed as `9c9b00d` (gate green).
+  gentle-ai assessed `2b67316..9c9b00d` as `medium`, review due (758 lines, 10 files);
+  granted without asking, lineage `review-b59af3f116a5c1f5`, approved and acknowledged.
+  No blocker; two warnings and a suggestion, each answered:
+  - R3-current-model-label (`evals/results/review/readings/current__seeded.json:12-14`):
+    the committed reading keeps a model nobody measured, and letting the model of
+    `current:real` stand for it is an inference across two sessions that the file does not
+    record. Accepted: `current:seeded` is run again with `--force` once the reader is
+    fixed, one review more than the nine. The first reading stays in the history of
+    `9c9b00d`.
+  - R3-single-sample-recall (this document, the entry above): six of seven against seven of
+    seven is one run a cell, and the model of `current` was not known. Accepted as stated:
+    the second run of `current:seeded` is a second sample of that side, the lean side has
+    three runs that found D7 (medium, own prompt, high), and the verdict of T13 says how
+    many runs each side rests on instead of calling one run a result.
+  - R3-token-budget-unchecked (`docs/ROADMAP.md:268`): the 1,499 of 1,500 is not left to
+    the prose. `npm run check` counts `AGENTS.md` against the budget and the pre-commit
+    hook ran it for `9c9b00d`; an edit that passes the cap fails the commit. No change.
+- 2026-10-08: `87854b1` (the fix, the three readings and the report; gate green) assessed
+  by gentle-ai from `9c9b00d` as `medium`, review due (736 lines, 15 files); granted
+  without asking, lineage `review-ee40ef20a7d64a34`, approved and acknowledged. No blocker.
+  - R3-partial-unknown-mismatch-note (`evals/review/report.mjs:119-121`, warning): the note
+    under a table compares rendered strings, so a half unknown on one side reads as a
+    session that ran something other than what was asked. Accepted, fixed with T13, test
+    first.
+  - R3-parts-model-last-only (`evals/review/compare.mjs:310-311`, suggestion): a range in
+    parts takes the model of its last attempt, and parts that disagree leave no sign.
+    Carried (Follow-ups): no cell of the comparison is in parts.
+- 2026-10-08: T14 written (inline): the section "Proposal for the Codex plugin" above
+  Follow-ups, from the plugin's own files and stored state and this feature's readings.
+  It proposes; nothing of the plugin was changed.
+- 2026-10-08: T13, the verdict and the switch, by one delegated writer (route: delegated),
+  test first, its run cut once by a network error and resumed from its own transcript.
+  Re-run by the parent: 93 of 93 over the home, prompt, compare and report files; the
+  command file 194 of 194 by the writer (353 s).
+  - The verdict: `lean` found the same or more with fewer tokens on both ranges, 36% of the
+    input of `current` on the seeded range and 59% on the real one. It rests on two runs of
+    `current` and three lean runs on the seeded range and one run a cell on the real one;
+    the two differ in load, model and effort at once (the entry of the last cells).
+  - The switch: no `--session` runs the lean session; `--session current` is today's
+    review on his own configuration, unchanged. The default prompt stays Codex's: the own
+    prompt found the same at about the same cost. `--keep-home`, `--prompt own` and
+    `--part-lines` no longer need `--session lean` and are refused only beside
+    `--session current`. The usage says which is the default and what it loads.
+  - What the flip would have broken, caught by a test going red: the `current` cell of the
+    comparison passed no `--session`, so it would have measured the lean session under the
+    name of the other. Every cell now names its session.
+  - Who else runs `codex-review` in this repository, all without a session, so all lean
+    now, which is the point: the dispatcher, the hint `check --push` prints, the sentence
+    of `AGENTS.md`, the line of the installed skill (`bin/lib/manifest.mjs:22`). Neither
+    names a session, a model or an effort, so the installed text and `AGENTS.md` (1,499
+    tokens) did not change. The hooks, `doctor`, `init`, `install` and the TUI never call
+    it. The pre-push rule reads records, whatever session wrote them.
+  - The roadmap's Review and Effort rows say what runs now: the lean session and what it
+    loads and leaves out, `gpt-6.1-sol` at `medium` fixed by the command.
+  - The follow-up that had to be closed before this, closed in the same slice: a lean
+    review left `<home>/.js-harness/codex-review-homes` behind, empty, and `uninstall` did
+    not know it. Decided by the parent: the session leaves nothing, so there is nothing for
+    `uninstall` to know. Once a home is removed, the folder of the homes goes when it is
+    empty, and `.js-harness` above it when that is empty too, by a removal that refuses a
+    folder with anything in it; a failure of that is silent and never changes the review.
+    `--keep-home` removes nothing. Not handled, and recorded: two reviews at once on one
+    machine have a small window in which one removes the empty folder between the two
+    folder creations of the other, which then stops with `ENOENT` and leaves nothing; a
+    second try works.
+  - The warning of the review of `87854b1` fixed here, test first: the note under a table
+    compares the model and the effort apart, each only when both sides know it.
+- 2026-10-08: T15 (inline): `docs/ROADMAP.md` has the section "Codex review result", a
+  row a configuration and a range with findings, seeded defects found, input tokens, the
+  first request and wall time, and the verdict with what it rests on; Next item 5 points
+  to it and to what is left for Sebastián. In `odd/tasks/codex-exec-review.md`, the
+  carried follow-up R3-exact-coverage-large-range is marked closed by this feature (parts
+  instead of a tolerance), and the one about `mcp_servers.context7.type` says a review no
+  longer meets it.
+- 2026-10-08: T13 and T15 committed as `fefec21` (gate green). gentle-ai assessed
+  `87854b1..fefec21` as `medium`, review due (864 lines, 12 files); granted without asking,
+  lineage `review-4dfd76380c113ffc`, approved and acknowledged. No blocker; two warnings
+  and two suggestions, all four accepted and given back to the same writer, test first:
+  - R3-concurrent-review-enoent-on-default (`bin/lib/codex-review-home.mjs:84-92`): with
+    lean the default, every review takes the path where one run can remove the folder
+    another is creating. Making a home retries once on `ENOENT`.
+  - R3-default-flip-activates-lean-preconditions (`bin/codex-review.mjs:133`): a machine
+    with the harness home on another volume, or a login that is not in `auth.json`, ran a
+    plain review before and is refused now. The refusal names `--session current` as the
+    way out, and tests hold it for a missing `auth.json` and for `EXDEV`.
+  - R3-keep-home-unavailable-unasserted (`bin/codex-review.mjs:167`): the flags that shape
+    a launch beside `--unavailable` with no session named are no longer usage errors and
+    nothing says what they do. Pinned by tests, refused unless the base accepted them.
+  - R3-rmdir-second-step-failure-untested (`bin/lib/codex-review-home.mjs:88`): the case
+    where the folder of the homes goes and `.js-harness` then cannot. A test.
+- 2026-10-08: the four closed by that writer. Re-run by the parent: the home file 37 of
+  37; the command file 196 of 196 by the writer (398 s).
+  - Two reviews at once: making a home tries once more when a folder vanished under it
+    (`ENOENT`), and no third time; red first, with the real file system giving the error
+    after the test removed the empty parent. When a home cannot be made, the empty folders
+    made to hold it go too.
+  - The way out: every refusal to make the lean home ends with "The way out:
+    `--session current` runs the review on your own Codex configuration, which needs no
+    Codex home of its own.", with or without `--session lean` named; red first. Held for a
+    missing `auth.json`, `EXDEV`, `EPERM` and a folder that cannot be made: exit 1,
+    nothing launched, no record, nothing left; and `--session current` reviews on the
+    machine with no `auth.json`.
+  - The flags beside `--unavailable`: kept accepted, since the base accepted them under
+    `--session lean` and the skip launches nothing. Pinned for five combinations, each with
+    and without the session named: the skip recorded, nothing launched, no home made. It
+    could not be red first, being what the code already did.
+  - The second removal that fails: pinned, not red first for the same reason.
+  - Follow-up closed: the window between two reviews at once (above, in Follow-ups).
+- 2026-10-08: the four fixes committed as `81bb786` (gate green). gentle-ai assessed
+  `fefec21..81bb786` as `medium`, not due (`under_budget`, 248 lines): it stays pending in
+  the slice, and the next assessment starts from `fefec21`.
+- 2026-10-08T06:12Z: the new default on the real binary, and the Codex review of this
+  stretch in one run: `node bin/js-harness.mjs codex-review --base 87854b1`, with no
+  `--session`, inside the login proof, CLI 0.161.0. Four Codex reviews, nineteen in the
+  feature.
+  - It ran the lean session (`gpt-6.1-sol`, `medium`), split `87854b1..81bb786` (1,102
+    changed lines, 12 files) in 4 parts of 82, 430, 385 and 205 lines, asked each with the
+    own prompt, and recorded the review once all four passed. Every part: the patch is
+    correct (confidence 0.93, 0.87, 0.88, 0.91), no finding. 386,652 input tokens (233,216
+    cached), 2,071 output, 17 requests, 111 s.
+  - The folder of the homes: `~/.js-harness` held `codex-review-homes` before the run,
+    left by the runs before the fix, and does not after it; the rest of that folder
+    (`backups`, `doctor.json`, `manifest.json`, `remote`) is as it was.
+  - The login: the same file, bytes unchanged, one name before and after.
+  - What has a Codex review record now: `87854b1..81bb786`. The code before it on this
+    branch, `7deddfc..87854b1`, has none (Next step).
+- 2026-10-08: that record committed as `a560e70` (gate green; document only).
+- 2026-10-08T06:35Z to 06:52Z: the Codex review of the whole branch, run and not asked.
+  It was put down as a choice for Sebastián an hour before (28 reviews, and a part that
+  might fail the evidence rule); read again against his rule of the same day and his "no
+  me importa si gasta cupo de codex, la idea es que se pueda tener una revisión", it is a
+  step of the plan whose answer is yes, with a way back if a part fails (record the skip
+  with its reason). So it was stated with its cost and run:
+  `node bin/js-harness.mjs codex-review --base 7deddfc`, default session, inside the login
+  proof, CLI 0.161.0. Twenty-eight Codex reviews, forty-seven in the feature.
+  - The range is `7deddfc..a560e70`, the branch whole, since the command reviews up to
+    `HEAD`: 14,141 changed lines in 72 files, 28 parts. All 28 passed the evidence rule,
+    the part of the command's test file among them (2,968 lines), and the review is
+    recorded. 3,358,226 input tokens (2,280,064 cached), 18,996 output, 136 requests,
+    963 s. The login: the same file, bytes unchanged, one name.
+  - Twenty-four parts: the patch is correct. Four: incorrect, with five findings, all P2,
+    each read against the code and accepted, to be fixed test first by one writer:
+    1. `bin/codex-review.mjs:1109-1112`: in a review in parts the findings of a part are
+       printed as soon as it ends, so when a later part fails they have been shown for a
+       range no review stands for. The tests look at the log and not at what is written.
+       Hold them until every part passed.
+    2. `bin/lib/codex-review-prompt.mjs:50`: a file name with a curly apostrophe passes
+       the check of the part prompt and breaks the PowerShell quoting of the command the
+       part is told to run. Refuse those characters with the ASCII quotes.
+    3. `bin/lib/codex-review-prompt.mjs:80`: the file names of a part are given to
+       `git diff` as pathspecs, so one with pathspec magic (`*`, `[`, a leading `:`) does
+       not mean itself. Give them as literal pathspecs.
+    4. `evals/review/compare.mjs:619-620`: a cell whose review is in parts and whose later
+       part could not be launched can be read as a review of the whole range. Mark such a
+       reading as not complete.
+    5. `evals/review/login-proof.mjs:377-378`: `--out` may name a file inside the real
+       home, the login itself included, and the report is written after the proof said
+       the home was intact. Refuse a destination inside the real home before the command
+       runs.
+- 2026-10-08: the five fixed by one delegated writer (route: delegated), test first.
+  Re-run by the parent: 115 of 115 over the prompt, parts, compare, report and login-proof
+  files; the command file 200 of 200 by the writer (380 s).
+  1. What a part rendered is held and written after the last part passed, in part order,
+     each under "Part N of M, as Codex rendered its review:"; when a part fails nothing of
+     any part is shown, and the failure says that the parts before it passed and are not
+     shown. Red first: the text of parts 1 and 2 was written when part 3 started.
+  2. The seven typographic quotes U+2018 to U+201E are refused where the straight ones
+     are, and such a name refuses the split before anything is launched. Red first.
+  3. The command a part is told to run is `git --literal-pathspecs diff --no-renames …`,
+     and what the part must have seen is computed the same way. Red first, with `a[1].txt`
+     beside `a1.txt`: the part saw 2 of 4 lines. The text Codex receives changed, so the
+     part prompt is `js-harness.codex-review-part-prompt/v2`; the whole-range prompt is
+     not touched. `*`, `?` and a leading `:` cannot be file names on NTFS, so those are
+     held at the level of the string.
+  4. A reading is `reviewed` only when every part handed over a result and the command
+     exited 0; otherwise `failed` with which part gave none, keeping the tokens, requests
+     and findings of the parts that ran. Red first.
+  5. `--out` is refused (exit 2, nothing run, nothing written) when it lands inside the
+     real home, by real path and by the file ids of its ancestors, or is an existing file
+     that is the same file as an entry of the home's top level. Red first: exit 0 for
+     `--out <home>/auth.json` and for a hard link to it. It reads stats and names, no byte.
+  - Left as they are, and said: a review not in parts that does not stand still shows
+    what Codex rendered above its error; the destination is checked once, before the
+    command, and against the top level of the home only.
+- 2026-10-08: the five fixes committed as `d71e81d` (gate green), and both reviews of it.
+  - gentle-ai assessed `fefec21..d71e81d` as `medium`, review due (975 lines, 12 files);
+    granted without asking, lineage `review-ce74bbb742247815`, approved and acknowledged.
+    No blocker. R3-part-rendered-unguarded (`bin/codex-review.mjs:1214-1215`, warning): a
+    part that passed with nothing rendered now gets its header and a blank or the text
+    `undefined`. R3-way-out-with-lean-only-flags (`bin/codex-review.mjs:967`, suggestion):
+    the way out is said also to a command that carries flags `--session current` refuses.
+    R3-out-hardlink-nested-unproved (`evals/review/login-proof.mjs:401-408`, suggestion):
+    the title of a test section claims more than the check holds. The three accepted and
+    given to the same writer, test first; the check of the destination is not widened.
+  - Codex, `node bin/js-harness.mjs codex-review --base a560e70`, default session, inside
+    the login proof: `a560e70..d71e81d`, 694 changed lines in 10 files, 2 parts, both
+    correct (confidence 0.88 and 0.87), no finding, recorded. 301,364 input tokens
+    (222,080 cached), 1,658 output, 11 requests, 87 s. The login as it was. Two Codex
+    reviews, forty-nine in the feature. What the parts rendered came after the last one,
+    each under its header, as the fix of finding 1 says.
+- 2026-10-08: the three of gentle-ai answered by that writer; the command file 202 of 202
+  (377 s), the login-proof file 33 of 33.
+  - The unguarded part: not a defect as the code stands. A part is shown only when it
+    stands, and it cannot stand without a rendered message (`reviewEvidence` asks for one),
+    so a header over nothing cannot happen; no test could be made red. The guard the
+    single-range path has is added all the same, with a comment that says it is not
+    reachable today, and a test pins what does happen: a part with no message, an empty
+    one or blanks alone fails as not inspected, and nothing of any part is written.
+  - The way out names the flags to leave out when the refused command carried them, in
+    the order of the usage: `--prompt own`, `--doc` (it needs `--prompt own`),
+    `--part-lines`, `--keep-home`; with none the sentence is as it was. Red first. Held
+    for each flag: the command the sentence describes is accepted, and refused with any
+    one of the named flags left in.
+  - The login proof says what it holds, in its usage, its comments and its test titles:
+    a destination inside the home, or the same file as an entry of its top level. A hard
+    link to a file deeper in the home is not caught, and it says so. The check itself is
+    as it was.
+- 2026-10-08: those committed as `4f32fd9` (gate green). gentle-ai assessed
+  `d71e81d..4f32fd9` as `medium`, not due (`under_budget`, 171 lines): pending in the
+  slice, the next assessment starts from `d71e81d`. Codex,
+  `node bin/js-harness.mjs codex-review --base d71e81d`, default session, inside the login
+  proof: one review, not in parts, the patch is correct (confidence 0.95), no finding,
+  recorded; 74,009 input tokens (50,048 cached), 386 output, 4 requests, 26 s; the login
+  as it was. Fifty Codex reviews in the feature.
+- 2026-10-08: `node bin/check.mjs --push` on `4f32fd9`: `PASS codex-review 15 code commits
+  since origin/main, all covered by a Codex review record`. The branch is ready for a
+  push as far as that rule goes; the push is Sebastián's.
+- 2026-10-08: the field names of the fix, read from one `turn_context` line of a session
+  file of today (names only, CLI 0.161.0): `payload.model` and `payload.effort`, both
+  strings. One delegated writer (route: delegated, four modules and their tests), test
+  first: `rolloutReading` returns them, the run line records them as `sessionModel` and
+  `sessionEffort`, the reading takes them with `modelSource` `session`, the report shows
+  them.
+- 2026-10-08: the fix built by that writer, each behaviour red first (its report names the
+  failing assertion of each). Re-run by the parent: 90 of 90 over the four module files;
+  the command file 189 of 189 by the writer (321 s). What it decided where the brief was
+  open: with threads that disagree, the model is that of the thread the first request
+  comes from; the two fields of the run line are always written, `null` when unknown; a
+  measured reading also keeps what was asked (`configuredModel`, `configuredEffort`), equal
+  or not, so a match is seen and not assumed; the report marks with `*` a model that was
+  not measured and adds a note when a session ran something other than what was asked.
+- 2026-10-08T03:10Z to 03:20Z: the three runs left, with the fix, each inside the login
+  proof, CLI 0.161.0. T12 is checked: `node evals/review/report.mjs --require-complete`
+  exits 0, nine of nine, and the report is `evals/results/review/report.md`. Ten reviews in
+  the batch, fifteen in the feature.
+
+  | Cell | Outcome | Found of 7 | Input | Not cached | Output | Requests | First request | Seconds | Ran with |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `current:seeded`, second run | incorrect | 6 | 151,204 | 44,068 | 1,823 | 4 | 27,912 | 79 | `gpt-6-astra` `low` |
+  | `current:real` | correct, 0 findings | | 228,539 | 56,123 | 814 | 5 | 28,936 | 47 | `gpt-6-astra` `low` |
+  | `lean-codegraph:real` | correct, 0 findings | | 160,383 | 39,423 | 493 | 6 | 7,491 | 30 | `gpt-6.1-sol` `medium` |
+
+  - The model of `current` is now measured, in both its cells: `gpt-6-astra` at `low`,
+    what the top of his `config.toml` names. So the first reading had the right label, by
+    inference; and the row of 2026-09 that named `gpt-6.1-sol` was a review under the
+    configuration he had then. The reading of the first run is in the history of `9c9b00d`:
+    156,564 input, six of seven, the same defect missed.
+  - `current:seeded` missed D7 in both runs, with the same six found. Two runs, not one;
+    still two.
+  - What this makes of the comparison, said before the verdict: `lean` and `current` differ
+    in three things at once, what the session loads, the model and the effort. The seven of
+    seven against six of seven cannot be given to one of them. The tokens of the first
+    request can: 27,912 and 28,936 under `current` against 5,717 to 7,491 under lean is the
+    load, whatever the model.
+  - CodeGraph under the clean session: the settings passed with `-c` held under
+    `--ignore-user-config`, since the first request grew by 780 tokens (7,491 against
+    6,711), which is the server's tools reaching the session. Whether the model called them
+    is not in the reading. The range has no known defect, so the cell could show a cost and
+    not a gain: 19% more input than `lean:real` (160,383 against 134,283), the same
+    answer, in as many requests.
+  - The model of a lean session, measured in that cell: `gpt-6.1-sol`, `medium`, what the
+    command passes. The other lean readings were taken before the fix and carry the mark
+    of a model not measured.
+  - The login: the same file, bytes unchanged, one name, in all three. The rest of his home:
+    `state_5.sqlite` was not touched in either `current` cell, so the change seen once was
+    not the review's. `models_cache.json` changed in both; its `client_version` is
+    `0.159.1` and its `fetched_at` 03:15:02Z, so the desktop app wrote it, not a CLI of
+    0.161.0. `logs_2.sqlite` and its two files came and went, the app's as before.
+
+## Proposal for the Codex plugin (T14, 2026-10-08), for Sebastián to decide
+The plugin is `codex@openai-codex` 1.0.6 for Claude Code, installed and enabled on this
+machine. This feature changes nothing about it; what follows is a proposal.
+
+What the plugin is today, read from its files and its stored state:
+- Its use here. It stored 41 jobs for this repository, all of them reviews, the first on
+  2026-09-27 and the last on 2026-09-30T00:14Z, the day `js-harness codex-review` replaced
+  it for reviews. None since, and no rescue job ever (`state.json` of its data folder for
+  this repository: `jobs` 41, kind `review` 41; `stopReviewGate` false).
+- What it puts in every Claude Code session. Three hooks: SessionStart (writes three
+  environment variables for its own companion script, nothing into the context),
+  SessionEnd (stops its broker) and Stop (the review gate, which is off, so a `node`
+  process starts at every stop to find that out; timeout 900 s). And the descriptions the
+  model sees: the `codex-rescue` agent, two commands and three skills, about 177 tokens by
+  this repository's estimate. Its cost in Claude's context is small; that was never the
+  problem.
+- Where the cost was, measured in this feature: a Codex session on his whole
+  configuration, which is the only kind the plugin starts (it passes no settings a thread,
+  `odd/tasks/codex-exec-review.md`), opens with 27,912 to 28,936 tokens before the diff,
+  against 5,717 to 7,491 for the clean session. Over a review that was 151,204 to 228,539
+  input tokens against 54,797 to 134,283, and six seeded defects of seven against seven.
+  A `codex:rescue` thread would pay the same opening load, on what his `config.toml`
+  names, `gpt-6-astra` at `low`.
+
+The proposal, three parts, each his to accept or not:
+1. The `doctor` row. Today the row `codex-plugin` reports the plugin installed, enabled and
+   logged in, and its fix tells a user to install the plugin. Nothing in the harness needs
+   the plugin any more: the review needs the Codex CLI and its login. Proposed: the row
+   becomes `codex`, the CLI installed and logged in (the probe it already runs), with the
+   fixes it already has for those two; the plugin is no longer something `doctor` asks
+   for. A small feature of its own, test first.
+2. `codex:rescue`. It is the one thing the plugin gives that the harness does not, and it
+   has not been used once here. Proposed: let it go with the plugin. If handing a stuck
+   task to Codex turns out to be wanted, it is built like the review was, over
+   `codex exec` with a clean session and a measured cost, rather than kept on a path that
+   loads 28,000 tokens to start.
+3. The SessionStart hook, with the other two. They exist for the plugin's own commands.
+   Proposed: disable the plugin in Claude Code (`claude plugin disable codex@openai-codex`,
+   undone by `enable`), which removes the three hooks, the agent and the commands from
+   every session. It is his configuration, so it is his command or his yes.
+
+What is not proposed: uninstalling the Codex CLI, touching his `~/.codex`, or changing the
+Codex desktop app. What this does not rest on: a measurement of the hooks' time, which was
+not taken.
+
+## Follow-ups
+- The login proof refuses a report destination inside the real home or on a file of its
+  top level; a hard link from outside to a file nested deeper in the home is not caught
+  (gentle-ai, review of `d71e81d`). Every run of this feature wrote its report outside
+  the home.
+- From the review of `87854b1` (R3-parts-model-last-only): a reading of a range reviewed in
+  parts takes the model of the last attempt; parts that ran on different models should
+  mark the reading instead of showing one of them as measured.
+- Some test of the suite starts PowerShell without `LOCALAPPDATA` in the repository root,
+  which once left an untracked `Microsoft/` folder there (2026-10-07, the gate of
+  `1c7b561`). Not reproduced since. Find the spawn and give it the variable or a folder of
+  its own.
+- From gentle-ai's review of `b5c8766` (all four closed with T10, Progress):
+  - R3-part-command-length-unbounded (`bin/lib/codex-review-parts.mjs:73-82`, WARNING): a
+    part is bounded by changed lines only, so many small or binary files can make one git
+    command line longer than Windows takes. It fails closed, but the message does not name
+    the cause. Bound a part by its file count or command length too. Before T12 reviews a
+    range with many files.
+  - R3-parts-runlog-failure-unasserted (`bin/codex-review.mjs:1070`): when a part's run line
+    cannot be written, the record can hold `runs` without `run`, or a shorter `runs`; no
+    test drives that.
+  - R3-parts-record-validity-unasserted (`bin/codex-review.mjs:1087`): nothing asserts that
+    `isValidCodexReview` takes a record with `runs`, which is what the push check needs.
+  - R3-login-proof-real-home-changed: answered in Progress (the real home during a lean
+    run). What remains is for the tool: when the home changes outside `auth.json`, the
+    report should say that a running Codex client may be the writer, and list the Codex
+    processes alive, so the reader does not have to find out by hand.
+- From gentle-ai's review of `81250a4` (all but the first closed with T8, Progress):
+  - R3-finding-shape-unproved-fails-closed (`bin/lib/codex-review-answer.mjs:44`, WARNING):
+    the schema of one finding has only been tested against invented fixtures, and both real
+    answers so far held an empty `findings`. An off-schema answer fails the attempt, so a
+    difference in a real finding would fail exactly the reviews that found something. Closed
+    by T10 and T12: the first real answer with a finding becomes a recorded fixture, before
+    the comparison rests on the reader.
+  - R3-verdict-printed-on-failed-attempt (`bin/codex-review.mjs:809`): the finding lines and
+    the verdict are printed before the completion and evidence checks, so an attempt that
+    then fails still prints "the patch is correct". Print them only once the attempt stands,
+    with T8.
+  - R3-stdin-early-close-unasserted (`bin/codex-review.mjs:464`): no test for a child that
+    exits before reading the prompt (an EPIPE on the write). With T8.
+  - R3-intent-cut-splits-surrogate (`bin/lib/codex-review-prompt.mjs:77`): the cut at 2,000
+    characters can split a surrogate pair. With T8.
+- From gentle-ai's review of `7529f67` (both closed with T8, Progress):
+  - R3-off-windows-case-test-host-platform (`bin/codex-review.test.mjs:1138`): the test of a
+    variable spelled in another case off Windows passes no platform, so it may rest on the
+    host's; pass `linux` and `darwin`.
+  - R3-keep-home-failed-clean-branch-unasserted (`bin/codex-review.mjs:631`): no test at the
+    command's level covers `--keep-home` when the login's name could not be removed cleanly.
+- Closed on 2026-10-07 with the correction above, from gentle-ai's review of `e531c1f`:
+  - R3-empty-state-home-resolves-to-cwd (WARNING, `bin/codex-review.mjs:544`): an empty
+    `JS_HARNESS_HOME` or `--home` is not taken as unset, so the lean home and its link to the
+    login would be made under the working directory.
+  - R3-real-home-case-sensitive-lookup (`bin/lib/codex-review-home.mjs:33-35`): `CODEX_HOME`
+    spelled in another case in an injected environment is not read.
+  - R3-proof-second-snapshot-uncaught (`evals/review/login-proof.mjs:239`): a second reading
+    that throws leaves no report after the run it exists to observe.
+  - R3-proof-no-shell-windows-shim (`evals/review/login-proof.mjs:238`): the wrapped command
+    must be a real executable; say so in the usage.
+- The command keeps nothing of Codex's raw events, so a run that goes wrong can only be read
+  from its summary. Keep the JSONL of every attempt beside the run log, or behind a flag.
+- Closed with T13 (2026-10-08): `uninstall` did not know
+  `<home>/.js-harness/codex-review-homes`; a run now removes that folder when it leaves it
+  empty. Two reviews at once: making a home tries once more when the other removed the
+  empty folder under it.
+- A `--home` or `JS_HARNESS_HOME` on another volume than the Codex home makes `lean` refuse
+  with `EXDEV`; on this host the temp folder is on C: and the repository on D:.
+- The `codex --version` probe runs before the lean home exists, so in the user's home.
+- With T5, from gentle-ai's review of `e3aad48`:
+  - R3-lean-argv-unproven-against-codex (WARNING, `bin/codex-review.mjs:101-108`): nothing
+    shows yet that the real CLI accepts the lean flags and the feature names after `--disable`;
+    the tests compare the argv with a list of the same tokens. T5's first real run is the
+    proof, and until it passes a `--session lean` run may only add `failed` lines to the log.
+  - R3-run-line-session-same-schema (`bin/codex-review.mjs:519`): run lines written before
+    `e3aad48` have no `session`, so a reader must take a missing one as `current`; say so in
+    the run log's header and hold it with a test.
+  - R3-duration-nan-not-clamped (`bin/codex-review.mjs:498`): a monotonic source that gives a
+    non-number makes `durationMs` `null`, and the clock is read outside the `try`. Only an
+    injected clock can do either; make the duration `null` on purpose when it is not finite.
+- `bin/codex-review.test.mjs` takes just over 120 s here, about 1.3 s a test, since each one
+  spawns real git; a foreground limit of 120 s cuts it off, so it is run with a longer one.
+- The five test files of the review command took 129 s in one run and 236 s in the next on
+  this host, so a foreground limit of 300 s leaves little room.
+- The reason logged for a timeout or an overflow quotes the built-in bounds even when a test
+  injects others, as the message it copies does (carried in `odd/tasks/codex-exec-review.md`).
+
+## Next step
+T1 to T15 are checked. What is left is Sebastián's:
+1. The proposal for the Codex plugin (the section above Follow-ups): the `doctor` row,
+   `codex:rescue`, the plugin's three hooks. Each part is his to accept or not; an accepted
+   part is a small feature of its own or one command of his.
+2. Done on 2026-10-09: push, pull request and merge of `feat/codex-review-lean`
+   (jsaristi/js-harness#43, merged as `ba7bf03`, after `main` was merged into the branch
+   in `3bd9162` for a conflict in the roadmap). The feature built on it,
+   `odd/tasks/codex-review-cost.md`, went in with jsaristi/js-harness#44.
+
+Open, for him (item 1 is done: the review of the whole branch ran on 2026-10-08 and is
+recorded, Progress; kept as it was put to him):
+1. The Codex review of the code range `7deddfc..87854b1` before any push, or a recorded
+   skip. Counted on 2026-10-08 with `reviewParts`: 13,350 changed lines in 71 files, 28
+   parts, so 28 Codex reviews, by the four parts of the run above about 2.7 million input
+   tokens and a quarter of an hour. Eight parts are one file above the 400 lines of a
+   part, the largest the test file of the command, 2,968 lines: if Codex does not print
+   all of that diff, the part fails the evidence rule, and a range is recorded only when
+   every part passes, so the 28 could end with no record. This is a choice with two ways
+   and not a step to state and do, so it is put to him: run the 28, or record the skip
+   with its reason (each commit of the range reviewed by gentle-ai or by its tests and the
+   gate, as Progress says commit by commit). `87854b1..81bb786` has its record.
+
+On the cap: fifty Codex reviews spent in this feature (one read nothing, forty-nine read their
+diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..2b67316`
+were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
+occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to
+`fefec21`; what follows `fefec21` is assessed with the commit of the five fixes.

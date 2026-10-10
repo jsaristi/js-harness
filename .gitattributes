@@ -3,3 +3,8 @@
 # Eval task fixtures must be the same bytes on every machine, and this one checks out CRLF (core.autocrlf=true).
 # `text=auto`, not `text`: a binary fixture file keeps its bytes, and only what Git detects as text is converted.
 evals/tasks/** text=auto eol=lf
+# What a Codex review leaves out, beside Markdown (`js-harness codex-review`, bin/lib/codex-review-scope.mjs):
+# the committed results and readings of the evals, and the seeded fixture of the review comparison, which is
+# wrong in seven places on purpose. They are data: the one review that read them found nothing in them.
+evals/results/** -codex-review
+evals/review/seeded/** -codex-review
