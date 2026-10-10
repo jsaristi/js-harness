@@ -6,7 +6,12 @@
 //
 // It reports nothing of its own on stdout: what the command prints goes to the caller as it is printed,
 // and the exit code is the command's. What `gate` itself has to say (whose gate it waits for, that it ran
-// nothing, that it ran without the lock) goes to stderr, each line starting with `gate:`.
+// nothing, that it ran without the lock, or in the turn of the process that started it) goes to stderr,
+// each line starting with `gate:`.
+//
+// The command is one argument after `--`, a command line the shell is handed as it is written, or several,
+// a command and its arguments. On Windows several arguments cannot hold everything: `commandLineOf` says
+// what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
 import { GATE_HELD_ENV, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 
@@ -21,35 +26,65 @@ class GateArgError extends Error {}
 
 /** One argument as the shell reads it back whole. What is only letters, digits and the usual marks of a
  * path or a flag goes as it is; anything else is quoted: in single quotes for `sh`, where a backslash is
- * one of the marks that need it, and in double quotes for `cmd.exe`, with the backslashes before a quote
- * doubled as the C runtime of the program expects. */
+ * one of the marks that need it, and in double quotes for `cmd.exe`, inside which a space and
+ * `& | < > ^ ( )` are what they are. A backslash at the end is doubled there, or the C runtime of the
+ * program would read the closing quote as escaped. What double quotes do not keep from `cmd.exe` never
+ * comes here (`CMD_READS`). */
 function quoted(argument, platform) {
   const windows = platform === 'win32';
   if ((windows ? /^[A-Za-z0-9_\/\\:=.,@+-]+$/ : /^[A-Za-z0-9_\/:=.,@+-]+$/).test(argument)) return argument;
   if (!windows) return `'${argument.replace(/'/g, "'\\''")}'`;
-  return `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+  return `"${argument.replace(/(\\+)$/, '$1$1')}"`;
 }
 
+// What `cmd.exe` reads in an argument whatever quotes are around it, so that no quoting hands it over
+// whole. A backslash before a double quote escapes it for the C runtime of the program and not for
+// `cmd.exe`, which reads the line first: an argument holding `a"&echo UNEXPECTED&rem "` ran a second
+// command (found in review, 2026-10-10).
+const CMD_READS = [
+  ['"', 'a double quote, which ends the quotes around it'],
+  ['%', 'a percent sign, which is expanded as a variable even inside quotes'],
+  ['\r', 'a carriage return, which ends the command line'],
+  ['\n', 'a line feed, which ends the command line'],
+];
+
 /** The command line the shell is given for what came after `--`. One argument is a command line as it
- * stands, pipes and all (`js-harness gate -- "npm test && npm run lint"`). Several are a command and its
- * arguments, as the caller's shell split them, and each is quoted again where the shell that runs them
- * would split or read it otherwise. */
+ * stands, pipes and all (`js-harness gate -- "npm test && npm run lint"`), on every system. Several are a
+ * command and its arguments, as the caller's shell split them, and each is quoted again where the shell
+ * that runs them would split or read it otherwise.
+ *
+ * On Windows that cannot be done for an argument that holds a double quote, a percent sign, a carriage
+ * return or a line feed (`CMD_READS`): among several arguments it throws a `GateArgError` that says which
+ * argument, what it holds and the way out, which is the whole command as one argument, written as
+ * `cmd.exe` reads it. Refused, and not passed on as well as it can be, because the caller would get
+ * another command than the one it wrote. `sh` takes every argument whole in single quotes. */
 export function commandLineOf(args, platform = process.platform) {
-  return args.length === 1 ? args[0] : args.map((argument) => quoted(argument, platform)).join(' ');
+  if (args.length === 1) return args[0];
+  return args.map((argument, index) => {
+    const holds = platform === 'win32' && CMD_READS.find(([mark]) => argument.includes(mark))?.[1];
+    if (holds) {
+      throw new GateArgError(`cmd.exe cannot be handed argument ${index + 1} after -- whole: it holds ${holds}; give the whole command as one argument after --, written as cmd.exe reads it`);
+    }
+    return quoted(argument, platform);
+  }).join(' ');
 }
 
 /** Walks what comes before `--` token by token, like `sessions`: anything that is not a known flag is a
- * usage error, never a token that is silently ignored. The home is resolved as `check` resolves it
+ * usage error, never a token that is silently ignored, and so is a flag given twice, which says two
+ * things with nothing to tell which is meant. The home is resolved as `check` resolves it
  * (`--home`, then `JS_HARNESS_HOME`, then the user's home), since the two must take the same lock. */
 function parseArgs(argv, env, defaultCwd) {
   const split = argv.indexOf('--');
   if (split === -1) throw new GateArgError('the command to run goes after --');
   const own = argv.slice(0, split);
   const paths = {};
+  const given = new Set();
   for (let i = 0; i < own.length; i++) {
     const token = own[i];
+    if (!['--no-wait', '--wait', '--home', '--cwd'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
+    if (given.has(token)) throw new GateArgError(`${token} given twice`);
+    given.add(token);
     if (token === '--no-wait') continue;
-    if (!['--wait', '--home', '--cwd'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
     const value = own[i + 1];
     if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
     if (token !== '--wait') paths[token.slice(2)] = value;
@@ -80,31 +115,45 @@ function parseArgs(argv, env, defaultCwd) {
  * is one taken by a `gate` that a holder of the lock started, which says so with the mark of a held lock
  * (`JS_HARNESS_GATE_HELD=1`, `GATE_HELD_ENV` of `check`, where it is told why the mark is trusted and
  * what it cannot protect against). In both cases the command runs at once, in the environment as given.
+ * Under the mark alone, stderr says that the command runs in the turn of the process that started this
+ * gate, as `check` says it in a row of its report: a mark left in a shell by mistake turns the lock off
+ * for every `gate` started there, and that line is its trace. Inside a gate nothing is said, as the
+ * `check` a sensor runs prints no row of the lock.
  *
  * With the lock in hand the command is given that mark in turn, so a gate it starts
  * (`js-harness gate -- npm run check`) runs in this turn instead of waiting for it. A command that runs
  * without the lock, which could not be taken, is not given it.
  *
+ * A usage error is said on stderr with the usage, before a lock is taken or anything runs: a flag `gate`
+ * cannot take (`parseArgs`), or arguments it cannot make a command line of (`commandLineOf`).
+ *
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
- * `deps.takeGateLock`, `deps.spawn` (for `runSensor`) and `deps.cwd` are replaceable. */
+ * `deps.takeGateLock`, `deps.spawn` (for `runSensor`) and `deps.cwd` are replaceable, and so is
+ * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
+ * line of another system and stands in for what would run it. */
 export async function gateMain(argv, env = process.env, deps = {}) {
   let parsed;
+  let commandLine;
   try {
     parsed = parseArgs(argv, env, deps.cwd ?? process.cwd());
+    commandLine = commandLineOf(parsed.command, deps.platform ?? process.platform);
   } catch (err) {
     console.error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const { cwd, home, noWait, waitMinutes, command } = parsed;
-  const commandLine = commandLineOf(command);
+  const { cwd, home, noWait, waitMinutes } = parsed;
   const run = async (given) => {
     const result = await (deps.spawn ?? runSensor)(commandLine, { cwd, env: given, timeout: 0, inherit: true });
     if (result.error) console.error(`gate: ${commandLine} could not run: ${result.error.message}`);
     else if (result.status === null) console.error(`gate: ${commandLine} was killed by ${result.signal}`);
     return result.error || result.status === null ? 1 : result.status;
   };
-  if (env.JS_HARNESS_CHECK_INNER === '1' || env[GATE_HELD_ENV] === '1') return run(env);
+  if (env.JS_HARNESS_CHECK_INNER === '1') return run(env);
+  if (env[GATE_HELD_ENV] === '1') {
+    console.error(`gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate takes none`);
+    return run(env);
+  }
 
   const turn = await takeGateTurn({ name: 'gate', home, cwd, command: `gate -- ${commandLine}`, wait: !noWait, waitMinutes }, deps.takeGateLock);
   if (turn.refused) {

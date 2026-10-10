@@ -15,8 +15,10 @@ import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 
 const dispatcher = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
 
+/** A temporary folder by its real path: where the temporary folder sits behind a symlink (macOS, `/var`
+ * to `/private/var`), a process started in it says the real one for its folder. */
 function makeTmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-gate-'));
+  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-gate-')));
 }
 
 /** A home for the lock and a folder to run in, and their removal. */
@@ -74,6 +76,14 @@ function gateClock() {
 
 const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]';
 
+/** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
+const IN_TURN = "gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate takes none";
+
+/** Why `gate` refuses, on Windows, the argument at `position` among several: `what` is what it holds. */
+const cannotHand = (position, what) => `cmd.exe cannot be handed argument ${position} after -- whole: it holds ${what}; give the whole command as one argument after --, written as cmd.exe reads it`;
+const QUOTE = 'a double quote, which ends the quotes around it';
+const PERCENT = 'a percent sign, which is expanded as a variable even inside quotes';
+
 test('gate runs the command in its folder, in the environment it was given, and its exit code is the command\'s', withHome(async (home, dir) => {
   for (const status of [0, 7]) {
     const spawned = ranWith(status);
@@ -109,7 +119,9 @@ test('gate gives its command the mark of a held gate lock only when it holds the
   assert.deepEqual(await given({ JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_GATE_HELD: '1' }), { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_GATE_HELD: '1' });
 }));
 
-test('gate started with the mark of a held gate lock takes no lock and runs the command at once, beside the gate that holds the lock in its home', withHome(async (home, dir) => {
+// The line on stderr is the trace of a mark left in a shell by mistake, which turns the lock off for every
+// `gate` started from it: `check` leaves the same trace in a row of its report.
+test('gate started with the mark of a held gate lock takes no lock, says so in one line, and runs the command at once beside the gate that holds the lock in its home', withHome(async (home, dir) => {
   const outer = await takeGateLock({ home, cwd: 'C:\\work\\outer', command: 'gate -- npm run all', pid: 4321, beatMs: 0 });
   try {
     let asked = 0;
@@ -124,7 +136,7 @@ test('gate started with the mark of a held gate lock takes no lock and runs the 
     const env = { JS_HARNESS_GATE_HELD: '1', MINE: 'yes' };
     // `--no-wait` would refuse at once against the held lock, were the lock asked for.
     const { code, said } = await runGate(['--no-wait', '--home', home, '--cwd', dir, '--', 'node', '--test'], env, { spawn: spawned, takeGateLock: take });
-    assert.deepEqual([code, said, asked], [4, [], 0]);
+    assert.deepEqual([code, said, asked], [4, [IN_TURN], 0]);
     assert.deepEqual(during, [4321, ['lock']]);
     // What it runs is in the same turn, and is told so.
     assert.deepEqual(spawned.asked[0].env, env);
@@ -266,11 +278,15 @@ test('gate inside a gate takes no lock and just runs the command: the gate that 
       throw new Error('not to be asked');
     };
     const spawned = ranWith(4);
-    const env = { JS_HARNESS_CHECK_INNER: '1' };
-    const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'node', '--test'], env, { spawn: spawned, takeGateLock: take });
+    const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+    const { code, said } = await runGate(argv, { JS_HARNESS_CHECK_INNER: '1' }, { spawn: spawned, takeGateLock: take });
     assert.deepEqual([code, said, asked], [4, [], 0]);
     assert.equal(spawned.asked[0].commandLine, 'node --test');
     assert.equal(readGateHolder(home).pid, 4321);
+    // And it says nothing, as the `check` a sensor runs prints no row of the lock: with the mark of a held
+    // lock as well, which every sensor of a gate that holds the lock carries.
+    const marked = await runGate(argv, { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_GATE_HELD: '1' }, { spawn: spawned, takeGateLock: take });
+    assert.deepEqual([marked.code, marked.said, asked], [4, [], 0]);
   } finally {
     other.release();
   }
@@ -310,6 +326,11 @@ test('gate errors with usage on stderr, exits 2 and runs nothing for arguments i
     [['--cwd', '--', 'x'], '--cwd requires a value'],
     [['--push', '--', 'x'], 'unknown argument: --push'],
     [['node', '--', 'x'], 'unknown argument: node'],
+    // A flag given twice says two things, and which of them counts is not for `gate` to choose.
+    [['--wait', '1', '--wait', '2', '--', 'x'], '--wait given twice'],
+    [['--no-wait', '--no-wait', '--', 'x'], '--no-wait given twice'],
+    [['--home', home, '--home', home, '--', 'x'], '--home given twice'],
+    [['--cwd', dir, '--wait', '1', '--cwd', dir, '--', 'x'], '--cwd given twice'],
   ];
   for (const [argv, why] of refusals) {
     const spawned = ranWith(0);
@@ -332,8 +353,71 @@ test('commandLineOf: one argument is a command line as it stands, several are a 
   assert.equal(commandLineOf(['node', '-e', "console.log('a b')", 'it\'s', ''], 'linux'), "node -e 'console.log('\\''a b'\\'')' 'it'\\''s' ''");
   // A backslash is part of a path for `cmd.exe` and an escape for `sh`.
   assert.equal(commandLineOf(['echo', 'a\\b', '/usr/bin:x=1'], 'linux'), "echo 'a\\b' /usr/bin:x=1");
-  assert.equal(commandLineOf(['node', '-e', 'console.log("a b")', 'C:\\Program Files\\x\\', 'a&b', ''], 'win32'), 'node -e "console.log(\\"a b\\")" "C:\\Program Files\\x\\\\" "a&b" ""');
+  // Inside double quotes a space and `& | < > ^ ( )` are what they are for `cmd.exe`; a backslash at the
+  // end is doubled, or the C runtime of the program would read the closing quote as escaped.
+  assert.equal(
+    commandLineOf(['node', '-e', "console.log('a b')", 'C:\\Program Files\\x\\', 'a&b', 'a|b<c>d^e(f)', ''], 'win32'),
+    'node -e "console.log(\'a b\')" "C:\\Program Files\\x\\\\" "a&b" "a|b<c>d^e(f)" ""',
+  );
 });
+
+// Found in review, 2026-10-10: every argument was escaped as the C runtime of the program reads it, and
+// `cmd.exe` reads the line first. A backslash escapes no quote for it and `%NAME%` is expanded inside
+// quotes too, so `gate -- node -e 'console.log("a&b")'` failed, and an argument holding
+// `a"&echo UNEXPECTED&rem "` ran a second command.
+test('commandLineOf on Windows refuses, among several arguments, one that cmd.exe cannot be handed whole, and says to give the command as one argument', () => {
+  const refused = [
+    ['console.log("a&b")', QUOTE],
+    ['a"&echo UNEXPECTED&rem "', QUOTE],
+    ['%PATH%', PERCENT],
+    ['100%', PERCENT],
+    ['a\rb', 'a carriage return, which ends the command line'],
+    ['a\nb', 'a line feed, which ends the command line'],
+  ];
+  for (const [argument, what] of refused) {
+    assert.throws(() => commandLineOf(['node', '-e', argument], 'win32'), { message: cannotHand(3, what) }, JSON.stringify(argument));
+    // One argument is the caller's own command line, whatever it holds.
+    assert.equal(commandLineOf([argument], 'win32'), argument);
+    // And `sh` takes each of them whole in single quotes.
+    for (const platform of ['linux', 'darwin']) assert.equal(commandLineOf(['node', '-e', argument], platform), `node -e '${argument}'`);
+  }
+  // The first argument that cannot be handed is the one named, the command itself included.
+  assert.throws(() => commandLineOf(['my "tool"', '%A%'], 'win32'), { message: cannotHand(1, QUOTE) });
+});
+
+test('gate on Windows refuses arguments cmd.exe cannot be handed whole: exit 2 with usage, nothing runs and no lock is taken', withHome(async (home, dir) => {
+  let asked = 0;
+  const take = async () => {
+    asked += 1;
+    throw new Error('not to be asked');
+  };
+  const gate = (command, platform, spawned, env = {}) => runGate(['--home', home, '--cwd', dir, '--', ...command], env, { spawn: spawned, takeGateLock: take, platform });
+  const refusals = [
+    [['node', '-e', 'console.log("a&b")'], cannotHand(3, QUOTE)],
+    [['echo', 'a"&echo UNEXPECTED&rem "'], cannotHand(2, QUOTE)],
+    [['echo', '%PATH%'], cannotHand(2, PERCENT)],
+    [['echo', 'a\nb'], cannotHand(2, 'a line feed, which ends the command line')],
+  ];
+  for (const [command, why] of refusals) {
+    // Inside a gate and under the mark as well: it is refused before `gate` looks at either.
+    for (const env of [{}, { JS_HARNESS_CHECK_INNER: '1' }, { JS_HARNESS_GATE_HELD: '1' }]) {
+      const spawned = ranWith(0);
+      const { code, said } = await gate(command, 'win32', spawned, env);
+      assert.deepEqual([code, said, spawned.asked.length, asked], [2, [`${why}\n\n${USAGE}`], 0, 0], JSON.stringify(command));
+    }
+  }
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of the lock was written');
+
+  // The way out the message names: the whole command as one argument, handed to the shell as it is.
+  const whole = ranWith(0);
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 0 };
+  const one = await runGate(['--home', home, '--cwd', dir, '--', 'node -e "console.log(\'a&b\')" %PATH%'], {}, { spawn: whole, takeGateLock: async () => lock, platform: 'win32' });
+  assert.deepEqual([one.code, one.said, whole.asked[0].commandLine], [0, [], 'node -e "console.log(\'a&b\')" %PATH%']);
+  // And `sh` is handed the same arguments, each in single quotes.
+  const posix = ranWith(0);
+  const other = await runGate(['--home', home, '--cwd', dir, '--', 'node', '-e', 'console.log("a&b")'], {}, { spawn: posix, takeGateLock: async () => lock, platform: 'linux' });
+  assert.deepEqual([other.code, other.said, posix.asked[0].commandLine], [0, [], 'node -e \'console.log("a&b")\'']);
+}));
 
 // --- the real thing: the dispatcher, a real shell, the real lock and the real clock, in a temporary home ---
 
@@ -402,6 +486,15 @@ test('a real gate streams what the command prints while it runs, holds the lock 
   assert.deepEqual(stderr.split(/\r?\n/), ['on stderr', '']);
   assert.equal(readGateHolder(home), null);
   assert.equal(fs.existsSync(gateDir(home)), false);
+}));
+
+const notWindows = process.platform !== 'win32' && 'cmd.exe is the shell on Windows only';
+test('a real gate on Windows hands its command the arguments unchanged through cmd.exe: spaces, the marks cmd.exe reads outside quotes, a backslash at the end, an empty one', { skip: notWindows }, withHome(async (home, dir) => {
+  const given = ['a & b', 'a|b<c>d^e (f)', 'C:\\some folder\\', ''];
+  const gate = startGate(['--home', home, '--', 'node', '-e', 'console.log(JSON.stringify(process.argv.slice(1)))', ...given], { cwd: dir });
+  const { status, stdout, stderr } = await gate.done;
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(JSON.parse(stdout), given);
 }));
 
 test('a real gate waits for a lock another process\'s gate holds, says so, and runs once it is released', withHome(async (home, dir) => {

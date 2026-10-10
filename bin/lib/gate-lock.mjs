@@ -321,7 +321,9 @@ function unreadable(dir, { token, since, answer }) {
  * which no look read anything of the lock: it is judged before the end of the wait, since the second
  * version judged it after, and a wait of a minute or less still ended as that red refusal (found in the
  * next review). A holder that one look of the wait did read is a gate that was seen, and its wait times
- * out as any other.
+ * out as any other. Neither verdict rests on a single look that read nothing: a wait that is already
+ * over at the first look, which is a `waitMs` of zero, is given one more look a poll later, and that
+ * look decides (found in a later review).
  *
  * A dead holder is taken over on its second stale reading, a poll apart: a machine that slept wakes with
  * every beat hours old, and a live holder's timer fires before the next look. Its file is then removed
@@ -362,6 +364,8 @@ export async function takeGateLock({
   let unread;
   // Whether any look of this take read something of the lock: a beat, or that nobody holds it.
   let everRead = false;
+  // How many looks this take has had at a lock it could not take.
+  let looks = 0;
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time.
@@ -409,6 +413,7 @@ export async function takeGateLock({
     }
 
     const seen = lookAt(io, dir, clock);
+    looks += 1;
     // Nothing read of the holder: the same one as at the look before, or the first such look of it.
     if (seen?.holder?.beatAt !== null) {
       unread = undefined;
@@ -453,6 +458,13 @@ export async function takeGateLock({
     // Unreadable for as long as a dead gate is given, or from end to end of a wait shorter than that:
     // nothing ever showed a gate here. Judged before the end of the wait, which would blame a gate.
     const unreadMs = unread ? at - unread.since : 0;
+    // Not on one look, though: a wait that is over at the first look (a wait of zero, which `check`
+    // cannot ask for and a caller of this can) gets one more a poll later, and the verdict is that
+    // look's: the lock taken, a holder that was read and times the wait out, or the error below.
+    if (unread && wait && waitedMs >= waitMs && looks === 1) {
+      await sleep(pollMs);
+      continue;
+    }
     if (unread && (unreadMs >= staleMs || (wait && waitedMs >= waitMs && !everRead))) {
       unstage();
       throw unreadable(dir, unread);

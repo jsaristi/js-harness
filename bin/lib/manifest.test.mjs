@@ -282,6 +282,77 @@ test('uninstall keeps a folder of the gate lock it cannot remove, reports it wit
   }
 });
 
+/** A seam of `uninstall` (`statFile`, `listDir`): the `real` call, but for `target`, which it refuses with
+ * `code` as the system does for what it gives no access to. File permissions cannot be relied on to make
+ * that happen on Windows. */
+function refusedAt(target, real, code = 'EACCES') {
+  return (asked, ...rest) => {
+    if (asked === target) throw Object.assign(new Error(`${code}: permission denied, '${asked}'`), { code });
+    return real(asked, ...rest);
+  };
+}
+
+// Found in review, 2026-10-10: the folder was looked for with `existsSync`, which answers "not there" for
+// one it could not look at. Uninstall then said there was nothing to remove and exited 0 over the lock's files.
+test('uninstall keeps a folder of the gate lock it could not look at and reports it with the error code, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    const statFile = refusedAt(gateDir(home), fs.statSync);
+    const notLookedAt = [{ path: gateDir(home), reason: 'unremovable', code: 'EACCES' }];
+
+    install(home, '0.1.0');
+    leftByKilledGates(home);
+    const installed = uninstall(home, { statFile });
+    assert.deepEqual(installed.gateKept, notLookedAt);
+    assert.equal(installed.removed.includes(gateDir(home)), false);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is removed all the same');
+
+    const bare = uninstall(home, { statFile });
+    assert.deepEqual(bare, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: notLookedAt });
+    assert.equal(fs.existsSync(gateLockDir(home)), true, 'nothing of it was removed on a guess');
+
+    // "Not there" is what the system says of the folder itself, or of a parent that is a file.
+    for (const code of ['ENOENT', 'ENOTDIR']) {
+      const result = uninstall(home, { statFile: refusedAt(gateDir(home), fs.statSync, code) });
+      assert.deepEqual([result.removed, result.gateKept], [[], []], code);
+    }
+    assert.deepEqual(uninstall(home).removed, [gateDir(home)]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Found in the same review: the empty folders above what was removed are cleared with a listing, and a
+// `.js-harness` that can be looked at and not listed made that throw, so the caller never got the result.
+test('uninstall leaves a folder it cannot list where it is, and still returns what it removed and kept, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    const own = path.join(home, '.js-harness');
+    const listDir = refusedAt(own, fs.readdirSync);
+    const none = { kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] };
+
+    leftByKilledGates(home);
+    assert.deepEqual(uninstall(home, { listDir }), { removed: [gateDir(home)], ...none });
+    assert.equal(fs.existsSync(own), true, 'not known to be empty, so left');
+
+    // With what could not be looked at as well: the two findings met in one home.
+    leftByKilledGates(home);
+    const statFile = refusedAt(gateDir(home), fs.statSync);
+    assert.deepEqual(uninstall(home, { listDir, statFile }), { removed: [], ...none, gateKept: [{ path: gateDir(home), reason: 'unremovable', code: 'EACCES' }] });
+
+    install(home, '0.1.0');
+    const installed = uninstall(home, { listDir });
+    assert.ok(installed.removed.includes(gateDir(home)), installed.removed.join('\n'));
+    assert.deepEqual([fs.existsSync(manifestPath(home)), fs.existsSync(own)], [false, true]);
+
+    // Nothing fails: the folder goes, as it always did.
+    assert.deepEqual(uninstall(home), { removed: [], ...none });
+    assert.equal(fs.existsSync(own), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- T4: entry-level manifest records (install registers one hook entry per host) ---
 
 test('entryComponents declare the SessionStart hook for Claude and Codex', () => {

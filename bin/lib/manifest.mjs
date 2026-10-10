@@ -587,13 +587,21 @@ export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(t
   return { status: 'removed' };
 }
 
-/** Removes `dir` and any now-empty parent up to (but not including) `home`. */
-function removeEmptyDirsUpTo(dir, home) {
+/** Removes `dir` and any now-empty parent up to (but not including) `home`. Best effort: a folder that
+ * cannot be listed is not known to be empty, and it is left, as is one that cannot be removed; the walk
+ * ends there. It is the tidying after the caller's own work, which is done by then and must still be
+ * reported: thrown from here, a failure took the result of `uninstall` with it (found in review,
+ * 2026-10-10). `listDir` is `uninstall`'s seam. */
+function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   let current = path.resolve(dir);
   const stop = path.resolve(home);
   while (current !== stop && current.startsWith(stop)) {
-    if (!fs.existsSync(current) || fs.readdirSync(current).length > 0) break;
-    fs.rmdirSync(current);
+    try {
+      if (!fs.existsSync(current) || listDir(current).length > 0) break;
+      fs.rmdirSync(current);
+    } catch {
+      break;
+    }
     current = path.dirname(current);
   }
 }
@@ -688,8 +696,12 @@ export function sync(home, version, deps = {}) {
  * The gate lock's folder is written by `check` and `gate`, not by `install`, so it is looked for under a
  * home with no manifest as well, which is otherwise left as it is. Its path is in `removed` when it was
  * there and is gone, and `gateKept` says why it was left, as `[{ path, reason, ... }]`: `in-use` with the
- * `pid` and `cwd` of the gate that is alive in it, or `unremovable` with the error's `code`
- * (`removeGateFolder`).
+ * `pid` and `cwd` of the gate that is alive in it, or `unremovable` with the error's `code`, for a folder
+ * that could not be looked at as for one that could not be removed (`removeGateFolder`).
+ * `deps.statFile` (default `fs.statSync`) is the seam that looks for that folder, and `deps.listDir`
+ * (default `fs.readdirSync`) the one that lists a folder left behind to see whether it is empty and goes
+ * too (`removeEmptyDirsUpTo`, which leaves one it cannot list): a test makes either fail as the system
+ * does for what it gives no access to.
  *
  * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
  * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
@@ -711,12 +723,14 @@ export function sync(home, version, deps = {}) {
  * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
+  const statFile = deps.statFile ?? fs.statSync;
+  const listDir = deps.listDir ?? fs.readdirSync;
   const manifest = readManifest(home);
   if (!manifest) {
     // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
     // component, so it is looked for all the same, and the folder it leaves empty goes with it.
-    const gate = removeGateFolder(home, removeFile);
-    removeEmptyDirsUpTo(path.dirname(gateDir(home)), home);
+    const gate = removeGateFolder(home, removeFile, statFile);
+    removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
     return { removed: gate.removed, kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept };
   }
 
@@ -727,7 +741,7 @@ export function uninstall(home, deps = {}) {
     const current = fs.readFileSync(file.path, 'utf8');
     if (sha256(current) === file.sha256) {
       removeFile(file.path);
-      removeEmptyDirsUpTo(path.dirname(file.path), home);
+      removeEmptyDirsUpTo(path.dirname(file.path), home, listDir);
       removed.push(file.path);
     } else {
       kept.push(file.path);
@@ -770,13 +784,13 @@ export function uninstall(home, deps = {}) {
   }
 
   fs.rmSync(cachePath(home), { force: true });
-  const gate = removeGateFolder(home, removeFile);
+  const gate = removeGateFolder(home, removeFile, statFile);
   removed.push(...gate.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
-    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
   return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept };
@@ -795,11 +809,11 @@ export function uninstall(home, deps = {}) {
  * instant between this look and the removal loses its lock, and its own report says so.
  *
  * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
- * `code`. `removeFile` is `uninstall`'s own seam. */
-function removeGateFolder(home, removeFile) {
+ * `code`. `removeFile` and `statFile` are `uninstall`'s own seams. */
+function removeGateFolder(home, removeFile, statFile) {
   const dir = gateDir(home);
-  if (!fs.existsSync(dir)) return { removed: [], kept: [] };
   try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
     // The waiters first, as the session board reads them: a gate that takes the lock between the two
     // reads is then in one of them.
     const [waiting] = readGateWaiters(home);
@@ -811,6 +825,19 @@ function removeGateFolder(home, removeFile) {
     return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
   return { removed: [dir], kept: [] };
+}
+
+/** Whether something is at `target`: `false` only when the system says nothing is (ENOENT, or ENOTDIR for
+ * a parent that is a file). Throws when it could not be looked at (no access to it), which `existsSync`
+ * answers as not there. */
+function isThere(target, statFile) {
+  try {
+    statFile(target);
+    return true;
+  } catch (err) {
+    if (['ENOENT', 'ENOTDIR'].includes(err.code)) return false;
+    throw err;
+  }
 }
 
 /** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing

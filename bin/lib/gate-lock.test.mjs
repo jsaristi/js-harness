@@ -512,6 +512,41 @@ test('an unreadable lock is judged before the end of the wait: nothing read of i
   first.release();
 }));
 
+// Found in review, 2026-10-10: with a wait of zero the wait is over at the first look, and that one look,
+// when it read nothing, was already the error. `check` cannot ask for a zero wait; a caller of this can.
+test('a wait that is over at the first look, which could read nothing, is given one more look a poll later, and that look is the verdict', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  clock.onSleep = () => first.beat();
+  const zero = (io) => take(home, clock, { pid: 22, waitMs: 0, fileSystem: io });
+
+  // Read at the second look: a gate that was seen, so the wait times out, and names it.
+  let busy = busyFor(11, 'statSync', 'EBUSY', 1);
+  const seen = await zero(busy.io);
+  assert.deepEqual([seen.refused, seen.holder.pid, seen.waitedMs, busy.failed()], ['timeout', 11, POLL_MS, 1]);
+
+  // Still nothing read at the second look: the error, after that one poll and no more.
+  let began = clock.now();
+  busy = busyFor(11, 'statSync', 'EACCES');
+  await assert.rejects(zero(busy.io), {
+    code: 'GATE_LOCK_UNREADABLE',
+    message: `the gate lock at ${gateLockDir(home)} could be neither taken nor read: its holder's file could not be looked at since ${new Date(began).toISOString()} (EACCES)`,
+  });
+  assert.deepEqual([clock.now() - began, busy.failed()], [POLL_MS, 2]);
+
+  // A holder the first look reads is refused at once, as before: one look that saw a gate is a verdict.
+  began = clock.now();
+  const atOnce = await zero(fs);
+  assert.deepEqual([atOnce.refused, atOnce.holder.pid, clock.now() - began], ['timeout', 11, 0]);
+
+  // Free by the second look: the lock is taken.
+  clock.onSleep = () => first.release();
+  const taken = await zero(busyFor(11, 'statSync', 'EBUSY', 1).io);
+  assert.deepEqual([taken.refused, taken.waitedMs, readGateHolder(home, { now: clock.now }).pid], [undefined, POLL_MS, 22]);
+  taken.release();
+  assert.deepEqual(waitFolders(home), []);
+}));
+
 test('a holder that was read once and cannot be at the end of a short wait is a gate that was seen: the wait times out', withHome(async (home) => {
   const clock = fakeClock();
   const first = await take(home, clock, { pid: 11 });

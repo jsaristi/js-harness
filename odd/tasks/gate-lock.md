@@ -217,6 +217,11 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       release removes the folder `gate` when it is empty, and `uninstall` removes what a
       killed gate left. Route: the writer of T4, first, and in T4's commit.
 - [x] T4 · `js-harness gate -- <command>`.
+- [x] T4b · What the reviews of T3b and T4 found (added 2026-10-10; the list is in Progress):
+      `gate` passes several arguments through `cmd.exe` unchanged, quotes, `&` and `%`
+      included; uninstall tells a gate folder it cannot look at from one that is not there,
+      and its parent's cleanup cannot throw away what it found; and the smaller ones. Route:
+      one writer, in a commit of its own or with T5, under about 1,200 changed lines.
 - [ ] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
 - [ ] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
       after.
@@ -703,27 +708,138 @@ allows a feature. No spend outside the plan.
   - `R3-in-use-unread-branch-untested` (suggestion, `bin/install.mjs:355`): uninstall's
     message for a live holder of which nothing could be read has no test.
 
+- 2026-10-10 · The second half is commit `1eafe1a` (T4): gate green in 759 s (10:10:25 to
+  10:23:04), one try, on this session's own look at the process list; the folder `gate` was
+  gone after it. `git diff backup/gate-lock-cc5e9f3 HEAD` shows this document and nothing
+  else, so the split changed no code; the backup branch is deleted. gentle-ai reviewed
+  `3659fb5..1eafe1a` (1,141 lines, one lens, reliability; lineage `review-217ff1a8afdac875`)
+  and approved it, acknowledged, with four advisory findings, kept for the next task that
+  touches `bin/gate.mjs` and not fixed here:
+  - `R3-real-gate-cwd-realpath` (warning, `bin/gate.test.mjs:395`): a real-process test
+    compares the holder's folder with an unresolved temporary path, which fails where the
+    temporary folder is behind a symlink (macOS) with the product right.
+  - `R3-gate-mark-silent` (suggestion, `bin/gate.mjs:107`): `gate` started with the mark runs
+    without the lock and says nothing, where `check` prints a row; a mark left in a shell
+    would switch the lock off for later `gate` runs with no trace.
+  - `R3-gate-cmd-quoting-percent` (suggestion, `bin/gate.mjs:30`): arguments re-quoted for
+    `cmd.exe` still have their percent signs expanded; no test with one.
+  - `R3-gate-duplicate-flags` (suggestion, `bin/gate.mjs:49-58`): a flag given twice is
+    neither refused nor pinned.
+  Owed: the Codex review of `b1d650b..1eafe1a` (its gate's row: no record covers
+  `3659fb5^..HEAD`), which waits for the answer to the budget question below. State at 81%
+  of this session's window: T1 to T4 done and committed, both gentle-ai reviews of every
+  slice acknowledged, nothing in flight, this entry not yet committed.
+
+- 2026-10-10 · Decided by Sebastián ("Sí, hasta 5 millones"): the Codex budget of this feature
+  is 5 million input tokens, not 3. What he was told: 2,081,562 spent; the review owed
+  (`b1d650b..1eafe1a`, 7 parts) put at 0.7 to 2 million from its plan and what today's
+  reviews cost against theirs; T6's still to come. Past 5 million, his again.
+
+- 2026-10-10 · Codex reviewed `b1d650b..1eafe1a` in 7 parts (14:06:24 to 14:16:01) and the review
+  is recorded. The first try spent nothing: 7 parts are more than the 6 a run starts without
+  `--max-parts`. Its plan put the review at 2,050,000 to 8,450,000 input tokens, not the 0.7
+  to 2 million this session had told Sebastián from its own sum, and he was told so before
+  it ran; it ran under a guard of this session's (`codex-guarded.cjs`, which adds up each
+  part's tokens and kills the run past 2,700,000) so the 5 million could not be passed.
+  Spent: 2,446,573 input tokens (1,998,848 cached). The feature's Codex spend: 4,528,135 of
+  5 million; 471,865 are left, which will not pay the review of T4b and T6. That is his to
+  decide again, with these numbers, before the next Codex review.
+  Four findings, all P2, all true on reading:
+  - `bin/gate.mjs:30`: several arguments after `--` are escaped for a C runtime and then
+    parsed by `cmd.exe`, where a backslash does not escape a quote and `%VAR%` expands
+    inside quotes. Codex ran it: `node -e 'console.log("a&b")'` fails, and an argument
+    holding `a"&echo UNEXPECTED&rem "` runs a second command. Until T4b, the safe form is
+    the whole command as one argument (`gate -- "node evals/runner.mjs --all"`), which is
+    handed to the shell as the caller wrote it. (gentle-ai's `R3-gate-cmd-quoting-percent`
+    is the same place.)
+  - `bin/gate.test.mjs:395`: the same as gentle-ai's realpath finding.
+  - `bin/lib/manifest.mjs:801`: `existsSync` says "not there" for a gate folder it could
+    not look at, so uninstall reports nothing to remove and exits 0 with the lock's files
+    still there.
+  - `bin/lib/manifest.mjs:718`: on a home with no manifest whose `.js-harness` can be
+    stat'ed and not listed, the parent's cleanup throws and the caller never gets what
+    `removeGateFolder` found.
+  T4b takes these four and gentle-ai's of the two halves: the zero-wait single look, the
+  untested uninstall message, `gate` silent under the mark, a flag given twice. Not taken:
+  the alarm for a gate run by a relative path seen before it stood in line (recorded gap).
+  State at 85% of this session's window, by his rule: T1 to T4 done, committed and reviewed
+  by both reviewers; nothing in flight; this document's last entries are not committed and
+  ride in the next commit. The next task does not fit in what is left before the app's own
+  compaction (a task with its commit cost 9 to 13 points today), so the compaction is asked
+  for here.
+
+- 2026-10-10 · After the compaction: the Engram mirror (observation 3282) is updated from this
+  file. Engram keeps about 50,000 characters of an observation and this document is past 62,000,
+  so the mirror holds everything up to Progress, the newest Progress entries that fit and Next;
+  the older entries are only here, and the mirror says how many.
+
+- 2026-10-10 · T4b, one writer (route: delegated, eight findings over eight files), test first, a
+  failing test seen for each finding that could have one:
+  - `gate` and `cmd.exe`. Decided here, since quoting cannot do it: on Windows, among several
+    arguments, one that holds a double quote, a percent sign, a carriage return or a line feed
+    is refused as a usage error (exit 2, before a lock is taken or anything runs), and the
+    message says which argument, what it holds and the way out: the whole command as one
+    argument after `--`, written as `cmd.exe` reads it. Why refused and not escaped: escaping
+    for `cmd.exe` with carets works for a program and not for a `.cmd` shim such as `npm`,
+    which reads its arguments a second time, and telling the two apart means reading the shim;
+    a refusal is the same for both and the caller never gets another command than the one it
+    wrote. Everything else is still wrapped in double quotes, inside which a space and
+    `& | < > ^ ( )` are what they are; a real-process test on Windows pins an argument with
+    `&` and spaces. One argument, and `sh`, are as they were.
+  - `gate`: a flag given twice is a usage error; started under the mark it says on stderr
+    that the command runs in the turn of the process that started it (inside a gate it says
+    nothing, as the `check` a sensor runs prints no row of the lock).
+  - `bin/gate.test.mjs`: every temporary folder is made through `realpathSync` (no failing
+    test on this machine: no symlinked temporary folder here).
+  - uninstall: a gate folder that could not be looked at is kept as `unremovable` with the
+    error's code and no longer reported as not there (`deps.statFile`); a folder that cannot
+    be listed or removed is left by `removeEmptyDirsUpTo` and the result is returned
+    (`deps.listDir`). The same hole was in its three other callers (`forgetRecord`, `sync`,
+    uninstall with a manifest) and is closed there by the same change. The message for a live
+    gate of which nothing could be read has its test, and one more says that uninstall exits
+    1 and names the folder it could not look at.
+  - the lock: with a wait of zero and a first look that read nothing, it looks once more a
+    poll later, and the verdict is the second look's.
+  Focused runs, each after a look at the process list (the writer waited twice for another
+  session's gate): `bin/gate.test.mjs` 21 of 21, `bin/lib/gate-lock.test.mjs` 56 of 56,
+  `bin/lib/manifest.test.mjs` 84 of 84, `bin/install.test.mjs` 56 of 56. 351 lines added
+  and 36 removed in the eight files. One line of comment in `bin/check.mjs` follows (it said
+  only `check` leaves a trace of the mark).
+  Seen and left: the installed skill's line for `js-harness gate` and its usage do not say
+  the one-argument rule of Windows (the refusal itself says it); uninstall's stderr line for
+  a folder it could not look at still says "could not remove ... it is still there"; a zero
+  wait whose first look finds the lock free and whose second cannot read its holder still
+  ends as a timeout.
+
+- 2026-10-10 · A standing notice from the orchestrator, checked against Sebastián's own words in
+  its chat (transcript `182ad401`, line 1112, 2026-10-10T19:55:22Z: he asks that the
+  orchestrator and the sessions work more on their own and stop less): this session no longer
+  asks for a gate turn. It looks at the process list itself (no `check.mjs`, no `node --test`,
+  no gentle-ai or Codex review alive), starts its gate, one try and no retry at the bound,
+  and tells the orchestrator in one line when it ends. Work is chained (commit, reviews,
+  findings, next task) with no report between; he is asked only for what is his: spend
+  outside the plan, a change on a machine, a product choice, what cannot be undone, a change
+  of this plan's scope or order, a new protocol, and for now the merge of code.
+
 ## Next
-The second half of `cc5e9f3` (T4: `check`, `gate`, the dispatcher, this document), staged:
-its commit on this session's own look at the process list (the orchestrator gave the turn
-in advance), message in the worktree's git folder as `GATE_SPLIT_2_MSG.txt`. Then, in this
-order:
-1. `gentle-ai review assess --base-ref 3659fb5 --committed-only` on it and what it returns
-   (one look at the process list first). The helper `review-open.cjs <base>` of this
-   session's scratchpad runs the steps up to the capture; if it is gone, run them by hand
-   as the returned commands say. Then one notice to the orchestrator: both commits, both
-   gates' seconds, what the lock left on disk, when `js-harness gate` can be named to
-   another session; and delete the branch `backup/gate-lock-cc5e9f3`.
-2. The question to Sebastián, open and not yet asked: the Codex budget. Spent 2,081,562 of
-   the 3 million input tokens of a feature (1,037,056 of the last review's 1,253,094 were
-   cached); owed: the review of `b1d650b..cc5e9f3` (2,250 lines, its `--plan` says what it
-   would cost) and later T6's. No Codex review past the 3 million without his yes.
-3. T5: measure the suite per file. With it, put to him the orchestrator's proposal that
-   every gate append one line to a file (start, end, seconds, worktree, result, whom it
-   waited for): one more file written outside the repository, so his to decide.
+1. T4b's commit and its gate; then `gentle-ai review assess --base-ref 1eafe1a --committed-only`
+   and the review it asks for.
+2. The question to Sebastián, before any Codex review: 4,528,135 of 5 million spent, and
+   T4b's and T6's reviews do not fit in the 471,865 left. Say what the plan (`--plan`) puts
+   them at, and that the cached share was four fifths of the last one. Not waited for: T5
+   and T6 go on meanwhile, and the Codex review of T4b, T5 and T6 can be one range.
+3. T5: measure the suite per file (one whole run with each file's time, under
+   `js-harness gate` so it waits its turn), recorded here. With it, put to him the
+   orchestrator's proposal that every gate append one line to a file (start, end, seconds,
+   worktree, result, whom it waited for): one more file written outside the repository, so
+   his to decide.
 4. Then T6, T7 (asked first, with the list of tests that read documents), T8.
+Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
+changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
+tree (set this document aside with `git stash`, one stash, popped by the same command);
+no review step beside a running gate.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,
-   and start nothing beside it (the two mistakes above). A gate starts only on the
-   orchestrator's turn, and one that reaches the bound is said and not retried.
+   and start nothing beside it (the two mistakes above). A gate that reaches the bound is said
+   and not retried, and the orchestrator is told in one line when a gate ends.

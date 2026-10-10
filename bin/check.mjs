@@ -258,7 +258,7 @@ export function runSensor(command, { cwd, env, timeout, inherit = false, killTre
  * it starts; a process that outlives the holder that started it (left in the background, detached),
  * which keeps the mark after the turn is over; and a holder that lost its lock to another gate for
  * having been silent a whole minute, whose children still carry it. `check` says in a row that it ran
- * under the mark, so a report shows a mark that should not have been there. */
+ * under the mark, and `gate` in a line on stderr, so a mark that should not have been there shows. */
 export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
 
 /** Runs one sensor's command in `cwd` through the shell and reports pass/fail. `spawn` may return a

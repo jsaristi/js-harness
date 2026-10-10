@@ -345,7 +345,8 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   }
   // The folder of the machine's gate lock, which `check` and `gate` write under the home. Left to a gate
   // that is alive in it, which removes its own files when it ends: that is no failure, and it is said
-  // with what is left to do. Left because it could not be removed: that goes to stderr, like a file.
+  // with what is left to do. Left because it could not be looked at or removed: that goes to stderr, like
+  // a file.
   const gateNotUndone = result.gateKept.filter((gate) => gate.reason !== 'in-use');
   for (const gate of result.gateKept) {
     if (gate.reason !== 'in-use') {
