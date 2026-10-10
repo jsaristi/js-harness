@@ -1,14 +1,30 @@
 // The pure part of the practice command (scripts/practice.mjs): where everything of the practice folder is,
-// what environment every process it starts gets, when `setup` refuses, which steps the journey has, how the
-// user's real home is compared before and after a run, and the line a run leaves in the record. Facts in,
-// values out: nothing here reads the disk, the clock or the environment, or starts a process, so its tests
-// cost the gate nothing. The design is in odd/tasks/practice-project.md.
+// what environment every process it starts gets, when `setup` refuses, how the answer of git about a
+// repository is read, which steps the journey has and how it is walked, how the user's real home is compared
+// before and after a run, and the line a run leaves in the record. Facts in, values out. What that covers:
+// - Nothing here reads the disk or the clock, or starts a process, and nothing prints; so its tests cost the
+//   gate nothing.
+// - Two defaults are taken from the process, and a caller can hand in both: `platform = process.platform`,
+//   and `baseEnv = process.env` in `childEnv`. Nothing else reads the environment.
+// - Given fully qualified paths, those a manifest records included, no result depends on the current
+//   directory. `path.relative` (in `isInside`) and `path.resolve` (in `realHomeFiles`) complete a Windows
+//   path that names no drive from the current directory; `setupRefusal` refuses such a root or home before
+//   it compares them.
+// The design is in odd/tasks/practice-project.md.
 import path from 'node:path';
 import crypto from 'node:crypto';
 
 /** The path rules of `platform`. Every function below takes the platform as a parameter and goes through
  * this, so the Windows and the POSIX behaviour can both be tested on one machine. */
 const pathFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
+
+/** Whether the absolute path `absolute` says by itself where it is, by the rules of `platform`. On Windows
+ * `\foo` and `/foo` are absolute and name no drive, and `\\server` names no share: Node completes them from
+ * the current directory. A path there is fully qualified when it starts with a drive letter and a separator
+ * (`D:\`, `d:/`) or is a network path (`\\server\share\...`). Off Windows every absolute path is. */
+function fullyQualified(absolute, platform) {
+  return platform !== 'win32' || /^[A-Za-z]:[\\/]/.test(absolute) || /^[\\/]{2}[^\\/]+[\\/]+[^\\/]+/.test(absolute);
+}
 
 // ---- the folder -------------------------------------------------------------------------------------------------------
 
@@ -106,8 +122,9 @@ export function childEnv(layout, baseEnv = process.env, platform = process.platf
 
 /** Whether `child` is `parent` or lies under it, by the path rules of `platform`: on Windows the case of the
  * drive and of every segment is ignored and both separators count; on POSIX the case matters. `D:\foo-bar` is
- * not inside `D:\foo`. Both paths are absolute. It compares spellings only: a link or a short name that leads
- * into `parent` is for the caller to resolve first. */
+ * not inside `D:\foo`. Both paths are fully qualified: a Windows path that names no drive would be completed
+ * from the current directory. It compares spellings only: a link or a short name that leads into `parent` is
+ * for the caller to resolve first. */
 export function isInside(parent, child, platform = process.platform) {
   const p = pathFor(platform);
   const relative = p.relative(parent, child);
@@ -120,17 +137,50 @@ export function isInside(parent, child, platform = process.platform) {
  * refuses a place that exists, because `run` deletes and rewrites inside the folder; one inside a repository,
  * because the practice project must be a repository of its own; and the home or anything inside it, because
  * the home is what the practice exists to leave alone. A root or a home that is not an absolute path cannot
- * be judged, and is refused. */
+ * be judged, and is refused; so is, on Windows, one that names no drive (`\foo`), because where it lies
+ * would depend on the folder the command was started from.
+ *
+ * The repository is judged last, and it is the only refusal that needs git: the command calls this once
+ * with `gitRoot: null`, before it starts git, and again with the answer (`readGitRoot`) when the first call
+ * found nothing to refuse. */
 export function setupRefusal({ root, exists, gitRoot, home, platform = process.platform }) {
   const p = pathFor(platform);
   if (typeof root !== 'string' || !p.isAbsolute(root)) return `the root ${root} is not an absolute path`;
+  if (!fullyQualified(root, platform)) {
+    return `the root ${root} names no drive, so where it lies would depend on the folder the command was started from: on Windows a root starts with a drive letter, as D:\\, or is a network path`;
+  }
   if (exists) return `${root} already exists: setup only creates a new folder`;
   if (typeof home !== 'string' || !p.isAbsolute(home)) {
     return `the user's home is not known as an absolute path (${home}), so ${root} cannot be shown to lie outside it`;
   }
+  if (!fullyQualified(home, platform)) return `the user's home ${home} names no drive, so ${root} cannot be shown to lie outside it`;
   if (isInside(home, root, platform)) return `${root} is inside the user's home ${home}, which the practice must never write to`;
   if (gitRoot) return `${root} is inside the git repository ${gitRoot}: the practice project needs a repository of its own`;
   return null;
+}
+
+/** What git says when the folder it was asked in lies in no repository, in the two wordings it has: no
+ * repository up to the root of the disk, and none up to a mount point. `fatal: not a git repository: <path>`
+ * is another thing, a link to a repository that is not there, and is not matched. */
+const NO_REPOSITORY = /not a git repository \(or any /;
+
+/** Reads what `git rev-parse --show-toplevel` answered (`status`, `stdout` and `stderr` of the child, asked
+ * in English) about the folder the practice would be created in:
+ *
+ * - `{ gitRoot: '<path>' }` when it exited 0 and printed the top level of a repository;
+ * - `{ gitRoot: null }` only when git said that there is no repository there;
+ * - `{ refusal }` for anything else, in one sentence of one line with what git printed: a repository git
+ *   refuses to read ("detected dubious ownership"), the inside of a `.git` folder, a child that was ended,
+ *   an exit 0 that names no folder. Git exits non-zero for all of these too, so reading every failure as
+ *   "no repository" would let `setup` create the practice inside one. */
+export function readGitRoot({ status, stdout, stderr }) {
+  const top = typeof stdout === 'string' ? stdout.trim() : '';
+  const said = typeof stderr === 'string' ? stderr.trim().replace(/\s+/g, ' ') : '';
+  const failed = Number.isInteger(status) && status !== 0;
+  if (status === 0 && top !== '') return { gitRoot: top };
+  if (failed && NO_REPOSITORY.test(said)) return { gitRoot: null };
+  const how = status === 0 ? 'it exited 0 and named no folder' : failed ? `it exited ${status}` : 'it did not exit by itself';
+  return { refusal: `git did not say whether the practice folder would lie inside a repository (${how}): ${said || 'it printed nothing'}` };
 }
 
 // ---- the marker ------------------------------------------------------------------------------------------------------
@@ -247,6 +297,46 @@ export const JOURNEY = Object.freeze([
   { id: 'record', title: 'one line is appended to record.jsonl' },
 ].map((step) => Object.freeze(step)));
 
+/** The steps that run whatever failed before them: the proof that the real home was left alone, and the
+ * record of the run, matter most when something went wrong. */
+export const ALWAYS_RUN = Object.freeze(['real-home-after', 'record']);
+
+/** Walks `journey` in order and says how the run ended. `steps` holds one function per id; each is called
+ * with `ctx` and returns its evidence as text, or throws with the reason it failed. A step that throws has
+ * failed, with the message as its detail, and so has a step of the journey that `steps` has no function for.
+ * After the first failure the steps that follow are skipped, except those of `alwaysRun`.
+ *
+ * The result of each step that ran, `{ id, ok, detail }`, is pushed to `ctx.results` (an array the caller
+ * made) as the step ends, so a later step reads those before it: the record step writes them down. Nothing
+ * is printed here: `report` is handed the facts of one line per step, `{ status, id, title, detail }` with
+ * the status `PASS` or `FAIL`, and `{ status: 'SKIP', id, title, failed }` with the id of the step that
+ * failed.
+ *
+ * Returns `{ ok, passed, failed }`: how many steps passed, the id of the first that failed (`undefined`
+ * when none did), and `ok`, true only when every step of the journey passed and it has at least one. */
+export function walkJourney({ journey = JOURNEY, steps, ctx, alwaysRun = ALWAYS_RUN, report = () => {} }) {
+  let failed;
+  let passed = 0;
+  for (const { id, title } of journey) {
+    if (failed !== undefined && !alwaysRun.includes(id)) {
+      report({ status: 'SKIP', id, title, failed });
+      continue;
+    }
+    let result;
+    try {
+      if (typeof steps[id] !== 'function') throw new Error(`the journey names the step ${id}, and scripts/practice.mjs has no code for it`);
+      result = { id, ok: true, detail: steps[id](ctx) };
+      passed += 1;
+    } catch (err) {
+      result = { id, ok: false, detail: err.message };
+      failed ??= id;
+    }
+    ctx.results.push(result);
+    report({ status: result.ok ? 'PASS' : 'FAIL', id, title, detail: result.detail });
+  }
+  return { ok: journey.length > 0 && passed === journey.length, passed, failed };
+}
+
 /** The `js-harness` commands of the step `project-adopt`, in order: a project not yet initialized gets
  * `init`; an initialized one, which is every run after the first, gets `status` and then `sync`, the new
  * version arriving at a project that already has the harness. */
@@ -260,10 +350,16 @@ export function adoptionCommands(initialized) {
  * one that ends it). `date` is the moment of the run as text, `candidate` the checkout that was proven
  * (`{ branch, commit, dirty }`: the product cannot tell two copies apart, every one reads the same version),
  * `steps` the result of each step that ran (`{ id, ok, detail }`), `node` and `platform` what it ran on.
- * `ok` is true only when at least one step ran and every one of them is ok. */
-export function recordLine({ date, candidate, steps, node, platform }) {
+ *
+ * `ok` is true only for a whole journey that passed: every step that ran is ok, at least one ran, and every
+ * step of `journey` (the journey of `run` unless another is handed in; its ids are what counts) is among
+ * them exactly once. A step that was skipped is not in `steps`, so a run with a failure is never ok, and
+ * neither is a part of the journey that happened to pass: the line is the lasting proof of a run. The
+ * journey itself is not written into the line. */
+export function recordLine({ date, candidate, steps, node, platform, journey = JOURNEY }) {
   const results = steps.map(({ id, ok, detail }) => ({ id, ok, detail }));
-  const ok = results.length > 0 && results.every((step) => step.ok === true);
+  const once = ({ id }) => results.filter((step) => step.id === id).length === 1;
+  const ok = results.length > 0 && results.every((step) => step.ok === true) && journey.every(once);
   const { branch, commit, dirty } = candidate;
   return JSON.stringify({ date, ok, candidate: { branch, commit, dirty }, steps: results, node, platform });
 }

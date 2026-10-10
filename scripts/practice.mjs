@@ -13,8 +13,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import {
-  practiceLayout, shimDir, installedBin, childEnv, setupRefusal, markerContent, ownsFolder, realHomeFiles,
-  contentHash, compareSnapshots, JOURNEY, adoptionCommands, recordLine, parseArgs, USAGE,
+  practiceLayout, shimDir, installedBin, childEnv, setupRefusal, readGitRoot, markerContent, ownsFolder, realHomeFiles,
+  contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE,
 } from './practice-lib.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
@@ -29,10 +29,6 @@ const NPM_QUIET = ['--no-audit', '--no-fund', '--no-update-notifier'];
 
 // The command of the `SessionStart` entry `install` registers in each host file (`bin/lib/manifest.mjs`).
 const HOOK_COMMAND = 'js-harness doctor --hook';
-
-// These two steps run whatever failed before them: the proof that the real home was left alone, and the
-// record of the run, matter most when something went wrong.
-const ALWAYS_RUN = new Set(['real-home-after', 'record']);
 
 // ---- the practice project -------------------------------------------------------------------------------------------
 
@@ -122,10 +118,20 @@ function readIfThere(file) {
   }
 }
 
-/** The deepest folder of the absolute path `absolute` that exists (the drive's root at the least). */
+/** Whether a folder is at `dir`. A file there is not one, and neither is what cannot be read. */
+function isFolder(dir) {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** The deepest folder of the absolute path `absolute` that exists (the drive's root at the least). A file
+ * on the way is passed over: the answer is the cwd git is asked in, and a file cannot be one. */
 function nearestExisting(absolute) {
   let existing = absolute;
-  while (!fs.existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing);
+  while (!isFolder(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing);
   return existing;
 }
 
@@ -384,9 +390,17 @@ const STEPS = {
 
 // ---- run -------------------------------------------------------------------------------------------------------------
 
-/** `run --root <dir>`: the journey, one PASS or FAIL per step. After the first failure the remaining steps
- * are skipped, except the two of `ALWAYS_RUN`. Returns 0 only when every step passed, which includes the
- * one that compares the real home. */
+/** The line of one step, from the facts `walkJourney` hands over: PASS with the evidence under it, FAIL
+ * with the reason, or SKIP with the step that failed before it. */
+function printStep({ status, title, detail, failed }) {
+  if (status === 'PASS') console.log(`PASS  ${title}\n      ${indented(detail)}`);
+  else if (status === 'FAIL') console.log(`FAIL  ${title}: ${indented(detail)}`);
+  else console.log(`SKIP  ${title} (${failed} failed)`);
+}
+
+/** `run --root <dir>`: the journey, one PASS or FAIL per step. The pure part walks it (`walkJourney`): after
+ * the first failure the remaining steps are skipped, except the two that always run. Returns 0 only when
+ * every step passed, which includes the one that compares the real home. */
 function journey(root) {
   const layout = practiceLayout(root);
   if (!ownsFolder(readIfThere(layout.marker)?.toString('utf8'))) {
@@ -404,31 +418,14 @@ function journey(root) {
   const ctx = { layout, env: childEnv(layout, process.env), npmCli, realHome: os.homedir(), date: new Date().toISOString(), results: [] };
   ctx.candidate = candidateOf(ctx);
 
-  let failed;
-  for (const { id, title } of JOURNEY) {
-    if (failed !== undefined && !ALWAYS_RUN.has(id)) {
-      console.log(`SKIP  ${title} (${failed} failed)`);
-      continue;
-    }
-    try {
-      assertThat(typeof STEPS[id] === 'function', `the journey names the step ${id}, and scripts/practice.mjs has no code for it`);
-      const detail = STEPS[id](ctx);
-      ctx.results.push({ id, ok: true, detail });
-      console.log(`PASS  ${title}\n      ${indented(detail)}`);
-    } catch (err) {
-      ctx.results.push({ id, ok: false, detail: err.message });
-      console.log(`FAIL  ${title}: ${indented(err.message)}`);
-      failed ??= id;
-    }
-  }
+  const { ok, passed } = walkJourney({ journey: JOURNEY, steps: STEPS, ctx, report: printStep });
 
-  const passed = ctx.results.filter((step) => step.ok).length;
   let realHome = 'not compared';
   if (ctx.differences?.length === 0) realHome = 'unchanged';
   else if (ctx.differences) realHome = ctx.differences.map(({ path: file, change }) => `${change} ${file}`).join(', ');
   const { branch, commit, dirty } = ctx.candidate;
   console.log(`\ncandidate ${branch} ${commit} (${dirty ? 'dirty' : 'clean'}): ${passed} of ${JOURNEY.length} steps passed; real home: ${realHome}`);
-  return passed === JOURNEY.length ? 0 : 1;
+  return ok ? 0 : 1;
 }
 
 // ---- setup -----------------------------------------------------------------------------------------------------------
@@ -441,14 +438,19 @@ function setup(root) {
   const layout = practiceLayout(root);
   const ctx = { layout, env: childEnv(layout, process.env) };
 
-  const inRepository = git(ctx, nearestExisting(root), 'rev-parse', '--show-toplevel');
-  assertThat(!inRepository.error, `git could not be run, and setup needs it: ${inRepository.error?.message}`);
-  const refusal = setupRefusal({
-    root,
-    exists: fs.existsSync(root),
-    gitRoot: inRepository.status === 0 ? inRepository.stdout.trim() : null,
-    home: fs.realpathSync.native(os.homedir()),
-  });
+  // What needs no git is judged before git is started: a root that is not a full path, that exists (a file
+  // included, which git could not even be asked in) or that lies in the home is refused for that reason.
+  const facts = { root, exists: fs.existsSync(root), home: fs.realpathSync.native(os.homedir()) };
+  let refusal = setupRefusal({ ...facts, gitRoot: null });
+  if (refusal === null) {
+    // Asked in English whatever the language of the machine (`LC_ALL=C`, for this one child): `readGitRoot`
+    // tells "no repository here" from every other failure by what git printed.
+    const inEnglish = { ...ctx, env: { ...ctx.env, LC_ALL: 'C' } };
+    const inRepository = git(inEnglish, nearestExisting(root), 'rev-parse', '--show-toplevel');
+    assertThat(!inRepository.error, `git could not be run, and setup needs it: ${inRepository.error?.message}`);
+    const answer = readGitRoot(inRepository);
+    refusal = answer.refusal ?? setupRefusal({ ...facts, gitRoot: answer.gitRoot });
+  }
   if (refusal) {
     console.error(`practice setup refused: ${refusal}`);
     return 1;

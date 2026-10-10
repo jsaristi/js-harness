@@ -240,7 +240,7 @@ run itself.
 - [x] T1 `scripts/practice-lib.mjs` and its test: the layout from a root, the environment of a child process (the practice's prefix first on PATH, `JS_HARNESS_HOME`, never his home), the refusals of `setup`, the journey as named steps, the before-and-after comparison of his real home, the record line — route: delegated writer (two non-trivial files)
 - [x] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
 - [x] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
-- [ ] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
+- [x] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
@@ -502,13 +502,49 @@ run itself.
 - 2026-10-10, the cut. The board gave this session 340k tokens, 71%, with its limit at 73%, so
   T3b is not started here: the session cuts at this task boundary, both reviews closed, with
   this document committed.
+- 2026-10-10, T3b, after the compaction (the summary was checked against this document: same tasks,
+  same boundary `ebde271`, tree clean). Route: one delegated writer on the three files, which ran
+  nothing but `node --check`; the parent ran everything, each start behind a guard that waits on
+  any live `check.mjs` and starts only when none is left (`pp-guard.ps1`, a scratch helper of
+  this session outside the repository).
+  - What changed, by the seven points: (1) `walkJourney` and `ALWAYS_RUN` in the library, the
+    command only prints the lines it is handed; (2) `recordLine` is ok only when every id of the
+    journey is among the steps exactly once and every step is ok; (3) `readGitRoot` reads git's
+    answer: a root, "no repository" only for git's own two wordings of it (`not a git repository
+    (or any ...`), and a refusal for anything else; that one git child is asked with
+    `LC_ALL=C`, not every child, because `childEnv` also feeds the hook and the project's
+    tests; (4) `setup` calls `setupRefusal` first without git and starts git only when that
+    found nothing; (5) the test feeds the fifteen names, written out; (6) the refusal test uses
+    `D:/js-harness` against the root `D:js-harnesspractice`; (7) `setupRefusal` refuses, on
+    Windows, a root or a home that names no drive and is no network path, and the header says
+    what the purity covers.
+  - Found by the writer, beyond the brief: `nearestExisting` could hand git a file as its cwd (a
+    missing root below a file); it now walks up to the deepest folder. And the header's claim
+    about the current directory is conditional on fully qualified paths: `realHomeFiles` uses
+    `path.resolve`, which reads the current directory for a manifest path with a drive and no
+    separator (`D:x`). Left so; a manifest records absolute paths.
+  - RED: the new test file against the library of `ebde271` does not load (`does not provide
+    an export named 'ALWAYS_RUN'`); against that library plus empty stubs for the three new
+    exports, `tests 55 / pass 39 / fail 16`, the sixteen being the new and the changed tests of
+    points 1, 2, 3, 4 and 7. The tests of points 5 and 6 pass on the old library too, as they
+    should: they tighten a test, not the code.
+  - GREEN: `node --test scripts/practice-lib.test.mjs` gives `tests 55 / pass 55 / fail 0`.
+  - Seen with the real command, creating nothing: `setup --root` on an existing file prints
+    `already exists: setup only creates a new folder` and exits 1 without asking git; on a
+    path inside this worktree it prints `is inside the git repository
+    D:/js-harness-worktrees/practice-project` and exits 1; and git's real answer outside a
+    repository on this machine, `128 fatal: not a git repository (or any of the parent
+    directories): .git`, reads as `{"gitRoot":null}`.
+  - A run from the working tree: exit 0, 10 of 10, `real home: unchanged`, third line of
+    `record.jsonl` (`ok true`, `ebde271`, dirty). It took 13 seconds (06:40:30 to 06:40:43),
+    the first time a run was measured.
+  - Not checked: `setup` to its end with the new order (it would need a second folder on his
+    machine); the refusal for a repository git will not read, with a real one.
 
 ## Next step
-T3b, by a delegated writer with the seven points above as its brief (allowed surfaces: the
-three files it names; it runs no test and reads no board; the parent runs `node --test
-scripts/practice-lib.test.mjs` and `node scripts/practice.mjs run --root
-D:\js-harness-practice` in a window with no gate). Then its commit, the gentle-ai assessment
-from the boundary `0df7f67`, and the Codex review of the whole range (`node bin/js-harness.mjs
-codex-review --base ac2c18a --plan` first, which spends nothing). Then a run from the clean
-commit for the record, and T4. Every start of a gate, a test, a review or a run is one command
-that first waits on any live `check.mjs` process and starts only when none is left.
+The commit of T3b is the boundary for what follows: the gentle-ai assessment of it from
+`0df7f67`, then the Codex review of the whole range (`node bin/js-harness.mjs codex-review --base
+ac2c18a --plan` first, which spends nothing). Then a run from the clean commit for the record,
+and T4, whose commit also records the reviews. Every start of a gate, a test, a review or a run
+is one command that first waits on any live `check.mjs` process and starts only when none is
+left.
