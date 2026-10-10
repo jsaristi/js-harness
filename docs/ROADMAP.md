@@ -653,6 +653,34 @@ podamos implementar todo"), each a feature of its own with its own document and 
    within two minutes of its own bound), and the same gate run by GitHub on every pull
    request. In a project that uses the harness the lock comes with `check`; whether `init`
    also writes the GitHub workflow is a product choice, his.
+   Its first slice is built (2026-10-10, `odd/tasks/gate-lock.md`): the lock and a shorter
+   run. The gate on GitHub stays for a later slice, his to start.
+   - What the lock covers: every `check` that runs sensors, and any command run through
+     `js-harness gate -- <command>` (a batch of evals, a whole test run by hand), for one
+     user on one machine, across projects and worktrees, since the lock is a folder under
+     the home (`~/.js-harness/gate`). A second gate waits for its turn, an hour unless
+     `--wait` says otherwise, and says whose gate it waits for; `--no-wait` refuses
+     instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
+     watch no longer raises an alarm for a gate that only waits. A gate that is killed
+     leaves a holder that the next one takes over a minute after its last beat. A gate that
+     ends leaves nothing on disk, and `uninstall` removes what a killed one left.
+   - What it does not cover: a gate of a branch, or of an installed version, from before
+     the lock, which runs beside the others as it always did, so the lock holds for
+     everybody only once it is merged and the machine's command is updated, both his; a
+     test file run alone by hand, left free on purpose; a `check` that could not take the
+     lock at all, which runs and says so in a row; a process that carries the mark of a
+     held lock without a holder behind it; two machines; and `check --push`, which runs
+     no sensor. On Windows `gate` refuses, among several arguments, one that `cmd.exe`
+     cannot be handed whole (a double quote, a percent sign, a line break): such a command
+     goes as one argument.
+   - The shorter run: measured file by file, the suite is as long as one file,
+     `bin/codex-review.test.mjs` (909.7 of 910 s, every other file done by 458 s). Its
+     test repositories built once and copied took that file from 640 s to 490 s alone and
+     the gate from about 900 s to 728 s. It is still the longest: 71% of it is the real
+     git that the command under test runs. Running it in three shards, which would bring
+     the gate near the second file's time, and a commit of documents alone skipping the
+     test sensor (205 of 410 commits since 2026-09-26 touched only Markdown, and no test
+     reads `docs/` or `odd/tasks/`) are both asked of him and not built.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top.

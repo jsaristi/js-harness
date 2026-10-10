@@ -958,18 +958,31 @@ allows a feature. No spend outside the plan.
   3. T6b: the three shards (recommended), or close with what T6 gave; and whether the change
      to `jsonLinesPath` belongs here.
 
+- 2026-10-10 · T6 is commit `a1d4360`: gate green in 728 s (16:46:31 to 16:58:39), one try, on this
+  session's own look at the process list; the folder `gate` was gone after it. The gates
+  before it, with the same suite but for T6, took 885 s (`f1419af`) and 910 s (T5's run): T6
+  gave about 160 s inside a whole run, as the file's time alone said it would. gentle-ai
+  reviewed `f1419af..a1d4360` (medium, 6 paths, 420 lines, one lens, reliability; lineage
+  `review-00cc85c18f73e548`) and approved it with no finding; acknowledged. Codex's plan for
+  all that it has not reviewed, `1eafe1a..a1d4360`: 2 parts, 770,000 to 4,400,000 input
+  tokens; with 471,865 left it waits for his answer.
+
+- 2026-10-10 · T8 begun with what hangs on none of his three answers (route: inline, one
+  document): `docs/ROADMAP.md` says, under the gate in the order he asked for, what the lock
+  covers, what it does not, what the shorter run gave and what is asked of him and not
+  built; the gate on GitHub stays for a later slice. Its commit's gate is one of the two
+  gates of the `Done when` that asks for two `check` commands started together: the other
+  is a plain `check` in a second worktree of this branch made for it
+  (`js-harness-worktrees/gate-lock-demo`, detached at `a1d4360`, removed afterwards), and
+  what the two print goes in the next entry.
+
 ## Next
-1. The commit of T6 (it carries T5 and the tests the review of T4b asked for) and its gate:
-   that gate's time against 885 s and 910 s is the first reading of what T6 gave inside a
-   whole run. Then `gentle-ai review assess --base-ref f1419af --committed-only`.
-2. His three answers (see the last Progress entry). No Codex review before the first; T7
-   and T6b not started before theirs.
-3. T8, the close, as far as it does not hang on them: `docs/ROADMAP.md` (what the lock
-   covers, what it does not, what waits for the later slice), the two gates shown waiting
-   one for the other with the output recorded (a `Done when`: two `check` commands in two
-   worktrees; this branch is the only one with the lock, so a second worktree of this
-   branch is the way), push and pull request once gate and both reviews are green. The
-   merge is his.
+1. The two gates started together (the roadmap's commit here, a plain `check` in
+   `gate-lock-demo`): what each printed, recorded here; then that worktree is removed.
+2. His three answers (see the Progress entry of the three questions). No Codex review
+   before the first; T7 and T6b not started before theirs.
+3. The rest of T8: the Codex review of `1eafe1a..HEAD` or its record as unavailable, by his
+   answer; push and pull request once gate and both reviews are green. The merge is his.
 Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
 changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
 tree (set this document aside with `git stash`, one stash, popped by the same command);
