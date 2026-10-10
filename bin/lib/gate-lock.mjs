@@ -10,9 +10,11 @@
 //   - a holder is alive by its beat: it touches its own file every few seconds, so nothing has to ask the
 //     system who a pid is (which costs a PowerShell snapshot on Windows and is fooled by a recycled pid);
 //   - a holder's file that is there and cannot be looked at (busy, on Windows) holds all the same: a look
-//     that failed shows neither an empty lock nor a dead gate;
+//     that failed shows neither an empty lock nor a dead gate. So does a lock folder that is there and
+//     cannot be listed: it is the lock of a gate of whom nothing is known, waited for and never taken over;
 //   - the lock of a gate that died is taken over by removing that holder's file by its name, which holds
-//     its token; a gate that took the lock in the meantime has another name;
+//     its token; a gate that took the lock in the meantime has another name. The removal is tried once: a
+//     busy answer may be the holder touching its file as it comes back, so the beat is read again first;
 //   - the folder is removed with `rmdir`, which fails while a holder's file is in it. An empty `lock` is
 //     nobody's (a release or a takeover is between its two steps, or died there), so anyone may remove it.
 // A first version made `lock` with `mkdir` and wrote the file after. In between the folder was empty and
@@ -40,13 +42,17 @@ const BUSY = ['EPERM', 'EACCES', 'EBUSY'];
 const TAKEN = ['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR', ...BUSY];
 // A take that neither succeeds nor finds a holder to wait for is tried again this many times, this far
 // apart: a folder Windows is still removing is gone in a moment, a home that cannot be written is not.
+// A lock folder that is there and cannot be listed gets the same tries, since one that is being removed
+// answers so too; still there and still busy after them, it is a gate to wait for (`lookAt`).
 const BLIND_TRIES = 40;
 const BLIND_PAUSE_MS = 25;
-// A holder's file another process holds open at that instant cannot be removed on Windows; a file left
-// behind would hold the lock, beating no more, for the whole stale time. So a removal that answers busy
-// is tried again here, this many times in all, this far apart. `rmSync` cannot be asked to: it takes
+// A gate's own file another process holds open at that instant cannot be removed on Windows; left
+// behind, it would hold the lock, beating no more, for the whole stale time. So a gate that removes what
+// is its own (its holder's file at a release, its folder when it stops waiting) tries again when the
+// answer is busy, this many times in all, this far apart. `rmSync` cannot be asked to: it takes
 // `maxRetries` and `retryDelay` and does not wait with them. On Node 24.15 and Windows 10 a file held
 // open for 150 ms answered EPERM within a millisecond, with `recursive` and without (run 2026-10-10).
+// Not at a takeover, where the file is another gate's (`takeGateLock`).
 const REMOVE_TRIES = 6;
 const REMOVE_PAUSE_MS = 20;
 
@@ -110,15 +116,29 @@ function holderOf(io, file, token, beatAt, { now, staleMs }) {
   };
 }
 
+/** The holder that is read when the lock folder is there and nothing in it can be: not even a token. It
+ * is not stale, as a holder whose beat could not be read is not. */
+const NOBODY_KNOWN = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+
 /** What is in the lock folder now: `null` when there is no folder to read, `{}` when it is empty, else
  * `{ file, holder }` for the holder that beat last. A file that went away since the listing is not
  * there. One that is there and answers busy is a holder of whom only the token, which is in its name,
  * is sure, and it counts as the one that beat last. A first version read it as not there: a live gate
  * whose file stayed busy for a second made the take an error, and a caller that runs its gate without
- * the lock on an error then ran it beside that gate (found in review, 2026-10-10). */
+ * the lock on an error then ran it beside that gate (found in review, 2026-10-10).
+ *
+ * A folder that is there and cannot be listed (busy, on Windows: another process holds it open, or it
+ * is being removed) is `{ holder }` with no file and the holder `NOBODY_KNOWN`, for the same reason: the
+ * gate inside could not be seen, which is not a free lock (found in the next review, 2026-10-10). */
 function lookAt(io, dir, clock) {
-  const names = unless(['ENOENT', 'ENOTDIR', ...BUSY], () => io.readdirSync(dir));
-  if (names === undefined) return null;
+  let names;
+  try {
+    names = io.readdirSync(dir);
+  } catch (err) {
+    if (BUSY.includes(err.code)) return { holder: { ...NOBODY_KNOWN } };
+    if (['ENOENT', 'ENOTDIR'].includes(err.code)) return null;
+    throw err;
+  }
   const found = [];
   for (const name of names) {
     const token = HOLDER_FILE.exec(name)?.[1];
@@ -143,8 +163,10 @@ function lookAt(io, dir, clock) {
  *
  * A holder whose file is there and busy at this look (another process holds it open, or Windows is
  * still removing it) is a holder too: its `token`, `beatAt: null`, `stale: false`, and `null` for
- * whatever else could not be read. So `null` always means a free lock, and `beatAt === null` a lock
- * that is held by a gate whose beat is not known yet: look again.
+ * whatever else could not be read. A lock folder that is there and cannot be listed at this look is a
+ * holder as well, with `token: null` too: nothing of the gate inside is known. So `null` always means a
+ * free lock, and `beatAt === null` a lock that is held by a gate whose beat is not known yet: look
+ * again. A folder Windows is still removing reads so for an instant.
  *
  * Reads only, and never throws for a lock that changes as it is read. */
 export function readGateHolder(home, { now = Date.now, staleMs = GATE_STALE_MS, fileSystem: io = fs } = {}) {
@@ -189,11 +211,18 @@ function sweepWaiters(io, root, own, clock) {
  * Rejects when the lock can be neither taken nor read (a home that cannot be written): there is no gate
  * to wait for, and the caller decides what a gate without a lock does. A holder whose file is there and
  * busy is not that case: it is a gate to wait for like any other (`holder.beatAt` is `null`), inside
- * `waitMs`, and it is not taken over while it stays busy.
+ * `waitMs`, and it is not taken over while it stays busy. Nor is a lock folder that is there and cannot
+ * be listed, once it has stayed so for the second of tries a folder that is being removed is given:
+ * it is waited for by polls like any gate (`holder.token` is `null`, and `onWait` says so), refused as
+ * `'held'` with `wait` off, and never taken over. A folder that can never be listed therefore keeps
+ * each gate to its `waitMs` and then refuses it: a red gate after the wait, not two gates at once.
  *
  * A dead holder is taken over on its second stale reading, a poll apart: a machine that slept wakes with
- * every beat hours old, and a live holder's timer fires before the next look. `now`, `sleep` and
- * `fileSystem` are injectable, so a test moves the clock and steps between two file operations. */
+ * every beat hours old, and a live holder's timer fires before the next look. Its file is then removed
+ * in one try. A busy answer there is likely the holder itself, touching its file as it comes back to
+ * life, and the two stale readings only say what was true before the removal began: the wait goes on,
+ * and the next look reads the beat again, under the same rule. `now`, `sleep` and `fileSystem` are
+ * injectable, so a test moves the clock and steps between two file operations. */
 export async function takeGateLock({
   home,
   cwd,
@@ -219,6 +248,9 @@ export async function takeGateLock({
   let told;
   let suspect;
   let blind = 0;
+  // The lock folder was still there and still not listed when the blind tries were spent: it is waited
+  // for by polls from then on, until a look can list it or finds it gone.
+  let unlisted = false;
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time. */
@@ -236,14 +268,12 @@ export async function takeGateLock({
       // swept later, as the folder of a gate that waits no more
     }
   };
-  /** One more try that found neither the lock nor a holder; past the last one, what the file system said. */
-  const tryBlind = async (err) => {
+  /** One more try that found neither the lock nor a holder to name; `false` past the last one. */
+  const tryBlind = async () => {
     blind += 1;
-    if (blind > BLIND_TRIES) {
-      unstage();
-      throw err;
-    }
+    if (blind > BLIND_TRIES) return false;
     if (blind > 1) await sleep(BLIND_PAUSE_MS);
+    return true;
   };
 
   for (;;) {
@@ -265,23 +295,30 @@ export async function takeGateLock({
     }
 
     const seen = lookAt(io, dir, clock);
-    if (!seen?.holder) {
+    // No file to name: the folder is there and could not be listed.
+    const nobodyKnown = seen?.holder !== undefined && seen.file === undefined;
+    if (!seen?.holder || (nobodyKnown && !unlisted)) {
       // No folder (released since the rename failed), or an empty one, which is nobody's: clear it and
-      // take the lock at once.
-      if (seen) unless(['ENOENT', 'ENOTEMPTY', 'EEXIST', ...BUSY], () => io.rmdirSync(dir));
-      await tryBlind(refusedBy);
-      continue;
+      // take the lock at once. One that could not be listed may be on its way out: tried again as well.
+      if (seen && !nobodyKnown) unless(['ENOENT', 'ENOTEMPTY', 'EEXIST', ...BUSY], () => io.rmdirSync(dir));
+      if (await tryBlind()) continue;
+      if (!nobodyKnown) {
+        unstage();
+        throw refusedBy;
+      }
     }
     blind = 0;
+    unlisted = nobodyKnown;
     const { file, holder } = seen;
     if (holder.stale) {
       // The same file with the same beat, seen stale twice: nothing touched it in between.
       const sighting = `${file}@${holder.beatAt}`;
       if (suspect === sighting) {
         suspect = undefined;
-        // Gone already when another gate removed it first. A file still busy after the tries of one
-        // removal is waited for and looked at again: it reads stale next time as well.
-        const gone = unless(BUSY, () => (unless(['ENOENT'], () => remove(io, file)), true));
+        // Gone already when another gate removed it first. One try, and not `remove`: a busy answer is
+        // waited for and the file looked at again, since it may have beaten in that instant. A dead
+        // holder's reads stale next time as well.
+        const gone = unless(BUSY, () => (unless(['ENOENT'], () => io.rmSync(file)), true));
         unless(['ENOENT', 'ENOTEMPTY', 'EEXIST', ...BUSY], () => io.rmdirSync(dir));
         if (gone) continue;
       } else {
@@ -337,10 +374,20 @@ function held({ io, dir, mine, now, beatMs, waitedMs }) {
       // until the next gate reads it stale.
     }
   };
+  /** Whether this gate's file is not there. A file that could not be looked at (busy, or no access) is
+   * not a file that was taken away, which is what `existsSync` would say of it. */
+  const notThere = () => {
+    try {
+      io.statSync(mine);
+      return false;
+    } catch (err) {
+      return err.code === 'ENOENT';
+    }
+  };
   return {
     release,
     beat,
-    lost: () => lost || (!released && !io.existsSync(mine)),
+    lost: () => lost || (!released && notThere()),
     waitedMs,
   };
 }

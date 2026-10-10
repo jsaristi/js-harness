@@ -191,7 +191,12 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       removal of a holder's file is retried when Windows says busy, shown by a run; the
       invariant test cannot have its assertion swallowed; the test of processes that die is
       not at the mercy of a loaded machine. Route: one writer, same two files.
-- [ ] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
+- [x] T1d · What the Codex review found in the lock (added 2026-10-10, three findings): a
+      takeover does not remove a holder's file whose beat moved since it was read stale; a
+      lock folder that cannot be listed because it is busy is a lock held, not a free one;
+      a gate does not read its lock as lost because its file could not be looked at. Route:
+      the writer of T2, first, and in T2's commit (the reason is in Progress).
+- [x] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
       rows, release on every way out; the suite's own gates do not wait. Proof with two
       worktrees recorded here.
 - [ ] T3 · The board reads the lock: `Gates` shows who runs and who waits; the watch stops
@@ -356,29 +361,92 @@ allows a feature. No spend outside the plan.
   each gate waiting to its `waitMs` and then refuses it (a red gate after the wait, not two
   gates at once); a file Windows is still removing costs a waiter one poll, 2 s.
 
-## Next
-T1c is written and staged with these records: its commit goes on the orchestrator's turn
-(one more gate of about 15 minutes), message `fix(gate-lock): wait for a busy holder, and
-make the retry of a removal real`. One look at the process list first; a gate that reaches
-the bound is said and not retried.
+- 2026-10-10 · T1c is commit `a84780f`: gate green in 828 s (05:57:10 to 06:10:58), one try, on
+  the orchestrator's turn. gentle-ai assessed it medium risk and not due (367 lines,
+  `under_budget`): it stays pending in the slice, and the next assess runs from `6022066`
+  with T2's commit. The Codex review of `8ef2771..a84780f` was started at 06:12 (plan: 2
+  parts, 977 changed lines, about 940,000 to 2,530,000 input tokens of the 3 million).
 
-Then, in this order:
-1. Record T1c's commit here. Run `gentle-ai review assess --base-ref 6022066 --committed-only`
-   on it and follow what it returns; then the Codex review of T1, T1b and T1c together:
-   `js-harness codex-review --base 8ef2771` (its plan first, `--plan`), and its real spend
-   told to Sebastián with the question of the Codex budget for T2 to T6.
-2. T2, one writer: `check` takes the lock around the sensors. Decided for it: the lock wraps
-   the sensors only, and only when there is a sensor to run; a second gate says on stderr
-   whose gate it waits for; `--no-wait` and `--wait <minutes>` (default 60); rows named `gate`
-   (INFO with the time waited, FAIL when refused or timed out, INFO when the lock was lost
-   while it ran); a lock that cannot be taken at all (`takeGateLock` rejects: a home that
-   cannot be written) must not turn a gate red: it runs without the lock and says so in a
-   row; the sensors' environment gets a mark that a gate holds the lock, so a `check` run
-   by the suite takes none, and every test that runs `main` with real sensors passes a
-   temporary home (they pass `JS_HARNESS_HOME: dir` today, `bin/check.test.mjs:588-634`); an
-   end-to-end test starts two real `check` processes on two folders and shows their sensors
-   one after the other.
-3. Before any test or commit: no private wait script. One look at the process list for
+- 2026-10-10 · Codex reviewed `8ef2771..a84780f` in 2 parts (06:11:26 to 06:14:55) and the
+  review is recorded (`.git/js-harness/codex-reviews.jsonl`). Spent: 310,314 input tokens
+  (215,168 cached) and 6,646 output, against an estimate of 940,000 to 2,530,000: a third of
+  the low figure. So the 3 million of a feature are not the limit the estimate made them look,
+  and there is no budget question to put to Sebastián now; the spend of each later review is
+  recorded here and the question comes back only if the sum nears the 3 million. The test
+  file: no finding. The library: "the patch is incorrect", three findings, all true, none
+  seen by either gentle-ai review:
+  - P1, `bin/lib/gate-lock.mjs:284`: T1c made the removal of a stale holder's file try again
+    for up to 180 ms when it answers busy, and a busy answer there is likely the holder
+    itself touching its file as it comes back to life. The later tries remove a file whose
+    beat has moved, and two gates run. The two stale readings only say what was true before
+    the removal began. Fix: one try at a takeover; a busy answer goes back to the wait, where
+    the next look reads the beat again (what T1b did, undone by T1c for this one call).
+  - P2, `:120-121`: a lock folder whose listing answers busy reads as no folder:
+    `readGateHolder` says free, and the take goes blind for a second and rejects. The same
+    failure T1c closed for a holder's file, left open for the folder (the writer of T1c had
+    said so under "not checked").
+  - P2, `:343`: `lost()` asks `existsSync`, which says "not there" for a file it could not
+    look at, so a gate would be told its lock was taken away when it was not.
+  They became T1d. Route, with the reason: T1d is done by the writer of T2 before T2 and
+  rides in T2's commit, not in one of its own. A commit costs a gate of 14 to 17 minutes of
+  the whole machine and a place in the orchestrator's queue, three sessions share it
+  tonight, and nothing calls the lock until T2 does. The price, said: one commit holds two
+  units, the lock's fixes and `check`'s use of it.
+
+- 2026-10-10 · T1d and T2 done, route one writer, its work read back and both test files run
+  again by this session. Changed lines: 754 added, 54 removed, in four files and this one.
+  T1d, in `bin/lib/gate-lock.mjs`: a takeover makes one try at removing the dead holder's
+  file, and a busy answer goes back to the wait, where the beat is read again; a lock folder
+  that is there and cannot be listed gets the short blind tries and is then a holder of whom
+  nothing is known (every field `null`, `stale: false`), waited for inside `waitMs`, refused
+  as `held` without a wait, never taken over, and `readGateHolder` returns it at once, so
+  `null` still means a free lock; `lost()` asks `statSync` and only "not there" is lost. A
+  home that cannot be written still rejects.
+  T2, in `bin/check.mjs`: `checkSensors` runs the sensors under the lock when `main` passes
+  it one and there is a sensor; no lock with no sensor, with `--push`, or inside a gate
+  (`JS_HARNESS_CHECK_INNER=1`, the mark the sensors already had: no new one was needed).
+  `--wait <minutes>` (a decimal above zero, an hour by default) and `--no-wait`, which
+  together are a usage error. A gate that waits says on stderr, once for each gate it waits
+  for: `check: waiting for the gate of <folder> (pid N, started <time>) to finish, for 60
+  minutes at most`, or `another gate` when the holder could not be read. Rows named `gate`:
+  none when the lock was taken in under a second; INFO `waited 6 s for the machine's gate
+  lock before the sensors ran`; FAIL `no sensor ran: <gate> holds the machine's gate lock,
+  and --no-wait was given`; FAIL `... still held the machine's gate lock after 30 s (--wait
+  bounds the wait at 0.5 minutes)`; INFO when the lock was lost while the sensors ran; INFO
+  when it could not be taken at all and the sensors ran without it. Released in a `finally`.
+  Checked: `node --test bin/lib/gate-lock.test.mjs` exits 0, 40 tests, 15.3 to 15.6 s (three
+  runs); `node --test bin/check.test.mjs` exits 0, 86 tests, 24.9 to 26.6 s (three runs; 73
+  tests in 22.4 s before). The red was seen with the committed files put under the new
+  tests: 6 of 40 for the lock, each for its own reason, and 13 of 86 for `check`, where the
+  log of the end-to-end test read "in one, in two", the overlap itself. That test starts two
+  real `check` processes on two folders with one temporary home and shows their sensors one
+  after the other and the second naming the first's folder; it runs a copy of `bin/`, since
+  from this worktree's own `bin/check.mjs` the board would count the two as gates of this
+  worktree. No test can take the lock in the real home: every start of `check` in `bin/` was
+  listed with why (the inner mark, `--push`, no sensor, a temporary home), `runCheck` now
+  gives a throwaway home when none is named, and `~/.js-harness/gate` did not exist after
+  the runs. Not checked: two real worktrees, which no session can run tonight without two
+  whole suites side by side (the first real use is this commit's own gate, alone); a real
+  Ctrl-C; a lock folder that is really busy, only injected errors; any system but this
+  Windows machine. Failed: nothing.
+  Decided, for the tasks after: a killed gate leaves its holder's file, taken over about a
+  minute after its last beat, and no signal is handled, since a handler would change how
+  `check` ends; a lock folder or a holder's file that can never be read costs each gate its
+  whole wait and then a red gate; the holder's `cwd` is the resolved folder and its
+  `command` is `check`. For T3: `bin/lib/manifest.mjs:23` describes `check`'s flags in the
+  skill text and does not name `--wait` or `--no-wait` yet.
+
+## Next
+T1d and T2 are written and staged with these records: their one commit goes on the
+orchestrator's turn, message `feat(check): run the sensors of one gate at a time on the
+machine`. One look at the process list first; a gate that reaches the bound is said and
+not retried. It is the first gate that takes the real lock (`~/.js-harness/gate`).
+
+After it: record the commit; `gentle-ai review assess --base-ref 6022066 --committed-only`
+(T1c, T1d and T2 together) and what it returns; then the Codex review of the same range,
+`js-harness codex-review --base 6022066`, its spend recorded. Then T3.
+
+Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,
    and start nothing beside it (the two mistakes above). A gate starts only on the
    orchestrator's turn, and one that reaches the bound is said and not retried.

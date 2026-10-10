@@ -13,6 +13,7 @@ import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCover
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
+import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 
 export { estimateTokens };
 
@@ -275,9 +276,88 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
+/** `ms` as a person reads a wait: `45 s`, `3 min 12 s`. */
+function duration(ms) {
+  const seconds = Math.round(ms / 1000);
+  return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+}
+
+/** The bound of a wait as `--wait` takes it: `1 minute`, `2.5 minutes`. */
+const minutes = (count) => `${count} minute${count === 1 ? '' : 's'}`;
+
+/** The gate a holder of the lock is, for a message: the folder it checks, with its pid and start time
+ * where its file says them. A holder of whom nothing is known (a file that could not be read, a lock
+ * folder that could not be listed) is "another gate". */
+function gateOf(holder) {
+  const said = [holder.pid !== null && `pid ${holder.pid}`, holder.startedAt !== null && `started ${holder.startedAt}`].filter(Boolean);
+  return `${holder.cwd === null ? 'another gate' : `the gate of ${holder.cwd}`}${said.length ? ` (${said.join(', ')})` : ''}`;
+}
+
+// A lock taken at once took a few milliseconds, and the report of a gate that waited for nobody says
+// nothing of the lock. A wait this long is said: it is a poll for another gate, or a takeover.
+const GATE_WAIT_SAID_MS = 1000;
+
+/** Runs `run`, the sensors of the gate that checks `cwd`, while this gate holds the machine's gate lock
+ * (`./lib/gate-lock.mjs`: two gates at once make both miss their time bound with every test green), and
+ * resolves to their rows, with a row named `gate` for whatever the lock did that a reader must know.
+ * Taken at once, which is the common case, it adds none.
+ *
+ * A gate that finds the lock held waits for it, and says once on stderr, as the wait begins and for each
+ * gate it then waits for, whose gate that is and for how long at most: the caller is a commit running in
+ * the background, and a silent wait reads as a hang. The time it waited is an INFO row. It counts against
+ * no sensor's timeout, which starts when the sensor does. With `wait` off, or past `waitMinutes`, the
+ * row is a FAIL that names the holder and `run` is not called: a gate that ran nothing must not look green.
+ *
+ * A lock that cannot be taken at all (the home cannot be written) does not turn a gate red, since the
+ * lock guards the machine's time and not the project's code: `run` is called without it and an INFO row
+ * says so and why. So does a lock lost while the sensors ran, which happens only to a gate that was
+ * silent for the whole stale time (a machine that slept).
+ *
+ * The lock is released on every way out of `run`, a throw included. A gate that is killed (a Ctrl-C, a
+ * closed terminal) leaves its holder's file, which beats no more: the next gate reads it stale a minute
+ * after its last beat and takes it over, having said whose gate it waits for. No signal is handled here
+ * to release it sooner: a handler would have to end the process itself, and `check` would no longer end
+ * on a Ctrl-C the way it does today.
+ * `takeGateLock` is injectable, so a test stands in for the lock or runs the real one on its own clock. */
+async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run) {
+  const row = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { info: true }), detail });
+  const onWait = (holder) => {
+    // A holder that already reads stale is waited for a poll or two, not for the whole bound.
+    const silent = holder.stale ? '; it has been silent for over a minute, and its lock is taken over if it stays so' : '';
+    console.error(`check: waiting for ${gateOf(holder)} to finish, for ${minutes(waitMinutes)} at most${silent}`);
+  };
+  let lock;
+  try {
+    lock = await take({ home, cwd: path.resolve(cwd), command: 'check', wait, waitMs: waitMinutes * 60_000, onWait });
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    return [row(`the sensors ran without the machine's gate lock, which could not be taken (${why}), so another gate may have run at the same time`), ...(await run())];
+  }
+  if (lock.refused === 'held') {
+    return [row(`no sensor ran: ${gateOf(lock.holder)} holds the machine's gate lock, and --no-wait was given`, false)];
+  }
+  if (lock.refused) {
+    return [row(`no sensor ran: ${gateOf(lock.holder)} still held the machine's gate lock after ${duration(lock.waitedMs)} (--wait bounds the wait at ${minutes(waitMinutes)})`, false)];
+  }
+  const rows = lock.waitedMs >= GATE_WAIT_SAID_MS ? [row(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
+  let lost = false;
+  try {
+    rows.push(...(await run()));
+  } finally {
+    // Asked before the release, after which a gate has no lock to have lost.
+    lost = lock.lost();
+    lock.release();
+  }
+  if (lost) rows.push(row("the machine's gate lock was lost while the sensors ran: this gate was silent for over a minute and another took its lock, so two gates may have run at once"));
+  return rows;
+}
+
 /** One row per sensor, run one after another; a broken declaration is one FAIL row and no sensor at all
- * is one INFO row. */
-export async function checkSensors(cwd, deps) {
+ * is one INFO row. With `lock` (`{ home, wait, waitMinutes }`, which is what a gate passes) the sensors
+ * run under the machine's gate lock in that home, and only when there is a sensor to run: see
+ * `underGateLock`, which may add a row named `gate`. Without it they run as they are, which is for a
+ * caller that is no gate. */
+export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
   if (sensors.length === 0) {
@@ -286,9 +366,12 @@ export async function checkSensors(cwd, deps) {
       : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
-  const rows = [];
-  for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, deps));
-  return rows;
+  const run = async () => {
+    const rows = [];
+    for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, deps));
+    return rows;
+  };
+  return lock ? underGateLock(cwd, lock, deps, run) : run();
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -560,7 +643,7 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
 }
 
 const USAGE =
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]';
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>]';
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage
 // error, not a silently-swallowed token that later crashes `path.join` with `undefined`.
@@ -573,18 +656,31 @@ function requireValue(argv, i, flag) {
 }
 
 /** Parses `argv`, matching `doctor.mjs`'s precedence: `--home` flag, then `env.JS_HARNESS_HOME`,
- * then `os.homedir()`. Throws `CheckArgError` when `--cwd`/`--home`/`--head`/`--remote` is given without a value. */
+ * then `os.homedir()`. Throws `CheckArgError` when `--cwd`/`--home`/`--head`/`--remote`/`--wait` is given
+ * without a value, when the value of `--wait` is not a number of minutes above zero, and when `--wait`
+ * comes with `--no-wait`, which says the opposite.
+ *
+ * `--wait <minutes>` bounds how long a gate waits for the machine's gate lock (an hour when it is not
+ * given; a fraction is taken, `0.5` for thirty seconds) and `--no-wait` refuses instead of waiting. */
 function parseArgs(argv, env) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
     return i !== -1 ? requireValue(argv, i, flag) : undefined;
   };
+  const wait = get('--wait');
+  const noWait = argv.includes('--no-wait');
+  if (wait !== undefined && !(/^\d+(\.\d+)?$/.test(wait) && Number(wait) > 0)) {
+    throw new CheckArgError(`--wait takes a number of minutes above zero, not "${wait}"`);
+  }
+  if (wait !== undefined && noWait) throw new CheckArgError('--wait and --no-wait cannot be given together');
   return {
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
     head: get('--head') ?? 'HEAD',
     remote: get('--remote') ?? 'origin',
+    noWait,
+    waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait),
   };
 }
 
@@ -596,7 +692,8 @@ function formatRow(row) {
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
- * stderr and running no row, when `--cwd`/`--home`/`--head`/`--remote` is given without a value. */
+ * stderr and running no row, when a flag that takes a value is given without one or `--wait` is given
+ * a value it cannot take (`parseArgs`). */
 export async function main(argv = process.argv.slice(2), env = process.env, deps = {}) {
   let parsed;
   try {
@@ -605,7 +702,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     console.error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const { cwd, home, push, head, remote } = parsed;
+  const { cwd, home, push, head, remote, noWait, waitMinutes } = parsed;
   // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   const rows = push
@@ -614,8 +711,11 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
+  // The sensors run under the machine's gate lock, taken in `home`, so two gates never run theirs
+  // together. The inner check and a push run no sensor and so take no lock: the inner one could only
+  // wait for the gate that runs it.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    rows.push(...(await checkSensors(cwd, deps)));
+    rows.push(...(await checkSensors(cwd, deps, { home, wait: !noWait, waitMinutes })));
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn as spawnChild, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -740,7 +742,11 @@ const gentleAiNotFound = () => ({
   error: Object.assign(new Error('spawnSync gentle-ai ENOENT'), { code: 'ENOENT' }),
 });
 
-/** Runs `main`, capturing everything it printed via console.log/console.error and the exit code. */
+/** Runs `main`, capturing everything it printed via console.log/console.error and the exit code.
+ *
+ * A gate takes the machine's gate lock in its home. A run that names none (`--home`, or
+ * `JS_HARNESS_HOME` in `env`) is given a throwaway one, so a test can neither wait for a real gate of
+ * this machine nor hold one up, whether this file is run by a gate or by hand. */
 async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
@@ -752,12 +758,14 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   console.error = (line) => {
     errOutput += `${line}\n`;
   };
+  const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
   try {
-    const code = await main(argv, env, deps);
+    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, deps);
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
     console.error = originalError;
+    if (ownHome) fs.rmSync(ownHome, { recursive: true, force: true });
   }
 }
 
@@ -1185,5 +1193,395 @@ test('main runs no review row when it is the inner run, or a push', async () => 
     assert.equal(gentleAi.calls.length, 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- the machine's gate lock: taken around the sensors, in the home the check resolves ---
+// The lock itself is tested in lib/gate-lock.test.mjs; here, what `check` does with it. Every gate of
+// these tests has a temporary home, so none can take the lock of this machine's real gates.
+
+/** What a sensor that passed answers, for a `deps.spawn` that runs none. */
+const sensorRan = () => ({ status: 0, signal: null, stdout: '', stderr: '' });
+const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
+/** The `deps` of a gate whose sensors are stand-ins and which starts neither gentle-ai nor git. */
+const gateDeps = (over = {}) => ({ gentleAi: gentleAiNotFound, git: notARepository, spawn: sensorRan, ...over });
+
+/** A stand-in for `takeGateLock` that takes the lock at once and keeps what it was asked. */
+function lockTakenAtOnce() {
+  const take = async (options) => {
+    take.asked.push(options);
+    return { release: () => { take.released += 1; }, beat: () => {}, lost: () => false, waitedMs: 0 };
+  };
+  take.asked = [];
+  take.released = 0;
+  return take;
+}
+
+/** A clock a test moves, and the real lock on it: `sleep` moves the clock and waits for nothing. */
+function gateClock() {
+  let at = Math.floor(Date.now() / 1000) * 1000;
+  const clock = {
+    /** What the test does while a gate sleeps: beat a lock, release one. */
+    onSleep: undefined,
+    now: () => at,
+    sleep: async (ms) => {
+      at += ms;
+      await clock.onSleep?.();
+    },
+    take: (options) => takeGateLock({ ...options, now: clock.now, sleep: clock.sleep, beatMs: 0 }),
+  };
+  return clock;
+}
+
+/** A sensor project, a home for its gate, and their removal. */
+async function withGate(sensors, run) {
+  const dir = sensorProject(sensors);
+  const home = makeTmpDir();
+  try {
+    await run(dir, home);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+const rowsOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
+const gateRows = (output) => rowsOf(output).filter((line) => /^\w+ {2}gate {2}/.test(line));
+
+test('main holds the gate lock while the sensors run and releases it after them', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  const during = [];
+  const spawn = () => {
+    during.push(readGateHolder(home));
+    return sensorRan();
+  };
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn }));
+  assert.equal(code, 0, output);
+  assert.equal(during.length, 2);
+  for (const holder of during) {
+    assert.deepEqual([holder?.pid, holder?.cwd, holder?.command, holder?.stale], [process.pid, path.resolve(dir), 'check', false]);
+  }
+  assert.equal(readGateHolder(home), null);
+  assert.equal(fs.existsSync(gateLockDir(home)), false);
+  // Taken at once, the common case: the report says nothing of the lock, as before there was one.
+  assert.deepEqual(gateRows(output), []);
+  assert.equal(errOutput, '');
+}));
+
+test('main releases the gate lock when a sensor fails, and when one throws', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const failed = await runCheck(argv, {}, gateDeps({ spawn: () => ({ ...sensorRan(), status: 3 }) }));
+  assert.equal(failed.code, 1);
+  assert.match(failed.output, /^FAIL {2}tests {2}run-tests exited 3$/m);
+  assert.equal(readGateHolder(home), null);
+
+  let during;
+  const spawn = () => {
+    during = readGateHolder(home);
+    throw new Error('the sensor blew up');
+  };
+  await assert.rejects(runCheck(argv, {}, gateDeps({ spawn })), /the sensor blew up/);
+  assert.equal(during?.pid, process.pid);
+  assert.equal(readGateHolder(home), null);
+  assert.equal(fs.existsSync(gateLockDir(home)), false);
+}));
+
+test('main takes the gate lock in its home for an hour at most, and --wait and --no-wait change how it waits', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const run = (...flags) => runCheck(['--cwd', dir, '--home', home, ...flags], {}, gateDeps({ takeGateLock: take }));
+  assert.equal((await run()).code, 0);
+  assert.equal((await run('--wait', '2.5')).code, 0);
+  assert.equal((await run('--no-wait')).code, 0);
+  const asked = take.asked.map(({ home: where, cwd, command, wait, waitMs }) => ({ home: where, cwd, command, wait, waitMs }));
+  const gate = { home, cwd: path.resolve(dir), command: 'check' };
+  assert.deepEqual(asked, [
+    { ...gate, wait: true, waitMs: 60 * 60_000 },
+    { ...gate, wait: true, waitMs: 150_000 },
+    { ...gate, wait: false, waitMs: 60 * 60_000 },
+  ]);
+  assert.equal(take.released, 3);
+}));
+
+test('main takes no gate lock with no sensor to run, as the inner run, or on a push', async () => {
+  const take = lockTakenAtOnce();
+  const deps = { gentleAi: gentleAiNotFound, git: notARepository, takeGateLock: take };
+  const home = makeTmpDir();
+  const projects = { none: makeTmpDir(), optedOut: sensorProject({}), broken: makeTmpDir(), sensors: sensorProject({ tests: exits(9) }) };
+  try {
+    fs.writeFileSync(path.join(projects.broken, 'harness.json'), '{ nope');
+    for (const dir of [projects.none, projects.optedOut, projects.broken]) {
+      const { output } = await runCheck(['--cwd', dir, '--home', home], {}, deps);
+      assert.match(output, /^(INFO|FAIL) {2}sensors /m);
+      assert.deepEqual(gateRows(output), []);
+    }
+    const inner = await runCheck(['--cwd', projects.sensors, '--home', home], { JS_HARNESS_CHECK_INNER: '1' }, deps);
+    const push = await runCheck(['--push', '--cwd', projects.sensors, '--home', home], {}, deps);
+    assert.deepEqual([...gateRows(inner.output), ...gateRows(push.output)], []);
+    assert.equal(take.asked.length, 0);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of the lock was written');
+
+    // The same stand-in is asked once there is a sensor to run, so the silence above is not its own.
+    await runCheck(['--cwd', projects.sensors, '--home', home], {}, { ...deps, spawn: sensorRan });
+    assert.equal(take.asked.length, 1);
+  } finally {
+    for (const dir of [home, ...Object.values(projects)]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main --no-wait fails the gate row against a held lock, runs no sensor and prints the other rows', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, beatMs: 0 });
+  try {
+    const { startedAt } = readGateHolder(home);
+    let ran = 0;
+    const spawn = () => {
+      ran += 1;
+      return sensorRan();
+    };
+    const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--no-wait'], {}, gateDeps({ spawn }));
+    assert.equal(code, 1);
+    assert.equal(ran, 0);
+    assert.deepEqual(gateRows(output), [
+      `FAIL  gate  no sensor ran: the gate of C:\\work\\other (pid 4321, started ${startedAt}) holds the machine's gate lock, and --no-wait was given`,
+    ]);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'review', 'codex-review']);
+    // A gate that does not wait says nothing of a wait.
+    assert.equal(errOutput, '');
+    assert.equal(readGateHolder(home).pid, 4321);
+  } finally {
+    other.release();
+  }
+}));
+
+test('main waits for the gate that holds the lock, says once on stderr whose it is, and reports the time it waited', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  const { startedAt } = readGateHolder(home, { now: clock.now });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    other.beat();
+    if (sleeps === 3) other.release();
+  };
+  const timeouts = [];
+  const spawn = (command, { timeout }) => {
+    timeouts.push(timeout);
+    return sensorRan();
+  };
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: clock.take, spawn }));
+  assert.equal(code, 0, output);
+  assert.equal(errOutput, `check: waiting for the gate of C:\\work\\other (pid 4321, started ${startedAt}) to finish, for 60 minutes at most\n`);
+  assert.deepEqual(gateRows(output), ["INFO  gate  waited 6 s for the machine's gate lock before the sensors ran"]);
+  const names = rowsOf(output).map((row) => row.split('  ')[1]);
+  assert.equal(names.indexOf('gate') + 1, names.indexOf('tests'), output);
+  // The wait is not the sensor's time: its own bound starts when it does, whole.
+  assert.deepEqual(timeouts, [20 * 60 * 1000]);
+  assert.equal(readGateHolder(home, { now: clock.now }), null);
+}));
+
+test('main gives up when its wait is over: a FAIL gate row, no sensor run, and the holder keeps the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  const { startedAt } = readGateHolder(home, { now: clock.now });
+  clock.onSleep = () => other.beat();
+  let ran = 0;
+  const spawn = () => {
+    ran += 1;
+    return sensorRan();
+  };
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--wait', '0.5'], {}, gateDeps({ takeGateLock: clock.take, spawn }));
+  assert.equal(code, 1);
+  assert.equal(ran, 0);
+  const holder = `the gate of C:\\work\\other (pid 4321, started ${startedAt})`;
+  assert.equal(errOutput, `check: waiting for ${holder} to finish, for 0.5 minutes at most\n`);
+  assert.deepEqual(gateRows(output), [
+    `FAIL  gate  no sensor ran: ${holder} still held the machine's gate lock after 30 s (--wait bounds the wait at 0.5 minutes)`,
+  ]);
+  assert.equal(other.lost(), false);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 4321);
+  other.release();
+}));
+
+test('main calls a holder of whom nothing is known another gate, and says when the one it waits for has gone silent', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const nobody = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+  const silent = { ...nobody, token: 'gone', pid: 77, beatAt: 1, stale: true };
+  const take = async ({ onWait }) => {
+    onWait(nobody);
+    onWait(silent);
+    return { refused: 'timeout', holder: nobody, waitedMs: 90_000 };
+  };
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--wait', '1'], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(code, 1);
+  assert.deepEqual(errOutput.split('\n'), [
+    'check: waiting for another gate to finish, for 1 minute at most',
+    'check: waiting for another gate (pid 77) to finish, for 1 minute at most; it has been silent for over a minute, and its lock is taken over if it stays so',
+    '',
+  ]);
+  assert.deepEqual(gateRows(output), ["FAIL  gate  no sensor ran: another gate still held the machine's gate lock after 1 min 30 s (--wait bounds the wait at 1 minute)"]);
+}));
+
+test('main runs the sensors without the gate lock when it cannot be taken at all, and says so in a row', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  let ran = 0;
+  const spawn = () => {
+    ran += 1;
+    return sensorRan();
+  };
+  const refuses = async () => {
+    throw Object.assign(new Error("EPERM: operation not permitted, mkdir 'somewhere'"), { code: 'EPERM' });
+  };
+  const stood = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: refuses, spawn }));
+  assert.equal(stood.code, 0, stood.output);
+  assert.equal(ran, 1);
+  assert.deepEqual(gateRows(stood.output), [
+    "INFO  gate  the sensors ran without the machine's gate lock, which could not be taken (EPERM: operation not permitted, mkdir 'somewhere'), so another gate may have run at the same time",
+  ]);
+
+  // And with the real lock: a home that is a file can hold no lock folder. Its tries are not slept through.
+  const notAFolder = path.join(home, 'a-file');
+  fs.writeFileSync(notAFolder, '');
+  const unslept = (options) => takeGateLock({ ...options, sleep: async () => {} });
+  const real = await runCheck(['--cwd', dir, '--home', notAFolder], {}, gateDeps({ takeGateLock: unslept, spawn }));
+  assert.equal(real.code, 0, real.output);
+  assert.equal(ran, 2);
+  assert.match(gateRows(real.output).join('\n'), /^INFO {2}gate {2}the sensors ran without the machine's gate lock, which could not be taken \(E[A-Z]+: .*\), so another gate may have run at the same time$/);
+}));
+
+test('main says in a row when the gate lock was lost while the sensors ran, and still releases it', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  let released = 0;
+  const take = async () => ({ release: () => { released += 1; }, beat: () => {}, lost: () => released === 0, waitedMs: 0 });
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(code, 0, output);
+  assert.equal(released, 1);
+  assert.deepEqual(gateRows(output), [
+    "INFO  gate  the machine's gate lock was lost while the sensors ran: this gate was silent for over a minute and another took its lock, so two gates may have run at once",
+  ]);
+  const names = rowsOf(output).map((row) => row.split('  ')[1]);
+  assert.equal(names.indexOf('tests') + 1, names.indexOf('gate'), output);
+}));
+
+test('main errors with usage on stderr, exits 2 and runs no row for a --wait it cannot take', async () => {
+  const refusals = [
+    [['--wait'], '--wait requires a value'],
+    [['--wait', '--no-wait'], '--wait requires a value'],
+    [['--wait', 'soon'], '--wait takes a number of minutes above zero, not "soon"'],
+    [['--wait', '0'], '--wait takes a number of minutes above zero, not "0"'],
+    [['--wait', '-5'], '--wait takes a number of minutes above zero, not "-5"'],
+    [['--wait', '1e3'], '--wait takes a number of minutes above zero, not "1e3"'],
+    [['--wait', '5', '--no-wait'], '--wait and --no-wait cannot be given together'],
+  ];
+  for (const [argv, said] of refusals) {
+    const { code, output, errOutput } = await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' });
+    assert.equal(code, 2, argv.join(' '));
+    assert.equal(output, '', argv.join(' '));
+    assert.equal(errOutput.split('\n')[0], said);
+    assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
+  }
+});
+
+test('a gate under test that names no home is given a throwaway one, so it cannot wait for a real gate of this machine', () => withGate({ tests: 'run-tests' }, async (dir) => {
+  const take = lockTakenAtOnce();
+  const { code } = await runCheck(['--cwd', dir], {}, gateDeps({ takeGateLock: take }));
+  assert.equal(code, 0);
+  const [{ home }] = take.asked;
+  assert.notEqual(path.resolve(home), path.resolve(os.homedir()));
+  assert.ok(path.resolve(home).startsWith(path.resolve(os.tmpdir())), `home was ${home}`);
+  assert.equal(fs.existsSync(home), false, 'the throwaway home is removed afterwards');
+}));
+
+// The real thing between two real processes: `node bin/check.mjs` twice, on two folders that share one
+// home. A sensor writes when it goes in, holds until the test lets it go, and writes when it comes out.
+const SENSOR = `
+const fs = require('fs');
+const [log, go, name] = process.argv.slice(2);
+fs.appendFileSync(log, 'in ' + name + '\\n');
+const giveUpAt = Date.now() + 60000;
+const timer = setInterval(() => {
+  if (!fs.existsSync(go) && Date.now() < giveUpAt) return;
+  clearInterval(timer);
+  fs.appendFileSync(log, 'out ' + name + '\\n');
+}, 20);
+`;
+
+/** Resolves once `condition()` holds, looking every 20 ms; rejects, naming `what`, after `ms`. */
+async function until(condition, what, ms = 60_000) {
+  const giveUpAt = Date.now() + ms;
+  while (!condition()) {
+    if (Date.now() > giveUpAt) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+/** One `node <check> --cwd <dir> --home <home>`: `stderr()` is what it has said so far, `done` how it ended. */
+function startCheck(check, dir, home, env) {
+  const child = spawnChild(process.execPath, [check, '--cwd', dir, '--home', home], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const said = { stdout: '', stderr: '' };
+  for (const stream of ['stdout', 'stderr']) {
+    child[stream].setEncoding('utf8');
+    child[stream].on('data', (chunk) => {
+      said[stream] += chunk;
+    });
+  }
+  const done = new Promise((resolve) => {
+    child.on('close', (status) => resolve({ status, ...said }));
+  });
+  return { child, done, stderr: () => said.stderr };
+}
+
+test('two check processes that share a home run their sensors one after the other, and the second says whose gate it waits for', async () => {
+  const home = makeTmpDir();
+  const slashes = (file) => file.replace(/\\/g, '/');
+  const log = slashes(path.join(home, 'sensors.log'));
+  const go = slashes(path.join(home, 'go'));
+  const readLog = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '');
+  const [one, two] = ['one', 'two'].map((name) => {
+    // The sensor names node by its path, since these gates are given a PATH with no program on it.
+    const dir = sensorProject({ tests: `"${process.execPath}" sensor.cjs "${log}" "${go}" ${name}` });
+    fs.writeFileSync(path.join(dir, 'sensor.cjs'), SENSOR);
+    return dir;
+  });
+  // The mark of a gate that runs this file would make these two inner checks, which run no sensor. No
+  // gentle-ai and no git either: an empty PATH leaves both rows saying they found none.
+  const noPrograms = path.join(home, 'no-programs');
+  fs.mkdirSync(noPrograms);
+  const dropped = ['js_harness_check_inner', 'node_test_context', 'path'];
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms };
+  // They run a copy of `bin/` in a temporary folder. Started from this checkout's own `bin/check.mjs`,
+  // they would read on the session board as two gates of this worktree at once, at every run of the suite
+  // (`watchedGates` in lib/sessions.mjs leaves out a gate whose folder is no worktree of the project).
+  const checkout = makeTmpDir();
+  fs.cpSync(path.dirname(fileURLToPath(import.meta.url)), path.join(checkout, 'bin'), { recursive: true, filter: (source) => !source.endsWith('.test.mjs') });
+  const check = path.join(checkout, 'bin', 'check.mjs');
+  const started = [];
+  try {
+    const first = startCheck(check, one, home, env);
+    started.push(first);
+    await until(() => readLog() === 'in one\n', 'the first gate to start its sensor');
+    const second = startCheck(check, two, home, env);
+    started.push(second);
+    await until(() => second.stderr().includes('at most') || readLog() !== 'in one\n', 'the second gate to say it waits');
+    assert.equal(readLog(), 'in one\n', 'the second gate started its sensor while the first ran its own');
+    fs.writeFileSync(go, '');
+    const [a, b] = await Promise.all([first.done, second.done]);
+
+    assert.equal(a.status, 0, `${a.stdout}${a.stderr}`);
+    assert.equal(b.status, 0, `${b.stdout}${b.stderr}`);
+    assert.equal(readLog(), 'in one\nout one\nin two\nout two\n');
+    assert.equal(a.stderr, '');
+    assert.deepEqual(gateRows(a.stdout), []);
+    const said = b.stderr.replace(/\r\n/g, '\n');
+    assert.ok(said.startsWith(`check: waiting for the gate of ${path.resolve(one)} (pid ${first.child.pid}, started `), said);
+    assert.ok(said.endsWith(') to finish, for 60 minutes at most\n'), said);
+    assert.match(gateRows(b.stdout.replace(/\r\n/g, '\n')).join('\n'), /^INFO {2}gate {2}waited \d+ s for the machine's gate lock before the sensors ran$/);
+    assert.match(b.stdout, /^INFO {2}review {2}gentle-ai was not found/m);
+    assert.equal(fs.existsSync(gateLockDir(home)), false);
+  } finally {
+    // Lets a sensor that is still holding go, should the test have failed before it did.
+    fs.writeFileSync(go, '');
+    for (const { child } of started) child.kill();
+    for (const dir of [one, two, home, checkout]) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // a sensor of a failed run may still hold it for a moment
+      }
+    }
   }
 });

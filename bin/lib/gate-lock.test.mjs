@@ -484,10 +484,9 @@ test('a dead holder whose file cannot be removed yet is looked at again, not an 
   second.release();
 }));
 
-// `rmSync` takes `maxRetries` and `retryDelay` and does not wait with them: on Node 24.15 and Windows 10
-// a file another process held open for 150 ms answered EPERM within a millisecond, with `recursive` and
-// without (run 2026-10-10). So the lock tries again by itself, and these two prove that it does.
-test('a dead holder\'s file that is busy for a moment is removed in the same look', withHome(async (home) => {
+// A takeover tries the removal once. Tried again in the same look, it removed a file on the strength of
+// two stale readings made before the first try: found in review, 2026-10-10.
+test('a takeover tries the removal of a dead holder\'s file once: a busy answer goes back to the wait', withHome(async (home) => {
   const clock = fakeClock();
   await take(home, clock, { pid: 11 });
   clock.advance(STALE_MS + 1000);
@@ -495,10 +494,134 @@ test('a dead holder\'s file that is busy for a moment is removed in the same loo
   const second = await take(home, clock, { pid: 22, wait: false, fileSystem: busy.io });
   assert.equal(second.refused, undefined);
   assert.equal(busy.failed(), 2);
-  assert.equal(second.waitedMs, POLL_MS);
+  // Two stale readings a poll apart before each try: one poll, then two more for each busy answer.
+  assert.equal(second.waitedMs, 5 * POLL_MS);
   second.release();
 }));
 
+test('a takeover does not remove a holder\'s file whose beat moved: a busy answer may be the holder coming back', withHome(async (home) => {
+  // Read stale twice, and then the removal answers busy: likely the holder itself, touching its file as
+  // it comes back to life. The next try removed a file that had beaten a moment before, and two gates ran.
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  clock.advance(STALE_MS + 1000);
+  let busy = 0;
+  const io = tapped((name, [target]) => {
+    if (name !== 'rmSync' || busy > 0 || !String(target).includes('holder-11-')) return;
+    busy += 1;
+    first.beat();
+    throw failing('EBUSY');
+  });
+  const second = await take(home, clock, { pid: 22, fileSystem: io, waitMs: 5 * POLL_MS });
+  assert.equal(busy, 1);
+  assert.equal(second.refused, 'timeout');
+  assert.equal(second.holder.pid, 11);
+  assert.equal(first.lost(), false);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 11);
+  first.release();
+}));
+
+/** `io`: `fs` whose listing of the lock folder fails with `code` the first `times` it is asked for.
+ * `failed()` says how many times it did. */
+function unlistable(home, code, times = Infinity) {
+  let failed = 0;
+  const io = tapped((called, [target]) => {
+    if (called !== 'readdirSync' || target !== gateLockDir(home) || failed >= times) return;
+    failed += 1;
+    throw failing(code);
+  });
+  return { io, failed: () => failed };
+}
+
+/** The holder that is read when the lock folder is there and nothing in it can be. */
+const NOBODY_KNOWN = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+
+test('a lock folder that is there and cannot be listed is a lock held by a gate of whom nothing is known, not a free one', withHome(async (home) => {
+  const clock = fakeClock();
+  const lock = await take(home, clock, { pid: 11 });
+  // Long past the stale time: a gate that could not be seen is not a gate that died.
+  clock.advance(10 * STALE_MS);
+  for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+    assert.deepEqual(readGateHolder(home, { now: clock.now, staleMs: STALE_MS, fileSystem: unlistable(home, code).io }), NOBODY_KNOWN, code);
+  }
+  assert.equal(readGateHolder(home, { now: clock.now, fileSystem: unlistable(home, 'ENOENT').io }), null);
+  lock.release();
+}));
+
+test('a gate waits for a lock folder that stays busy past its blind tries, and takes the lock only once it is released', withHome(async (home) => {
+  // Busy for more looks than a take makes of a lock nobody holds before it gives up. Read as no folder,
+  // it made the take an error, and a caller that goes on without the lock ran beside the gate inside.
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const [firstFile] = holderFiles(home);
+  const busy = unlistable(home, 'EPERM', 50);
+  const inTheLock = new Set();
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    inTheLock.add(holderFiles(home).join());
+    first.beat();
+    if (sleeps === 52) first.release();
+  };
+  const told = [];
+  const second = await take(home, clock, { pid: 22, fileSystem: busy.io, onWait: (holder) => told.push(holder) });
+  assert.equal(second.refused, undefined);
+  assert.equal(busy.failed(), 50);
+  assert.deepEqual([...inTheLock], [firstFile], 'only the first gate held the lock until it released it');
+  // Told of a gate nobody can name once the blind tries are spent, and of the first one once it can be read.
+  assert.deepEqual(told.map((holder) => holder.pid), [null, 11]);
+  assert.deepEqual(told[0], NOBODY_KNOWN);
+  // 40 blind tries 25 ms apart, and from then on a look every poll, not 40 more tries before each.
+  assert.equal(second.waitedMs, 39 * 25 + 13 * POLL_MS);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
+  second.release();
+}));
+
+test('a lock folder that stays busy refuses a gate that does not wait once its blind tries are spent, and one that waits when its wait is over', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const [firstFile] = holderFiles(home);
+  const busy = unlistable(home, 'EBUSY');
+  const atOnce = await take(home, clock, { pid: 22, wait: false, fileSystem: busy.io });
+  assert.equal(atOnce.refused, 'held');
+  assert.deepEqual(atOnce.holder, NOBODY_KNOWN);
+  assert.ok(atOnce.waitedMs < POLL_MS, `waited ${atOnce.waitedMs} ms`);
+  // Nor is it taken over, however long nothing in it can be read.
+  clock.advance(2 * STALE_MS);
+  const later = await take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io });
+  assert.equal(later.refused, 'timeout');
+  assert.deepEqual(later.holder, NOBODY_KNOWN);
+  assert.ok(later.waitedMs >= 5 * POLL_MS && later.waitedMs < 6 * POLL_MS, `waited ${later.waitedMs} ms`);
+  assert.equal(first.lost(), false);
+  assert.deepEqual(holderFiles(home), [firstFile]);
+  assert.deepEqual(waitFolders(home), []);
+  first.release();
+}));
+
+test('a gate whose file cannot be looked at has not lost its lock; one whose file is gone has', withHome(async (home) => {
+  // `existsSync` answers "not there" for a file it could not look at, and a gate was told its lock had
+  // been taken away when it had not.
+  let busy = false;
+  const io = new Proxy(fs, {
+    get: (target, name) => {
+      if (busy && name === 'existsSync') return () => false;
+      if (busy && name === 'statSync') return () => { throw failing('EPERM'); };
+      return target[name];
+    },
+  });
+  const lock = await take(home, fakeClock(), { pid: 11, fileSystem: io });
+  busy = true;
+  assert.equal(lock.lost(), false);
+  busy = false;
+  assert.equal(lock.lost(), false);
+  fs.rmSync(path.join(gateLockDir(home), holderFiles(home)[0]));
+  assert.equal(lock.lost(), true);
+  lock.release();
+}));
+
+// `rmSync` takes `maxRetries` and `retryDelay` and does not wait with them: on Node 24.15 and Windows 10
+// a file another process held open for 150 ms answered EPERM within a millisecond, with `recursive` and
+// without (run 2026-10-10). So a release tries again by itself, and this proves that it does.
 test('release removes its holder\'s file when the file is busy for a moment, and leaves no lock behind', withHome(async (home) => {
   const busy = busyFor(11, 'rmSync', 'EPERM', 2);
   const lock = await take(home, fakeClock(), { pid: 11, fileSystem: busy.io });
