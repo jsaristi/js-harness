@@ -425,9 +425,12 @@ const COMMANDS = ['setup', 'run'];
  * many, and a root that does not say by itself where it is (`rootRefusal`, by the path rules of `platform`):
  * the command resolves the root against the folder it was started from, so the argument is judged here, as
  * it was typed. It never throws and never guesses: a command of this project once acted on a flag it did
- * not know. */
+ * not know.
+ *
+ * One `--` before the command is dropped, and only there: `npm run practice -- run --root <dir>` reaches the
+ * script without it under npm and with it under pnpm, which hands the mark on. */
 export function parseArgs(argv = [], platform = process.platform) {
-  const [command, ...rest] = argv;
+  const [command, ...rest] = argv[0] === '--' ? argv.slice(1) : argv;
   if (command === undefined) return { error: 'no command: expected setup or run' };
   if (!COMMANDS.includes(command)) return { error: `unknown command ${command}: expected setup or run` };
 

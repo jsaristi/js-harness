@@ -697,11 +697,33 @@ run itself.
     merge it would cost a branch, a pull request, a gate and a Codex record of its own for
     one line; here it rides the gate this commit pays anyway and costs one small Codex
     record. `npm run practice -- run --root D:\js-harness-practice` is the same command as
-    `node scripts/practice.mjs run --root D:\js-harness-practice`.
+    `node scripts/practice.mjs run --root D:\js-harness-practice` (true only since the next
+    commit: see the entry below).
   - Both slices are over the 400 lines a pull request is held to (982 and about 1,500, more
     than half of each tests and this document). They are the two slices planned under
     Delivery and put to him with the plan; they are not cut again, and each pull request
     says so.
+- 2026-10-10: the delivery commit is `2333c66`; gate green (14:36:08 to 14:49:35, 807
+  seconds).
+- 2026-10-10, failed, by this session: `2333c66` says of the new script something that was not
+  true on this machine, and it was committed before it was known.
+  - What happened: the command that proved the script and the commit were started as one
+    chain, and the commit did not wait on the proof. `npm run practice -- run --root
+    D:\js-harness-practice` exited 2 with `unknown command --: expected setup or run`. The
+    `npm` on this machine's PATH answers as pnpm (it prints `[ELIFECYCLE]`), and pnpm hands
+    the `--` on to the script, where npm keeps it. The orchestrator had asked for one gate at
+    most; this costs a second.
+  - The fix: `parseArgs` drops one `--` before the command, and only there. RED: `tests 63 /
+    pass 62 / fail 1`; GREEN: `tests 63 / pass 63 / fail 0`. Seen with both: the `npm` of the
+    PATH through `cmd` (10 of 10, exit 0, 35 seconds) and the real npm CLI (`node
+    C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js run practice -- run --root ...`, 10 of
+    10, exit 0, 12 seconds).
+  - What stops it again: a proof is a condition of what follows it, never a neighbour in a
+    chain. It is the mistake of the reviewer beside a gate, in another place: there a read
+    that was not a condition, here a result that was not one.
+  - Where it belongs in the harness: with the gate lock and the session channel, as the rule
+    that a step which follows a check runs only on that check's exit code; noted for the
+    orchestrator.
 
 ## Next step
 Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's

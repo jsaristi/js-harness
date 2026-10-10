@@ -748,6 +748,16 @@ test('parseArgs gives every other shape back as a usage error and never as a com
   }
 });
 
+test('parseArgs drops one double dash before the command, which pnpm hands on to a script', () => {
+  // `npm run practice -- run --root <dir>`: npm keeps the `--` for itself, pnpm passes it to the script.
+  assert.deepEqual(parseArgs(['--', 'run', '--root', WIN_ROOT], 'win32'), { command: 'run', root: WIN_ROOT });
+  assert.deepEqual(parseArgs(['--', 'setup', '--root', '/srv/practice'], 'linux'), { command: 'setup', root: '/srv/practice' });
+  // Only one, and only there: anywhere else it is an argument nobody asked for.
+  assert.ok(parseArgs(['--', '--', 'run', '--root', WIN_ROOT], 'win32').error.includes('unknown command --'));
+  assert.ok(parseArgs(['run', '--', '--root', WIN_ROOT], 'win32').error.includes('unknown flag --'));
+  assert.deepEqual(Object.keys(parseArgs(['--'], 'win32')), ['error']);
+});
+
 test('parseArgs names the argument it refused', () => {
   assert.ok(parseArgs(['deploy'], 'win32').error.includes('deploy'));
   assert.ok(parseArgs(['run', '--force', '--root', WIN_ROOT], 'win32').error.includes('--force'));
