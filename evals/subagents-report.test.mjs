@@ -478,3 +478,69 @@ test('a usage error exits 2 with the usage text: an unknown flag, a missing valu
     assert.ok(err.includes(USAGE), argv.join(' '));
   }
 });
+
+// ---- the modes that count ----------------------------------------------------------------------------------------
+
+test('--modes reports and requires only the listed delegation modes, and says in one line what is recorded of the others', async () => {
+  const write = matrix().filter((entry) => SUBAGENT_CONFIGS[entry.config].mode === 'write');
+  // Trials of the two other modes, each with something a list would show: one did not delegate, one has an estimated cost.
+  const others = [
+    trial({ config: 'sub-opus-explore' }),
+    trial({ config: 'sub-haiku-explore', score: 0, subagents: 0, subagentStats: statsOf(0) }),
+    trial({ config: 'sub-opus-verify', listCost: estimated(0.2, 0.3) }),
+  ];
+  const docs = { run: docOf('run', [...write, ...others]) };
+
+  const all = await run(['--require-complete'], docs);
+  assert.equal(all.code, 1, 'without the flag every mode is required, as before');
+  assert.match(all.err, /house-rules explore sub-opus medium: 1 of 3 counted/);
+  assert.doesNotMatch(all.out, /left out/);
+
+  const only = await run(['--require-complete', '--modes', 'write'], docs);
+  assert.deepEqual([only.code, only.err], [0, ''], 'the write cells are complete, and they are all that is asked');
+  assert.deepEqual(only.out.match(/^effort \S+, mode \S+$/gm), ['effort medium, mode write']);
+  assert.match(only.out, /\nleft out by --modes write: 2 trials of explore, 1 trial of verify \(in no figure, list or check below\)\n/);
+  // What is left out is in no list either: not among the trials not counted, not among the flags.
+  assert.match(only.out, /Trials not counted: none/);
+  assert.match(only.out, /Flags: none in 18 recorded trials/);
+  const report = buildSubagentsReport([{ name: 'run', doc: docs.run }], { modes: ['write'] });
+  assert.deepEqual([report.modes, report.leftOut, report.trials], [['write'], [{ mode: 'explore', trials: 2 }, { mode: 'verify', trials: 1 }], 18]);
+  assert.deepEqual(incompleteCells(report), []);
+
+  // Several modes, reported in the order of `configs.mjs` whatever the order they were typed in.
+  const two = await run(['--modes', 'write,explore'], docs);
+  assert.deepEqual(two.out.match(/^effort \S+, mode \S+$/gm), ['effort medium, mode explore', 'effort medium, mode write']);
+  assert.match(two.out, /\nleft out by --modes explore,write: 1 trial of verify \(in no figure, list or check below\)\n/);
+  assert.match(two.out, /Trials not counted: 1 of 20 recorded/);
+
+  // A short cell of a listed mode still fails, and only cells of the listed modes are named.
+  const short = await run(['--require-complete', '--modes', 'write'], { run: docOf('run', [...write.slice(1), ...others]) });
+  assert.equal(short.code, 1);
+  assert.deepEqual(short.err.trim().split('\n'), ['--require-complete: cells with fewer than 3 counted trials:', '  format-v2 write sub-opus medium: 2 of 3 counted (1 not recorded)']);
+});
+
+test('trials of other modes alone are nothing recorded for --modes: said with what was left out, and never a pass', async () => {
+  const others = { run: docOf('run', [trial({ config: 'sub-opus-explore' }), trial({ config: 'sub-haiku-explore' }), trial({ config: 'sub-opus-verify' })]) };
+  const plain = await run(['--modes', 'write'], others);
+  assert.deepEqual([plain.code, plain.err], [0, '']);
+  assert.match(plain.out, /^no subagent trial of mode write is recorded yet in .* \(left out: 2 trials of explore, 1 trial of verify\)\n$/);
+  // Every cell of an effort nobody ran at would be asked of nothing, and nothing would be short.
+  const gate = await run(['--require-complete', '--modes', 'write'], others);
+  assert.deepEqual([gate.code, gate.out], [1, '']);
+  assert.match(gate.err, /--require-complete: no subagent trial of mode write is recorded yet in .* \(left out: 2 trials of explore, 1 trial of verify\): a report of nothing is not a pass/);
+  const empty = await run(['--require-complete', '--modes', 'write'], undefined);
+  assert.equal(empty.code, 1);
+  assert.match(empty.err, /--require-complete: no subagent trial of mode write is recorded yet in [^(]*: a report of nothing is not a pass/);
+});
+
+test('--modes takes a list of the delegation modes of configs.mjs: an unknown, an empty or a repeated one is a usage error', async () => {
+  assert.ok(USAGE.includes(`--modes <list>`) && USAGE.includes(Object.keys(DELEGATION_MODES).join(', ')), 'the usage names the flag and the modes it takes');
+  for (const argv of [['--modes'], ['--modes', 'nope'], ['--modes', 'write,nope'], ['--modes', 'write,write'], ['--modes', ''], ['--modes', 'write,'], ['--modes', 'write', '--modes', 'explore']]) {
+    const { code, out, err } = await run(argv, { run: docOf('run', [trial()]) });
+    assert.equal(code, 2, argv.join(' '));
+    assert.equal(out, '');
+    assert.ok(err.includes(USAGE), argv.join(' '));
+  }
+  const nope = await run(['--modes', 'nope'], { run: docOf('run', [trial()]) });
+  assert.match(nope.err, /^--modes needs a comma separated list of delegation modes \(explore, verify, write\), got "nope"\n/);
+});

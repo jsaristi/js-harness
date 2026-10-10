@@ -1,0 +1,1290 @@
+{
+  "format": 1,
+  "name": "write-high",
+  "createdAt": "2026-10-10T20:06:24.261Z",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "stack": {
+    "claude": "2.1.296 (Claude Code)",
+    "gentleAi": "4.0.0",
+    "engram": "3.3.0",
+    "engramPlugin": "0.1.6"
+  },
+  "subagentConfigs": {
+    "sub-opus-write": {
+      "model": "claude-opus-5-5",
+      "delegationSha256": "25160c8f82fa55c3034b62cff2d9e7cb150265eae98133114625ff7b980d5397"
+    },
+    "sub-haiku-write": {
+      "model": "claude-haiku-5-5",
+      "delegationSha256": "25160c8f82fa55c3034b62cff2d9e7cb150265eae98133114625ff7b980d5397"
+    }
+  },
+  "args": {
+    "claude": "C:\\Users\\Oficina\\.local\\share\\claude\\versions\\2.1.296",
+    "configs": [
+      "sub-opus-write",
+      "sub-haiku-write"
+    ],
+    "efforts": [
+      "high"
+    ],
+    "repeats": 1,
+    "tasks": [
+      "format-v2",
+      "house-rules",
+      "lost-updates"
+    ],
+    "workRoot": "D:\\js-harness-evals-work"
+  },
+  "trials": [
+    {
+      "task": "house-rules",
+      "config": "sub-opus-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.9787234042553191,
+      "passed": 46,
+      "total": 47,
+      "inputTokens": 182080,
+      "outputTokens": 5053,
+      "turns": 6,
+      "usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 43613,
+        "cache_read_input_tokens": 138455,
+        "output_tokens": 5053,
+        "output_tokens_details": {
+          "thinking_tokens": 1388
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 43613,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.8989262,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 34,
+          "outputTokens": 14810,
+          "cacheReadInputTokens": 385056,
+          "cacheCreationInputTokens": 78948,
+          "webSearchRequests": 0,
+          "costUSD": 0.8989262,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1875,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 141297,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:06:24.266Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 6,
+          "inputTokens": 12,
+          "outputTokens": 5053,
+          "cacheReadTokens": 138455,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 43613,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.477703,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 6,
+              "inputTokens": 12,
+              "outputTokens": 5053,
+              "cacheReadTokens": 138455,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 43613,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.477703
+            }
+          }
+        },
+        "subagents": {
+          "requests": 11,
+          "inputTokens": 22,
+          "outputTokens": 9757,
+          "cacheReadTokens": 246601,
+          "cacheWrite5mTokens": 35335,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.4212232,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 11,
+              "inputTokens": 22,
+              "outputTokens": 9757,
+              "cacheReadTokens": 246601,
+              "cacheWrite5mTokens": 35335,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.4212232
+            }
+          },
+          "agents": [
+            {
+              "agentId": "a282ce44330ba1a52",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "requests": 11,
+              "inputTokens": 22,
+              "outputTokens": 9757,
+              "cacheReadTokens": 246601,
+              "cacheWrite5mTokens": 35335,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.4212232,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:07:08.238Z",
+              "lastTimestamp": "2026-10-10T20:08:31.032Z",
+              "spanMs": 82794
+            }
+          ]
+        },
+        "total": {
+          "requests": 17,
+          "inputTokens": 34,
+          "outputTokens": 14810,
+          "cacheReadTokens": 385056,
+          "cacheWrite5mTokens": 35335,
+          "cacheWrite1hTokens": 43613,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.8989262,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 17,
+              "inputTokens": 34,
+              "outputTokens": 14810,
+              "cacheReadTokens": 385056,
+              "cacheWrite5mTokens": 35335,
+              "cacheWrite1hTokens": 43613,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.8989262
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "house-rules",
+      "config": "sub-haiku-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.9787234042553191,
+      "passed": 46,
+      "total": 47,
+      "inputTokens": 157457,
+      "outputTokens": 5839,
+      "turns": 6,
+      "usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 26948,
+        "cache_read_input_tokens": 130499,
+        "output_tokens": 5839,
+        "output_tokens_details": {
+          "thinking_tokens": 1851
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 26948,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.38278957500000005,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 10,
+          "outputTokens": 5839,
+          "cacheReadInputTokens": 130499,
+          "cacheCreationInputTokens": 26948,
+          "webSearchRequests": 0,
+          "costUSD": 0.3585038,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1851,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        },
+        "claude-haiku-5-5": {
+          "inputTokens": 26,
+          "outputTokens": 27073,
+          "cacheReadInputTokens": 423280,
+          "cacheCreationInputTokens": 52111,
+          "webSearchRequests": 0,
+          "costUSD": 0.024285775000000006,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 15513,
+          "canonicalModel": "claude-haiku-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 235999,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:08:50.657Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 5,
+          "inputTokens": 10,
+          "outputTokens": 5839,
+          "cacheReadTokens": 130499,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 26948,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.3585038,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 5,
+              "inputTokens": 10,
+              "outputTokens": 5839,
+              "cacheReadTokens": 130499,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 26948,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3585038
+            }
+          }
+        },
+        "subagents": {
+          "requests": 13,
+          "inputTokens": 26,
+          "outputTokens": 27073,
+          "cacheReadTokens": 423280,
+          "cacheWrite5mTokens": 52111,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.024285775,
+          "models": {
+            "claude-haiku-5-5": {
+              "requests": 13,
+              "inputTokens": 26,
+              "outputTokens": 27073,
+              "cacheReadTokens": 423280,
+              "cacheWrite5mTokens": 52111,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.024285775
+            }
+          },
+          "agents": [
+            {
+              "agentId": "a8a93dd1b83e5d2d9",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-haiku-5-5"
+              ],
+              "requests": 13,
+              "inputTokens": 26,
+              "outputTokens": 27073,
+              "cacheReadTokens": 423280,
+              "cacheWrite5mTokens": 52111,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.024285775,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:09:43.921Z",
+              "lastTimestamp": "2026-10-10T20:12:25.658Z",
+              "spanMs": 161737
+            }
+          ]
+        },
+        "total": {
+          "requests": 18,
+          "inputTokens": 36,
+          "outputTokens": 32912,
+          "cacheReadTokens": 553779,
+          "cacheWrite5mTokens": 52111,
+          "cacheWrite1hTokens": 26948,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.382789575,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 5,
+              "inputTokens": 10,
+              "outputTokens": 5839,
+              "cacheReadTokens": 130499,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 26948,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3585038
+            },
+            "claude-haiku-5-5": {
+              "requests": 13,
+              "inputTokens": 26,
+              "outputTokens": 27073,
+              "cacheReadTokens": 423280,
+              "cacheWrite5mTokens": 52111,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.024285775
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true,
+            "claude-haiku-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "format-v2",
+      "config": "sub-opus-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 47,
+      "total": 47,
+      "inputTokens": 308424,
+      "outputTokens": 15957,
+      "turns": 7,
+      "usage": {
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 46421,
+        "cache_read_input_tokens": 261989,
+        "output_tokens": 15957,
+        "output_tokens_details": {
+          "thinking_tokens": 9022
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 46421,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 2.2131008000000003,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 72,
+          "outputTokens": 56021,
+          "cacheReadInputTokens": 1661199,
+          "cacheCreationInputTokens": 124178,
+          "webSearchRequests": 0,
+          "costUSD": 2.2131008000000003,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 14813,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 535705,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:24:09.899Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 7,
+          "inputTokens": 14,
+          "outputTokens": 15957,
+          "cacheReadTokens": 261989,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 46421,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.7429618,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 7,
+              "inputTokens": 14,
+              "outputTokens": 15957,
+              "cacheReadTokens": 261989,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 46421,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.7429618
+            }
+          }
+        },
+        "subagents": {
+          "requests": 29,
+          "inputTokens": 58,
+          "outputTokens": 40064,
+          "cacheReadTokens": 1399210,
+          "cacheWrite5mTokens": 77757,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.470139,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 29,
+              "inputTokens": 58,
+              "outputTokens": 40064,
+              "cacheReadTokens": 1399210,
+              "cacheWrite5mTokens": 77757,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.470139
+            }
+          },
+          "agents": [
+            {
+              "agentId": "aade95fa842bdc395",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "requests": 29,
+              "inputTokens": 58,
+              "outputTokens": 40064,
+              "cacheReadTokens": 1399210,
+              "cacheWrite5mTokens": 77757,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.470139,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:26:22.181Z",
+              "lastTimestamp": "2026-10-10T20:32:30.342Z",
+              "spanMs": 368161
+            }
+          ]
+        },
+        "total": {
+          "requests": 36,
+          "inputTokens": 72,
+          "outputTokens": 56021,
+          "cacheReadTokens": 1661199,
+          "cacheWrite5mTokens": 77757,
+          "cacheWrite1hTokens": 46421,
+          "longPromptRequests": 0,
+          "listCostUsd": 2.2131008,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 36,
+              "inputTokens": 72,
+              "outputTokens": 56021,
+              "cacheReadTokens": 1661199,
+              "cacheWrite5mTokens": 77757,
+              "cacheWrite1hTokens": 46421,
+              "longPromptRequests": 0,
+              "listCostUsd": 2.2131008
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "format-v2",
+      "config": "sub-haiku-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 47,
+      "total": 47,
+      "inputTokens": 309218,
+      "outputTokens": 16875,
+      "turns": 7,
+      "usage": {
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 46111,
+        "cache_read_input_tokens": 263093,
+        "output_tokens": 16875,
+        "output_tokens_details": {
+          "thinking_tokens": 10168
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 46111,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 1.143452035,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 14,
+          "outputTokens": 16875,
+          "cacheReadInputTokens": 263093,
+          "cacheCreationInputTokens": 46111,
+          "webSearchRequests": 0,
+          "costUSD": 0.7590625999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 10168,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        },
+        "claude-haiku-5-5": {
+          "inputTokens": 76,
+          "outputTokens": 119090,
+          "cacheReadInputTokens": 3942127,
+          "cacheCreationInputTokens": 156393,
+          "webSearchRequests": 0,
+          "costUSD": 0.38438943500000006,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 75814,
+          "canonicalModel": "claude-haiku-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 718957,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:33:15.632Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 7,
+          "inputTokens": 14,
+          "outputTokens": 16875,
+          "cacheReadTokens": 263093,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 46111,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.7590626,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 7,
+              "inputTokens": 14,
+              "outputTokens": 16875,
+              "cacheReadTokens": 263093,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 46111,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.7590626
+            }
+          }
+        },
+        "subagents": {
+          "requests": 38,
+          "inputTokens": 76,
+          "outputTokens": 119090,
+          "cacheReadTokens": 3942127,
+          "cacheWrite5mTokens": 156393,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 28,
+          "listCostUsd": 0.384389435,
+          "models": {
+            "claude-haiku-5-5": {
+              "requests": 38,
+              "inputTokens": 76,
+              "outputTokens": 119090,
+              "cacheReadTokens": 3942127,
+              "cacheWrite5mTokens": 156393,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 28,
+              "listCostUsd": 0.384389435
+            }
+          },
+          "agents": [
+            {
+              "agentId": "ac3a9e9742ed2f49a",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-haiku-5-5"
+              ],
+              "requests": 38,
+              "inputTokens": 76,
+              "outputTokens": 119090,
+              "cacheReadTokens": 3942127,
+              "cacheWrite5mTokens": 156393,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 28,
+              "listCostUsd": 0.384389435,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:35:40.940Z",
+              "lastTimestamp": "2026-10-10T20:44:31.192Z",
+              "spanMs": 530252
+            }
+          ]
+        },
+        "total": {
+          "requests": 45,
+          "inputTokens": 90,
+          "outputTokens": 135965,
+          "cacheReadTokens": 4205220,
+          "cacheWrite5mTokens": 156393,
+          "cacheWrite1hTokens": 46111,
+          "longPromptRequests": 28,
+          "listCostUsd": 1.143452035,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 7,
+              "inputTokens": 14,
+              "outputTokens": 16875,
+              "cacheReadTokens": 263093,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 46111,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.7590626
+            },
+            "claude-haiku-5-5": {
+              "requests": 38,
+              "inputTokens": 76,
+              "outputTokens": 119090,
+              "cacheReadTokens": 3942127,
+              "cacheWrite5mTokens": 156393,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 28,
+              "listCostUsd": 0.384389435
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true,
+            "claude-haiku-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "lost-updates",
+      "config": "sub-opus-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 43,
+      "total": 43,
+      "inputTokens": 219018,
+      "outputTokens": 15438,
+      "turns": 7,
+      "usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 31595,
+        "cache_read_input_tokens": 187411,
+        "output_tokens": 15438,
+        "output_tokens_details": {
+          "thinking_tokens": 9731
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 31595,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 1.7739428,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 62,
+          "outputTokens": 48409,
+          "cacheReadInputTokens": 1208849,
+          "cacheCreationInputTokens": 93792,
+          "webSearchRequests": 0,
+          "costUSD": 1.7739428,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 18208,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 496389,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:45:25.296Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 6,
+          "inputTokens": 12,
+          "outputTokens": 15438,
+          "cacheReadTokens": 187411,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 31595,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.5990502,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 6,
+              "inputTokens": 12,
+              "outputTokens": 15438,
+              "cacheReadTokens": 187411,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 31595,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.5990502
+            }
+          }
+        },
+        "subagents": {
+          "requests": 25,
+          "inputTokens": 50,
+          "outputTokens": 32971,
+          "cacheReadTokens": 1021438,
+          "cacheWrite5mTokens": 62197,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.1748926,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 25,
+              "inputTokens": 50,
+              "outputTokens": 32971,
+              "cacheReadTokens": 1021438,
+              "cacheWrite5mTokens": 62197,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.1748926
+            }
+          },
+          "agents": [
+            {
+              "agentId": "a996e1bb1da496a0b",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "requests": 25,
+              "inputTokens": 50,
+              "outputTokens": 32971,
+              "cacheReadTokens": 1021438,
+              "cacheWrite5mTokens": 62197,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.1748926,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:47:54.260Z",
+              "lastTimestamp": "2026-10-10T20:53:18.079Z",
+              "spanMs": 323819
+            }
+          ]
+        },
+        "total": {
+          "requests": 31,
+          "inputTokens": 62,
+          "outputTokens": 48409,
+          "cacheReadTokens": 1208849,
+          "cacheWrite5mTokens": 62197,
+          "cacheWrite1hTokens": 31595,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.7739428,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 31,
+              "inputTokens": 62,
+              "outputTokens": 48409,
+              "cacheReadTokens": 1208849,
+              "cacheWrite5mTokens": 62197,
+              "cacheWrite1hTokens": 31595,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.7739428
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "lost-updates",
+      "config": "sub-haiku-write",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 43,
+      "total": 43,
+      "inputTokens": 394798,
+      "outputTokens": 13263,
+      "turns": 10,
+      "usage": {
+        "input_tokens": 20,
+        "cache_creation_input_tokens": 34822,
+        "cache_read_input_tokens": 359956,
+        "output_tokens": 13263,
+        "output_tokens_details": {
+          "thinking_tokens": 6254
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 34822,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.7502436200000002,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 20,
+          "outputTokens": 13263,
+          "cacheReadInputTokens": 359956,
+          "cacheCreationInputTokens": 34822,
+          "webSearchRequests": 0,
+          "costUSD": 0.6159072000000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 6254,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        },
+        "claude-haiku-5-5": {
+          "inputTokens": 42,
+          "outputTokens": 93296,
+          "cacheReadInputTokens": 1240373,
+          "cacheCreationInputTokens": 130894,
+          "webSearchRequests": 0,
+          "costUSD": 0.13433641999999998,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 61000,
+          "canonicalModel": "claude-haiku-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 2,
+      "subagentStats": {
+        "spawned": 2,
+        "requested": {
+          "background": 0,
+          "foreground": 2,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 2,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 2
+        }
+      },
+      "wallMs": 625406,
+      "cliVersion": "2.1.296 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-10T20:53:46.547Z",
+      "transcripts": {
+        "files": 5,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 10,
+          "inputTokens": 20,
+          "outputTokens": 13263,
+          "cacheReadTokens": 359956,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 34822,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.6159072,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 10,
+              "inputTokens": 20,
+              "outputTokens": 13263,
+              "cacheReadTokens": 359956,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 34822,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.6159072
+            }
+          }
+        },
+        "subagents": {
+          "requests": 21,
+          "inputTokens": 42,
+          "outputTokens": 93296,
+          "cacheReadTokens": 1240373,
+          "cacheWrite5mTokens": 130894,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 7,
+          "listCostUsd": 0.13433642,
+          "models": {
+            "claude-haiku-5-5": {
+              "requests": 21,
+              "inputTokens": 42,
+              "outputTokens": 93296,
+              "cacheReadTokens": 1240373,
+              "cacheWrite5mTokens": 130894,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 7,
+              "listCostUsd": 0.13433642
+            }
+          },
+          "agents": [
+            {
+              "agentId": "ab6040cfff6240077",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-haiku-5-5"
+              ],
+              "requests": 14,
+              "inputTokens": 28,
+              "outputTokens": 88187,
+              "cacheReadTokens": 1112297,
+              "cacheWrite5mTokens": 112631,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 7,
+              "listCostUsd": 0.128216885,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T20:55:30.971Z",
+              "lastTimestamp": "2026-10-10T21:02:21.521Z",
+              "spanMs": 410550
+            },
+            {
+              "agentId": "ab93e8f8621eb8cfb",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-haiku-5-5"
+              ],
+              "requests": 7,
+              "inputTokens": 14,
+              "outputTokens": 5109,
+              "cacheReadTokens": 128076,
+              "cacheWrite5mTokens": 18263,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.006119535,
+              "efforts": [
+                "high"
+              ],
+              "firstTimestamp": "2026-10-10T21:02:59.825Z",
+              "lastTimestamp": "2026-10-10T21:03:41.450Z",
+              "spanMs": 41625
+            }
+          ]
+        },
+        "total": {
+          "requests": 31,
+          "inputTokens": 62,
+          "outputTokens": 106559,
+          "cacheReadTokens": 1600329,
+          "cacheWrite5mTokens": 130894,
+          "cacheWrite1hTokens": 34822,
+          "longPromptRequests": 7,
+          "listCostUsd": 0.75024362,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 10,
+              "inputTokens": 20,
+              "outputTokens": 13263,
+              "cacheReadTokens": 359956,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 34822,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.6159072
+            },
+            "claude-haiku-5-5": {
+              "requests": 21,
+              "inputTokens": 42,
+              "outputTokens": 93296,
+              "cacheReadTokens": 1240373,
+              "cacheWrite5mTokens": 130894,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 7,
+              "listCostUsd": 0.13433642
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true,
+            "claude-haiku-5-5": true
+          }
+        }
+      }
+    }
+  ]
+}

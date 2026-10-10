@@ -2,7 +2,7 @@
 // The subagent report: turns the recorded runs in `evals/results/subagents/` into the two arms side by side, per
 // delegation mode and task (`odd/tasks/subagent-model-routing.md`). Zero deps, plain Node.
 //
-//   node evals/subagents-report.mjs [--runs <name,name>] [--results-dir <dir>] [--require-complete]
+//   node evals/subagents-report.mjs [--runs <name,name>] [--results-dir <dir>] [--modes <mode,mode>] [--require-complete]
 //
 // It reads the results documents alone, never the raw logs, which are not committed: what a trial's transcripts said
 // is in its record (`listCost`, `transcript-usage.mjs`). It decides nothing between the arms: it is the two
@@ -296,15 +296,25 @@ const byEffort = (a, b) => effortRank(a) - effortRank(b) || (a < b ? -1 : a > b 
  *                                        `[{ trial, reason, score, error }]`
  *   flags, flagCounts                    the trials with something to flag, `[{ trial, flags }]` (`flagsOf`), and how
  *                                        many trials carry each kind
+ *   modes, leftOut                       the delegation modes reported, and what the runs hold of the others, as
+ *                                        `[{ mode, trials }]` for each that has a trial
+ *
+ * `modes` are the delegation modes that count (`--modes`), every one of `configs.mjs` when not given. A trial of
+ * another mode is in nothing above: no cell, no effort, no task, no list and no count but `leftOut`, which is there
+ * so that what was recorded and is not reported is said and not dropped. So a report of some modes may hold no trial
+ * at all (`trials` 0, no effort), which the command takes for nothing recorded.
  *
  * Arms, modes and efforts are read from the trials through `configs.mjs`, never from a run's `args`: a run continued
  * in two invocations keeps only the last one's. Throws a `ReportError` for runs that cannot be read together
  * (`checkRuns` of `report.mjs`: a model, a permission mode or a stack that differs, a trial recorded twice) or as
- * these arms (`checkPins`). */
-export function buildSubagentsReport(runs) {
+ * these arms (`checkPins`). Both hold every trial of the runs, of a mode that is left out too: a document that
+ * cannot be read as a whole is not read in part. */
+export function buildSubagentsReport(runs, { modes = MODES } = {}) {
   checkRuns(runs);
   checkPins(runs);
-  const trials = runs.flatMap((run) => run.doc.trials);
+  const modeOf = (entry) => SUBAGENT_CONFIGS[entry.config].mode;
+  const recorded = runs.flatMap((run) => run.doc.trials);
+  const trials = recorded.filter((entry) => modes.includes(modeOf(entry)));
   const cellTrials = (task, effort, arm, mode) => trials.filter((entry) => entry.task === task && entry.effort === effort && SUBAGENT_CONFIGS[entry.config].arm === arm && SUBAGENT_CONFIGS[entry.config].mode === mode);
   const tasks = [...TASKS, ...[...new Set(trials.map((entry) => entry.task))].filter((task) => !TASKS.includes(task)).sort()];
   const flags = trials.map((entry) => ({ trial: trialLabel(entry), flags: flagsOf(entry) })).filter((entry) => entry.flags.length > 0);
@@ -318,7 +328,7 @@ export function buildSubagentsReport(runs) {
     prices: unique(trials.map((entry) => entry.listCost?.prices).filter(isObject)),
     efforts: [...new Set(trials.map((entry) => entry.effort))].sort(byEffort).map((effort) => ({
       effort,
-      modes: MODES.map((mode) => ({
+      modes: modes.map((mode) => ({
         mode,
         rows: tasks.map((task) => {
           const cells = Object.fromEntries(ARMS.map((arm) => [arm, buildCell(cellTrials(task, effort, arm, mode))]));
@@ -335,10 +345,16 @@ export function buildSubagentsReport(runs) {
     })),
     flags,
     flagCounts: Object.fromEntries(Object.keys(FLAG_KINDS).map((kind) => [kind, flags.filter((entry) => entry.flags.some((item) => item.kind === kind)).length])),
+    modes,
+    leftOut: MODES.filter((mode) => !modes.includes(mode)).map((mode) => ({ mode, trials: recorded.filter((entry) => modeOf(entry) === mode).length })).filter((entry) => entry.trials > 0),
   };
 }
 
-/** The cells that fail `--require-complete`: every cell of the matrix, at every effort in the runs, with fewer than
+/** What a report left out (`leftOut`), in words: `2 trials of explore, 1 trial of verify`. */
+const leftOutText = (leftOut) => leftOut.map((entry) => `${plural(entry.trials, 'trial')} of ${entry.mode}`).join(', ');
+
+/** The cells that fail `--require-complete`: every cell of the matrix, in the modes of the report (`--modes`), at
+ * every effort its trials ran at, with fewer than
  * `COMPLETE_TRIALS` counted trials, as `[{ task, mode, arm, effort, required, counted, notRecorded, notDelegated,
  * unknown }]` in report order. The last three say why it is short: trials nobody ran, trials that did the work
  * alone, and trials that recorded no spawned count. The number is `report.mjs`'s, the three repeats of the design,
@@ -355,11 +371,13 @@ export function incompleteCells(report) {
 // ---- the command -------------------------------------------------------------------------------------------------
 
 export const USAGE = [
-  'Usage: node evals/subagents-report.mjs [--runs <name,name>] [--results-dir <dir>] [--require-complete]',
+  'Usage: node evals/subagents-report.mjs [--runs <name,name>] [--results-dir <dir>] [--modes <mode,mode>] [--require-complete]',
   '',
   '  --runs <list>        report only these runs of the results directory (default: every *.json)',
   `  --results-dir <dir>  where the runs are (default: evals/results/${SUBAGENTS_DIR})`,
-  `  --require-complete   exit 1 unless every cell of the matrix (${ARMS.length} arms, ${MODES.length} modes, ${TASKS.length} tasks) has ${COMPLETE_TRIALS} trials that spawned a subagent`,
+  `  --modes <list>       report and require only these delegation modes, of ${MODES.join(', ')} (default: all); the trials`,
+  '                       recorded of the others are counted in one line and are in nothing else',
+  `  --require-complete   exit 1 unless every cell of the matrix (${ARMS.length} arms, the modes reported, ${TASKS.length} tasks) has ${COMPLETE_TRIALS} trials that spawned a subagent`,
   '',
   'A trial counts only when it spawned at least one subagent; the others are listed apart and are in no figure.',
   'Exit codes: 0 reported (or nothing recorded yet), 1 refused (runs that cannot be read together) or the gate failed, 2 usage error.',
@@ -367,12 +385,14 @@ export const USAGE = [
 
 const RUN_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/;
 
-/** The command line as `{ runs, resultsDir, requireComplete }` (`undefined` or `false` for what was not given). A
- * flag that is unknown, repeated or missing its value, and a run name that is not a plain file name, are a
- * `UsageError`. The flags are `report.mjs`'s where the two reports share one; its others are refused, since a flag
- * that was typed and did nothing would let a command pass for one it was not. */
+/** The command line as `{ runs, resultsDir, modes, requireComplete }` (`undefined` or `false` for what was not
+ * given). A flag that is unknown, repeated or missing its value, a run name that is not a plain file name, and a
+ * mode that is not one of `configs.mjs` or is listed twice, are a `UsageError`. `modes` come back in the order of
+ * `configs.mjs`, whatever the order typed: it is the order of the report. The flags are `report.mjs`'s where the
+ * two reports share one; its others are refused, since a flag that was typed and did nothing would let a command
+ * pass for one it was not. */
 export function parseArgs(argv) {
-  const options = { runs: undefined, resultsDir: undefined, requireComplete: false };
+  const options = { runs: undefined, resultsDir: undefined, modes: undefined, requireComplete: false };
   const given = new Set();
   const once = (flag) => {
     if (given.has(flag)) throw new UsageError(`${flag} was given twice`);
@@ -399,6 +419,14 @@ export function parseArgs(argv) {
     } else if (token === '--results-dir') {
       once(token);
       options.resultsDir = valueOf(token, i);
+      i += 1;
+    } else if (token === '--modes') {
+      once(token);
+      const names = valueOf(token, i).split(',');
+      if (names.some((name) => !MODES.includes(name))) throw new UsageError(`--modes needs a comma separated list of delegation modes (${MODES.join(', ')}), got ${JSON.stringify(argv[i + 1])}`);
+      const twice = names.find((name, index) => names.indexOf(name) !== index);
+      if (twice !== undefined) throw new UsageError(`--modes: ${JSON.stringify(twice)} is listed twice`);
+      options.modes = MODES.filter((mode) => names.includes(mode));
       i += 1;
     } else if (token.startsWith('--')) {
       throw new UsageError(`unknown argument ${token}`);
@@ -497,6 +525,7 @@ export function formatSubagentsReport(report) {
       + 'each rate over its own arm\'s counted trials, and cost, wall time and turns as a ratio',
     'subagents: spawned, completed, failed, killed and refused are totals over the counted trials, as Claude Code printed them',
   ];
+  if (report.leftOut.length > 0) lines.push(`left out by --modes ${report.modes.join(',')}: ${leftOutText(report.leftOut)} (in no figure, list or check below)`);
   for (const { effort, modes } of report.efforts) for (const entry of modes) lines.push('', ...modeLines(entry, effort));
   const cells = report.efforts.flatMap(({ modes }) => modes.flatMap(({ rows }) => rows.flatMap((row) => Object.values(row.cells))));
   if (cells.some((cell) => [cell.score, cell.wallMs, cell.turns, cell.cost.orchestrator, cell.cost.subagents, cell.cost.total].some((stats) => isPartial(stats, cell)))) {
@@ -523,6 +552,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * trial of the feature: the command says that nothing is recorded and exits 0, so it can be run at any time. With
  * `--require-complete` the same state exits 1, and prints nothing as a result: a gate must not pass on nothing.
  *
+ * `--modes` names the delegation modes that count: the report and the gate hold those alone, one line says how many
+ * trials of which other modes the runs hold, and runs that hold trials of the other modes only are that same state
+ * of nothing recorded.
+ *
  * Everything it prints goes through `deps.stdout` and `deps.stderr`; `deps.resultsDir` is the directory
  * `--results-dir` overrides. Nothing here writes a file or runs anything: it only reads. */
 export async function subagentsReportMain(argv, env = process.env, deps = {}) {
@@ -539,14 +572,18 @@ export async function subagentsReportMain(argv, env = process.env, deps = {}) {
   let report = null;
   try {
     const runs = loadRuns({ dir, names: options.runs });
-    if (runs.some((run) => run.doc.trials.length > 0)) report = buildSubagentsReport(runs);
+    if (runs.some((run) => run.doc.trials.length > 0)) report = buildSubagentsReport(runs, { modes: options.modes });
   } catch (error) {
     if (!(error instanceof ReportError)) throw error;
     stderr.write(`${error.message}\n`);
     return 1;
   }
-  if (report === null) {
-    const nothing = `no subagent trial is recorded yet in ${dir}`;
+  // No trial of the modes that count is nothing recorded too, whatever the runs hold of the others: with no effort
+  // to ask the cells of, the gate would find none short.
+  if (report === null || report.trials === 0) {
+    const asked = options.modes === undefined ? '' : ` of mode${options.modes.length === 1 ? '' : 's'} ${options.modes.join(', ')}`;
+    const others = report === null || report.leftOut.length === 0 ? '' : ` (left out: ${leftOutText(report.leftOut)})`;
+    const nothing = `no subagent trial${asked} is recorded yet in ${dir}${others}`;
     if (!options.requireComplete) {
       stdout.write(`${nothing}\n`);
       return 0;

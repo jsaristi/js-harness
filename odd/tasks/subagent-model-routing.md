@@ -20,8 +20,8 @@ cheaper model goes into the harness only if a measurement of ours says it helps 
 - `node --test "evals/**/*.test.mjs"` exits 0
 - `node evals/report.mjs --require-complete --min-discriminating 3` exits 0, so F5's gate still
   holds with the new runs recorded
-- `node evals/subagents-report.mjs --require-complete` exits 0, so the matrix of this feature is
-  complete and every counted trial delegated
+- `node evals/subagents-report.mjs --require-complete --modes write` exits 0, so the matrix of
+  this feature (the `write` mode, since 2026-10-10) is complete and every counted trial delegated
 - `docs/ROADMAP.md` records the result per delegation mode and task (both arms' score, list
   cost split between orchestrator and subagents, wall time, subagent outcomes) and the
   recommendation
@@ -51,21 +51,27 @@ cheaper model goes into the harness only if a measurement of ours says it helps 
 - A trial counts only when `subagent_stats.spawned` is at least 1; a trial that did not delegate
   is reported apart and never averaged in — because it measures nothing about subagents, and in
   F5 only 5 of 60 trials delegated (E4).
-- The base is the `minimal` arm at effort `medium`, with a delegation mode appended to the
-  prompt, identical in both arms — because it isolates the one variable, costs about half of the
-  `current` arm, and the tasks do not delegate by themselves.
+- The base is the `minimal` arm at effort `high`, with the `write` delegation mode appended to
+  the prompt, identical in both arms — because it isolates the one variable, the tasks do not
+  delegate by themselves, and by his rule of 2026-10-10 Haiku 5.5 is a candidate only for
+  subagents that write code under an orchestrator on Opus 5.5 at high effort (until that day the
+  base was effort `medium` and three modes were to be measured; `explore` and `verify` stay on
+  Opus 5.5 and their configs stay in the suite, unmeasured).
 - Results live in `evals/results/subagents/` with a report of their own — because
   `evals/report.mjs` reads every `*.json` in `evals/results/` and rejects any config other than
   `minimal` and `current`.
-- Spend is staged (Sebastián, 2026-10-08): 1 probe call (spent), 2 smoke trials, the rest of the
-  first repeat (18 trials in all), then his go-ahead for the other 36. No batch and no gate
-  starts before its count is put to him — because another session uses this machine and the
-  runs draw on the plan's weekly cap, which stood at 77% on 2026-10-08.
+- Spend is staged (Sebastián, 2026-10-08, resized on 2026-10-10 to the `write` mode alone): 1
+  probe call (spent), 2 smoke trials, the rest of the first repeat (4 trials, 6 in all), then
+  his go-ahead for the other 12. The count of a batch is stated before it starts — because
+  other sessions use this machine and the runs draw on the plan's weekly cap.
 - Never two gates at once, and no gate or test suite while trials run — because parallel spawns
   on this host fail with `0xC0000142` (`odd/tasks/evals.md`, follow-ups). The other session works
   in `D:\js-harness-worktrees\codex-review-lean`.
-- The stack is not updated during the feature: Claude Code 2.1.292, gentle-ai, engram and Codex
-  stay as installed — because the two arms and F6 must run on one measured stack.
+- The stack is not updated by this feature, and every trial names Claude Code 2.1.296 by its
+  versioned path (`C:UsersOficina.localshareclaudeersions.1.296`), never the
+  `claude` on PATH — because the native installer updates that one by itself (it went from
+  2.1.292 to 2.1.296 on 2026-10-09), a run refuses to continue on another version, and 2.1.296
+  knows Haiku 5.5 where 2.1.292 ran it on fallback limits (Sebastián, 2026-10-10).
 - Zero dependencies — because every command in this repo runs with no install step.
 
 ## Effort
@@ -94,7 +100,8 @@ Three delegation modes, one per kind of work, appended to the task prompt:
 | `write` | Writes the change | Plans, then reviews the result |
 
 Three tasks with their hidden graders: `format-v2`, `house-rules`, `lost-updates`. Three repeats.
-2 arms × 3 modes × 3 tasks × 3 repeats = 54 trials, sequential.
+As designed: 2 arms × 3 modes × 3 tasks × 3 repeats = 54 trials, sequential. As measured since
+2026-10-10: the `write` mode alone at effort high, 2 arms × 3 tasks × 3 repeats = 18 trials.
 
 | Measurement | Source |
 |-------------|--------|
@@ -175,9 +182,20 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   `runner` 163 pass and 1 skipped (POSIX only), `transcript-usage` 18, `subagents-report` 17,
   `report` 55, `suite` 79, `configs` 79, 0 fail; with no run recorded the report exits 0 and
   `--require-complete` exits 1. Parent spot check: `subagents-report` 17 pass
-- [ ] T4 Smoke: 2 trials, one per arm, `house-rules` in `write` mode
-- [ ] T5 The rest of the first repeat: 16 trials, 18 with the smoke
-- [ ] T6 The other two repeats: 36 trials, after Sebastián's go-ahead
+- [x] T3c The report takes the modes that count: `--modes write`, so `--require-complete` asks
+  the cells of the plan and no others (route: delegated writer). Trials of a mode left out are
+  counted in one line and enter nothing; the checks of a run's stack and pins still cover every
+  trial. Writer's evidence, RED (3 fail: unknown argument) then GREEN: `subagents-report` 24
+  pass, 0 fail; 119 lines added, 16 deleted. Parent spot check: 24 pass
+- [x] T4 Smoke: 2 trials, one per arm, `house-rules` in `write` mode at effort high (route:
+  inline; run `write-high`, `evals/results/subagents/write-high.json`). Both arms delegated
+  (spawned 1, completed 1) and scored 0.98; the transcripts name `claude-opus-5-5` and
+  `claude-haiku-5-5` as the subagents' models, each at effort high, so the forcing holds on
+  2.1.296; list cost $0.90 against $0.38, and Claude Code's own cost equals it on this version
+- [x] T5 The rest of the first repeat: 4 trials (`format-v2` and `lost-updates`), 6 with the smoke
+  (route: inline; the same run `write-high`, continued). All 6 delegated and none failed;
+  `--require-complete --modes write` exits 1 as it must, each cell at 1 of 3
+- [ ] T6 The other two repeats: 12 trials, after Sebastián's go-ahead
 - [ ] T7 The result and the recommendation in `docs/ROADMAP.md`
 
 ## Progress
@@ -363,3 +381,110 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   rule of the same day: nothing stops for a percentage; at 85 percent a session writes its
   state here, then finishes if little is left or asks for the compaction. `origin/main` is at
   `d3bc399`, 85 commits ahead of this branch, with no file in common with slice 2.
+- 2026-10-10 — Slice 2 is pull request `jsaristi/js-harness#51`, open, not merged: the merge of
+  code is his, and the orchestrator asks him. `origin/main` merged in as `da550c0`; on the
+  orchestrator's "go", the entries above committed as `301c4ce`, whose gate ran over the merged
+  tree (gate 8, 832 s, passed alone); pushed, the pre-push row green. A mistake of this
+  session: the push was chained after `gentle-ai review assess --base-ref 779bb4a
+  --committed-only` and ran before its answer was read. The answer was "review due,
+  slice_budget_reached, 26,343 lines", because that range now holds the merge of `main`; the
+  lines authored here since the reviewed boundary are 157 (`8cb6ec0`, assessed alone as under
+  budget and reviewed by Codex) and 37 of this document (passive), so no review was started,
+  by this session's judgment and not the tool's. From now: an assessment is read before the next
+  command, and after `main` is merged in the base of the next assessment is the merge commit.
+  Next: T4, the 2 smoke trials, with a turn asked of the orchestrator.
+- 2026-10-10 — Found while preparing T4: the stack moved by itself. `claude --version` on PATH
+  now answers 2.1.296; the native installer replaced `C:\Users\Oficina\.local\bin\claude.exe`
+  on 2026-10-09 at 14:36 (`autoUpdatesProtectedForNative: true` in `~/.claude.json`), with
+  2.1.295 the night before. Nobody in this feature updated it. Both binaries are still on disk
+  and answer by path: `C:\Users\Oficina\.local\share\claude\versions\2.1.292` and
+  `...\versions\2.1.296`, and the suite takes the binary as an absolute path (`--claude`), so a
+  run can be pinned to either file and is then safe from the next update. Read in the 2.1.296
+  binary: `claude-haiku-5-5` appears 32 times (none in 2.1.292, E2) and
+  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` 14 times. The choice is a change of a constraint of this
+  contract, so it is put to Sebastián before any trial: 2.1.292 is the stack the evidence was
+  gathered on, but there Haiku 5.5 is an unrecognized model that runs on fallback limits
+  (E3: a 200,000-token window and 32,000 output tokens), so a weak result of the Haiku arm could
+  be the old binary's and not the model's; 2.1.296 knows the model and is what a session runs
+  today, which is where routing would be used. Recommended: 2.1.296 by its versioned path, with
+  the 2 smoke trials as its probe (the transcript shows each subagent's model, so the smoke
+  proves the forcing still holds).
+- 2026-10-10 — His answer, given in the orchestrator's chat and relayed here under the protocol
+  he approved the same minute (his answers given there travel to the session that asked, with
+  his exact words and where to check them). Checked in the orchestrator's transcript
+  `182ad401-252a-4cbe-afcc-929fcd905c6a.jsonl`: line 990, an entry of origin `human` at
+  2026-10-10T19:40:12Z, and line 1044, his "Si" to the relay. His words, whole: "si pero solo
+  para codificar quiero el haiku pero de resto ahora que estamos diseñando el harness o cuando
+  vayamos a tratar cosas de planificacion debe ser minimo opues 5.5 alto o fable 5.5 alto (que
+  aun no ha salido), ningun otro modelo hasta la fecha". Settled by it: the trials run on
+  Claude Code 2.1.296, pinned by its versioned path. Read from it, this session's reading and
+  his to accept: a product rule, Haiku 5.5 is a candidate only for subagents that write code,
+  and designing and planning stay on Opus 5.5 at high effort or better. Against the design
+  above that rule leaves one mode with a decision behind it, `write`, where the orchestrator
+  plans and reviews and the subagent codes; `explore` feeds the plan, so Haiku is ruled out
+  there before any trial, and `verify` (run the tests, report) is neither planning nor coding
+  and his words do not cover it. It also says the orchestrator he will really run is Opus 5.5
+  at high, not the medium of the base. Proposed to him, pending: measure `write` alone, at
+  effort high: 2 arms × 3 tasks × 3 repeats = 18 trials instead of 54, about $22 to $31 at list
+  price and 1.5 to 2 hours (F5's minimal arm at high cost $1.67, $0.47 and $0.72 a trial on the
+  three tasks, `evals/results/ab-high.json`, with 30% to 80% added for delegation), staged as 2
+  smoke, 4 for the rest of the first repeat, and 12 on his go-ahead. It needs one change of
+  code: `--require-complete` of the report asks the three modes today, so the modes that count
+  must be named to it. The configs of the other two modes stay in the suite, so a mode can be
+  measured later with runs alone.
+- 2026-10-10 — Accepted. His words, in the orchestrator's transcript at line 1112 (origin
+  `human`, 2026-10-10T19:55:22Z), answering the plan as put to him with the lead's
+  recommendation that verifying stays on Opus 5.5 at high effort and is not measured now: "SI
+  verificar tambien, excelente aporte proactivo, por favor necesito que tu orquestador y las
+  sesiones sean mas autonomas y trabajen mas de seguido sin interrupciones, por favor
+  implementalo y dale la informacion para que no paren tanto y avancemos mas". Read here as: yes
+  to the `write` mode alone at effort high, 18 trials staged 2, 4 and 12; verifying also stays
+  on Opus 5.5 (the reading that fits the recommendation he praises; if he meant that verifying
+  be measured too, its configs are in the suite and it takes runs alone). Goal, Done when,
+  Constraints, Design and Tasks above are rewritten to that plan. How this session works from
+  now, the lead's standing notice from his words: it stops for him only for spend outside the
+  plan, a change on a machine, a product choice, what cannot be undone, a change of the plan's
+  scope or order, a new protocol, and the merge of code; before a gate or a batch it looks at
+  the process list itself and starts, one try; push and pull request go once the gate and both
+  reviews are green; one line to the lead per gate or batch. The trial batches run after that
+  look and not under the `gate` command of `feat/gate-lock`: it is unmerged with four open
+  findings about how Windows quotes a command, and these commands carry quoted paths.
+- 2026-10-10 — T4, the smoke (batch 1 of 3; it waited 450 s for another session's gate, then
+  ran 403 s, exit 0). `house-rules`, `write` mode, effort high, one trial per arm:
+
+  | Arm | Score | Wall | List cost | Orchestrator | Subagent | Subagent span |
+  |-----|-------|------|-----------|--------------|----------|---------------|
+  | `sub-opus` | 0.98 | 2m21s | $0.899 | $0.478 | $0.421 | 83 s |
+  | `sub-haiku` | 0.98 | 3m56s | $0.383 | $0.359 | $0.024 | 162 s |
+
+  One trial per arm, so nothing is concluded; what the smoke was for holds: each arm spawned and
+  completed one `general-purpose` subagent, the transcript totals equal `modelUsage`, no model is
+  unpriced and no prompt passed 100,000 tokens. On 2.1.296 Claude Code prices Haiku 5.5 itself:
+  its `total_cost_usd` equals the list cost in both arms, where 2.1.292 was 25 to 40 times off
+  (E3). The run pins the stack as Claude Code 2.1.296, gentle-ai 4.0.0, engram 3.3.0 and its
+  plugin 0.1.6: engram was updated on this machine since F5 (3.0.0 and 0.1.5), not by this
+  feature; told to the lead. Batch 2, the 4 trials that complete the first repeat, follows by
+  the same look.
+- 2026-10-10 — T3c and T5. Batch 2 waited 600 s for the machine and ran 2,415 s, exit 0. The
+  first repeat, `node evals/subagents-report.mjs --modes write`, one trial per cell, effort high:
+
+  | Task | Arm | Score | List cost | Orchestrator | Subagents | Wall |
+  |------|-----|-------|-----------|--------------|-----------|------|
+  | `format-v2` | `sub-opus` | 1.00 | $2.213 | $0.743 | $1.470 | 8m56s |
+  | `format-v2` | `sub-haiku` | 1.00 | $1.144 | $0.759 | $0.384 | 11m59s |
+  | `house-rules` | `sub-opus` | 0.98 | $0.899 | $0.478 | $0.421 | 2m21s |
+  | `house-rules` | `sub-haiku` | 0.98 | $0.383 | $0.359 | $0.024 | 3m56s |
+  | `lost-updates` | `sub-opus` | 1.00 | $1.774 | $0.599 | $1.175 | 8m16s |
+  | `lost-updates` | `sub-haiku` | 1.00 | $0.750 | $0.616 | $0.134 | 10m25s |
+
+  Over the three tasks the Opus arm cost $4.886 and the Haiku arm $2.277, 47% of it, at the
+  same score in every cell, and the Haiku arm took 1.26 to 1.67 times as long. One trial per
+  cell: a first reading, not a result. What it already shows about why the saving is about
+  half and not the 75% he had read: the orchestrator costs the same in both arms ($1.82 against
+  $1.73) and is 37% of the Opus arm, and the Haiku subagent spends more tokens for the same
+  change, 2.8 to 3 times the output tokens and up to 2.8 times the cache reads, with 28 and 7
+  of its requests over the 100,000-token prompt where its price is five times higher (the
+  report's only flags). Every trial spawned and completed its subagents (`lost-updates` in the
+  Haiku arm spawned 2). Spent so far on trials: $7.16 at list price, and $0.35 for the probe.
+  The 12 trials of the other two repeats are his go-ahead: about $14 and 95 minutes of
+  machine by the first repeat's figures.
