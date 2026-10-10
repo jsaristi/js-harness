@@ -53,8 +53,9 @@ first, at no cost.
 - Out: everything under `bin/` and `evals/`. In particular `bin/check.mjs`,
   `bin/lib/gate-lock.mjs`, `bin/js-harness.mjs`, `bin/sessions.mjs`, `bin/lib/sessions.mjs` and
   `bin/lib/manifest.mjs`, which `feat/gate-lock` is changing. The plan needs none of them.
-- Out: `package.json`. A `practice` script beside `e2e` and `sandbox` would be natural, and it is
-  left for the merge, so that this branch shares no file with another one.
+- Out, until the delivery: `package.json`. A `practice` script beside `e2e` and `sandbox` was
+  left for the merge, so that this branch would share no file with another one; it went in with
+  the delivery, once no open branch changed that file (see Progress, the delivery).
 - Out: repairing what the practice run meets. Defects are written under "Met on the road" and
   reported; each is repaired by its own feature, which then adds its step to the journey.
 - Out: his real home (`~/.claude`, `~/.codex`, `~/.js-harness`) and the command on his PATH.
@@ -678,6 +679,29 @@ run itself.
   that is a piece of design, not a fourth patch at the end of a feature; each patch also
   costs a gate and a Codex record. It is written under "Next step" for the first feature
   that adds a step to the journey, which has to open the command anyway.
+- 2026-10-10, the delivery, asked by the orchestrator in a notice Sebastián carried: bring
+  `main` in, push, two pull requests in order, no merge.
+  - `main` (`d3bc399`, documents only since `20911ea`: `docs/ROADMAP.md` and
+    `odd/tasks/session-board.md`) was brought in by merges, not by a rebase: the Codex review
+    records name commits, and a rebase would leave every code commit with no record. The
+    first slice has its own branch, `feat/practice-project-lib`: `d0bcb16` with `main` merged
+    in (`05a68ae`), whose difference from `main` is the three files of the slice. That branch
+    was then merged into this one (`99b1d6a`), so the second pull request, opened on top of
+    the first, shows its slice alone. Neither merge had a conflict or wrote a line of its
+    own; the roadmap's two changes sit in different places.
+  - The `practice` script goes into `package.json` now, in this branch, and not after the
+    merge. It was left out so that the branch would share no file with another one; checked
+    today, no open branch changes `package.json` (`git diff --stat` of it against `main` is
+    empty in the worktrees `gate-lock`, `session-board`, `codex-parity`,
+    `subagent-model-routing` and `rule-hierarchy-plan`), so that reason is gone. After the
+    merge it would cost a branch, a pull request, a gate and a Codex record of its own for
+    one line; here it rides the gate this commit pays anyway and costs one small Codex
+    record. `npm run practice -- run --root D:\js-harness-practice` is the same command as
+    `node scripts/practice.mjs run --root D:\js-harness-practice`.
+  - Both slices are over the 400 lines a pull request is held to (982 and about 1,500, more
+    than half of each tests and this document). They are the two slices planned under
+    Delivery and put to him with the plan; they are not cut again, and each pull request
+    says so.
 
 ## Next step
 Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's
@@ -686,9 +710,8 @@ to do alone:
   test of the command itself against a made-up world, which closes the three findings above
   (`R3-project-adopt-hook-refusal-unproved`, `R3-unreported-exit-wiring-unproved`,
   `R3-reasonof-empty-or-throwing`).
-- Push, the pull requests and the merge, on his word or under the orchestrator's charter.
-  At the merge, a `practice` script in `package.json` beside `e2e` and `sandbox` (left out
-  here so that this branch shares no file with another).
+- The merge of the two pull requests, his: first the one of `feat/practice-project-lib`
+  into `main`, then the one of this branch, whose base moves to `main` once the first is in.
 - The gate lock, the session channel, the rule hierarchy and the gate on GitHub each add
   their step to `JOURNEY` and put `node scripts/practice.mjs run --root
   D:\js-harness-practice` in their contract.
