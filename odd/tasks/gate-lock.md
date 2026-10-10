@@ -74,9 +74,9 @@ The run is long for two measured reasons, and both are paid on every commit:
 - The suite starts gates of its own (`bin/check.test.mjs` runs `main` with real sensors). They
   must never wait for the gate that runs them, and a test file run by hand must never wait for
   a real gate.
-- What the lock writes outside the repository is one folder, `<home>/.js-harness/gate.lock`,
-  removed when the gate ends. Deleting it by hand undoes everything; a leftover of a gate that
-  died is taken over without anyone's help.
+- What the lock writes outside the repository is one folder, `<home>/.js-harness/gate`; what
+  is in it is removed when the gate ends. Deleting it by hand undoes everything; a leftover of
+  a gate that died is taken over without anyone's help.
 - The lock holds only between gates that have it. This repository's hook runs each worktree's
   own `bin/check.mjs`, so a branch cut before this one merges has no lock until it merges
   `main`; a project that uses the harness gets it when the global command is updated on the
@@ -101,17 +101,24 @@ a measurement, and the two-worktree proof of T2 is a run recorded here.
 ## Design
 
 ### The lock
-- One lock for the machine, not for the project: `<home>/.js-harness/gate.lock`, with `home`
+- One lock for the machine, not for the project: `<home>/.js-harness/gate/lock`, with `home`
   resolved as `check` already does (`--home`, then `JS_HARNESS_HOME`, then the user's home).
   Two projects share the cores, so they share the lock.
 - A folder that holds one file, `holder-<token>.json` (changed in T1 from the single file of
-  the plan). Taking the lock is `mkdir`, which the file system grants to one process only; the
-  file holds the pid, the folder being checked, the start time and the command. With a single
-  file, taking over a dead gate's lock means removing "the lock file", and a gate that looked
-  a moment earlier can remove the file of the gate that has just taken it; that is the gap the
-  house lock documents (`bin/remote.mjs:298-300`). With a folder, the dead holder's file is
-  removed by its own name, which a live gate's file never has, and the folder goes with
-  `rmdir`, which fails while a file is in it. No step can act on anything but what it saw.
+  the plan); the file holds the pid, the folder being checked, the start time and the command.
+  With a single file, taking over a dead gate's lock means removing "the lock file", and a
+  gate that looked a moment earlier can remove the file of the gate that has just taken it;
+  that is the gap the house lock documents (`bin/remote.mjs:298-300`). With a folder, the dead
+  holder's file is removed by its own name, which a live gate's file never has, and the folder
+  goes with `rmdir`, which fails while a file is in it.
+- Taken in one step (changed in T1b, after review). A gate makes a folder of its own beside
+  the lock, `gate/wait-<token>/`, with its file inside, and takes the lock by renaming that
+  folder to `lock`, which the file system refuses while `lock` holds a file. So the lock
+  folder never exists without its holder's file, and an empty `lock` is nobody's. The first
+  version made `lock` with `mkdir` and wrote the file after: in between the folder was empty
+  and its maker's, a gate late to a takeover could remove it and make its own, and both held
+  the lock. The folders of gates that wait are also how the board will know who waits (T3);
+  one left by a gate that died waiting is swept by the next gate that takes the lock.
 - Alive by a heartbeat, not by asking the system who a pid is: the holder touches its file
   every 5 s while its sensors run. A file not touched for a minute belongs to a gate that
   died, and the next one takes it over on its second stale reading, 2 s apart (a machine that
@@ -177,6 +184,8 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
 
 - [x] T1 · `bin/lib/gate-lock.mjs`: take, heartbeat, release, stale takeover, bounded wait;
       clock injected, real file system in a temporary home; test first.
+- [x] T1b · The lock is taken in one step (added 2026-10-10: the review of T1 found that two
+      gates late to the same takeover could both hold the lock). Route inline, same two files.
 - [ ] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
       rows, release on every way out; the suite's own gates do not wait. Proof with two
       worktrees recorded here.
@@ -217,8 +226,92 @@ allows a feature. No spend outside the plan.
   run of two, so that mutant is caught by chance, not always. Not checked: any system but
   this Windows machine. Failed: nothing. Changed from the plan: the lock is a folder with one
   file, not a file (Design, "The lock").
+- 2026-10-10 · T1 is commit `c623c4c` (gate 1,085 s, green). gentle-ai assessed it medium risk
+  and due (651 lines, `slice_budget_reached`), reviewed it with one lens (reliability) under
+  the consent he pre-granted, approved it, and the approval was acknowledged (lineage
+  `review-0a3b0756ba2e7a2e`, authority burned). Three advisory findings, all true:
+  - `R3-takeover-rmdir-fresh-folder` (warning): two gates on their second stale reading of
+    the same dead holder could both hold the lock. One removes the dead file and the folder
+    and makes the folder again; the other, late, removes that fresh empty folder and makes its
+    own; both then write their file. The comment at the top of the file claimed this could not
+    happen. It was wrong: it covered a folder removed under a gate, not one made again.
+  - `R3-stat-busy-not-tolerated` (warning): reading a holder's file tolerated only "not
+    there", and a file Windows is still removing answers "busy".
+  - `R3-partial-take-and-unremovable-stale` (suggestion): a take that failed half way left its
+    file behind, and a dead holder's file that could not be removed threw out of the wait.
+  They became T1b. The Codex review runs once over T1 and T1b together (`--base 8ef2771`),
+  not over code already replaced.
+- 2026-10-10 · Two mistakes of this session with the very rule this feature replaces, both
+  told to the orchestrator. At 02:15 the lock's test file (30 s, about ten short processes) was
+  started while the gate of `practice-project` (pid 18872) ran: the line of `Gates` was read
+  and the command went on regardless. Then a wait script of this session's own polled the
+  board every 48 s for 46 minutes beside two gates and could never have fired: it called `rg`,
+  which is a shell function here and does not exist inside `sh script.sh`, so it never read
+  "none running". The orchestrator found it by reading the script's output; one gate of
+  `session-board` failed at its 20-minute bound in that time (02:40 to 03:00), and whether
+  the polling pushed it there is not known. Both are what the plan said of wait scripts, now
+  with this session's name on it: the check and the start are two steps, and a private script
+  is one more thing that can be wrong.
+
+- 2026-10-10 · T1b done, route inline. The lock is now `<home>/.js-harness/gate/lock`, taken
+  by renaming the gate's own folder onto it; `fileSystem` is injectable, so a test steps in
+  between two file operations. Checked: `node --test bin/lib/gate-lock.test.mjs` exits 0, 30
+  tests, 14.8 s. The red was seen this time: against the first version (`c623c4c`, given only
+  the seam the test needs) the test "the lock folder never exists without its holder's file"
+  fails three runs of three with "the lock folder was empty in the middle of a take", and
+  passes against this one. The three findings each have a test: the late gate at a takeover,
+  the holder file that answers "busy" as it is read, the dead holder's file that cannot be
+  removed yet. Said plainly: the test of five processes that each die holding the lock passes
+  against the first version too (three runs of three), so it does not prove the gap closed;
+  the empty-folder test does, by showing the state the gap needs no longer exists. Found on
+  the way: on Windows a rename of a folder onto a file replaces the file, so a stray file
+  named `lock` holds nothing. Not checked: any system but this Windows machine (on others a
+  rename onto an empty folder replaces it, which the design allows and no test here ran).
+  Failed: nothing.
+
+- 2026-10-10 · T1b's first commit was refused by the gate on time alone: "npm run test timed
+  out after 1200 s", 350 tests passed and none failed when it was stopped (04:22 to 04:42, on
+  the orchestrator's turn, with no other gate or test run alive when it started). Not retried:
+  the orchestrator gives the next turn. T1b is staged and not committed. The gates of this
+  branch took 990 s, then 1,085 s, then more than 1,200 s; the record commit of the
+  `session-board` session reached the bound four times the same night (the orchestrator's
+  count), and another gate passed in 956 s in between. So the suite no longer fits its bound
+  reliably on this machine, which is what T6 is for, and T6 cannot land without commits that
+  pass. Seen while looking, cause not established: the temporary folder holds 2,357 folders
+  left by test runs (1,417 `js-harness-codex-review-*`), which a run stopped at the bound
+  never removes; and the processor reported 991 of 1,190 MHz. The gate left
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` untracked in this worktree, as the
+  orchestrator had warned; removed, not committed.
 
 ## Next
-T2, one writer: `check` takes the lock around the sensors. Before it starts, record T1's commit
-here. A lock that cannot be taken at all (a home that cannot be written) must not turn a gate
+This session cuts its context now, at 72% measured, with T1b staged and not committed. That
+is inside a task by the letter of the roadmap's rule (a task ends with its commit), and it is
+said to him as such: what is left of T1b is one step, blocked from outside, and everything
+it needs is in these files; waiting for it in a full window costs a whole read of it at
+every wake.
+
+After the cut, first: commit T1b when the orchestrator gives the turn. The three files are
+staged; the commit message is in this session's scratchpad (`msg-t1b.txt`) and, if that is
+gone, is the entry "T1b done" above put as `fix(gate-lock): take the lock in one step, so two
+gates cannot both hold it`. Before it, one look at the process list for `check.mjs` or
+`node --test`, and nothing started if one is alive. If the gate reaches the bound again, say
+so and do not retry.
+
+Then, in this order:
+1. Record T1b's commit here. Run `gentle-ai review assess --base-ref c623c4c --committed-only`
+   on it and follow what it returns; then the Codex review of T1 and T1b together:
+   `js-harness codex-review --base 8ef2771` (its plan first, `--plan`).
+2. T2, one writer: `check` takes the lock around the sensors. Decided for it: the lock wraps
+   the sensors only, and only when there is a sensor to run; a second gate says on stderr
+   whose gate it waits for; `--no-wait` and `--wait <minutes>` (default 60); rows named `gate`
+   (INFO with the time waited, FAIL when refused or timed out, INFO when the lock was lost
+   while it ran); a lock that cannot be taken at all (`takeGateLock` rejects: a home that
+   cannot be written) must not turn a gate red: it runs without the lock and says so in a
+   row; the sensors' environment gets a mark that a gate holds the lock, so a `check` run
+   by the suite takes none, and every test that runs `main` with real sensors passes a
+   temporary home (they pass `JS_HARNESS_HOME: dir` today, `bin/check.test.mjs:588-634`); an
+   end-to-end test starts two real `check` processes on two folders and shows their sensors
+   one after the other.
+3. Before any test or commit: no private wait script. Wait on the running gate's process
+   itself, read the board once, and start nothing if it shows a gate (the two mistakes above). A lock that cannot be taken at all (a home that cannot be written) must not turn a gate
 red: it runs without the lock and says so in a row.
