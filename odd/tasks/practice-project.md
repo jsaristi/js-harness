@@ -688,7 +688,8 @@ run itself.
     in (`05a68ae`), whose difference from `main` is the three files of the slice. That branch
     was then merged into this one (`99b1d6a`), so the second pull request, opened on top of
     the first, shows its slice alone. Neither merge had a conflict or wrote a line of its
-    own; the roadmap's two changes sit in different places.
+    own; the roadmap's two changes sit in different places. (The branch of the first slice
+    did not stay so: see the entry on the push check below.)
   - The `practice` script goes into `package.json` now, in this branch, and not after the
     merge. It was left out so that the branch would share no file with another one; checked
     today, no open branch changes `package.json` (`git diff --stat` of it against `main` is
@@ -724,6 +725,44 @@ run itself.
   - Where it belongs in the harness: with the gate lock and the session channel, as the rule
     that a step which follows a check runs only on that check's exit code; noted for the
     orchestrator.
+- 2026-10-10: the fix committed as `d725288`; gate green (14:51:59 to 15:05:14, 795 seconds).
+  - The Codex review of `99b1d6a..d725288` (the two delivery commits, 18 changed lines in 3
+    files, recorded): `the patch is correct (confidence 0.98)`, no finding; 124,157 input
+    tokens (88,064 cached), 28 seconds.
+  - The gentle-ai assessment of `87a4511..d725288`: medium, 526 lines (413 of them the
+    documents `main` brought), `slice_budget_reached`; reviewed (lineage
+    `review-78fd372322596bab`, one lens, the reviewer from 15:07:55 to 15:08:30 with no gate
+    alive): approved, acknowledged. Two suggestions, informational, left written:
+    `R3-lone-double-dash-message-unasserted` (`scripts/practice-lib.test.mjs:758`: the test of
+    a lone `--` asserts that it is an error, not which) and
+    `R3-practice-script-wiring-manual-only` (`package.json:18`: that the script reaches the
+    command is seen by hand, in the two runs above, and held by no test).
+  - The run for the record, from the clean commit: `candidate feat/practice-project d725288
+    (clean): 10 of 10 steps passed; real home: unchanged`, exit 0; `record.jsonl` holds nine
+    lines.
+- 2026-10-10, the push check changed the shape of the first branch. `node bin/check.mjs --push`
+  refused `feat/practice-project-lib` at `05a68ae`: `1 of 1 code commit since origin/main have
+  no Codex review record`. The record that holds `d0bcb16` is the one of `ac2c18a..709ba20`,
+  and a record covers a tip short of its head only when that tip is an ancestor of the head
+  (`bin/lib/codex-review-coverage.mjs`, `headsPastTip`); a merge of `main` on top of `d0bcb16`
+  is not an ancestor of `709ba20`. A second Codex review of code already reviewed was not
+  bought for it. So `feat/practice-project-lib` is `d0bcb16` itself, which the check passes
+  (`1 code commit since origin/main, all covered`), and `05a68ae` stays only as an ancestor
+  of this branch.
+  - What that costs: the first pull request is clean (three files, 982 lines) and behind
+    `main` by documents it does not touch. The second, on top of it, shows seven files and
+    not six until the first is merged: `odd/tasks/session-board.md` and part of
+    `docs/ROADMAP.md` are `main`'s. Once the first is in, `main` is merged into this branch
+    once more, a merge that writes no file and pays no gate, and the pull request shows its
+    own six.
+  - Pushed at 15:23, after waiting on another session's gate from 15:09:36: both branches
+    passed the push check (`7 code commits since origin/main, all covered` for this one).
+    Pull requests: #52 (`feat/practice-project-lib` into `main`) and #53 (this branch on top
+    of it), both mergeable, neither merged.
+- The delivery cost three gates where the orchestrator asked for one at most: the delivery
+  commit, the fix of the script it had not proven, and this record, which corrects what the
+  first of them says of the branch. With them the feature spent twelve gates, five gentle-ai
+  reviews and 1,186,367 input tokens of Codex in three runs.
 
 ## Next step
 Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's
@@ -731,9 +770,11 @@ to do alone:
 - For the first feature that adds its step to the journey (the gate lock is the nearest): a
   test of the command itself against a made-up world, which closes the three findings above
   (`R3-project-adopt-hook-refusal-unproved`, `R3-unreported-exit-wiring-unproved`,
-  `R3-reasonof-empty-or-throwing`).
-- The merge of the two pull requests, his: first the one of `feat/practice-project-lib`
-  into `main`, then the one of this branch, whose base moves to `main` once the first is in.
+  `R3-reasonof-empty-or-throwing`) and the two of the delivery
+  (`R3-lone-double-dash-message-unasserted`, `R3-practice-script-wiring-manual-only`).
+- The merge of the two pull requests, his: #52 first. Then this session, the owner of the
+  branch, merges `main` into it and pushes, so that #53 shows its six files; then #53, whose
+  base moves to `main`.
 - The gate lock, the session channel, the rule hierarchy and the gate on GitHub each add
   their step to `JOURNEY` and put `node scripts/practice.mjs run --root
   D:\js-harness-practice` in their contract.
