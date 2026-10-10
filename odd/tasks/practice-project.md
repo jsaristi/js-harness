@@ -241,6 +241,7 @@ run itself.
 - [x] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
 - [x] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
 - [x] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
+- [x] T3c Accepted follow-ups of the review of T3b, test first: `R3-non-error-throw-detail`, `R3-report-throw-aborts-walk`, `R3-recordline-foreign-ids`, `R3-setup-wiring-unproved` — route: inline (three small changes in the library, one call changed in the command, four tests)
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
@@ -515,7 +516,7 @@ run itself.
     `LC_ALL=C`, not every child, because `childEnv` also feeds the hook and the project's
     tests; (4) `setup` calls `setupRefusal` first without git and starts git only when that
     found nothing; (5) the test feeds the fifteen names, written out; (6) the refusal test uses
-    `D:/js-harness` against the root `D:js-harnesspractice`; (7) `setupRefusal` refuses, on
+    `D:/js-harness` against the root `D:\js-harness\practice`; (7) `setupRefusal` refuses, on
     Windows, a root or a home that names no drive and is no network path, and the header says
     what the purity covers.
   - Found by the writer, beyond the brief: `nearestExisting` could hand git a file as its cwd (a
@@ -540,11 +541,47 @@ run itself.
     the first time a run was measured.
   - Not checked: `setup` to its end with the new order (it would need a second folder on his
     machine); the refusal for a repository git will not read, with a real one.
+- 2026-10-10: T3b committed as `d639bdf`; gate green (started 06:41:24 with no `check.mjs` alive,
+  ended 06:53:29, twelve minutes), tree clean afterwards.
+- 2026-10-10, the gentle-ai review of T3b (`0df7f67..d639bdf`, lineage
+  `review-5f95fc5f5a19df44`): assessed medium (602 lines, `slice_budget_reached`), one lens
+  (`review-reliability`), consent under the standing grant, approved, acknowledged (`authority:
+  burned`). Outcome for the task: granted, approved. Every step ran behind the guard; the
+  reviewer ran from 06:54:27 to 06:55:41 with no gate alive. Four findings, all informational;
+  the reply carries only their id, place and severity, so what each asks is this session's
+  reading of the code at that place:
+  - `R3-non-error-throw-detail` (suggestion, `scripts/practice-lib.mjs:331`): a step that throws
+    something that is no error leaves a failure with no reason.
+  - `R3-report-throw-aborts-walk` (warning, `scripts/practice-lib.mjs:334-335`): a `report` that
+    throws ends the walk, so the comparison of the real home and the record do not happen.
+  - `R3-recordline-foreign-ids` (suggestion, `scripts/practice-lib.mjs:361-362`): a line with
+    the whole journey and one more step, from elsewhere, still says ok.
+  - `R3-setup-wiring-unproved` (warning, `scripts/practice.mjs:441-453`): that `setup` judges
+    first without git and takes git's refusal is wired in the command, where no test reaches.
+- 2026-10-10, T3c: the four accepted and done at once, before Codex, so that Codex reads the
+  range once in its last shape. Route: inline.
+  - What changed: `walkJourney` takes whatever is thrown as the reason (`reasonOf`), does not
+    let a throwing `report` end the walk, and returns `unreported`, what the first one said; the
+    command prints it and does not exit 0. `recordLine` is ok only with as many results as the
+    journey has steps, each of its ids once. `setupRefusalWithGit(facts, askGit)` in the library
+    is the order `setup` had inline: `askGit` is called only when nothing else refuses.
+  - RED, with only the new export in place: `tests 59 / pass 51 / fail 8`, the three new tests of
+    `walkJourney` and `recordLine` and the five whose expected result gained `unreported`. The
+    test of `setupRefusalWithGit` was red before that as a file that does not load (`does not
+    provide an export named 'setupRefusalWithGit'`).
+  - GREEN: `tests 59 / pass 59 / fail 0`. The two refusals of `setup` seen again with the real
+    command (an existing file; a path inside this worktree), both exit 1, nothing created. A
+    run from the working tree: exit 0, 10 of 10, `real home: unchanged`, 11 seconds.
+  - Failed, by this session: the entry of T3b above was written through a shell script that
+    ate the backslashes of one path, and `d639bdf` carries it as `D:js-harnesspractice`.
+    Corrected here. Text with backslashes goes through the editor from now on, not a script.
+  - The guard held: the green run waited on another session's gate (pid 5764) from 06:59:02 to
+    07:12:34 and started only then.
 
 ## Next step
-The commit of T3b is the boundary for what follows: the gentle-ai assessment of it from
-`0df7f67`, then the Codex review of the whole range (`node bin/js-harness.mjs codex-review --base
-ac2c18a --plan` first, which spends nothing). Then a run from the clean commit for the record,
-and T4, whose commit also records the reviews. Every start of a gate, a test, a review or a run
-is one command that first waits on any live `check.mjs` process and starts only when none is
-left.
+The commit of T3c, then the Codex review of the whole range (`node bin/js-harness.mjs
+codex-review --base ac2c18a`; its plan, read at `d639bdf`: three parts, 1,572 changed lines,
+about 1,150,000 to 3,630,000 input tokens), with the gentle-ai assessment of T3c from `d639bdf`
+before it. Then a run from the clean commit for the record, and T4, whose commit also records
+the reviews. Every start of a gate, a test, a review or a run is one command that first waits
+on any live `check.mjs` process and starts only when none is left.

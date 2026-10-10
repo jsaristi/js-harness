@@ -13,7 +13,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import {
-  practiceLayout, shimDir, installedBin, childEnv, setupRefusal, readGitRoot, markerContent, ownsFolder, realHomeFiles,
+  practiceLayout, shimDir, installedBin, childEnv, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE,
 } from './practice-lib.mjs';
 
@@ -418,14 +418,17 @@ function journey(root) {
   const ctx = { layout, env: childEnv(layout, process.env), npmCli, realHome: os.homedir(), date: new Date().toISOString(), results: [] };
   ctx.candidate = candidateOf(ctx);
 
-  const { ok, passed } = walkJourney({ journey: JOURNEY, steps: STEPS, ctx, report: printStep });
+  const { ok, passed, unreported } = walkJourney({ journey: JOURNEY, steps: STEPS, ctx, report: printStep });
 
   let realHome = 'not compared';
   if (ctx.differences?.length === 0) realHome = 'unchanged';
   else if (ctx.differences) realHome = ctx.differences.map(({ path: file, change }) => `${change} ${file}`).join(', ');
   const { branch, commit, dirty } = ctx.candidate;
   console.log(`\ncandidate ${branch} ${commit} (${dirty ? 'dirty' : 'clean'}): ${passed} of ${JOURNEY.length} steps passed; real home: ${realHome}`);
-  return ok ? 0 : 1;
+  // A run whose lines could not all be printed did not tell what it found: its record line stands, and it
+  // does not exit 0.
+  if (unreported !== undefined) console.error(`practice run could not print every line of the journey: ${unreported}`);
+  return ok && unreported === undefined ? 0 : 1;
 }
 
 // ---- setup -----------------------------------------------------------------------------------------------------------
@@ -438,19 +441,18 @@ function setup(root) {
   const layout = practiceLayout(root);
   const ctx = { layout, env: childEnv(layout, process.env) };
 
-  // What needs no git is judged before git is started: a root that is not a full path, that exists (a file
-  // included, which git could not even be asked in) or that lies in the home is refused for that reason.
+  // What needs no git is judged before git is started (`setupRefusalWithGit`): a root that is not a full
+  // path, that exists (a file included, which git could not even be asked in) or that lies in the home is
+  // refused for that reason, and git is asked only after.
   const facts = { root, exists: fs.existsSync(root), home: fs.realpathSync.native(os.homedir()) };
-  let refusal = setupRefusal({ ...facts, gitRoot: null });
-  if (refusal === null) {
-    // Asked in English whatever the language of the machine (`LC_ALL=C`, for this one child): `readGitRoot`
+  const refusal = setupRefusalWithGit(facts, () => {
+    // Asked in English whatever the language of the machine (`LC_ALL=C`, for this one child): the pure part
     // tells "no repository here" from every other failure by what git printed.
     const inEnglish = { ...ctx, env: { ...ctx.env, LC_ALL: 'C' } };
     const inRepository = git(inEnglish, nearestExisting(root), 'rev-parse', '--show-toplevel');
     assertThat(!inRepository.error, `git could not be run, and setup needs it: ${inRepository.error?.message}`);
-    const answer = readGitRoot(inRepository);
-    refusal = answer.refusal ?? setupRefusal({ ...facts, gitRoot: answer.gitRoot });
-  }
+    return inRepository;
+  });
   if (refusal) {
     console.error(`practice setup refused: ${refusal}`);
     return 1;

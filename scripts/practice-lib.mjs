@@ -140,9 +140,9 @@ export function isInside(parent, child, platform = process.platform) {
  * be judged, and is refused; so is, on Windows, one that names no drive (`\foo`), because where it lies
  * would depend on the folder the command was started from.
  *
- * The repository is judged last, and it is the only refusal that needs git: the command calls this once
- * with `gitRoot: null`, before it starts git, and again with the answer (`readGitRoot`) when the first call
- * found nothing to refuse. */
+ * The repository is judged last, and it is the only refusal that needs git: `setupRefusalWithGit` calls this
+ * once with `gitRoot: null`, before git is started, and again with the answer (`readGitRoot`) when the first
+ * call found nothing to refuse. */
 export function setupRefusal({ root, exists, gitRoot, home, platform = process.platform }) {
   const p = pathFor(platform);
   if (typeof root !== 'string' || !p.isAbsolute(root)) return `the root ${root} is not an absolute path`;
@@ -181,6 +181,19 @@ export function readGitRoot({ status, stdout, stderr }) {
   if (failed && NO_REPOSITORY.test(said)) return { gitRoot: null };
   const how = status === 0 ? 'it exited 0 and named no folder' : failed ? `it exited ${status}` : 'it did not exit by itself';
   return { refusal: `git did not say whether the practice folder would lie inside a repository (${how}): ${said || 'it printed nothing'}` };
+}
+
+/** Why `setup` must not create the practice folder, or `null`, with git asked only when it has to be.
+ * `facts` is what `setupRefusal` takes, less `gitRoot`; `askGit` starts `git rev-parse --show-toplevel` and
+ * returns what the child answered, as `readGitRoot` reads it. What needs no git is judged first, so a root
+ * that is an existing file is refused as existing and git is never asked in a place it could not be asked
+ * in. Then git's answer either refuses by itself, when it says neither "a repository" nor "none", or is the
+ * last fact `setupRefusal` needs. */
+export function setupRefusalWithGit(facts, askGit) {
+  const withoutGit = setupRefusal({ ...facts, gitRoot: null });
+  if (withoutGit !== null) return withoutGit;
+  const answer = readGitRoot(askGit());
+  return answer.refusal ?? setupRefusal({ ...facts, gitRoot: answer.gitRoot });
 }
 
 // ---- the marker ------------------------------------------------------------------------------------------------------
@@ -303,23 +316,34 @@ export const ALWAYS_RUN = Object.freeze(['real-home-after', 'record']);
 
 /** Walks `journey` in order and says how the run ended. `steps` holds one function per id; each is called
  * with `ctx` and returns its evidence as text, or throws with the reason it failed. A step that throws has
- * failed, with the message as its detail, and so has a step of the journey that `steps` has no function for.
- * After the first failure the steps that follow are skipped, except those of `alwaysRun`.
+ * failed, with what it threw as its detail (the message of an error, anything else as text), and so has a
+ * step of the journey that `steps` has no function for. After the first failure the steps that follow are
+ * skipped, except those of `alwaysRun`.
  *
  * The result of each step that ran, `{ id, ok, detail }`, is pushed to `ctx.results` (an array the caller
  * made) as the step ends, so a later step reads those before it: the record step writes them down. Nothing
  * is printed here: `report` is handed the facts of one line per step, `{ status, id, title, detail }` with
  * the status `PASS` or `FAIL`, and `{ status: 'SKIP', id, title, failed }` with the id of the step that
- * failed.
+ * failed. A `report` that throws (an output that was closed) does not end the walk: the comparison of the
+ * real home and the record still have to happen.
  *
- * Returns `{ ok, passed, failed }`: how many steps passed, the id of the first that failed (`undefined`
- * when none did), and `ok`, true only when every step of the journey passed and it has at least one. */
+ * Returns `{ ok, passed, failed, unreported }`: how many steps passed, the id of the first that failed
+ * (`undefined` when none did), `ok`, true only when every step of the journey passed and it has at least
+ * one, and `unreported`, what the first `report` that threw said (`undefined` when every line was told). */
 export function walkJourney({ journey = JOURNEY, steps, ctx, alwaysRun = ALWAYS_RUN, report = () => {} }) {
   let failed;
+  let unreported;
   let passed = 0;
+  const tell = (line) => {
+    try {
+      report(line);
+    } catch (thrown) {
+      unreported ??= reasonOf(thrown);
+    }
+  };
   for (const { id, title } of journey) {
     if (failed !== undefined && !alwaysRun.includes(id)) {
-      report({ status: 'SKIP', id, title, failed });
+      tell({ status: 'SKIP', id, title, failed });
       continue;
     }
     let result;
@@ -327,15 +351,19 @@ export function walkJourney({ journey = JOURNEY, steps, ctx, alwaysRun = ALWAYS_
       if (typeof steps[id] !== 'function') throw new Error(`the journey names the step ${id}, and scripts/practice.mjs has no code for it`);
       result = { id, ok: true, detail: steps[id](ctx) };
       passed += 1;
-    } catch (err) {
-      result = { id, ok: false, detail: err.message };
+    } catch (thrown) {
+      result = { id, ok: false, detail: reasonOf(thrown) };
       failed ??= id;
     }
     ctx.results.push(result);
-    report({ status: result.ok ? 'PASS' : 'FAIL', id, title, detail: result.detail });
+    tell({ status: result.ok ? 'PASS' : 'FAIL', id, title, detail: result.detail });
   }
-  return { ok: journey.length > 0 && passed === journey.length, passed, failed };
+  return { ok: journey.length > 0 && passed === journey.length, passed, failed, unreported };
 }
+
+/** What was thrown, as text: the message of an error, and anything else (a step may throw a plain text) as
+ * the text it gives, so a failure never has an empty reason. */
+const reasonOf = (thrown) => (thrown instanceof Error ? thrown.message : String(thrown));
 
 /** The `js-harness` commands of the step `project-adopt`, in order: a project not yet initialized gets
  * `init`; an initialized one, which is every run after the first, gets `status` and then `sync`, the new
@@ -351,15 +379,17 @@ export function adoptionCommands(initialized) {
  * (`{ branch, commit, dirty }`: the product cannot tell two copies apart, every one reads the same version),
  * `steps` the result of each step that ran (`{ id, ok, detail }`), `node` and `platform` what it ran on.
  *
- * `ok` is true only for a whole journey that passed: every step that ran is ok, at least one ran, and every
- * step of `journey` (the journey of `run` unless another is handed in; its ids are what counts) is among
- * them exactly once. A step that was skipped is not in `steps`, so a run with a failure is never ok, and
- * neither is a part of the journey that happened to pass: the line is the lasting proof of a run. The
- * journey itself is not written into the line. */
+ * `ok` is true only for a whole journey that passed: every step that ran is ok, at least one ran, and the
+ * steps are those of `journey` (the journey of `run` unless another is handed in; its ids are what counts),
+ * each exactly once and no other. A step that was skipped is not in `steps`, so a run with a failure is
+ * never ok, and neither is a part of the journey that happened to pass, nor a line with a step from
+ * elsewhere in it: the line is the lasting proof of a run. The journey itself is not written into the line. */
 export function recordLine({ date, candidate, steps, node, platform, journey = JOURNEY }) {
   const results = steps.map(({ id, ok, detail }) => ({ id, ok, detail }));
   const once = ({ id }) => results.filter((step) => step.id === id).length === 1;
-  const ok = results.length > 0 && results.every((step) => step.ok === true) && journey.every(once);
+  // As many results as the journey has steps, and each of its ids once: so none of another journey.
+  const whole = results.length > 0 && results.length === journey.length && journey.every(once);
+  const ok = whole && results.every((step) => step.ok === true);
   const { branch, commit, dirty } = candidate;
   return JSON.stringify({ date, ok, candidate: { branch, commit, dirty }, steps: results, node, platform });
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusal, readGitRoot, markerContent, ownsFolder,
+  practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs,
 } from './practice-lib.mjs';
 
@@ -273,6 +273,31 @@ test('setup judges what needs no git the same whether git was asked or not', () 
   assert.ok(setupRefusal({ ...SETUP_FACTS, gitRoot: 'D:/a-repository' }).includes('D:/a-repository'));
 });
 
+test('setup asks git only when nothing else refuses, and takes the refusal from what git answered', () => {
+  const inRepository = { status: 0, stdout: 'D:/a-repository\n', stderr: '' };
+  const noRepository = { status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' };
+  const unread = { status: 128, stdout: '', stderr: "fatal: detected dubious ownership in repository at 'D:/a-repository'\n" };
+  const asked = (facts, answer) => {
+    let calls = 0;
+    const refusal = setupRefusalWithGit(facts, () => {
+      calls += 1;
+      return answer;
+    });
+    return { refusal, calls };
+  };
+
+  // What needs no git is refused before git is started: a root that is a file could not even be its cwd.
+  for (const facts of [{ ...SETUP_FACTS, exists: true }, { ...SETUP_FACTS, root: '\\foo\\bar' }, { ...SETUP_FACTS, root: 'C:\\Users\\Oficina\\practice' }]) {
+    assert.deepEqual(asked(facts, inRepository), { refusal: setupRefusal(facts), calls: 0 }, facts.root);
+    assert.equal(typeof setupRefusal(facts), 'string', facts.root);
+  }
+  assert.deepEqual(asked(SETUP_FACTS, noRepository), { refusal: null, calls: 1 });
+  assert.deepEqual(asked(SETUP_FACTS, inRepository), { refusal: setupRefusal({ ...SETUP_FACTS, gitRoot: 'D:/a-repository' }), calls: 1 });
+  // An answer that is neither a repository nor "no repository" refuses: it never reads as a free place.
+  assert.deepEqual(asked(SETUP_FACTS, unread), { refusal: readGitRoot(unread).refusal, calls: 1 });
+  assert.match(asked(SETUP_FACTS, unread).refusal, /dubious ownership/);
+});
+
 // ---- what git answered about the repository --------------------------------------------------------------------------
 
 test('readGitRoot gives the top level git printed when it exited 0', () => {
@@ -477,7 +502,7 @@ test('walkJourney runs every step in order, each with the context and the result
     seen.push({ id, sameContext: handed === ctx, before: handed.results.map((step) => step.id) });
     return `${id} done`;
   }]));
-  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: 10, failed: undefined });
+  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: 10, failed: undefined, unreported: undefined });
   assert.deepEqual(ctx.results, IDS.map(done));
   // The record step reads the results of the steps before it while it runs: they are there by then.
   assert.deepEqual(seen, IDS.map((id, index) => ({ id, sameContext: true, before: IDS.slice(0, index) })));
@@ -485,21 +510,21 @@ test('walkJourney runs every step in order, each with the context and the result
 
 test('walkJourney skips what follows a failed step, but for the comparison of the real home and the record', () => {
   const ctx = { results: [] };
-  assert.deepEqual(walkJourney({ steps: stepsWith('install'), ctx }), { ok: false, passed: 4, failed: 'install' });
+  assert.deepEqual(walkJourney({ steps: stepsWith('install'), ctx }), { ok: false, passed: 4, failed: 'install', unreported: undefined });
   assert.deepEqual(ctx.results, [done('real-home-before'), done('pack-install'), broke('install'), done('real-home-after'), done('record')]);
   assert.deepEqual(ALWAYS_RUN, ['real-home-after', 'record']);
 });
 
 test('walkJourney says the run failed when a step that always runs fails', () => {
   const late = { results: [] };
-  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: 9, failed: 'real-home-after' });
+  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: 9, failed: 'real-home-after', unreported: undefined });
   assert.deepEqual(late.results, IDS.map((id) => (id === 'real-home-after' ? broke(id) : done(id))), 'the record still runs');
 
-  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: 9, failed: 'record' });
+  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: 9, failed: 'record', unreported: undefined });
 
   // Two failures: the first one is the one named, and the steps that always run are still not skipped.
   const both = { results: [] };
-  assert.deepEqual(walkJourney({ steps: stepsWith('commit-passes', 'real-home-after'), ctx: both }), { ok: false, passed: 5, failed: 'commit-passes' });
+  assert.deepEqual(walkJourney({ steps: stepsWith('commit-passes', 'real-home-after'), ctx: both }), { ok: false, passed: 5, failed: 'commit-passes', unreported: undefined });
   assert.deepEqual(both.results, [
     done('real-home-before'), done('pack-install'), done('install'), done('project-adopt'),
     broke('commit-passes'), broke('real-home-after'), done('record'),
@@ -511,7 +536,7 @@ test('walkJourney fails a step of the journey that has no function, and names it
     const steps = { ...stepsWith(), install: missing };
     if (missing === undefined) delete steps.install;
     const ctx = { results: [] };
-    assert.deepEqual(walkJourney({ steps, ctx }), { ok: false, passed: 4, failed: 'install' }, String(missing));
+    assert.deepEqual(walkJourney({ steps, ctx }), { ok: false, passed: 4, failed: 'install', unreported: undefined }, String(missing));
     assert.deepEqual(ctx.results.map((step) => step.id), ['real-home-before', 'pack-install', 'install', 'real-home-after', 'record']);
     const result = ctx.results[2];
     assert.equal(result.ok, false);
@@ -542,8 +567,32 @@ test('walkJourney walks the journey and keeps running the ids it is handed', () 
   assert.deepEqual(ran(['c']), ['a', 'c']);
   assert.deepEqual(ran([]), ['a']);
   assert.deepEqual(ran(undefined), ['a'], 'the two ids that always run by default are not in this journey');
-  assert.deepEqual(walkJourney({ journey, steps: { ...steps, a: () => 'a done' }, ctx: { results: [] } }), { ok: true, passed: 3, failed: undefined });
+  assert.deepEqual(walkJourney({ journey, steps: { ...steps, a: () => 'a done' }, ctx: { results: [] } }), { ok: true, passed: 3, failed: undefined, unreported: undefined });
   assert.equal(walkJourney({ journey: [], steps, ctx: { results: [] } }).ok, false, 'a journey with no step proves nothing');
+});
+
+test('walkJourney takes whatever a step throws as the reason it failed', () => {
+  const thrown = (value) => {
+    const ctx = { results: [] };
+    walkJourney({ journey: [{ id: 'a', title: 'A' }], steps: { a: () => { throw value; } }, ctx });
+    return ctx.results[0];
+  };
+  assert.deepEqual(thrown(new Error('an error')), { id: 'a', ok: false, detail: 'an error' });
+  assert.deepEqual(thrown('a plain text'), { id: 'a', ok: false, detail: 'a plain text' });
+  assert.deepEqual(thrown(undefined), { id: 'a', ok: false, detail: 'undefined' });
+});
+
+test('walkJourney goes on when report throws, and says that a line could not be told', () => {
+  const ctx = { results: [] };
+  let calls = 0;
+  const report = () => {
+    calls += 1;
+    if (calls === 2 || calls === 3) throw new Error(`write EPIPE ${calls}`);
+  };
+  // Every step still runs, the record included, and the steps are judged as they went; the first reason is kept.
+  assert.deepEqual(walkJourney({ steps: stepsWith(), ctx, report }), { ok: true, passed: 10, failed: undefined, unreported: 'write EPIPE 2' });
+  assert.deepEqual(ctx.results, IDS.map(done));
+  assert.equal(calls, 10);
 });
 
 // ---- the record ------------------------------------------------------------------------------------------------------
@@ -595,6 +644,10 @@ test('a run is not ok when a step of the journey is in it twice', () => {
   assert.equal(okOf([...RUN.steps, RUN.steps[0]]), false);
   // Ten results and nine ids: one step twice, in the place of another.
   assert.equal(okOf(RUN.steps.map((step, index) => (index === 1 ? RUN.steps[0] : step))), false);
+});
+
+test('a run is not ok when a step that is not of the journey is in it', () => {
+  assert.equal(okOf([...RUN.steps, { id: 'not-a-step', ok: true, detail: 'from elsewhere' }]), false);
 });
 
 test('recordLine judges the run against the journey it is handed, by its ids, and leaves it out of the line', () => {
