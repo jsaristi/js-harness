@@ -654,10 +654,38 @@ run itself.
   touch the files of slice 1, so the two only merge in that order. The branch was cut at
   `20911ea` and `main` is at `d3bc399`: it needs `main` brought in first; the two change
   different lines of `docs/ROADMAP.md`.
+- 2026-10-10: the closing record committed as `87a4511`; gate green (07:46:56 to 07:59:13).
+  With it the slice `d639bdf..87a4511` reached the budget (medium, 413 lines,
+  `slice_budget_reached`), so gentle-ai reviewed it (lineage `review-a3d4e16319047eb8`, one
+  lens, `review-reliability`, consent under the standing grant, the reviewer from 07:59:54 to
+  08:00:45 with no gate alive): approved, acknowledged (`authority: burned`). Outcome for T3c
+  and T3d: granted, approved. Three findings, all informational, read from their id and place:
+  - `R3-project-adopt-hook-refusal-unproved` (warning, `scripts/practice.mjs:288-291`): no
+    test and no run proves the failure of `project-adopt` when the hook lies outside the
+    project. True, and written above as not checked.
+  - `R3-unreported-exit-wiring-unproved` (suggestion, `scripts/practice.mjs:439-440`): that a
+    line which could not be printed makes the command exit non-zero is wired in the command.
+  - `R3-reasonof-empty-or-throwing` (suggestion, `scripts/practice-lib.mjs:382`): an error
+    with an empty message still leaves an empty reason, and turning what was thrown into text
+    can itself throw.
+- 2026-10-10, decided by this session, his to overrule: those three are not fixed here. Three
+  of the four gentle-ai reviews found some wiring of the command that no test reaches, and a
+  patch each time moved one more decision into the pure part. With this review and the
+  commit that records it, the feature spent nine gates and four gentle-ai reviews, not the
+  eight and three counted above. The cause is one: the command
+  has no test of its own, only its run. What closes it is a seam, the command's steps and
+  its exit code tested against a made-up world (files, git and the harness handed in), and
+  that is a piece of design, not a fourth patch at the end of a feature; each patch also
+  costs a gate and a Codex record. It is written under "Next step" for the first feature
+  that adds a step to the journey, which has to open the command anyway.
 
 ## Next step
 Nothing is left to build. Left for Sebastián or the orchestrator, none of it this session's
 to do alone:
+- For the first feature that adds its step to the journey (the gate lock is the nearest): a
+  test of the command itself against a made-up world, which closes the three findings above
+  (`R3-project-adopt-hook-refusal-unproved`, `R3-unreported-exit-wiring-unproved`,
+  `R3-reasonof-empty-or-throwing`).
 - Push, the pull requests and the merge, on his word or under the orchestrator's charter.
   At the merge, a `practice` script in `package.json` beside `e2e` and `sandbox` (left out
   here so that this branch shares no file with another).
