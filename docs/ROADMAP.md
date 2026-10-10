@@ -788,6 +788,27 @@ none of the four shares a file with another, so the first two could run side by 
 `JH 1` and `JH 2`, once the orchestrator session is open. That reading is from the plans,
 not from a comparison of the branches, which is what the sensor above would give.
 
+A live handover, his decision of 2026-10-09, given in the new orchestrator's chat the first
+time one took over from another (`JH ORQ · js-harness` from the main session). His words,
+read in that session's transcript: "tu puedes comunicarte con la sesion anterior osea, si
+tienes dudas siempre manda en el prompt cual fue el nombre de la sesion anterior
+orquetadora que te creo y preguntale informacion adicional que no te haya quedado clara,
+recuerda siempre se critico por que siempre priorizamos la calidad sobre el tiempo aunque
+la rapidez tambien es importante. si tienes que añadir esto al harness hazlo por favor".
+The new orchestrator's reading, his to correct, for the rewrite of the skill:
+
+- The title of the orchestrator before, which is its message address, is always in the
+  relief file, so it outlives an orchestrator that died; the opening prompt may repeat it.
+- Before it says it is watching, the new one reads what can be read and asks the one before,
+  by message, only what the files do not hold. Each answer is a claim: one thing is
+  checked, and what was learned is appended to the relief file.
+- The one before is archived only after those questions are answered.
+- A sensor rather than prose: the board's Relief section prints who the orchestrator before
+  was and whether it is alive to be asked.
+
+It was done that way the same day: five questions asked by message and answered the same
+way (`odd/tasks/session-board.md`, entries of that day).
+
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The
 rule about how a reply ends is paid on every turn, so where it lives is settled by the rule
