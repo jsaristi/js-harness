@@ -1226,6 +1226,48 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   that the new copy runs: `js-harness sessions` from `D:\js-harness` prints the board,
   where the old copy had no such command. To go back: `pnpm add -g
   github:jsaristi/js-harness#36f2cee`.
+- 2026-10-09: pull request #47 (documents only) merged by the main session under the charter
+  he approved that day; `main` at `9510a2a`. The relief file was started
+  (`~/.js-harness/relief/D--js-harness.md`) with the handover for the new orchestrator.
+- 2026-10-09: a session opened by another, tried because he said he would have the
+  orchestrator create the sessions and hand them their prompt. The desktop app has no
+  `start_session` among this session's tools, but a scheduled task with no schedule does it:
+  `create_scheduled_task`, then `run_scheduled_task`, which answered `dispatched as session
+  local_9edf9d4d…`. Seen: the session started in `D:\js-harness` at 17:45:11 with the task's
+  title and answered the prompt; `set_session_title` renamed it to `JH 0 · prueba de
+  apertura`; a `SendMessage` to its `local_` id was delivered; its answer came back as a
+  message between sessions, by `mcp__ccd_session_mgmt__send_message`, because `SendMessage`
+  refused it there ("cannot reach another session from a session nobody opened in this
+  app"). Limits seen: the app wraps the prompt with "The user is not present to answer
+  questions" and the session has no tool to ask him one; `notify_when_idle` is refused for
+  it. A mistake of the main session on the way: it told him "you will see it in your list"
+  without having checked, and he did not see it (his screenshot, 17:47). And an effect no
+  description announced: deleting the task archived the session it had started, 95 seconds
+  after it opened, so which of the two explains what he saw is not known. It was brought
+  back with `unarchive_session` and he was asked to look again and to type in it. Not known
+  yet: where the app lists such a session, whether he can type in it, its permission mode,
+  whether it can commit. The task's file stays on disk
+  (`~/.claude/scheduled-tasks/jh-open-session-test/SKILL.md`), as the app says it does.
+- 2026-10-09, on his word: `D:\js-harness` brought up to `main` with `git pull --ff-only`,
+  measured before and after: `d6cf6be` to `9510a2a`, 0 changed files both times, `remote
+  status` reporting the same supervisor (`pid 12876, since 2026-10-09T04:40:05`) `running`
+  and `connected` both times (it keeps the code it had loaded until it restarts), and
+  `js-harness progress` from that folder going from `214/227` to `233/248`.
+- 2026-10-09, T7's stretch starts. He opened the new orchestrator by pasting the skill's
+  opening prompt with two added lines (its title, and where the change of role is written);
+  it is session `0f993107`, titled `JH ORQ · js-harness`. It read the relief file, the
+  board and the roadmap, appended to the relief file, told him what it understood, and
+  asked the main session five questions by message, on his word that the new orchestrator
+  asks the one before (roadmap, "A live handover"). His words were checked in its
+  transcript before being written down. From this point the main session no longer
+  orchestrates: it is the work session of this feature until T7's record is committed, and
+  then it is archived. The proof has five criteria, written before the stretch began: (1)
+  the orchestrator says in five lines what it understood and he sees whether it matches;
+  (2) it proposes the next two sessions with the four entry-gate answers in writing; (3) it
+  opens a session by itself, he sees it, can type in it, and it can commit in its own
+  folder; (4) two sessions work at once with never two gates together and the notices
+  arriving; (5) a session cuts at the end of a task and resumes with nothing reopened. Each
+  is recorded here as seen, with its evidence, or as a defect.
 
 ## Next step
 The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
