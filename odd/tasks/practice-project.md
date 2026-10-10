@@ -165,6 +165,8 @@ what was once proven as installed, run again on every candidate.
 - That a host loads the skills or runs the `SessionStart` entry: no Claude Code or Codex session
   is started. See "Not in this feature".
 - The command on his PATH: that one is the pnpm global copy, and the practice has its own.
+- codegraph's telemetry and update check: they are switched off in the practice (`DO_NOT_TRACK=1`
+  on every process, see Progress), where a project of his has them as he set them.
 - macOS and Linux: it runs on this machine.
 
 ### Not in this feature
@@ -209,14 +211,14 @@ medium
 - Creating the practice folder, and where. Recommended: `D:\js-harness-practice`, beside
   `D:\js-harness` and `D:\js-harness-worktrees`: outside the repository, outside his home, on the
   drive where the work is, with a short path.
-- Letting the real `codegraph init` run in the practice project, if reading shows that it writes
-  anything outside that project. Not known today; looked up before the first run.
 - Push, pull request, merge.
 - A live session in the practice project: it spends his plan.
 
 ## Delivery
 Strategy: `ask-on-risk`. Forecast about 600 authored lines: the pure part about 150, its tests
-about 200, the command about 250. That is over the budget of about 400, so two slices stacked to
+about 200, the command about 250. Measured after T1: the pure part is 275 lines and its tests
+395, so the forecast for the whole is now about 950. The code was not cut to fit: 395 of the 670
+are tests, and the two slices stay as planned. That is over the budget of about 400, so two slices stacked to
 `main`, the form the session board and the watchdog used: slice 1 is this document, the pure part
 and its tests; slice 2 the command, the first run's record and the roadmap entry. Each code slice
 gets its gentle-ai review and then its Codex review, whose cost the orchestrator admits under
@@ -227,8 +229,8 @@ taken in turns with `JH 1`, never two at once; two Codex reviews; no model spend
 run itself.
 
 ## Tasks
-- [ ] T0 This document, the plan put to Sebastián, his yes and the place of the folder — route: inline
-- [ ] T1 `scripts/practice-lib.mjs` and its test: the layout from a root, the environment of a child process (the practice's prefix first on PATH, `JS_HARNESS_HOME`, never his home), the refusals of `setup`, the journey as named steps, the before-and-after comparison of his real home, the record line — route: delegated writer (two non-trivial files)
+- [x] T0 This document, the plan put to Sebastián, his yes and the place of the folder — route: inline
+- [x] T1 `scripts/practice-lib.mjs` and its test: the layout from a root, the environment of a child process (the practice's prefix first on PATH, `JS_HARNESS_HOME`, never his home), the refusals of `setup`, the journey as named steps, the before-and-after comparison of his real home, the record line — route: delegated writer (two non-trivial files)
 - [ ] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
 - [ ] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
@@ -251,6 +253,60 @@ run itself.
   worktree" for some seconds (`odd/tasks/session-board.md:1053-1058`). The orchestrator is told
   before T3.
 
+- 2026-10-10: this document committed as `ac2c18a`; gate green (`PASS tests npm run test
+  passed`), review not due (`passive risk, 1 path, 256 lines`). No gate was running when it
+  started.
+- 2026-10-10, his decision. The plan was put to him in this chat in plain words: the problem, the
+  one folder with its own copy of the harness and its own home, the journey, the check on his
+  real home, what it does not prove, the cost, and the files touched. The question named what a
+  yes covers (the plan, and the folder at `D:\js-harness-practice`, created when the command is
+  ready) and what it does not (push, pull request, merge, his home, his PATH, a session opened in
+  the practice project). His answer: "Si". T0 closed. Read of the board at that moment: context
+  of this session 172k tokens, 36%.
+- 2026-10-10, what the real `codegraph init` writes outside a project, the question this document
+  had left for before the first run. Read in the code of the installed tool
+  (`@colbymchenry/codegraph`, under `C:\nvm4w\nodejs\node_modules`), nothing run. `init --yes`
+  creates `.codegraph/` in the project and indexes it (`bin/codegraph.js`, `runInit`); it
+  installs git hooks in the project only where its file watcher is disabled, which is WSL or
+  `CODEGRAPH_NO_WATCH` (`installer/index.js`, `offerWatchFallback`). Outside the project it
+  writes under the user's home, `~/.codegraph`: a telemetry queue and an update-check cache.
+  Both are off with `DO_NOT_TRACK=1` (its README, "Telemetry"; `upgrade/update-check.js:103`).
+  The registry of daemons there is written by its MCP server, not by `init`: the `init` of this
+  worktree, run today, left `~/.codegraph/daemons` with its date of 2026-10-08. So every process
+  of the practice gets `DO_NOT_TRACK=1` and nothing is written outside the folder; the harness
+  itself does not read that variable (`rg -c 'DO_NOT_TRACK|CODEGRAPH_TELEMETRY' bin scripts`:
+  no hit). The question to Sebastián this document kept for this case is not needed and was
+  removed from "Ask me before". The writer of T1 was told while it worked.
+- 2026-10-10, T1 written by a delegated writer, test first; route as planned. Its handoff, with
+  what the parent read itself (the whole of `scripts/practice-lib.mjs`):
+  - Done: `scripts/practice-lib.mjs` (275 lines; imports only `node:path` and `node:crypto`) and
+    `scripts/practice-lib.test.mjs` (395 lines, 38 tests, no process, no disk, no clock).
+    Exports: `practiceLayout`, `shimDir`, `installedBin`, `childEnv`, `isInside`, `setupRefusal`,
+    `markerContent`, `ownsFolder`, `realHomeFiles`, `contentHash`, `compareSnapshots`, `JOURNEY`,
+    `adoptionCommands`, `recordLine`, `parseArgs`, `USAGE`.
+  - Checked: red first (`ERR_MODULE_NOT_FOUND` for the library, `tests 1 / pass 0 / fail 1`),
+    then `node --test scripts/practice-lib.test.mjs`: `tests 38 / pass 38 / fail 0`, 0.72 s.
+    `contract check` of this document: PASS.
+  - Not checked: no test was broken on purpose to see it fail, only the missing import was seen
+    red. Nothing against the real disk: the layout npm really gives the shim, his real manifest,
+    the effect of `DO_NOT_TRACK` on codegraph. Those are T3's first run.
+  - Failed: one run of the tests (0.87 s, no process started) happened while a gate of
+    `session-board` had just started. The writer had chained the run after a command that only
+    printed "Gates"; printing is not a guard. Its later runs tested for the text `none running`.
+    And gates ran back to back for more than thirty minutes, which killed its first wait.
+  - Three things wider than its brief, kept, each for its reason. `childEnv` drops every
+    `JS_HARNESS_*` variable of the caller, not three: `JS_HARNESS_CHECK_INNER=1` makes `check`
+    skip a project's sensors (`bin/check.mjs:617`), and the commit that must be refused would
+    pass. `realHomeFiles` also takes the paths under the manifest's `entries` and `optional`, and
+    leaves out `.js-harness/doctor.json`, which every session start rewrites. `setupRefusal`
+    refuses a root or a home that is not an absolute path.
+  - The parent's brief was wrong in one fact: the machine manifest records absolute paths
+    (`bin/lib/manifest.mjs:623`), not paths relative to the home. The library takes both.
+  - Open, for T2: resolve `--root` to an absolute path and through links before judging it
+    (`isInside` compares spellings); hash the same list of files before and after; read
+    `JS_HARNESS_E2E_NPM_CLI` from the caller's environment, since `childEnv` drops it.
+
 ## Next step
-T0: Sebastián's yes to the plan and to the place of the folder. Then T1, by a delegated writer,
-test first.
+The commit of slice 1 (this document, the pure part and its tests), when no gate runs; its
+gentle-ai assessment from the boundary `ac2c18a` and, if due, its review and the Codex review.
+Then T2, by a delegated writer: `scripts/practice.mjs`.
