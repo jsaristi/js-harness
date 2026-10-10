@@ -13,7 +13,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import {
-  practiceLayout, shimDir, installedBin, childEnv, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
+  practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE,
 } from './practice-lib.mjs';
 
@@ -281,9 +281,18 @@ const STEPS = {
       return `js-harness ${command}:\n${tail(result.output)}`;
     });
     const hook = gitPath(ctx, 'hooks/pre-commit');
+    // The hook git runs has to be the one `init` wrote, inside the project. A `core.hooksPath` of the
+    // machine sends git elsewhere: `init` writes no gate there, and the commits of the next steps would
+    // prove a hook that is not the candidate's. The practice changes no git configuration to get round it,
+    // because a project of the user's would meet the same.
+    assertThat(
+      isInside(project, hook),
+      `git runs the hooks of the practice project from ${path.dirname(hook)}, outside it (a core.hooksPath of this machine): js-harness init writes no gate there, so the journey cannot prove the hook on this machine as it is configured`,
+    );
     for (const file of [path.join(project, 'harness.json'), path.join(project, 'AGENTS.md'), hook]) {
       assertThat(fs.existsSync(file), `${file} is missing after js-harness ${commands.join(', ')}`);
     }
+    assertThat(fs.readFileSync(hook, 'utf8').includes('js-harness check'), `${hook} is there after js-harness ${commands.join(', ')}, and it does not call js-harness check`);
     return [...said, `the hook is ${hook}`, `git status --porcelain:\n${porcelain(ctx) || '(clean)'}`].join('\n');
   },
 

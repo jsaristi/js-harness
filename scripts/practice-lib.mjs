@@ -83,6 +83,10 @@ const GIT_REPOSITORY_VARIABLES = [
   'GIT_COMMON_DIR',
 ];
 
+// Where git stops looking for a repository on its way up. Set to a repository around the root, it makes git
+// answer "not a git repository" inside that repository, and `setup` would read the place as a free one.
+const GIT_DISCOVERY_CEILING = 'GIT_CEILING_DIRECTORIES';
+
 /** The environment of every process the practice command starts, as a new object; `baseEnv` is left as it is.
  *
  * - The practice's command comes first on PATH, so the hook `init` writes (`exec js-harness check`) and every
@@ -98,14 +102,16 @@ const GIT_REPOSITORY_VARIABLES = [
  *   writes nothing outside its folder.
  * - The variables that bind git to one repository are dropped: started from a hook or an `--exec` of git, the
  *   `git init` and the commits of the practice would otherwise act on the repository the command was started
- *   from. Everything else git reads (the editor, the author, the ssh command) is kept.
+ *   from. So is the ceiling of git's search for a repository (`GIT_CEILING_DIRECTORIES`), which would hide
+ *   from `setup` a repository around the root. Everything else git reads (the editor, the author, the ssh
+ *   command) is kept.
  * - `HOME` and `USERPROFILE` are kept: git needs the user's identity to commit. The real home is protected by
  *   the before-and-after comparison below instead. */
 export function childEnv(layout, baseEnv = process.env, platform = process.platform) {
   const windows = platform === 'win32';
   const named = (name, wanted) => (windows ? name.toUpperCase() === wanted : name === wanted);
   const ofHarness = (name) => (windows ? name.toUpperCase() : name).startsWith('JS_HARNESS_');
-  const ofRepository = (name) => GIT_REPOSITORY_VARIABLES.includes(windows ? name.toUpperCase() : name);
+  const ofRepository = (name) => GIT_REPOSITORY_VARIABLES.includes(windows ? name.toUpperCase() : name) || named(name, GIT_DISCOVERY_CEILING);
   const replaced = (name) => named(name, 'PATH') || named(name, 'DO_NOT_TRACK') || ofHarness(name) || ofRepository(name);
 
   const pathName = Object.keys(baseEnv).filter((name) => named(name, 'PATH')).sort()[0];
@@ -131,6 +137,18 @@ export function isInside(parent, child, platform = process.platform) {
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${p.sep}`) && !p.isAbsolute(relative));
 }
 
+/** Why `root`, as it was typed, cannot name the practice folder, in one sentence that names it, or `null`
+ * when it can: it has to say by itself where it is. A path that is not absolute lies wherever the command
+ * was started, and so does, on Windows, one that names no drive (`\foo`). `parseArgs` judges the argument
+ * with this before the command resolves anything, and `setupRefusal` judges the root it is handed again. */
+export function rootRefusal(root, platform = process.platform) {
+  if (typeof root !== 'string' || !pathFor(platform).isAbsolute(root)) return `the root ${root} is not an absolute path`;
+  if (!fullyQualified(root, platform)) {
+    return `the root ${root} names no drive, so where it lies would depend on the folder the command was started from: on Windows a root starts with a drive letter, as D:\\, or is a network path`;
+  }
+  return null;
+}
+
 /** Why `setup` must not create the practice folder at `root`, in one sentence that names the path, or `null`
  * when it may. The command gathers the facts: `exists` (something is already at `root`), `gitRoot` (the top
  * level of the git repository `root` would lie in, or `null`) and `home` (the user's real home). `setup`
@@ -145,10 +163,8 @@ export function isInside(parent, child, platform = process.platform) {
  * call found nothing to refuse. */
 export function setupRefusal({ root, exists, gitRoot, home, platform = process.platform }) {
   const p = pathFor(platform);
-  if (typeof root !== 'string' || !p.isAbsolute(root)) return `the root ${root} is not an absolute path`;
-  if (!fullyQualified(root, platform)) {
-    return `the root ${root} names no drive, so where it lies would depend on the folder the command was started from: on Windows a root starts with a drive letter, as D:\\, or is a network path`;
-  }
+  const ofRoot = rootRefusal(root, platform);
+  if (ofRoot !== null) return ofRoot;
   if (exists) return `${root} already exists: setup only creates a new folder`;
   if (typeof home !== 'string' || !p.isAbsolute(home)) {
     return `the user's home is not known as an absolute path (${home}), so ${root} cannot be shown to lie outside it`;
@@ -406,8 +422,11 @@ const COMMANDS = ['setup', 'run'];
 /** Reads the arguments of the practice command: `{ command, root }` for `setup --root <dir>` and
  * `run --root <dir>`, and `{ error }` for anything else: no command, an unknown one, an unknown flag,
  * `--root` with no value or given twice, no `--root` at all (there is no default root), one argument too
- * many. It never throws and never guesses: a command of this project once acted on a flag it did not know. */
-export function parseArgs(argv = []) {
+ * many, and a root that does not say by itself where it is (`rootRefusal`, by the path rules of `platform`):
+ * the command resolves the root against the folder it was started from, so the argument is judged here, as
+ * it was typed. It never throws and never guesses: a command of this project once acted on a flag it did
+ * not know. */
+export function parseArgs(argv = [], platform = process.platform) {
   const [command, ...rest] = argv;
   if (command === undefined) return { error: 'no command: expected setup or run' };
   if (!COMMANDS.includes(command)) return { error: `unknown command ${command}: expected setup or run` };
@@ -423,5 +442,7 @@ export function parseArgs(argv = []) {
     i += 1;
   }
   if (root === undefined) return { error: `${command} needs --root <dir>: there is no default root` };
+  const ofRoot = rootRefusal(root, platform);
+  if (ofRoot !== null) return { error: ofRoot };
   return { command, root };
 }

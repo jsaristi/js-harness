@@ -242,6 +242,7 @@ run itself.
 - [x] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
 - [x] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
 - [x] T3c Accepted follow-ups of the review of T3b, test first: `R3-non-error-throw-detail`, `R3-report-throw-aborts-walk`, `R3-recordline-foreign-ids`, `R3-setup-wiring-unproved` — route: inline (three small changes in the library, one call changed in the command, four tests)
+- [x] T3d The three findings of the Codex review, test first: the ceiling of git's search kept in the child environment, a root resolved before it is judged, a hook of the machine taken for the one `init` wrote — route: inline (the library, its test, two places of the command)
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
@@ -577,11 +578,57 @@ run itself.
     Corrected here. Text with backslashes goes through the editor from now on, not a script.
   - The guard held: the green run waited on another session's gate (pid 5764) from 06:59:02 to
     07:12:34 and started only then.
+- 2026-10-10: T3c committed as `709ba20`; gate green (07:13:22 to 07:25:07). The message file
+  was rewritten while the gate ran, because its first writing had failed after the commit was
+  started; git reads the file after the hook, and the commit carries the right message. The
+  gentle-ai assessment of `d639bdf..709ba20`: medium, 212 lines, `under_budget`, no review due;
+  it stays pending in the slice.
+- 2026-10-10, the Codex review of the whole range (`node bin/js-harness.mjs codex-review --base
+  ac2c18a`, range `ac2c18a..709ba20`, recorded in `.git/js-harness/codex-reviews.jsonl`):
+  `gpt-6.1-sol` at high effort, three parts, 1,657 changed lines in 3 files, started with no
+  `check.mjs` alive at 07:25:31 and ended at 07:30:00. Spent: 897,955 input tokens (711,296
+  cached) and 6,755 output, under the plan's lower figure (1,060,000). Part 2, the tests: no
+  finding. Parts 1 and 3: three findings, all P2, all true, all accepted as T3d:
+  - `scripts/practice-lib.mjs:108-109`: `childEnv` kept `GIT_CEILING_DIRECTORIES`. Set to a
+    repository around the root, it makes git answer "not a git repository" inside it, and
+    `setup` would have created the practice in that repository.
+  - `scripts/practice.mjs:502-503`: the command resolves the root (`path.resolve`, in
+    `throughLinks`) before anything judges it, so `--root \practice` became a path on the
+    current drive and the refusal written in T3b never saw it.
+  - `scripts/practice.mjs:469-471`: with a `core.hooksPath` in the machine's git configuration
+    the practice project inherits it; `init` writes no gate outside a repository, and the
+    journey would prove another hook or fail without saying why. Codex proposed a hooks path
+    of the practice's own. Not taken as proposed: the harness never changes git's
+    configuration (`bin/lib/project.mjs:577-578`), and a practice project configured apart
+    would no longer be what a project of his receives. Taken instead: the step says so.
+- 2026-10-10, T3d. Route: inline.
+  - What changed: `childEnv` drops `GIT_CEILING_DIRECTORIES`. `rootRefusal(root, platform)` is
+    the judgement of the root alone, and `parseArgs` applies it to the argument as it was
+    typed, so a relative root and a Windows root with no drive are a usage error (exit 2)
+    before anything is resolved; a relative root was accepted until now. The step
+    `project-adopt` fails with the reason when the hook git would run lies outside the
+    practice project, and when the hook does not call `js-harness check`.
+  - RED, with `rootRefusal` extracted and nothing else: `tests 62 / pass 60 / fail 2`, the test
+    of the ceiling and the test of `parseArgs`. GREEN: `tests 62 / pass 62 / fail 0`.
+  - Seen with the real command, creating nothing: `setup --root \practice-nope` prints `names
+    no drive` and exits 2; `run --root practice` prints `is not an absolute path` and exits 2;
+    and with `GIT_CEILING_DIRECTORIES` set to this worktree, where git itself answers `fatal:
+    not a git repository` from `scripts`, `setup --root` on a path under `scripts` still
+    prints `is inside the git repository D:/js-harness-worktrees/practice-project` and exits
+    1. A run from the working tree: exit 0, 10 of 10, `real home: unchanged`, 11 seconds.
+  - Not checked: the new failure of `project-adopt`, which needs a `core.hooksPath` in the
+    machine's git configuration (`git config --global --get core.hooksPath` prints nothing
+    here), and that is a change on his machine.
+- 2026-10-10, T4, the roadmap: the paragraph after item 4 of "The order he asked for" now says
+  that the third step exists, what a run does and proves, what it costs, how a feature adds
+  its step and what the run does not prove. `main` moved meanwhile (`d3bc399`, two merges of
+  documents) and changes other lines of the roadmap, none of that paragraph.
 
 ## Next step
-The commit of T3c, then the Codex review of the whole range (`node bin/js-harness.mjs
-codex-review --base ac2c18a`; its plan, read at `d639bdf`: three parts, 1,572 changed lines,
-about 1,150,000 to 3,630,000 input tokens), with the gentle-ai assessment of T3c from `d639bdf`
-before it. Then a run from the clean commit for the record, and T4, whose commit also records
-the reviews. Every start of a gate, a test, a review or a run is one command that first waits
-on any live `check.mjs` process and starts only when none is left.
+The commit of T3d with the roadmap entry. Then the gentle-ai assessment from `d639bdf`, and
+the Codex review of the part no record covers (`node bin/js-harness.mjs codex-review --base
+709ba20`, `--plan` first): the pre-push hook asks a record for every code commit. Then a run
+from the clean commit for the record, the notice to the orchestrator, and one last commit of
+this document that records those and closes T4. Every start of a gate, a test, a review or a
+run is one command that first waits on any live `check.mjs` process and starts only when none
+is left.

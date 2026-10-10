@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
+  practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs,
 } from './practice-lib.mjs';
 
@@ -140,6 +140,17 @@ test('childEnv drops what would bind git to another repository, and keeps the re
     assert.deepEqual(gitNames(lower), [], `${name.toLowerCase()} on win32`);
   }
   assert.equal(childEnv(POSIX_LAYOUT, { git_dir: 'another variable' }, 'linux').git_dir, 'another variable');
+});
+
+test('childEnv drops the ceiling that would stop git before it finds a repository around the root', () => {
+  // With GIT_CEILING_DIRECTORIES set to an enclosing repository, git answers "not a git repository" inside
+  // it, and `setup` would take a place in that repository for a free one.
+  for (const [layout, platform] of [[WIN_LAYOUT, 'win32'], [POSIX_LAYOUT, 'linux']]) {
+    const env = childEnv(layout, { PATH: 'x', GIT_CEILING_DIRECTORIES: '/an/enclosing/repository', GIT_EDITOR: 'true' }, platform);
+    assert.deepEqual(Object.keys(env).filter((name) => /^git_/i.test(name)), ['GIT_EDITOR'], platform);
+  }
+  const lower = childEnv(WIN_LAYOUT, { git_ceiling_directories: 'D:\\js-harness' }, 'win32');
+  assert.deepEqual(Object.keys(lower).filter((name) => /^git_/i.test(name)), []);
 });
 
 test('childEnv keeps the home of the user, which git needs for his identity', () => {
@@ -682,8 +693,35 @@ test('the line the record step writes in a walked journey is ok only when no ste
 // ---- the arguments ---------------------------------------------------------------------------------------------------
 
 test('parseArgs reads setup and run with their root', () => {
-  assert.deepEqual(parseArgs(['setup', '--root', WIN_ROOT]), { command: 'setup', root: WIN_ROOT });
-  assert.deepEqual(parseArgs(['run', '--root', 'practice folder']), { command: 'run', root: 'practice folder' });
+  assert.deepEqual(parseArgs(['setup', '--root', WIN_ROOT], 'win32'), { command: 'setup', root: WIN_ROOT });
+  assert.deepEqual(parseArgs(['run', '--root', 'D:\\practice folder'], 'win32'), { command: 'run', root: 'D:\\practice folder' });
+  assert.deepEqual(parseArgs(['run', '--root', 'd:/practice'], 'win32'), { command: 'run', root: 'd:/practice' });
+  assert.deepEqual(parseArgs(['run', '--root', '\\\\server\\share\\practice'], 'win32'), { command: 'run', root: '\\\\server\\share\\practice' });
+  assert.deepEqual(parseArgs(['run', '--root', '/srv/practice'], 'linux'), { command: 'run', root: '/srv/practice' });
+});
+
+test('parseArgs refuses a root that does not say by itself where it is, before anything resolves it', () => {
+  // The command resolves the root it is given against the folder it was started from, so `setupRefusal`
+  // would never see `practice` or `\practice` as they were typed: the argument is judged as it was typed.
+  for (const root of ['practice', '.\\practice', '\\practice', '/practice', 'D:practice']) {
+    const parsed = parseArgs(['setup', '--root', root], 'win32');
+    assert.deepEqual(Object.keys(parsed), ['error'], root);
+    assert.ok(parsed.error.includes(root), parsed.error);
+    assert.equal(parsed.error, rootRefusal(root, 'win32'), root);
+  }
+  assert.deepEqual(Object.keys(parseArgs(['run', '--root', 'practice'], 'linux')), ['error']);
+  // What else is wrong with the arguments is said first: the root is judged once they are all read.
+  assert.ok(parseArgs(['run', '--root', 'practice', '--force'], 'win32').error.includes('--force'));
+});
+
+test('rootRefusal is the judgement setupRefusal makes of the root alone', () => {
+  for (const root of ['practice', '\\practice', '/practice', undefined]) {
+    assert.equal(typeof rootRefusal(root, 'win32'), 'string', String(root));
+    assert.equal(setupRefusal({ ...SETUP_FACTS, root }), rootRefusal(root, 'win32'), String(root));
+  }
+  assert.equal(rootRefusal(WIN_ROOT, 'win32'), null);
+  assert.equal(rootRefusal('/srv/practice', 'linux'), null);
+  assert.equal(typeof rootRefusal('practice', 'linux'), 'string');
 });
 
 test('parseArgs gives every other shape back as a usage error and never as a command', () => {
@@ -704,14 +742,14 @@ test('parseArgs gives every other shape back as a usage error and never as a com
     '--root given twice': ['run', '--root', WIN_ROOT, '--root', 'D:\\other'],
   };
   for (const [what, argv] of Object.entries(wrong)) {
-    const parsed = parseArgs(argv);
+    const parsed = parseArgs(argv, 'win32');
     assert.deepEqual(Object.keys(parsed), ['error'], what);
     assert.ok(typeof parsed.error === 'string' && parsed.error.length > 0, what);
   }
 });
 
 test('parseArgs names the argument it refused', () => {
-  assert.ok(parseArgs(['deploy']).error.includes('deploy'));
-  assert.ok(parseArgs(['run', '--force', '--root', WIN_ROOT]).error.includes('--force'));
-  assert.ok(parseArgs(['run', '--root', WIN_ROOT, 'extra']).error.includes('extra'));
+  assert.ok(parseArgs(['deploy'], 'win32').error.includes('deploy'));
+  assert.ok(parseArgs(['run', '--force', '--root', WIN_ROOT], 'win32').error.includes('--force'));
+  assert.ok(parseArgs(['run', '--root', WIN_ROOT, 'extra'], 'win32').error.includes('extra'));
 });
