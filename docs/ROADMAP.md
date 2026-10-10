@@ -809,6 +809,21 @@ The new orchestrator's reading, his to correct, for the rewrite of the skill:
 It was done that way the same day: five questions asked by message and answered the same
 way (`odd/tasks/session-board.md`, entries of that day).
 
+Two classes of session, found on 2026-10-10 in the first stretch with two work sessions
+(`odd/tasks/session-board.md`). Claude Code delivers a message between sessions only when
+both ask for permissions the same way: a receiver that bypasses permission prompts holds a
+message from a sender that does not, and in the desktop app the held message expires
+unseen. His desktop sessions bypass; a session he opens from the phone through `js-harness
+remote` runs in `auto`. So the notice of a phone-opened work session never reached the
+orchestrator. His decision that day: such a session is read on the board for now, the
+repair goes here, and making the modes meet is his, at the computer (the host documents
+`crossSessionInbound: "accept"` in the user's settings, and the roadmap's open decision 2,
+the permission mode, is the other road). Proposed by the orchestrator for this feature, not
+decided: a work session whose first notice is held does not retry and says so once; the
+stack doctor reports when a project's sessions run in different classes; an orchestrator is
+opened from the desktop app. In a project that only uses the harness this is the first
+thing a second device would meet, so the check belongs in what is installed, not in advice.
+
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The
 rule about how a reply ends is paid on every turn, so where it lives is settled by the rule

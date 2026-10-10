@@ -1268,15 +1268,270 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
   folder; (4) two sessions work at once with never two gates together and the notices
   arriving; (5) a session cuts at the end of a task and resumes with nothing reopened. Each
   is recorded here as seen, with its evidence, or as a defect.
+- 2026-10-09, T7's stretch, what was seen so far. The evidence is the orchestrator's, sent
+  by message and checked here in one place each before being written.
+  - The handover itself: the orchestrator asked five questions by message and got five
+    answers marked known or not known; it merged pull request #48 (documents only, `main`
+    at `20911ea`) after checking that it held exactly the two files, and said so with its
+    command. The notices kept the agreed shape (done, checked, not checked, failed, open).
+  - Criterion 1, seen. It told him in five lines what it had understood; his first answer
+    was an instruction and not a yes, so it asked again, and he answered "Si" (his whole
+    message, 2026-10-10T03:14:40Z in its transcript, read here).
+  - Criterion 2, seen as written, not yet read by him. The four answers of the entry gate
+    for `JH 1 · control de tests` and `JH 2 · proyecto de práctica` are lines 32 and 33 of
+    the relief file (read here), resting on `git diff --name-only origin/main...<branch>`
+    for the two open feature branches: neither touches the gate's files. It adds what the
+    plans alone had not shown: the gate is cut in two, the lock and the shorter run first
+    and GitHub later, because the second holds two choices of his; and `JH 2` opens after
+    the plan of `JH 1` is agreed, since until the lock exists each session is one more gate
+    that can collide. `JH 2`'s first answer rests on its plan only, said as such.
+  - Criterion 3, not seen yet, and narrowed by the orchestrator's own choice (relief line
+    34): `JH 1` and `JH 2` open by his paste, because he asked that each plan be settled
+    with him and a session opened by a scheduled task cannot ask him anything; the opening
+    by a scheduled task is tried apart, on `JH 0`.
+  - Criteria 4 and 5: not seen yet.
+  - A defect of the watch, found by the orchestrator in use: a session that started waiting
+    on him went unreported for 50 minutes. Its account, from three outputs it holds: one
+    watch returned `session d066e2eb 'JH 1 · control de tests' appeared (working)`; it
+    launched the next at once, which returned `nothing changed in 3005s`; the board read by
+    hand then showed that session `waiting, last entry 50m ago`. The cause, read in the
+    code here: every run of `--watch` compares against the board it reads at its own start
+    (`bin/sessions.mjs:363`, `let baseline = first`), and nothing is kept from the run
+    before, so what changes between one run's return and the next one's start belongs to
+    neither. The gap is as long as the orchestrator takes to read a wake and launch again,
+    which is when a session it just saw working is most likely to finish. Until it is
+    repaired the orchestrator launches the watch first and reads the board by hand right
+    after, so that the gap is covered by that reading. The repair, not started: a run
+    keeps its last board in a file of the project and the next run compares against that.
+  - Where that repair goes, proposed by this session and his to accept when the time
+    comes: behind `feat/gate-lock`, as a small slice of its own, not inside it. The
+    orchestrator saw the collision before anything was written: the plan of `JH 1`
+    (`odd/tasks/gate-lock.md`, lines 55 and 131, read here) changes `bin/sessions.mjs` and
+    `bin/lib/sessions.mjs` for the Gates section. Adding the repair to that plan would
+    widen a feature whose plan he has not approved yet, and the way around it covers the
+    gap meanwhile. This is the lead's part of the role seen working: a collision named
+    from the files, before two sessions edited the same ones.
+  - Criterion 4, in part: two notices of `JH 1` ("opened", "waiting for Sebastián on the
+    plan") reached the orchestrator by message without him carrying them, by its account.
+    Two sessions with gates at once has not happened yet.
+  - 2026-10-10, criterion 4, seen for one session and failed for the other, by the
+    orchestrator's account with its sources. Two sessions have worked at once since about
+    04:30Z: `JH 1 · control de tests` (`d066e2eb`, opened in the desktop app, branch
+    `feat/gate-lock`) and `JH 2 · proyecto de práctica` (`213bd4ec`, opened by him from the
+    phone, branch `feat/practice-project`). No board showed two gates together; `JH 1` said
+    by message that it ran one test file beside `JH 2`'s gate, which passed. The notices of
+    `JH 1` arrived by message. The first notice of `JH 2` did not: it was held, and he got
+    two notices on the phone, "held by the receiving session" and then "expired without
+    approval". The cause it read in Claude Code's documentation of messages between
+    sessions: a session that bypasses permission prompts holds a message from one that does
+    not, and the desktop app cannot show the approval, so it is dropped after five minutes.
+    Checked here in the three transcripts: `permissionMode` is `auto` in `213bd4ec` and
+    `bypassPermissions` in `d066e2eb` and in the orchestrator's. So a session opened from
+    the phone through the remote server cannot reach an orchestrator opened in the desktop
+    app as his machine is set today. His decision, read in the orchestrator's transcript
+    ("listo hagamos tu recomendacion"): for now such a session is read on the board; the
+    repair in the harness is written down for the session channel; making the two modes
+    meet is his, at the computer. The orchestrator changed no setting.
+  - A mistake of the orchestrator, told by itself: it ran `claude remote-control --help`
+    without knowing the command; it hung for 120 s and was stopped, with one server process
+    afterwards. The same mistake as this session's `install --help` the day before, by
+    another session a day after the rule was written in the relief file and the roadmap:
+    the sentence did not stop it, which is what the roadmap says of sentences.
+  - Criterion 3 not tried, criterion 5 not seen: `JH 1`, at 67% of its window, was told to
+    finish its task and cut before the next. The orchestrator, at 65%, expects its own
+    relief soon.
+  - 2026-10-10, the orchestrator relieved itself: `0f993107`, past the context limit, handed
+    over to session `4a8db1c5`, which took the title `JH ORQ · js-harness`; the old one
+    forwarded a message that still reached it and said it would act on nothing more. Seen
+    from here as a change of the address that answers.
+  - 2026-10-10, this record's own commit failed three times before it was made, and the
+    board is part of the cause. Run 1, 02:40:06 to 03:00:19, and run 2, from 03:01:19: the
+    gate reached its bound (`FAIL  tests  npm run test timed out after 1200 s`). Run 3 was
+    this session's mistake: its retry command ran a whole `npm run check` as a diagnostic
+    after the failed commit, 03:21 to 03:41, for nothing. This session first told him
+    another session had probably run tests beside run 1; the orchestrator had four
+    transcripts read and that was wrong: no test, gate or commit ran in that window. What
+    ran was the board, about 43 reads in twenty minutes (15 by two orchestrators alive at
+    once, about 25 by a waiting script of `JH 1` that was broken and polled without end,
+    3 by `JH 2`), each taking 12 to 40 s under load by its estimate. Two defects of this
+    feature follow, neither repaired: a board read is heavy enough to slow a gate, and
+    nothing keeps the watch or a waiting script from reading it while one runs. The gate
+    itself stands too near its bound: 16 to 18 minutes with one session active the day
+    before, 956 s for `JH 2`'s alone on a quiet machine at 03:44. The fourth run was
+    made in a turn the orchestrator gave, with `JH 1` holding and its own watch off.
+  - A test run leaves an untracked folder in the worktree it runs in,
+    `Microsoft/Windows/PowerShell/ModuleAnalysisCache` (created 03:07, removed by hand):
+    junk from a PowerShell child, which a session could commit by mistake. Not repaired.
+  - Seen in passing, and working as meant: `JH 1` did not take a pasted opening prompt
+    that carried no line of his as an assignment; it asked him to confirm and built
+    nothing.
+  - 2026-10-10, the fourth run failed too, so the entry above is wrong in its first line:
+    the commit was not made. Run 3 was pid 27468, 03:21:27 to 03:41:34; run 4 was pid
+    22616, 04:01:04 to 04:21:11, with `JH 1` and `JH 2` holding and the orchestrator's
+    watch off, and it ended on the same line (`FAIL  tests  npm run test timed out after
+    1200 s`, line 36 of `D:\js-harness-worktrees\sb-last-commit.log`). Between the two,
+    `JH 2`'s gate passed alone in 956 s (pid 8184, 03:44:26 to 04:00:22, commit `d0bcb16`;
+    relief file, read here). A quiet machine was enough at 03:44 and not at 04:01: not
+    explained.
+  - What that log shows, read by the session that took T7 over (`JH 3`), with nothing run.
+    It holds the tests of three of the 59 test files, since the runner prints files in
+    order and was stopped at the bound: `bin/codex-review.test.mjs` (204 tests printed,
+    1,191 s summed), `bin/check-codex-reviews.test.mjs` (94 tests, 488 s) and
+    `bin/check.test.mjs` (73 tests, 83 s). That is 1,763 s inside a wall of 1,200 s, so
+    files ran side by side. The slowness is spread and not in a few tests: 294 of the 371
+    took more than a second, half of those more than 4.7 s and a tenth more than 9.6 s;
+    the five slowest (58.4, 35.1, 29.4, 27.3 and 26.6 s) add up to 177 s. The tests of one
+    file run one after another, and `bin/codex-review.test.mjs` had used 1,191 s with
+    tests still owed (the file holds 232 `test(` lines, a floor, since some tests are made
+    in loops). Read from that and not checked by a run: the gate's bound is in effect a
+    bound on that one file, and at that speed the gate cannot pass however quiet the rest
+    of the machine is. One log to compare with exists, of an older suite:
+    `D:\js-harness-worktrees\codex-parity-commit.log`, a whole run of 2026-10-04 (1,451
+    tests in 482.5 s, 3 failed). The 157 tests named in both took 299 s then and 477 s
+    now, 1.6 times; a test that starts one process is no slower (`checkSensor passes when
+    the command exits 0`: 0.86 s then, 0.47 s now), the ones that build git repositories
+    are. No log of a passing gate keeps the time of each test. Not known: what else ran on
+    2026-10-04, how many tests that file held then, and why the same quiet machine gave
+    956 s and then more than 1,200 s.
+  - What the orchestrator measured on the machine that night, by its relief file (read
+    here; the numbers are its own, taken once each). At 03:25, with run 3 under way, two
+    samples of 15 s: about 40% of the 8 logical cores in use; in the second, Microsoft PC
+    Manager (one process) used 11.5 CPU-seconds, as much as the 39 `node` processes with
+    the gate among them (11.2), and the 25 `claude` processes used 16; 5.1 of 19.7 GB
+    free. At 04:22, after run 4: 20 runs of `git --version` in 10.1 s and 10 runs of
+    `node -e ""` in 9.7 s, about half a second and a second to start one process (`JH 1`'s
+    gate may have been starting); Defender's real-time protection and behavior monitoring
+    on; 398 processes; 5.8 of 19.7 GB free. Not known: the same numbers on an idle
+    machine, and whether the antivirus or PC Manager is what slows a process start.
+    Nothing was changed on his machine; what is changed there is his.
+  - Two things the session before this one was never sent, taken from the relief file. A
+    notice of `JH 1` to the title reached the new orchestrator, so a title handed over
+    works as an address. And `TaskStop` stopped the task of `JH 1`'s broken waiter and
+    left its `sh` process alive (pid 10452), which went on reading the board through run
+    2 until `JH 1` killed it (its account; the orchestrator saw the process gone). A
+    stopped task is not a stopped process: the process list is what says so.
+  - 2026-10-10, the feature changed hands at a task's edge. `JH 3 · cierre de session
+    board` (`9b9ca6a8`) opened on his paste of the orchestrator's opening prompt and read
+    "Next step", these entries, the last 30 lines of the relief file and the state of the
+    worktree. The paste carried no line of his; it was taken as the start because the
+    relief file says his paste is the start and the session already bore the title, and
+    only reading and two messages were done on it. What the files did not hold, asked of
+    `1cca9aae` in five questions: whether anything of it still ran; the commit's command
+    and message; evidence it had received and not written (the two entries above); the
+    engram mirror, which was stale; and words of his that are in no file (none). Checked
+    of its answers: the process list at 04:29 held nothing of it, one gate (`JH 1`'s,
+    `check.mjs` pid 21584 from 04:22:12) and one shell naming this worktree, `JH 2`'s wait
+    (pid 12340), which ended only when this worktree left `20911ea` and `gate-lock` left
+    `c623c4c`. So `JH 2` was held behind a commit that had no turn; the orchestrator said
+    the condition came from its own notice and changed it through his paste. For criterion
+    5 this is a relief and not the cut it names: nothing was reopened, and the files were
+    short by what those five questions asked.
+  - 2026-10-10, the night's findings that belong to the board and to the channel between
+    sessions, sent by the orchestrator as one batch and written here as its account, each
+    marked as it marked it. He asked that day that what goes wrong while we work becomes
+    work on the harness and is later proven in the practice project; this list is that
+    work named, none of it started. One thing checked here: the third, in the code.
+    - The board, 1. A board read is a load beside a gate: 12 to 40 s each under load
+      (assumed from latencies), about 43 beside the run of 02:40 to 03:00 (a sub-agent's
+      count over four transcripts), and the watch reads the board every 30 s. Proposed,
+      not decided: no board read while a gate runs, or a cheap one, and a wait goes on the
+      gate's process id.
+    - The board, 2. A session opened from the phone is printed under the first words of
+      its prompt and not under its title: `213bd4ec` is `JH 2 · proyecto de práctica` in
+      `ListAgents`. Checked by the orchestrator.
+    - The board, 3. A gate started by `pnpm run check` is printed as `worktree unavailable:
+      its command line names bin/check.mjs by a relative path` (pid 27468, checked by the
+      orchestrator). Checked here: the text is `bin/lib/sessions.mjs:529`, the answer for
+      any folder that is not an absolute path, so the board cannot say which worktree
+      such a gate runs in. Not checked: whether the watch reports such a gate at all.
+    - The board, 4. A task stopped with `TaskStop` keeps "no recorded end" for ever
+      (`bs83eq4ea`), and `TaskStop` can leave the process alive (pid 10452, above).
+    - The board, 5. He asked for a roster: who is alive, what each is for, who left and
+      who took its place, in one place. His words and the orchestrator's reading are in
+      the relief file (read here): a section of the board computed at each read, not a
+      second board refreshed on a clock, since board reads beside a gate are what was
+      measured that night. The orchestrator keeps it by hand in the relief file meanwhile.
+    - The channel, 6. A notice reached the relieved orchestrator because its sender
+      answered a reply address, which belongs to a session, and not the title, which
+      belongs to the role. Proposed: a notice goes to a role, a command prints the
+      orchestrator's current address, and a relieved session answers who has the role.
+    - The channel, 7. A session opened from the phone runs in auto mode and the desktop
+      ones bypass permission prompts, so messages between them are held and expire (entry
+      above); three notices went through his paste that night.
+    - The channel, 8. The orchestrator's mistake, and a rule for notices: a wait handed to
+      a session that cannot be reached names a process that ends, never a commit that may
+      not come. It had held `JH 2` behind this record's commit (the takeover entry).
+    - The channel, 9. The relief of an orchestrator has no protocol for the title. Done
+      that night as: the old one renames itself and renames the new one in one step, and
+      the new one confirms with `ListAgents`. It worked; the one leak was the sixth.
+  - Criteria 4 and 5 after that night, by the orchestrator's account, not checked here.
+    Criterion 4: two gates never ran together (process lists and the board), but a test
+    ran beside a gate at 03:02, since a session's check and its run are not one step, and
+    the notices of `JH 2` never arrived. Criterion 5: `JH 1` cut at 72% with T1b verified
+    and staged but not committed, because the gate did not let it in, and came back at
+    22% with nothing reopened (its claim; the orchestrator read its context at 20%). So
+    the cut happened, and not at a task's closed edge: the gate decided where the edge
+    was. And `1cca9aae` was replaced from "Next step" instead of compacted.
 
 ## Next step
-The wait of 2026-10-07 is over and `main` is merged in (`4a2a668`). When this feature closes,
-the main session brings Sebastián back to the plan in the roadmap ("Session channel
-(planned)" and the order under it) to settle with him how each part should work, before any
-of it is built: he asked for that on 2026-10-09. The Codex review is done and its five
-findings fixed and reviewed (entries of 2026-10-09); the push check passes. Each on
-Sebastián's word, in this order: the push and one pull request to `main` (see the entry of
-2026-10-09 on delivery), the merge, the global install brought up to
-`main`, and `js-harness install`. T7 closes with an orchestrator session opened with the
-skill's opening prompt and one real stretch supervised by it, recorded here with the gaps of
-T6 and of the wakes above judged.
+T7 is in its stretch and is the only task left. Done on Sebastián's word: the install (by
+the mistake recorded above, kept by him), the command on PATH and `D:\js-harness` brought
+up to `main`, and the new orchestrator opened (`JH ORQ · js-harness`, session `0f993107`). This
+session no longer orchestrates: it is the work session of this feature, it writes T7's
+record from the evidence the orchestrator sends by message, checking one thing each time,
+and it is archived on his word when T7 is checked off. Of the five criteria written before
+the stretch (entries of 2026-10-09 and 2026-10-10): 1 and 2 are seen; 4 is seen for a
+session opened in the desktop app and failed for one opened from the phone (permission
+classes, roadmap "Two classes of session"); 3 (a session opened by the orchestrator
+itself, on `JH 0`) is not tried; 5 (a cut at the end of a task with nothing reopened) is
+not seen. T7 is checked off when 3 and 5 are each recorded as seen or as a defect, with the
+gaps of T6 and of the wakes judged.
+
+State on 2026-10-10 at 04:30, for whoever takes this over. The record above is NOT in git:
+`docs/ROADMAP.md` and this file are changed in the worktree
+`D:\js-harness-worktrees\session-board`, branch `docs/session-board-t7-record` (on the
+remote, holding no commit of this record), partly staged and partly not, so `git add` both
+before a commit; no pull request exists. Its commit failed four times at the gate's bound
+of 1,200 s (entry of 2026-10-10; whole output of the last run in
+`D:\js-harness-worktrees\sb-last-commit.log`: no test failed, every test that starts a
+process was slow). Do not run it again without a turn from the orchestrator (`JH ORQ ·
+js-harness`, session `4a8db1c5`, reached by message at that title) or Sebastián's word; do
+not run a whole gate as a diagnostic; do not read the board while a gate runs. The
+orchestrator chose that a fresh work session, `JH 3 · cierre de session board`, takes T7
+from this document, and that the session that wrote it (`1cca9aae`, "F6 Codex parity en
+slice C") stays open only to answer it; that clean start is itself what criterion 5 asks
+to see. Owed for criterion 3: a session opened by the orchestrator through a scheduled
+task, on `JH 0` (`local_9edf9d4d`, session `cbca9769`): whether he sees it in his list,
+whether he can type in it, its permission mode, whether it can commit in a folder of its
+own. Owed for criterion 5: a session that cut at the end of a task and resumed with
+nothing reopened, with what shows it.
+
+Taken over on 2026-10-10 at 04:29 by `JH 3 · cierre de session board` (`9b9ca6a8`), which
+owns this feature and this worktree from here; `1cca9aae` only answers and is archived on
+his word. The record is still not in git. Its commit has the third turn for the gate,
+after `JH 1` and `JH 2`: one try, on the orchestrator's "go", in an idle window and after
+the orchestrator measures how fast the machine starts processes. The commit is `git add`
+of the two files and `git commit -F D:\js-harness-worktrees\session-board-commit-msg.txt`
+with its output kept whole; then the push and a pull request with
+`D:\js-harness-worktrees\session-board-pr-body.md`, only if the commit returned 0. Not
+used: the older message `session-board-commit-ab-msg.txt`, which leaves out the failed
+runs and the handover, and the script `sb-commit-when-free.sh`, which reads the board
+before committing and returns 0 after a failed commit (an empty branch was pushed that
+way on run 1, by `1cca9aae`'s account). The engram mirror `odd/session-board/tasks` holds
+a condensed copy of this document as of the takeover (observation 3290), since the
+document is too long to copy whole; the file is the source. Since the takeover the
+orchestrator sent evidence for criterion 5 (the cut of `JH 1`, entry of 2026-10-10): it
+is recorded as its account and judged when T7 is; criterion 3 is still not tried.
+
+Left by this feature as work for later, none started: the watch's starting picture kept
+between runs (behind `feat/gate-lock`, same files); a board read made cheap, and neither
+the watch nor a waiting script reading the board while a gate runs; the folder
+`Microsoft/Windows/PowerShell/ModuleAnalysisCache` a test run leaves in its worktree; a
+command that writes outside the repository refusing a flag it does not know; `upgrade` and
+the version that cannot tell copies apart; and from the batch of 2026-10-10: a
+phone-opened session printed under its title, a gate started by a relative path placed in
+its worktree, a stopped task that reads as stopped, and the roster as a section of the
+board (the notices that go to a role and the rule for a wait handed to a session that
+cannot be reached belong to the session channel). When the feature closes, Sebastián is
+brought back to the plan in the roadmap to settle each part before it is built; the
+orchestrator already does that feature by feature (the gate's plan first).
