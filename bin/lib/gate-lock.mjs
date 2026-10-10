@@ -9,6 +9,8 @@
 // what it acts on, so none can undo a take:
 //   - a holder is alive by its beat: it touches its own file every few seconds, so nothing has to ask the
 //     system who a pid is (which costs a PowerShell snapshot on Windows and is fooled by a recycled pid);
+//   - a holder's file that is there and cannot be looked at (busy, on Windows) holds all the same: a look
+//     that failed shows neither an empty lock nor a dead gate;
 //   - the lock of a gate that died is taken over by removing that holder's file by its name, which holds
 //     its token; a gate that took the lock in the meantime has another name;
 //   - the folder is removed with `rmdir`, which fails while a holder's file is in it. An empty `lock` is
@@ -31,7 +33,8 @@ export const GATE_WAIT_MS = 60 * 60_000;
 
 const HOLDER_FILE = /^holder-(.+)\.json$/;
 const WAIT_DIR = /^wait-(.+)$/;
-// What Windows answers for a file or a folder that is being removed while a handle is still open on it.
+// What Windows answers for a file or a folder another process holds open, or that is being removed while
+// a handle is still open on it.
 const BUSY = ['EPERM', 'EACCES', 'EBUSY'];
 // What a rename onto `lock` answers when `lock` is there: by system, and by what `lock` is.
 const TAKEN = ['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR', ...BUSY];
@@ -39,9 +42,13 @@ const TAKEN = ['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR', ...BUSY];
 // apart: a folder Windows is still removing is gone in a moment, a home that cannot be written is not.
 const BLIND_TRIES = 40;
 const BLIND_PAUSE_MS = 25;
-// A holder's file another process is reading at that instant cannot always be removed on Windows; a
-// file left behind would hold the lock, beating no more, for the whole stale time.
-const RETRY_BUSY = { maxRetries: 5, retryDelay: 20 };
+// A holder's file another process holds open at that instant cannot be removed on Windows; a file left
+// behind would hold the lock, beating no more, for the whole stale time. So a removal that answers busy
+// is tried again here, this many times in all, this far apart. `rmSync` cannot be asked to: it takes
+// `maxRetries` and `retryDelay` and does not wait with them. On Node 24.15 and Windows 10 a file held
+// open for 150 ms answered EPERM within a millisecond, with `recursive` and without (run 2026-10-10).
+const REMOVE_TRIES = 6;
+const REMOVE_PAUSE_MS = 20;
 
 /** Everything the lock writes: deleting this folder undoes it. */
 export function gateDir(home) {
@@ -62,10 +69,28 @@ function unless(codes, step) {
   }
 }
 
+/** Stops this thread for `ms`. A release is not a promise, and a gate that releases or waits has
+ * nothing else to run meanwhile. */
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** Removes a file or a folder, trying again while the answer is busy; past the last try, that answer
+ * is thrown. */
+function remove(io, target, options) {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return io.rmSync(target, options);
+    } catch (err) {
+      if (!BUSY.includes(err.code) || tries >= REMOVE_TRIES) throw err;
+      pause(REMOVE_PAUSE_MS);
+    }
+  }
+}
+
 const isStale = (beatAt, now, staleMs) => now() - beatAt > staleMs;
 
 /** What a holder's file says, as far as it can be read: a file that is not ours names nobody and still
- * holds by its beat. */
+ * holds by its beat. `beatAt` is `null` for a file too busy to be looked at, and that holder is not
+ * stale: a beat that could not be read is not an old beat. */
 function holderOf(io, file, token, beatAt, { now, staleMs }) {
   let said = {};
   try {
@@ -81,13 +106,16 @@ function holderOf(io, file, token, beatAt, { now, staleMs }) {
     command: typeof said.command === 'string' ? said.command : null,
     startedAt: typeof said.startedAt === 'string' ? said.startedAt : null,
     beatAt,
-    stale: isStale(beatAt, now, staleMs),
+    stale: beatAt !== null && isStale(beatAt, now, staleMs),
   };
 }
 
 /** What is in the lock folder now: `null` when there is no folder to read, `{}` when it is empty, else
- * `{ file, holder }` for the holder that beat last. A file that is going away as it is looked at (a busy
- * answer on Windows) is not there. */
+ * `{ file, holder }` for the holder that beat last. A file that went away since the listing is not
+ * there. One that is there and answers busy is a holder of whom only the token, which is in its name,
+ * is sure, and it counts as the one that beat last. A first version read it as not there: a live gate
+ * whose file stayed busy for a second made the take an error, and a caller that runs its gate without
+ * the lock on an error then ran it beside that gate (found in review, 2026-10-10). */
 function lookAt(io, dir, clock) {
   const names = unless(['ENOENT', 'ENOTDIR', ...BUSY], () => io.readdirSync(dir));
   if (names === undefined) return null;
@@ -96,32 +124,53 @@ function lookAt(io, dir, clock) {
     const token = HOLDER_FILE.exec(name)?.[1];
     if (!token) continue;
     const file = path.join(dir, name);
-    const beatAt = unless(['ENOENT', ...BUSY], () => io.statSync(file).mtimeMs);
-    if (beatAt !== undefined) found.push({ file, holder: holderOf(io, file, token, beatAt, clock) });
+    let beatAt = null;
+    try {
+      beatAt = io.statSync(file).mtimeMs;
+    } catch (err) {
+      if (err.code === 'ENOENT') continue;
+      if (!BUSY.includes(err.code)) throw err;
+    }
+    found.push({ file, holder: holderOf(io, file, token, beatAt, clock) });
   }
-  return found.sort((a, b) => b.holder.beatAt - a.holder.beatAt)[0] ?? {};
+  const beat = ({ holder }) => holder.beatAt ?? Number.MAX_VALUE;
+  return found.sort((a, b) => beat(b) - beat(a))[0] ?? {};
 }
 
 /** Who holds the machine's gate lock: `null` when nobody does, else `{ token, pid, cwd, command,
  * startedAt, beatAt, stale }`, with `null` for what the holder's file does not say and `stale` true
- * for a holder that stopped beating, whose lock the next gate takes over. Reads only, and never throws
- * for a lock that changes as it is read. */
+ * for a holder that stopped beating, whose lock the next gate takes over.
+ *
+ * A holder whose file is there and busy at this look (another process holds it open, or Windows is
+ * still removing it) is a holder too: its `token`, `beatAt: null`, `stale: false`, and `null` for
+ * whatever else could not be read. So `null` always means a free lock, and `beatAt === null` a lock
+ * that is held by a gate whose beat is not known yet: look again.
+ *
+ * Reads only, and never throws for a lock that changes as it is read. */
 export function readGateHolder(home, { now = Date.now, staleMs = GATE_STALE_MS, fileSystem: io = fs } = {}) {
   return lookAt(io, gateLockDir(home), { now, staleMs })?.holder ?? null;
 }
 
-/** Removes the folders of gates that died while they waited: nothing touched them for the stale time. */
+/** Removes the folders of gates that died while they waited: nothing touched them for the stale time.
+ * Litter, not the lock: whatever cannot be swept now is swept by a later gate. Entry by entry, so one
+ * that cannot be read (a file of that name, a waiter that left since the listing) does not keep the
+ * dead ones listed after it for ever. */
 function sweepWaiters(io, root, own, clock) {
-  try {
-    for (const name of io.readdirSync(root)) {
-      if (!WAIT_DIR.test(name) || name === own) continue;
+  const quietly = (step) => {
+    try {
+      return step();
+    } catch {
+      return undefined;
+    }
+  };
+  for (const name of quietly(() => io.readdirSync(root)) ?? []) {
+    if (!WAIT_DIR.test(name) || name === own) continue;
+    quietly(() => {
       const folder = path.join(root, name);
       const entries = [folder, ...io.readdirSync(folder).map((file) => path.join(folder, file))];
       const touched = Math.max(...entries.map((entry) => io.statSync(entry).mtimeMs));
       if (isStale(touched, clock.now, clock.staleMs)) io.rmSync(folder, { recursive: true, force: true });
-    }
-  } catch {
-    // Litter, not the lock: whatever could not be swept now is swept by a later gate.
+    });
   }
 }
 
@@ -138,7 +187,9 @@ function sweepWaiters(io, root, own, clock) {
  * begins, and again when the gate waited for changes.
  *
  * Rejects when the lock can be neither taken nor read (a home that cannot be written): there is no gate
- * to wait for, and the caller decides what a gate without a lock does.
+ * to wait for, and the caller decides what a gate without a lock does. A holder whose file is there and
+ * busy is not that case: it is a gate to wait for like any other (`holder.beatAt` is `null`), inside
+ * `waitMs`, and it is not taken over while it stays busy.
  *
  * A dead holder is taken over on its second stale reading, a poll apart: a machine that slept wakes with
  * every beat hours old, and a live holder's timer fires before the next look. `now`, `sleep` and
@@ -180,7 +231,7 @@ export async function takeGateLock({
   };
   const unstage = () => {
     try {
-      io.rmSync(staging, { recursive: true, force: true, ...RETRY_BUSY });
+      remove(io, staging, { recursive: true, force: true });
     } catch {
       // swept later, as the folder of a gate that waits no more
     }
@@ -228,9 +279,9 @@ export async function takeGateLock({
       const sighting = `${file}@${holder.beatAt}`;
       if (suspect === sighting) {
         suspect = undefined;
-        // Gone already when another gate removed it first. A file that cannot be removed now is waited
-        // for and looked at again: it reads stale next time as well.
-        const gone = unless(BUSY, () => (unless(['ENOENT'], () => io.rmSync(file, RETRY_BUSY)), true));
+        // Gone already when another gate removed it first. A file still busy after the tries of one
+        // removal is waited for and looked at again: it reads stale next time as well.
+        const gone = unless(BUSY, () => (unless(['ENOENT'], () => remove(io, file)), true));
         unless(['ENOENT', 'ENOTEMPTY', 'EEXIST', ...BUSY], () => io.rmdirSync(dir));
         if (gone) continue;
       } else {
@@ -278,10 +329,12 @@ function held({ io, dir, mine, now, beatMs, waitedMs }) {
     released = true;
     clearInterval(timer);
     try {
-      io.rmSync(mine, RETRY_BUSY);
+      remove(io, mine);
       io.rmdirSync(dir);
     } catch {
-      // Not ours any more, or a folder the next gate already cleared: the gate's result stands either way.
+      // Not ours any more, or a folder the next gate already cleared: the gate's result stands either
+      // way. So it does when the file stayed busy past every try: it holds the lock, beating no more,
+      // until the next gate reads it stale.
     }
   };
   return {

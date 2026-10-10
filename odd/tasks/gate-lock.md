@@ -186,6 +186,11 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       clock injected, real file system in a temporary home; test first.
 - [x] T1b · The lock is taken in one step (added 2026-10-10: the review of T1 found that two
       gates late to the same takeover could both hold the lock). Route inline, same two files.
+- [x] T1c · What the review of T1b found (added 2026-10-10, five advisory findings): a busy
+      holder reads as held, not as empty; the sweep goes on past an entry it cannot read; the
+      removal of a holder's file is retried when Windows says busy, shown by a run; the
+      invariant test cannot have its assertion swallowed; the test of processes that die is
+      not at the mercy of a loaded machine. Route: one writer, same two files.
 - [ ] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
       rows, release on every way out; the suite's own gates do not wait. Proof with two
       worktrees recorded here.
@@ -283,24 +288,85 @@ allows a feature. No spend outside the plan.
   `Microsoft/Windows/PowerShell/ModuleAnalysisCache` untracked in this worktree, as the
   orchestrator had warned; removed, not committed.
 
-## Next
-This session cuts its context now, at 72% measured, with T1b staged and not committed. That
-is inside a task by the letter of the roadmap's rule (a task ends with its commit), and it is
-said to him as such: what is left of T1b is one step, blocked from outside, and everything
-it needs is in these files; waiting for it in a full window costs a whole read of it at
-every wake.
+- 2026-10-10 · T1b is commit `6022066`: gate green in 916 s (05:03:00 to 05:18:16), one try, on
+  the orchestrator's turn, with no gate or test run alive when it started. The orchestrator
+  reports that Sebastián closed Brave and PC Manager a few minutes before (its check, not
+  this session's): the first gate of this branch under 950 s. gentle-ai assessed it medium
+  risk and due (559 lines, `slice_budget_reached`), reviewed it with one lens (reliability)
+  under the consent he pre-granted, approved it, and the approval was acknowledged (lineage
+  `review-fc1d8c6ca9190fe9`, authority burned). Five advisory findings, none blocking:
+  - `R3-dies-race-real-clock-margin` (warning): the test of five processes that die holding
+    the lock runs on real time with a stale time of 1.5 s and a poll of 1 ms. A racer that
+    stalls more than 1.5 s on a loaded machine is taken over alive and the test goes red with
+    the lock behaving as designed: a false red in a suite that already misses its bound.
+  - `R3-invariant-assert-swallowed` (suggestion): the test that proves the empty folder is
+    gone throws from inside the file-system tap, and the sweep, the unstage, the release and
+    the read of a holder catch everything, so a violation seen there would pass.
+  - `R3-sweep-aborts-on-first-error` (suggestion): one `try` around the whole sweep, so one
+    entry that cannot be read keeps every dead waiter after it for ever.
+  - `R3-busy-stat-reads-as-empty-lock` (suggestion): a holder whose file answers "busy" is
+    read as no holder, the take goes blind for a second and then rejects; with T2's plan to
+    run without the lock on a rejection, the failure is two gates at once.
+  - `R3-retry-busy-ignored-without-recursive` (suggestion, from the reviewer's memory of the
+    Node documentation, not run): `rmSync` may ignore `maxRetries` without `recursive`, so
+    the retry on a single file would do nothing. Not established either way here: T1c runs it.
+  They became T1c. Changed from the plan, with the reason: the Codex review moves after T1c
+  and covers T1, T1b and T1c together (`--base 8ef2771`), so it is not paid to find again
+  what this review found. Its plan today, nothing spent: 2 parts, 813 changed lines, about
+  780,000 to 2,170,000 input tokens. Said to Sebastián: at that rate the 3 million the
+  charter allows a feature will likely not cover Codex reviews of T2 to T6 as well; it is
+  put to him with the real spend of this one, before any spend past the plan.
+- 2026-10-10 · From the orchestrator, the reading another session made of the log of the gate
+  that timed out (its claims, checked by neither): `bin/codex-review.test.mjs` alone used
+  1,191 s of the 1,200, with tests still owed; tests inside a file run in series and files
+  in parallel, so the bound is in effect a bound on that one file. Every gate started from a
+  desktop session between 02:40 and 04:42 reached the bound, and the two of another session
+  passed (956 s, 1,042 s); why is not known.
 
-After the cut, first: commit T1b when the orchestrator gives the turn. The three files are
-staged; the commit message is in this session's scratchpad (`msg-t1b.txt`) and, if that is
-gone, is the entry "T1b done" above put as `fix(gate-lock): take the lock in one step, so two
-gates cannot both hold it`. Before it, one look at the process list for `check.mjs` or
-`node --test`, and nothing started if one is alive. If the gate reaches the bound again, say
-so and do not retry.
+- 2026-10-10 · T1c done, route one writer (two non-trivial files), its work read back and one
+  of its commands run again by this session. Done: a holder whose file is there and busy is a
+  holder (`beatAt: null`, `stale: false`), waited for inside `waitMs` and refused as `held`
+  with `--no-wait`, never an empty lock; the sweep is entry by entry; a removal that answers
+  busy is tried again by the library itself (6 tries, 20 ms apart, the thread stopped with
+  `Atomics.wait`: about 180 ms at worst) at takeover, at release and at unstage; the
+  invariant test records what it sees and asserts after the take; the test of processes that
+  die runs 3 processes with a stale time of 4 s and a poll of 50 ms. Checked: `node --test
+  bin/lib/gate-lock.test.mjs` exits 0 with 35 tests in 14.0 to 14.4 s, four runs (three the
+  writer's, one this session's). The red was seen for six new tests by putting the library
+  of `6022066` under them (6 of 35 fail, each for its own reason: the take rejected with
+  EPERM, the dead waiter left behind, the removal not tried again). The reworked invariant
+  test fails against the first version (three runs of three, "the lock folder was empty in
+  the middle of a take") and against a library broken inside the sweep's catch-all, where the
+  test as committed passed: the reviewer was right that it could be swallowed. The retry of
+  `rmSync`, run here (`rm-retry.mjs`, Node 24.15, Windows 10, a file held open with no
+  sharing by a PowerShell child, twice): EPERM within a millisecond for every option,
+  `maxRetries` 5 or 50, with `recursive` and without, a file or a folder. So the reviewer's
+  recollection was half right, and `RETRY_BUSY` never did anything on this machine. With a
+  really busy file (`release-busy.mjs`): the library of `6022066` leaves the lock behind at
+  once; this one removes it for holds of 66 and 87 ms and gives up after 179 ms on one of 3 s.
+  Not checked: no test of the suite uses a really busy file, only those two scripts; a busy
+  answer on the listing of the lock folder itself still goes blind and rejects after about a
+  second (outside the finding); any system but this Windows machine; the dies test has no
+  red, since the stall it guards against cannot be made on purpose. Failed: nothing. Told as
+  it was: the writer ran the PowerShell experiment (no tests) while a gate of another session
+  was alive, and wrote the library before it could see the new tests fail, for the same
+  reason; the red was then shown with the committed library under the new tests.
+  Decided here, for T2 and T3 to build on: `readGateHolder` returns `null` only for a free
+  lock; a holder that stays busy is never taken over, so a file that can never be read keeps
+  each gate waiting to its `waitMs` and then refuses it (a red gate after the wait, not two
+  gates at once); a file Windows is still removing costs a waiter one poll, 2 s.
+
+## Next
+T1c is written and staged with these records: its commit goes on the orchestrator's turn
+(one more gate of about 15 minutes), message `fix(gate-lock): wait for a busy holder, and
+make the retry of a removal real`. One look at the process list first; a gate that reaches
+the bound is said and not retried.
 
 Then, in this order:
-1. Record T1b's commit here. Run `gentle-ai review assess --base-ref c623c4c --committed-only`
-   on it and follow what it returns; then the Codex review of T1 and T1b together:
-   `js-harness codex-review --base 8ef2771` (its plan first, `--plan`).
+1. Record T1c's commit here. Run `gentle-ai review assess --base-ref 6022066 --committed-only`
+   on it and follow what it returns; then the Codex review of T1, T1b and T1c together:
+   `js-harness codex-review --base 8ef2771` (its plan first, `--plan`), and its real spend
+   told to Sebastián with the question of the Codex budget for T2 to T6.
 2. T2, one writer: `check` takes the lock around the sensors. Decided for it: the lock wraps
    the sensors only, and only when there is a sensor to run; a second gate says on stderr
    whose gate it waits for; `--no-wait` and `--wait <minutes>` (default 60); rows named `gate`
@@ -312,6 +378,7 @@ Then, in this order:
    temporary home (they pass `JS_HARNESS_HOME: dir` today, `bin/check.test.mjs:588-634`); an
    end-to-end test starts two real `check` processes on two folders and shows their sensors
    one after the other.
-3. Before any test or commit: no private wait script. Wait on the running gate's process
-   itself, read the board once, and start nothing if it shows a gate (the two mistakes above). A lock that cannot be taken at all (a home that cannot be written) must not turn a gate
-red: it runs without the lock and says so in a row.
+3. Before any test or commit: no private wait script. One look at the process list for
+   `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,
+   and start nothing beside it (the two mistakes above). A gate starts only on the
+   orchestrator's turn, and one that reaches the bound is said and not retried.

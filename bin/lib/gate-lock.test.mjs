@@ -346,14 +346,18 @@ test('processes that race for the lock of a dead holder, and then for each other
 test('the lock folder never exists without its holder\'s file while a gate takes the lock', withHome(async (home) => {
   // A first version made the folder and then wrote the file. In between the folder was empty and its
   // maker's, and a gate late to a takeover removed it and made its own: both held the lock.
+  // What is seen is kept and judged after the take: thrown from in here, it would be caught by the
+  // steps of a take that catch everything (the sweep, the removal of its own folder).
   let taking = true;
   let calls = 0;
-  const io = tapped(() => {
+  const emptyBefore = [];
+  const io = tapped((name) => {
     calls += 1;
-    if (taking && fs.existsSync(gateLockDir(home))) assert.notDeepEqual(fs.readdirSync(gateLockDir(home)), [], 'the lock folder was empty in the middle of a take');
+    if (taking && fs.existsSync(gateLockDir(home)) && fs.readdirSync(gateLockDir(home)).length === 0) emptyBefore.push(name);
   });
   const lock = await take(home, fakeClock(), { fileSystem: io });
   taking = false;
+  assert.deepEqual(emptyBefore, [], `the lock folder was empty in the middle of a take, before ${emptyBefore.join(', ')}`);
   assert.ok(calls > 0, 'the take went through the file system it was given');
   assert.equal(holderFiles(home).length, 1);
   lock.release();
@@ -392,33 +396,115 @@ test('an empty lock folder is nobody\'s: it is cleared and the lock is taken at 
   lock.release();
 }));
 
-test('a holder file that is going away as it is read is not there, and reading the holder does not throw', withHome(async (home) => {
+/** `io`: `fs` whose `name` fails with `code` the first `times` it is asked for the file of the holder
+ * with `pid`. `failed()` says how many times it did. */
+function busyFor(pid, name, code, times = Infinity) {
+  let failed = 0;
+  const io = tapped((called, [target]) => {
+    if (called !== name || !String(target).includes(`holder-${pid}-`) || failed >= times) return;
+    failed += 1;
+    throw failing(code);
+  });
+  return { io, failed: () => failed };
+}
+
+test('a holder file that is busy as it is read is a holder since when is not known, one that is gone is none, and neither throws', withHome(async (home) => {
   const clock = fakeClock();
   const lock = await take(home, clock, { pid: 11 });
-  const io = tapped((name) => {
-    if (name === 'statSync') throw failing('EPERM');
-  });
-  assert.equal(readGateHolder(home, { now: clock.now, fileSystem: io }), null);
-  assert.equal(readGateHolder(home, { now: clock.now }).pid, 11);
+  const [name] = holderFiles(home);
+  // Long past the stale time: a beat that could not be read is not an old beat.
+  clock.advance(10 * STALE_MS);
+  const holder = readGateHolder(home, { now: clock.now, staleMs: STALE_MS, fileSystem: busyFor(11, 'statSync', 'EPERM').io });
+  assert.equal(holder.token, name.slice('holder-'.length, -'.json'.length));
+  assert.equal(holder.beatAt, null);
+  assert.equal(holder.stale, false);
+  assert.equal(readGateHolder(home, { now: clock.now, fileSystem: busyFor(11, 'statSync', 'ENOENT').io }), null);
+  assert.equal(readGateHolder(home, { now: clock.now, staleMs: STALE_MS }).stale, true);
   lock.release();
+}));
+
+test('a holder whose file is busy holds the lock: a gate waits for it and takes the lock only once it is released', withHome(async (home) => {
+  // Busy for more looks than a take makes of a lock nobody holds before it gives up. Read as an empty
+  // lock, such a holder made the take an error, and a caller that goes on without the lock ran beside it.
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const [firstFile] = holderFiles(home);
+  const busy = busyFor(11, 'statSync', 'EBUSY', 50);
+  const inTheLock = new Set();
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    inTheLock.add(holderFiles(home).join());
+    first.beat();
+    if (sleeps === 53) first.release();
+  };
+  const told = [];
+  const second = await take(home, clock, { pid: 22, fileSystem: busy.io, onWait: (holder) => told.push(holder) });
+  assert.equal(second.refused, undefined);
+  assert.equal(busy.failed(), 50);
+  assert.equal(second.waitedMs, 53 * POLL_MS);
+  assert.deepEqual([...inTheLock], [firstFile], 'only the first gate held the lock until it released it');
+  assert.equal(told.length, 1);
+  assert.equal(told[0].beatAt, null);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
+  second.release();
+}));
+
+test('a holder whose file stays busy refuses a gate that does not wait at once, and one that waits when its wait is over', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const busy = busyFor(11, 'statSync', 'EACCES');
+  const atOnce = await take(home, clock, { pid: 22, wait: false, fileSystem: busy.io });
+  assert.equal(atOnce.refused, 'held');
+  assert.equal(atOnce.waitedMs, 0);
+  assert.equal(atOnce.holder.beatAt, null);
+  assert.equal(atOnce.holder.stale, false);
+  // Nor is it taken over, however old the beat that cannot be read may be.
+  clock.advance(2 * STALE_MS);
+  const later = await take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io });
+  assert.equal(later.refused, 'timeout');
+  assert.equal(later.waitedMs, 5 * POLL_MS);
+  assert.equal(later.holder.beatAt, null);
+  assert.equal(first.lost(), false);
+  assert.deepEqual(waitFolders(home), []);
+  first.release();
 }));
 
 test('a dead holder whose file cannot be removed yet is looked at again, not an error', withHome(async (home) => {
   const clock = fakeClock();
   await take(home, clock, { pid: 11 });
   clock.advance(STALE_MS + 1000);
-  let busy = 0;
-  const io = tapped((name, [target]) => {
-    if (name === 'rmSync' && String(target).includes('holder-11-') && busy < 3) {
-      busy += 1;
-      throw failing('EBUSY');
-    }
-  });
-  const second = await take(home, clock, { pid: 22, fileSystem: io });
+  // Busy for longer than the tries of one removal, so the take must come back to it.
+  const busy = busyFor(11, 'rmSync', 'EBUSY', 8);
+  const second = await take(home, clock, { pid: 22, fileSystem: busy.io });
   assert.equal(second.refused, undefined);
-  assert.equal(busy, 3);
+  assert.equal(busy.failed(), 8);
+  assert.ok(second.waitedMs > 2 * POLL_MS, `waited ${second.waitedMs} ms`);
   assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
   second.release();
+}));
+
+// `rmSync` takes `maxRetries` and `retryDelay` and does not wait with them: on Node 24.15 and Windows 10
+// a file another process held open for 150 ms answered EPERM within a millisecond, with `recursive` and
+// without (run 2026-10-10). So the lock tries again by itself, and these two prove that it does.
+test('a dead holder\'s file that is busy for a moment is removed in the same look', withHome(async (home) => {
+  const clock = fakeClock();
+  await take(home, clock, { pid: 11 });
+  clock.advance(STALE_MS + 1000);
+  const busy = busyFor(11, 'rmSync', 'EBUSY', 2);
+  const second = await take(home, clock, { pid: 22, wait: false, fileSystem: busy.io });
+  assert.equal(second.refused, undefined);
+  assert.equal(busy.failed(), 2);
+  assert.equal(second.waitedMs, POLL_MS);
+  second.release();
+}));
+
+test('release removes its holder\'s file when the file is busy for a moment, and leaves no lock behind', withHome(async (home) => {
+  const busy = busyFor(11, 'rmSync', 'EPERM', 2);
+  const lock = await take(home, fakeClock(), { pid: 11, fileSystem: busy.io });
+  lock.release();
+  assert.equal(fs.existsSync(gateLockDir(home)), false, 'the lock folder is gone');
+  assert.equal(busy.failed(), 2);
 }));
 
 test('a gate leaves no folder of its own behind, whether it takes the lock, is refused or gives up', withHome(async (home) => {
@@ -448,6 +534,25 @@ test('the folder of a gate that died while it waited is swept by the next gate t
   lock.release();
 }));
 
+test('an entry the sweep cannot read does not keep the dead waiter listed after it', withHome(async (home) => {
+  // A file where a waiter's folder would be cannot be listed, as a waiter that left since the listing
+  // cannot. Listings are sorted here, so it comes before the dead waiter on every file system.
+  const clock = fakeClock();
+  const old = new Date(clock.now() - 10 * STALE_MS);
+  const dead = path.join(gateDir(home), 'wait-dead');
+  fs.mkdirSync(dead, { recursive: true });
+  fs.writeFileSync(path.join(dead, 'holder-x.json'), '{}');
+  fs.utimesSync(path.join(dead, 'holder-x.json'), old, old);
+  fs.utimesSync(dead, old, old);
+  fs.writeFileSync(path.join(gateDir(home), 'wait-a-file'), 'not a folder');
+  const sorted = new Proxy(fs, {
+    get: (target, name) => (name === 'readdirSync' ? (...args) => target.readdirSync(...args).sort() : target[name]),
+  });
+  const lock = await take(home, clock, { fileSystem: sorted });
+  assert.deepEqual(waitFolders(home), ['wait-a-file']);
+  lock.release();
+}));
+
 test('a gate whose own folder was swept as it took the lock makes it again and takes the lock', withHome(async (home) => {
   // It slept the whole stale time between two looks, and another gate took it for dead.
   let swept = false;
@@ -465,15 +570,21 @@ test('a gate whose own folder was swept as it took the lock makes it again and t
   lock.release();
 }));
 
-// Each racer dies holding the lock, so every take but the first is a takeover that the others race for,
-// looking as fast as they can. It proves that every death is recovered and by one gate at a time; it is
-// not what catches the first version's gap, which it passed three runs of three (five processes do not
-// hit a window that narrow). The test of the empty folder above is.
+// Each racer dies holding the lock, so every take but the first is a takeover: two race for the first
+// one, and the last takes the second alone. It proves that every death is recovered and by one gate at a
+// time; it is not what catches the first version's gap, which it passed three runs of three with five
+// processes looking every millisecond (a window that narrow is not hit that way). The test of the empty
+// folder above is.
+//
+// It runs on the real clock, so its numbers are margins against a loaded machine. A racer is inside for
+// 25 ms and never beats: one that stalls there for longer than the stale time is taken over alive, and
+// the test is red with the lock doing what it should. Four seconds is that margin, which each of the two
+// takeovers waits out; so three processes and not five, and a look every 50 ms, which loads nothing.
 test('processes that each die holding the lock are taken over one at a time', withHome(async (home) => {
   const log = path.join(home, 'race.log');
-  const results = await Promise.all(Array.from({ length: 5 }, () => racer(home, log, { rounds: 1, staleMs: 1500, pollMs: 1, dies: true })));
+  const results = await Promise.all(Array.from({ length: 3 }, () => racer(home, log, { rounds: 1, staleMs: 4000, pollMs: 50, dies: true })));
   for (const { status, stderr } of results) assert.equal(status, 0, stderr);
-  assertNeverTogether(fs.readFileSync(log, 'utf8'), 5);
+  assertNeverTogether(fs.readFileSync(log, 'utf8'), 3);
 }));
 
 test('a holder file that cannot be read still holds while it is fresh, and is taken over once stale', withHome(async (home) => {
