@@ -15,7 +15,8 @@ const pathFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
 /** Every path of the practice folder, from its root: the one folder whose deletion undoes everything.
  * `marker` says that this command made the folder, `project` is the practice project (its own git
  * repository), `prefix` is where the candidate is installed, `home` stands in for the user's home, `releases`
- * holds the packed candidate and `record` gets one line per run. */
+ * holds the packed candidate, `npmCache` is where npm keeps its cache and its logs (it would write them under
+ * the user's home otherwise) and `record` gets one line per run. */
 export function practiceLayout(root, platform = process.platform) {
   const p = pathFor(platform);
   return {
@@ -25,6 +26,7 @@ export function practiceLayout(root, platform = process.platform) {
     prefix: p.join(root, 'prefix'),
     home: p.join(root, 'home'),
     releases: p.join(root, 'releases'),
+    npmCache: p.join(root, 'npm-cache'),
     record: p.join(root, 'record.jsonl'),
   };
 }
@@ -45,6 +47,26 @@ export function installedBin(prefix, platform = process.platform) {
 
 // ---- the environment of every child process --------------------------------------------------------------------------
 
+// The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists them
+// (the same list `bin/check.mjs` takes from a sensor). Git exports some to a hook and to an `--exec`.
+const GIT_REPOSITORY_VARIABLES = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+];
+
 /** The environment of every process the practice command starts, as a new object; `baseEnv` is left as it is.
  *
  * - The practice's command comes first on PATH, so the hook `init` writes (`exec js-harness check`) and every
@@ -58,13 +80,17 @@ export function installedBin(prefix, platform = process.platform) {
  * - `DO_NOT_TRACK` is `1`: `js-harness init` runs the real `codegraph init`, which queues telemetry and caches
  *   an update check under the user's real `~/.codegraph`; this variable switches both off, so the practice
  *   writes nothing outside its folder.
+ * - The variables that bind git to one repository are dropped: started from a hook or an `--exec` of git, the
+ *   `git init` and the commits of the practice would otherwise act on the repository the command was started
+ *   from. Everything else git reads (the editor, the author, the ssh command) is kept.
  * - `HOME` and `USERPROFILE` are kept: git needs the user's identity to commit. The real home is protected by
  *   the before-and-after comparison below instead. */
 export function childEnv(layout, baseEnv = process.env, platform = process.platform) {
   const windows = platform === 'win32';
   const named = (name, wanted) => (windows ? name.toUpperCase() === wanted : name === wanted);
   const ofHarness = (name) => (windows ? name.toUpperCase() : name).startsWith('JS_HARNESS_');
-  const replaced = (name) => named(name, 'PATH') || named(name, 'DO_NOT_TRACK') || ofHarness(name);
+  const ofRepository = (name) => GIT_REPOSITORY_VARIABLES.includes(windows ? name.toUpperCase() : name);
+  const replaced = (name) => named(name, 'PATH') || named(name, 'DO_NOT_TRACK') || ofHarness(name) || ofRepository(name);
 
   const pathName = Object.keys(baseEnv).filter((name) => named(name, 'PATH')).sort()[0];
   const searchPath = [shimDir(layout.prefix, platform), pathName === undefined ? '' : baseEnv[pathName]];

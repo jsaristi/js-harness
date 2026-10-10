@@ -80,7 +80,8 @@ first, at no cost.
   of its bound (`docs/ROADMAP.md:652-653`) and must not grow.
 - Never run while a gate runs — because the run packs and installs the package with npm, and two
   heavy runs at once made a gate time out (`docs/ROADMAP.md:341-344`). Until the gate has its
-  lock, "Gates" in `js-harness sessions` is read first, by hand.
+  lock, "Gates" in `js-harness sessions` is read once before starting, and never again and again
+  while a gate runs: the read is load too (Progress, the orchestrator's notice of 2026-10-10).
 
 ## Design
 
@@ -115,6 +116,7 @@ makes the first road's mistake impossible rather than forbidden.
   prefix\            where the candidate is installed
   home\              the practice's home: .claude, .codex, .js-harness
   releases\          the packed candidate
+  npm-cache\         npm's cache and logs, which it would otherwise keep under his home
   record.jsonl       one line per run
 ```
 
@@ -192,6 +194,9 @@ Read in the code, not run, unless it says so. Reported to the orchestrator; none
   (`git ls-remote --tags origin | wc -l` prints 0). The command it suggests cannot work.
 - New, assumed until the first run: `init` creates `.codegraph/` and writes no `.gitignore`
   (`rg` in `bin/lib/project.mjs`: no hit), so a project would show that folder as untracked.
+  The writer of T2 read that codegraph writes its own `.codegraph/.gitignore` (`*`,
+  `!.gitignore`), which keeps the index out of a commit but still leaves `?? .codegraph/` in
+  `git status`.
 - New, assumed until the first run: the hook depends on the PATH of whatever starts git. From a
   program that does not carry the shim's folder, a commit would fail with a "not found" from the
   shell and not with a message of the harness.
@@ -218,7 +223,9 @@ medium
 Strategy: `ask-on-risk`. Forecast about 600 authored lines: the pure part about 150, its tests
 about 200, the command about 250. Measured after T1: the pure part is 275 lines and its tests
 395, so the forecast for the whole is now about 950. The code was not cut to fit: 395 of the 670
-are tests, and the two slices stay as planned. That is over the budget of about 400, so two slices stacked to
+are tests, and the two slices stay as planned. Measured after T2: the command is 509 lines, twice
+its forecast, because each of the ten steps states what it expects and prints its evidence; the
+whole is about 1,230 lines with the two library changes of T2. That is over the budget of about 400, so two slices stacked to
 `main`, the form the session board and the watchdog used: slice 1 is this document, the pure part
 and its tests; slice 2 the command, the first run's record and the roadmap entry. Each code slice
 gets its gentle-ai review and then its Codex review, whose cost the orchestrator admits under
@@ -231,8 +238,8 @@ run itself.
 ## Tasks
 - [x] T0 This document, the plan put to Sebastián, his yes and the place of the folder — route: inline
 - [x] T1 `scripts/practice-lib.mjs` and its test: the layout from a root, the environment of a child process (the practice's prefix first on PATH, `JS_HARNESS_HOME`, never his home), the refusals of `setup`, the journey as named steps, the before-and-after comparison of his real home, the record line — route: delegated writer (two non-trivial files)
-- [ ] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
-- [ ] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
+- [x] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
+- [x] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
@@ -305,8 +312,128 @@ run itself.
   - Open, for T2: resolve `--root` to an absolute path and through links before judging it
     (`isInside` compares spellings); hash the same list of files before and after; read
     `JS_HARNESS_E2E_NPM_CLI` from the caller's environment, since `childEnv` drops it.
+- 2026-10-10: slice 1 committed as `d0bcb16`; gate green, no gate was running when it started
+  (`board free after 0s`). After the gate an untracked `Microsoft/Windows/PowerShell/
+  ModuleAnalysisCache` sat in the worktree root, written at 03:45 while the gate ran: the
+  follow-up `odd/tasks/codex-review-lean.md:1296-1299` (some test starts PowerShell without
+  `LOCALAPPDATA`), seen now for the fourth time. Removed by hand, not committed. The gate's
+  review row and `gentle-ai review assess --base-ref ac2c18a --committed-only` both read the
+  candidate as unassessable (`risk: high`, `review_due: true`) because of untracked files: that
+  folder and `scripts/practice.mjs`, which the writer of T2 had begun. The review of slice 1
+  waits for that writer to finish, so that nothing moves under it.
+- 2026-10-10, a notice from the orchestrator, carried by Sebastián because this session holds
+  its messages too. A claim until checked; the one thing checked: both worktrees it names still
+  show the commits it names (`session-board` at `20911ea`, `gate-lock` at `c623c4c`). What it
+  says: the gate failed three times that night at its bound of 1,200 s for another session, and
+  a board read beside a gate is load; the writer of T1 polled the board every 60 s. The rules
+  it sets, taken as written: while any gate runs, no test run and no board read; to wait for a
+  gate, wait on its process id; no gate and no test run from this session until the
+  session-board record and `JH 1`'s T1b are both committed. The writer of T2 was told at once
+  to run no test and read no board; the library test it changed is run by the parent in its
+  turn. This replaces the constraint above that told a session to read "Gates" before every
+  run: reading it repeatedly is itself the load.
+- 2026-10-10, T2 written by a delegated writer that ran nothing but `node --check` and the
+  wrong-argument calls; route as planned. Its handoff, with what the parent read itself (the
+  whole of `scripts/practice.mjs` and the diff of the library):
+  - Done: `scripts/practice.mjs` (509 lines): the project's files, the seeds of the practice
+    home, the child-process helpers, one function per id of `JOURNEY`, `journey`, `setup` and a
+    guarded `main`. Two library changes: `practiceLayout` gains `npmCache`, and `childEnv` also
+    drops the variables that bind git to one repository (`GIT_DIR`, `GIT_WORK_TREE`,
+    `GIT_INDEX_FILE` and the rest of the list `bin/check.mjs` keeps), because started from a hook
+    the practice's `git init` and commits would act on the repository the command was started
+    from.
+  - Checked: `node --check` on the three files, exit 0. `node scripts/practice.mjs` with no
+    argument, `bogus`, `run`, `run --root`, `setup --help`, `run --root x extra`: exit 2 each,
+    usage printed, nothing created. `contract check`: PASS. The parent confirmed by reading that
+    `check` prints its rows as `PASS  <name>  <detail>` (`bin/check.mjs:591-595`), which two
+    steps rely on.
+  - Not checked: the library tests after its changes (one test edited, one added:
+    `childEnv drops what would bind git to another repository, and keeps the rest of what git
+    reads`); the parent runs them in its turn. And the whole journey: every expectation of a
+    step is read from the code of the harness or assumed, none was run. The assumptions the
+    first run settles: that npm takes the quiet flags on `pack`; that `codegraph init` succeeds
+    and returns; that git's shell finds the shim through PATH and the hook's output reaches the
+    captured streams; that `npm run test` works inside `check`; that `.codegraph` can be removed
+    on Windows.
+  - Failed, said first to Sebastián: a diagnostic command of the writer (`env | rg`) printed
+    the value of the environment variable `JS_HARNESS_EVAL_OAUTH_TOKEN` into its own tool
+    output, which is the transcript of this session's sub-agent. It was written to no file of
+    the repository and is not repeated anywhere. Whether the token is replaced is his decision.
+    `childEnv` drops that variable from every process of the practice. The writer also wrote
+    and removed one scratch file under `/tmp`, outside its surfaces.
+  - Decisions beyond its brief, kept: `install` and `uninstall --global` get `--home` as well
+    as `JS_HARNESS_HOME`; `install` runs twice in its step, to show a second adds no entry; the
+    refused commit must show a `FAIL  tests` row, so that a refusal for another reason does not
+    pass; the project's `uninstall` is judged by `git status` before and after; a skipped step
+    prints `SKIP` and is left out of the record; `setup` creates only the root.
+  - Open: `check` makes and removes a throwaway home in the OS temporary folder while it runs
+    a project's sensors (`bin/check.mjs:241-244`): a passing write outside the practice folder
+    that the harness does in every project, so "nothing outside the one folder" holds for what
+    remains, not for that moment.
+- 2026-10-10, a second notice from the orchestrator, carried by Sebastián, correcting the first:
+  the session-board record gets no gate for now (it failed a fourth time at the bound and
+  passed to the session `JH 3 · cierre de session board`), so this session no longer waits for
+  that worktree. Its turn comes when process 21584 (`JH 1`'s gate, started 04:22:12) has ended
+  and the process list shows no `check.mjs` alive; the wait is on the process id, not on reads
+  of git or of the board. Checked: `tasklist /FI "PID eq 21584"` showed that `node.exe` alive
+  at 04:32. The wait on the two git heads was stopped, and one `Wait-Process -Id 21584` waits
+  instead, followed by one read of the process list.
+- 2026-10-10, the order of this session's turn, changed for a reason. T2 has never run, and a
+  commit costs a gate that others wait for. So the first run comes before the commit of slice
+  2: `setup` and `run` at `D:\js-harness-practice` from the uncommitted tree (the record says
+  `dirty`), what it shows is fixed, and slice 2 is committed once, working. A run from the clean
+  commit follows for the record. The reviews do not hold the turn either: a review starts four
+  reviewer processes, which is load beside a gate, so each runs in a window with no gate, and
+  the review of slice 1 runs from a detached worktree at `d0bcb16`, so that later commits do
+  not move its candidate.
+- 2026-10-10, this session's turn: process 21584 ended at 04:42:24 and the one read of the
+  process list after it said `no check.mjs alive`.
+  - `node --test scripts/practice-lib.test.mjs`: `tests 39 / pass 39 / fail 0`, 0.25 s. This is
+    the first green run of the two tests T2 changed; their red was not seen by the parent.
+  - `node scripts/practice.mjs setup --root D:\js-harness-practice`: exit 0. The folder exists,
+    on Sebastián's yes of the same day: the marker (`from feat/practice-project d0bcb16`), the
+    project with one commit, the stand-in home with its two seeded host files, and the empty
+    `prefix`, `releases` and `npm-cache`. To undo everything: delete `D:\js-harness-practice`.
+  - `node scripts/practice.mjs run --root D:\js-harness-practice`, the first run, from the
+    uncommitted tree: exit 0, `10 of 10 steps passed; real home: unchanged`, with nothing to
+    fix. What each step printed, shortened:
+    - real home, before: `8 files of C:\Users\Oficina hashed, 8 of them present`.
+    - pack and install: `js-harness-0.1.0.tgz installed; the command on the practice PATH is
+      D:\js-harness-practice\prefix\js-harness`.
+    - `install`: the manifest and four skills in the practice home; each host file holds its
+      seeded entry and one `js-harness doctor --hook`, after two installs.
+    - `init`: `wrote harness.json`, `wrote AGENTS.md`, `wrote .git/hooks/pre-commit`, `ran
+      codegraph init`; `git status --porcelain` then shows `?? .codegraph/`, `?? AGENTS.md`,
+      `?? harness.json`.
+    - the commit that passes: `HEAD 6d596bd -> 9966f1e`, and the hook printed `PASS  budget
+      122 estimated tokens (budget 1500)`, `PASS  contracts  no contracts under odd/tasks`,
+      `PASS  tests  npm run test passed`.
+    - the commit that must be refused: `git commit exited 1 and HEAD stayed at 9966f1e`, with
+      `FAIL  tests  npm run test exited 1`; the module restored, no tracked file differs.
+    - `uninstall` in the project: the hook, the project manifest, `harness.json`, `AGENTS.md`
+      and `.codegraph` gone, `git status` showing only ` D AGENTS.md` and ` D harness.json`;
+      `init` again, no tracked file differs.
+    - `uninstall --global`: no manifest and no skill left in the practice home, both host
+      files byte for byte as seeded; installed again.
+    - real home, after: `the same 8 files of C:\Users\Oficina hashed again: none differs`.
+  - A second run at once, to take the other branch of the fourth step, the one every later
+    run takes: exit 0, 10 of 10. `js-harness status` printed `pinned version: 0.1.0`, `running
+    version: 0.1.0`, `this clone: set up`, `pin and running version: match`; `js-harness sync`
+    printed `up to date at 0.1.0`. The practice project's `git log` now reads `afed3a6` and
+    `9966f1e` (`practice: run of js-harness d0bcb16`), both made through the hook `init` wrote,
+    over `6d596bd`, and `record.jsonl` holds two lines, both `dirty`.
+  - What the two runs settled of what was assumed: git's shell finds the candidate through
+    PATH on Windows and the hook's output reaches the caller; `npm run test` works inside
+    `check` in a project; npm takes the quiet flags on `pack`; `codegraph init` returns, and
+    `.codegraph` can be removed on Windows. And of "Met on the road": after `init`, a project
+    does show `?? .codegraph/`, in every run.
+  - Not checked: whether `DO_NOT_TRACK=1` kept codegraph from writing under `~/.codegraph`.
+    Every session on this machine appends to that queue, so its date proves nothing either
+    way; it rests on the reading of codegraph's code. How long a run takes was not measured.
+  - Failed: nothing.
 
 ## Next step
-The commit of slice 1 (this document, the pure part and its tests), when no gate runs; its
-gentle-ai assessment from the boundary `ac2c18a` and, if due, its review and the Codex review.
-Then T2, by a delegated writer: `scripts/practice.mjs`.
+The commit of slice 2 (`scripts/practice.mjs`, the two library changes, this document), in this
+turn. Then, each in a window with no gate: the review of slice 1 (`d0bcb16`, base `ac2c18a`,
+from a detached worktree) and of slice 2, with their Codex reviews; a run from the clean commit
+for the record; and T4, the roadmap entry.

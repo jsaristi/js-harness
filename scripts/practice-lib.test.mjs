@@ -26,9 +26,11 @@ test('practiceLayout gives every path of the practice folder from its root', () 
     prefix: 'D:\\js-harness-practice\\prefix',
     home: 'D:\\js-harness-practice\\home',
     releases: 'D:\\js-harness-practice\\releases',
+    npmCache: 'D:\\js-harness-practice\\npm-cache',
     record: 'D:\\js-harness-practice\\record.jsonl',
   });
   assert.equal(POSIX_LAYOUT.marker, '/srv/practice/practice.json');
+  assert.equal(POSIX_LAYOUT.npmCache, '/srv/practice/npm-cache');
   assert.equal(POSIX_LAYOUT.record, '/srv/practice/record.jsonl');
 });
 
@@ -99,6 +101,20 @@ test('childEnv sets DO_NOT_TRACK to 1 whatever the base holds', () => {
   const env = childEnv(WIN_LAYOUT, { do_not_track: '0' }, 'win32');
   assert.deepEqual(Object.keys(env).filter((name) => /^do_not_track$/i.test(name)), ['DO_NOT_TRACK']);
   assert.equal(env.DO_NOT_TRACK, '1');
+});
+
+test('childEnv drops what would bind git to another repository, and keeps the rest of what git reads', () => {
+  // Set by git for a hook or an `--exec`: with them, the `git init` and the commits of the practice would
+  // act on the repository the command was started from.
+  const binding = { GIT_DIR: 'D:\\js-harness\\.git', GIT_WORK_TREE: 'D:\\js-harness', GIT_INDEX_FILE: 'D:\\js-harness\\.git\\index', GIT_COMMON_DIR: 'D:\\js-harness\\.git', GIT_PREFIX: 'scripts/' };
+  const kept = { GIT_EDITOR: 'true', GIT_AUTHOR_NAME: 'Sebastian', GIT_SSH: 'ssh.exe' };
+  for (const [layout, platform] of [[WIN_LAYOUT, 'win32'], [POSIX_LAYOUT, 'linux']]) {
+    const env = childEnv(layout, { PATH: 'x', ...binding, ...kept }, platform);
+    assert.deepEqual(Object.keys(env).filter((name) => /^git_/i.test(name)).sort(), Object.keys(kept).sort(), platform);
+  }
+  const lower = childEnv(WIN_LAYOUT, { git_dir: 'D:\\js-harness\\.git' }, 'win32');
+  assert.deepEqual(Object.keys(lower).filter((name) => /^git_/i.test(name)), []);
+  assert.equal(childEnv(POSIX_LAYOUT, { git_dir: 'another variable' }, 'linux').git_dir, 'another variable');
 });
 
 test('childEnv keeps the home of the user, which git needs for his identity', () => {
