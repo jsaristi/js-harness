@@ -167,7 +167,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Live check on this machine with two or more sessions open, and the memories point to the command
 - [x] `sessions --watch` returns when the board changes and costs nothing while it does not
 - [x] The orchestrator ships as a skill the installer writes and removes through the manifest
-- [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
+- [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -821,6 +821,35 @@ The new orchestrator's reading, his to correct, for the rewrite of the skill:
 
 It was done that way the same day: five questions asked by message and answered the same
 way (`odd/tasks/session-board.md`, entries of that day).
+
+Two classes of session, found on 2026-10-10 in the first stretch with two work sessions
+(`odd/tasks/session-board.md`). Claude Code delivers a message between sessions only when
+both ask for permissions the same way: a receiver that bypasses permission prompts holds a
+message from a sender that does not, and in the desktop app the held message expires
+unseen. His desktop sessions bypass; a session he opens from the phone through `js-harness
+remote` runs in `auto`. So the notice of a phone-opened work session never reached the
+orchestrator. His decision that day: such a session is read on the board for now, the
+repair goes here, and making the modes meet is his, at the computer (the host documents
+`crossSessionInbound: "accept"` in the user's settings, and the roadmap's open decision 2,
+the permission mode, is the other road). Proposed by the orchestrator for this feature, not
+decided: a work session whose first notice is held does not retry and says so once; the
+stack doctor reports when a project's sessions run in different classes; an orchestrator is
+opened from the desktop app. In a project that only uses the harness this is the first
+thing a second device would meet, so the check belongs in what is installed, not in advice.
+
+A test owed, carried here from the session board's last task on 2026-10-10. A session that
+the orchestrator opens by itself, through a scheduled task with no schedule, was seen to
+start, take a title, receive a message and run with permission prompts bypassed
+(`odd/tasks/session-board.md`, criterion 3). Not tried: whether he can type in its chat, and
+whether it can commit in a folder of its own. The second costs one gate turn, so it is run
+once the gate lock is merged; until then work sessions open by his paste, because a session
+opened that way has no tool to ask him anything. The same stretch left for this feature,
+none of it decided: a notice goes to a role and never to a remembered reply address, with a
+command that prints the orchestrator's current address; a wait handed to a session that
+cannot be reached names a process that ends, never a commit that may not come; the handover
+of the orchestrator's title, done twice that night by renaming in one step, has no protocol;
+and the roster he asked for (who is alive, what each is for, who left and who took its
+place) as a section of the board computed at each read.
 
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The
