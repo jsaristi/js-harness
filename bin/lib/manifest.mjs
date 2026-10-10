@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
+import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 
 function skillContent(version) {
   return `---
@@ -21,6 +22,7 @@ js-harness commands:
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for the gate that runs, 60 minutes at most (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
+- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 
@@ -91,7 +93,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 ## A work session
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
-- Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. Start no whole test run of your own beside a gate.
+- Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
@@ -680,7 +682,14 @@ export function sync(home, version, deps = {}) {
  * included (reported in the same two lists). Removes each
  * recorded entry the same way (deep-equal match only, file left alone otherwise — see
  * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content") and finally the manifest itself.
+ * `files`/`entries` since it is not "installed content"), the folder of the machine's gate lock, and
+ * finally the manifest itself.
+ *
+ * The gate lock's folder is written by `check` and `gate`, not by `install`, so it is looked for under a
+ * home with no manifest as well, which is otherwise left as it is. Its path is in `removed` when it was
+ * there and is gone, and `gateKept` says why it was left, as `[{ path, reason, ... }]`: `in-use` with the
+ * `pid` and `cwd` of the gate that is alive in it, or `unremovable` with the error's `code`
+ * (`removeGateFolder`).
  *
  * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
  * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
@@ -703,7 +712,13 @@ export function sync(home, version, deps = {}) {
 export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
   const manifest = readManifest(home);
-  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] };
+  if (!manifest) {
+    // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
+    // component, so it is looked for all the same, and the folder it leaves empty goes with it.
+    const gate = removeGateFolder(home, removeFile);
+    removeEmptyDirsUpTo(path.dirname(gateDir(home)), home);
+    return { removed: gate.removed, kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept };
+  }
 
   const removed = [];
   const kept = [];
@@ -755,6 +770,8 @@ export function uninstall(home, deps = {}) {
   }
 
   fs.rmSync(cachePath(home), { force: true });
+  const gate = removeGateFolder(home, removeFile);
+  removed.push(...gate.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
@@ -762,7 +779,38 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept };
+}
+
+/** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
+ * is in it, as `{ removed, kept }`: `removed` holds its path when it was there and is gone, `kept` says
+ * why it was left, as `{ path, reason, ... }`, and both are empty when there was no such folder.
+ *
+ * Nothing records that folder: `check` and `js-harness gate` write it under the home, a gate that ends
+ * removes its own files and the folder with them, and what is found here is what a gate that was killed
+ * left, or the empty folder an older version left after every gate. It is not removed from under a gate
+ * that is alive, which would take its lock away: while a gate holds the lock and still beats, or waits
+ * for it, the folder is kept with reason `in-use` and that gate's `pid` and `cwd`, and the gate removes it
+ * when it ends. A holder that stopped beating a minute ago is no live gate. One that started in the
+ * instant between this look and the removal loses its lock, and its own report says so.
+ *
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
+ * `code`. `removeFile` is `uninstall`'s own seam. */
+function removeGateFolder(home, removeFile) {
+  const dir = gateDir(home);
+  if (!fs.existsSync(dir)) return { removed: [], kept: [] };
+  try {
+    // The waiters first, as the session board reads them: a gate that takes the lock between the two
+    // reads is then in one of them.
+    const [waiting] = readGateWaiters(home);
+    const holder = readGateHolder(home);
+    const alive = holder && !holder.stale ? holder : waiting;
+    if (alive) return { removed: [], kept: [{ path: dir, reason: 'in-use', pid: alive.pid, cwd: alive.cwd }] };
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
 }
 
 /** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing

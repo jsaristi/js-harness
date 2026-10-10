@@ -69,7 +69,7 @@ function tapped(before) {
 
 const failing = (code) => Object.assign(new Error(`${code}: made up by the test`), { code });
 const holderFiles = (home) => (fs.existsSync(gateLockDir(home)) ? fs.readdirSync(gateLockDir(home)) : []);
-const waitFolders = (home) => fs.readdirSync(gateDir(home)).filter((name) => name.startsWith('wait-'));
+const waitFolders = (home) => (fs.existsSync(gateDir(home)) ? fs.readdirSync(gateDir(home)) : []).filter((name) => name.startsWith('wait-'));
 
 test('everything the lock writes is under <home>/.js-harness/gate, and the lock is its folder `lock`', () => {
   assert.equal(gateDir('/h'), path.join('/h', '.js-harness', 'gate'));
@@ -260,7 +260,7 @@ test('a lock that can be neither taken nor read is an error after a few tries, n
   await assert.rejects(take(home, clock, { fileSystem: io }), { code: 'EPERM' });
   assert.ok(renames > 1, 'it tried again');
   assert.ok(clock.now() - startedAt < POLL_MS, `gave up after ${clock.now() - startedAt} ms`);
-  assert.deepEqual(fs.readdirSync(gateDir(home)), []);
+  assert.equal(fs.existsSync(gateDir(home)), false, 'neither its own folder nor the folder `gate` is left');
 }));
 
 test('a file where the lock folder goes holds nothing: the lock is taken or the take is an error, never a wait', withHome(async (home) => {
@@ -466,13 +466,13 @@ test('a holder whose file is busy holds the lock: a gate waits for it and takes 
   assert.equal(busy.failed(), 50);
   assert.equal(second.waitedMs, 53 * 1000);
   assert.deepEqual([...inTheLock], [firstFile], 'only the first gate held the lock until it released it');
-  assert.equal(told.length, 1);
-  assert.equal(told[0].beatAt, null);
+  // Told of it while its beat could not be read, and again once it could.
+  assert.deepEqual(told.map((holder) => [holder.pid, holder.beatAt === null]), [[11, true], [11, false]]);
   assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
   second.release();
 }));
 
-test('a holder whose file stays busy refuses a gate that does not wait at once, and one that waits when its wait is over', withHome(async (home) => {
+test('a holder whose file stays busy refuses a gate that does not wait at once, and is never taken over', withHome(async (home) => {
   const clock = fakeClock();
   const first = await take(home, clock, { pid: 11 });
   const busy = busyFor(11, 'statSync', 'EACCES');
@@ -483,13 +483,81 @@ test('a holder whose file stays busy refuses a gate that does not wait at once, 
   assert.equal(atOnce.holder.stale, false);
   // Nor is it taken over, however old the beat that cannot be read may be.
   clock.advance(2 * STALE_MS);
-  const later = await take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io });
-  assert.equal(later.refused, 'timeout');
-  assert.equal(later.waitedMs, 5 * POLL_MS);
-  assert.equal(later.holder.beatAt, null);
+  // A wait that read nothing of it from end to end is an error, not a gate that timed out (below).
+  await assert.rejects(take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io }), { code: 'GATE_LOCK_UNREADABLE' });
   assert.equal(first.lost(), false);
   assert.deepEqual(waitFolders(home), []);
   first.release();
+}));
+
+// Found in review, 2026-10-10: the end of the wait was judged first, so with a wait no longer than the stale
+// time (`check --wait 1` or less) a lock of which nothing could be read still ended as a gate that timed
+// out, a red row that blamed another gate.
+test('an unreadable lock is judged before the end of the wait: nothing read of it for a whole wait no longer than the stale time is the error, not a timeout', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  for (const waitMs of [STALE_MS, STALE_MS / 2, POLL_MS]) {
+    const began = clock.now();
+    const busy = busyFor(11, 'statSync', 'EACCES');
+    await assert.rejects(take(home, clock, { pid: 22, waitMs, fileSystem: busy.io }), {
+      code: 'GATE_LOCK_UNREADABLE',
+      message: `the gate lock at ${gateLockDir(home)} could be neither taken nor read: its holder's file could not be looked at since ${new Date(began).toISOString()} (EACCES)`,
+    }, `a wait of ${waitMs} ms`);
+    assert.equal(clock.now() - began, waitMs, 'at the end of its wait, not before');
+    first.beat();
+  }
+  // With no wait at all it is still a refusal, at once: one look says nothing of how long.
+  assert.equal((await take(home, clock, { pid: 22, wait: false, fileSystem: busyFor(11, 'statSync', 'EACCES').io })).refused, 'held');
+  assert.deepEqual(waitFolders(home), []);
+  first.release();
+}));
+
+test('a holder that was read once and cannot be at the end of a short wait is a gate that was seen: the wait times out', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  clock.onSleep = () => first.beat();
+  let looks = 0;
+  const io = tapped((name, [target]) => {
+    if (name !== 'statSync' || !String(target).includes('holder-11-')) return;
+    looks += 1;
+    if (looks > 1) throw failing('EBUSY');
+  });
+  const second = await take(home, clock, { pid: 22, waitMs: 5 * POLL_MS, fileSystem: io });
+  assert.equal(second.refused, 'timeout');
+  assert.equal(second.waitedMs, 5 * POLL_MS);
+  assert.equal(second.holder.pid, 11);
+  first.release();
+}));
+
+// Found in review, 2026-10-10: a holder unreadable at the first look was announced as waited for "60 s at
+// most", and when it became readable the wait went on to the whole bound with no new notice.
+test('a waiting gate is told again when the holder it could not read becomes readable, and when it stops being so, with what is left by then', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  // Unreadable at the looks 1 to 3 and 7 to 8, readable at the others.
+  let looks = 0;
+  const io = tapped((name, [target]) => {
+    if (name !== 'statSync' || !String(target).includes('holder-11-')) return;
+    looks += 1;
+    if (looks <= 3 || looks === 7 || looks === 8) throw failing('EBUSY');
+  });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    first.beat();
+    if (sleeps === 9) first.release();
+  };
+  const told = [];
+  const waitMs = 10 * 60_000;
+  const second = await take(home, clock, { pid: 22, waitMs, fileSystem: io, onWait: (holder, leftMs) => told.push([holder.pid, holder.beatAt === null, leftMs]) });
+  assert.equal(second.refused, undefined);
+  assert.deepEqual(told, [
+    [11, true, STALE_MS],
+    [11, false, waitMs - 3 * POLL_MS],
+    [11, true, STALE_MS],
+    [11, false, waitMs - 8 * POLL_MS],
+  ]);
+  second.release();
 }));
 
 // Found in review, 2026-10-10: a holder that could never be read kept each gate waiting to the end of its
@@ -646,7 +714,7 @@ test('a gate waits for a lock folder that stays busy past its blind tries, and t
   second.release();
 }));
 
-test('a lock folder that stays busy refuses a gate that does not wait once its blind tries are spent, and one that waits when its wait is over', withHome(async (home) => {
+test('a lock folder that stays busy refuses a gate that does not wait once its blind tries are spent, and is never taken over', withHome(async (home) => {
   const clock = fakeClock();
   const first = await take(home, clock, { pid: 11 });
   const [firstFile] = holderFiles(home);
@@ -657,10 +725,10 @@ test('a lock folder that stays busy refuses a gate that does not wait once its b
   assert.ok(atOnce.waitedMs < POLL_MS, `waited ${atOnce.waitedMs} ms`);
   // Nor is it taken over, however long nothing in it can be read.
   clock.advance(2 * STALE_MS);
-  const later = await take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io });
-  assert.equal(later.refused, 'timeout');
-  assert.deepEqual(later.holder, NOBODY_KNOWN);
-  assert.ok(later.waitedMs >= 5 * POLL_MS && later.waitedMs < 6 * POLL_MS, `waited ${later.waitedMs} ms`);
+  // A wait shorter than the stale time that listed nothing from end to end is the error, at its end.
+  const began = clock.now();
+  await assert.rejects(take(home, clock, { pid: 33, waitMs: 5 * POLL_MS, fileSystem: busy.io }), { code: 'GATE_LOCK_UNREADABLE' });
+  assert.ok(clock.now() - began >= 5 * POLL_MS && clock.now() - began < 6 * POLL_MS, `waited ${clock.now() - began} ms`);
   assert.equal(first.lost(), false);
   assert.deepEqual(holderFiles(home), [firstFile]);
   assert.deepEqual(waitFolders(home), []);
@@ -718,6 +786,105 @@ test('release removes its holder\'s file when the file is busy for a moment, and
   lock.release();
   assert.equal(fs.existsSync(gateLockDir(home)), false, 'the lock folder is gone');
   assert.equal(busy.failed(), 2);
+}));
+
+// --- nothing left on disk: the folder `gate` goes with the last gate ---
+// A release left `<home>/.js-harness/gate` behind, empty, after every gate, against the rule that whatever
+// the harness writes outside the repository can be undone exactly.
+
+test('release removes the folder `gate` itself when nothing else is in it', withHome(async (home) => {
+  const lock = await take(home, fakeClock());
+  lock.release();
+  assert.equal(fs.existsSync(gateDir(home)), false);
+  // And the lock is taken again from nothing.
+  const again = await take(home, fakeClock());
+  assert.equal(again.refused, undefined);
+  again.release();
+  assert.equal(fs.existsSync(gateDir(home)), false);
+}));
+
+test('release leaves the folder `gate` to a gate that waits in it, and the last one to leave removes it', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  let left;
+  clock.onSleep = () => {
+    first.release();
+    left = fs.readdirSync(gateDir(home));
+  };
+  const second = await take(home, clock, { pid: 22 });
+  assert.equal(second.refused, undefined);
+  assert.equal(left.length, 1, 'the folder of the gate that waits');
+  assert.match(left[0], /^wait-22-/);
+  second.release();
+  assert.equal(fs.existsSync(gateDir(home)), false);
+}));
+
+test('a release never fails for a folder `gate` it cannot remove: one that got a gate in line as it was being removed, or one that is busy', withHome(async (home) => {
+  // A gate stages its folder between the release's removal of the lock and its removal of `gate`.
+  const staged = path.join(gateDir(home), 'wait-22-abc');
+  let asked = 0;
+  const racing = tapped((name, [target]) => {
+    if (name !== 'rmdirSync' || target !== gateDir(home)) return;
+    asked += 1;
+    fs.mkdirSync(staged);
+  });
+  const first = await take(home, fakeClock(), { pid: 11, fileSystem: racing });
+  first.release();
+  assert.equal(asked, 1, 'the release tried to remove the folder `gate`');
+  assert.equal(fs.existsSync(gateLockDir(home)), false, 'the lock is released');
+  assert.equal(fs.existsSync(staged), true, 'the folder of the gate in line is still there');
+  fs.rmSync(gateDir(home), { recursive: true });
+
+  for (const code of ['EPERM', 'EBUSY', 'EACCES', 'EIO']) {
+    const busy = tapped((name, [target]) => {
+      if (name === 'rmdirSync' && target === gateDir(home)) throw failing(code);
+    });
+    const lock = await take(home, fakeClock(), { pid: 11, fileSystem: busy });
+    lock.release();
+    assert.equal(fs.existsSync(gateLockDir(home)), false, code);
+    assert.equal(fs.existsSync(gateDir(home)), true, code);
+  }
+}));
+
+test('a gate that stages its folder while the folder `gate` is being removed still takes the lock', withHome(async (home) => {
+  // The release comes before the stage's `mkdir`, which makes `gate` again; between its `mkdir` and the
+  // write of its file, where `gate` is not empty and stays; and as a `mkdir` that Windows refuses for an
+  // instant because the folder is still on its way out.
+  const steps = [
+    { at: 'mkdirSync', refuse: false },
+    { at: 'writeFileSync', refuse: false },
+    { at: 'mkdirSync', refuse: true },
+  ];
+  for (const { at, refuse } of steps) {
+    const clock = fakeClock();
+    const first = await take(home, clock, { pid: 11 });
+    let stepped = false;
+    const io = tapped((name) => {
+      if (name !== at || stepped) return;
+      stepped = true;
+      first.release();
+      if (refuse) throw failing('EPERM');
+    });
+    const told = [];
+    const second = await take(home, clock, { pid: 22, fileSystem: io, onWait: (holder) => told.push(holder.pid) });
+    assert.equal(second.refused, undefined, at);
+    assert.equal(stepped, true, at);
+    assert.deepEqual(told, [], `${at}: it waited for nobody`);
+    assert.equal(readGateHolder(home, { now: clock.now }).pid, 22, at);
+    second.release();
+    assert.equal(fs.existsSync(gateDir(home)), false, at);
+  }
+}));
+
+test('a gate that is refused or gives up leaves the folder `gate` to the gate that holds the lock, which removes it', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  clock.onSleep = () => first.beat();
+  assert.equal((await take(home, clock, { pid: 22, wait: false })).refused, 'held');
+  assert.equal((await take(home, clock, { pid: 33, waitMs: 3 * POLL_MS })).refused, 'timeout');
+  assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock']);
+  first.release();
+  assert.equal(fs.existsSync(gateDir(home)), false);
 }));
 
 test('a gate leaves no folder of its own behind, whether it takes the lock, is refused or gives up', withHome(async (home) => {

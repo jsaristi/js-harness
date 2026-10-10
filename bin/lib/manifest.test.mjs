@@ -24,6 +24,7 @@ import {
   runSchtasks,
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
+import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -163,7 +164,119 @@ test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] });
+    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- the machine's gate lock: what `check` and `gate` write under the home, outside any manifest ---
+// A gate removes its own files when it ends, and the folder `gate` with them. One that was killed leaves
+// its holder's file, or its folder in line, until the next gate sweeps it; `uninstall` is the other way
+// it goes, so that whatever the harness wrote under the home can be undone exactly.
+
+/** What gates that were killed leave under `home`: the lock with its holder's file and the folder of a
+ * gate in line, both last touched `secondsAgo`. */
+function leftByKilledGates(home, secondsAgo = 3600) {
+  const at = new Date(Date.now() - secondsAgo * 1000);
+  const files = [path.join(gateLockDir(home), 'holder-4321-aaaaaaaaaaaa.json'), path.join(gateDir(home), 'wait-4322-bbbbbbbbbbbb', 'holder-4322-bbbbbbbbbbbb.json')];
+  for (const [index, file] of files.entries()) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify({ pid: 4321 + index, cwd: 'C:\\work\\dead', command: 'check', startedAt: at.toISOString(), waitingSince: at.toISOString() })}\n`);
+    fs.utimesSync(file, at, at);
+    fs.utimesSync(path.dirname(file), at, at);
+  }
+}
+
+test('uninstall removes the folder of the gate lock and what a gate that was killed left in it', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByKilledGates(home);
+    const result = uninstall(home);
+    assert.ok(result.removed.includes(gateDir(home)), result.removed.join('\n'));
+    assert.deepEqual(result.gateKept, []);
+    assert.equal(fs.existsSync(gateDir(home)), false);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    // An empty folder, which is what every gate left behind before a release removed it.
+    install(home, '0.1.0');
+    fs.mkdirSync(gateDir(home), { recursive: true });
+    assert.ok(uninstall(home).removed.includes(gateDir(home)));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    // And nothing is said of a folder that is not there.
+    install(home, '0.1.0');
+    assert.equal(uninstall(home).removed.includes(gateDir(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// `check` runs in a project with no machine install, so a home with no manifest can hold the lock's folder.
+test('uninstall removes what a killed gate left under a home that has no manifest', () => {
+  const home = makeTmpHome();
+  try {
+    leftByKilledGates(home);
+    const result = uninstall(home);
+    assert.deepEqual(result, { removed: [gateDir(home)], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall leaves the folder of the gate lock while a live gate holds the lock or waits for it, and says whose gate it is', async () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+    const held = uninstall(home);
+    assert.deepEqual(held.gateKept, [{ path: gateDir(home), reason: 'in-use', pid: 4321, cwd: 'C:\\work\\one' }]);
+    assert.equal(held.removed.includes(gateDir(home)), false);
+    assert.equal(lock.lost(), false, 'the gate still holds its lock');
+    // The rest of the install is undone all the same.
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+    // The gate removes its own files, and the folder `gate`, when it ends; the uninstall that is run
+    // again then finds nothing of the lock, and leaves no folder of the harness.
+    lock.release();
+    assert.equal(fs.existsSync(gateDir(home)), false);
+    assert.deepEqual(uninstall(home).removed, []);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    // A gate in line and nobody holding the lock: read in the instant between a release and its take.
+    const waiting = path.join(gateDir(home), 'wait-4250-cccccccccccc', 'holder-4250-cccccccccccc.json');
+    fs.mkdirSync(path.dirname(waiting), { recursive: true });
+    fs.writeFileSync(waiting, `${JSON.stringify({ pid: 4250, cwd: 'C:\\work\\two', command: 'check', waitingSince: new Date().toISOString() })}\n`);
+    assert.deepEqual(uninstall(home).gateKept, [{ path: gateDir(home), reason: 'in-use', pid: 4250, cwd: 'C:\\work\\two' }]);
+    assert.equal(fs.existsSync(waiting), true);
+
+    // Once nothing has touched it for the stale time it is what a gate that died left, and it goes.
+    const old = new Date(Date.now() - 3600 * 1000);
+    fs.utimesSync(waiting, old, old);
+    fs.utimesSync(path.dirname(waiting), old, old);
+    const swept = uninstall(home);
+    assert.deepEqual([swept.gateKept, swept.removed], [[], [gateDir(home)]]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps a folder of the gate lock it cannot remove, reports it with the error code, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByKilledGates(home);
+    const removeFile = (target, options) => {
+      if (target === gateDir(home)) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      fs.rmSync(target, options);
+    };
+    const result = uninstall(home, { removeFile });
+    assert.deepEqual(result.gateKept, [{ path: gateDir(home), reason: 'unremovable', code: 'EPERM' }]);
+    assert.equal(result.removed.includes(gateDir(home)), false);
+    assert.equal(fs.existsSync(gateLockDir(home)), true);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is removed all the same');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -760,6 +873,17 @@ test('the installed skill names check as the gate of a commit, and how it waits 
   assert.match(line, /refuses at once \(`--no-wait`\)/);
 });
 
+// The lock holds between gates; a whole test run or a batch of evals by hand is no gate, and beside one it
+// costs the same. The skill is where an agent learns there is a command that puts such a run in line.
+test('the installed skill names gate, the command that runs anything else heavy under the same lock', () => {
+  const text = components[0].content('0.1.0');
+  const line = /^- `js-harness gate -- <command>` — (.+)$/m.exec(text)?.[1] ?? '';
+  assert.match(line, /not a commit's gate/);
+  assert.match(line, /waits for its turn/);
+  assert.match(line, /`--wait <minutes>`, `--no-wait`/);
+  assert.match(line, /exit code is the command's/);
+});
+
 // The board is how a session learns what the others are doing; the first skill is where it learns the
 // command exists.
 test('the installed skill names sessions and its --watch', () => {
@@ -811,10 +935,10 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   const text = components[2].content('0.1.0');
   assert.doesNotMatch(text, /never start a gate while another runs/);
   assert.doesNotMatch(text, /a gate is about to start/);
-  assert.ok(text.includes("- Your commit's gate waits by itself while another runs: `Gates` in `js-harness sessions` says which runs and which wait. Start no whole test run of your own beside a gate.\n"));
+  // A whole test run of a session's own is no gate: the line names the command that puts it in line.
+  assert.ok(text.includes("- Your commit's gate waits by itself while another runs: `Gates` in `js-harness sessions` says which runs and which wait. A whole test run of your own goes through `js-harness gate -- <command>`, which waits for its turn too.\n"));
+  assert.doesNotMatch(text, /Start no whole test run/);
   assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
-  // It names no command that does not exist.
-  assert.doesNotMatch(text, /js-harness gate\b/);
 });
 
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user
@@ -1067,7 +1191,7 @@ test('uninstall over a manifest that only records optional files removes them an
     fs.mkdirSync(path.dirname(others), { recursive: true });
     fs.writeFileSync(others, '{"hooks":{}}');
 
-    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] });
+    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
     assert.equal(fs.existsSync(manifestPath(home)), false);
     assert.equal(fs.readFileSync(others, 'utf8'), '{"hooks":{}}', 'no component or hook entry was recorded, so none is looked for');
   } finally {

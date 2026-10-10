@@ -11,7 +11,9 @@
 // lines): that session writes it, this command only reads it.
 // The gates come from two sources: the process listing, which shows every `check` process, and the
 // machine's gate lock (bin/lib/gate-lock.mjs), which says which of them runs its sensors and which wait
-// for their turn. Both are read, neither is written.
+// for their turn. Both are read, neither is written. A gate of a checkout from before the lock asks for
+// no turn and runs whenever it is started: it is told apart by the lock's library, which is beside the
+// script of a gate that knows the lock and of no other (`lockLibraryBesideScript`).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -179,6 +181,21 @@ function listGateCandidates(run, platform) {
   return windows ? parseProcessList(result.stdout) : parsePsList(result.stdout);
 }
 
+/** Whether the machine's gate lock has its library beside the script at `script`: `lib/gate-lock.mjs` in
+ * the folder of `bin/check.mjs`, or of the dispatcher, which is where this version keeps it and where a
+ * checkout from before the lock has nothing. That is what tells a gate that waits for its turn from one
+ * that runs whenever it is started (`findGates`). The script is followed through a link first: an install
+ * on macOS or Linux links the dispatcher from a folder of commands. A script that cannot be looked at
+ * has no library beside it. Reads only; `realpath` and `exists` are replaceable, since a test cannot make
+ * a link on every machine. */
+export function lockLibraryBesideScript(script, { realpath = fs.realpathSync, exists = fs.existsSync } = {}) {
+  try {
+    return exists(path.join(path.dirname(realpath(script)), 'lib', 'gate-lock.mjs'));
+  } catch {
+    return false;
+  }
+}
+
 /** The id of the subagent the tool call `toolUseId` launched, from the `agent-<id>.meta.json` that names
  * it — the only place it is written while a foreground subagent runs. `null` when no file names it. */
 function agentOfCall(subagentsDir, toolUseId, { readdir, readFile }) {
@@ -271,6 +288,8 @@ export async function sessionsMain(
     // an unavailable fact, not a board that never prints.
     run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 30000 }),
     listProcesses = () => listGateCandidates(run, platform),
+    // Whether a gate's script has the lock's library beside it, replaceable so a test places none.
+    lockLibraryBeside = (script) => lockLibraryBesideScript(script),
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     readdir = (absolute) => fs.readdirSync(absolute),
     stat = (absolute) => fs.statSync(absolute),
@@ -339,14 +358,18 @@ export async function sessionsMain(
 
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
-    // in line, and read the other way round it would be a process the lock says nothing of, which is
-    // what a gate that runs without the lock looks like. The waiters before the holder, for the same
-    // reason: a gate that takes the lock between the two reads is then in one of them.
-    const gates = readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []);
+    // in line, and read the other way round more of them would be shown as not yet in line. The waiters
+    // before the holder: a gate that takes the lock between the two reads is then in one of them.
+    const gates = readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : [], { lockLibraryBeside });
     const gateLock = readGateLock(() => {
-      const reading = { now: () => generatedAt, fileSystem: lockFiles };
+      // Against the clock of this moment, not the one the look began at: the transcripts, `git` and the
+      // process listing took their time (16 s, measured here), and a holder whose last beat was a
+      // minute before now would still read alive against the earlier time. One time for both reads,
+      // which goes with what was read: the board says the ages of these gates against it.
+      const readAt = now();
+      const reading = { now: () => readAt, fileSystem: lockFiles };
       const waiters = readGateWaiters(harnessHome, reading);
-      return { holder: readGateHolder(harnessHome, reading), waiters };
+      return { holder: readGateHolder(harnessHome, reading), waiters, readAt };
     });
     return {
       root,

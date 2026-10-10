@@ -343,16 +343,31 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
         `schtasks /Query /TN ${task.name} shows whether it is, and schtasks /Delete /TN ${task.name} /F deletes it`,
     );
   }
+  // The folder of the machine's gate lock, which `check` and `gate` write under the home. Left to a gate
+  // that is alive in it, which removes its own files when it ends: that is no failure, and it is said
+  // with what is left to do. Left because it could not be removed: that goes to stderr, like a file.
+  const gateNotUndone = result.gateKept.filter((gate) => gate.reason !== 'in-use');
+  for (const gate of result.gateKept) {
+    if (gate.reason !== 'in-use') {
+      console.error(`could not remove ${gate.path} (${gate.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+      continue;
+    }
+    const whose = [gate.pid !== null && `pid ${gate.pid}`, gate.cwd !== null && `in ${gate.cwd}`].filter(Boolean).join(', ') || 'nothing more of it could be read';
+    console.log(
+      `kept ${gate.path}: a gate holds the machine's gate lock or waits for it right now (${whose}); it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
+    );
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
     result.entriesRemoved.length === 0 &&
     result.entriesKept.length === 0 &&
     result.tasksRemoved.length === 0 &&
-    result.tasksKept.length === 0
+    result.tasksKept.length === 0 &&
+    result.gateKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 ? 1 : 0;
 }

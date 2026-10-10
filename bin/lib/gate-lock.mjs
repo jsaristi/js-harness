@@ -19,7 +19,12 @@
 //     its token; a gate that took the lock in the meantime has another name. The removal is tried once: a
 //     busy answer may be the holder touching its file as it comes back, so the beat is read again first;
 //   - the folder is removed with `rmdir`, which fails while a holder's file is in it. An empty `lock` is
-//     nobody's (a release or a takeover is between its two steps, or died there), so anyone may remove it.
+//     nobody's (a release or a takeover is between its two steps, or died there), so anyone may remove it;
+//   - the folder `gate` itself goes the same way when a gate leaves: with `rmdir`, which fails while the
+//     lock or the folder of a gate that waits is in it. A gate that stages its folder at that instant makes
+//     `gate` again, since it makes its folder with every parent it needs. So nothing is left on disk
+//     between two gates, and what a gate that was killed leaves is swept by the next one, or removed by
+//     `js-harness uninstall`.
 // A first version made `lock` with `mkdir` and wrote the file after. In between the folder was empty and
 // its maker's, and a gate late to a takeover could remove it and make its own: both then held the lock
 // (found in review, 2026-10-10).
@@ -92,6 +97,17 @@ function remove(io, target, options) {
       if (!BUSY.includes(err.code) || tries >= REMOVE_TRIES) throw err;
       pause(REMOVE_PAUSE_MS);
     }
+  }
+}
+
+/** Removes the folder `gate` when nothing is in it, for a gate that leaves. Every failure is the answer
+ * "not now": the lock or a gate in line is in it, another gate removed it first, or Windows holds it for
+ * an instant. Whatever stays is removed by the next gate that leaves. */
+function leaveNoFolder(io, root) {
+  try {
+    io.rmdirSync(root);
+  } catch {
+    // not empty, gone already, or busy
   }
 }
 
@@ -275,14 +291,16 @@ function unreadable(dir, { token, since, answer }) {
  *
  * Resolves to `{ release, beat, lost, waitedMs }` once the lock is held. It then beats by itself every
  * `beatMs` (0 for no timer: `beat()` by hand) until `release()`, which removes the holder's file and the
- * folder, never throws, and does nothing to a lock that is no longer this gate's. `lost()` says whether
- * the lock was taken from this gate while it held it, which happens only to a gate that did not beat for
- * the whole stale time.
+ * folder, and the folder `gate` when nothing else is in it, never throws, and does nothing to a lock that
+ * is no longer this gate's. `lost()` says whether the lock was taken from this gate while it held it,
+ * which happens only to a gate that did not beat for the whole stale time.
  *
  * Resolves to `{ refused, holder, waitedMs }` when it is not taken: `refused` is `'held'` with `wait`
  * off, at once, and `'timeout'` once `waitMs` have passed. `onWait(holder, leftMs)` is called when the
- * wait begins, and again when the gate waited for changes, with how long that gate is waited for at
- * most from then on: what is left of `waitMs`, or less for a holder that cannot be read (below).
+ * wait begins, and again when the gate waited for changes, or when its beat stops being readable or
+ * becomes so, with how long that gate is waited for at most from then on: what is left of `waitMs`, or
+ * less for a holder that cannot be read (below). So a notice of the minute an unreadable holder is given
+ * is never the last word before the whole of a wait.
  *
  * Rejects when the lock can be neither taken nor read (a home that cannot be written): there is no gate
  * to wait for, and the caller decides what a gate without a lock does. A holder whose file is there and
@@ -299,7 +317,11 @@ function unreadable(dir, { token, since, answer }) {
  * one, which no gate ends): the take rejects with an error of code `GATE_LOCK_UNREADABLE` that says
  * since when nothing could be read, the same case as a lock that cannot be taken. A first version waited
  * for it to the end of `waitMs`, an hour, and then refused: a red gate that blamed another gate when
- * there was none (found in review, 2026-10-10).
+ * there was none (found in review, 2026-10-10). The same error ends a wait shorter than the stale time in
+ * which no look read anything of the lock: it is judged before the end of the wait, since the second
+ * version judged it after, and a wait of a minute or less still ended as that red refusal (found in the
+ * next review). A holder that one look of the wait did read is a gate that was seen, and its wait times
+ * out as any other.
  *
  * A dead holder is taken over on its second stale reading, a poll apart: a machine that slept wakes with
  * every beat hours old, and a live holder's timer fires before the next look. Its file is then removed
@@ -338,6 +360,8 @@ export async function takeGateLock({
   // The looks in a row that could read nothing of one holder: its token (`null` for a folder that could
   // not be listed), when the first of them was, and what the system answered at the last.
   let unread;
+  // Whether any look of this take read something of the lock: a beat, or that nobody holds it.
+  let everRead = false;
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time.
@@ -356,6 +380,7 @@ export async function takeGateLock({
     } catch {
       // swept later, as the folder of a gate that waits no more
     }
+    leaveNoFolder(io, root);
   };
   /** One more try that found neither the lock nor a holder to name; `false` past the last one. */
   const tryBlind = async () => {
@@ -380,13 +405,15 @@ export async function takeGateLock({
     }
     if (!refusedBy) {
       sweepWaiters(io, root, path.basename(staging), clock);
-      return held({ io, dir, mine: path.join(dir, fileName), now, beatMs, waitedMs: now() - startedWaiting });
+      return held({ io, root, dir, mine: path.join(dir, fileName), now, beatMs, waitedMs: now() - startedWaiting });
     }
 
     const seen = lookAt(io, dir, clock);
     // Nothing read of the holder: the same one as at the look before, or the first such look of it.
-    if (seen?.holder?.beatAt !== null) unread = undefined;
-    else if (!unread || unread.token !== seen.holder.token) unread = { token: seen.holder.token, since: now(), answer: seen.unread };
+    if (seen?.holder?.beatAt !== null) {
+      unread = undefined;
+      everRead = true;
+    } else if (!unread || unread.token !== seen.holder.token) unread = { token: seen.holder.token, since: now(), answer: seen.unread };
     else unread.answer = seen.unread;
     // No file to name: the folder is there and could not be listed.
     const nobodyKnown = seen?.holder !== undefined && seen.file === undefined;
@@ -423,20 +450,24 @@ export async function takeGateLock({
 
     const at = now();
     const waitedMs = at - startedWaiting;
+    // Unreadable for as long as a dead gate is given, or from end to end of a wait shorter than that:
+    // nothing ever showed a gate here. Judged before the end of the wait, which would blame a gate.
+    const unreadMs = unread ? at - unread.since : 0;
+    if (unread && (unreadMs >= staleMs || (wait && waitedMs >= waitMs && !everRead))) {
+      unstage();
+      throw unreadable(dir, unread);
+    }
     // A dead holder is no gate to be refused for: with `wait` off its second reading is still waited for.
     const refused = !wait && !holder.stale ? 'held' : waitedMs >= waitMs ? 'timeout' : undefined;
     if (refused) {
       unstage();
       return { refused, holder, waitedMs };
     }
-    // Unreadable for as long as a dead gate is given: nothing ever showed a gate here.
-    const unreadMs = unread ? at - unread.since : 0;
-    if (unread && unreadMs >= staleMs) {
-      unstage();
-      throw unreadable(dir, unread);
-    }
-    if (wait && told !== holder.token) {
-      told = holder.token;
+    // Said for each gate waited for, and again when its beat stops being readable or becomes so: what is
+    // left of the wait is not the same for the two.
+    const telling = `${holder.token}|${unread ? 'unread' : 'read'}`;
+    if (wait && told !== telling) {
+      told = telling;
       onWait?.(holder, Math.min(waitMs - waitedMs, unread ? staleMs - unreadMs : Infinity));
     }
     await sleep(pollMs);
@@ -444,7 +475,7 @@ export async function takeGateLock({
 }
 
 /** The handle of a lock that is held: its beat, its release, and whether it was lost. */
-function held({ io, dir, mine, now, beatMs, waitedMs }) {
+function held({ io, root, dir, mine, now, beatMs, waitedMs }) {
   let released = false;
   let lost = false;
   const beat = () => {
@@ -473,6 +504,7 @@ function held({ io, dir, mine, now, beatMs, waitedMs }) {
       // way. So it does when the file stayed busy past every try: it holds the lock, beating no more,
       // until the next gate reads it stale.
     }
+    leaveNoFolder(io, root);
   };
   /** Whether this gate's file is not there. A file that could not be looked at (busy, or no access) is
    * not a file that was taken away, which is what `existsSync` would say of it. */
