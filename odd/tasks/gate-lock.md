@@ -206,7 +206,17 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       margins. Route: the writer of T3, first, and in T3's commit.
 - [x] T3 · The board reads the lock: `Gates` shows who runs and who waits; the watch stops
       reporting a waiting gate; the skill line reworded.
-- [ ] T4 · `js-harness gate -- <command>`.
+- [x] T3b · What the two reviews of T3 found, and what the lock leaves on disk (added
+      2026-10-10). The board stops guessing a gate's phase from outside: a `check` process
+      whose own folder holds the lock's library is a gate that knows the lock, and only the
+      lock says whether it runs; the alarm is for a gate that does not know the lock beside
+      another gate. With it: the lock read against the clock of that moment, an unreadable
+      holder that is nobody's is not "another gate", a holder with no start time renders, the
+      wait notice is said again when an unreadable holder becomes readable, an unreadable lock
+      is judged before the timeout, the beat test's margins. And nothing left behind: a
+      release removes the folder `gate` when it is empty, and `uninstall` removes what a
+      killed gate left. Route: the writer of T4, first, and in T4's commit.
+- [x] T4 · `js-harness gate -- <command>`.
 - [ ] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
 - [ ] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
       after.
@@ -540,13 +550,178 @@ allows a feature. No spend outside the plan.
   run in parallel with the slow one, so the gate's time should not move: this commit's gate
   says.
 
+- 2026-10-10 · T2b and T3 are commit `b1d650b`: gate green in 760 s (08:21:08 to 08:33:48), one
+  try, on the orchestrator's turn; the gates of this branch today: 990, 1,085, over 1,200
+  (refused), 916, 828, 869, 760 s. The board with a real holder, read once 32 s into that
+  gate (the read took 16 s): `pid 24676  D:/js-harness-worktrees/gate-lock  running, took
+  the gate lock 32s ago  C:\nvm4w\nodejs\node.exe D:/js-harness-worktrees/gate-lock/bin/
+  check.mjs`. A real gate that waits is still not seen: no second gate with the lock exists
+  on the machine until this branch is merged.
+  Asked by the orchestrator, checked, and true: `uninstall` does not remove
+  `~/.js-harness/gate`. It removes what the manifest records and the doctor cache
+  (`bin/lib/manifest.mjs:703-757`), and after each gate the folder `gate` stays, empty. That
+  is against the rule that whatever the harness writes outside the repository can be undone
+  exactly. Taken: T3b.
+- 2026-10-10 · The reviews of `7b67b61..b1d650b`. gentle-ai approved (one lens, reliability;
+  lineage `review-c33e4a0f32a18334`, acknowledged, authority burned), five advisory findings;
+  Codex reviewed it in 3 parts (08:35:11 to 08:41:09), five findings, all P2, and is
+  recorded. Spent by Codex: 1,253,094 input tokens (1,037,056 cached). The feature's Codex
+  spend: 2,081,562 of 3 million, with T3b, T4 and T6 still to review: it will not fit. That
+  is a spend past the plan and his to decide; it is put to Sebastián before the next Codex
+  review, with these numbers.
+  What they found, nine distinct things, seven about the board:
+  - (gentle-ai, warning) a `check` process listed before it has staged its wait folder is
+    neither holder nor waiter, so the watch says "started while another runs" beside the
+    live holder, and never corrects it;
+  - (Codex) a gate that released the lock and still writes its report is remembered as "past
+    its sensors" for one look only, then alarms when another gate starts;
+  - (Codex) a holder's file left by a dead gate whose pid a new `check` process got: the new
+    gate is shown as the dead one, or not at all;
+  - (Codex) a gate that waited and then ran without the lock (unreadable lock) is taken for
+    one that finished;
+  - (Codex) the lock is read against the time the board began, so a slow board reads a dead
+    holder as alive;
+  - (gentle-ai) a holder nobody could read counts as "another gate" in the alarm;
+  - (gentle-ai) a holder with a beat and no start time renders an undefined age;
+  - (Codex, the lock) a holder unreadable at the first look is announced as "60 s at most",
+    and when it becomes readable the wait goes on to the whole bound with no new notice;
+  - (gentle-ai, the lock) an unreadable lock is judged after the timeout, so with `--wait 1`
+    or less it still ends as the red timeout row;
+  - (gentle-ai) the real-clock beat test has thin margins for a stalled machine.
+  Read together, the first four are one mistake of T3: the board guesses, from the process
+  list and the lock, which phase each `check` process is in, and every guess has a moment
+  where it is wrong. Decided for T3b: it stops guessing. A `check` process whose own folder
+  holds `lib/gate-lock.mjs` beside it is a gate that knows the lock: it runs its sensors only
+  as the holder (or says in its own row that it ran without the lock), so the board shows
+  it from the lock and never alarms for it, whatever it is doing. A `check` process whose
+  folder does not hold that file is a gate that does not know the lock, as every gate of
+  an older branch is: it is shown and alarmed as before the lock, beside another such gate
+  or beside a live holder. Pids are then matched for nothing that decides anything. Not
+  taken, with the reason: the watch cannot see a gate that knows the lock and ran without it
+  (Codex's fourth); that happens when the lock's folder cannot be read or written, which is
+  when no trace could be left either, and the gate's own row says it.
+
+- 2026-10-10 · T3b and T4 done, route one writer (two passes: the second closed a trap the
+  first reported), its work read back and the eight test files run again by this session.
+  Changed: 1,363 lines added, 227 removed, in 14 files, two new ones and this one.
+  T3b. The board no longer guesses a phase. A `check` process whose script has
+  `lib/gate-lock.mjs` beside it knows the lock: it is shown from the lock when it holds or
+  waits, as `not in its sensors (before or after them)` otherwise, and never alarmed on the
+  strength of the process list. A process whose script is not placed on disk by its command
+  line (`npm run check` runs a relative path) knows the lock when the lock names its pid,
+  and is taken for a gate without the lock otherwise: decided by the writer and accepted,
+  with its gap, that such a gate seen before it staged or after it released, beside a live
+  holder, still alarms. A gate that does not know the lock is shown and alarmed as before,
+  beside another such gate or a live holder. A pid match only attaches a command line, and
+  is refused for a process that started after the holder did. The "past its sensors"
+  bookkeeping is gone. Also: the lock is read against the clock of that moment and its ages
+  are rendered against that same clock; a holder with no start time renders; an unreadable
+  lock is judged before the timeout, and only when nothing was ever read in that take; the
+  wait notice is said again when a holder turns readable or unreadable; the beat test's
+  stale time is over a second. Nothing left on disk: a release removes the folder `gate`
+  when it is empty (three interleavings with a waiter that stages, through the injected file
+  system), and `uninstall` removes `<home>/.js-harness/gate` unless a live gate holds or
+  waits right then, which it says (`kept <path>: a gate holds the machine's gate lock or
+  waits for it right now …`, exit 0; a folder it could not remove is said on stderr, exit
+  1). It removes it on a home with no manifest too.
+  T4. `js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] --
+  <command> [args...]` (`bin/gate.mjs`): runs the command through the shell in the caller's
+  environment, output streamed, no time bound of its own, exit code the command's; waits
+  and says so like `check` (one shared function, `takeGateTurn`); exit 75 with one line
+  when nothing ran; runs without the lock, saying so, when it cannot be taken; the holder's
+  file says `gate -- <command line>`. The trap the writer found and the second pass closed:
+  `js-harness gate -- npm run check` waited for the lock its own parent held, up to the
+  whole bound. A process that holds the lock now gives its children `JS_HARNESS_GATE_HELD=1`
+  (`check` to its sensors, `gate` to its command, and neither when it runs without the
+  lock), and a `check` or `gate` started with it takes no lock and runs at once; `check`
+  then prints an INFO row saying it ran in the turn of the process that started it, which
+  also makes a mark set by hand visible. `JS_HARNESS_CHECK_INNER` means what it meant. The
+  skill text names the command and sends a whole test run of one's own through it.
+  Checked, by this session after the writer: `node --test` of `bin/lib/gate-lock.test.mjs`
+  (55 tests, 18.0 s), `bin/check.test.mjs` (93, 31.1 s), `bin/gate.test.mjs` (18, 4.5 s),
+  `bin/lib/sessions.test.mjs` (131, 0.3 s), `bin/sessions.test.mjs` (115, one skipped: this
+  machine may not make symlinks; 1.9 s), `bin/lib/manifest.test.mjs` (82, 3.1 s),
+  `bin/install.test.mjs` (55, 7.8 s), `bin/js-harness.test.mjs` (23, 6.9 s): all exit 0.
+  The writer saw the red of each group with the committed sources put under the new tests
+  (it wrote several before it could run them, a gate of another session being alive): 9 of
+  130 and 5 of 114 for the board, 11 of 55 for the lock, 2 of 91 for `check`, 7 of 82 and 3
+  of 55 for uninstall, the missing module for `gate`, then 4 of 18 and 2 of 93 for the mark.
+  An end-to-end test runs a real `check` under a real `gate` in one temporary home and the
+  sensor runs with no wait. No test touches the real home: `~/.js-harness/gate` was the
+  same empty folder before and after. Not checked: the board, `uninstall` and `gate`
+  against the real machine and home (the first real release that removes the folder is this
+  commit's own gate); a real gate that waits; the symlink test; any system but this Windows
+  machine. Failed: nothing. Told as it was: once the writer ran three short test files
+  after one look at the process list instead of one look each.
+  Decided, and limits: only the value `1` is the mark; the mark cannot protect against one
+  set by hand, a process that outlives the holder that started it, or a holder that lost
+  its lock; `gate` handles no signal, like `check`; a `js-harness gate` process is not in
+  the board's process listing, so its line comes from the lock alone.
+
+- 2026-10-10 · T3b and T4 are commit `cc5e9f3`: gate green in 767 s (09:35:25 to 09:48:12), one
+  try, on the orchestrator's turn. The first real release that removes the folder: after
+  the gate `~/.js-harness` held `backups`, `doctor.json`, `manifest.json`, `relief`,
+  `remote`, and no `gate`. The gate's own row: medium risk, 17 paths, 2,250 lines, review
+  due. Told to the orchestrator, for a session that waits for it: `js-harness gate` can be
+  used today from another folder as `node D:/js-harness-worktrees/gate-lock/bin/js-harness.mjs
+  gate -- <command>`; it queues with whatever takes the lock and not with a gate of a
+  branch without it.
+- 2026-10-10 · A cut of context proposed at 70% was withdrawn: his rule of that day, read in
+  this session's memory note and not only in the orchestrator's message, is that a session
+  does not cut for the percentage; at 85% it pauses, writes its state here, and finishes or
+  asks for the compaction.
+- 2026-10-10 · gentle-ai refused to review `b1d650b..cc5e9f3`: `lens_context_budget_exceeded`,
+  the candidate's evidence (2,250 lines, 17 paths) does not fit its reviewer's context, and
+  no review was created. The cause is this session's own choice, twice recorded above, to
+  let a task's commit carry the fixes of the task before it so as to pay one gate: the two
+  candidates before (1,185 and 1,095 lines) fitted, this one did not. A review has no way
+  to take part of a commit, so `cc5e9f3` is split in two along its tasks, nothing changed:
+  first T3b (the lock's fixes, the board, uninstall: 10 files, about 1,160 lines), then T4
+  (`check`, `gate`, the dispatcher, this document: about 1,090). The old commit is kept as
+  the branch `backup/gate-lock-cc5e9f3` until both halves are reviewed. Checked before the
+  split: the first half alone, in a throwaway worktree on top of `b1d650b`, passes the seven
+  test files that exist there (gate-lock 55, check 90, sessions 131 and 115 with one
+  skipped, manifest 82, install 55, dispatcher 22). Its skill text already names
+  `js-harness gate`, which only the second half adds. Cost, said: two more gates of about
+  13 minutes. The rule taken from it: a commit that will be reviewed stays under about
+  1,200 changed lines, and a batch that would pass it is two commits.
+
+- 2026-10-10 · The first half is commit `3659fb5` (T3b): gate green in 833 s (09:53:13 to
+  10:07:06), one try; the folder `gate` was gone again after it. Its gate's review row said
+  "gentle-ai could not assess": the second half's two new files were untracked, and an
+  untracked file nobody declared makes the assessment refuse (what another session found
+  with a stray folder). Staged, they are no longer untracked, and the assessment ran:
+  medium, 10 paths, 1,164 lines. gentle-ai reviewed `b1d650b..3659fb5` (one lens,
+  reliability; lineage `review-2e44f5727ccbf1c6`) and approved it, acknowledged, with three
+  advisory findings, kept for the next task that touches those files and not fixed here:
+  - `R3-zero-wait-single-look` (warning, `bin/lib/gate-lock.mjs:456`): with a wait of zero
+    one unreadable look is already the "unreadable" error. `check` cannot ask for zero
+    (`--wait` is above zero), a caller of the library can.
+  - `R3-relative-script-alarm` (warning, `bin/lib/sessions.mjs:790`): the gap already
+    recorded, a gate run by a relative path (`npm run check`) seen before it stood in
+    line still alarms beside a live holder.
+  - `R3-in-use-unread-branch-untested` (suggestion, `bin/install.mjs:355`): uninstall's
+    message for a live holder of which nothing could be read has no test.
+
 ## Next
-T2b and T3 are written and staged with these records: their one commit goes on the
-orchestrator's turn, message `feat(sessions): show who runs and who waits for the gate
-lock`. While that gate runs, one read of the board from this worktree shows `Gates` with a
-real holder: record what it printed. After it: `gentle-ai review assess --base-ref 7b67b61
---committed-only` and what it returns, and the Codex review of the same range (a Codex
-review wants a clean tree: set this document aside or have it committed). Then T4.
+The second half of `cc5e9f3` (T4: `check`, `gate`, the dispatcher, this document), staged:
+its commit on this session's own look at the process list (the orchestrator gave the turn
+in advance), message in the worktree's git folder as `GATE_SPLIT_2_MSG.txt`. Then, in this
+order:
+1. `gentle-ai review assess --base-ref 3659fb5 --committed-only` on it and what it returns
+   (one look at the process list first). The helper `review-open.cjs <base>` of this
+   session's scratchpad runs the steps up to the capture; if it is gone, run them by hand
+   as the returned commands say. Then one notice to the orchestrator: both commits, both
+   gates' seconds, what the lock left on disk, when `js-harness gate` can be named to
+   another session; and delete the branch `backup/gate-lock-cc5e9f3`.
+2. The question to Sebastián, open and not yet asked: the Codex budget. Spent 2,081,562 of
+   the 3 million input tokens of a feature (1,037,056 of the last review's 1,253,094 were
+   cached); owed: the review of `b1d650b..cc5e9f3` (2,250 lines, its `--plan` says what it
+   would cost) and later T6's. No Codex review past the 3 million without his yes.
+3. T5: measure the suite per file. With it, put to him the orchestrator's proposal that
+   every gate append one line to a file (start, end, seconds, worktree, result, whom it
+   waited for): one more file written outside the repository, so his to decide.
+4. Then T6, T7 (asked first, with the list of tests that read documents), T8.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,

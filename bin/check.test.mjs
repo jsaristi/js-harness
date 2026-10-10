@@ -7,7 +7,7 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
-import { gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
+import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -1262,6 +1262,7 @@ test('main holds the gate lock while the sensors run and releases it after them'
   }
   assert.equal(readGateHolder(home), null);
   assert.equal(fs.existsSync(gateLockDir(home)), false);
+  assert.equal(fs.existsSync(gateDir(home)), false, 'a gate leaves no folder of the lock behind');
   // Taken at once, the common case: the report says nothing of the lock, as before there was one.
   assert.deepEqual(gateRows(output), []);
   assert.equal(errOutput, '');
@@ -1326,6 +1327,73 @@ test('main takes no gate lock with no sensor to run, as the inner run, or on a p
     for (const dir of [home, ...Object.values(projects)]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The mark of a held lock (`JS_HARNESS_GATE_HELD=1`): whoever holds the lock gives it to what it runs, so a
+// gate started inside that turn (`js-harness gate -- npm run check`) does not wait for the lock its own
+// parent holds, which it did for the whole of its wait before there was a mark.
+test('main started with the mark of a held gate lock takes no lock and runs its sensors at once, beside the gate that holds the lock in its home', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const outer = await takeGateLock({ home, cwd: 'C:\\work\\outer', command: 'gate -- npm run check', pid: 4321, beatMs: 0 });
+  try {
+    let asked = 0;
+    const take = async () => {
+      asked += 1;
+      throw new Error('not to be asked');
+    };
+    const ran = [];
+    const spawn = (command, options) => {
+      ran.push({ command, held: options.env.JS_HARNESS_GATE_HELD, inner: options.env.JS_HARNESS_CHECK_INNER, holder: readGateHolder(home)?.pid });
+      return sensorRan();
+    };
+    // `--no-wait` would fail the gate at once against the held lock, were the lock asked for.
+    const { code, output, errOutput } = await runCheck([...argv, '--no-wait'], { JS_HARNESS_GATE_HELD: '1' }, gateDeps({ spawn, takeGateLock: take }));
+    assert.equal(code, 0, output);
+    // Its sensors run, since nobody runs them for it, and they are told of the held lock in their turn.
+    assert.deepEqual(ran, [{ command: 'run-tests', held: '1', inner: '1', holder: 4321 }]);
+    assert.equal(asked, 0);
+    assert.equal(errOutput, '');
+    assert.deepEqual(gateRows(output), [
+      "INFO  gate  the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate took none",
+    ]);
+    // Not the inner run of old: every row of a gate is there.
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'tests', 'review', 'codex-review']);
+    assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
+    assert.equal(readGateHolder(home).pid, 4321);
+  } finally {
+    outer.release();
+  }
+  // Only `1` is the mark: anything else is a gate like any other.
+  const take = lockTakenAtOnce();
+  for (const value of ['', '0', 'true']) await runCheck(argv, { JS_HARNESS_GATE_HELD: value }, gateDeps({ takeGateLock: take }));
+  assert.equal(take.asked.length, 3);
+}));
+
+test('main gives its sensors the mark of a held gate lock while it holds the lock, and to no sensor it runs without it', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const marks = [];
+  const spawn = (command, options) => {
+    marks.push(Object.entries(options.env).filter(([key]) => key.toLowerCase() === 'js_harness_gate_held').map(([, value]) => value));
+    return sensorRan();
+  };
+  const argv = ['--cwd', dir, '--home', home];
+  const refuses = async () => {
+    throw Object.assign(new Error("EPERM: operation not permitted, mkdir 'somewhere'"), { code: 'EPERM' });
+  };
+  // This process may carry the mark itself, as when a gate runs this file: a sensor inherits its
+  // environment, and must not inherit the mark of a lock that the gate which runs it does not hold.
+  const had = process.env.JS_HARNESS_GATE_HELD;
+  process.env.JS_HARNESS_GATE_HELD = '1';
+  try {
+    await runCheck(argv, {}, gateDeps({ spawn }));
+    await runCheck(argv, {}, gateDeps({ spawn, takeGateLock: refuses }));
+    // A caller that is no gate takes no lock, and holds none.
+    await checkSensors(dir, { spawn });
+    await checkSensor(dir, { name: 'tests', command: 'run-tests' }, { spawn });
+  } finally {
+    if (had === undefined) delete process.env.JS_HARNESS_GATE_HELD;
+    else process.env.JS_HARNESS_GATE_HELD = had;
+  }
+  assert.deepEqual(marks, [['1'], [], [], []]);
+}));
 
 test('main --no-wait fails the gate row against a held lock, runs no sensor and prints the other rows', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, beatMs: 0 });
@@ -1460,12 +1528,14 @@ test('main says in a row when the gate lock was lost while the sensors ran, and 
 // Found in review, 2026-10-10: nothing showed the holder beating while a sensor runs, which is the whole of
 // the exclusion in a real gate (fifteen minutes held against a stale time of one): every test had a short
 // sensor, a stand-in lock or a clock it moved. Here a real sensor, the real lock and the real clock, with
-// times short enough that the sensor outlasts the stale time five times over.
-const SHORT_TIMES = { beatMs: 25, staleMs: 400, pollMs: 40 };
+// times short enough that the sensor outlasts the stale time three times over.
+// The stale time is well over a second (found in the next review: 400 ms was within reach of one stall of
+// a loaded machine, which would read as a gate that stopped beating), and it is 26 beats long.
+const SHORT_TIMES = { beatMs: 50, staleMs: 1300, pollMs: 40 };
 /** A sensor that passes after `ms`. */
 const outlasting = (ms) => `node -e "setTimeout(Object, ${ms})"`;
 
-test('a gate keeps beating while its sensor outlasts the stale time, so no other gate is let in', () => withGate({ tests: outlasting(5 * SHORT_TIMES.staleMs) }, async (dir, home) => {
+test('a gate keeps beating while its sensor outlasts the stale time, so no other gate is let in', () => withGate({ tests: outlasting(3 * SHORT_TIMES.staleMs) }, async (dir, home) => {
   let started = false;
   let ended = false;
   const spawn = async (command, options) => {
@@ -1492,8 +1562,9 @@ test('a gate keeps beating while its sensor outlasts the stale time, so no other
   const { code, output } = await checking;
   assert.equal(code, 0, output);
   assert.deepEqual(tries.filter((tried) => tried.refused !== 'held' || tried.holder !== process.pid), [], 'every other gate was refused while the sensor ran');
-  const refusedFor = tries.at(-1).at - tries[0].at;
-  assert.ok(refusedFor > 3 * SHORT_TIMES.staleMs, `refused over ${refusedFor} ms, ${tries.length} times`);
+  // No try at all is a sensor that ended before the first one did, which proves nothing.
+  const refusedFor = tries.length > 0 ? tries.at(-1).at - tries[0].at : 0;
+  assert.ok(refusedFor > 2 * SHORT_TIMES.staleMs, `refused over ${refusedFor} ms, ${tries.length} times`);
   // Taken at once and never lost: the report says nothing of the lock.
   assert.deepEqual(gateRows(output), []);
   assert.equal(readGateHolder(home), null);
@@ -1502,14 +1573,17 @@ test('a gate keeps beating while its sensor outlasts the stale time, so no other
 // The same gate with no beat, so the test above is not green for another reason: once its holder's file is
 // a stale time old, a gate that waits takes the lock from under the sensor, and the report says so.
 test('a gate that does not beat loses its lock while its sensor runs, and its report says so', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  // A stale time of its own, short: this gate never beats, so no stall can make it lose the lock sooner
+  // than it is meant to, and the wait for it is all this test costs.
+  const times = { ...SHORT_TIMES, staleMs: 400 };
   let took;
   const spawn = async () => {
-    const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, waitMs: 30_000, ...SHORT_TIMES });
+    const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, waitMs: 30_000, ...times });
     took = other.refused === undefined;
     other.release?.();
     return sensorRan();
   };
-  const take = (options) => takeGateLock({ ...options, ...SHORT_TIMES, beatMs: 0 });
+  const take = (options) => takeGateLock({ ...options, ...times, beatMs: 0 });
   const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, takeGateLock: take }));
   assert.equal(code, 0, output);
   assert.equal(took, true);
@@ -1547,6 +1621,37 @@ test('main does not wait an hour for a lock of which nothing can be read: after 
     `INFO  gate  the sensors ran without the machine's gate lock, which could not be taken (the gate lock at ${gateLockDir(home)} could be neither taken nor read: its folder could not be listed since ${began} (EACCES)), so another gate may have run at the same time`,
   ]);
   assert.ok(clock.now() - Date.parse(began) < 62_000, 'a minute, not the hour of the wait');
+  other.release();
+}));
+
+// Found in the next review, 2026-10-10: with a wait of a minute or less the end of the wait came first, and
+// the same lock of which nothing could be read ended as the red row of a gate that timed out.
+test('main with a wait shorter than a minute still runs the sensors without a lock of which nothing can be read, instead of failing as if a gate held it', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  const began = new Date(clock.now()).toISOString();
+  const noAccess = new Proxy(fs, {
+    get: (target, name) => {
+      if (name !== 'readdirSync') return target[name];
+      return (folder, ...rest) => {
+        if (folder === gateLockDir(home)) throw Object.assign(new Error('EACCES: permission denied, scandir'), { code: 'EACCES' });
+        return target.readdirSync(folder, ...rest);
+      };
+    },
+  });
+  let ran = 0;
+  const spawn = () => {
+    ran += 1;
+    return sensorRan();
+  };
+  const take = (options) => clock.take({ ...options, fileSystem: noAccess });
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--wait', '0.5'], {}, gateDeps({ takeGateLock: take, spawn }));
+  assert.equal(code, 0, output);
+  assert.equal(ran, 1);
+  assert.equal(errOutput, 'check: waiting for another gate to finish, for 0.5 minutes at most\n');
+  assert.deepEqual(gateRows(output), [
+    `INFO  gate  the sensors ran without the machine's gate lock, which could not be taken (the gate lock at ${gateLockDir(home)} could be neither taken nor read: its folder could not be listed since ${began} (EACCES)), so another gate may have run at the same time`,
+  ]);
   other.release();
 }));
 
@@ -1662,11 +1767,12 @@ test('two check processes that share a home run their sensors one after the othe
     fs.writeFileSync(path.join(dir, 'sensor.cjs'), SENSOR);
     return dir;
   });
-  // The mark of a gate that runs this file would make these two inner checks, which run no sensor. No
-  // gentle-ai and no git either: an empty PATH leaves both rows saying they found none.
+  // The mark of a gate that runs this file would make these two inner checks, which run no sensor, and
+  // the mark of its held lock would make them gates that take none. No gentle-ai and no git either: an
+  // empty PATH leaves both rows saying they found none.
   const noPrograms = path.join(home, 'no-programs');
   fs.mkdirSync(noPrograms);
-  const dropped = ['js_harness_check_inner', 'node_test_context', 'path'];
+  const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context', 'path'];
   const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms };
   // They run a copy of `bin/` in a temporary folder. Started from this checkout's own `bin/check.mjs`,
   // they would read on the session board as two gates of this worktree at once, at every run of the suite
