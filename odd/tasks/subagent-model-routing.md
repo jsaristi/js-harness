@@ -326,3 +326,40 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   decides both the star and its footnote. Noted by the writer: a continued run that gains an arm
   keeps the first arm's pin, so one results document can hold two digests for one mode, which
   the report now refuses.
+- 2026-10-09 — The fixes committed as `8cb6ec0` (gate 7 passed alone). gentle-ai assessed
+  `779bb4a..8cb6ec0` as medium risk, 157 lines, review not due (`under_budget`): it stays pending
+  in the slice until a later commit reaches the budget. Codex found no actionable regression
+  and the review is recorded (`js-harness codex-review --base 779bb4a`). T3 is closed and slice
+  2 is `779bb4a` and `8cb6ec0`. Next, one decision at a time: Sebastián's go-ahead to deliver
+  slice 2 as a pull request, then the count and cost of the 2 smoke trials (T4);
+  `JS_HARNESS_EVAL_OAUTH_TOKEN` is set in this environment.
+- 2026-10-09 — Harness candidate, from his answer to the request to deliver slice 2. He said yes
+  on a condition: a session about to do something shared asks the orchestrator first whether it
+  breaks the flow, since several sessions will run at once and can collide, or he is told a
+  better way before his yes counts. Meanwhile `origin/main` had moved to `d6cf6be` (pull
+  requests 43 to 45 of other sessions), which this session learned only by fetching. Proposed in
+  answer, pending his word: facts before questions. `js-harness sessions` (the board of
+  `feat/session-board`, not yet on `main`) already prints from disk what each session is doing,
+  the running gates and the open pull requests; run from this session it showed no gate, no
+  open pull request and the orchestrator waiting for his answer on its own delivery. So a
+  session reads the board before any shared action (a gate, an eval batch, a push or merge to
+  `main`) and reports what it saw in its request to him. A message to the orchestrator is a
+  notice, not a question to wait on: a message starts a turn there and buries the question it
+  has open with him. Two gaps the board names or cannot close, proposed for the orchestrator's
+  feature and not built here: `check` takes a machine-wide lock in the git common directory, so
+  two gates cannot overlap even when both sessions saw an idle machine in the same minute; and a
+  line of intent a session appends before a shared action and the board prints, since "what a
+  session plans to do next" is what the board says it cannot see.
+- 2026-10-10 — That proposal is superseded by what he decided the same day with the orchestrator,
+  read in `docs/ROADMAP.md` on `origin/main` ("Session channel (planned)") and in the relief
+  file `C:\Users\Oficina\.js-harness\relief\D--js-harness.md` (line 4, the charter): one
+  orchestrator per project, the session titled "JH ORQ · js-harness", is the lead; a work
+  session asks it for a turn by `SendMessage` before a gate, a test run, a trial batch or a
+  board read, and waits for its "go"; a push and a pull request need no yes of his once the gate
+  and both reviews are green; merging code, spend outside the plan and product choices stay
+  his. The machine lock this document proposed is being built by another session
+  (`feat/gate-lock`, unmerged). The question left open with him about slice 2 is withdrawn: its
+  gate, push and pull request go under the charter, and only the merge is asked of him. Context
+  rule of the same day: nothing stops for a percentage; at 85 percent a session writes its
+  state here, then finishes if little is left or asks for the compaction. `origin/main` is at
+  `d3bc399`, 85 commits ahead of this branch, with no file in common with slice 2.
