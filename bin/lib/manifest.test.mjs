@@ -750,6 +750,16 @@ test('the installed skill names codex-review and check --push', () => {
   assert.match(text, /default branch/);
 });
 
+// `check` waits by itself for the gate that runs on the machine; the skill is where an agent learns that it
+// does, and the two flags that change how.
+test('the installed skill names check as the gate of a commit, and how it waits for the gate that runs: --wait and --no-wait', () => {
+  const text = components[0].content('0.1.0');
+  const line = /^- `js-harness check` — (.+)$/m.exec(text)?.[1] ?? '';
+  assert.match(line, /one gate at a time on the machine/);
+  assert.match(line, /60 minutes at most \(`--wait <minutes>`\)/);
+  assert.match(line, /refuses at once \(`--no-wait`\)/);
+});
+
 // The board is how a session learns what the others are doing; the first skill is where it learns the
 // command exists.
 test('the installed skill names sessions and its --watch', () => {
@@ -793,6 +803,18 @@ test('the orchestrator skill has a one-line description a host can read, and nam
   for (const command of ['js-harness sessions', 'js-harness sessions --watch', 'js-harness progress']) {
     assert.ok(text.includes(command), command);
   }
+});
+
+// Two gates at once was a rule each session kept by hand, from the board. `check` keeps it now, so the
+// skill no longer asks for it: it says what a session still has to know, and what is still its own to keep.
+test('the orchestrator skill no longer asks a session to keep by hand the rule that check keeps', () => {
+  const text = components[2].content('0.1.0');
+  assert.doesNotMatch(text, /never start a gate while another runs/);
+  assert.doesNotMatch(text, /a gate is about to start/);
+  assert.ok(text.includes("- Your commit's gate waits by itself while another runs: `Gates` in `js-harness sessions` says which runs and which wait. Start no whole test run of your own beside a gate.\n"));
+  assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
+  // It names no command that does not exist.
+  assert.doesNotMatch(text, /js-harness gate\b/);
 });
 
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user

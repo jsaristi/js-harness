@@ -1457,6 +1457,123 @@ test('main says in a row when the gate lock was lost while the sensors ran, and 
   assert.equal(names.indexOf('tests') + 1, names.indexOf('gate'), output);
 }));
 
+// Found in review, 2026-10-10: nothing showed the holder beating while a sensor runs, which is the whole of
+// the exclusion in a real gate (fifteen minutes held against a stale time of one): every test had a short
+// sensor, a stand-in lock or a clock it moved. Here a real sensor, the real lock and the real clock, with
+// times short enough that the sensor outlasts the stale time five times over.
+const SHORT_TIMES = { beatMs: 25, staleMs: 400, pollMs: 40 };
+/** A sensor that passes after `ms`. */
+const outlasting = (ms) => `node -e "setTimeout(Object, ${ms})"`;
+
+test('a gate keeps beating while its sensor outlasts the stale time, so no other gate is let in', () => withGate({ tests: outlasting(5 * SHORT_TIMES.staleMs) }, async (dir, home) => {
+  let started = false;
+  let ended = false;
+  const spawn = async (command, options) => {
+    started = true;
+    try {
+      return await runSensor(command, options);
+    } finally {
+      ended = true;
+    }
+  };
+  const take = (options) => takeGateLock({ ...options, ...SHORT_TIMES });
+  const checking = runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, takeGateLock: take }));
+  // Awaited below; until then a failure of the gate is not an unhandled one.
+  checking.catch(() => {});
+  await until(() => started, 'the sensor to start');
+  const tries = [];
+  while (!ended) {
+    const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, wait: false, ...SHORT_TIMES });
+    other.release?.();
+    // A try that ended after the sensor did met a lock the gate was free to release.
+    if (!ended) tries.push({ at: Date.now(), refused: other.refused, holder: other.holder?.pid });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const { code, output } = await checking;
+  assert.equal(code, 0, output);
+  assert.deepEqual(tries.filter((tried) => tried.refused !== 'held' || tried.holder !== process.pid), [], 'every other gate was refused while the sensor ran');
+  const refusedFor = tries.at(-1).at - tries[0].at;
+  assert.ok(refusedFor > 3 * SHORT_TIMES.staleMs, `refused over ${refusedFor} ms, ${tries.length} times`);
+  // Taken at once and never lost: the report says nothing of the lock.
+  assert.deepEqual(gateRows(output), []);
+  assert.equal(readGateHolder(home), null);
+}));
+
+// The same gate with no beat, so the test above is not green for another reason: once its holder's file is
+// a stale time old, a gate that waits takes the lock from under the sensor, and the report says so.
+test('a gate that does not beat loses its lock while its sensor runs, and its report says so', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  let took;
+  const spawn = async () => {
+    const other = await takeGateLock({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321, waitMs: 30_000, ...SHORT_TIMES });
+    took = other.refused === undefined;
+    other.release?.();
+    return sensorRan();
+  };
+  const take = (options) => takeGateLock({ ...options, ...SHORT_TIMES, beatMs: 0 });
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, takeGateLock: take }));
+  assert.equal(code, 0, output);
+  assert.equal(took, true);
+  assert.match(gateRows(output).join('\n'), /^INFO {2}gate {2}the machine's gate lock was lost while the sensors ran: /);
+}));
+
+// Found in review, 2026-10-10: no access to the lock folder made every gate wait its whole hour and then
+// go red, blaming a gate that was not there. It is waited for like a gate for the stale time, and then it
+// is a lock that cannot be taken: the sensors run without it and a row says why.
+test('main does not wait an hour for a lock of which nothing can be read: after a minute it runs the sensors without it and says why', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const other = await clock.take({ home, cwd: 'C:\\work\\other', command: 'check', pid: 4321 });
+  const began = new Date(clock.now()).toISOString();
+  const noAccess = new Proxy(fs, {
+    get: (target, name) => {
+      if (name !== 'readdirSync') return target[name];
+      return (folder, ...rest) => {
+        if (folder === gateLockDir(home)) throw Object.assign(new Error('EACCES: permission denied, scandir'), { code: 'EACCES' });
+        return target.readdirSync(folder, ...rest);
+      };
+    },
+  });
+  let ran = 0;
+  const spawn = () => {
+    ran += 1;
+    return sensorRan();
+  };
+  const take = (options) => clock.take({ ...options, fileSystem: noAccess });
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: take, spawn }));
+  assert.equal(code, 0, output);
+  assert.equal(ran, 1);
+  // Said as the wait begins, with the minute it is given and not the hour of the wait.
+  assert.equal(errOutput, 'check: waiting for another gate to finish, for 59 s at most\n');
+  assert.deepEqual(gateRows(output), [
+    `INFO  gate  the sensors ran without the machine's gate lock, which could not be taken (the gate lock at ${gateLockDir(home)} could be neither taken nor read: its folder could not be listed since ${began} (EACCES)), so another gate may have run at the same time`,
+  ]);
+  assert.ok(clock.now() - Date.parse(began) < 62_000, 'a minute, not the hour of the wait');
+  other.release();
+}));
+
+// Found in review, 2026-10-10: each line said the whole bound, with most of it spent by the second.
+test('main says what is left of its wait with each gate it waits for, not the whole bound again', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const first = await clock.take({ home, cwd: 'C:\\work\\one', command: 'check', pid: 11 });
+  let next;
+  let sleeps = 0;
+  clock.onSleep = async () => {
+    sleeps += 1;
+    first.beat();
+    if (sleeps === 3) {
+      first.release();
+      next = await clock.take({ home, cwd: 'C:\\work\\two', command: 'check', pid: 22 });
+    }
+    if (sleeps === 5) next.release();
+  };
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--wait', '1'], {}, gateDeps({ takeGateLock: clock.take }));
+  assert.equal(code, 0, output);
+  const said = errOutput.split('\n');
+  assert.match(said[0], /^check: waiting for the gate of C:\\work\\one \(pid 11, started [^)]+\) to finish, for 1 minute at most$/);
+  assert.match(said[1], /^check: waiting for the gate of C:\\work\\two \(pid 22, started [^)]+\) to finish, for 54 s at most$/);
+  assert.deepEqual(said.slice(2), ['']);
+  assert.deepEqual(gateRows(output), ["INFO  gate  waited 10 s for the machine's gate lock before the sensors ran"]);
+}));
+
 test('main errors with usage on stderr, exits 2 and runs no row for a --wait it cannot take', async () => {
   const refusals = [
     [['--wait'], '--wait requires a value'],
@@ -1488,20 +1605,28 @@ test('a gate under test that names no home is given a throwaway one, so it canno
 
 // The real thing between two real processes: `node bin/check.mjs` twice, on two folders that share one
 // home. A sensor writes when it goes in, holds until the test lets it go, and writes when it comes out.
+//
+// The test waits a minute for each of two things before it lets the sensors go (`until`), so a sensor
+// gives up only after five: well past both. With the same minute for the sensor as for the test, the first
+// sensor of a slow machine would come out by itself as the test's own wait ran out, and the test would
+// fail on the log, not on what it had waited for (found in review, 2026-10-10). A sensor that a failed
+// run leaves behind ends when the test removes the home its log is in, not at its give-up.
+const UNTIL_MS = 60_000;
+const SENSOR_GIVES_UP_MS = 5 * UNTIL_MS;
 const SENSOR = `
 const fs = require('fs');
 const [log, go, name] = process.argv.slice(2);
 fs.appendFileSync(log, 'in ' + name + '\\n');
-const giveUpAt = Date.now() + 60000;
+const giveUpAt = Date.now() + ${SENSOR_GIVES_UP_MS};
 const timer = setInterval(() => {
-  if (!fs.existsSync(go) && Date.now() < giveUpAt) return;
+  if (!fs.existsSync(go) && fs.existsSync(log) && Date.now() < giveUpAt) return;
   clearInterval(timer);
   fs.appendFileSync(log, 'out ' + name + '\\n');
 }, 20);
 `;
 
 /** Resolves once `condition()` holds, looking every 20 ms; rejects, naming `what`, after `ms`. */
-async function until(condition, what, ms = 60_000) {
+async function until(condition, what, ms = UNTIL_MS) {
   const giveUpAt = Date.now() + ms;
   while (!condition()) {
     if (Date.now() > giveUpAt) throw new Error(`timed out waiting for ${what}`);
@@ -1568,7 +1693,8 @@ test('two check processes that share a home run their sensors one after the othe
     assert.deepEqual(gateRows(a.stdout), []);
     const said = b.stderr.replace(/\r\n/g, '\n');
     assert.ok(said.startsWith(`check: waiting for the gate of ${path.resolve(one)} (pid ${first.child.pid}, started `), said);
-    assert.ok(said.endsWith(') to finish, for 60 minutes at most\n'), said);
+    // The whole bound, or what is left of it on a machine so slow that a second of it was spent by then.
+    assert.match(said, /\) to finish, for (60 minutes|59 min \d+ s) at most\n$/);
     assert.match(gateRows(b.stdout.replace(/\r\n/g, '\n')).join('\n'), /^INFO {2}gate {2}waited \d+ s for the machine's gate lock before the sensors ran$/);
     assert.match(b.stdout, /^INFO {2}review {2}gentle-ai was not found/m);
     assert.equal(fs.existsSync(gateLockDir(home)), false);

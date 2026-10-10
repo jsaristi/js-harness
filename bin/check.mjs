@@ -303,12 +303,14 @@ const GATE_WAIT_SAID_MS = 1000;
  * Taken at once, which is the common case, it adds none.
  *
  * A gate that finds the lock held waits for it, and says once on stderr, as the wait begins and for each
- * gate it then waits for, whose gate that is and for how long at most: the caller is a commit running in
- * the background, and a silent wait reads as a hang. The time it waited is an INFO row. It counts against
- * no sensor's timeout, which starts when the sensor does. With `wait` off, or past `waitMinutes`, the
- * row is a FAIL that names the holder and `run` is not called: a gate that ran nothing must not look green.
+ * gate it then waits for, whose gate that is and for how long at most from then on, which is what is left
+ * of the bound and not the whole of it: the caller is a commit running in the background, and a silent
+ * wait reads as a hang. The time it waited is an INFO row. It counts against no sensor's timeout, which
+ * starts when the sensor does. With `wait` off, or past `waitMinutes`, the row is a FAIL that names the
+ * holder and `run` is not called: a gate that ran nothing must not look green.
  *
- * A lock that cannot be taken at all (the home cannot be written) does not turn a gate red, since the
+ * A lock that cannot be taken at all (the home cannot be written, or a lock is there of which nothing
+ * could be read for a minute, which is no gate to wait an hour for) does not turn a gate red, since the
  * lock guards the machine's time and not the project's code: `run` is called without it and an INFO row
  * says so and why. So does a lock lost while the sensors ran, which happens only to a gate that was
  * silent for the whole stale time (a machine that slept).
@@ -321,14 +323,18 @@ const GATE_WAIT_SAID_MS = 1000;
  * `takeGateLock` is injectable, so a test stands in for the lock or runs the real one on its own clock. */
 async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run) {
   const row = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { info: true }), detail });
-  const onWait = (holder) => {
+  const waitMs = waitMinutes * 60_000;
+  const onWait = (holder, leftMs = waitMs) => {
+    // What is left of the bound when this gate is first waited for: the whole of it, as `--wait` takes
+    // it, while under a second is spent, which is the wait's first line.
+    const left = waitMs - leftMs < GATE_WAIT_SAID_MS ? minutes(waitMinutes) : duration(leftMs);
     // A holder that already reads stale is waited for a poll or two, not for the whole bound.
     const silent = holder.stale ? '; it has been silent for over a minute, and its lock is taken over if it stays so' : '';
-    console.error(`check: waiting for ${gateOf(holder)} to finish, for ${minutes(waitMinutes)} at most${silent}`);
+    console.error(`check: waiting for ${gateOf(holder)} to finish, for ${left} at most${silent}`);
   };
   let lock;
   try {
-    lock = await take({ home, cwd: path.resolve(cwd), command: 'check', wait, waitMs: waitMinutes * 60_000, onWait });
+    lock = await take({ home, cwd: path.resolve(cwd), command: 'check', wait, waitMs, onWait });
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     return [row(`the sensors ran without the machine's gate lock, which could not be taken (${why}), so another gate may have run at the same time`), ...(await run())];

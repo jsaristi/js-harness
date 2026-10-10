@@ -9,12 +9,16 @@
 // a decision, so a session can wait on the others without spending anything while nothing happens.
 // The board also prints the relief file of the session that orchestrates the others (its path and last
 // lines): that session writes it, this command only reads it.
+// The gates come from two sources: the process listing, which shows every `check` process, and the
+// machine's gate lock (bin/lib/gate-lock.mjs), which says which of them runs its sensors and which wait
+// for their turn. Both are read, neither is written.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -293,7 +297,11 @@ export async function sessionsMain(
   // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`. An empty
   // JS_HARNESS_HOME is no home: joined as it is, it would put the file under the folder the command runs
   // in. A relative `--relief` is read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
-  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(env.JS_HARNESS_HOME || homedir(), '.js-harness', 'relief', `${slug}.md`));
+  const harnessHome = env.JS_HARNESS_HOME || homedir();
+  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(harnessHome, '.js-harness', 'relief', `${slug}.md`));
+  // The machine's gate lock is under the same home, read through the same three functions as every other
+  // file of the board, so a test hands it a folder of its own.
+  const lockFiles = { readdirSync: readdir, statSync: stat, readFileSync: readFile };
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
@@ -330,6 +338,16 @@ export async function sessionsMain(
     for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
 
     const worktrees = readWorktrees(run, root, { readFile });
+    // The processes first, the lock after: a gate that starts is a process for a moment before it stands
+    // in line, and read the other way round it would be a process the lock says nothing of, which is
+    // what a gate that runs without the lock looks like. The waiters before the holder, for the same
+    // reason: a gate that takes the lock between the two reads is then in one of them.
+    const gates = readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []);
+    const gateLock = readGateLock(() => {
+      const reading = { now: () => generatedAt, fileSystem: lockFiles };
+      const waiters = readGateWaiters(harnessHome, reading);
+      return { holder: readGateHolder(harnessHome, reading), waiters };
+    });
     return {
       root,
       projectDir,
@@ -341,7 +359,8 @@ export async function sessionsMain(
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
       worktrees,
-      gates: readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []),
+      gates,
+      gateLock,
       pullRequests: readPullRequests(run, root),
       relief: readRelief(reliefFile, readFile),
       notVisible: NOT_VISIBLE,

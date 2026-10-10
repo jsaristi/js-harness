@@ -20,6 +20,7 @@ js-harness commands:
 - \`js-harness upgrade\` — install the newer release, then sync.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
+- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for the gate that runs, 60 minutes at most (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 
@@ -67,7 +68,7 @@ When the user asks for something, place it with the roadmap and the board:
 Write to the user only when:
 1. a session starts waiting on them;
 2. a session finished with nothing running behind it;
-3. a gate is about to start while another runs;
+3. two gates run at once (a gate that waits for its turn is not one of them);
 4. a prompt they hold became stale;
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
 6. a session's context passed the limit.
@@ -90,7 +91,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 ## A work session
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
-- Before a commit, check \`Gates\` in \`js-harness sessions\`, and never start a gate while another runs.
+- Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. Start no whole test run of your own beside a gate.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.

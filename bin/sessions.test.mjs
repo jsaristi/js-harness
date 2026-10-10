@@ -597,6 +597,103 @@ test('elsewhere the gates come from ps, which gives no start time', withMachine(
   assert.deepEqual(fake.calls.find((made) => made.command === 'ps').args, ['-A', '-o', 'pid=,args=']);
 }));
 
+// --- the machine's gate lock: read beside the process listing, under the harness home ---
+
+const gateFolder = (home) => path.join(home, '.js-harness', 'gate');
+
+/** A gate's file as `bin/lib/gate-lock.mjs` keeps it: in `lock` for the gate that holds the machine's gate
+ * lock, in `wait-<token>` for one in line. Its last write, `seconds` before NOW, is its beat. */
+function writeGateFile(home, folder, { pid, cwd, ...times }, seconds) {
+  const token = `${pid}-${String(pid).padStart(12, '0')}`;
+  const file = path.join(gateFolder(home), folder === 'lock' ? 'lock' : `wait-${token}`, `holder-${token}.json`);
+  writeAt(file, `${JSON.stringify({ token, pid, cwd, command: 'check', ...times })}\n`, seconds);
+  fs.utimesSync(path.dirname(file), before(seconds), before(seconds));
+}
+
+const checkProcess = (pid, folder, seconds) => ({ pid, createdAt: NOW - seconds * 1000, commandLine: `node ${slashes(folder)}/bin/check.mjs` });
+const gatesSection = (stdout) => {
+  const lines = stdout.split('\n');
+  return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1);
+};
+
+/** One gate runs in the main checkout and holds the lock; `inLine` puts a second one in line for it. */
+function gateRuns(machine, home = machine.userHome) {
+  writeGateFile(home, 'lock', { pid: 4242, cwd: machine.root, startedAt: before(125).toISOString(), waitingSince: before(125).toISOString() }, 3);
+  const processes = [checkProcess(4242, machine.root, 130)];
+  const inLine = () => {
+    writeGateFile(home, 'wait', { pid: 4250, cwd: machine.worktree, startedAt: before(1).toISOString(), waitingSince: before(60).toISOString() }, 1);
+    processes.push(checkProcess(4250, machine.worktree, 61));
+  };
+  return { listProcesses: () => [...processes], inLine };
+}
+
+test('the board reads the machine\'s gate lock under the harness home: Gates says which gate runs and which waits', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { listProcesses, inLine } = gateRuns(machine);
+  inLine();
+  const board = JSON.parse((await runSessions(machine, ['--json'], { listProcesses })).stdout);
+  assert.deepEqual(board.gateLock, {
+    available: true,
+    holder: { pid: 4242, cwd: machine.root, command: 'check', startedAt: before(125).toISOString(), beatAt: before(3).toISOString(), stale: false },
+    waiters: [{ pid: 4250, cwd: machine.worktree, command: 'check', waitingSince: before(60).toISOString() }],
+  });
+  // The listing still has both processes, as it gave them.
+  assert.deepEqual(board.gates.items.map((gate) => gate.pid), [4242, 4250]);
+  assert.deepEqual(gatesSection((await runSessions(machine, [], { listProcesses })).stdout), [
+    `  pid 4242  ${slashes(machine.root)}  running, took the gate lock 2m ago  node ${slashes(machine.root)}/bin/check.mjs`,
+    `  pid 4250  ${slashes(machine.worktree)}  waiting for the gate of pid 4242, began 1m ago  node ${slashes(machine.worktree)}/bin/check.mjs`,
+  ]);
+
+  // A holder that has not beaten for the stale time is said silent, not running.
+  const later = () => NOW + 120_000;
+  assert.deepEqual(gatesSection((await runSessions(machine, [], { listProcesses: () => [], now: later })).stdout), [
+    `  pid 4242  ${slashes(machine.root)}  silent: holds the gate lock, its last beat was 2m ago and the next gate takes it over  check (no process of the listing has this pid)`,
+  ]);
+}));
+
+test('the gate lock is looked for under JS_HARNESS_HOME, or under the home folder, and no lock there is a free one', withMachine(async (machine) => {
+  writeSessions(machine);
+  const free = { available: true, holder: null, waiters: [] };
+  const none = await runSessions(machine, ['--json']);
+  assert.deepEqual(JSON.parse(none.stdout).gateLock, free);
+  assert.equal(fs.existsSync(machine.userHome), false, 'looking for the lock creates nothing');
+
+  const other = path.join(machine.dir, 'harness-home');
+  const { listProcesses } = gateRuns(machine, other);
+  assert.deepEqual(JSON.parse((await runSessions(machine, ['--json'], { listProcesses })).stdout).gateLock, free, 'the lock of another home is not this one\'s');
+  const moved = JSON.parse((await runSessions(machine, ['--json'], { listProcesses, env: { JS_HARNESS_HOME: other } })).stdout);
+  assert.equal(moved.gateLock.holder.pid, 4242);
+  // An empty JS_HARNESS_HOME is no home, as for the relief file.
+  assert.deepEqual(JSON.parse((await runSessions(machine, ['--json'], { listProcesses, env: { JS_HARNESS_HOME: '' } })).stdout).gateLock, free);
+}));
+
+test('the lock is read after the processes are listed, so a gate that started between the two is in line and not beside the one that runs', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { listProcesses, inLine } = gateRuns(machine);
+  // The second gate starts and stands in line as the processes are being listed.
+  const listing = () => {
+    inLine();
+    return listProcesses();
+  };
+  const { stdout } = await runSessions(machine, ['--json'], { listProcesses: listing });
+  assert.deepEqual(JSON.parse(stdout).gateLock.waiters.map((waiter) => waiter.pid), [4250]);
+}));
+
+test('a gate lock that cannot be read is said under Gates with its reason, and the gates of the listing are still printed', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { listProcesses } = gateRuns(machine);
+  const readdir = (folder) => {
+    if (folder === gateFolder(machine.userHome)) throw Object.assign(new Error('EACCES: permission denied, scandir'), { code: 'EACCES' });
+    return fs.readdirSync(folder);
+  };
+  const reason = 'the gate lock: EACCES: permission denied, scandir';
+  assert.deepEqual(JSON.parse((await runSessions(machine, ['--json'], { listProcesses, readdir })).stdout).gateLock, { available: false, reason });
+  assert.deepEqual(gatesSection((await runSessions(machine, [], { listProcesses, readdir })).stdout), [
+    `  pid 4242  ${slashes(machine.root)}  started 2m ago  node ${slashes(machine.root)}/bin/check.mjs`,
+    `  unavailable: ${reason}`,
+  ]);
+}));
+
 // --- the board as text ---
 
 test('the text board prints each session with its state, its open work and the tail of its last reply, then the machine', withMachine(async (machine) => {
@@ -754,6 +851,28 @@ test('--watch exits 1 when the sessions folder is gone at a later look', withMac
   assert.equal(code, 1);
   assert.deepEqual(lines, ['']);
   assert.match(stderr, /^js-harness sessions: no sessions folder for /);
+}));
+
+// Since `check` waits for the machine's gate lock, a second `check` process beside the one that runs is a
+// gate in line. The watch said "gate started … while another runs" for it, which is what the lock prevents.
+test('--watch says that a gate which starts and waits for the lock is waiting, and nothing when it then takes the lock', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { listProcesses, inLine } = gateRuns(machine);
+  const queued = await watch(machine, ['--interval', '5', '--timeout', '60'], [inLine], { listProcesses });
+  assert.deepEqual(queued.lines.slice(0, 3), [
+    'sessions --watch: 1 change after 5s',
+    `  gate started in ${slashes(machine.worktree)} (pid 4250), waiting for the gate in ${slashes(machine.root)} (pid 4242)`,
+    '',
+  ]);
+  assert.deepEqual(gatesSection(queued.lines.join('\n')).map((line) => line.split('  ')[3]), ['running, took the gate lock 2m ago', 'waiting for the gate of pid 4242, began 1m ago']);
+
+  // The first gate releases the lock and writes its report while the second takes it: nothing to decide.
+  const handOver = () => {
+    fs.rmSync(gateFolder(machine.userHome), { recursive: true });
+    writeGateFile(machine.userHome, 'lock', { pid: 4250, cwd: machine.worktree, startedAt: before(-5).toISOString(), waitingSince: before(60).toISOString() }, -5);
+  };
+  const taken = await watch(machine, ['--interval', '5', '--timeout', '10'], [handOver], { listProcesses });
+  assert.deepEqual(taken.lines, ['sessions --watch: nothing changed in 10s']);
 }));
 
 // --- the relief file of the orchestrator ---

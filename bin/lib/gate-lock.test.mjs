@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './gate-lock.mjs';
+import { gateDir, gateLockDir, readGateHolder, readGateWaiters, takeGateLock } from './gate-lock.mjs';
 
 const STALE_MS = 60_000;
 const POLL_MS = 2_000;
@@ -171,6 +171,26 @@ test('a waiting gate is told again when the gate it waits for changes', withHome
   const told = [];
   const second = await take(home, clock, { pid: 22, onWait: (holder) => told.push(holder.pid) });
   assert.deepEqual(told, [11, 33]);
+  second.release();
+}));
+
+test('a waiting gate is told, with each gate it waits for, what is left of its wait by then', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  let third;
+  let sleeps = 0;
+  clock.onSleep = async () => {
+    sleeps += 1;
+    first.beat();
+    if (sleeps === 3) {
+      first.release();
+      third = await take(home, clock, { pid: 33, sleep: async () => {} });
+    }
+    if (sleeps === 5) third.release();
+  };
+  const told = [];
+  const second = await take(home, clock, { pid: 22, waitMs: 60_000, onWait: (holder, leftMs) => told.push([holder.pid, leftMs]) });
+  assert.deepEqual(told, [[11, 60_000], [33, 60_000 - 3 * POLL_MS]]);
   second.release();
 }));
 
@@ -426,6 +446,8 @@ test('a holder file that is busy as it is read is a holder since when is not kno
 test('a holder whose file is busy holds the lock: a gate waits for it and takes the lock only once it is released', withHome(async (home) => {
   // Busy for more looks than a take makes of a lock nobody holds before it gives up. Read as an empty
   // lock, such a holder made the take an error, and a caller that goes on without the lock ran beside it.
+  // The looks are a second apart, so the fifty of them fit in the stale time, which is how long a holder
+  // that cannot be read is waited for.
   const clock = fakeClock();
   const first = await take(home, clock, { pid: 11 });
   const [firstFile] = holderFiles(home);
@@ -439,10 +461,10 @@ test('a holder whose file is busy holds the lock: a gate waits for it and takes 
     if (sleeps === 53) first.release();
   };
   const told = [];
-  const second = await take(home, clock, { pid: 22, fileSystem: busy.io, onWait: (holder) => told.push(holder) });
+  const second = await take(home, clock, { pid: 22, pollMs: 1000, fileSystem: busy.io, onWait: (holder) => told.push(holder) });
   assert.equal(second.refused, undefined);
   assert.equal(busy.failed(), 50);
-  assert.equal(second.waitedMs, 53 * POLL_MS);
+  assert.equal(second.waitedMs, 53 * 1000);
   assert.deepEqual([...inTheLock], [firstFile], 'only the first gate held the lock until it released it');
   assert.equal(told.length, 1);
   assert.equal(told[0].beatAt, null);
@@ -468,6 +490,53 @@ test('a holder whose file stays busy refuses a gate that does not wait at once, 
   assert.equal(first.lost(), false);
   assert.deepEqual(waitFolders(home), []);
   first.release();
+}));
+
+// Found in review, 2026-10-10: a holder that could never be read kept each gate waiting to the end of its
+// wait, an hour, and then refused it: a red gate that blamed another gate when none was there.
+test('a holder whose file stays unreadable for the stale time is no gate to wait an hour for: the take is an error that says since when', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const [firstFile] = holderFiles(home);
+  const began = clock.now();
+  const busy = busyFor(11, 'statSync', 'EACCES');
+  const told = [];
+  const taking = take(home, clock, { pid: 22, waitMs: 60 * 60_000, fileSystem: busy.io, onWait: (holder, leftMs) => told.push([holder.beatAt, leftMs]) });
+  await assert.rejects(taking, {
+    code: 'GATE_LOCK_UNREADABLE',
+    message: `the gate lock at ${gateLockDir(home)} could be neither taken nor read: its holder's file could not be looked at since ${new Date(began).toISOString()} (EACCES)`,
+  });
+  assert.equal(clock.now() - began, STALE_MS, 'waited for like a gate for the stale time, a poll at a time');
+  // Told at once that this one is waited for a minute at most, not for the hour of the wait.
+  assert.deepEqual(told, [[null, STALE_MS]]);
+  // Not taken over: nothing said its gate had died.
+  assert.equal(first.lost(), false);
+  assert.deepEqual(holderFiles(home), [firstFile]);
+  assert.deepEqual(waitFolders(home), []);
+  first.release();
+}));
+
+test('the stale time of a holder that cannot be read is counted from the first such look in a row: one that reads its beat starts it again', withHome(async (home) => {
+  // Unreadable for forty seconds, read once, unreadable for forty more: eighty in all, never sixty in a row.
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  let looks = 0;
+  const io = tapped((name, [target]) => {
+    if (name !== 'statSync' || !String(target).includes('holder-11-')) return;
+    looks += 1;
+    if (looks !== 21 && looks <= 41) throw failing('EBUSY');
+  });
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    first.beat();
+    if (sleeps === 45) first.release();
+  };
+  const second = await take(home, clock, { pid: 22, fileSystem: io });
+  assert.equal(second.refused, undefined);
+  assert.equal(second.waitedMs, 45 * POLL_MS);
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
+  second.release();
 }));
 
 test('a dead holder whose file cannot be removed yet is looked at again, not an error', withHome(async (home) => {
@@ -598,6 +667,27 @@ test('a lock folder that stays busy refuses a gate that does not wait once its b
   first.release();
 }));
 
+// The other side of the same finding: no access to the lock folder is not a gate, and no gate ends it.
+test('a lock folder that can never be listed is an error once the stale time has passed since the first look, not a wait to the end', withHome(async (home) => {
+  const clock = fakeClock();
+  const first = await take(home, clock, { pid: 11 });
+  const [firstFile] = holderFiles(home);
+  const began = clock.now();
+  const told = [];
+  const taking = take(home, clock, { pid: 22, waitMs: 60 * 60_000, fileSystem: unlistable(home, 'EACCES').io, onWait: (holder, leftMs) => told.push([holder, leftMs]) });
+  await assert.rejects(taking, {
+    code: 'GATE_LOCK_UNREADABLE',
+    message: `the gate lock at ${gateLockDir(home)} could be neither taken nor read: its folder could not be listed since ${new Date(began).toISOString()} (EACCES)`,
+  });
+  // The second of blind tries is part of the stale time, and the polls after it are the rest.
+  assert.equal(clock.now() - began, 39 * 25 + 30 * POLL_MS);
+  assert.deepEqual(told, [[NOBODY_KNOWN, STALE_MS - 39 * 25]]);
+  assert.equal(first.lost(), false);
+  assert.deepEqual(holderFiles(home), [firstFile]);
+  assert.deepEqual(waitFolders(home), []);
+  first.release();
+}));
+
 test('a gate whose file cannot be looked at has not lost its lock; one whose file is gone has', withHome(async (home) => {
   // `existsSync` answers "not there" for a file it could not look at, and a gate was told its lock had
   // been taken away when it had not.
@@ -673,6 +763,82 @@ test('an entry the sweep cannot read does not keep the dead waiter listed after 
   });
   const lock = await take(home, clock, { fileSystem: sorted });
   assert.deepEqual(waitFolders(home), ['wait-a-file']);
+  lock.release();
+}));
+
+// --- who waits: what the session board reads beside the holder ---
+
+test('a gate that waits is read as a waiter, with its folder and since when; the gate that holds the lock is none', withHome(async (home) => {
+  const clock = fakeClock();
+  const read = () => readGateWaiters(home, { now: clock.now, staleMs: STALE_MS });
+  assert.deepEqual(read(), [], 'no gate folder yet');
+  const first = await take(home, clock, { pid: 11 });
+  assert.deepEqual(read(), []);
+  const began = new Date(clock.now()).toISOString();
+  const seen = [];
+  let sleeps = 0;
+  clock.onSleep = () => {
+    sleeps += 1;
+    first.beat();
+    seen.push(read());
+    if (sleeps === 3) first.release();
+  };
+  const second = await take(home, clock, { pid: 22, cwd: 'C:\\work\\two', command: 'check' });
+  assert.equal(seen.length, 3);
+  for (const waiters of seen) {
+    assert.equal(waiters.length, 1);
+    const [{ token, ...said }] = waiters;
+    assert.match(token, /^22-[0-9a-f]{12}$/);
+    // Since its wait began, at every poll: not since the poll that staged its folder last.
+    assert.deepEqual(said, { pid: 22, cwd: 'C:\\work\\two', command: 'check', waitingSince: began });
+  }
+  assert.deepEqual(read(), [], 'it holds the lock now');
+  assert.equal(readGateHolder(home, { now: clock.now }).pid, 22);
+  second.release();
+}));
+
+test('readGateWaiters gives the longest wait first, leaves out a waiter that died, and knows a pid by its folder\'s name when its file cannot be read', withHome((home) => {
+  const clock = fakeClock();
+  const ago = (seconds) => new Date(clock.now() - seconds * 1000);
+  const waiter = (token, content, touched) => {
+    const folder = path.join(gateDir(home), `wait-${token}`);
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, `holder-${token}.json`), content);
+    fs.utimesSync(path.join(folder, `holder-${token}.json`), touched, touched);
+    fs.utimesSync(folder, touched, touched);
+  };
+  const says = (pid, seconds) => JSON.stringify({ pid, cwd: `C:\\work\\${pid}`, command: 'check', waitingSince: ago(seconds).toISOString() });
+  waiter('31-aaaaaaaaaaaa', says(31, 30), ago(1));
+  waiter('32-bbbbbbbbbbbb', says(32, 300), ago(2));
+  // A waiter writes its file again at every poll: read in that instant, the file is empty.
+  waiter('33-cccccccccccc', '', ago(0));
+  waiter('34-dddddddddddd', says(34, 900), ago(STALE_MS / 1000 + 1));
+  waiter('garbage', '{ not json', ago(0));
+  fs.writeFileSync(path.join(gateDir(home), 'wait-a-file'), 'not a folder');
+  const waiters = readGateWaiters(home, { now: clock.now, staleMs: STALE_MS });
+  const brief = ({ token, pid, cwd, waitingSince }) => [token, pid, cwd, waitingSince];
+  assert.deepEqual(waiters.slice(0, 2).map(brief), [
+    ['32-bbbbbbbbbbbb', 32, 'C:\\work\\32', ago(300).toISOString()],
+    ['31-aaaaaaaaaaaa', 31, 'C:\\work\\31', ago(30).toISOString()],
+  ]);
+  // After them, in the order of the listing, the two whose wait has no known start.
+  assert.deepEqual(waiters.slice(2).map(brief).sort(), [['33-cccccccccccc', 33, null, null], ['garbage', null, null, null]]);
+
+  // A gate folder that is there and cannot be listed is not "nobody waits".
+  const noAccess = tapped((name, [target]) => {
+    if (name === 'readdirSync' && target === gateDir(home)) throw failing('EACCES');
+  });
+  assert.throws(() => readGateWaiters(home, { fileSystem: noAccess }), { code: 'EACCES' });
+}));
+
+test('a holder whose file cannot be read is still known by the pid in its name', withHome(async (home) => {
+  const clock = fakeClock();
+  const lock = await take(home, clock, { pid: 11 });
+  const unread = tapped((name, [target]) => {
+    if (name === 'readFileSync' && String(target).includes('holder-11-')) throw failing('EBUSY');
+  });
+  const holder = readGateHolder(home, { now: clock.now, staleMs: STALE_MS, fileSystem: unread });
+  assert.deepEqual([holder.pid, holder.cwd, holder.startedAt, holder.stale], [11, null, null, false]);
   lock.release();
 }));
 

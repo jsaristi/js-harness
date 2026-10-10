@@ -199,7 +199,12 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
 - [x] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
       rows, release on every way out; the suite's own gates do not wait. Proof with two
       worktrees recorded here.
-- [ ] T3 · The board reads the lock: `Gates` shows who runs and who waits; the watch stops
+- [x] T2b · What the gentle-ai review of T2 found (added 2026-10-10): a test that the holder
+      keeps beating while a sensor outlasts the stale time; a lock that stays unreadable past
+      the stale time is an error, so the gate runs without it instead of waiting an hour and
+      going red; the wait message says what is left of the bound; the two-process test's
+      margins. Route: the writer of T3, first, and in T3's commit.
+- [x] T3 · The board reads the lock: `Gates` shows who runs and who waits; the watch stops
       reporting a waiting gate; the skill line reworded.
 - [ ] T4 · `js-harness gate -- <command>`.
 - [ ] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
@@ -436,15 +441,112 @@ allows a feature. No spend outside the plan.
   `command` is `check`. For T3: `bin/lib/manifest.mjs:23` describes `check`'s flags in the
   skill text and does not name `--wait` or `--no-wait` yet.
 
-## Next
-T1d and T2 are written and staged with these records: their one commit goes on the
-orchestrator's turn, message `feat(check): run the sensors of one gate at a time on the
-machine`. One look at the process list first; a gate that reaches the bound is said and
-not retried. It is the first gate that takes the real lock (`~/.js-harness/gate`).
+- 2026-10-10 · T1d and T2 are commit `7b67b61`: gate green in 869 s (06:58:05 to 07:12:34), one
+  try, on the orchestrator's turn. The first real use of the lock, seen: 26 s into the gate
+  `~/.js-harness/gate/lock` held one file, `holder-5764-3c5795afd334.json` (this worktree,
+  pid 5764, `check`, started 11:58:05Z); after the gate the lock folder was gone and the
+  empty folder `gate` was left. No second gate came, so nothing waited. gentle-ai assessed
+  `6022066..7b67b61` medium risk and due (1,185 lines, `slice_budget_reached`), the review
+  was started under his consent (lineage `review-7084f49729a6d2eb`, one lens, reliability),
+  and its first bound status answered `operation_timeout` ("context deadline exceeded", no
+  mutation): the gate of `practice-project` had started at 07:13:23, seconds after this
+  one ended, and the review's steps were running beside it. Cause: the machine, not
+  gentle-ai. Nothing more was started beside that gate.
 
-After it: record the commit; `gentle-ai review assess --base-ref 6022066 --committed-only`
-(T1c, T1d and T2 together) and what it returns; then the Codex review of the same range,
-`js-harness codex-review --base 6022066`, its spend recorded. Then T3.
+- 2026-10-10 · The reviews of `6022066..7b67b61`. The bound status of gentle-ai answered in
+  5 s once the other gate had ended (07:25), so the timeout was the machine. gentle-ai
+  approved (one lens, reliability; lineage `review-7084f49729a6d2eb`, acknowledged, authority
+  burned) with five advisory findings:
+  - `R3-beat-during-sensors-unproved` (warning): no test shows the holder beating while a
+    sensor runs longer than the stale time; every test uses a short sensor, a stand-in lock
+    or a moved clock. True. The gate of `7b67b61` held the lock 869 s and nobody took it,
+    which is one run and not a test. Taken: T2b.
+  - `R3-unlistable-folder-permanent-wait` (warning): a lock folder that can never be listed
+    (permissions, not a gate) makes every gate wait its whole hour and go red, blaming a gate
+    that does not exist, against the rule that a lock that cannot be taken does not turn a
+    gate red. True, and it is the other side of Codex's finding in T1d. Taken, T2b: a lock
+    that cannot be read is waited for like a gate only for the stale time; still unreadable
+    after it, with nothing ever read, it is the error "can be neither taken nor read", and
+    `check` runs without the lock and says so. The same bound for a holder's file that
+    stays busy.
+  - `R3-wait-message-overstates-remaining` (suggestion): each wait line says the whole bound.
+    Taken: T2b.
+  - `R3-e2e-shared-60s-margins` (suggestion): the two-process test gives its sensor and its
+    own wait the same 60 s, so on a loaded machine it would fail with a message that is not
+    what happened. Taken: T2b.
+  - `R3-lost-lock-stays-green` (warning): a lock lost while the sensors ran is an INFO row and
+    exit 0. Not taken, decided: the lock guards the machine's time and not the project's
+    code, the sensors of that commit passed, and a red gate would send a session to fix code
+    that has nothing wrong. The row stays, and a reader of exit codes alone does not see it:
+    said.
+  Codex reviewed `a84780f..7b67b61` in 3 parts (07:28:32 to 07:31:30; T1c already had its
+  record): "the patch is correct" for the three, no finding. Spent: 518,154 input tokens
+  (359,168 cached). The feature's Codex spend so far: 828,468 of 3 million. Its first try
+  refused at once, nothing spent: the record claims a committed range and this document
+  had uncommitted lines; the document was set aside with `git stash` for the three minutes
+  of the review and put back, a copy kept in the scratchpad meanwhile.
+  From the orchestrator, as a proposal for this feature and not yet placed: every gate
+  appends one line to a file (start, end, seconds, worktree, result, whom it waited for),
+  so "which gates ran" is a file to read; five gates in a row passed on the machine with the
+  browser closed (916, 1,038, 828, 843 s and one of another session). It fits T5 and is put
+  to Sebastián there, since it is one more file written outside the repository.
+
+- 2026-10-10 · T2b and T3 done, route one writer, its work read back and the five test files
+  run again by this session. Changed: 968 lines added, 74 removed, in ten files and this one.
+  T2b. The beat is proved: a test runs a real sensor process for 2 s under the real lock on
+  the real clock, with a beat of 25 ms and a stale time of 400 ms, and a second taker is
+  refused all the while; it passes against `7b67b61` too, so the beat did fire and T2 had no
+  defect there, and its control (a gate that does not beat loses its lock and its report
+  says so) shows the test can fail. A lock of which nothing can be read is waited for like
+  a gate for the stale time only, counted from the first such look and reset by any look
+  that reads a beat, another holder or a free lock; past it `takeGateLock` rejects with the
+  code `GATE_LOCK_UNREADABLE` and `check` runs without the lock and says so. The wait
+  message says what is left of the bound (`for 54 s at most`). The two-process test's
+  sensor gives up after 5 minutes against the test's 60 s.
+  T3. `readGateWaiters` in the lock's library (a waiter's file now says since when it
+  waits). The board keeps the process list and adds the lock: a `check` process that is the
+  holder is one gate, running; one that is a waiter is waiting; one that is neither runs
+  without the lock and is shown as before; a holder or waiter with no process in the list
+  is shown from the lock. `Gates` reads, for a gate that runs, `pid 4242  <folder>
+  running, took the gate lock 2m ago  <command>`; for one that waits, `pid 4250  <folder>
+  waiting for the gate of pid 4242, began 1m ago`; for a dead holder, `silent: holds the
+  gate lock, its last beat was 5m ago and the next gate takes it over`. The watch says
+  `gate started in X (pid 6), waiting for the gate in Y (pid 5)` and nothing when that gate
+  then takes the lock; `gate started … while another runs …` only for two gates that
+  really run at once; a stale holder is not "another". The skill text: a new line for
+  `js-harness check` with `--wait <minutes>` and `--no-wait`; the orchestrator's third
+  case becomes "two gates run at once (a gate that waits for its turn is not one of them)";
+  a work session's line becomes "Your commit's gate waits by itself while another runs:
+  `Gates` in `js-harness sessions` says which runs and which wait. Start no whole test run
+  of your own beside a gate."
+  Checked: `node --test` of `bin/lib/gate-lock.test.mjs` (47 tests, 17.0 to 17.8 s),
+  `bin/check.test.mjs` (90 tests, 28.6 and 28.9 s alone; 56.8 s the one time a gate of
+  another session started seconds after the look), `bin/lib/sessions.test.mjs` (123, 0.2 s),
+  `bin/sessions.test.mjs` (110, 1.6 s), `bin/lib/manifest.test.mjs` (77, 2.7 s), all exit 0.
+  The red was seen with the committed files put under the new tests: 6 of 47 for the lock,
+  2 of 90 for `check`, 10 of 123 and 5 of 110 for the board, 2 of 77 for the skill text.
+  The real board, run once from this worktree with no gate alive: `Gates` says `none
+  running`. No test reads or writes the lock in the real home, and `~/.js-harness/gate` was
+  still empty after the runs. Not checked: the board with a real gate that holds the lock
+  and a real one that waits (the first chance is this commit's own gate); a real
+  permission error or a really busy file, only injected ones; any system but this Windows
+  machine. Failed: nothing.
+  Decided, and known gaps: with a `--wait` shorter than the stale time an unreadable lock
+  still ends as the timeout row; the watch compares processes only, and a gate first seen
+  while it writes its report rows, after it released the lock, beside a holder, is still
+  reported as "while another runs" (a false alarm that needs that exact moment); the live
+  holder counts as "another" whatever project it checks; the pid of a holder or waiter whose
+  file cannot be read is the one in its token. The suite grew by about 7 s in files that
+  run in parallel with the slow one, so the gate's time should not move: this commit's gate
+  says.
+
+## Next
+T2b and T3 are written and staged with these records: their one commit goes on the
+orchestrator's turn, message `feat(sessions): show who runs and who waits for the gate
+lock`. While that gate runs, one read of the board from this worktree shows `Gates` with a
+real holder: record what it printed. After it: `gentle-ai review assess --base-ref 7b67b61
+--committed-only` and what it returns, and the Codex review of the same range (a Codex
+review wants a clean tree: set this document aside or have it committed). Then T4.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,
