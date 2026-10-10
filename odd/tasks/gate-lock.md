@@ -74,7 +74,7 @@ The run is long for two measured reasons, and both are paid on every commit:
 - The suite starts gates of its own (`bin/check.test.mjs` runs `main` with real sensors). They
   must never wait for the gate that runs them, and a test file run by hand must never wait for
   a real gate.
-- What the lock writes outside the repository is one file, `<home>/.js-harness/gate.lock`,
+- What the lock writes outside the repository is one folder, `<home>/.js-harness/gate.lock`,
   removed when the gate ends. Deleting it by hand undoes everything; a leftover of a gate that
   died is taken over without anyone's help.
 - The lock holds only between gates that have it. This repository's hook runs each worktree's
@@ -101,16 +101,25 @@ a measurement, and the two-worktree proof of T2 is a run recorded here.
 ## Design
 
 ### The lock
-- One file for the machine, not for the project: `<home>/.js-harness/gate.lock`, with `home`
+- One lock for the machine, not for the project: `<home>/.js-harness/gate.lock`, with `home`
   resolved as `check` already does (`--home`, then `JS_HARNESS_HOME`, then the user's home).
   Two projects share the cores, so they share the lock.
-- Taken by creating the file with the exclusive flag, which the file system grants to one
-  process only. It holds the pid, the folder being checked, the start time and the command.
-- Alive by a heartbeat, not by asking the system who a pid is: the holder touches the file
-  every few seconds while its sensors run. A file not touched for a minute belongs to a gate
-  that died, and the next one takes it over. This works the same on every system, costs no
-  PowerShell snapshot (2.1 s each here), and a recycled pid cannot fool it. Two waiters that
-  find the same dead holder must not both take it: the takeover is serialized and tested.
+- A folder that holds one file, `holder-<token>.json` (changed in T1 from the single file of
+  the plan). Taking the lock is `mkdir`, which the file system grants to one process only; the
+  file holds the pid, the folder being checked, the start time and the command. With a single
+  file, taking over a dead gate's lock means removing "the lock file", and a gate that looked
+  a moment earlier can remove the file of the gate that has just taken it; that is the gap the
+  house lock documents (`bin/remote.mjs:298-300`). With a folder, the dead holder's file is
+  removed by its own name, which a live gate's file never has, and the folder goes with
+  `rmdir`, which fails while a file is in it. No step can act on anything but what it saw.
+- Alive by a heartbeat, not by asking the system who a pid is: the holder touches its file
+  every 5 s while its sensors run. A file not touched for a minute belongs to a gate that
+  died, and the next one takes it over on its second stale reading, 2 s apart (a machine that
+  slept wakes with every beat hours old, and a live holder's timer fires first). This works
+  the same on every system, costs no PowerShell snapshot (2.1 s each here), and a recycled
+  pid cannot fool it. A gate frozen for the whole minute loses the lock and can tell
+  (`lost()`); the gap left is a holder that wakes in the instant between a waiter's second
+  reading and its removal.
 - It covers the sensors only. The budget, contract and payload rows read files and take
   milliseconds; `check --push` runs no sensor and takes no lock; neither does the inner check
   a sensor's suite runs (`JS_HARNESS_CHECK_INNER`).
@@ -166,8 +175,8 @@ map of that exists here, and a wrong one is a silent hole).
 Each closes with its commit and this file saying what is next. Route: T1 inline (one new file
 and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files); T5 a run.
 
-- [ ] T1 · `bin/lib/gate-lock.mjs`: take, heartbeat, release, stale takeover, bounded wait;
-      clock and file system injected; test first.
+- [x] T1 · `bin/lib/gate-lock.mjs`: take, heartbeat, release, stale takeover, bounded wait;
+      clock injected, real file system in a temporary home; test first.
 - [ ] T2 · `check` takes it around the sensors: the wait message, `--no-wait`, `--wait`, the
       rows, release on every way out; the suite's own gates do not wait. Proof with two
       worktrees recorded here.
@@ -194,5 +203,22 @@ allows a feature. No spend outside the plan.
 - 2026-10-10 · Plan put to Sebastián and approved ("Si"). Told the orchestrator by message:
   opened, then waiting for him; both delivered to its inbox.
 
+- 2026-10-10 · The document's commit is `8ef2771`. Its gate took 990 s for one Markdown file,
+  alone on the machine: the cost T7 is about, measured.
+- 2026-10-10 · T1 done, route inline. `bin/lib/gate-lock.mjs` (237 lines) and its test (364
+  lines, 22 tests, 2.3 s). Checked: `node --test bin/lib/gate-lock.test.mjs` exits 0; the test
+  of five real processes that race for a dead holder's lock and then for each other's passed 8
+  runs out of 8. The tests were written before the library, but the red that was seen is only
+  "module not found" (the library moved aside): the gate of `8ef2771` was running while both
+  were written, and no test is started beside a gate. In its place the library was broken on
+  purpose three ways. Taking over on one stale reading: 2 tests fail. A `mkdir` that is not
+  exclusive: the file fails (exit 1; one run of it hung in a loop only that mutant has, and was
+  killed). A release that removes the folder with what is in it: the race test failed in one
+  run of two, so that mutant is caught by chance, not always. Not checked: any system but
+  this Windows machine. Failed: nothing. Changed from the plan: the lock is a folder with one
+  file, not a file (Design, "The lock").
+
 ## Next
-T1: the test of `bin/lib/gate-lock.mjs` first, then the library.
+T2, one writer: `check` takes the lock around the sensors. Before it starts, record T1's commit
+here. A lock that cannot be taken at all (a home that cannot be written) must not turn a gate
+red: it runs without the lock and says so in a row.
