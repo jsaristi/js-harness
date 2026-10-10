@@ -240,6 +240,7 @@ run itself.
 - [x] T1 `scripts/practice-lib.mjs` and its test: the layout from a root, the environment of a child process (the practice's prefix first on PATH, `JS_HARNESS_HOME`, never his home), the refusals of `setup`, the journey as named steps, the before-and-after comparison of his real home, the record line — route: delegated writer (two non-trivial files)
 - [x] T2 `scripts/practice.mjs`: `setup` and `run` over the pure part, using `scripts/lib.mjs` for npm — route: delegated writer (reading `scripts/e2e.mjs`, `scripts/sandbox.mjs` and `scripts/lib.mjs` prepares the write)
 - [x] T3 On his word: the folder created where he chose, the first run, its output recorded here, and what it met reported to the orchestrator — route: inline
+- [ ] T3b Accepted follow-ups of the two reviews, test first: of slice 2, `R3-failure-paths-unproved`, `R3-setup-gitroot-fail-open`, `R3-setup-root-is-file`, `R3-git-variable-list-partly-asserted`; of slice 1, `R3-recordline-partial-ok`, `R3-gitroot-assertion-vacuous`, `R3-purity-cwd` (what each asks is under Progress) — route: delegated writer (the library, its test and the command)
 - [ ] T4 The roadmap says the third step exists and how a feature adds its step; the orchestrator is told, so the four features put the run in their contracts — route: inline
 
 ## Progress
@@ -431,9 +432,83 @@ run itself.
     Every session on this machine appends to that queue, so its date proves nothing either
     way; it rests on the reading of codegraph's code. How long a run takes was not measured.
   - Failed: nothing.
+- 2026-10-10: slice 2 committed as `0df7f67`; gate green (started 04:44:37 with no `check.mjs`
+  alive, ended about 05:01), tree clean afterwards. The gate's rows: `review  medium risk, 4
+  paths, 696 lines: review due (slice_budget_reached)` and `codex-review  no Codex review record
+  for 1 of 1 code commit since origin/main`.
+- 2026-10-10, the gentle-ai review of slice 2 (`d0bcb16..0df7f67`, lineage
+  `review-046ca6f260decbfb`): assessed medium, one lens (`review-reliability`), consent given
+  under the standing grant, approved, acknowledged (`authority: burned`). Outcome for the task:
+  granted, approved. Four findings, all informational, all accepted as T3b because each is true
+  and small:
+  - `R3-failure-paths-unproved` (warning, `scripts/practice.mjs:408-423`): the command has no
+    automated test, so nothing proves that a failed step makes the run exit non-zero, that the
+    later steps are skipped, or that the comparison of the real home and the record still run.
+  - `R3-setup-gitroot-fail-open` (warning, `scripts/practice.mjs:449`): any non-zero exit of
+    `git rev-parse --show-toplevel` is read as "not in a repository", and git also exits
+    non-zero inside a repository it refuses to read.
+  - `R3-setup-root-is-file` (suggestion): a root that is an existing file makes the git child
+    fail first, and the message blames git.
+  - `R3-git-variable-list-partly-asserted` (suggestion): the test feeds 5 of the 15 names.
+- 2026-10-10, failed, by this session: that review's reviewer ran beside a gate. One read of
+  the process list at about 05:02 said `no check.mjs alive`; `JH 1`'s gate (pid 14664) started
+  at 05:03:00, and the reviewer ran from then for some minutes. A later command of this session
+  printed `ALIVE 14664` and went on all the same, because the read was chained with `;` and
+  not made a condition: it created the detached worktree `D:\js-harness-worktrees\
+  practice-project-s1` at `d0bcb16` and ran `gentle-ai review assess` there (medium, 3 paths,
+  740 lines, review due). Stopped there. A read that is not a condition is no guard: the same
+  mistake the writer of T1 made, now made twice, so the wait and the guard go in one command
+  from here on. The real control is the gate lock `JH 1` is building.
+- 2026-10-10, the gentle-ai review of slice 1 (`ac2c18a..d0bcb16`, lineage
+  `review-81555b47f864e932`), run from the detached worktree so that `0df7f67` did not move its
+  candidate: assessed medium (3 paths, 740 lines), one lens (`review-reliability`), consent
+  under the standing grant, approved, acknowledged (`authority: burned`). The guard held this
+  time: the first attempt to start the reviewer found `JH 1`'s gate alive (pid 15068) and
+  started nothing; the second waited on that process, saw `no check.mjs alive at 05:36:32`
+  and ran until 05:38:12. Four findings, all informational:
+  - `R3-childenv-git-vars` (warning): `childEnv` passed git's repository variables through.
+    Already closed by slice 2 (`0df7f67`), which the reviewer of slice 1 could not see.
+  - `R3-recordline-partial-ok` (warning, `scripts/practice-lib.mjs:238-243`): `recordLine`
+    calls a run ok when the steps it was handed are all ok, without asking whether they are
+    the whole journey. Accepted: the line is the lasting proof of a run.
+  - `R3-gitroot-assertion-vacuous` (suggestion, `scripts/practice-lib.test.mjs:151-155`): the
+    test of the refusal inside a repository cannot fail on the second name, since the git root
+    is a prefix of the root. Accepted.
+  - `R3-purity-cwd` (suggestion, `scripts/practice-lib.mjs:85-89`): on Windows a root with no
+    drive letter passes `isAbsolute` and is then judged against the current drive, so the
+    result depends on where the command was started. Accepted: `setupRefusal` refuses it.
+- 2026-10-10, what T3b is, so that it can be handed to a writer as it stands. All in
+  `scripts/practice-lib.mjs`, `scripts/practice-lib.test.mjs` and `scripts/practice.mjs`, test
+  first, and still with no process and no disk in the tests:
+  1. The loop that walks the journey moves to the pure part, taking the step functions as an
+     argument, and is tested with steps made for the test: after a step fails the later ones
+     are skipped, except the comparison of the real home and the record, and the result says
+     the run failed (`R3-failure-paths-unproved`).
+  2. `recordLine` says ok only when every step of the journey it is given is there, once, and
+     ok (`R3-recordline-partial-ok`).
+  3. What git answered about the repository is read by a pure function: a root when it exits
+     0, "not in a repository" only when git says exactly that, and anything else is a reason
+     for `setup` to refuse (`R3-setup-gitroot-fail-open`).
+  4. `setup` judges that the root exists before it starts git (`R3-setup-root-is-file`).
+  5. The test of `childEnv` feeds all fifteen names (`R3-git-variable-list-partly-asserted`).
+  6. The test of the refusal inside a repository uses a git root that is not a prefix of the
+     root (`R3-gitroot-assertion-vacuous`).
+  7. `setupRefusal` refuses a Windows root with no drive letter, and the header of the library
+     says what the purity covers (`R3-purity-cwd`).
+- 2026-10-10: the detached worktree `D:\js-harness-worktrees\practice-project-s1` was removed
+  once its review was acknowledged. Scratch files of this session, outside the repository, in
+  `D:\js-harness-worktrees`: `pp-step.mjs` (runs one returned review command verbatim) and the
+  saved replies `pp-s1-*.json`, `pp-s2-*.json`.
+- 2026-10-10, the cut. The board gave this session 340k tokens, 71%, with its limit at 73%, so
+  T3b is not started here: the session cuts at this task boundary, both reviews closed, with
+  this document committed.
 
 ## Next step
-The commit of slice 2 (`scripts/practice.mjs`, the two library changes, this document), in this
-turn. Then, each in a window with no gate: the review of slice 1 (`d0bcb16`, base `ac2c18a`,
-from a detached worktree) and of slice 2, with their Codex reviews; a run from the clean commit
-for the record; and T4, the roadmap entry.
+T3b, by a delegated writer with the seven points above as its brief (allowed surfaces: the
+three files it names; it runs no test and reads no board; the parent runs `node --test
+scripts/practice-lib.test.mjs` and `node scripts/practice.mjs run --root
+D:\js-harness-practice` in a window with no gate). Then its commit, the gentle-ai assessment
+from the boundary `0df7f67`, and the Codex review of the whole range (`node bin/js-harness.mjs
+codex-review --base ac2c18a --plan` first, which spends nothing). Then a run from the clean
+commit for the record, and T4. Every start of a gate, a test, a review or a run is one command
+that first waits on any live `check.mjs` process and starts only when none is left.
