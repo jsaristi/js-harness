@@ -385,6 +385,19 @@ test('commandLineOf on Windows refuses, among several arguments, one that cmd.ex
   assert.throws(() => commandLineOf(['my "tool"', '%A%'], 'win32'), { message: cannotHand(1, QUOTE) });
 });
 
+// Found with a real `cmd.exe`, 2026-10-10: it splits a bare command word at `=` and at a comma, so a
+// program in a folder named `a=b` was looked for as `a`. An argument after the command is not split there.
+test('commandLineOf on Windows quotes a command word that holds = or a comma, and leaves the same text bare as a later argument', () => {
+  for (const mark of ['=', ',']) {
+    const word = `C:\\tools\\a${mark}b\\run.cmd`;
+    assert.equal(commandLineOf([word, word, `--wait${mark}5`], 'win32'), `"${word}" ${word} --wait${mark}5`, mark);
+    // `sh` splits at neither, in any position.
+    for (const platform of ['linux', 'darwin']) {
+      assert.equal(commandLineOf([`/tools/a${mark}b/run`, `/tools/a${mark}b/run`, `--wait${mark}5`], platform), `/tools/a${mark}b/run /tools/a${mark}b/run --wait${mark}5`, `${platform} ${mark}`);
+    }
+  }
+});
+
 test('gate on Windows refuses arguments cmd.exe cannot be handed whole: exit 2 with usage, nothing runs and no lock is taken', withHome(async (home, dir) => {
   let asked = 0;
   const take = async () => {
@@ -495,6 +508,50 @@ test('a real gate on Windows hands its command the arguments unchanged through c
   const { status, stdout, stderr } = await gate.done;
   assert.equal(status, 0, stderr);
   assert.deepEqual(JSON.parse(stdout), given);
+}));
+
+/** A batch file in `folder`, which is made, that passes the arguments it was given on to `node` (`%*`), as
+ * `npm.cmd` does, and prints what `node` got of them as JSON. Returns its path. `cmd.exe` reads the
+ * arguments a second time there, inside the batch file, after reading the line that started it. */
+function batchShim(folder) {
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'show.cjs'), 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+  const shim = path.join(folder, 'show.cmd');
+  fs.writeFileSync(shim, ['@echo off', `"${process.execPath}" "%~dp0show.cjs" %*`, ''].join('\r\n'));
+  return shim;
+}
+
+// The test above proves the quoting of what comes after a bare `node`. These two prove the shapes it left
+// to a comparison of strings (found in review, 2026-10-10): a command that needs quotes itself, in the
+// first position, and a command that is a batch file.
+test('a real gate on Windows runs a command whose own path has a space, among several arguments', { skip: notWindows }, withHome(async (home, dir) => {
+  const shim = batchShim(path.join(dir, 'some folder'));
+  const given = ['second', 'a b'];
+  const gate = startGate(['--home', home, '--', shim, ...given], { cwd: dir });
+  const { status, stdout, stderr } = await gate.done;
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(JSON.parse(stdout), given);
+}));
+
+test('a real gate on Windows hands a batch file that passes its arguments on, as npm.cmd does, each of them unchanged', { skip: notWindows }, withHome(async (home, dir) => {
+  const given = ['a & b', '(x)^y', 'a|b<c>d^e (f)', 'C:\\some folder\\', ''];
+  // By its path as it is, and behind a space as well, where both the command and its arguments are quoted.
+  for (const folder of [dir, path.join(dir, 'some folder')]) {
+    const gate = startGate(['--home', home, '--', batchShim(folder), ...given], { cwd: dir });
+    const { status, stdout, stderr } = await gate.done;
+    assert.equal(status, 0, `${folder}: ${stderr}`);
+    assert.deepEqual(JSON.parse(stdout), given, folder);
+  }
+}));
+
+test('a real gate on Windows runs a command whose own path holds = or a comma, where cmd.exe splits a bare command word', { skip: notWindows }, withHome(async (home, dir) => {
+  const given = ['second', 'a b'];
+  for (const name of ['a=b', 'a,b']) {
+    const gate = startGate(['--home', home, '--', batchShim(path.join(dir, name)), ...given], { cwd: dir });
+    const { status, stdout, stderr } = await gate.done;
+    assert.equal(status, 0, `${name}: ${stderr}`);
+    assert.deepEqual(JSON.parse(stdout), given, name);
+  }
 }));
 
 test('a real gate waits for a lock another process\'s gate holds, says so, and runs once it is released', withHome(async (home, dir) => {

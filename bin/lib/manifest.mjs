@@ -397,9 +397,10 @@ export function recordOptionalFile(home, file, content) {
 
 /** Forgets the record of `file`, never touching the file itself; `false` when there was none. An empty `optional`
  * is dropped, so the manifest reads as it did before the first record, and a manifest left with nothing in it
- * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. */
-export function forgetOptionalFile(home, file) {
-  return forgetRecord(home, 'optional', (entry) => entry.path === file);
+ * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. `deps.listDir` is the
+ * seam that lists that folder (see `uninstall`). */
+export function forgetOptionalFile(home, file, deps = {}) {
+  return forgetRecord(home, 'optional', (entry) => entry.path === file, deps.listDir);
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
@@ -419,8 +420,9 @@ function keepRecord(home, key, record, matches) {
 
 /** Takes the records `matches` finds out of the array `key`; `false` when there was none. An array left empty is
  * dropped, and a manifest that then records nothing at all (no version, no file, no entry, and nothing in any
- * array of `ON_REQUEST`) is removed, with its folder when that is empty. */
-function forgetRecord(home, key, matches) {
+ * array of `ON_REQUEST`) is removed, with its folder when that is empty and can be removed
+ * (`removeEmptyDirsUpTo`, whose `listDir` this hands on). */
+function forgetRecord(home, key, matches, listDir) {
   const manifest = readManifest(home);
   if (!manifest?.[key]?.some(matches)) return false;
   const left = manifest[key].filter((entry) => !matches(entry));
@@ -431,7 +433,7 @@ function forgetRecord(home, key, matches) {
     writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
     fs.rmSync(manifestPath(home), { force: true });
-    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   } else {
     writeManifest(home, rest);
   }
@@ -463,9 +465,10 @@ export function recordScheduledTask(home, task) {
 }
 
 /** Forgets the record of the task `name`, never touching the task itself; `false` when there was none. What is
- * left of the manifest is what `forgetOptionalFile` leaves: no empty `tasks`, and no manifest that records nothing. */
-export function forgetScheduledTask(home, name) {
-  return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name));
+ * left of the manifest is what `forgetOptionalFile` leaves: no empty `tasks`, and no manifest that records nothing.
+ * `deps.listDir` is the same seam as there. */
+export function forgetScheduledTask(home, name, deps = {}) {
+  return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name), deps.listDir);
 }
 
 /** Puts one record back as it was, for a command that takes back what it did: `record` (what the manifest held
@@ -591,7 +594,8 @@ export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(t
  * cannot be listed is not known to be empty, and it is left, as is one that cannot be removed; the walk
  * ends there. It is the tidying after the caller's own work, which is done by then and must still be
  * reported: thrown from here, a failure took the result of `uninstall` with it (found in review,
- * 2026-10-10). `listDir` is `uninstall`'s seam. */
+ * 2026-10-10). `listDir` is the seam of its callers: `deps.listDir` of `uninstall`, `sync` and the two
+ * that forget a record. */
 function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   let current = path.resolve(dir);
   const stop = path.resolve(home);
@@ -652,7 +656,8 @@ export function install(home, version, deps = {}) {
 /** Re-writes components for `version`, drops files and entries the current release no longer
  * ships, and updates the manifest. An old manifest with no `entries` field (written before T4)
  * still loads: pruning simply has nothing to prune. `deps` is forwarded to `install` (see its
- * `deps.writeFile` seam above). */
+ * `deps.writeFile` seam above), and `deps.listDir` is the seam that lists the folder a pruned file
+ * leaves behind (see `uninstall`). */
 export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
   const manifest = install(home, version, deps);
@@ -668,7 +673,7 @@ export function sync(home, version, deps = {}) {
       if (declaredTargets.has(file.path)) continue;
       if (fs.existsSync(file.path)) {
         fs.rmSync(file.path);
-        removeEmptyDirsUpTo(path.dirname(file.path), home);
+        removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
       }
     }
 

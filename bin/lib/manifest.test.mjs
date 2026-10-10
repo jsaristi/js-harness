@@ -353,6 +353,64 @@ test('uninstall leaves a folder it cannot list where it is, and still returns wh
   }
 });
 
+/** A `listDir` seam for a folder that is listed as empty and cannot be removed: listing `target` puts a file
+ * in it first and answers that it holds nothing, as when the file arrived between the listing and the
+ * removal. The refusal is then the system's own, of a folder that is not empty. */
+function filledWhenListed(target) {
+  return (asked, ...rest) => {
+    if (asked !== target) return fs.readdirSync(asked, ...rest);
+    fs.writeFileSync(path.join(target, 'arrived-late.txt'), 'not ours', 'utf8');
+    return [];
+  };
+}
+
+/** The two ways a folder left empty stays where it is, each as what makes the `listDir` seam of `folder`. */
+const LEFT_BEHIND = [
+  ['a folder that cannot be listed', (folder) => refusedAt(folder, fs.readdirSync)],
+  ['a folder listed as empty that cannot be removed', filledWhenListed],
+];
+
+// The other half of that finding had no test: the removal that fails, after a listing that worked.
+test('uninstall leaves a folder it listed as empty and could not remove, and still returns what it removed', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    const folder = path.dirname(components[0].target(home));
+    const result = uninstall(home, { listDir: filledWhenListed(folder) });
+    assert.deepEqual([result.removed, result.kept], [manifest.files.map((file) => file.path), []]);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is removed all the same');
+    assert.deepEqual(fs.readdirSync(folder), ['arrived-late.txt'], 'the folder is left with what is in it');
+    // What stopped it is the system, not the seam: this is the call that failed inside `uninstall`.
+    assert.throws(() => fs.rmdirSync(folder), { code: 'ENOTEMPTY' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// `sync` shares that tidying: it threw there too before the same fix, and it is the caller's manifest that
+// a throw would take.
+test('sync returns its manifest when the folder a pruned file leaves cannot be listed, or cannot be removed', () => {
+  for (const [what, seam] of LEFT_BEHIND) {
+    const home = makeTmpHome();
+    try {
+      const installed = install(home, '0.1.0');
+      // An older release shipped one more file, as in the test of the pruning above.
+      const orphanPath = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+      const folder = path.dirname(orphanPath);
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(orphanPath, 'stale content', 'utf8');
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...installed, files: [...installed.files, { path: orphanPath, sha256: sha256('stale content') }] }, null, 2));
+
+      const manifest = sync(home, '0.2.0', { listDir: seam(folder) });
+      assert.equal(manifest.version, '0.2.0', what);
+      assert.deepEqual(readManifest(home), manifest, what);
+      assert.deepEqual([fs.existsSync(orphanPath), fs.existsSync(folder)], [false, true], `${what}: the file is pruned and its folder left`);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
 // --- T4: entry-level manifest records (install registers one hook entry per host) ---
 
 test('entryComponents declare the SessionStart hook for Claude and Codex', () => {
@@ -1504,6 +1562,35 @@ test('forgetScheduledTask leaves an installed manifest exactly as it was before 
     assert.equal(fs.readFileSync(manifestPath(home), 'utf8'), before);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Forgetting the last record tidies as `uninstall` does (`removeEmptyDirsUpTo`), and the record is gone by
+// then: a throw from the tidying would say that nothing was forgotten.
+test('forgetting the last record answers true and removes the manifest when its folder cannot be listed, or cannot be removed', () => {
+  const forgetting = {
+    forgetOptionalFile: (home, deps) => {
+      const { file, content } = makeOptionalFile(home);
+      recordOptionalFile(home, file, content);
+      return forgetOptionalFile(home, file, deps);
+    },
+    forgetScheduledTask: (home, deps) => {
+      recordScheduledTask(home, TASK);
+      return forgetScheduledTask(home, TASK.name, deps);
+    },
+  };
+  for (const [left, seam] of LEFT_BEHIND) {
+    for (const [name, forget] of Object.entries(forgetting)) {
+      const what = `${name}, ${left}`;
+      const home = makeTmpHome();
+      try {
+        const own = path.dirname(manifestPath(home));
+        assert.equal(forget(home, { listDir: seam(own) }), true, what);
+        assert.deepEqual([fs.existsSync(manifestPath(home)), fs.existsSync(own)], [false, true], `${what}: the manifest goes and its folder is left`);
+      } finally {
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+    }
   }
 });
 

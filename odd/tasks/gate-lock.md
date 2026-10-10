@@ -222,9 +222,13 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       included; uninstall tells a gate folder it cannot look at from one that is not there,
       and its parent's cleanup cannot throw away what it found; and the smaller ones. Route:
       one writer, in a commit of its own or with T5, under about 1,200 changed lines.
-- [ ] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
-- [ ] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
+- [x] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
+- [x] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
       after.
+- [ ] T6b · `bin/codex-review.test.mjs` is still the longest file after T6 (added 2026-10-10;
+      the numbers are in Progress). Running it in three shards, with no code moved, is what
+      would bring the gate near the second file's time. Asked first, as the plan says of
+      splitting that file: not started without Sebastián's answer.
 - [ ] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first).
 - [ ] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
       gentle-ai and Codex reviews of each slice with code, pull request. Merge is his.
@@ -821,23 +825,156 @@ allows a feature. No spend outside the plan.
   outside the plan, a change on a machine, a product choice, what cannot be undone, a change
   of this plan's scope or order, a new protocol, and for now the merge of code.
 
+- 2026-10-10 · T4b is commit `f1419af`: gate green in 885 s (15:09:07 to 15:23:52), one try, started
+  on this session's own look at the process list (a first try started nothing: another
+  session's review step, then a test run of an eval trial, were alive; each was waited for).
+  The folder `gate` was gone after it. Codex's plan for `1eafe1a..f1419af`: 1 part, 389
+  changed lines, 440,000 to 2,700,000 input tokens. With 471,865 left of the 5 million that
+  review is not started: the question went to Sebastián through the orchestrator (raise the
+  cap to 6.5 million and review T4b and T6 as one range at the end, recommended; or keep 5
+  million and record the rest as unavailable), and the work goes on without its answer.
+
+- 2026-10-10 · The map T7 needs, made by a read-only explorer while the gate ran (not yet checked
+  line by line by this session): what a commit that changes only Markdown can turn red.
+  - No test reads this repository's own documents (`AGENTS.md`, `docs/**`, `odd/tasks/*.md`):
+    every test of a reader of them works in a temporary folder or with `--cwd`. Searched:
+    every use of `import.meta`, `process.cwd()` and `__dirname` in the 61 `*.test.mjs`, and
+    every real command a test starts without `--cwd`.
+  - Two rows of `check` read them, both static and a matter of milliseconds: `budget`
+    (`AGENTS.md` over 1,500 estimated tokens) and `contracts` (`odd/tasks/*.md`).
+  - Tracked Markdown that is a fixture, under `evals/`, is read by tests:
+    `evals/tasks.test.mjs` (the task folders; three graders pin a document by its hash),
+    `evals/review/seeded.test.mjs` and `evals/review/compare.test.mjs` (the seeded
+    repository, its `AGENTS.md` and task document included), `evals/runner.test.mjs` and
+    `evals/codex-configs.test.mjs` (`evals/fixtures/tasks/sample/task.md`).
+  - Nothing the installer ships comes from a tracked `.md`: the skill texts and the
+    `AGENTS.md` of `init` are strings in `bin/lib/manifest.mjs` and `bin/lib/project.mjs`.
+  - `check` has no notion of changed files today, and there is no `harness.json`: the one
+    sensor is `npm run test`, found in `package.json`. `isDocument` of
+    `bin/lib/codex-review-scope.mjs` is the one definition of "document" there is.
+  So the rule T7 would need: a commit skips the test sensor when every path it changes is
+  Markdown outside `evals/`, and `budget` and `contracts` still run.
+
+- 2026-10-10 · gentle-ai reviewed `1eafe1a..f1419af` (medium, 10 paths, 543 lines, one lens,
+  reliability; lineage `review-b1587f8e89d78cb6`) and approved it, acknowledged, with two
+  suggestions, both about what the tests do not prove. Taken with T6, whose commit is tests
+  too:
+  - `R3-empty-dir-cleanup-swallow-partly-unproved`: `removeEmptyDirsUpTo` now leaves a
+    folder it cannot list or remove, and only the listing that fails, through uninstall, has
+    a test; the removal that fails has none, nor do `sync` and `forgetRecord`, which went
+    from throwing to leaving the folder.
+  - `R3-real-cmd-test-command-position-unproved`: the one real-process proof of the Windows
+    quoting runs `node` with quoted arguments after it; a quoted first argument (a command
+    whose path has a space) and a command that is a `.cmd` shim are compared as strings
+    only, so what the shell makes of them is not proved.
+
+- 2026-10-10 · T5, a run (route: inline, no source written): the whole suite once, on `f1419af`,
+  under `js-harness gate` (it waited for another session's gate by this session's look at
+  the process list, then ran alone), with a reporter that prints what each file's process
+  says of itself (the `test:summary` event of `node --test`: its file and its duration).
+  Command: `node bin/js-harness.mjs gate -- "node --test --test-reporter=<per-file reporter>
+  --test-reporter-destination=<file>"`. 15:37:47 to 15:52:58, exit 0: 61 files, 2,842 tests,
+  2,832 passed, none failed, 10 skipped. The run took 910.3 s; the files' seconds added up
+  are 3,942.4, so they ran about four at a time.
+
+  | Seconds | Tests | File |
+  |---:|---:|---|
+  | 909.7 | 232 | `bin/codex-review.test.mjs` |
+  | 458.4 | 163 | `evals/runner.test.mjs` |
+  | 450.9 | 94 | `bin/check-codex-reviews.test.mjs` |
+  | 381.7 | 122 | `evals/isolation-probe.test.mjs` |
+  | 311.2 | 34 | `evals/task-proof.test.mjs` |
+  | 194.6 | 79 | `evals/configs.test.mjs` |
+  | 144.0 | 139 | `bin/lib/project.test.mjs` |
+  | 140.3 | 79 | `evals/suite.test.mjs` |
+  | 127.7 | 111 | `bin/remote.test.mjs` |
+  | 105.2 | 17 | `bin/lib/codex-review-coverage.test.mjs` |
+  | 98.9 | 36 | `evals/review/compare.test.mjs` |
+  | 78.8 | 5 | `evals/tasks.test.mjs` |
+
+  The other 49 files take 65 s or less each, 623 s between them.
+  What it says: the run is as long as its longest file. `bin/codex-review.test.mjs` starts
+  with the run and ends with it (909.7 of 910.3 s), and every other file is done by the
+  middle. So the sensor's time is that file's time, and nothing else shortens it until that
+  file is under the second one.
+  The numbers T6 is judged by: `bin/codex-review.test.mjs` inside a whole run, 909.7 s
+  today; the whole run, 910.3 s today. T6 does its work if that file stops being the
+  longest, which puts the run near 460 s, the time of `evals/runner.test.mjs` (a file of
+  `evals/`, which this feature does not touch) and of `bin/check-codex-reviews.test.mjs`,
+  which builds repositories the same way and is the next one to treat, in a feature after
+  this one, if the run is to go under that. The file alone, before and after, is timed by
+  T6 itself (`Done when`).
+
+- 2026-10-10 · T6, one writer (route: delegated; the file has 5,229 lines), measured before it
+  was changed. The file alone, `node --test bin/codex-review.test.mjs` with a preload kept
+  outside the repository that times every process the file starts:
+  - Before, 16:21:33 to 16:32:14: 640.3 s, 232 tests, all passed. (A first try, 891.6 s,
+    ran beside another session's gate and is not a timing.)
+  - After, 16:33:01 to 16:41:11: 489.5 s, 233 tests, all passed (the one more is the test of
+    the new helper).
+  Where the 640 s went: 12,591 git processes take 625.6 s of them, about 45 ms each on this
+  machine. The helpers built 250 repositories, 22 distinct (one of them 183 times), with
+  2,000 processes: 139.6 s, 22% of the file. The tests' own git, 31.5 s. And the command
+  under test, in 546 runs with real git and only Codex faked: 10,008 processes, 455.3 s,
+  71%; `git rev-parse` alone is 6,509 of them, 285.2 s.
+  What changed: `makeRepoWith` and `makeSlicedRepo` build each distinct repository once
+  and hand every test a copy of its own (`copyOf`), with the same commit ids; the sample
+  hooks of `git init` are left out of the copies, being half of what there was to copy. No
+  test changed. A copy's index holds the dates of the files it was copied from: `git status`
+  and `git commit` read it as clean, `git diff-files` does not, and nothing here uses that.
+  So T6 did what it said and fell short of what T5 asked of it: the file is 150 s shorter
+  and still the longest of the suite (489.5 s alone against 458 s for the second inside a
+  whole run, where this file took 1.4 times its time alone). The design's premise, "most of
+  its time is fixtures", came from notes and was wrong by a factor of three. What would get
+  it under, none of it done:
+  - three shards of the same file with no code moved (two small files that import it with
+    a shard number): the gate near the second file's time. It is T6b, asked first.
+  - `jsonLinesPath` (`bin/lib/codex-reviews.mjs`) asks git for two folders through `gitDirs`
+    and uses one: about 2,070 look-ups, some 86 s of this file by arithmetic, and a faster
+    `codex-review` for every user. Product code outside this feature's scope: put to him
+    as an option, not done.
+  - the tests' own `git diff` kept per repository: 20 s at most.
+  With it, the two test gaps of the review of T4b: `removeEmptyDirsUpTo` when the removal
+  fails, and `sync` and the two `forget` functions when a folder cannot be listed or
+  removed (`deps.listDir` now reaches them; with the catch made to rethrow, four tests
+  fail); and on Windows, through the real `gate`, a command at a path with a space and a
+  `.cmd` that hands `%*` on, with `&`, `( ) ^ | < >`, a backslash at the end and an empty
+  argument: all arrived whole.
+  And a bug those tests' author found beside them: on Windows a command whose path holds
+  `=` or a comma was not found when given as several arguments, since `cmd.exe` splits a
+  bare command word there and nowhere else. The command word is now quoted for those two
+  marks; later arguments are as they were (`--wait=5` stays bare). Seen failing first, in
+  a unit test and through the real `gate`.
+  Focused runs, each after a look at the process list: `bin/codex-review.test.mjs` 233 of
+  233 (489.5 s), `bin/lib/manifest.test.mjs` 87 of 87, `bin/gate.test.mjs` 25 of 25. 236
+  lines added and 17 removed in five files.
+
+- 2026-10-10 · Three questions are with Sebastián, sent through the orchestrator, which relays his
+  words with their line; none of them stops the work:
+  1. Codex: raise the cap of 5 million (4,528,135 spent) to 6.5 million and review what is
+     left as one range at the end (recommended), or record the rest as unavailable.
+  2. T7: build it as designed, with the list in hand (no test reads `docs/` or
+     `odd/tasks/`; recommended), or leave it out.
+  3. T6b: the three shards (recommended), or close with what T6 gave; and whether the change
+     to `jsonLinesPath` belongs here.
+
 ## Next
-1. T4b's commit and its gate; then `gentle-ai review assess --base-ref 1eafe1a --committed-only`
-   and the review it asks for.
-2. The question to Sebastián, before any Codex review: 4,528,135 of 5 million spent, and
-   T4b's and T6's reviews do not fit in the 471,865 left. Say what the plan (`--plan`) puts
-   them at, and that the cached share was four fifths of the last one. Not waited for: T5
-   and T6 go on meanwhile, and the Codex review of T4b, T5 and T6 can be one range.
-3. T5: measure the suite per file (one whole run with each file's time, under
-   `js-harness gate` so it waits its turn), recorded here. With it, put to him the
-   orchestrator's proposal that every gate append one line to a file (start, end, seconds,
-   worktree, result, whom it waited for): one more file written outside the repository, so
-   his to decide.
-4. Then T6, T7 (asked first, with the list of tests that read documents), T8.
+1. The commit of T6 (it carries T5 and the tests the review of T4b asked for) and its gate:
+   that gate's time against 885 s and 910 s is the first reading of what T6 gave inside a
+   whole run. Then `gentle-ai review assess --base-ref f1419af --committed-only`.
+2. His three answers (see the last Progress entry). No Codex review before the first; T7
+   and T6b not started before theirs.
+3. T8, the close, as far as it does not hang on them: `docs/ROADMAP.md` (what the lock
+   covers, what it does not, what waits for the later slice), the two gates shown waiting
+   one for the other with the output recorded (a `Done when`: two `check` commands in two
+   worktrees; this branch is the only one with the lock, so a second worktree of this
+   branch is the way), push and pull request once gate and both reviews are green. The
+   merge is his.
 Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
 changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
 tree (set this document aside with `git stash`, one stash, popped by the same command);
-no review step beside a running gate.
+no review step beside a running gate; a timing taken beside another session's gate is
+not a timing.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,

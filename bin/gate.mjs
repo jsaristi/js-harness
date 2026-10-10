@@ -29,10 +29,16 @@ class GateArgError extends Error {}
  * one of the marks that need it, and in double quotes for `cmd.exe`, inside which a space and
  * `& | < > ^ ( )` are what they are. A backslash at the end is doubled there, or the C runtime of the
  * program would read the closing quote as escaped. What double quotes do not keep from `cmd.exe` never
- * comes here (`CMD_READS`). */
-function quoted(argument, platform) {
+ * comes here (`CMD_READS`).
+ *
+ * The command word (`isCommand`, the first argument) is quoted on Windows for `=` and a comma as well,
+ * since `cmd.exe` splits a bare command word at them: a program in a folder named `a=b` was looked for
+ * as `a` (seen with a real `cmd.exe`, 2026-10-10). It splits no later argument there, so `--wait=5` goes
+ * as it is. */
+function quoted(argument, platform, isCommand = false) {
   const windows = platform === 'win32';
-  if ((windows ? /^[A-Za-z0-9_\/\\:=.,@+-]+$/ : /^[A-Za-z0-9_\/:=.,@+-]+$/).test(argument)) return argument;
+  const bare = !windows ? /^[A-Za-z0-9_\/:=.,@+-]+$/ : isCommand ? /^[A-Za-z0-9_\/\\:.@+-]+$/ : /^[A-Za-z0-9_\/\\:=.,@+-]+$/;
+  if (bare.test(argument)) return argument;
   if (!windows) return `'${argument.replace(/'/g, "'\\''")}'`;
   return `"${argument.replace(/(\\+)$/, '$1$1')}"`;
 }
@@ -51,7 +57,8 @@ const CMD_READS = [
 /** The command line the shell is given for what came after `--`. One argument is a command line as it
  * stands, pipes and all (`js-harness gate -- "npm test && npm run lint"`), on every system. Several are a
  * command and its arguments, as the caller's shell split them, and each is quoted again where the shell
- * that runs them would split or read it otherwise.
+ * that runs them would split or read it otherwise (`quoted`, which is stricter with the command word on
+ * Windows).
  *
  * On Windows that cannot be done for an argument that holds a double quote, a percent sign, a carriage
  * return or a line feed (`CMD_READS`): among several arguments it throws a `GateArgError` that says which
@@ -65,7 +72,7 @@ export function commandLineOf(args, platform = process.platform) {
     if (holds) {
       throw new GateArgError(`cmd.exe cannot be handed argument ${index + 1} after -- whole: it holds ${holds}; give the whole command as one argument after --, written as cmd.exe reads it`);
     }
-    return quoted(argument, platform);
+    return quoted(argument, platform, index === 0);
   }).join(' ');
 }
 
