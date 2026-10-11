@@ -1,0 +1,378 @@
+# Session channel
+
+Locator: `odd/tasks/session-channel.md` · Engram mirror: `odd/session-channel/tasks` · Designed
+on branch `docs/channel-and-rules-design` by the session `JH 4 · diseño canal y reglas`
+(2026-10-10), together with `odd/tasks/rule-hierarchy.md`. Nothing is built here: the feature is
+built later, in a session of its own, on a branch of its own, once `feat/gate-lock` is merged
+(it changes `bin/sessions.mjs` and `bin/lib/sessions.mjs`, which this feature changes too).
+
+## Goal
+The sessions of a project tell each other, and tell Sebastián, what happened through a channel
+that is recorded, addressed to a role and read with a command — so that he carries no text
+between sessions, nothing goes to a session that is no longer the one for it, and a session he
+opens starts at once.
+
+## Why
+On 2026-10-10, with an orchestrator and up to four work sessions, the channel was the app's
+messages and his hands. What the day showed, each in the orchestrator's relief file:
+
+- A finished feature sat undelivered for six hours, because a session opened from the phone runs
+  in another permission mode and the app holds messages between the two (lines 58 to 61, 143).
+- A notice reached a relieved orchestrator, because it was sent to the reply address of an
+  earlier message, which belongs to a session, and not to the title, which belongs to the role
+  (line 78).
+- An opening pasted with no line of his was not taken as his assignment, twice, the second time
+  after 28 minutes of waiting (lines 129 and 175; the second is this design session's own
+  opening).
+- Three orchestrators were relieved in one day with their context between 65% and 85%, and
+  sessions proposed a cut near 70% because of a mark that limits nothing (lines 124 to 127).
+- Hours were written from a guess, and "no gate runs" was said while one ran (lines 122, 172).
+
+His words that day ask for one thing under several forms: a place, always current, that says
+which sessions are alive and what each is for (line 78); to be asked only what is his (line 124);
+sessions that work without stopping (line 151); and every failure learned, with the proof that it
+does not return (lines 143 and 145).
+
+## Done when
+- `npm run check` exits 0
+- `node bin/js-harness.mjs contract check odd/tasks/session-channel.md` exits 0
+- `node --test bin/lib/channel.test.mjs` exits 0
+- `node --test bin/notify.test.mjs` exits 0
+- `node --test bin/sessions.test.mjs` exits 0
+- `node scripts/practice.mjs run --root D:\js-harness-practice` exits 0
+- One real stretch on this machine, recorded in Progress: an orchestrator and two work sessions,
+  one of them opened from the phone, in which he pastes no text between sessions and every
+  notice is on the board.
+
+## In scope / Out of scope
+- In: new `bin/notify.mjs` and `bin/lib/channel.mjs`; `bin/sessions.mjs` and
+  `bin/lib/sessions.mjs` (the roster, the channel section, the measures, what the reader takes
+  from a transcript, the context figure); `bin/js-harness.mjs` (dispatcher); the orchestrator
+  skill and one hook entry in `bin/lib/manifest.mjs`; a row in `bin/lib/stack.mjs`; a step in
+  `scripts/practice*.mjs`; `docs/ROADMAP.md`.
+- Out: how a reply closes and the rest of "Working with Sebastián" — `odd/tasks/rule-hierarchy.md`
+  owns `AGENTS.md` and the reply check. The gate lock and the gate log — `feat/gate-lock`. A
+  second machine and several accounts — kept for later by him (roadmap, item 5 of the order).
+  Opening a session from a session — only its two tests are owed here.
+
+## Constraints
+- The record is a file and the app's message is only the doorbell — because a message can be
+  held, expire or reach a session that left, and none of that can be read afterwards; a file
+  can be read by the board, by Codex and by a session in any permission mode.
+- A notice is a claim, never his word — because he decided it (2026-10-09), and because the host
+  itself tells a session that a message from another session never approves anything.
+- Nothing asks an agent to remember to write: every line of the record is appended by a command
+  that stamps the clock — because hours were guessed on 2026-10-10 (relief file, line 172).
+- The channel never becomes the way gates take turns — because a lock holds when nobody is
+  listening (roadmap, point 5).
+- Each notice is one line and there are few kinds — because each one costs the receiver a turn.
+- Zero dependencies, fixture-based tests, and what is written under the home folder is recorded
+  in the manifest and removed by `uninstall`.
+
+## Effort
+high
+
+## Ask me before
+How the two permission classes meet on his machine: option A or B of "Permission classes" below
+(a security setting, his alone, done by him at the computer). Installing the resume hook on this
+machine. Whether notices are also pushed into a work session by a hook (option C below; it has
+the same exposure as A). Archiving or deleting any session. Any change to the charter.
+
+## TDD
+Mode: strict (source: user global config). Runner: `node --test`. The transcript reader is
+tested with fixture transcripts, as today. The skill is passive text: its test is that the
+installed copy equals the source, which exists.
+
+## Delivery
+Forecast: about 1,600 to 2,000 authored lines over five slices, each its own pull request
+against `main`, merged in order (`stacked-to-main`). Slices: 1 = T1 and T2; 2 = T3 and T4;
+3 = T5 and T6; 4 = T7 to T9; 5 = T10 to T12.
+
+## Design
+
+### What exists to build on (surveyed on 2026-10-10)
+- The board reads every transcript of the project (`bin/lib/sessions.mjs:106-137`, `:212-262`)
+  and computes state, context, open background work, worktrees, gates and pull requests. It
+  prints the last five lines of the relief file and never writes it (`bin/sessions.mjs:245-251`).
+- A transcript already holds what the channel needs and the reader does not take yet (key tally
+  of two transcripts, no text read): a `user` entry carries `origin.kind` (a person, a peer
+  session, a task notification), and for a peer the sender's name, session and permission mode
+  and a message id; an outgoing `SendMessage` carries its `to` and the id returned; `user`
+  entries carry `permissionMode`; a `custom-title` entry carries the title.
+- Two defects follow from the reader ignoring `origin`: a message from another session counts as
+  a prompt, so the session reads as working (`bin/lib/sessions.mjs:118`), and it can become the
+  session's fallback title (`:92`).
+- `install` writes one `SessionStart` entry per host, matcher `startup|resume`
+  (`bin/lib/manifest.mjs:128-150`); a second entry is one more item and `uninstall` removes it.
+- `appendJsonLine` and `readJsonLines` are generic helpers for a `.jsonl` record
+  (`bin/lib/codex-reviews.mjs:60-93`).
+- The hosts (official documentation, read by a sub-agent on 2026-10-10, each a claim to confirm
+  before it is built on): Claude Code addresses a message by the session's name; hooks receive
+  `session_title`; `SessionStart` has the matcher `compact` on both hosts; the `Stop` hook's
+  input carries `background_tasks`; `claude --name` with an initial prompt opens an interactive
+  session; `crossSessionInbound` takes `accept`, `hold` or `refuse` and a held message expires
+  after five minutes by default; Codex has hooks and no messages between sessions. Not
+  documented: whether a name stops resolving after a rename, and whether a held message is
+  reported to its sender.
+
+### 1. Names (decided, 2026-10-09)
+`<project code> <role> · <what it does>`: `JH ORQ · js-harness`, `JH 1 · …`, numbered in the
+order they open, never reused. The title is the address of the role. New here: the roster parses
+the role and the number from the title, so a title that does not follow the shape is a line of
+the board.
+
+### 2. The record
+One file per project on the machine, beside the relief file: `<home>/.js-harness/channel/<slug>.jsonl`.
+It is written only by a command:
+
+`js-harness notify --to <role> --kind <kind> "<one line>"`
+
+It appends one line: the time read from the clock, the sender (the session id the host gives,
+its title, its permission mode when known), the role it is for, the kind and the text. Kinds:
+`opened` (feature, worktree, branch), `waiting` (on what, and whose it is), `closed` (what was
+delivered, and that nothing more goes to the sender), `note` (from the orchestrator: only what
+the receiver cannot see), `answer` (his words given in the orchestrator's chat, with the
+transcript and the line), `relieved` (who has the role now). It prints the current address of
+the role, so the sender can ring it.
+
+The orchestrator needs no message to receive a notice: its `sessions --watch` returns when a
+line addressed to its role appears. So a notice from a phone-opened session, from Codex, or
+from a session whose message would be held reaches the orchestrator the same way, and failure 5
+of the day (six hours undelivered) has no path left.
+
+The relief file stays the orchestrator's own log, in prose. It gains the same writer:
+`js-harness notify --relief "<line>"` appends to it with the clock, so no hour is written from
+memory.
+
+Judged twice: in a project that only uses the harness the record ships with the board, and it is
+the only channel a Codex session has.
+
+### 3. The doorbell, and a role as the address
+`SendMessage` stays what wakes an idle session: after `notify`, the sender sends the same line
+to the title `notify` printed. Three rules, each a count on the board instead of a sentence:
+
+- A message goes to the title of a role, never to the `from` of an earlier message. `js-harness
+  sessions --address <role>` prints the title of the one live session with that role and exits 1
+  when there is none or more than one.
+- A send that is held or fails is not retried: the record already holds the notice.
+- A relieved or finished session that receives a message answers with one line saying who has
+  the role now.
+
+### 4. The roster
+A section of the board, computed at each read and stored nowhere: every session of the project
+with its role and number (from the title), what it is for (the text after the dot), its feature
+and worktree (from the folder and branch of its entries), its permission mode, its last
+activity, and its place in the record: opened, waiting, closed, relieved by whom. One app
+session that owns several transcripts (relief file, line 148) is one row, keyed by title.
+
+What it cannot know, said on its last line: whether a silent session is alive or archived. No
+command outside a session lists the app's sessions (not documented), so a session with no
+`closed` or `relieved` line is shown as "silent since" its last entry, never as alive. This
+replaces the roster the orchestrators rewrote by hand as a line of the relief file.
+
+### 5. One orchestrator, checked
+`sessions --address orchestrator` is the check: a session that starts as orchestrator runs it
+first and refuses to start when another one answers; the board prints a line when two sessions
+carry the orchestrator's title. The handover of the title, done more than once on 2026-10-10
+and written nowhere but the relief file, becomes four steps of the skill: the new one opens as
+`<code> ORQ nueva`; it reads the record, the relief file and the board, and asks the one before
+by message only what the files do not hold; on its "ready" the one before renames itself
+`<code> ORQ relevada` and renames the new one in the same step, then appends `relieved`; he
+archives the one before only after the board shows one orchestrator.
+
+### 6. Opening a session
+A session he opens starts at once, and its opening is on disk. The orchestrator writes the
+opening to a file with `js-harness notify --opening "<title>"` (text on standard input, stored
+under `<home>/.js-harness/channel/openings/`), and gives him one short line to send in the new
+session:
+
+`Sos "JH 5 · <qué hace>": corré js-harness sessions --opening "JH 5" y seguí lo que imprime.`
+
+That line is his word, and it asks for the file to be followed, which is what the host requires
+of pasted or read text. The opening survives a compaction, since it is a file, and the resume
+hook below points back to it.
+
+Assumed, and the first thing the build tests: a line that short, pasted from the phone or the
+desktop, reaches the session as typed text and not wrapped as pasted content. If it is wrapped,
+the line is typed by hand, and it is short enough for that.
+
+Two ways for the orchestrator to open a session by itself are tests owed, not designed: a
+scheduled task with no schedule (seen to start, take a title and receive a message; not tried:
+whether he can type in its chat and whether it can commit), and `claude --name "<title>"
+"<line>"` started from a command (documented; whether such a session appears in the desktop
+app is not known). Until one passes, opening a session stays one line of his.
+
+### 7. His words, when they travel
+His decision of 2026-10-10 (relief file, line 149): an answer he gives in the orchestrator's
+chat travels to the session that asked, with his exact words and the place where that session
+reads them in the orchestrator's transcript. Two things make it a check:
+
+- `js-harness sessions --quote <transcript> <line>` prints the entry only when it is a `user`
+  entry whose origin is a person, with its time; it exits 1 for a peer message, a task
+  notification or an assistant entry, and warns when the entry is only pasted content. The
+  receiving session runs it before it uses the words.
+- The notice of kind `answer` is in the record, so the board lists the answers that travelled
+  and whether the receiver quoted the line.
+
+A limit found in this session, to state plainly. A travelling answer carries information and a
+choice among options already put to him; it does not approve a pending question in a session
+whose host tells it that a message from another session never approves anything. On 2026-10-10
+the orchestrator carried his words to this session with their lines (406 and 449 of its
+transcript `1d16beeb`, both `user` entries of origin `human`, read by this session afterwards)
+and the session still waited for a word typed in its own chat. So the protocol does
+not replace the fix of point 6: what removes the question is an opening that carries his line.
+And a question that was not his to answer should not have been asked: that is the reply check
+of `odd/tasks/rule-hierarchy.md` (C1).
+
+### 8. How he is told
+For the orchestrator's replies (decided, 2026-10-09): what needs him and where, or nothing; then
+what runs alone; then what was done; in everyday words. A wake with no news is one line. New
+here: a reply no longer ends with a prompt for another session; it says what was recorded and
+sent and whether it arrived. A block for another session exists only when both the record and
+the message cannot reach it, and it then says, under "where it goes", that he types a line of
+his own with the paste.
+
+### 9. Context
+His rule of 2026-10-10 (relief file, lines 126 and 127): no session stops, slows or proposes a
+cut for a percentage. At 85% it pauses, writes its state in its feature document (done, in
+flight, next step), and judges: little left, it finishes well; much left, the compaction is done
+there and the same task continues after it, from the document. What makes the rule act:
+
+- The board states the limit as room left before the host's compaction against what the
+  session's last task cost, not as a share of the window; the 73% mark leaves
+  (`bin/lib/sessions.mjs:13-21`). The window the board assumes (480,000) and the one the app
+  reports (500,000, compacting near 467,000) become one figure, read where it can be.
+- A `SessionStart` hook with the matcher `compact`, on both hosts: it prints the session's
+  title, its opening file, its feature document and the instruction to read "Next step" and to
+  repeat any open question. He then pastes no resume prompt, and a cut is the bare `/compact`.
+- The nudge at 85% rides on the reply check of the rule hierarchy (its `Stop` hook reads the
+  transcript the board reads). Until that feature ships, the board flags it and the orchestrator
+  tells the session once, as today.
+- The orchestrator is relieved, not compacted; its own row is in the roster like any other.
+
+Proofs: the count of cuts proposed under 85% is zero; no task is reopened because a cut lost
+what it needed.
+
+### 10. Permission classes
+Claude Code delivers a message only between sessions of the same class, unless
+`crossSessionInbound` says otherwise; his desktop sessions bypass permission prompts and a
+session opened from the phone runs in `auto`. With the record, this no longer loses a notice to
+the orchestrator. What it still costs: an idle session of the other class cannot be woken by the
+orchestrator, so a notice for it waits until its next turn or his paste. The three ways, his to
+choose:
+
+- A. He sets `crossSessionInbound` to `accept` in his user settings. Every message arrives. Its
+  cost: on the whole machine a session that asks for permissions can put text into one that
+  does not, without his approval; a message still approves nothing and changes no setting.
+- B. The desktop sessions move to `auto`, so both roads are one class. Its cost: the desktop
+  sessions stop bypassing prompts, which is the roadmap's open decision 2.
+- C. Built here on his word only: a hook hands a work session the notices addressed to it when
+  its turn ends. It works across hosts and classes, and its exposure is the one of A, moved
+  into the harness.
+
+Recommended: A, which the two orchestrators before also recommended; C is not built unless he
+asks. Whatever he chooses, `doctor` gains a row `session-classes`: it reads the permission mode
+of the project's recent sessions and the setting, and reports when the classes differ and
+nothing joins them. In a project that only uses the harness this is the first thing a second
+device meets, so the row ships.
+
+### 11. The orchestrator skill, rewritten
+The installed skill describes a watchman; he decided a lead (2026-10-09) and changed its charter
+(2026-10-10). The rewrite, within about the size it has today, carries:
+
+- The lead: for every request, the need behind his words, where it falls in the map, the
+  proposal, then the record. Before an opening, four answers in writing (does it touch what
+  another touches; does it need something unfinished; is it better joined with another; is there
+  room). When a session closes or starts waiting, the next one proposed. Doubts kept in the
+  relief file and asked one at a time.
+- The charter. Alone, told afterwards: the next feature within the order, up to three work
+  sessions; plan steps and notices; pushes and pull requests once the gate and both reviews are
+  green; the merge of a pull request, documents or code, when the gate passed, both reviews are
+  recorded with nothing blocking and it is clean; the go-ahead of a later stage inside a plan he
+  approved; a Codex review within the cost its plan prints. His, asked one at a time: spend
+  outside the plan; anything installed or changed on a machine; a product choice; what cannot be
+  undone; a change of the plan or of its order; a new protocol. Before it calls something his,
+  it names which of the six.
+- It still never implements, never commits in a worktree and never answers for him; it writes
+  the relief file and notices, through the command.
+- The handover of point 5, and the questions to the one before.
+- A work session: its three notices; it settles its plan with him before building; it writes a
+  plan change in its document before going on; it reports each mistake in five parts; a wait it
+  hands to a session that cannot be reached names a process that ends.
+- What leaves the skill, because a check does it: reading `Gates` before a commit (the lock),
+  the 73% limit (point 9), "say whose prompt it is" (no prompts for other sessions).
+
+A sensor for the second entry-gate question, on the board: the files two branches both changed.
+
+### 12. Measures
+His words of 2026-10-10: review what is measured and what is missing, to improve from numbers.
+Each measure answers a decision, is computed from what already exists, and asks no agent to
+write anything. `js-harness sessions --measures` prints them over a window.
+
+| Measure | The decision it answers | Read from |
+|---|---|---|
+| Notices recorded, rung, held, carried by his paste, sent to no role | whether the channel works without him | the record; `SendMessage` and peer entries of the transcripts |
+| A bare yes of his, per session, and a yes that follows a paste | whether he is asked what is not his | `user` entries of origin person |
+| Time a session waited: for him, for the gate, for another session | where the day goes | turn ends and the next entry; the gate log of `feat/gate-lock` |
+| Cuts proposed under 85%; tasks reopened after a cut | whether the context rule holds | replies with the cut state and their tokens; feature documents |
+| The orchestrator's context per hour, reliefs per day, wakes with no news | whether one orchestrator lasts a day | its transcript; `relieved` lines |
+| Answers that travelled, and those quoted before use | whether his words are checked | `answer` lines; the quote command in the receiver's transcript |
+
+The gate's own numbers (each run, its length, what ran beside it) belong to `feat/gate-lock`,
+where no gate log exists yet (searched on the branch on 2026-10-10, nothing found); the finding
+is passed to its session through the orchestrator. Rework and spend per feature are left for a
+later look: nothing decided today would use them.
+
+### 13. Tests owed
+Each is run once by the build, with its result recorded in Progress.
+1. A one-line opening pasted on the phone and on the desktop: typed text or pasted content?
+2. A session opened by the orchestrator through a scheduled task: can he type in it; can it
+   commit in a folder of its own (one gate turn)?
+3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
+4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
+   remote-control`?
+5. After a rename, does the old title stop resolving as an address?
+6. The clean start against the compaction: may a session clear itself while he has it open, and
+   does it lose less than a summary?
+
+## Failures this feature owns
+From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
+5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 are the
+next slice of the session board and are built with T4 here, since both change the same reader.
+
+## Tasks
+- [x] T0 Design: what exists, the record, the roster, the opening, the context rule, the skill,
+  the measures (route: inline, with three read-only sub-agents for the survey and the host
+  documentation)
+- [ ] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
+  relief writer, the openings
+- [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
+- [ ] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
+  peer message is neither a prompt nor a title
+- [ ] T4 The board: the roster, the channel section, `--address`, `--opening`, `--quote`; the
+  watch wakes on a notice for the orchestrator; a stopped task and an archived session no longer
+  read as live
+- [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
+- [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
+  installed on his word
+- [ ] T7 The row `session-classes` of `doctor`
+- [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session
+- [ ] T9 `--measures`
+- [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
+  on the board
+- [ ] T11 The real stretch of "Done when", recorded
+- [ ] T12 The roadmap's section replaced by a pointer; the failures this feature owns closed
+  with their proofs
+
+## Progress
+- 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
+  read and the host documentation's pages. The transcript shapes come from a key tally of two
+  files of `~/.claude/projects/D--js-harness`, text not read; they are confirmed with fixtures
+  in T3.
+- 2026-10-10, his decision still open, carried from the relief file (line 61): A or B for the
+  permission classes. It is asked in the design session's chat; his answer is written here.
+
+## Next step
+The build waits for `feat/gate-lock` to be merged. Its session opens this document, runs the six
+tests owed (T2) alongside T1, and asks Sebastián nothing before T6, unless a test of T2 changes
+the design.

@@ -309,6 +309,13 @@ that each build a real repository.
 
 ## Rule hierarchy (planned)
 
+Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
+`odd/tasks/session-channel.md`; not built. Where this section and that document differ, the
+document wins. It holds the survey (83 rules, 49 with nothing that makes them act, and the
+place of each), the checks to build, the outline of the rewritten `AGENTS.md`, the protocols,
+and the list of that day's failures with the proof each one owes. This section stays as the
+reasoning it came from and is replaced by a pointer when the feature closes (its T14).
+
 A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08 and not started.
 That session opens `odd/tasks/rule-hierarchy.md`; this section is its starting point and is
 replaced by a pointer to that document once it exists. It sits outside the Next list only so
@@ -535,6 +542,29 @@ A limit of the feature as a whole: most of the text loaded on every turn is not 
 gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
 
 ## Session channel (planned)
+
+Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
+`odd/tasks/rule-hierarchy.md`; not built. Where this section and that document differ, the
+document wins. Four statements below are superseded by decisions Sebastián took on 2026-10-10,
+recorded until now only in the orchestrator's relief file:
+
+- Context (below, "Past the board's limit (73% of the window it measures) it does not start
+  one"): no session stops, slows or proposes a cut for a percentage. At 85% it pauses, writes
+  its state in its feature document, and judges: little left, it finishes well; much left, the
+  compaction is done there and the same task continues after it. His words: "al 85% pausamos
+  no detenemos y miramos si falta poco para poder terminar bien o sino para compactar y
+  continuar post-compactacion".
+- The charter (below, "and, for now, the merge of code"): the lead merges a pull request with
+  code when the gate passed, both reviews are recorded with nothing blocking and it is clean,
+  and gives the go-ahead of a later stage inside a plan he approved. His list is six items.
+- Point 2 (below, "push and merge are asked and answered in the chat of the session that needs
+  them"): push and pull request need no yes once the gate and both reviews are green, which
+  the charter already said.
+- Point 2 (below, "no session takes one as the answer to a question it put to him"): his
+  answers given in the orchestrator's chat travel to the session that asked, with his exact
+  words and the transcript line where that session reads them before using them. The document
+  states the limit seen the same day: such an answer does not approve a question still pending
+  in a session whose host tells it that a message from another session approves nothing.
 
 A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09 and not started.
 It builds on the session board (`odd/tasks/session-board.md`) and starts after that feature is
