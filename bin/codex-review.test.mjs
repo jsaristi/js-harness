@@ -13,8 +13,11 @@ import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
-import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
-import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import * as reviewRuns from './lib/codex-review-runs.mjs';
+import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
+import * as reviewRecords from './lib/codex-reviews.mjs';
+import { isValidCodexReview } from './lib/codex-reviews.mjs';
+import { gitDirs } from './lib/project.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
@@ -70,6 +73,40 @@ const fileId = (file) => {
 /** The entries of `dir`, or none when it is not there. */
 const listed = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []);
 
+// The tests read and write the records of a repository themselves, to set a state up and to see what a run
+// left: over a thousand times in a run of this file, and each time the reader or the writer asked git where
+// the git folder is, one process for an answer that does not change while the repository is there. So the
+// answer is kept here, by the root of the repository, and handed to them as their `where` (`jsonLinesPath`).
+// A memo by root is safe in this file and nowhere in the product: every repository here is a folder of its
+// own, made once and removed when the file ends, so a root never comes to name another repository.
+//
+// It is the tests' own shortcut, never the command's. A run under test finds the folder by asking git
+// through the `spawn` it is handed, and the tests that count or fail that question (`--git-common-dir`)
+// count it there. How the folder is found in a linked worktree, outside a repository or under a path with
+// a line break is tested where it is decided, in `./lib/codex-reviews.test.mjs`,
+// `./lib/codex-review-runs.test.mjs` and `./lib/project.test.mjs`, which ask git every time.
+const gitFolders = new Map();
+
+/** What the tests' readers and writers of records are told of the repository at `root`: its git folder, as
+ * `gitDirs` answers it, asked the first time. An answer git did not give is not kept, and nothing is then
+ * said: the reader asks git itself, as it did, and answers for a folder that is in no repository. */
+function whereOf(root) {
+  if (!gitFolders.has(root)) {
+    const { commonGitDir } = gitDirs(root);
+    if (commonGitDir === null) return {};
+    gitFolders.set(root, { commonGitDir });
+  }
+  return gitFolders.get(root);
+}
+
+// The readers and writers of records, under the names the product gives them, each told where the git
+// folder is. A test that calls one calls these.
+const codexReviewsPath = (root) => reviewRecords.codexReviewsPath(root, { where: whereOf(root) });
+const readCodexReviews = (root) => reviewRecords.readCodexReviews(root, { where: whereOf(root) });
+const appendCodexReview = (root, record) => reviewRecords.appendCodexReview(root, record, { where: whereOf(root) });
+const codexReviewRunsPath = (root) => reviewRuns.codexReviewRunsPath(root, { where: whereOf(root) });
+const readCodexReviewRuns = (root) => reviewRuns.readCodexReviewRuns(root, { where: whereOf(root) });
+
 // Building a repository takes eight git processes, and most tests ask for one of the same few. So each
 // distinct one is built once in a run of this file, and a test is handed a copy of it: a folder of its
 // own, which it may commit in, dirty and remove, with the same objects and so the same commit ids.
@@ -78,7 +115,10 @@ const built = new Map();
 /** A repository of the caller's own: a copy of the one `build` makes, which is made once for `key` and is
  * never handed out itself. `build` answers `{ root, ... }`, and the rest of it goes with every copy. The
  * index of a copy holds the dates of the files it was copied from, so the tree reads as clean to what
- * compares the files themselves, as `git status` and `git commit` do, and not to `git diff-files`. */
+ * compares the files themselves, as `git status` and `git commit` do, and not to `git diff-files`.
+ *
+ * A copy keeps its git folder where the one it was copied from keeps its own, so git is asked where that
+ * is once, of the one that was built, and never of a copy (`whereOf`). */
 function copyOf(key, build) {
   if (!built.has(key)) {
     const template = build();
@@ -89,6 +129,10 @@ function copyOf(key, build) {
   const { root: template, ...ids } = built.get(key);
   const root = tmp('js-harness-codex-review-');
   fs.cpSync(template, root, { recursive: true });
+  // Only a git folder inside the repository went with the copy: one that lies elsewhere is asked for.
+  const asked = whereOf(template).commonGitDir;
+  const gitFolder = asked === undefined ? null : path.relative(template, asked);
+  if (gitFolder !== null && !gitFolder.startsWith('..') && !path.isAbsolute(gitFolder)) gitFolders.set(root, { commonGitDir: path.resolve(root, gitFolder) });
   return { root, ...ids };
 }
 
@@ -4847,6 +4891,119 @@ test('the row of the plain check and the plan of the command size the same revie
       assert.deepEqual(row.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${base} --plan`], which);
     }
   }
+});
+
+// --- one run asks git where its repository is once, and what it learned ends with it ---
+
+/** `deps` with a `spawn` that also keeps the git processes it starts, in order: each `{ args, cwd, input }`,
+ * what git was given, the folder it ran in and what it read on its standard input. */
+function countingGit(deps) {
+  const asked = [];
+  const spawn = (command, args, opts) => {
+    if (command === 'git') asked.push({ args, cwd: opts?.cwd, input: opts?.input });
+    return deps.spawn(command, args, opts);
+  };
+  return { deps: { ...deps, spawn }, asked };
+}
+
+/** How many of the git processes in `asked` were given every one of `words`. */
+const timesAsked = (asked, ...words) => asked.filter(({ args }) => words.every((word) => args.includes(word))).length;
+
+/** The questions in `asked` that git was put more than once: the same arguments, in the same folder, with
+ * the same standard input. */
+function askedTwice(asked) {
+  const times = new Map();
+  for (const question of asked.map((one) => JSON.stringify(one))) times.set(question, (times.get(question) ?? 0) + 1);
+  return [...times].filter(([, count]) => count > 1).map(([question]) => question);
+}
+
+/** The top of the repository `root` is in, as the folder a git command is run in. */
+const topOf = (root) => path.resolve(git(root, 'rev-parse', '--show-toplevel'));
+
+test('a review asks git where the git folder is once, whatever it reads and writes there, and never where the top is: its first question said so', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, one));
+  const { deps, asked } = countingGit(fakeCodex(reviewed(root, one)));
+  const result = await run(['--base', 'HEAD~3', '--cwd', root], deps);
+  assert.equal(result.code, 0, result.err);
+  // The run read the records, read the run log for its plan, wrote a run line and wrote its record: four
+  // times a file of the git folder, and one question of where that folder is.
+  assert.equal(result.out.split('\n')[0], startsAt(rangeOf(base, three), 3, 1, one));
+  assert.equal(onlyRun(root).outcome, 'reviewed');
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, one), reviewedRecord(one, three)]);
+  assert.equal(timesAsked(asked, '--git-common-dir'), 1);
+  // The top is the folder the run's first question answered with. What the project marks is asked there, of
+  // the files of the commits the records were read against; the files the review then reads are among
+  // them, at the same commit, so they are not asked about again.
+  assert.equal(timesAsked(asked, '--show-toplevel'), 1);
+  assert.equal(timesAsked(asked, '--show-cdup'), 0);
+  assert.deepEqual(asked.filter(({ args }) => args[0] === 'check-attr').map(({ args, cwd, input }) => [args[2], cwd, input]), [[three, topOf(root), 'c.txt\0b.txt\0a.txt\0']]);
+  // The two ends of the range are resolved once each, and no question is put to git twice.
+  assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 2);
+  assert.deepEqual(askedTwice(asked), []);
+});
+
+test('a range reviewed in parts, a plan and a skip each ask where the git folder is once', async () => {
+  // Two parts: the records, the run log, a run line for each part, and the record.
+  const { root, base, head } = makeThreeFileRepo();
+  const sessions = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt') }, { stdout: partShown(root, base, head, 'c.txt') });
+  const inParts = countingGit(sessions);
+  const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...inParts.deps, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual([sessions.calls.length, readCodexReviewRuns(root).length, readCodexReviews(root).length], [2, 2, 1]);
+  assert.deepEqual([timesAsked(inParts.asked, '--git-common-dir'), timesAsked(inParts.asked, '--show-cdup')], [1, 0]);
+  // A plan reads the records and the run log; a skip reads the records and writes its own.
+  const sliced = makeSlicedRepo();
+  appendCodexReview(sliced.root, reviewedRecord(sliced.base, sliced.one));
+  for (const flags of [['--plan'], ['--unavailable', 'model rejected']]) {
+    const nothing = startsNothing(sliced.root);
+    const one = countingGit(nothing.deps);
+    const ran = await run(['--base', 'HEAD~3', ...flags, ...nothing.home, '--cwd', sliced.root], one.deps);
+    assert.deepEqual([ran.code, ran.err], [0, ''], flags[0]);
+    assert.deepEqual([timesAsked(one.asked, '--git-common-dir'), timesAsked(one.asked, '--show-cdup')], [1, 0], flags[0]);
+  }
+  assert.deepEqual(readCodexReviews(sliced.root).at(-1), skippedRecord(sliced.one, sliced.three, 'model rejected'));
+});
+
+test('an answer git did not give is not kept: the run asks where the git folder is again the next time it needs it, and then no more', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const { deps, asked } = countingGit(fake);
+  // The first time, for the run log the plan is estimated from, git fails.
+  let failed = false;
+  const spawn = (command, args, opts) => {
+    const fails = command === 'git' && args.includes('--git-common-dir') && !failed;
+    failed ||= fails;
+    return fails ? { status: 128, stdout: '', stderr: 'fatal' } : deps.spawn(command, args, opts);
+  };
+  const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...deps, spawn });
+  assert.deepEqual([result.code, result.err], [0, '']);
+  // The run line asks again, and is answered; the record is written where that answer said.
+  assert.equal(timesAsked(asked, '--git-common-dir'), 1, 'one question reached git after the one that failed');
+  assert.equal(onlyRun(root).outcome, 'reviewed');
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('what a run learned of its repository ends with it: the next run asks again, of the commit HEAD is then and of the repository it runs in', async () => {
+  const { root, base, head } = makeRepo();
+  const first = countingGit(fakeCodex(reviewed(root, base)));
+  assert.equal((await run(['--base', 'HEAD~1', '--cwd', root], first.deps)).code, 0);
+  // HEAD moves between the two runs, and the second is of the range the first left.
+  fs.writeFileSync(path.join(root, 'f.txt'), 'three', 'utf8');
+  git(root, 'commit', '-am', 'three');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  const second = countingGit(fakeCodex(reviewed(root, head)));
+  const result = await run(['--base', 'HEAD~2', '--cwd', root], second.deps);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head), reviewedRecord(head, moved)]);
+  assert.deepEqual([timesAsked(first.asked, '--git-common-dir'), timesAsked(second.asked, '--git-common-dir')], [1, 1]);
+  // A run in another repository, in the same process, reads and writes the files of that one.
+  const other = makeTwoFileRepo();
+  const third = countingGit(fakeCodex(reviewed(other.root, other.base)));
+  assert.equal((await run(['--base', 'HEAD~1', '--cwd', other.root], third.deps)).code, 0);
+  assert.equal(timesAsked(third.asked, '--git-common-dir'), 1);
+  assert.deepEqual(readCodexReviews(other.root), [reviewedRecord(other.base, other.head)]);
+  assert.equal(readCodexReviews(root).length, 2);
 });
 
 // --- what the comparison of the configurations varies: by injection alone, never by a flag ---

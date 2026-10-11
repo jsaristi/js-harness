@@ -108,6 +108,81 @@ test('when git cannot say what is marked the answer is `null`, never that nothin
   }
 });
 
+test('a caller that knows where the top of the repository is says so: git is asked there what is marked, and not where the top is', () => {
+  const marks = () => ({ status: 0, stdout: attrOutput(['a.js', 'unset'], ['b.js', 'unspecified']) });
+  const top = path.resolve('/repo');
+  const git = fakeGit(marks, () => {
+    throw new Error('git is not asked where the top is');
+  });
+  const left = leftOutOf(['a.js', 'b.js', 'x.md'], { cwd: path.join(top, 'src'), source: SOURCE, spawn: git.spawn, where: { top } });
+  assert.deepEqual([...left], [['x.md', DOCUMENT], ['a.js', MARKED]]);
+  assert.equal(git.calls.length, 1);
+  assert.deepEqual([git.calls[0].args, git.calls[0].opts.cwd], [['check-attr', '--source', SOURCE, '--stdin', '-z', 'codex-review'], top]);
+  // Not said, or said by a caller that knows no top: git is asked where it is, as before.
+  for (const where of [undefined, {}, { top: null }, { commonGitDir: path.join(top, '.git') }]) {
+    const asked = fakeGit(marks, () => ({ status: 0, stdout: '../\n' }));
+    assert.deepEqual([...leftOutOf(['a.js', 'b.js'], { cwd: path.join(top, 'src'), source: SOURCE, spawn: asked.spawn, where })], [['a.js', MARKED]]);
+    assert.deepEqual(asked.calls.map((call) => [call.args[0], call.opts.cwd]), [['rev-parse', path.join(top, 'src')], ['check-attr', top]]);
+  }
+});
+
+test('a caller that keeps what git said of a commit has no path asked about twice, and an answer git did not give is not kept', () => {
+  const top = path.resolve('/repo');
+  /** Git, as a project that marks its JSON files: it answers for the paths it is asked about, and no other. */
+  const marksJson = (_args, opts) => ({ status: 0, stdout: attrOutput(...opts.input.split('\0').slice(0, -1).map((file) => [file, file.endsWith('.json') ? 'unset' : 'unspecified'])) });
+  const git = fakeGit(marksJson);
+  const where = { top, marks: new Map() };
+  const ask = (paths, source = SOURCE) => [...leftOutOf(paths, { cwd: top, source, spawn: git.spawn, where })];
+  assert.deepEqual(ask(['c.js', 'data/a.json', 'x.md']), [['x.md', DOCUMENT], ['data/a.json', MARKED]]);
+  assert.equal(git.calls.length, 1);
+  // The same paths, in another order and with another document: git is asked nothing, and the answer is in
+  // the order every answer is, the documents and then the marked paths as they were given.
+  assert.deepEqual(ask(['data/a.json', 'y.md', 'c.js']), [['y.md', DOCUMENT], ['data/a.json', MARKED]]);
+  assert.equal(git.calls.length, 1);
+  // A path nothing was said of is asked about, alone.
+  assert.deepEqual(ask(['c.js', 'data/b.json', 'data/a.json']), [['data/b.json', MARKED], ['data/a.json', MARKED]]);
+  assert.deepEqual([git.calls.length, git.calls[1].opts.input], [2, 'data/b.json\0']);
+  // What was said of one commit says nothing of another.
+  const other = 'b'.repeat(40);
+  assert.deepEqual(ask(['c.js', 'data/a.json'], other), [['data/a.json', MARKED]]);
+  assert.deepEqual([git.calls.length, git.calls[2].args[2], git.calls[2].opts.input], [3, other, 'c.js\0data/a.json\0']);
+  // A git that fails is no answer, so the next call asks again.
+  const kept = { top, marks: new Map() };
+  assert.equal(leftOutOf(['c.js', 'd.json'], { cwd: top, source: SOURCE, spawn: fakeGit(() => ({ status: 129, stdout: '' })).spawn, where: kept }), null);
+  const next = fakeGit(marksJson);
+  assert.deepEqual([...leftOutOf(['c.js', 'd.json'], { cwd: top, source: SOURCE, spawn: next.spawn, where: kept })], [['d.json', MARKED]]);
+  assert.equal(next.calls.length, 1);
+});
+
+test('what git said is kept only of a full commit id: a name that can come to mean another commit is asked about every time, and nothing is kept of it', () => {
+  const top = path.resolve('/repo');
+  // A project whose marks change from one commit to the next: git says `marked` of every path it is asked.
+  let marked = 'unset';
+  const marks = (_args, opts) => ({ status: 0, stdout: attrOutput(...opts.input.split('\0').slice(0, -1).map((file) => [file, marked])) });
+  // 40 hexadecimal characters, or the 64 of a repository of SHA-256, as git writes an id: nothing else.
+  const names = ['HEAD', 'main', 'feature/a', 'HEAD~1', 'a'.repeat(7), 'a'.repeat(39), 'a'.repeat(41), 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(40), `${'a'.repeat(39)}g`, `${'a'.repeat(40)}^`];
+  for (const source of names) {
+    marked = 'unset';
+    const git = fakeGit(marks);
+    const where = { top, marks: new Map() };
+    const ask = () => [...leftOutOf(['a.js'], { cwd: top, source, spawn: git.spawn, where })];
+    assert.deepEqual(ask(), [['a.js', MARKED]], source);
+    // The name now means a commit that marks nothing, as `HEAD` does after a commit: the answer is that one's.
+    marked = 'unspecified';
+    assert.deepEqual(ask(), [], source);
+    assert.deepEqual([git.calls.length, git.calls[1].args[2], where.marks.size], [2, source, 0], source);
+  }
+  // A full commit id means one commit for good, so what git said of it is kept.
+  for (const source of ['a'.repeat(40), '0123456789abcdef'.repeat(4), `${'0123456789'.repeat(3)}abcdefabcd`]) {
+    marked = 'unset';
+    const git = fakeGit(marks);
+    const where = { top, marks: new Map() };
+    const ask = () => [...leftOutOf(['a.js'], { cwd: top, source, spawn: git.spawn, where })];
+    assert.deepEqual([ask(), ask()], [[['a.js', MARKED]], [['a.js', MARKED]]], source);
+    assert.deepEqual([git.calls.length, [...where.marks.keys()]], [1, [source]], source);
+  }
+});
+
 // --- real git: which attributes are read ---
 
 let configDir;
@@ -204,6 +279,14 @@ test('a path is from the top of the repository wherever git is asked from: a fol
   assert.deepEqual(fromTop, [['README.md', DOCUMENT], ['evals/results/a.json', MARKED], ['top.json', MARKED], ['src/deep/a.snap', MARKED]]);
   for (const below of ['src', path.join('src', 'deep')]) {
     assert.deepEqual([...leftOutOf(paths, { cwd: path.join(root, below), source: head })], fromTop, below);
+    // And the same from a caller that says where the top is, with one git process in place of two.
+    let started = 0;
+    const spawn = (command, args, opts) => {
+      started += 1;
+      return spawnSync(command, args, opts);
+    };
+    assert.deepEqual([...leftOutOf(paths, { cwd: path.join(root, below), source: head, spawn, where: { top: root } })], fromTop, below);
+    assert.equal(started, 1, below);
   }
 });
 
