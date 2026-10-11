@@ -13,8 +13,11 @@ import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
-import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
-import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import * as reviewRuns from './lib/codex-review-runs.mjs';
+import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
+import * as reviewRecords from './lib/codex-reviews.mjs';
+import { isValidCodexReview } from './lib/codex-reviews.mjs';
+import { gitDirs } from './lib/project.mjs';
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or
@@ -70,6 +73,40 @@ const fileId = (file) => {
 /** The entries of `dir`, or none when it is not there. */
 const listed = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []);
 
+// The tests read and write the records of a repository themselves, to set a state up and to see what a run
+// left: over a thousand times in a run of this file, and each time the reader or the writer asked git where
+// the git folder is, one process for an answer that does not change while the repository is there. So the
+// answer is kept here, by the root of the repository, and handed to them as their `where` (`jsonLinesPath`).
+// A memo by root is safe in this file and nowhere in the product: every repository here is a folder of its
+// own, made once and removed when the file ends, so a root never comes to name another repository.
+//
+// It is the tests' own shortcut, never the command's. A run under test finds the folder by asking git
+// through the `spawn` it is handed, and the tests that count or fail that question (`--git-common-dir`)
+// count it there. How the folder is found in a linked worktree, outside a repository or under a path with
+// a line break is tested where it is decided, in `./lib/codex-reviews.test.mjs`,
+// `./lib/codex-review-runs.test.mjs` and `./lib/project.test.mjs`, which ask git every time.
+const gitFolders = new Map();
+
+/** What the tests' readers and writers of records are told of the repository at `root`: its git folder, as
+ * `gitDirs` answers it, asked the first time. An answer git did not give is not kept, and nothing is then
+ * said: the reader asks git itself, as it did, and answers for a folder that is in no repository. */
+function whereOf(root) {
+  if (!gitFolders.has(root)) {
+    const { commonGitDir } = gitDirs(root);
+    if (commonGitDir === null) return {};
+    gitFolders.set(root, { commonGitDir });
+  }
+  return gitFolders.get(root);
+}
+
+// The readers and writers of records, under the names the product gives them, each told where the git
+// folder is. A test that calls one calls these.
+const codexReviewsPath = (root) => reviewRecords.codexReviewsPath(root, { where: whereOf(root) });
+const readCodexReviews = (root) => reviewRecords.readCodexReviews(root, { where: whereOf(root) });
+const appendCodexReview = (root, record) => reviewRecords.appendCodexReview(root, record, { where: whereOf(root) });
+const codexReviewRunsPath = (root) => reviewRuns.codexReviewRunsPath(root, { where: whereOf(root) });
+const readCodexReviewRuns = (root) => reviewRuns.readCodexReviewRuns(root, { where: whereOf(root) });
+
 // Building a repository takes eight git processes, and most tests ask for one of the same few. So each
 // distinct one is built once in a run of this file, and a test is handed a copy of it: a folder of its
 // own, which it may commit in, dirty and remove, with the same objects and so the same commit ids.
@@ -78,7 +115,10 @@ const built = new Map();
 /** A repository of the caller's own: a copy of the one `build` makes, which is made once for `key` and is
  * never handed out itself. `build` answers `{ root, ... }`, and the rest of it goes with every copy. The
  * index of a copy holds the dates of the files it was copied from, so the tree reads as clean to what
- * compares the files themselves, as `git status` and `git commit` do, and not to `git diff-files`. */
+ * compares the files themselves, as `git status` and `git commit` do, and not to `git diff-files`.
+ *
+ * A copy keeps its git folder where the one it was copied from keeps its own, so git is asked where that
+ * is once, of the one that was built, and never of a copy (`whereOf`). */
 function copyOf(key, build) {
   if (!built.has(key)) {
     const template = build();
@@ -89,6 +129,10 @@ function copyOf(key, build) {
   const { root: template, ...ids } = built.get(key);
   const root = tmp('js-harness-codex-review-');
   fs.cpSync(template, root, { recursive: true });
+  // Only a git folder inside the repository went with the copy: one that lies elsewhere is asked for.
+  const asked = whereOf(template).commonGitDir;
+  const gitFolder = asked === undefined ? null : path.relative(template, asked);
+  if (gitFolder !== null && !gitFolder.startsWith('..') && !path.isAbsolute(gitFolder)) gitFolders.set(root, { commonGitDir: path.resolve(root, gitFolder) });
   return { root, ...ids };
 }
 

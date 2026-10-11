@@ -42,6 +42,11 @@ export const MARKED = 'marked';
 
 const ATTR_MAX_BUFFER = 64 * 1024 * 1024;
 
+// A full commit id, as git writes one: 40 hexadecimal characters, or the 64 of a repository of SHA-256. It
+// is the one way to name a commit that means the same commit for good, which is what `leftOutOf` asks of a
+// source before it keeps what git said of it.
+const FULL_COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 /** Whether `path` is a document: a Markdown file, by its name, in any letter case. The path is taken as git
  * writes it with `-z`, as it is: a name in the quotes git puts around an unusual one is not read here. */
 export function isDocument(path) {
@@ -96,8 +101,10 @@ function topOf(cwd, spawn) {
  * And none for the paths the caller was already answered about: `where.marks`, a `Map` the caller makes and
  * keeps for one run, which this function fills, from `source` to what git said of each path asked at it.
  * A path in it is not asked about again, so a run that asks for the files of the commits of a range and
- * then for the files of that range asks once. It is for a `source` that is a full commit id, whose
- * attributes do not change under a run. An answer git did not give puts nothing in it. */
+ * then for the files of that range asks once. It is read and filled only for a `source` that is a full
+ * commit id (`FULL_COMMIT_ID`), whose attributes do not change under a run. Any other source, a branch or
+ * `HEAD`, can come to name another commit between two calls: git is asked about it every time, and nothing
+ * of it is kept. An answer git did not give puts nothing in it. */
 export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
   const leftOut = new Map();
   const code = [];
@@ -106,8 +113,9 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
     else code.push(path);
   }
   // Whether each path is marked, as git said it of this commit: to this call, or to an earlier one of a
-  // caller that keeps the answers.
-  const said = where?.marks?.get(source) ?? new Map();
+  // caller that keeps the answers, which are kept of a full commit id alone.
+  const kept = typeof source === 'string' && FULL_COMMIT_ID.test(source) ? where?.marks : undefined;
+  const said = kept?.get(source) ?? new Map();
   const asked = code.filter((path) => !said.has(path));
   if (asked.length > 0) {
     let unset;
@@ -128,7 +136,7 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
       return null;
     }
     for (const path of asked) said.set(path, unset.has(path));
-    where?.marks?.set(source, said);
+    kept?.set(source, said);
   }
   for (const path of code) {
     if (said.get(path)) leftOut.set(path, MARKED);

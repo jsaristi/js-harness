@@ -154,6 +154,35 @@ test('a caller that keeps what git said of a commit has no path asked about twic
   assert.equal(next.calls.length, 1);
 });
 
+test('what git said is kept only of a full commit id: a name that can come to mean another commit is asked about every time, and nothing is kept of it', () => {
+  const top = path.resolve('/repo');
+  // A project whose marks change from one commit to the next: git says `marked` of every path it is asked.
+  let marked = 'unset';
+  const marks = (_args, opts) => ({ status: 0, stdout: attrOutput(...opts.input.split('\0').slice(0, -1).map((file) => [file, marked])) });
+  // 40 hexadecimal characters, or the 64 of a repository of SHA-256, as git writes an id: nothing else.
+  const names = ['HEAD', 'main', 'feature/a', 'HEAD~1', 'a'.repeat(7), 'a'.repeat(39), 'a'.repeat(41), 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(40), `${'a'.repeat(39)}g`, `${'a'.repeat(40)}^`];
+  for (const source of names) {
+    marked = 'unset';
+    const git = fakeGit(marks);
+    const where = { top, marks: new Map() };
+    const ask = () => [...leftOutOf(['a.js'], { cwd: top, source, spawn: git.spawn, where })];
+    assert.deepEqual(ask(), [['a.js', MARKED]], source);
+    // The name now means a commit that marks nothing, as `HEAD` does after a commit: the answer is that one's.
+    marked = 'unspecified';
+    assert.deepEqual(ask(), [], source);
+    assert.deepEqual([git.calls.length, git.calls[1].args[2], where.marks.size], [2, source, 0], source);
+  }
+  // A full commit id means one commit for good, so what git said of it is kept.
+  for (const source of ['a'.repeat(40), '0123456789abcdef'.repeat(4), `${'0123456789'.repeat(3)}abcdefabcd`]) {
+    marked = 'unset';
+    const git = fakeGit(marks);
+    const where = { top, marks: new Map() };
+    const ask = () => [...leftOutOf(['a.js'], { cwd: top, source, spawn: git.spawn, where })];
+    assert.deepEqual([ask(), ask()], [[['a.js', MARKED]], [['a.js', MARKED]]], source);
+    assert.deepEqual([git.calls.length, [...where.marks.keys()]], [1, [source]], source);
+  }
+});
+
 // --- real git: which attributes are read ---
 
 let configDir;
