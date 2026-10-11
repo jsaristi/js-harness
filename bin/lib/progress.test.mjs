@@ -316,3 +316,15 @@ test('tokenize keeps HTML comments unless stripComments is set, so progress coun
   assert.equal(parseSteps(md).length, 2);
   assert.deepEqual(tokenize(md, { stripComments: true }).filter((t) => t.step).map((t) => t.step.text), ['shown']);
 });
+
+test('tokenize takes a fence indented past three spaces only with indentedFences, so progress counts are unchanged', () => {
+  const md = '- [ ] a task\n    ```\n    - [ ] an example\n    <!-- never closed\n    ```\n- [ ] the next task\n';
+  const kinds = (tokens) => tokens.map((t) => (t.fence ? 'fence' : t.step ? 'step' : 'text'));
+  assert.equal(parseSteps(md).length, 3);
+  assert.deepEqual(kinds(tokenize(md)), ['step', 'text', 'step', 'text', 'text', 'step', 'text']);
+  assert.deepEqual(kinds(tokenize(md, { indentedFences: true })), ['step', 'fence', 'fence', 'fence', 'fence', 'step', 'text']);
+  // The comment the fence holds opens nothing, and the code span below opens no fence.
+  assert.deepEqual(kinds(tokenize(md, { indentedFences: true, stripComments: true })), ['step', 'fence', 'fence', 'fence', 'fence', 'step', 'text']);
+  const span = '- [ ] a task\n    ```inline``` in a wrapped line\n- [ ] the next task\n';
+  assert.deepEqual(kinds(tokenize(span, { indentedFences: true })), ['step', 'text', 'step', 'text']);
+});

@@ -1257,6 +1257,19 @@ names it, and the entry stays open until it does.
   tests were not run by the runner before the commit, because a gate ran the whole time; the
   commit's gate runs them. The real register reads the same after the fixes: 59 failures, 17
   not settled.
+- 2026-10-11, the fixes are `d8cdf05` (gate 17:50 to 18:04, `PASS  tests`; `review not due
+  (under_budget)`, 219 lines since `6c687ab`). Codex reviewed that commit alone (18:05 to
+  18:19): 188,160 input tokens for 114 changed lines, 1,650 a line where its plan said 1,140,
+  so over the 1,200 for that run and told to the orchestrator; the slice as a whole stands at
+  603 a line. It found the fix of the nested fence wrong in two ways, both seen wrong through
+  a script first: a fence under a task that holds a `<!--` swallowed every task after it, and
+  three backticks that open a code span in a wrapped line were taken for a fence. The cause
+  was one: this session had put a second, smaller reading of fences on top of the tokenizer's.
+  It is removed. `tokenize` of `bin/lib/progress.mjs` takes `indentedFences`, off by default
+  so that `js-harness progress` counts as before, and with it the tokenizer itself tells a
+  fence from a code span and keeps a `<!--` inside a fence from opening a comment. Found on
+  the way and not changed here: `js-harness progress` counts a checkbox shown in a fence
+  indented under a list item as a step, for the same reason.
 
 ## Next step
 In this order. (1) The reviews of what follows `5b754dd`:

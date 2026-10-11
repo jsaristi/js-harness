@@ -31,9 +31,6 @@ const CLASS_PATTERN = /^\s*[-*+]\s+`([^`]+)`/;
 const SINCE_PATTERN = /^ — since (\S+)$/;
 // A list item, with a checkbox or without one: `- text`, `* text`, `1. text`, `2) text`.
 const LIST_ITEM_PATTERN = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
-// A fence indented by four spaces or more, as one under a list item is: the tokenizer takes a fence
-// only up to three, so it reads this one, and what it holds, as text.
-const NESTED_FENCE_PATTERN = /^\s{4,}(`{3,}|~{3,})/;
 
 // Refused, and not read around: it would swallow every entry after it without a word.
 const OPEN_FENCE =
@@ -276,16 +273,10 @@ export function sightings(entry) {
 function uncheckedItems(markdown) {
   const items = [];
   let open = false; // whether the lines that follow continue the last item of `items`
-  let nested = null; // the marker of a fence indented under a list item, which the tokenizer reads as text
-  for (const token of tokenize(markdown, { stripComments: true })) {
-    const marker = token.fence ? null : token.line.match(NESTED_FENCE_PATTERN)?.[1];
-    if (nested) {
-      // The fence ends at a line that holds only its marker, as long or longer.
-      if (marker?.[0] === nested[0] && marker.length >= nested.length && token.line.trim() === marker) nested = null;
-    } else if (marker) {
-      nested = marker;
-      open = false;
-    } else if (token.step) {
+  // The tokenizer is asked for fences at any indentation, so that it is the one to tell a fence
+  // from a code span and to keep a `<!--` inside a fence from opening a comment.
+  for (const token of tokenize(markdown, { stripComments: true, indentedFences: true })) {
+    if (token.step) {
       open = !token.step.done;
       if (open) items.push(token.step.text);
     } else if (open && !token.fence && !token.heading && CONTINUATION_PATTERN.test(token.line) && !LIST_ITEM_PATTERN.test(token.line)) {
