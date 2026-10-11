@@ -925,14 +925,35 @@ record. What exists, all local to this machine:
   none failing; and `resume --hook` run in a folder with no `harness.json` printed 0 bytes,
   exit 0.
 
+- 2026-10-11 11:01 local, commit `9dd1622` (T5 and T6) on `feat/session-context`. Its gate:
+  `INFO gate waited 26 min 23 s`, then `PASS tests npm run test passed`; 10:19:27 to 11:01:47
+  in all, one try. The working tree is clean.
+- 2026-10-11, the gentle-ai review of what follows the last reviewed boundary (`ce8bdf7`) is
+  NOT done, and stopped on a failure of gentle-ai itself. As one candidate, `ce8bdf7..9dd1622`
+  (2,017 lines), it was refused: `lens_context_budget_exceeded`, no authority created. As the
+  fourth slice alone, `82cd2c2..9dd1622` (1,622 lines), START created the lineage
+  `review-506a7846ef824265` (state `reviewing`, one lens, reliability; consent granted as
+  `AGENTS.md` says), and the bound STATUS it returned then failed twice with `operation_timeout`
+  ("The negotiated review operation exceeded its aggregate time budget", phase `pre_native`,
+  `mutation_outcome: not_started`, `retry_safe: false`, `next_action: stop`, cause "context
+  deadline exceeded"); the second try was the parent's, made before it read `retry_safe`. Not
+  known why; other sessions' gates were in line on the machine through the morning, which
+  slows every git call, and that is not shown to be the cause. Nothing was retried again. The
+  exact command that failed: `gentle-ai review status --contract=gentle-ai.review-integration/v2
+  --next-transition=true --lineage=review-506a7846ef824265
+  --repository-context=rctx2_cfed30968ffc9401a1db626c533a4c245e0a363ce07e8c3d793be1e110261542
+  --agent=claude-code --base-ref=c07a2db7c4e87b3e0426b47e513a16627d319f1a --committed-only=true`
+  (run from the worktree). The consent envelope of that START was not kept (the session's
+  script printed only its summary), so its exact `declined` invocation is not at hand.
+  Put to Sebastián in the session's chat, his to choose: report the failure to gentle-ai's
+  repository and go on, go on without reporting, or stop here.
+
 ## Next step
-FIRST, if the working tree of `feat/session-context` still holds uncommitted code (`git status
---short`): (1) have a writer make `scripts/practice.mjs` and `scripts/e2e.mjs` expect the two
-hook entries, with their tests (`scripts/practice-lib.test.mjs` and any test of `e2e`), and
-make `contextCompaction` one shape in `--json`; (2) the parent's spot check of the test files
-above; (3) the commit and its gate (stop this session's `tsserver.js` first); (4) the
-gentle-ai review of `7a19710..HEAD` in the worktree (`review-chain.mjs`, then
-`capture-ack.mjs`), in two halves against a boundary if it does not fit; (5) its findings.
+Two ranges still owe their gentle-ai review, each small enough for one candidate: the fix
+commit `ce8bdf7..82cd2c2` (313 lines; check out `82cd2c2` detached to review it, then return
+to `feat/session-context`) and the fourth slice `82cd2c2..9dd1622` (1,622 lines, lineage
+`review-506a7846ef824265` open and stuck on its STATUS). Do not start either before his
+answer on the failure above. Then their findings, in a commit on `feat/session-context`.
 
 The third slice is whole on `feat/session-board-channel` at `7a19710`: T1b, T4b and T4c,
 gated; `ce8bdf7` reviewed by gentle-ai in two halves, `7a19710` not due. It is not pushed. On
