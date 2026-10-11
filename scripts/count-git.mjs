@@ -18,9 +18,10 @@
 // behind when the tool itself is killed: no signal is handled here.
 //
 // The count changes what it counts in one way: a child started with an environment its caller wrote out
-// is handed the counting variables too, so a test that asserts the exact environment of a child fails
-// under this tool and passes without it (five of `evals/` did in the whole suite, 2026-10-11). The counts
-// of such a run stand; its exit code is not the suite's.
+// is handed the counting variables too, and one whose caller cleared NODE_OPTIONS gets the preload back,
+// so a test that asserts the exact environment of a child fails under this tool and passes without it
+// (five of `evals/` did in the whole suite, 2026-10-11). The counts of such a run stand; its exit code is
+// not the suite's.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -81,6 +82,31 @@ function readCounts(file) {
   return { lines, unreadable };
 }
 
+/** How many `node` launches no report answers, from the lines of the processes that reported. A report
+ * answers a launch of the process that started it and of no other: of its parent when that one reported, or
+ * of the process that started its parent, where the launch was a shell string that begins with `node` and
+ * the process it started is the shell. A report with neither answers nothing: a test file's own process,
+ * started by the runner, and the test file of a `node --test` that a test started, whose runner is no `node`
+ * a report is due from. Counted against all launches of the run, each of those would hide one process that
+ * never reported. Processes are told apart by pid, and a long run uses a pid again: two that had the same
+ * one are summed, their launches and the reports below them. */
+function missingReports(lines) {
+  const launches = new Map(); // the pid of a process that reported → the `node` launches it counted
+  const starterOf = new Map(); // the pid a launch was given → the pid of the process that started it
+  for (const line of lines) {
+    launches.set(line.pid, (launches.get(line.pid) ?? 0) + line.nodes);
+    for (const pid of line.nodePids ?? []) starterOf.set(pid, line.pid);
+  }
+  const answered = new Map();
+  for (const line of lines) {
+    const starter = launches.has(line.ppid) ? line.ppid : starterOf.get(line.ppid);
+    if (starter !== undefined) answered.set(starter, (answered.get(starter) ?? 0) + 1);
+  }
+  let missing = 0;
+  for (const [pid, count] of launches) missing += Math.max(0, count - (answered.get(pid) ?? 0));
+  return missing;
+}
+
 /** The report as data, from one line per process. Every list is ordered by count, largest first, then by
  * name, so two runs of the same tree print the same order. A line of the runner (`runnerPid`) is left out:
  * its one process per test file is the run, not something the tests start. Node 24 does not load the preload
@@ -91,7 +117,6 @@ export function summarize(lines, { runnerPid = null, root = REPO_ROOT, unreadabl
   const other = { count: 0, shell: 0 };
   const tables = { sub: new Map(), caller: new Map(), file: new Map() };
   const counted = lines.filter((line) => line.pid !== runnerPid);
-  let started = 0;
   const add = (table, name, entry) => {
     if (!table.has(name)) table.set(name, { name, count: 0, ms: 0, subcommands: {} });
     const row = table.get(name);
@@ -102,7 +127,6 @@ export function summarize(lines, { runnerPid = null, root = REPO_ROOT, unreadabl
   for (const line of counted) {
     other.count += line.other;
     other.shell += line.shell;
-    started += line.nodes;
     const file = line.testFile ? below(root, line.testFile) ?? line.testFile : '(not known)';
     for (const entry of line.git) {
       git.count += entry.count;
@@ -120,8 +144,7 @@ export function summarize(lines, { runnerPid = null, root = REPO_ROOT, unreadabl
   return {
     git: { count: git.count, seconds: seconds(git.ms), untimed: git.untimed },
     other,
-    // A test file's own process is started by the runner; every other one by a call that counted it in `nodes`.
-    processes: { reported: counted.length, missing: Math.max(0, started - counted.filter((line) => line.ppid !== runnerPid).length), unreadable },
+    processes: { reported: counted.length, missing: missingReports(counted), unreadable },
     bySubcommand: rows(tables.sub),
     byCaller: [...tables.caller.values()].sort(byCount).map((row) => ({ name: row.name, count: row.count, seconds: seconds(row.ms), subcommands: ordered(row.subcommands) })),
     byTestFile: rows(tables.file),

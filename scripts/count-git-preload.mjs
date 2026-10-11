@@ -11,7 +11,8 @@
 //   `spawn`, some through the exports this file replaces. Only the outermost call counts, which is also the
 //   one whose arguments the caller wrote.
 // - The counting variables are added to an environment a caller writes out (`{ env: { PATH } }`): a child
-//   `node` started without NODE_OPTIONS would run uncounted, with every git process below it.
+//   `node` started without NODE_OPTIONS would run uncounted, with every git process below it. So would one
+//   whose caller kept the rest and cleared NODE_OPTIONS (`{ ...process.env, NODE_OPTIONS: '' }`).
 // - What it cannot see is said in the tool's report: a process that is killed never reaches its `exit`.
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
@@ -26,6 +27,7 @@ export const TEST_FILE_VARIABLE = 'COUNT_GIT_TEST_FILE';
 export const FRAMES_VARIABLE = 'COUNT_GIT_FRAMES';
 
 const SELF = fileURLToPath(import.meta.url);
+const PRELOAD_OPTION = `--import=${import.meta.url}`;
 const WRAPPED = ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork'];
 
 // The options of git itself whose value is the next argument (`git -C <dir> status`). The forms with `=`
@@ -121,12 +123,21 @@ function install(out) {
   const testFile = process.env[TEST_FILE_VARIABLE] ?? null;
   const frames = Math.max(1, Number.parseInt(process.env[FRAMES_VARIABLE], 10) || 1);
   const totals = { other: 0, shell: 0, nodes: 0 };
+  // The pids of the `node` processes started here, where the call gives one (`execSync` and `execFileSync`
+  // return the output alone). The tool tells by them whose launch a report answers; behind a shell string
+  // the pid is the shell's, and the `node` that reports is its child.
+  const nodePids = [];
+  // Read now: a child that outlives the process that started it has another parent by its exit.
+  const ppid = process.ppid;
   const git = new Map();
   let depth = 0;
 
-  /** Counts one started process and returns the function that records its end. */
-  const count = (call, caller, started) => {
-    if (call.node) totals.nodes += 1;
+  /** Counts one started process, `pid` when the call gave it, and returns the function that records its end. */
+  const count = (call, caller, started, pid) => {
+    if (call.node) {
+      totals.nodes += 1;
+      if (pid > 0) nodePids.push(pid);
+    }
     if (!call.git) {
       totals.other += 1;
       if (call.shell) totals.shell += 1;
@@ -144,11 +155,18 @@ function install(out) {
   };
 
   /** An options object whose `env` the caller wrote out, with the counting variables added. One that names
-   * an out file already is left alone: it is the run of a count inside this one. */
+   * another out file is left alone: it is the run of a count inside this one. One that names the out file of
+   * this run is a child of this run, whatever else its caller did to it: `{ ...process.env, NODE_OPTIONS: '' }`
+   * keeps the out file and drops the preload, and that child would run uncounted. Only an environment that
+   * has both is passed on as it is. */
   const withCounting = (arg) => {
     const env = arg && typeof arg === 'object' && !Array.isArray(arg) ? arg.env : null;
-    if (!env || typeof env !== 'object' || env[OUT_VARIABLE] !== undefined) return arg;
-    const added = { [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames), NODE_OPTIONS: `${env.NODE_OPTIONS ?? ''} --import=${import.meta.url}`.trim() };
+    if (!env || typeof env !== 'object') return arg;
+    if (env[OUT_VARIABLE] !== undefined && env[OUT_VARIABLE] !== out) return arg;
+    const options = String(env.NODE_OPTIONS ?? '');
+    const preloaded = options.includes(PRELOAD_OPTION);
+    if (env[OUT_VARIABLE] === out && preloaded) return arg;
+    const added = { [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames), NODE_OPTIONS: preloaded ? options : `${options} ${PRELOAD_OPTION}`.trim() };
     if (testFile) added[TEST_FILE_VARIABLE] = testFile;
     return { ...arg, env: { ...env, ...added } };
   };
@@ -169,7 +187,7 @@ function install(out) {
         // A sync call throws for a process that ran and failed (`execSync` on a non-zero exit, a timeout): Node
         // puts its pid on the error, and it counts. A command that is not there (ENOENT, pid 0) and arguments
         // Node refuses (no pid at all) started nothing.
-        if (sync && error?.pid > 0) count(call, caller, started)();
+        if (sync && error?.pid > 0) count(call, caller, started, error.pid)();
         throw error;
       } finally {
         depth -= 1;
@@ -178,7 +196,7 @@ function install(out) {
       // pid 0, a child without a pid. `execSync` and `execFileSync` return the output of a process that ran.
       const ran = name === 'execSync' || name === 'execFileSync' || result?.pid > 0;
       if (!ran) return result;
-      const ended = count(call, caller, started);
+      const ended = count(call, caller, started, result?.pid);
       if (sync) ended();
       else result?.once?.('close', ended); // no `error` listener: that would hide a failed start from the caller
       return result;
@@ -201,7 +219,7 @@ function install(out) {
   syncBuiltinESMExports();
 
   process.on('exit', () => {
-    const line = { pid: process.pid, ppid: process.ppid, testFile, ...totals, git: [...git.values()] };
+    const line = { pid: process.pid, ppid, testFile, ...totals, nodePids, git: [...git.values()] };
     try {
       // Append only, never create: a process that outlives the tool must not bring the removed file back.
       fs.appendFileSync(out, `${JSON.stringify(line)}\n`, { flag: fs.constants.O_WRONLY | fs.constants.O_APPEND });

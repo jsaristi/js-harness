@@ -1,8 +1,9 @@
-// Tests of scripts/count-git.mjs and its preload. The two runs of the tool count throwaway test files written
+// Tests of scripts/count-git.mjs and its preload. The runs of the tool count throwaway test files written
 // to a temporary folder, which start a known number of git and other processes in every way the preload has to
 // see: sync and async, through a shell string, through `util.promisify`, by a named import and by the default
-// one, in a helper, and from a child `node` with the inherited environment and with one written out. Only cheap
-// git commands run (`git --version` and the like); no repository is built.
+// one, in a helper, from a child `node` with the inherited environment, with one written out and with one that
+// clears NODE_OPTIONS, and from the test file of a `node --test` that a test starts. Only cheap git commands
+// run (`git --version` and the like); no repository is built.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -82,6 +83,45 @@ const FILES = {
     "import { spawnSync } from 'node:child_process';",
     "test('boom-test', () => { spawnSync('git', ['--version']); throw new Error('boom'); });",
   ],
+  // Two children with an environment that is the test's own, spread, and NODE_OPTIONS cleared: one keeps the
+  // out file of the run, the other names a different one.
+  'kept.test.mjs': [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import cp from 'node:child_process';",
+    "const asked = (env) => JSON.parse(cp.spawnSync(process.execPath, ['env-child.mjs'], { cwd: import.meta.dirname, env, encoding: 'utf8' }).stdout);",
+    "test('kept', () => {",
+    "  assert.equal(asked({ ...process.env, NODE_OPTIONS: '' }).out, process.env.COUNT_GIT_OUT);",
+    "  const other = { ...process.env, NODE_OPTIONS: '', COUNT_GIT_OUT: `${process.env.COUNT_GIT_OUT}.other` };",
+    "  assert.deepEqual(asked(other), { out: other.COUNT_GIT_OUT, options: '' }); // as its caller wrote it",
+    '});',
+  ],
+  'env-child.mjs': [
+    "import cp from 'node:child_process';",
+    "cp.spawnSync('git', ['--version']); // m-env-child",
+    "console.log(JSON.stringify({ out: process.env.COUNT_GIT_OUT, options: process.env.NODE_OPTIONS ?? '' }));",
+  ],
+  // One `node` that never reports (killed at its timeout), a `node --test` of its own with one test file, and
+  // two `node` that report: one whose pid the call does not give (`execFileSync`), one behind a shell.
+  'nested.test.mjs': [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import cp from 'node:child_process';",
+    "test('nested', () => {",
+    "  assert.equal(cp.spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 9000)'], { timeout: 300 }).error.code, 'ETIMEDOUT');",
+    '  const env = { ...process.env };',
+    '  delete env.NODE_TEST_CONTEXT; // with it the inner runner takes itself for a test file and runs nothing',
+    "  const inner = cp.spawnSync(process.execPath, ['--test', 'inner.spec.mjs'], { cwd: import.meta.dirname, env, encoding: 'utf8' });",
+    '  assert.equal(inner.status, 0, inner.stdout);',
+    "  cp.execFileSync(process.execPath, ['-e', '0']);",
+    `  assert.equal(cp.spawnSync('"' + process.execPath + '" -e 0', { shell: true }).status, 0);`,
+    '});',
+  ],
+  'inner.spec.mjs': [
+    "import { test } from 'node:test';",
+    "import cp from 'node:child_process';",
+    "test('inner', () => { cp.spawnSync('git', ['--version']); }); // m-inner",
+  ],
 };
 const at = (file, marker) => `${file}:${FILES[file].findIndex((line) => line.endsWith(`// ${marker}`)) + 1}`;
 
@@ -149,6 +189,48 @@ test('--frames 2: the caller is two frames deep, so a helper is split by who cal
     [`${at('helper.mjs', 'm-helper')} < ${at('frames.test.mjs', 'm-first-site')}`, 1],
     [`${at('helper.mjs', 'm-helper')} < ${at('frames.test.mjs', 'm-second-site')}`, 1],
   ]);
+});
+
+test('a child that keeps the out file of the run with NODE_OPTIONS cleared is counted; one that names another out file is left alone', () => {
+  const run = runTool('--json', 'kept.test.mjs');
+  assert.equal(run.status, 0, run.stderr); // the test file itself asserts what the child of another run was given
+  const report = JSON.parse(run.stdout);
+  // Two children ran `git --version`. The one of this run is counted although its caller cleared the preload;
+  // the one that names another out file is the run of another count, and none of this one's.
+  assert.deepEqual(report.byCaller.map((row) => [row.name, row.count]), [[at('env-child.mjs', 'm-env-child'), 1]]);
+  assert.deepEqual(report.byTestFile.map((row) => [row.name, row.count]), [['kept.test.mjs', 1]]);
+  assert.deepEqual(fs.readdirSync(tmp), [], 'no file is made for the out file the test named');
+});
+
+test('a nested `node --test`: its test file reports, and stands in for no process that never did', () => {
+  const run = runTool('--json', 'nested.test.mjs');
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(run.stdout);
+  assert.deepEqual(report.byCaller.map((row) => [row.name, row.count]), [[at('inner.spec.mjs', 'm-inner'), 1]]);
+  assert.deepEqual(report.byTestFile.map((row) => [row.name, row.count]), [['nested.test.mjs', 1]], 'the file of the run, not of the nested one');
+  // Reported: the test file, the test file of the nested run, and the two `node -e 0`. The nested runner is
+  // no `node` a report is due from, so the report of its test file answers no launch: the one that is missing
+  // is the `node` killed at its timeout. The two `node -e 0` answer their own launches, the one behind a
+  // shell too, where the process the call started is the shell.
+  assert.deepEqual(report.processes, { reported: 4, missing: 1, unreadable: 0 });
+});
+
+test('a report answers a launch of the process that started it, and of no other', () => {
+  const line = (pid, ppid, nodePids = [], nodes = nodePids.length) => ({ pid, ppid, testFile: null, other: nodes, shell: 0, nodes, nodePids, git: [] });
+  const missing = (...lines) => summarize(lines, { runnerPid: 1 }).processes.missing;
+  // Test file 2 started `node` 7, which never reported. 6 is the test file of a nested run: its parent 5 is
+  // the nested runner, which counted no launch and reports nothing.
+  assert.equal(missing(line(2, 1, [7]), line(6, 5)), 1);
+  assert.equal(missing(line(2, 1, [7]), line(7, 2), line(6, 5)), 0, 'with the report of 7 nothing is missing');
+  // Two reports below test file 3 for its one launch do not make up for the one missing below 2.
+  assert.equal(missing(line(2, 1, [7]), line(3, 1, [8]), line(8, 3), line(9, 3)), 1);
+  // Behind a shell the call started the shell (7), and the `node` that reports is its child.
+  assert.equal(missing(line(2, 1, [7]), line(8, 7)), 0);
+  // `execFileSync` gives no pid: the launch is counted in `nodes` alone, and a child of 2 answers it.
+  assert.equal(missing(line(2, 1, [], 1), line(8, 2)), 0);
+  assert.equal(missing(line(2, 1, [], 1), line(8, 5)), 1);
+  // A pid that two processes had one after the other: their launches and the reports below them add up.
+  assert.equal(missing(line(2, 1, [7]), line(2, 1, [8]), line(7, 2)), 1);
 });
 
 test('a wrong option: exit code 2, the reason and the usage on stderr, and no run', () => {
