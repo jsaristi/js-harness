@@ -226,15 +226,17 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
   another machine need their review recorded again there.
 - Check: `js-harness check --push` runs one row, `codex-review`, and nothing else: the budget and
   test rows read the working tree, not the pushed commit, and pre-commit already ran them on every
-  commit (T7d). A commit needs a Codex review when it is not a merge and changes a file that is not
-  Markdown; it is covered when some valid record's `base..head` contains it (T7e). The row covers
+  commit (T7d). A commit needs a Codex review when it changes what a review reads, which
+  `bin/lib/codex-review-scope.mjs` defines once for the command and for `check`; it is covered
+  when some valid record's `base..head` contains it (T7e). The row covers
   `<remote default>..<head>`, the base taken only from the remote's refs
   (`refs/remotes/<remote>/HEAD`, else `<remote>/main`, else `<remote>/master`; `--remote`, default
   `origin`), never a local branch, and fails naming `git remote set-head <remote> --auto` when
   there is none (T7d). It passes with nothing to cover, lists `unavailable` records as lines of the
   PASS row, and fails naming each uncovered commit (short id and subject) and the command that
-  records it. Plain `check` (the pre-commit gate) does not run it, since a slice under gentle-ai's
-  review budget is committed before it is reviewed.
+  records it. Plain `check` (the pre-commit gate) refuses nothing for it, since a slice under
+  gentle-ai's review budget is committed before it is reviewed: it says in an INFO row how much
+  code waits for a review (`checkCodexReviewDebt`, `bin/check.mjs`).
 - Gate: `.githooks/pre-push` runs `check --push --remote "$1" --head <sha>` for each ref it pushes
   (skipping deletes, `node` reading `/dev/null`), so a skipped review stops the push, which
   precedes every pull request. `init` does not write a pre-push hook yet; that is for a project
@@ -1153,5 +1155,4 @@ targets, no commit range, in a format gentle-ai v4 may change. So js-harness wri
 None for this feature: it is complete. Its carried follow-ups (Progress, slices 5 to 7) are
 separate later work; the first of slice 7's, a Codex turn that could not inspect recorded as
 `reviewed`, is done, merged via `jsaristi/js-harness#15` (b1e3462), and continued in
-`odd/tasks/codex-exec-review.md`, which replaced the plugin path with `codex exec review`. The installed skill on this machine still carries
-the old text until `js-harness` is reinstalled from `main` and synced.
+`odd/tasks/codex-exec-review.md`, which replaced the plugin path with `codex exec review`.

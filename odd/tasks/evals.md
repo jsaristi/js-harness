@@ -1341,13 +1341,7 @@ Slice 1 (T1–T2) is merged (PR jsaristi/js-harness#20, `5ab2ae6`). T3 is comple
 `feat/evals` (slice 2 so far: `05692b0..d0bc904`, every commit reviewed by gentle-ai and Codex).
 Since then, all on `feat/evals` (pushed 2026-10-03): T4a (done: the isolation probe passes with the
 real binary, see Progress, 2026-10-02), T4ar, T4as, T4k, T4kr, T4kt, T4s, T4sr, T4srr and T4ap.
-The stack work is done on `feat/stack-v4` (`odd/tasks/stack-v4.md`, not pushed).
 T4k is on `main` since `0f44719` (slice 3, 2026-10-03), so committing on `main` is safe again.
-**`feat/stack-v4` still has the old gate until it takes `main` in: make that merge its first
-commit**, because its pre-commit gate kills by parent pid (see Progress, 2026-10-02) and can
-close unrelated programs. One line is still owed to `odd/tasks/stack-v4.md`: the 11
-`~/.claude/commands/gentle-sdd-*.md` files were moved to
-`~/.js-harness/backups/stack-v4-20261001/home/` with the other v3 leftovers.
 Before T4, two of Sebastián's decisions were taken:
 1. His `claude setup-token`: **done 2026-10-02**. It is in the user environment variable
    `JS_HARNESS_EVAL_OAUTH_TOKEN` (checked without reading it: 108 characters, the `sk-ant-oat`
@@ -1369,8 +1363,7 @@ run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (D
 verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
 remained was delivery, and it is done (see Delivery): the four slices are merged to `main`
 (`5ab2ae6`, `bb82ea8`, `0f44719`, `7f02627`), and `main`'s tree equals `feat/evals` at
-`3babe73`. **The feature is closed.** What follows is outside it and belongs to a new
-session: `feat/stack-v4` takes `main` in as its first commit and goes as its own PR. The
+`3babe73`. **The feature is closed.** The
 Follow-ups below stay open until one earns a slice. A run written by two invocations keeps only the last one's `args`
 (`ab-high` says `configs: ["current"]` over trials of both configs), so the report reads the
 trials, never `args`. Do not run a gate or a test suite while trials run: wall time is reported
