@@ -32,6 +32,8 @@ fourteen matters two places say different things; each is listed, with the text 
 - `node bin/js-harness.mjs contract check odd/tasks/rule-hierarchy.md` exits 0
 - `node --test bin/reply.test.mjs` exits 0
 - `node --test bin/lib/failures.test.mjs` exits 0
+- `node --test bin/failures.test.mjs` exits 0
+- `node bin/js-harness.mjs failures check --settled` exits 0
 - `node --test bin/lib/spec.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
 - The practice journey, with this feature's steps in it, passes on the machine that builds it
@@ -47,8 +49,9 @@ fourteen matters two places say different things; each is listed, with the text 
   `bin/lib/reply.mjs`, and its entry in the dispatcher (`bin/js-harness.mjs`); new rows in
   `bin/check.mjs` (`failures`, `spec`, citations) with `bin/lib/failures.mjs` and
   `bin/lib/spec.mjs`; a row in `bin/lib/stack.mjs` (`memory-rules`); `docs/SPEC.md` and
-  `docs/FAILURES.md`; a `harness.json` at the root of this repository, which it does not track
-  today and which C1 needs for the reply check to act here; one eval task under
+  `docs/FAILURES.md`; the `harness.json` at the root of this repository (tracked since `74e473c`,
+  with `documents` alone; the design of 2026-10-10 said it was not tracked), which C1 needs a
+  `reply` key in for the reply check to act here; one eval task under
   `evals/tasks/`; steps in `scripts/practice*.mjs`; `docs/ROADMAP.md`. The test files the
   contract names (`bin/reply.test.mjs`, `bin/lib/failures.test.mjs`, `bin/lib/spec.test.mjs`)
   do not exist yet: the build creates them, and adds to "Done when" the test of each other
@@ -62,7 +65,7 @@ fourteen matters two places say different things; each is listed, with the text 
 ## Constraints
 - A check before a line, a line before a protocol — because a check costs no tokens and cannot
   be forgotten, and F5 measured what more text costs.
-- `AGENTS.md` stays within `TOKEN_BUDGET` (1,500, `bin/check.mjs:19`); the gate of this
+- `AGENTS.md` stays within `TOKEN_BUDGET` (1,500, `bin/check.mjs:21`); the gate of this
   document's commit printed `PASS  budget  1499 estimated tokens (budget 1500)` — because every
   line is paid on every turn, a rule that enters makes another leave. The new section lists
   nine items against a file with one token to spare, so T8 is not done by adding: it measures
@@ -197,7 +200,9 @@ step that installs and removes the hook, and the count of refusals per session o
 **C2 The failures register** (`docs/FAILURES.md`, row `failures` of `check`, command
 `js-harness failures`). Designed again on 2026-10-11, before anything was built, in the section
 "The failures register" below; the first design, an id, a date, an owner and a state written by
-hand, is in this file's history (`6d8bc82`). It is seeded with the eighteen entries of "Failures
+hand, is in this file's history (`6d8bc82`). The row refuses a register it cannot read; what
+depends on other files is counted, and `failures check --settled` is the command that refuses
+it. It is seeded with the eighteen entries of "Failures
 of 2026-10-10" and with those of 2026-10-11. In an installed project the row acts only when the
 file exists.
 
@@ -255,7 +260,7 @@ checks the Codex record.
 
 ### The failures register
 The design of C2, by the session that builds it (`JH 7 · registro de fallas y reglas`,
-2026-10-11).
+2026-10-11), as it stands after a reader that did not write it attacked it (Progress, T3a).
 
 The need, in his words. On 2026-10-10: a mistake is told with how it is solved now, how it does
 not happen again and how it is integrated, and "a futuro comprobar que esto no vuelva a fallar".
@@ -276,7 +281,7 @@ a rule existed and nothing made it act; a command failed or did the wrong thing.
 fails and is fixed inside its own task is not one: the gate is that control, working.
 
 The file. `## Classes` declares the classes, one list item each (`` `id` `` and what it means).
-`## Entries` holds one entry per failure: a `### <id>` heading, one paragraph that says what
+`## Entries` holds one entry per failure: a `### <id>` heading, the text that says what
 happened, and a list of fields.
 
 ```
@@ -285,9 +290,8 @@ A TypeScript language server per session works while tests write files, and a ga
 bound.
 - Class: machine
 - Aka: failure 20
-- Seen: 2026-10-11 — relief file, line 202 — found beside the tests of two sessions
 - Seen: 2026-10-11 — relief file, line 224 — a gate at 1,188 s of 1,200
-- Control: owed — odd/tasks/gate-log.md T9
+- Control: owed — odd/tasks/<feature>.md — "<words of an unchecked task of that document>"
 ```
 
 That block shows the shape only: the lines of the seed are written from the records, not from it.
@@ -304,61 +308,113 @@ That block shows the shape only: the lines of the seed are written from the reco
   `machine` (load or leftovers: processes, folders, locks), `rule-not-acting` (a rule existed and
   nothing made it act), `tool` (a command of the harness or of the stack failed or did the wrong
   thing), `delivery` (a commit, a review or a merge left in a shape that could not be checked).
-- `Seen` is one line per sighting, in date order: the date, where the evidence is, a note. The
-  number of these lines is how often the thing came back; it is never written as a figure.
+- `Seen` is one line per sighting: the date, where the evidence is, a note. The number of these
+  lines is how often the thing came back; it is never written as a figure. Their order in the
+  file is free and the reader sorts them, so a conflict between two branches that each add a
+  sighting is settled by keeping both lines, in either order. Two lines with the same date and
+  the same evidence are one sighting: two sessions that read the same record do not count it
+  twice.
 - `Control` is absent, owed or in place.
-  Owed: `owed — <feature document> <task id>`, the task that will build it.
+  Owed: `owed — <document> — "<phrase>"`, where the phrase is found in a list item of that
+  document that is not checked off: the task that will build the control, in a feature document
+  or in the roadmap. A phrase and not a task number, because the roadmap's steps carry none.
   In place: `<check|line|protocol> — <path> — "<phrase>" — since <date>`, one of the three levels
   of the placement rule. The path is a file of the repository and the phrase is text that file
   must hold: the name of the test for a check, the sentence for a line of `AGENTS.md`, the
-  heading for a protocol.
-- `Was` is a control that did not hold, moved there when the failure is seen after it. Free text.
+  heading for a protocol. `since` is the day the control reached `main`.
+- `Proof`, when the control is not a test: the command or the count that shows the failure has
+  not come back, in words ("the board prints 0 under ..."). Free text, printed and not checked.
+- `Was` is a control that did not hold or that left, moved there by hand. Free text; its lines
+  are counted, as the number of controls that had to be replaced.
 
-There is no state field. The state is computed from the fields: no control, owed, controlled, or
-seen again (a sighting later than `since`). A state written by hand is one more statement that
-can be false, in a file that exists to count those.
+How a field is read, said here because the existing reader of markdown (`tokenize`,
+`bin/lib/progress.mjs`) only tells a heading, a list item and a fence apart. A field is never
+split on every dash: `Seen` takes the date at its start and is cut at the first two ` — `, so a
+note may hold dashes, quotes and dates; `Control` takes its first word, the `— since <date>` at
+its end, and the phrase between the outermost quotes, so a phrase may hold a quote or a dash. A
+long field continues on indented lines. A path uses forward slashes, is not absolute and holds
+no `..` (as `documentFault` refuses them, `bin/check.mjs:162-171`); a `check` is never a `.md`
+file. A phrase has at least twelve characters and is matched with every run of white space read
+as one space on both sides, because the files here end their lines with a carriage return and
+wrap their sentences. Everything between the heading and the first field is the text of the
+entry. A byte-order mark is dropped. A fence left open inside an entry is refused, because it
+would swallow every entry after it without a word.
 
-What the row refuses. Each refusal says what is missing and how it is written (the refusal
-carries the rule):
-1. A file that cannot be read as a register: an entry with no paragraph, no class or no
-   sighting; a class the file does not declare; an id that is not in the shape, is repeated or is
-   out of order; a date that is no date; sightings out of date order; a field it does not know.
-2. A failure seen twice or more with no `Control`.
-3. A control owed to a document that does not exist, to a task that document does not hold, or
-   to a task already checked off: the task is done, so the entry names what it left.
-4. A control in place whose path does not exist, or whose file no longer holds the phrase. This
-   is what makes a rule leave safely: the commit that drops a line of `AGENTS.md`, or renames a
-   test, fails until the entry names what replaces it.
-5. A sighting later than the `since` of the control in place: the control did not hold. The entry
-   moves it to `Was` and names the next one, or owes it.
+There is no state field. The state is computed from the fields, and a state written by hand
+would be one more statement that can be false, in a file that exists to count those:
+- `once`: seen once, nothing owed. Nothing is asked of it.
+- `repeated`: seen twice or more, and no `Control`.
+- `owed`: the document holds an unchecked item with the phrase.
+- `owed, stale`: it does not: the document is gone, or the task was checked off and the entry
+  still says owed.
+- `controlled`: the path holds the phrase and no sighting is later than `since`.
+- `control lost`: the path is gone or no longer holds the phrase: a test renamed, a line of
+  `AGENTS.md` dropped.
+- `seen again`: a sighting later than `since`: the control did not hold where it was seen.
+`once`, `owed` and `controlled` are settled. The other four are not.
 
-Recording stays cheap, on purpose. A second sighting costs one line and the name of a task; it
-never costs building the control in the same commit. A row that asked for more would be obeyed
-by not recording. For the same reason nothing fails by the calendar: a row that turned red with
-the date would refuse a commit that changed nothing. The age of what is owed is printed instead,
-on every gate: the row's detail carries the number of failures, of sightings, of repeated
-failures and of those repeated with a control still owed.
+What the row refuses, and what it only counts. It refuses what the register alone shows, which
+the session editing it can always repair: an entry with no text, no class or no sighting; a
+class the file does not declare; an id that is not in the shape, is repeated or is out of order;
+a date that is no date; a field it does not know or cannot read; a control in a shape it does
+not know; a fence left open. Each refusal says what is missing and how it is written. Every
+state that depends on another file, or on another day, is counted and printed with the ids on
+every gate and refuses nothing. Three facts decide it:
+1. Those states change without any author. A session renames a test on a branch cut before the
+   entry that names it; both pull requests merge clean; the next session to commit, on any
+   feature, is the one refused, for a failure it knows nothing about. A task checked off on one
+   branch while the entry sits on another does the same.
+2. A static row that fails is only printed after the sensors have run (`bin/check.mjs:964-995`:
+   the rows are computed first and printed last), and nothing checks `main` after a merge (no
+   `.github/`; `.githooks/` holds `pre-commit` and `pre-push`). So that bystander pays a whole
+   gate to read the refusal: 897 s for this document's own on 2026-10-10 (Progress), 1,188 s for
+   one of 2026-10-11 (relief file, line 224), of a turn the whole machine shares.
+3. A row that refused a second sighting until its control is placed would be obeyed by not
+   recording it: the session that sees a failure again often does not own the document where
+   its task belongs, and may not write there.
+So the force is put where somebody can act. `js-harness failures check --settled` exits 1 while
+any entry is not settled, and it is a command of this feature's "Done when": the rule hierarchy
+does not close with a repeated failure that nobody controls or owes. Any feature's contract can
+carry it. The row prints the same list at every gate, with the first day each was seen, and
+its detail ends with how a failure is recorded, which is how a session learns the register
+exists at no token per turn. Proposed to the gate's feature and not built here: a gate that
+stops before its sensors when a static row already fails; with that, the states that are not
+settled could refuse in the row at the cost of seconds.
 
-The command. `js-harness failures` prints the totals, the count of entries and sightings by
+Nothing fails by the calendar: a row that turned red with the date would refuse a commit that
+changed nothing.
+
+The command. `js-harness failures` prints the totals, the count of entries and of sightings by
 class, and one line per entry, the most seen first, with its state. `js-harness failures <id>`
-prints one entry whole, and for a check whose path is a test file the command that proves it
-(`node --test <path>`). `--json` gives the same data. `js-harness failures check` runs the row
-alone and exits 1 when it refuses. It reads; nothing writes the file but an editor.
+prints one entry whole. `js-harness failures check` runs the row alone and exits 1 when it
+refuses; with `--settled`, also when an entry is not settled. It reads; nothing writes the file
+but an editor.
 
-What the row proves and what it does not. It proves that every repeated failure has a control
-named or a task that owes one, and that every control named is still in the tree. It does not
-prove that a control works: the test it names does, and the gate runs it. It does not prove
-that every failure was recorded: nothing can, and the honesty audit (C9) is the nearest thing.
-A date has no hour, so a failure seen again on the day its control entered reads as seen before
-it.
+What the counts are worth. The count by class is the one to trust. The count of one failure
+depends on every session giving it the same name: two sessions that record the same new failure
+under two ids make two entries seen once each, and nothing mechanical sees it. Numbers collided
+loudly; words diverge in silence. What narrows it: the command lists the entries of a class, so
+a session looks before it adds, and a new entry is read by the slice's reviewers. A sighting
+recorded on a branch reaches the other sessions when that branch merges, not before.
 
-Judged twice. Here it replaces two hand-kept lists and gives the two numbers this feature ends
-on their first command ("no repeated mistake" becomes: no entry seen after its control). In a
-project that only installs the harness, the row acts only when `docs/FAILURES.md` exists, the
-classes are the project's own, and a task id is what gentle-ai's ODD documents already carry.
-Not built in this slice, and said so: `init` does not write an empty register (it goes with T9,
-with the template), and no command writes a sighting; that is built only if editing by hand
-proves to cost.
+What the register proves and what it does not. A control in place is a phrase found in a file,
+not a control that works: the test it names proves that, and the gate runs it. A short phrase
+can be found by accident, and a test that is skipped still holds its name. Whether a failure
+came back is known only if somebody records it, except where its control is a check that makes
+it impossible; that is the limit of his "comprobar que esto no vuelva a fallar", and the honesty
+audit (C9) is what would narrow it. A date has no hour, so a failure seen again on the day its
+control entered reads as seen before it; and a sighting on a branch that did not have the
+control yet reads as `seen again`, which is why that state is counted and judged by a person
+and never refused.
+
+Judged twice. Here it replaces two hand-kept lists, and "no repeated mistake" of the signals
+becomes a number that can be other than zero on a green tree: the entries seen again, and the
+`Was` lines. In a project that only installs the harness, the row acts only when
+`docs/FAILURES.md` exists, the classes are the project's own, and a control owed is a phrase of
+any unchecked list item, which needs no convention of task numbers. Not built in this slice,
+and said so: `init` does not write an empty register (it goes with T9, with the template); no
+command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
+which waits for a reader.
 
 A limit of who writes. The orchestrator writes only its relief file, so what it sees reaches the
 register through a work session that reads that file, and the evidence of such a sighting is a
@@ -368,8 +424,8 @@ would close that gap; it is proposed to that feature, not built here.
 Where the code lives. `bin/lib/failures.mjs` parses, validates and counts, from text, with no
 file access, as `bin/lib/contract.mjs` does. `bin/failures.mjs` is the command and the row: it
 reads the files the entries name. `bin/check.mjs` gains an import and one call, and
-`bin/js-harness.mjs` one entry; both are told to the orchestrator first, because another session
-owns `bin/check.mjs` while this is built.
+`bin/js-harness.mjs` one usage line and one entry; both were told to the orchestrator first,
+because other sessions change those files while this is built (Progress, 2026-10-11).
 
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
@@ -637,9 +693,10 @@ names it, and the entry stays open until it does.
   manifest for both hosts, the `reply` key of `harness.json`
 - [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
   writer; the trigger is three files that are not mechanical)
-  - [ ] T3a The design read by a reader that did not write it, and what it found taken or
+  - [x] T3a The design read by a reader that did not write it, and what it found taken or
     answered
-  - [ ] T3b `bin/lib/failures.mjs` and its tests: the parser, the five refusals, the counts
+  - [ ] T3b `bin/lib/failures.mjs` and its tests: the parser, the refusals, the seven states,
+    the counts
   - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
     `failures` of `check`; the entry in the dispatcher
   - [ ] T3d `docs/FAILURES.md` seeded with the eighteen and with those of 2026-10-11, each
@@ -751,10 +808,53 @@ names it, and the entry stays open until it does.
   number (two branches collide on the next number); the state is computed and not written; a
   control is a place and a phrase the row can find, which replaces the separate proof; and a
   repeat with no control is refused only until a task owes it, so that recording stays cheap.
+- 2026-10-11, T3a. The design (commit `5fd9cad`) was read by a sub-agent that did not write it
+  (Opus 5.5, high effort, read-only), told to attack each refusal with a scenario. What it found
+  and what was done, each checked by this session where a line is given:
+  - Three of the five refusals turned `main` red with no author and made a bystander pay a whole
+    gate (a test renamed on another branch, a task checked off on another branch). Checked:
+    `bin/check.mjs:964-995` computes the static rows first and prints them after the sensors.
+    Taken, and further than it proposed: every state that depends on another file or another day
+    is counted and printed, and refuses nothing; the force moved to `failures check --settled`
+    in this contract.
+  - The refusal of a sighting later than its control emptied its own number: on a green tree it
+    was always zero. Taken: `seen again` is a state that is counted, with the `Was` lines.
+  - The count of one failure is its weakest part: two sessions that add a sighting conflict on
+    the same lines, two that name one failure differently make two entries, two that read one
+    record count it twice. Taken: the order of sightings is free, the same date and evidence
+    count once, and the design says the count by class is the one to trust.
+  - A control owed to a task number could not be written by a session that does not own the
+    document, and the design's own example named a task that no branch holds (`gate-log.md` has
+    T1 to T8, all checked: read at `odd/tasks/gate-log.md:304-331`). Taken: owed is a phrase of
+    an unchecked list item, and a repeated failure with nothing owed is a state, not a refusal.
+    The example now holds no task that could be read as a fact.
+  - The phrase would not have matched as written: this machine's files end their lines with a
+    carriage return and `AGENTS.md` wraps its sentences. Taken: white space is read as one space
+    on both sides, a phrase has a least length, a path is refused in the shapes `documentFault`
+    refuses.
+  - The reader of fields was not designed. Taken: "How a field is read".
+  - His "comprobar que esto no vuelva a fallar" was served less than the seed's proof column
+    did. Taken in part: the optional `Proof` field; the limit is said plainly.
+  - Cut on its advice: `--json`, the `node --test` hint, the refusal of sightings out of order.
+  - Stated as fact here and false, corrected: `harness.json` is tracked; `TOKEN_BUDGET` is at
+    line 21. Left as written, because it is a record of that day: `bin/check.mjs:513-560` in
+    failure 10 of the table below, which the review places at `:842-889` today (not read here).
+  - Not taken: stopping the gate before its sensors when a static row fails. It is right, and it
+    is the gate's code, which another session owns: passed to the orchestrator as a proposal.
+- 2026-10-11, from the orchestrator by message (claims, the first read here). `bin/check.mjs`
+  and `bin/js-harness.mjs` may be touched on this branch; three unmerged branches change the
+  same places (`feat/gate-log-file`, `feat/session-board-channel`, `feat/session-context`), so
+  the change stays at one import, one call, one usage line and one entry, and `main` is merged
+  in before the push. And a standing instruction of his (relief file, line 240, read: "si nos
+  llegamos a quedar sin uso de codex semanal, me avisas para yo implementar un reinicio"): a
+  Codex review that fails because the weekly use is spent is told to the orchestrator at once
+  with the error's text, and is not recorded as `--unavailable`. The lead's idea in that line,
+  for a later slice and not decided: a row that reads the Codex use left before a review is
+  planned.
 
 ## Next step
-T3a: the design of "The failures register" is read by a reader that did not write it, while a
-second reader lists every failure of the records with its sightings and the controls already on
-`origin/main`. Then T3b to T3d, test first, and the slice's two reviews. T1 follows. T2 and T8
+T3b to T3d, test first, by one writer, from the design above and from the list of failures a
+second reader is taking from the records (each with its sightings and the controls already on
+`origin/main`). Then the slice's two reviews. T1 follows. T2 and T8
 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of "What
 the hosts allow" that T2 rests on are confirmed with a logging hook.
