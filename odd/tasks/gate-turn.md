@@ -178,7 +178,15 @@ Not taken:
   own (`bin/gate.mjs:168`). The cost of leaving it: with gates of about fourteen minutes, a
   gate with four or more ahead reaches the sixty minutes while the line moves, is refused,
   and comes back at the end. The refusal says how many were ahead. Told to the orchestrator
-  as an open need, not built.
+  as an open need; placed by it back in this feature, in the slice of the line (T3), as a
+  design question this session settles with that slice's reader, and his only if it changes
+  what a user of the installed gate sees by default. The orchestrator's reading, its own and
+  not his words: the bound measures the time since the holder last changed. What that
+  reading must answer before it is taken: what `--wait` then means and where that is said
+  (`bin/check.mjs:892`, `:904-908`, `bin/lib/manifest.mjs:25`, `docs/ROADMAP.md:726`), which
+  is what a user sees; a holder that has no bound of its own (`js-harness gate --`); a gate
+  of an older version that passes the line and "changes the holder" each time; and the
+  message "for 54 s at most" that a review asked for. Open until T3.
 - A ticket number in a shared counter file (a second thing to lock); asking the system
   whether a waiter's pid is alive (the lock judges life by the beat everywhere, and a pid is
   reused); a release that hands the lock to the next gate by name (a dead heir holds
@@ -216,8 +224,12 @@ lock, samples the load and runs the sensors), then `review`, then the Codex debt
   one line of a fourth kind, `stopped`, with the rows that stopped it, and no `start`. For
   that, the reader of the log must leave out a kind it does not know without calling the
   line unreadable, before the format is on `main` and in the installed command: asked of
-  "JH 6" through the orchestrator. The count of `stopped` lines is the measure of what the
-  stop saves.
+  "JH 6" through the orchestrator, and answered yes (its claim, relayed 2026-10-11, to be
+  read in its commit when it lands): the reader of its second slice leaves out in silence a
+  line with a sound head (`v`, `id`, `at`) whose `event` it does not know, and still counts
+  a torn line. Its limit, which this design already meets by writing no `start`: an old
+  reader does not pair an end of a new kind with its start. The count of `stopped` lines is
+  the measure of what the stop saves.
 - Known and left: the static rows read the working tree before a wait that may last an hour,
   and are not read again after it; the sensors read the tree late in the same way today.
 
@@ -313,6 +325,13 @@ Slices: S1 is T2, now. S2 is T3 and S3 is T4 with T5, after the merges of "JH 6"
   2026-10-02, and that neither run printed an error of the sweep (the two transcripts, read
   with `rg` for the test's name). `feat/gate-log-file` changes `bin/check.test.mjs` at its
   lines 228 to 240, 1802 to 1838, 2352 and 2677 on, not at 1688.
+- 2026-10-11 · From the orchestrator, by message (claims): the line waits for the two merges
+  of "JH 6", taken; "JH 6" answered yes on the reader of the gate log; "JH 7" was told where
+  its rows stand; the bound of a wait came back to this feature as a question of T3. Two
+  facts it gave: he is away until about 18:20, and the plan's five-hour limit resets then,
+  so rounds of readers stay few until that hour (read here at 15:48: 64 percent used). T2's
+  writer runs. Spent so far on sub-agents: 448,533 tokens (explorer 168,928, reader
+  279,605).
 
 ## Next
 T2, through the lock for every test run. T3 to T5 wait for the orchestrator's word that the
