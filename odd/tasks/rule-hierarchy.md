@@ -22,8 +22,9 @@ not free: in F5 the stack with the most instructions cost 1.68 to 2.54 times as 
 score (`docs/ROADMAP.md`, "F5 result").
 
 The survey of 2026-10-10 (section "Survey" below) counted 83 rules. For 49 of them nothing acts:
-they live only in a memory note, in the orchestrator's relief file or as roadmap text. Fourteen
-pairs of places contradict each other.
+they live only in a memory note, in the orchestrator's relief file or as roadmap text. In
+fourteen matters two places say different things; each is listed, with the text that wins, in
+"Contradictions the build resolves".
 
 ## Done when
 - `npm run check` exits 0
@@ -31,7 +32,11 @@ pairs of places contradict each other.
 - `node --test bin/reply.test.mjs` exits 0
 - `node --test bin/lib/failures.test.mjs` exits 0
 - `node --test bin/lib/spec.test.mjs` exits 0
-- `node scripts/practice.mjs run --root D:\js-harness-practice` exits 0
+- `node --test scripts/practice-lib.test.mjs` exits 0
+- The practice journey, with this feature's steps in it, passes on the machine that builds it
+  (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
+  quoted in Progress. The folder is one machine's, so this is read, not a command of the
+  contract.
 - The seven signals of "Signals of done" below are read and recorded in Progress, each with the
   command that showed it.
 
@@ -285,8 +290,9 @@ The seven of the roadmap, each as something read and not judged.
 | No protocol without its incident | a test over the protocols skill: every section opens with a dated incident |
 
 ### Contradictions the build resolves
-Found by the survey; each names the text that wins. The first four are corrected in
-`docs/ROADMAP.md` by the design session's own pull request; the rest by the build.
+The fourteen the survey found; each names the text that wins. The first four are corrected in
+`docs/ROADMAP.md` by the design session's own pull request; the rest by the build, and T11 is
+done when each of the fourteen reads one way in every place that states it.
 
 1. Context limit: nothing stops for a percentage and a session pauses at 85% (his decision,
    2026-10-10) wins over the 73% of the roadmap, of the board (`bin/lib/sessions.mjs:20`) and of
@@ -309,6 +315,17 @@ Found by the survey; each names the text that wins. The first four are corrected
 10. Stale notes: `merge-from-chat` ("never merge on your own"), `mistake-report-four-parts`
     (titled four, holds five), `cross-session-prompts` (says the skill is the source, and the
     skill lacks those rules), the roadmap's count of twelve memory notes (seventeen).
+11. Clearing a session: a memory note forbids offering `/clear` as the cut, and the roadmap
+    proposes comparing a clean start with a compaction. The note holds until test 6 of
+    `odd/tasks/session-channel.md` is run; its result decides.
+12. Opening by paste: the roadmap and a memory note keep the pasted opening; the opening as a
+    file with one line of his (`odd/tasks/session-channel.md`, point 6) wins once built.
+13. One feature at a time (a proposal of 2026-10-09 he never answered) against up to three
+    work sessions (the charter he approved the same day): the charter wins, and the proposal
+    is withdrawn from the roadmap.
+14. Attribution in commits: the global `CLAUDE.md` forbids it and `AGENTS.md` is silent. The
+    global file wins and nothing is added here, since what the stack already says is not
+    repeated.
 
 ## Survey
 Taken on 2026-10-10 by a read-only sub-agent over `AGENTS.md`, the seventeen memory notes of the
@@ -480,6 +497,17 @@ the session channel, SB the next slice of the session board, GL `feat/gate-lock`
   `statusline.md`, `skills.md`, `commands.md`, `cross-session-messaging.md`, `cli-reference.md`,
   `remote-control.md`; `learn.chatgpt.com/docs/hooks`. Not retrieved: the full settings
   reference and the scheduled-tasks page.
+- 2026-10-10, delivery of the design. Commit `6d8bc82` holds both documents and the roadmap's
+  pointers; its gate ran 22:40:05 to 22:55:02 (897 s, one try, after waiting for a gate and two
+  test runs of other sessions to end). gentle-ai assessed it medium and due by size (895
+  lines); the review ran on the consent already granted, one lens (reliability), lineage
+  `review-ed901e320032842b`, approved and acknowledged. Its four findings were advisory and all
+  four were taken, in the commit after it: the exit codes of `sessions --address` (one code for
+  none and another for several, the caller never counted); the fourteen contradictions listed
+  one by one, so T11 can be counted; the roadmap's two sentences that still said "not started"
+  and "replaced by a pointer once it exists"; and the practice run bound to a folder of this
+  machine, which is now read and not a command of either contract. No Codex review: the range
+  holds no code (`check`, row `codex-review`: "no code commits since origin/main").
 
 ## Next step
 The build waits for the session channel to be merged. Its session opens this document, confirms

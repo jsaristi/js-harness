@@ -39,7 +39,11 @@ does not return (lines 143 and 145).
 - `node --test bin/lib/channel.test.mjs` exits 0
 - `node --test bin/notify.test.mjs` exits 0
 - `node --test bin/sessions.test.mjs` exits 0
-- `node scripts/practice.mjs run --root D:\js-harness-practice` exits 0
+- `node --test scripts/practice-lib.test.mjs` exits 0
+- The practice journey, with this feature's step in it, passes on the machine that builds it
+  (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
+  quoted in Progress. The folder is one machine's, so this is read, not a command of the
+  contract.
 - One real stretch on this machine, recorded in Progress: an orchestrator and two work sessions,
   one of them opened from the phone, in which he pastes no text between sessions and every
   notice is on the board.
@@ -152,8 +156,9 @@ the only channel a Codex session has.
 to the title `notify` printed. Three rules, each a count on the board instead of a sentence:
 
 - A message goes to the title of a role, never to the `from` of an earlier message. `js-harness
-  sessions --address <role>` prints the title of the one live session with that role and exits 1
-  when there is none or more than one.
+  sessions --address <role>` prints the title of the one session that holds the role and exits
+  0; it exits 1 when none holds it and 2 when more than one does, printing each. It never
+  counts the session that runs it, so the answer is always about the others.
 - A send that is held or fails is not retried: the record already holds the notice.
 - A relieved or finished session that receives a message answers with one line saying who has
   the role now.
@@ -172,8 +177,10 @@ replaces the roster the orchestrators rewrote by hand as a line of the relief fi
 
 ### 5. One orchestrator, checked
 `sessions --address orchestrator` is the check: a session that starts as orchestrator runs it
-first and refuses to start when another one answers; the board prints a line when two sessions
-carry the orchestrator's title. The handover of the title, done more than once on 2026-10-10
+first. Exit 1 (no other session holds the role) lets it start; exit 0 or 2 (another one does)
+makes it refuse, unless it was opened as that one's relief, which the opening says. A work
+session reads the same command the other way: only exit 0 gives it an address. The board prints
+a line when two sessions carry the orchestrator's title. The handover of the title, done more than once on 2026-10-10
 and written nowhere but the relief file, becomes four steps of the skill: the new one opens as
 `<code> ORQ nueva`; it reads the record, the relief file and the board, and asks the one before
 by message only what the files do not hold; on its "ready" the one before renames itself
@@ -371,6 +378,13 @@ next slice of the session board and are built with T4 here, since both change th
   in T3.
 - 2026-10-10, his decision still open, carried from the relief file (line 61): A or B for the
   permission classes. It is asked in the design session's chat; his answer is written here.
+- 2026-10-10, delivery of the design: commit `6d8bc82`, its gate and its review are recorded in
+  `odd/tasks/rule-hierarchy.md`, Progress. Two of the review's four findings were in this
+  document and are corrected: the exit codes of `sessions --address` (points 3 and 5), and the
+  practice run that was a command of the contract while bound to one machine's folder.
+- 2026-10-10, a finding for `feat/gate-lock`, passed to the orchestrator with the closing
+  notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
+  their proof.
 
 ## Next step
 The build waits for `feat/gate-lock` to be merged. Its session opens this document, runs the six

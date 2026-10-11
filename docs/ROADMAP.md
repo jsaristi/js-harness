@@ -316,10 +316,9 @@ place of each), the checks to build, the outline of the rewritten `AGENTS.md`, t
 and the list of that day's failures with the proof each one owes. This section stays as the
 reasoning it came from and is replaced by a pointer when the feature closes (its T14).
 
-A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08 and not started.
-That session opens `odd/tasks/rule-hierarchy.md`; this section is its starting point and is
-replaced by a pointer to that document once it exists. It sits outside the Next list only so
-that it does not collide with the items `feat/codex-review-cost` adds there.
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08; designed, not
+built. This section was the starting point of that document. It sits outside the Next list
+only so that it does not collide with the items `feat/codex-review-cost` adds there.
 
 He approved the design below on 2026-10-08, to be done in a new session with the main session
 told of it. What stays open is the detail that session works out, and each thing it ships is
@@ -566,12 +565,12 @@ recorded until now only in the orchestrator's relief file:
   states the limit seen the same day: such an answer does not approve a question still pending
   in a session whose host tells it that a message from another session approves nothing.
 
-A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09 and not started.
-It builds on the session board (`odd/tasks/session-board.md`) and starts after that feature is
-merged. The design below is the main session's proposal, put to him that day and approved by
-him ("me parece excelente tu propuesta"); point 6 answers the question he asked next. Each
-thing the feature ships is still his to decide then, and what he changes is written here
-before the feature document `odd/tasks/session-channel.md` opens.
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09; designed, not
+built. It builds on the session board (`odd/tasks/session-board.md`), which is merged. The
+design below is the main session's proposal, put to him that day and approved by him ("me
+parece excelente tu propuesta"); point 6 answers the question he asked next. Each thing the
+feature ships is still his to decide then; what he changes from here on is written in the
+feature document.
 
 The problem. Sessions that work side by side talk to each other only through him: a session
 that finishes hands him a block of text to paste into the orchestrator, and he carries it
