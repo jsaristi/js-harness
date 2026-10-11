@@ -6,11 +6,14 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { spawn as spawnChild } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, busiestBetween, busiestLines, busiestProcesses, parseProcStat, parseProcessReadings, scriptOf, splitCommandLine } from './machine-busiest.mjs';
+import { createReaper } from './process-tree.testkit.mjs';
+import { ASKED_FILE_ENV, BUSIEST_ASK_BOUND_MS, BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, busiestBetween, busiestLines, busiestProcesses, isFileOnDisk, parseProcStat, parseProcessReadings, scriptOf, splitCommandLine } from './machine-busiest.mjs';
 
 // What loads a loaded machine: every process's CPU time read twice, the difference taken, and the three
-// that spent most named by program and script. Every test but the last reads recorded output through
-// stand-ins: none starts PowerShell or reads `/proc`. The last one runs the real look of this machine.
+// that spent most named by program and script. The tests of the look read recorded output through
+// stand-ins: none starts PowerShell or reads `/proc`, and the disk they ask is a stand-in too. The real
+// disk is asked where a test says so, by the Node process a question starts, and the last test runs the
+// real look of this machine.
 
 test('splitCommandLine splits a Windows command line at the spaces outside its double quotes', () => {
   assert.deepEqual(splitCommandLine('node --max-old-space-size=4096 C:\\x\\tsserver.js'), ['node', '--max-old-space-size=4096', 'C:\\x\\tsserver.js']);
@@ -34,89 +37,89 @@ function disk(...files) {
 /** A disk on which whatever is asked is a file: what is not named on it is not named for its form. */
 const anyFile = () => true;
 
-test('scriptOf gives the base name of the first argument that is not an option, where that is the whole path of a file that exists', () => {
+test('scriptOf gives the base name of the first argument that is not an option, where that is the whole path of a file that exists', async () => {
   const windows = (line, isFile, name = 'node') => scriptOf(splitCommandLine(line), name, { windows: true, isFile });
-  assert.equal(windows('node --max-old-space-size=4096 C:\\x\\tsserver.js', disk('C:\\x\\tsserver.js')), 'tsserver.js');
-  assert.equal(windows('"C:\\Program Files\\nodejs\\node.exe" "D:\\my project\\run tests.mjs" --watch', disk('D:\\my project\\run tests.mjs')), 'run tests.mjs');
+  assert.equal(await windows('node --max-old-space-size=4096 C:\\x\\tsserver.js', disk('C:\\x\\tsserver.js')), 'tsserver.js');
+  assert.equal(await windows('"C:\\Program Files\\nodejs\\node.exe" "D:\\my project\\run tests.mjs" --watch', disk('D:\\my project\\run tests.mjs')), 'run tests.mjs');
   // A drive letter with either slash. The path of a share is never asked of the disk, and so never named:
-  // asking a share that does not answer can take the seconds in which the gate's lock has to beat.
-  assert.equal(windows('node D:/proj/bin/check.mjs --cwd D:/proj', disk('D:/proj/bin/check.mjs')), 'check.mjs');
+  // to ask, this machine would turn to whatever server the argument names.
+  assert.equal(await windows('node D:/proj/bin/check.mjs --cwd D:/proj', disk('D:/proj/bin/check.mjs')), 'check.mjs');
   const share = disk('\\\\build\\tools\\bin\\pack.cmd');
-  assert.equal(windows('cmd.exe /c \\\\build\\tools\\bin\\pack.cmd', share, 'cmd'), null);
+  assert.equal(await windows('cmd.exe /c \\\\build\\tools\\bin\\pack.cmd', share, 'cmd'), null);
   assert.deepEqual(share.asked, []);
   // The first one, whatever comes after it: the disk is asked about that one alone.
   const first = disk('D:\\proj\\bin\\check.test.mjs', 'D:\\proj\\bin\\gate.test.mjs');
-  assert.equal(windows('node --test D:\\proj\\bin\\check.test.mjs D:\\proj\\bin\\gate.test.mjs', first), 'check.test.mjs');
+  assert.equal(await windows('node --test D:\\proj\\bin\\check.test.mjs D:\\proj\\bin\\gate.test.mjs', first), 'check.test.mjs');
   assert.deepEqual(first.asked, ['D:\\proj\\bin\\check.test.mjs']);
   // Options alone, or no argument at all: the name of the program is all there is to say.
   const unasked = disk();
-  assert.equal(windows('"C:\\Program Files\\Google\\Chrome\\chrome.exe" --type=renderer --lang=es', unasked, 'chrome'), null);
-  assert.equal(windows('node', unasked), null);
-  assert.equal(windows('', unasked), null);
+  assert.equal(await windows('"C:\\Program Files\\Google\\Chrome\\chrome.exe" --type=renderer --lang=es', unasked, 'chrome'), null);
+  assert.equal(await windows('node', unasked), null);
+  assert.equal(await windows('', unasked), null);
   assert.deepEqual(unasked.asked, []);
   // A switch of Windows is an option too.
-  assert.equal(windows('cmd.exe /d /s /c C:\\work\\build.cmd', disk('C:\\work\\build.cmd'), 'cmd'), 'build.cmd');
+  assert.equal(await windows('cmd.exe /d /s /c C:\\work\\build.cmd', disk('C:\\work\\build.cmd'), 'cmd'), 'build.cmd');
   // The program's own name is not said twice.
-  assert.equal(windows('"C:\\nodejs\\node.exe" C:\\nodejs\\node.exe', anyFile), null);
+  assert.equal(await windows('"C:\\nodejs\\node.exe" C:\\nodejs\\node.exe', anyFile), null);
   // Elsewhere a whole path starts with a slash, and the arguments come already split: a space is part of a name.
-  assert.equal(scriptOf(['/usr/bin/node', '/srv/app.js'], 'node', { isFile: disk('/srv/app.js') }), 'app.js');
-  assert.equal(scriptOf(['python3', '-u', '/home/me/my tools/serve files.py', '--port', '8000'], 'python3', { isFile: disk('/home/me/my tools/serve files.py') }), 'serve files.py');
+  assert.equal(await scriptOf(['/usr/bin/node', '/srv/app.js'], 'node', { isFile: disk('/srv/app.js') }), 'app.js');
+  assert.equal(await scriptOf(['python3', '-u', '/home/me/my tools/serve files.py', '--port', '8000'], 'python3', { isFile: disk('/home/me/my tools/serve files.py') }), 'serve files.py');
 });
 
 // Found by the Codex review of the slice: `-p P@ssword.123` was said whole, since a credential with a dot
 // in it is spelled as a file name is. What the spelling cannot tell, the disk can.
-test('scriptOf says nothing of an argument that is not the whole path of a file that exists, however it is spelled', () => {
+test('scriptOf says nothing of an argument that is not the whole path of a file that exists, however it is spelled', async () => {
   const said = (args, options) => scriptOf(['tool', ...args], 'tool', options);
   for (const isFile of [undefined, anyFile]) {
     for (const windows of [false, true]) {
       const options = { windows, ...(isFile && { isFile }) };
       // The value of an option, and a secret with no option before it.
-      assert.equal(said(['-p', 'P@ssword.123'], options), null);
-      assert.equal(said(['P@ssword.123'], options), null);
-      assert.equal(said(['-p', 'hunter2'], options), null);
-      assert.equal(said(['-H', 'Authorization: Bearer abc.def.ghi', 'https://example.com/x.json'], options), null);
-      assert.equal(said(['postgres://me:secret@db.example.com'], options), null);
-      assert.equal(said(['https://me:secret@example.com/tools/install.sh'], options), null);
-      assert.equal(said(['TOKEN=abc.def'], options), null);
+      assert.equal(await said(['-p', 'P@ssword.123'], options), null);
+      assert.equal(await said(['P@ssword.123'], options), null);
+      assert.equal(await said(['-p', 'hunter2'], options), null);
+      assert.equal(await said(['-H', 'Authorization: Bearer abc.def.ghi', 'https://example.com/x.json'], options), null);
+      assert.equal(await said(['postgres://me:secret@db.example.com'], options), null);
+      assert.equal(await said(['https://me:secret@example.com/tools/install.sh'], options), null);
+      assert.equal(await said(['TOKEN=abc.def'], options), null);
       // A path from the folder the process runs in, which the look does not know.
-      for (const relative of ['server.js', './server.js', '..\\app\\server.js', 'bin/check.mjs', 'C:server.js']) assert.equal(said([relative], options), null, relative);
+      for (const relative of ['server.js', './server.js', '..\\app\\server.js', 'bin/check.mjs', 'C:server.js']) assert.equal(await said([relative], options), null, relative);
     }
   }
   // A whole path of the other system is none of this one, whatever the disk says.
-  assert.equal(said(['/work/app/server.js'], { windows: true, isFile: anyFile }), null);
-  assert.equal(said(['\\work\\app\\server.js'], { windows: true, isFile: anyFile }), null);
-  assert.equal(said(['\\\\build\\pack.cmd'], { windows: true, isFile: anyFile }), null);
-  assert.equal(said(['C:\\x\\tsserver.js'], { isFile: anyFile }), null);
-  assert.equal(said(['\\\\build\\tools\\pack.cmd'], { isFile: anyFile }), null);
+  assert.equal(await said(['/work/app/server.js'], { windows: true, isFile: anyFile }), null);
+  assert.equal(await said(['\\work\\app\\server.js'], { windows: true, isFile: anyFile }), null);
+  assert.equal(await said(['\\\\build\\pack.cmd'], { windows: true, isFile: anyFile }), null);
+  assert.equal(await said(['C:\\x\\tsserver.js'], { isFile: anyFile }), null);
+  assert.equal(await said(['\\\\build\\tools\\pack.cmd'], { isFile: anyFile }), null);
 
   // A whole path that names no file: one that is missing, a folder, and a disk that cannot be asked.
   const missing = disk('/srv/other.js');
-  assert.equal(said(['/srv/app.js'], { isFile: missing }), null);
+  assert.equal(await said(['/srv/app.js'], { isFile: missing }), null);
   assert.deepEqual(missing.asked, ['/srv/app.js']);
-  assert.equal(said(['C:\\x\\tsserver.js'], { windows: true, isFile: disk() }), null);
+  assert.equal(await said(['C:\\x\\tsserver.js'], { windows: true, isFile: disk() }), null);
   const threw = () => {
     throw Object.assign(new Error("EACCES: permission denied, stat '/srv/app.js'"), { code: 'EACCES' });
   };
-  assert.equal(said(['/srv/app.js'], { isFile: threw }), null);
-  assert.equal(said(['C:\\x\\tsserver.js'], { windows: true, isFile: threw }), null);
+  assert.equal(await said(['/srv/app.js'], { isFile: threw }), null);
+  assert.equal(await said(['C:\\x\\tsserver.js'], { windows: true, isFile: threw }), null);
 
   // A file that exists is still said only by a name that reads as one, of 64 characters at most.
-  assert.equal(said(['/srv/app'], { isFile: anyFile }), null);
-  assert.equal(said(['/srv/key: abc.def'], { isFile: anyFile }), null);
-  assert.equal(said([`/srv/${'a'.repeat(70)}.js`], { isFile: anyFile }), null);
-  assert.equal(said(['/srv/año nuevo.py'], { isFile: anyFile }), 'año nuevo.py');
+  assert.equal(await said(['/srv/app'], { isFile: anyFile }), null);
+  assert.equal(await said(['/srv/key: abc.def'], { isFile: anyFile }), null);
+  assert.equal(await said([`/srv/${'a'.repeat(70)}.js`], { isFile: anyFile }), null);
+  assert.equal(await said(['/srv/año nuevo.py'], { isFile: anyFile }), 'año nuevo.py');
 });
 
-test('scriptOf asks the real disk unless it is handed another: a file by its whole path is named, a missing one, a folder and the same file by a relative path are not', () => {
+test('scriptOf asks the real disk unless it is handed another: a file by its whole path is named, a missing one, a folder and the same file by a relative path are not', async () => {
   const windows = process.platform === 'win32';
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-script-'));
   try {
     const file = path.join(dir, 'serves pages.mjs');
     fs.writeFileSync(file, '');
     fs.mkdirSync(path.join(dir, 'a folder.js'));
-    assert.equal(scriptOf(['node', file], 'node', { windows }), 'serves pages.mjs');
-    assert.equal(scriptOf(['node', path.join(dir, 'gone.mjs')], 'node', { windows }), null);
-    assert.equal(scriptOf(['node', path.join(dir, 'a folder.js')], 'node', { windows }), null);
+    assert.equal(await scriptOf(['node', file], 'node', { windows }), 'serves pages.mjs');
+    assert.equal(await scriptOf(['node', path.join(dir, 'gone.mjs')], 'node', { windows }), null);
+    assert.equal(await scriptOf(['node', path.join(dir, 'a folder.js')], 'node', { windows }), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -125,8 +128,8 @@ test('scriptOf asks the real disk unless it is handed another: a file by its who
   // On Windows there is no relative path to another drive, and nothing to try then.
   if (path.isAbsolute(relative)) return;
   assert.equal(fs.statSync(relative).isFile(), true);
-  assert.equal(scriptOf(['node', relative], 'node', { windows }), null);
-  assert.equal(scriptOf(['node', path.resolve(relative)], 'node', { windows }), 'machine-busiest.test.mjs');
+  assert.equal(await scriptOf(['node', relative], 'node', { windows }), null);
+  assert.equal(await scriptOf(['node', path.resolve(relative)], 'node', { windows }), 'machine-busiest.test.mjs');
 });
 
 const proc = (pid, name, cpuSeconds) => ({ pid, name, cpuSeconds });
@@ -478,6 +481,279 @@ test('on any other system nobody is named, and nothing is started or read', asyn
   assert.deepEqual([fake.read, fake.slept], [[], []]);
 });
 
+// Found by the Codex review of the slice: the disk was asked with a call that does not return until it is
+// answered, and a script on a mapped drive or a mount whose server is away keeps such a call for many
+// seconds, in which the lock of the gate that looks cannot beat. So the look waits for the disk as it
+// waits for its helper: for a bounded time, with the event loop free.
+
+/** A `/proc` of programs named `node`, each `[pid, ticks, script]`: it spent `ticks` hundredths of a
+ * second between the two readings, and runs `script`, given by its whole path. */
+function scripted(...programs) {
+  const reading = (spent) => Object.fromEntries(programs.map(([pid, ticks]) => [`/proc/${pid}/stat`, stat(pid, 'node', spent ? ticks : 0, 0)]));
+  const commandLines = Object.fromEntries(programs.map(([pid, , script]) => [`/proc/${pid}/cmdline`, `/usr/bin/node\0${script}\0`]));
+  return fakeProc(reading(false), { ...reading(true), ...commandLines });
+}
+
+/** A disk that never answers about `silent`, and says of any other file, a turn of the loop later, that
+ * it is one. It keeps what it was asked and what it was handed to be told when the look gives up. */
+function silentAbout(silent) {
+  const isFile = (file, options) => {
+    isFile.asked.push(file);
+    isFile.handed.push(options);
+    return file === silent ? new Promise(() => {}) : new Promise((resolve) => {
+      setImmediate(resolve, true);
+    });
+  };
+  isFile.asked = [];
+  isFile.handed = [];
+  return isFile;
+}
+
+test('a disk that does not answer costs the look a short bound and no more: that process is named without its script, the others with theirs', async () => {
+  // A second for all the questions of a look, inside the ten of the look.
+  assert.equal(BUSIEST_ASK_BOUND_MS, 1000);
+  assert.ok(BUSIEST_ASK_BOUND_MS < BUSIEST_BOUND_MS - BUSIEST_LOOK_MS);
+  const fake = scripted([600, 320, '/mnt/share/serve.js'], [700, 160, '/srv/app.js']);
+  const isFile = silentAbout('/mnt/share/serve.js');
+  const startedAt = Date.now();
+  const busiest = await linuxLook(fake, { isFile, askBoundMs: 40 });
+  const took = Date.now() - startedAt;
+  assert.deepEqual(busiest, [
+    { name: 'node', script: null, pid: 600, cpuSeconds: 3.2 },
+    { name: 'node', script: 'app.js', pid: 700, cpuSeconds: 1.6 },
+  ]);
+  assert.deepEqual(isFile.asked, ['/mnt/share/serve.js', '/srv/app.js']);
+  // The bound was waited for, and nothing longer than it.
+  assert.ok(took >= 30 && took < 2000, `the look took ${took} ms`);
+  // Whoever asks is told that the look gave up, so that a question still open can be let go.
+  assert.deepEqual(isFile.handed.map((options) => options?.signal?.aborted), [true, true]);
+
+  // The questions fit inside the bound of the whole look, whatever their own bound is.
+  const late = silentAbout('/mnt/share/serve.js');
+  const lateStartedAt = Date.now();
+  assert.deepEqual((await linuxLook(scripted([600, 320, '/mnt/share/serve.js']), { isFile: late, boundMs: 40, askBoundMs: 60_000 })).map(({ pid, script }) => [pid, script]), [[600, null]]);
+  assert.ok(Date.now() - lateStartedAt < 2000);
+
+  // On Windows as well, where the helper has ended by the time the disk is asked.
+  const { child, spawn } = helper((helped) => {
+    helped.once('asked', () => {
+      helped.stdout.emit('data', recorded(...COMMAND_LINES));
+      helped.emit('close', 0);
+    });
+    helped.stdout.emit('data', recorded(...READINGS));
+  });
+  const tsserver = 'C:\\Users\\me\\my project\\node_modules\\typescript\\lib\\tsserver.js';
+  const mapped = silentAbout(tsserver);
+  const windowsStartedAt = Date.now();
+  assert.deepEqual((await windowsLook(spawn, { ownPid: 31337, isFile: mapped, askBoundMs: 40 })).map(({ name, script }) => [name, script]), [['node', null], ['chrome', null], ['Memory Compression', null]]);
+  assert.ok(Date.now() - windowsStartedAt < 2000);
+  assert.deepEqual(mapped.asked, [tsserver]);
+  assert.equal(child.killed, 0);
+});
+
+test('a disk that fails to answer, or answers anything but yes, names no script', async () => {
+  const look = async (isFile) => (await linuxLook(scripted([600, 320, '/srv/app.js'], [700, 160, '/srv/other.js']), { isFile, askBoundMs: 40 })).map(({ pid, script }) => [pid, script]);
+  const denied = () => Object.assign(new Error("EACCES: permission denied, stat '/srv/app.js'"), { code: 'EACCES' });
+  // A question that fails later, and one that fails at once.
+  assert.deepEqual(await look(() => Promise.reject(denied())), [[600, null], [700, null]]);
+  assert.deepEqual(await look(() => {
+    throw denied();
+  }), [[600, null], [700, null]]);
+  // One question that fails takes no other with it.
+  assert.deepEqual(await look((file) => (file === '/srv/app.js' ? Promise.reject(denied()) : Promise.resolve(true))), [[600, null], [700, 'other.js']]);
+  // Only a plain yes is one.
+  for (const answer of [false, undefined, null, 'yes', 1, {}]) assert.deepEqual(await look(() => Promise.resolve(answer)), [[600, null], [700, null]], String(answer));
+  assert.deepEqual(await look(() => Promise.resolve(true)), [[600, 'app.js'], [700, 'other.js']]);
+});
+
+test('while the disk is asked the event loop is free: a timer fires before the look is over', async () => {
+  let fired = 0;
+  const beat = setInterval(() => {
+    fired += 1;
+  }, 5);
+  try {
+    const slow = () => new Promise((resolve) => {
+      setTimeout(resolve, 60, true);
+    });
+    const busiest = await linuxLook(scripted([600, 320, '/srv/app.js']), { isFile: slow });
+    assert.deepEqual(busiest.map(({ script }) => script), ['app.js']);
+    // As the lock of a gate beats: by a timer of this process, which a call that waits for the disk would hold.
+    assert.ok(fired >= 1, `the timer fired ${fired} times`);
+  } finally {
+    clearInterval(beat);
+  }
+});
+
+test('the disk is asked about the three processes that are named, and about no other of the machine', async () => {
+  const fake = scripted([610, 50, '/srv/one.js'], [620, 400, '/srv/two.js'], [630, 10, '/srv/three.js'], [640, 300, '/srv/four.js'], [650, 200, '/srv/five.js']);
+  const asked = [];
+  const isFile = async (file) => {
+    asked.push(file);
+    return file !== '/srv/four.js';
+  };
+  assert.deepEqual((await linuxLook(fake, { isFile })).map(({ pid, script }) => [pid, script]), [[620, 'two.js'], [640, null], [650, 'five.js']]);
+  assert.deepEqual(asked, ['/srv/two.js', '/srv/four.js', '/srv/five.js']);
+  assert.deepEqual(fake.read.filter((file) => file.endsWith('/cmdline')), ['/proc/620/cmdline', '/proc/640/cmdline', '/proc/650/cmdline']);
+
+  // A helper of Windows that says more command lines than it was asked for: the others are not looked at.
+  const { spawn } = helper((helped) => {
+    helped.once('asked', () => {
+      helped.stdout.emit('data', recorded(...COMMAND_LINES, 'c\t7000\t"C:\\tools\\Code.exe" C:\\tools\\main.js', 'c\t5000\t"C:\\tools\\git.exe" C:\\tools\\hook.cmd'));
+      helped.emit('close', 0);
+    });
+    helped.stdout.emit('data', recorded(...READINGS));
+  });
+  const windowsAsked = [];
+  const windowsDisk = async (file) => {
+    windowsAsked.push(file);
+    return true;
+  };
+  assert.deepEqual((await windowsLook(spawn, { ownPid: 31337, isFile: windowsDisk })).map(({ name, script }) => [name, script]), [['node', 'tsserver.js'], ['chrome', null], ['Memory Compression', null]]);
+  assert.deepEqual(windowsAsked, ['C:\\Users\\me\\my project\\node_modules\\typescript\\lib\\tsserver.js']);
+});
+
+test('the real disk is asked by a Node process of its own, which finds the path in its environment and says yes or no', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-ask-'));
+  try {
+    // A name with a space and a letter outside ASCII, which have to reach the other process whole.
+    const file = path.join(dir, 'año nuevo.mjs');
+    fs.writeFileSync(file, '');
+    const started = [];
+    const spawn = (command, args, options) => {
+      started.push({ command, args, options });
+      return spawnChild(command, args, options);
+    };
+    assert.equal(await isFileOnDisk(file, { spawn }), true);
+    assert.equal(await isFileOnDisk(dir, { spawn }), false);
+    assert.equal(await isFileOnDisk(path.join(dir, 'gone.mjs'), { spawn }), false);
+    assert.equal(started.length, 3);
+    assert.deepEqual(started.map(({ options }) => options.env[ASKED_FILE_ENV]), [file, dir, path.join(dir, 'gone.mjs')]);
+    for (const { command, args, options } of started) {
+      assert.equal(command, process.execPath);
+      // The same command line whatever is asked: nothing of another process's command line is in it.
+      assert.deepEqual(args, started[0].args);
+      assert.equal(args.join(' ').includes('js-harness-ask-'), false);
+      // Nothing is written to it: a process that does not read would hold whoever waits for it to.
+      assert.deepEqual(options.stdio, ['ignore', 'pipe', 'ignore']);
+      assert.equal(options.windowsHide, true);
+      // The rest of its environment is this process's, with which it finds what Node needs to start.
+      assert.equal(options.env.PATH ?? options.env.Path, process.env.PATH ?? process.env.Path);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  // Through a stand-in for that process: only `1` from one that ended well is a yes.
+  const says = async (play) => {
+    const { spawn } = helper(play);
+    const is = await isFileOnDisk('/srv/app.js', { spawn });
+    assert.deepEqual(spawn.asked.map(({ options }) => options.env[ASKED_FILE_ENV]), ['/srv/app.js']);
+    return is;
+  };
+  const prints = (printed, code) => (helped) => {
+    helped.stdout.emit('data', printed);
+    helped.emit('close', code);
+  };
+  assert.equal(await says(prints('1', 0)), true);
+  for (const [printed, code] of [['0', 0], ['1', 1], ['1', null], ['11', 0], ['1\n', 0], ['yes', 0]]) assert.equal(await says(prints(printed, code)), false, `${JSON.stringify(printed)} and ${code}`);
+  assert.equal(await says((helped) => helped.emit('close', 0)), false);
+  assert.equal(await says((helped) => helped.emit('error', Object.assign(new Error('spawn node ENOENT'), { code: 'ENOENT' }))), false);
+  // A process that cannot be started is no answer either, and none is started for a look that is over.
+  assert.equal(await isFileOnDisk('/srv/app.js', { spawn: neverSpawned }), false);
+  let starts = 0;
+  const over = new AbortController();
+  over.abort();
+  assert.equal(await isFileOnDisk('/srv/app.js', { signal: over.signal, spawn: () => {
+    starts += 1;
+    throw new Error('a process was started');
+  } }), false);
+  assert.equal(starts, 0);
+});
+
+test('a question that is given up is answered no at once, and the process that was asked is killed', async () => {
+  // A real process that reads nothing and never answers, as one that waits for a server that is away.
+  const asked = [];
+  const neverAnswers = (command, args, options) => {
+    const child = spawnChild(command, ['-e', 'setInterval(() => {}, 1000)'], options);
+    asked.push(child);
+    return child;
+  };
+  const asking = new AbortController();
+  const answer = isFileOnDisk('/mnt/share/serve.js', { signal: asking.signal, spawn: neverAnswers });
+  const [child] = asked;
+  const ended = new Promise((resolve) => {
+    child.once('exit', (code, signal) => resolve({ code, signal }));
+  });
+  let fired = 0;
+  const beat = setInterval(() => {
+    fired += 1;
+  }, 5);
+  setTimeout(() => asking.abort(), 60);
+  try {
+    assert.equal(await answer, false);
+  } finally {
+    clearInterval(beat);
+  }
+  // The question held no timer of this process while it was open.
+  assert.ok(fired >= 1, `the timer fired ${fired} times`);
+  assert.equal(child.killed, true);
+  assert.equal(child.stdout.destroyed, true);
+  // It did end: nothing is left behind where the system lets a process be killed.
+  const { code } = await ended;
+  assert.notEqual(code, 0);
+});
+
+test('a question that is given up keeps its process neither running nor from ending, even where the process asked will not die', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-ask-'));
+  // A process of its own, which asks, gives up after 50 ms and has then nothing left to do: what ends it
+  // is that nothing holds its event loop. The process it asks never answers, cannot be killed by it, and
+  // lives for twenty seconds unless this test ends it first.
+  const script = path.join(dir, 'asks and ends.mjs');
+  fs.writeFileSync(script, [
+    "import { spawn } from 'node:child_process';",
+    `import { isFileOnDisk } from ${JSON.stringify(new URL('./machine-busiest.mjs', import.meta.url).href)};`,
+    'const stubborn = (command, args, options) => {',
+    "  const child = spawn(command, ['-e', 'setTimeout(() => {}, 20000)'], options);",
+    '  child.kill = () => false;',
+    '  console.log(child.pid);',
+    '  return child;',
+    '};',
+    'const asking = new AbortController();',
+    "const answer = isFileOnDisk('/mnt/share/serve.js', { signal: asking.signal, spawn: stubborn });",
+    'setTimeout(() => asking.abort(), 50);',
+    'console.log(await answer);',
+    '',
+  ].join('\n'));
+  const startedAt = Date.now();
+  const asker = spawnChild(process.execPath, [script], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let printed = '';
+  let errors = '';
+  asker.stdout.setEncoding('utf8').on('data', (chunk) => {
+    printed += chunk;
+  });
+  asker.stderr.setEncoding('utf8').on('data', (chunk) => {
+    errors += chunk;
+  });
+  const code = await new Promise((resolve) => {
+    asker.once('close', resolve);
+  });
+  const took = Date.now() - startedAt;
+  const [pid, answer] = printed.trim().split(/\r?\n/);
+  try {
+    assert.equal(code, 0, errors);
+    assert.match(pid ?? '', /^\d+$/, printed);
+    assert.equal(answer, 'false');
+    // It ended, pipes and all, long before the process it had asked would have: it did not wait for it.
+    // By the clock and not by whether that process still runs: Windows ends it with the one that started it.
+    assert.ok(took < 10_000, `the process that asked ended after ${took} ms`);
+  } finally {
+    // The process that was asked is known here by its number alone, which Windows may have given to another
+    // since: the shared teardown stops it only if it started after this test did.
+    if (/^\d+$/.test(pid ?? '')) createReaper().reap([Number(pid)], { since: startedAt });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('busiestLines says each of the busiest in one line: its processor seconds in the look, program, script and pid', () => {
   const busiest = [
     { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
@@ -501,9 +777,17 @@ test('the real look of this machine names at most three processes, the busiest f
   assert.equal(path.isAbsolute(script), true);
   fs.writeFileSync(script, 'const until = Date.now() + 15000;\nwhile (Date.now() < until);\n');
   const spinner = spawnChild(process.execPath, [script], { stdio: 'ignore' });
+  // The real disk, with what it said of the script kept: the process that is asked has a bound of its own,
+  // which a host as busy as the suite keeps this one can make it miss, as the helper can miss its own.
+  let saidAFile = false;
+  const isFile = async (file, options) => {
+    const is = await isFileOnDisk(file, options);
+    if (file === script) saidAFile = is;
+    return is;
+  };
   try {
     const startedAt = Date.now();
-    const busiest = await busiestProcesses();
+    const busiest = await busiestProcesses({ isFile });
     const took = Date.now() - startedAt;
     assert.ok(Array.isArray(busiest) && busiest.length <= 3, JSON.stringify(busiest));
     for (const { name, script: said, pid, cpuSeconds } of busiest) {
@@ -523,9 +807,10 @@ test('the real look of this machine names at most three processes, the busiest f
     // failure of this test. Where it did name somebody, it lasted its two seconds.
     if (busiest.length === 0) return;
     assert.ok(took >= BUSIEST_LOOK_MS - 100, `the look took ${took} ms`);
-    // Where the process that spins is among the three, it is named by its script and not by its folder.
+    // Where the process that spins is among the three, it is named by its script and not by its folder,
+    // once the disk has said in time that the script is a file, and by its program alone until then.
     const own = busiest.find(({ pid }) => pid === spinner.pid);
-    if (own) assert.equal(own.script, 'spins for the look.mjs', JSON.stringify(own));
+    if (own) assert.equal(own.script, saidAFile ? 'spins for the look.mjs' : null, JSON.stringify(own));
   } finally {
     spinner.kill();
     await new Promise((resolve) => {

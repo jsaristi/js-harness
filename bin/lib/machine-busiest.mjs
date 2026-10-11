@@ -23,8 +23,21 @@
 // cannot be told from a file name by its spelling, and it is no file on the disk. So a script given by a
 // path relative to its process's folder is not named, and that process reads by its program alone.
 //
+// Whether a path names a file is asked of the disk, and a disk can be a server that is away: a mapped
+// drive of Windows, a mount of Linux, a link into either, none of which the spelling of a path shows. A
+// call to the file system made by this process is then kept for as long as the server is silent. One that
+// does not return holds the event loop, on which the lock of the gate that looks beats: after a minute
+// without a beat another gate takes the lock, and two run at once. One that leaves the loop free
+// (`fs.promises`) keeps a thread of Node's pool instead, and Node waits for that thread before the process
+// may end, in `process.exit` as well: measured 2026-10-11 on Node 24.15 with a read of a pipe nobody wrote
+// to, the process ended when the pipe did, five seconds after its `exit` event. So each question is asked
+// by a process of its own (`isFileOnDisk`), which can be killed and left behind, and the look waits one
+// second at most for all its questions together (`BUSIEST_ASK_BOUND_MS`): a script whose disk has not
+// answered by then is not named.
+//
 // Best effort throughout. A helper that is missing, fails, prints what cannot be read or does not answer
-// within ten seconds names nobody, and so does a `/proc` that cannot be read: `busiestProcesses` never
+// within ten seconds names nobody, and so does a `/proc` that cannot be read. A question to the disk that
+// fails, or is not answered in its time, names the process without a script. `busiestProcesses` never
 // rejects, because nothing a gate proves depends on it.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,6 +50,12 @@ export const BUSIEST_LOOK_MS = 2000;
 /** How long the helper of Windows may take for the whole look before it is killed: on a loaded machine
  * PowerShell alone can take seconds to start. */
 export const BUSIEST_BOUND_MS = 10_000;
+
+/** How long the disk may take to say which scripts are files, for all the questions of one look together,
+ * and within `BUSIEST_BOUND_MS` as the rest of the look. A question costs what a Node process costs to
+ * start: on this machine 0.3 s with eight of eight logical processors busy, and 0.4 s for three at once
+ * (2026-10-11). A server that is away takes many seconds to say so, and no gate waits that long for a name. */
+export const BUSIEST_ASK_BOUND_MS = 1000;
 
 // How many processes are named, and from how much processor time on: less would print as `0.0 s`.
 const NAMED = 3;
@@ -74,39 +93,94 @@ export function splitCommandLine(line) {
 const FILE_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_ .+@-]*\.[A-Za-z0-9]{1,8}$/u;
 
 // A whole path, which names one file wherever the process runs: on Windows from a drive letter, elsewhere
-// from the root. Not the path of a share (`\\server\share\`): the disk is asked with a call that does not
-// return until it is answered, a share that does not answer can keep it for many seconds, and in those the
-// lock of the gate that looks does not beat. A script on a share is not named.
+// from the root. Not the path of a share (`\\server\share\`): to ask about it, this machine would open a
+// connection to whatever server an argument of another process names, and offer it the user's sign-in. A
+// script on a share is not named. A mapped drive is spelled as a disk of the machine and is asked about,
+// which is why the question has to be one a silent server cannot hold (`isFileOnDisk`).
 const WINDOWS_WHOLE_PATH = /^[A-Za-z]:[\\/]/;
 const isWholePath = (argument, windows) => (windows ? WINDOWS_WHOLE_PATH.test(argument) : argument.startsWith('/'));
 
-/** Whether `file` is a file on this machine's disk. It throws where there is nothing of that name. */
-const isFileOnDisk = (file) => fs.statSync(file).isFile();
+/** The variable in which the process that is asked finds the path. In its environment and not in its
+ * command line, so that nothing of another process's command line is put into a new one, which any process
+ * of the machine may read. And not by its standard input: on Windows the end of what was written to a pipe
+ * waits until the other side has read it, so a process that hangs before it reads, and does not die, holds
+ * the one that wrote (measured 2026-10-11: that one ended eight seconds late, with the one it had asked). */
+export const ASKED_FILE_ENV = 'JS_HARNESS_ASKED_FILE';
 
-/** The script a process runs, from its arguments (`args[0]` is the program): the base name of the first
- * one that is not an option, so that a language server reads `node tsserver.js` and not `node`. An option
- * starts with `-`, and with `windows` a switch such as `/c` is one too. `null` where there is none.
+// What the process that is asked runs: it prints `1` where the disk holds a file at that path, `0` where it
+// holds none or cannot be asked. The call that does not return until the disk answers is made there, where
+// it holds that process and nothing of a gate. In single quotes, being one argument of a command line.
+const ASK_SCRIPT = `let is = false; try { is = require('node:fs').statSync(process.env.${ASKED_FILE_ENV}).isFile() } catch {} process.stdout.write(is ? '1' : '0')`;
+
+/** Whether `file` is a file on this machine's disk, asked by a Node process of its own (see the head of
+ * this file for why not by this one): resolves to `true` or `false` and never rejects. `false` as well
+ * where that process cannot be started, fails or prints anything else.
+ *
+ * When `signal` aborts the question is given up and answered `false`: the process is killed and let go of
+ * with its pipe, so that one that is slow to die, as one that waits for a server may be, keeps neither the
+ * event loop nor the end of this process. Without a `signal` the answer is waited for, however long it
+ * takes. `spawn` stands in for the system in a test. */
+export function isFileOnDisk(file, { signal, spawn = spawnChild } = {}) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(false);
+      return;
+    }
+    let child;
+    try {
+      child = spawn(process.execPath, ['-e', ASK_SCRIPT], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, [ASKED_FILE_ENV]: file } });
+    } catch {
+      resolve(false);
+      return;
+    }
+    let printed = '';
+    const giveUp = () => {
+      child.kill();
+      child.stdout.destroy();
+      child.unref();
+      resolve(false);
+    };
+    const answer = (isFile) => {
+      signal?.removeEventListener('abort', giveUp);
+      resolve(isFile);
+    };
+    signal?.addEventListener('abort', giveUp, { once: true });
+    child.on('error', () => answer(false));
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      printed += chunk;
+    });
+    child.on('close', (code) => answer(code === 0 && printed === '1'));
+  });
+}
+
+/** The script a process runs, from its arguments (`args[0]` is the program): resolves to the base name of
+ * the first one that is not an option, so that a language server reads `node tsserver.js` and not `node`.
+ * An option starts with `-`, and with `windows` a switch such as `/c` is one too. `null` where there is none.
  *
  * That argument may be the value of an option (`-p <password>`) or a secret given bare, and no spelling
  * tells a secret from a file name. So it is said only when it names a file that exists: it is a whole path
- * (`isWholePath`), and the disk holds a file there (`isFile`; a disk that cannot be asked holds none).
- * Nothing after it is tried. The price: an argument relative to the folder the process runs in is never
- * named, since the look does not know that folder, so `node server.js` reads `node`.
+ * (`isWholePath`), and the disk holds a file there. Nothing after it is tried. The price: an argument
+ * relative to the folder the process runs in is never named, since the look does not know that folder, so
+ * `node server.js` reads `node`.
  *
- * A file that exists is then said by a base name of 64 characters at most that is spelled as one
- * (`FILE_NAME`). Nor is the program's own name said twice. `isFile` stands in for the disk in a test. */
-export function scriptOf(args, name, { windows = false, isFile = isFileOnDisk } = {}) {
+ * A file is said by a base name of 64 characters at most that is spelled as one (`FILE_NAME`), and the
+ * program's own name is not said twice. The disk is asked last, and so only where its answer decides:
+ * `isFile(file, { signal })`, which answers now or later. Only a plain `true` is a yes, and a disk that
+ * cannot be asked holds no file. Nothing here bounds the wait for the answer: `busiestProcesses` does,
+ * and tells through `signal` when it has given up. `isFile` stands in for the disk in a test. */
+export async function scriptOf(args, name, { windows = false, isFile = isFileOnDisk, signal } = {}) {
   const isOption = (argument) => argument.startsWith('-') || (windows && /^\/[^\\/]*$/.test(argument));
   const first = args.slice(1).find((argument) => argument !== '' && !isOption(argument));
   if (first === undefined || !isWholePath(first, windows)) return null;
+  const base = first.split(/[\\/]/).pop();
+  if (base.length > 64 || !FILE_NAME.test(base)) return null;
+  if (base.toLowerCase().replace(/\.exe$/, '') === name.toLowerCase()) return null;
   try {
-    if (!isFile(first)) return null;
+    return (await isFile(first, { signal })) === true ? base : null;
   } catch {
     return null;
   }
-  const base = first.split(/[\\/]/).pop();
-  if (base.length > 64 || !FILE_NAME.test(base)) return null;
-  return base.toLowerCase().replace(/\.exe$/, '') === name.toLowerCase() ? null : base;
 }
 
 /** The processes that spent most processor time between two readings, the busiest first, three at most:
@@ -129,9 +203,29 @@ export function busiestBetween(before, after, { skip = [] } = {}) {
 // A name is printed in a report and written to a log: what would move a terminal's cursor is taken out.
 const printable = (name) => name.replace(/[\u0000-\u001f\u007f]/g, '?');
 
-/** One of the busiest as a gate names it. `args` is its command line in arguments, or nothing where the
- * system did not show it: the process is then named by its program alone. */
-const named = ({ pid, name, cpuSeconds }, args, options) => ({ name, script: args ? scriptOf(args, name, options) : null, pid, cpuSeconds });
+/** The busiest as a gate names them: `[{ name, script, pid, cpuSeconds }]`. Each of `found` comes with
+ * `args`, its command line in arguments, or nothing where the system did not show it: that process is
+ * named by its program alone. Only these are asked about, so the disk gets three questions at most.
+ *
+ * The questions are asked at once and waited for together, for `boundMs`: a process whose question is
+ * still open then is named without a script, and the others keep theirs. Whoever asks is told, on the way
+ * out, that nobody waits any more (`signal`), which is when `isFileOnDisk` kills what it started. */
+async function named(found, { windows, isFile, boundMs }) {
+  const asking = new AbortController();
+  let timer;
+  const bound = new Promise((resolve) => {
+    timer = setTimeout(resolve, boundMs, null);
+  });
+  try {
+    return await Promise.all(found.map(async ({ pid, name, cpuSeconds, args }) => {
+      const script = args ? await Promise.race([scriptOf(args, name, { windows, isFile, signal: asking.signal }), bound]) : null;
+      return { name, script, pid, cpuSeconds };
+    }));
+  } finally {
+    clearTimeout(timer);
+    asking.abort();
+  }
+}
 
 // --- Linux: /proc, read by Node ---
 
@@ -160,7 +254,7 @@ const wait = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
-async function lookLinux({ ms, ownPid, proc, sleep, isFile }) {
+async function lookLinux({ ms, ownPid, proc, sleep }) {
   // A process that ended since the folder was listed, or whose file may not be read, is in no reading.
   const read = (file) => {
     try {
@@ -178,7 +272,7 @@ async function lookLinux({ ms, ownPid, proc, sleep, isFile }) {
   return busiestBetween(before, reading(), { skip: [ownPid] }).map((process) => {
     // The arguments end in a zero byte each. A program that rewrote its title has one, and so no script.
     const commandLine = read(`/proc/${process.pid}/cmdline`);
-    return named(process, commandLine === null ? null : commandLine.split('\0'), { windows: false, isFile });
+    return { ...process, args: commandLine === null ? null : commandLine.split('\0') };
   });
 }
 
@@ -235,7 +329,7 @@ const lookScript = (ms) => [
  * gate runs in first, which is a project's. */
 const powershell = (env) => path.win32.join(env.SystemRoot ?? env.SYSTEMROOT ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
-function lookWindows({ ms, boundMs, ownPid, spawn, env, isFile }) {
+function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
   return new Promise((resolve) => {
     let child;
     let timer;
@@ -276,11 +370,13 @@ function lookWindows({ ms, boundMs, ownPid, spawn, env, isFile }) {
         return;
       }
       const { commandLines } = parseProcessReadings(text);
-      finish(found.map((process) => named(process, commandLines.has(process.pid) ? splitCommandLine(commandLines.get(process.pid)) : null, { windows: true, isFile })));
+      finish(found.map((process) => ({ ...process, args: commandLines.has(process.pid) ? splitCommandLine(commandLines.get(process.pid)) : null })));
     });
   });
 }
 
+// The look of each system resolves to the busiest as `busiestBetween` gives them, each with `args`: its
+// command line in arguments, or `null` where the system did not show it. Neither asks the disk: `named` does.
 const LOOKS = { linux: lookLinux, win32: lookWindows };
 
 /** The three processes that load this machine most, the busiest first: resolves to
@@ -289,16 +385,21 @@ const LOOKS = { linux: lookLinux, win32: lookWindows };
  * says of the command line, or `null`. This process (`ownPid`) is never one of them: a gate asks before
  * its sensors start, so nothing else of the gate is running yet.
  *
- * Asynchronous throughout, so the lock of the gate that looks goes on beating: the wait is a timer and the
- * helper of Windows a process of its own. It takes the two seconds of the look and what the helper needs to
- * start, and is over after `boundMs` at the latest. It resolves to an empty list on a system that is
- * neither Linux nor Windows, and wherever the look fails (see the head of this file).
+ * Asynchronous throughout, so the lock of the gate that looks goes on beating: the wait is a timer, and
+ * the helper of Windows and each question to the disk a process of its own. It takes the two seconds of
+ * the look, what the helper needs to start, and what the disk needs to answer about the three at most that
+ * are named: `askBoundMs` at the longest and never more than is left of `boundMs`, after which the look is
+ * over at the latest. It resolves to an empty list on a system that is neither Linux nor Windows, and
+ * wherever the look fails (see the head of this file).
  *
  * `platform`, `spawn`, `proc` (`list` and `read` of `/proc`), `sleep`, `env` and `isFile` (the disk
  * `scriptOf` asks) stand in for the system in a test. */
-export async function busiestProcesses({ platform = process.platform, ms = BUSIEST_LOOK_MS, boundMs = BUSIEST_BOUND_MS, ownPid = process.pid, spawn = spawnChild, proc = PROC, sleep = wait, env = process.env, isFile = isFileOnDisk } = {}) {
+export async function busiestProcesses({ platform = process.platform, ms = BUSIEST_LOOK_MS, boundMs = BUSIEST_BOUND_MS, askBoundMs = BUSIEST_ASK_BOUND_MS, ownPid = process.pid, spawn = spawnChild, proc = PROC, sleep = wait, env = process.env, isFile = isFileOnDisk } = {}) {
+  const startedAt = Date.now();
   try {
-    return (await LOOKS[platform]?.({ ms, boundMs, ownPid, spawn, proc, sleep, env, isFile })) ?? [];
+    const found = (await LOOKS[platform]?.({ ms, boundMs, ownPid, spawn, proc, sleep, env })) ?? [];
+    const left = startedAt + boundMs - Date.now();
+    return await named(found, { windows: platform === 'win32', isFile, boundMs: Math.max(0, Math.min(askBoundMs, left)) });
   } catch {
     return [];
   }
