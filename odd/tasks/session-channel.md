@@ -556,6 +556,34 @@ reader, and that table names this feature as their owner.
   19 deleted, of which about 480 are tests: over the 400 guide because the reader, the roster
   and the command each carry their fixtures. Not built, on purpose: the columns of the roster
   that come from the record. Not checked here: the whole suite, which the commit's gate runs.
+- 2026-10-11 05:43 local, commit `d3a4686` (T3 and T4a). Its gate: `PASS tests npm run test
+  passed`, 05:28:48 to 05:43:30, 882 s, one try, after the two TypeScript servers under this
+  session's own process were stopped (failure 20). gentle-ai: medium risk
+  (`slice_budget_reached`, 897 lines against the branch point `7ef20b9`), lineage
+  `review-7d91be9d22ff68d1`, one lens (reliability), consent granted without a question as
+  `AGENTS.md` says, approved and acknowledged (`authority: burned`). Two findings, both
+  warnings that open no correction, both about the exit a starting orchestrator relies on:
+  a sessions folder that cannot be listed for a reason other than "it does not exist" answers
+  exit 1, which reads as "none"; and the asking session is left out transcript by transcript,
+  so after the app restarts it into a new file its own earlier transcript counts as another
+  holder. Taken with the findings of the Codex review, in one follow-up commit: the first is
+  fixed (only a missing folder is "none"); the second stays as it is on purpose, since leaving
+  out the whole row would answer "none" to a second session that took the same title, and
+  gains a line that says the title found is also the asker's own.
+- 2026-10-11 05:50 local, Codex on `6ca38d8..d3a4686` (`js-harness codex-review --base
+  7ef20b9`), recorded: three parts, 812,689 input tokens (624,256 cached), 194 s; its plan had
+  printed about 1,040,000 to 5,600,000. Parts 1 and 3 correct; part 2 one finding, P2, the
+  same as gentle-ai's first (it injected `EACCES` on the listing and got exit 1). Spent of the
+  feature's 3 million: 812,689. At this rate per changed line the five slices do not fit in
+  3 million; that is spend outside the plan, his, asked when this slice is delivered.
+- 2026-10-11 05:52 local, the two findings taken, test first, by the same writer: a sessions
+  folder that cannot be listed for another reason than `ENOENT` makes `--address` exit 2 with
+  the folder and the error code (red: an injected `EACCES` gave exit 1); and when the one
+  holder found carries the asker's own title, one line on standard error says the transcripts
+  cannot tell an earlier transcript of the same session from another session under that title
+  (red: the twin case had an empty standard error). Read by the parent: `node --test
+  bin/sessions.test.mjs` 133 pass, 0 fail, 1 skipped; `node --test bin/lib/sessions.test.mjs`
+  152 pass.
 
 ## Next step
 Slice "roster first", on `feat/session-roster`: T3, then the roster of T4 and `--address`,

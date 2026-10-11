@@ -338,15 +338,16 @@ export async function sessionsMain(
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
   /** One look at the transcripts: `{ generatedAt, since, sessions }`, the sessions whose transcript changed
-   * in the window, the most recent first, and where that window starts (ms); or `null` (said on stderr)
-   * when the project has no sessions folder. */
+   * in the window, the most recent first, and where that window starts (ms); or `{ unlisted }` when the
+   * sessions folder could not be listed, with the system's code for why, or its message when it gave no
+   * code. `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions
+   * and did not show them, which is not the same answer to every caller (`--address`). */
   const lookAtSessions = () => {
     let names;
     try {
       names = readdir(projectDir);
     } catch (err) {
-      stderr(`js-harness sessions: no sessions folder for ${root}: ${projectDir} (${err.code ?? err.message})`);
-      return null;
+      return { unlisted: err.code ?? err.message };
     }
 
     const generatedAt = now();
@@ -373,10 +374,16 @@ export async function sessionsMain(
     return { generatedAt, since, sessions };
   };
 
-  /** One look at the machine: the board, or `null` when the project has no sessions folder. */
+  const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
+
+  /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
+   * listed: there is then no board to print, whatever the reason, and the line gives it. */
   const look = () => {
     const seen = lookAtSessions();
-    if (seen === null) return null;
+    if (seen.unlisted !== undefined) {
+      stderr(noFolder(seen.unlisted));
+      return null;
+    }
     const { generatedAt, since, sessions } = seen;
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
@@ -425,14 +432,29 @@ export async function sessionsMain(
   // window was read. A transcript that could not be read has no title, so it may be the holder: with no
   // holder found the answer is then not known, and that is exit 2, with the file. The session that starts
   // as orchestrator takes exit 1 as leave to start, so not knowing must never read as "none". Exit 2 is
-  // "no clean answer": several holders, cannot tell, or a usage error.
+  // "no clean answer": several holders, cannot tell, or a usage error. The same holds one step earlier: a
+  // sessions folder that does not exist has no session in it, and one that is there and could not be
+  // listed (no permission, busy, a disk error) may be full of them, so only the first is exit 1. A first
+  // version took every failure of the listing for "no folder" (found by both reviews, 2026-10-11).
   if (parsed.address) {
+    const role = parsed.address.role === 'orchestrator' ? 'the orchestrator' : `work session ${parsed.address.number}`;
     const seen = lookAtSessions();
-    if (seen === null) return 1; // no sessions folder, so no session that could hold the role
+    if (seen.unlisted === 'ENOENT') {
+      stderr(noFolder(seen.unlisted));
+      return 1;
+    }
+    if (seen.unlisted !== undefined) {
+      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: the sessions folder ${projectDir} could not be listed (${seen.unlisted})`);
+      return 2;
+    }
+    // The session that asks is left out by its transcript, not by its title. Leaving out every transcript
+    // of its title would answer "none" to a second session that took the same title, and a session that
+    // starts as orchestrator must never read that as leave to start. What it costs: after the app
+    // restarts a session into a new file, its own earlier transcript is found as the holder, which is
+    // said beside the answer (`sameTitle` below), since no transcript tells the two cases apart.
     const others = seen.sessions.filter((session) => !session.self);
     const roster = rosterOf(others, { since: seen.since });
     const holders = roleHolders(roster, parsed.address);
-    const role = parsed.address.role === 'orchestrator' ? 'the orchestrator' : `work session ${parsed.address.number}`;
     const window = `that changed in the last ${parsed.hours}h`;
     const unread = others.filter((session) => session.unavailable).map((session) => `${path.join(projectDir, `${session.id}.jsonl`)} (${session.unavailable})`);
     const notRead = `${unread.length} transcript${unread.length === 1 ? '' : 's'} ${window} could not be read`;
@@ -448,6 +470,11 @@ export async function sessionsMain(
       return 1;
     }
     if (holders.length > 1) stderr(`js-harness sessions: ${holders.length} sessions carry the title of ${role}: a message to it has no single address`);
+    // Only a title a session was given is one, as in the roster: the start of a first prompt names nobody.
+    const sameTitle = holders.length === 1 && seen.sessions.some((session) => session.self && session.titleSource === 'custom-title' && session.title === holders[0].title);
+    if (sameTitle) {
+      stderr(`js-harness sessions: ${JSON.stringify(holders[0].title)} is also the title of the session that asks: the transcript found may be an earlier one of this same session, or another session under the same title, and the transcripts cannot tell which`);
+    }
     if (unread.length > 0) stderr(`js-harness sessions: ${notRead} and ${unread.length === 1 ? 'is' : 'are'} not counted: ${unread.join(', ')}`);
     return holders.length === 1 ? 0 : 2;
   }

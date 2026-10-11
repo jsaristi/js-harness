@@ -1195,6 +1195,25 @@ test('--address exits 1 with one line when no session holds the role', withMachi
   assert.deepEqual([gone.code, gone.stdout, gone.stderr], [1, '', `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`]);
 }));
 
+// Found by both reviews of d3a4686: every failure to list the folder was read as "no folder", and exit 1
+// certified that no session holds the role. Only a folder that is not there is that.
+test('--address exits 2 when the sessions folder is there and cannot be listed: only a folder that does not exist is "none"', withMachine(async (machine) => {
+  writeRoster(machine);
+  const refused = (code) => () => {
+    throw Object.assign(new Error(`${code}: made up`), { code });
+  };
+  for (const code of ['EACCES', 'EPERM', 'EBUSY', 'EIO']) {
+    const unknown = await runSessions(machine, ['--address', 'orchestrator'], { readdir: refused(code) });
+    assert.deepEqual([unknown.code, unknown.stdout, unknown.stderr], [2, '', `js-harness sessions: not known whether a session carries the title of the orchestrator: the sessions folder ${machine.projectDir} could not be listed (${code})`], code);
+  }
+  // An error that carries no code is not "it does not exist" either, and is said as it came.
+  const odd = await runSessions(machine, ['--address', '5'], { readdir: () => { throw new Error('made up'); } });
+  assert.deepEqual([odd.code, odd.stdout, odd.stderr], [2, '', `js-harness sessions: not known whether a session carries the title of work session 5: the sessions folder ${machine.projectDir} could not be listed (made up)`]);
+  // The board says of such a folder what it said before, and exits 1 as it did.
+  const board = await runSessions(machine, [], { readdir: refused('EACCES') });
+  assert.deepEqual([board.code, board.stdout, board.stderr], [1, '', `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (EACCES)`]);
+}));
+
 // The app appends entries with no time to a transcript it opens, so a file can be of this minute and its
 // session of two weeks ago (seen on 2026-10-11). The board still lists the transcript; no role is held by it.
 test('a session is a row of the roster, and holds a role, only while its last timed entry is in the window, however new its file', withMachine(async (machine) => {
@@ -1264,11 +1283,20 @@ test('--address never counts the session that asks: CLAUDE_CODE_SESSION_ID, or -
   assert.deepEqual([own.code, own.stdout, own.stderr], [1, '', 'js-harness sessions: no session carries the title of the orchestrator (transcripts that changed in the last 12h: 2, the one that asks is not counted)']);
   assert.equal((await runSessions(machine, ['--address', 'orchestrator', '--self', 'aaaaaaaa'])).code, 1);
   assert.deepEqual([(await runSessions(machine, ['--address', '5'], asOrchestrator)).stdout, (await runSessions(machine, ['--address', '5', '--self', 'bbbbbbbb'], asOrchestrator)).code], [WORKER, 1]);
-  // A second session under the orchestrator's own title is another session that holds the role: the one
-  // that asks is left out, the other is its answer.
+  // A holder under another title than the asker's own is another session, and nothing more is said.
+  const other = await runSessions(machine, ['--address', '5'], asOrchestrator);
+  assert.deepEqual([other.code, other.stdout, other.stderr], [0, WORKER, '']);
+  // A second transcript under the asker's own title: the one that asks is left out, the other is its
+  // answer. It is either another session that took the title, or this same session before the app
+  // restarted it into a new file, and no transcript says which: the answer stands, and the line says so.
   writeTitled(machine, SESSION_E, ORCHESTRATOR, 30);
   const twin = await runSessions(machine, ['--address', 'orchestrator'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_E } });
   assert.deepEqual([twin.code, twin.stdout], [0, ORCHESTRATOR]);
+  assert.equal(twin.stderr, `js-harness sessions: "${ORCHESTRATOR}" is also the title of the session that asks: the transcript found may be an earlier one of this same session, or another session under the same title, and the transcripts cannot tell which`);
+  // The asker's title is one it was given: the start of a first prompt that reads the same names nobody.
+  writeAt(transcriptOf(machine, SESSION_E), jsonl(prompt(ORCHESTRATOR, 40), reply('Done.', 30)), 30);
+  const untitled = await runSessions(machine, ['--address', 'orchestrator'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_E } });
+  assert.deepEqual([untitled.code, untitled.stdout, untitled.stderr], [0, ORCHESTRATOR, '']);
 }));
 
 // --- read-only ---
