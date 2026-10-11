@@ -2,6 +2,7 @@
 // format this file reads, established from real transcripts). No fs and no process here: a transcript's
 // text goes in and session facts come out, and every external command is a `run` the caller hands in,
 // so the tests use inline synthetic transcripts and fake commands, never this machine's sessions.
+import path from 'node:path';
 import { parseSnapshot } from './process-tree.mjs';
 import { parseFeature, tokenize } from './progress.mjs';
 
@@ -392,6 +393,32 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
  * character outside `[A-Za-z0-9]` turned into `-` (`D:\js-harness` is `D--js-harness`). */
 export function projectSlug(root) {
   return root.replace(/[^A-Za-z0-9]/g, '-');
+}
+
+/** The main checkout of the repository `cwd` is in, so the project is the same from any worktree: for the
+ * board, and for `notify`, whose record and relief file are the project's. Outside a repository (or
+ * without git) the folder itself is the project, as it is for Claude Code.
+ *
+ * It is the folder that holds the common git dir when that dir is a `.git`: an ordinary checkout, and
+ * every worktree linked to it. A common git dir of another name is kept apart from its checkout (a
+ * submodule's is under the superproject's `.git/modules`, `--separate-git-dir` puts it anywhere) and its
+ * place says nothing, so git is asked for the working tree: the one that git dir records, which a
+ * submodule's does, and otherwise the one `cwd` is in when that is the main one, its git dir being the
+ * common one. With neither (a bare repository; a worktree linked to a `--separate-git-dir` checkout,
+ * which nothing in git ties to it) the project is the git dir itself, as it always was. */
+export function mainCheckout(run, cwd) {
+  const revParse = (args, folder) => {
+    const result = run('git', ['rev-parse', ...args], { cwd: folder });
+    return result.error || result.status !== 0 ? [] : result.stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
+  };
+  const [common] = revParse(['--git-common-dir'], cwd);
+  if (common === undefined) return cwd;
+  const commonDir = path.resolve(cwd, common);
+  if (path.basename(commonDir) === '.git') return path.dirname(commonDir);
+  const [recorded] = revParse(['--show-toplevel'], commonDir);
+  if (recorded !== undefined) return path.resolve(recorded);
+  const [gitDir, top] = revParse(['--git-dir', '--show-toplevel'], cwd);
+  return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
 const failed = (result) => Boolean(result.error) || result.status !== 0;

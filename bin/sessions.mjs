@@ -24,7 +24,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { reliefPath } from './lib/channel.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -125,31 +126,6 @@ function parseArgs(argv) {
   const contextLimit = contextLimitOf(parsed.contextLimitSpec, parsed.contextWindow);
   if (!(contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (73%)');
   return { ...parsed, contextLimit, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
-}
-
-/** The main checkout of the repository `cwd` is in, so the board is the same from any worktree. Outside a
- * repository (or without git) the folder itself is the project, as it is for Claude Code.
- *
- * It is the folder that holds the common git dir when that dir is a `.git`: an ordinary checkout, and
- * every worktree linked to it. A common git dir of another name is kept apart from its checkout (a
- * submodule's is under the superproject's `.git/modules`, `--separate-git-dir` puts it anywhere) and its
- * place says nothing, so git is asked for the working tree: the one that git dir records, which a
- * submodule's does, and otherwise the one `cwd` is in when that is the main one, its git dir being the
- * common one. With neither (a bare repository; a worktree linked to a `--separate-git-dir` checkout,
- * which nothing in git ties to it) the project is the git dir itself, as it always was. */
-function mainCheckout(run, cwd) {
-  const revParse = (args, folder) => {
-    const result = run('git', ['rev-parse', ...args], { cwd: folder });
-    return result.error || result.status !== 0 ? [] : result.stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
-  };
-  const [common] = revParse(['--git-common-dir'], cwd);
-  if (common === undefined) return cwd;
-  const commonDir = path.resolve(cwd, common);
-  if (path.basename(commonDir) === '.git') return path.dirname(commonDir);
-  const [recorded] = revParse(['--show-toplevel'], commonDir);
-  if (recorded !== undefined) return path.resolve(recorded);
-  const [gitDir, top] = revParse(['--git-dir', '--show-toplevel'], cwd);
-  return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
 // One row of the shared listing (`Format-ProcessRow`, bin/lib/process-tree.mjs) and one `C` line per
@@ -330,7 +306,7 @@ export async function sessionsMain(
   // JS_HARNESS_HOME is no home: joined as it is, it would put the file under the folder the command runs
   // in. A relative `--relief` is read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
   const harnessHome = env.JS_HARNESS_HOME || homedir();
-  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(harnessHome, '.js-harness', 'relief', `${slug}.md`));
+  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(harnessHome, slug));
   // The machine's gate lock is under the same home, read through the same three functions as every other
   // file of the board, so a test hands it a folder of its own.
   const lockFiles = { readdirSync: readdir, statSync: stat, readFileSync: readFile };

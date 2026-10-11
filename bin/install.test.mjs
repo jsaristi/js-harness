@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
 import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
+import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -394,6 +395,56 @@ test('uninstallMain says a folder of the gate lock it could not remove was left,
     const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
     assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
     assert.deepEqual(unseen.errLines, [`could not remove ${gateDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The folder of the session channel is written by `notify`, outside any manifest, like the gate lock's.
+// No process lives in it, so it is removed, or it could not be: there is no "kept for now".
+test('uninstallMain removes the folder of the session channel, with or without an install, and says so', async () => {
+  const home = makeTmpHome();
+  try {
+    const leave = () => appendNotice(home, 'C--proj', newNotice({ at: '2026-01-01T12:00:00.000Z', from: null, to: 'orchestrator', kind: 'note', text: 'made up' }));
+    await captureConsole(() => installMain(['--home', home]));
+    leave();
+    const installed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([installed.code, installed.errLines], [0, []]);
+    assert.ok(installed.outLines.includes(`removed ${channelDir(home)}`), installed.outLines.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    leave();
+    const bare = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([bare.code, bare.outLines, bare.errLines], [0, [`removed ${channelDir(home)}`], []]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says a folder of the session channel it could not remove was left, with the error code and what to do, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    appendNotice(home, 'C--proj', newNotice({ at: '2026-01-01T12:00:00.000Z', from: null, to: 'orchestrator', kind: 'note', text: 'made up' }));
+    const removeFile = (target, options) => {
+      if (target === channelDir(home)) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+    assert.equal(code, 1, 'a folder left behind is not a clean uninstall');
+    assert.deepEqual(errLines, [`could not remove ${channelDir(home)} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+    assert.equal(fs.existsSync(recordPath(home, 'C--proj')), true);
+
+    // One it could not even look at is said the same way, and is no "nothing installed" that exits 0.
+    const statFile = (target) => {
+      if (target === channelDir(home)) throw Object.assign(new Error('EACCES: permission denied, stat'), { code: 'EACCES' });
+      return fs.statSync(target);
+    };
+    const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
+    assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
+    assert.deepEqual(unseen.errLines, [`could not remove ${channelDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

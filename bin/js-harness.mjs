@@ -11,6 +11,7 @@ import { contractMain } from './contract.mjs';
 import { codexReviewMain } from './codex-review.mjs';
 import { remoteMain } from './remote.mjs';
 import { sessionsMain } from './sessions.mjs';
+import { notifyMain } from './notify.mjs';
 import { tuiMain } from './tui.mjs';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -33,6 +34,7 @@ Commands:
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
   sessions    Show the project's recent Claude Code sessions (state, context size, background work still open, tail of the last reply), with their roster by the role each title gives, the worktrees and each one's feature plan, the running gates, the open pull requests and the orchestrator's relief file (its path and last lines). Read-only; --json gives the same data. --watch waits and returns only when the board changes in a way that needs a decision, or at --timeout. --address <role> (orchestrator, or a work session's number) prints the title of the one other session that holds the role: exit 0 for one, 1 for none with every transcript read, 2 for several or when it cannot tell.
+  notify      Append one notice to the project's channel record under the home (.js-harness/channel/<project>.jsonl), with the time of the clock, the sender's session and the worktree and branch it ran in: js-harness notify --to orchestrator|<number> --kind opened|waiting|closed|note|answer|relieved "<one line>" (an answer also takes --transcript and --line, where the user's words are read). It then prints the address of the role, as sessions --address gives it, so the sender can ring it; it sends no message, and its exit is 0 once the notice is recorded. --relief "<one line>" appends a line stamped by the clock to the orchestrator's relief file; --opening "<title>" stores the opening of a session, read from standard input. A notice is a claim of the session that wrote it, never the user's word.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
 `;
@@ -53,6 +55,7 @@ const commands = {
   'codex-review': codexReviewMain,
   remote: remoteMain,
   sessions: sessionsMain,
+  notify: notifyMain,
 };
 
 async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui = tuiMain } = {}) {

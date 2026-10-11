@@ -292,6 +292,42 @@ test('sessions dispatches to a temp cwd and Claude home and exits 1 for a projec
   }
 });
 
+test('--help lists notify, and notify with nothing to write exits 2 with its usage through the dispatcher', () => {
+  assert.match(
+    run(['--help']).stdout,
+    /^ {2}notify\s+Append one notice to the project's channel record.*js-harness notify --to orchestrator\|<number> --kind opened\|waiting\|closed\|note\|answer\|relieved "<one line>".*--transcript.*--line.*address of the role, as sessions --address gives it.*exit is 0 once the notice is recorded.*--relief "<one line>".*relief file.*--opening "<title>".*standard input.*claim.*never the user's word/m,
+  );
+  const result = run(['notify', '--to', 'orchestrator']);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /a notice takes --to and --kind/);
+  assert.match(result.stderr, /Usage: js-harness notify/);
+});
+
+// Hermetic: a temp harness home, a temp folder to run from and an empty temp Claude home, so the notice
+// is written under the temp home and the address stops at "no sessions folder". Which project the record
+// is named after is not asserted, for the reason given above for `sessions`.
+test('notify dispatches: it records one notice under a temp home and exits 0 with no address to give', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-notify-cwd-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-notify-home-'));
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-notify-claude-'));
+  try {
+    const result = run(['notify', '--to', '9', '--kind', 'note', 'probe', '--cwd', cwd, '--home', home, '--claude-home', claudeHome]);
+    assert.equal(result.status, 0, result.stderr);
+    const channel = path.join(home, '.js-harness', 'channel');
+    const records = fs.readdirSync(channel);
+    assert.equal(records.length, 1);
+    const lines = fs.readFileSync(path.join(channel, records[0]), 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line));
+    assert.deepEqual(lines.map((notice) => [notice.schema, notice.to, notice.kind, notice.text, notice.cwd]), [['js-harness.channel-notice/v1', { role: 'work', number: 9 }, 'note', 'probe', cwd]]);
+    const [recorded, address] = result.stdout.trimEnd().split('\n');
+    assert.match(recorded, /^js-harness notify: recorded note for work session 9 at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z from /);
+    assert.ok(recorded.endsWith(` in ${path.join(channel, records[0])}`), recorded);
+    assert.ok(address.startsWith('address of work session 9: no single one now (sessions --address exit 1): no sessions folder for '), address);
+  } finally {
+    for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // A global install on macOS/Linux reaches the bin through a symlink; the entry guard must follow it.
 test('runs when invoked through a linked directory', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));

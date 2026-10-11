@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import nodePath from 'node:path';
 import * as lib from './sessions.mjs';
 
 // Every transcript below is synthetic: the entry shapes are the ones odd/tasks/session-board.md records
@@ -1884,4 +1885,53 @@ test('boardChanges does not compare the roster: it is the sessions again, and a 
     return { sessions, roster: lib.rosterOf(sessions) };
   };
   assert.deepEqual(changes(titled('JH ORQ nueva · proj'), titled('JH ORQ · proj')), []);
+});
+
+// --- the project a folder belongs to ---
+//
+// `mainCheckout` is shared by the board and by `notify`, which must name the same project from the same
+// folder: the board's own tests (bin/sessions.test.mjs) go through every layout with a whole machine,
+// and these pin the function where both take it from.
+
+/** A fake `git rev-parse` that answers each list of options, joined by a space, from `answers`; anything
+ * else fails as git does outside a repository. */
+function revParse(answers) {
+  const calls = [];
+  const run = (command, args, { cwd }) => {
+    calls.push({ command, args, cwd });
+    const answer = answers[`${args.slice(1).join(' ')} @ ${cwd}`] ?? answers[args.slice(1).join(' ')];
+    return answer === undefined ? { status: 128, stdout: '', stderr: 'fatal: not a git repository\n' } : { status: 0, stdout: `${answer}\n`, stderr: '' };
+  };
+  return { run, calls };
+}
+
+test('mainCheckout is the folder that holds the common git dir, from the checkout and from a linked worktree', () => {
+  const here = nodePath.resolve('proj');
+  const fromCheckout = revParse({ '--git-common-dir': '.git' });
+  assert.equal(lib.mainCheckout(fromCheckout.run, here), here);
+  assert.deepEqual(fromCheckout.calls, [{ command: 'git', args: ['rev-parse', '--git-common-dir'], cwd: here }]);
+  const worktree = nodePath.resolve('proj-worktrees', 'board');
+  assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': nodePath.join(here, '.git').split(nodePath.sep).join('/') }).run, worktree), here);
+});
+
+test('mainCheckout is the folder itself outside a repository, and without git', () => {
+  const here = nodePath.resolve('no-repository');
+  assert.equal(lib.mainCheckout(revParse({}).run, here), here);
+  assert.equal(lib.mainCheckout(() => ({ error: Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT' }) }), here), here);
+});
+
+test('mainCheckout asks git for the working tree of a git dir kept apart from its checkout, and falls back on that git dir', () => {
+  const here = nodePath.resolve('proj');
+  const meta = nodePath.resolve('meta');
+  // A submodule's git dir records its working tree.
+  const recorded = revParse({ '--git-common-dir': meta, [`--show-toplevel @ ${meta}`]: here });
+  assert.equal(lib.mainCheckout(recorded.run, here), here);
+  // A `--separate-git-dir` checkout: the git dir records none, and the folder is the main working tree.
+  const apart = revParse({ '--git-common-dir': meta, [`--git-dir --show-toplevel @ ${here}`]: `${meta}\n${here}` });
+  assert.equal(lib.mainCheckout(apart.run, here), here);
+  assert.deepEqual(apart.calls.map((made) => made.args.slice(1)), [['--git-common-dir'], ['--show-toplevel'], ['--git-dir', '--show-toplevel']]);
+  // A worktree linked to such a checkout, a bare repository: nothing ties them to a checkout.
+  const linked = revParse({ '--git-common-dir': meta, [`--git-dir --show-toplevel @ ${here}`]: `${nodePath.join(meta, 'worktrees', 'board')}\n${here}` });
+  assert.equal(lib.mainCheckout(linked.run, here), meta);
+  assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': meta }).run, here), meta);
 });
