@@ -2150,6 +2150,27 @@ test('channelOf counts once a send whose copies differ in what is known of its o
   assert.equal(channel(old, member(C, 'JH 2 · renamed', 110, { sent: [{ ...unresolved, id: 'm2' }] }), member(D, 'JH 2 · the board', 100, { sent: [{ ...unresolved, id: 'm2' }] })).messageCount, 1);
 });
 
+// Codex review of 25cf031: copies were matched by their place alone, the n-th send of a key in one
+// transcript with the n-th in another. A transcript that holds only some of the sends of a key (a session
+// resumed part way) put a send with one id in the place of a send with another, and the second was lost
+// when the shorter transcript was read first.
+test('channelOf never takes two sends with two ids for one, whichever transcript is read first', () => {
+  const ids = (...sessions) => lib.channelOf(recordOf(), sessions, { count: 10 }).messages.map((message) => message.id).sort();
+  const same = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const whole = member(B, 'JH 2 · the board', 120, { sent: [{ ...same, id: 'm1' }, { ...same, id: 'm2' }] });
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(ids(resumed({ ...same, id: 'm2' }), whole), ['m1', 'm2'], 'the shorter transcript first');
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' })), ['m1', 'm2'], 'and last');
+  // A copy with no id is a copy of the send it can still be: the one no copy of its transcript is yet.
+  assert.deepEqual(ids(resumed({ ...same }, { ...same, id: 'm2' }), whole), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' }, { ...same })), ['m1', 'm2']);
+  // And a send with an id takes the place of a copy with none, never of one with another id.
+  const unresolved = member(B, 'JH 2 · the board', 120, { sent: [{ ...same }, { ...same, id: 'm2' }] });
+  assert.deepEqual(ids(unresolved, resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' })), ['m1', 'm2']);
+  assert.deepEqual(ids(resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' }), unresolved), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm3' })), ['m1', 'm2', 'm3'], 'a third id is a third send');
+});
+
 // Codex review of 7a19710, finding 4: the session whose notices were written from a gate's folder was
 // named as the gate's, and a session opened in that folder, which could have started it, was left out.
 test('renderBoard: a gate in a folder one session wrote its notices from and another was opened in hangs from one of them, each named with what places it', () => {

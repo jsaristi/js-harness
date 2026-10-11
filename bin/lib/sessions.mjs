@@ -1039,31 +1039,46 @@ function messagesBetween(sessions) {
   // and the other has it, or one failed and the other says nothing yet. The copy that knows more is
   // kept: an id, then a failure, then neither.
   //
-  // Copies are matched across transcripts only, the n-th call of a key in one with the n-th in another:
-  // two calls of one transcript are two messages whatever they share, since one reply can make both. A
-  // send with no time has no key. Two different messages would have to come from two sessions of one
-  // title, in the same millisecond, to one address, in the same words.
+  // Copies are matched across transcripts only: two calls of one transcript are two messages whatever
+  // they share, since one reply can make both, so a send of a key held so far takes at most one call of
+  // each transcript. Two ids are two sends: a call with an id is the held send with that id, or else the
+  // first held send of its key that has no id yet, and never one with another id (a transcript resumed
+  // part way holds only some of the sends of a key, so the place of a call among them says nothing). A
+  // call with no id is the first held send of its key that no call of its transcript is yet. A send
+  // with no time has no key. Two different messages would have to come from two sessions of one title,
+  // in the same millisecond, to one address, in the same words.
   const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null]) : null);
   const known = (message) => (message.id !== null ? 2 : message.failed ? 1 : 0);
   const calls = []; // one per send, in the order first seen: { session, message }, the copy that knows most
-  const slots = new Map(); // key -> its calls, by their order in a transcript
+  const slots = new Map(); // key -> the sends of that key held so far
   for (const session of readable) {
-    const here = new Map(); // key -> how many calls of this transcript had it so far
+    const here = new Map(); // key -> the calls of this transcript that have it, in their order
     for (const message of session.sent ?? []) {
       const key = copyKey(session, message);
-      if (key === null) {
-        calls.push({ session, message });
-        continue;
-      }
-      const nth = here.get(key) ?? 0;
-      here.set(key, nth + 1);
+      if (key === null) calls.push({ session, message });
+      else here.set(key, [...(here.get(key) ?? []), message]);
+    }
+    for (const [key, mine] of here) {
       const held = slots.get(key) ?? [];
       slots.set(key, held);
-      if (held[nth] === undefined) {
-        held[nth] = { session, message };
-        calls.push(held[nth]);
-      } else if (known(message) > known(held[nth].message)) {
-        Object.assign(held[nth], { session, message });
+      const taken = new Set(); // the held sends a call of this transcript already is
+      const rest = [];
+      for (const message of mine) {
+        const same = message.id === null ? undefined : held.find((send) => send.message.id === message.id && !taken.has(send));
+        if (same) taken.add(same);
+        else rest.push(message);
+      }
+      for (const message of rest) {
+        const copied = held.find((send) => !taken.has(send) && (message.id === null || send.message.id === null));
+        if (copied === undefined) {
+          const send = { session, message };
+          held.push(send);
+          taken.add(send);
+          calls.push(send);
+          continue;
+        }
+        taken.add(copied);
+        if (known(message) > known(copied.message)) Object.assign(copied, { session, message });
       }
     }
   }
