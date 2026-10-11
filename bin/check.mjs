@@ -14,6 +14,7 @@ import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
+import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 
 export { estimateTokens };
 
@@ -462,7 +463,8 @@ function gateOf(holder) {
 
 // A lock taken at once took a few milliseconds, and the report of a gate that waited for nobody says
 // nothing of the lock. A wait this long is said: it is a poll for another gate, or a takeover.
-const GATE_WAIT_SAID_MS = 1000;
+// `js-harness gate` reads it too, for the same question: whether another gate ran until a moment ago.
+export const GATE_WAIT_SAID_MS = 1000;
 
 /** One turn at the machine's gate lock (`./lib/gate-lock.mjs`), taken the way a gate takes it, for
  * whoever runs under it: `check` around its sensors, `js-harness gate` around a command. `name` is who
@@ -526,18 +528,20 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * to release it sooner: a handler would have to end the process itself, and `check` would no longer end
  * on a Ctrl-C the way it does today.
  *
- * `run(true)` is called with the lock in hand, and the sensors are then given the mark of a held lock
- * (`GATE_HELD_ENV`); `run(false)` without it.
+ * `run(true, waited)` is called with the lock in hand, and the sensors are then given the mark of a held
+ * lock (`GATE_HELD_ENV`); `waited` says that the wait for the lock was long enough to be said, which is
+ * a gate that ran until a moment ago. `run(false)` is called without the lock.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
 async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run) {
   const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes }, take);
   if (turn.without) return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run(false))];
   if (turn.refused) return [gateRow(`no sensor ran: ${turn.refused}`, false)];
   const { lock } = turn;
-  const rows = lock.waitedMs >= GATE_WAIT_SAID_MS ? [gateRow(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
+  const waited = lock.waitedMs >= GATE_WAIT_SAID_MS;
+  const rows = waited ? [gateRow(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
   let lost = false;
   try {
-    rows.push(...(await run(true)));
+    rows.push(...(await run(true, waited)));
   } finally {
     // Asked before the release, after which a gate has no lock to have lost.
     lost = lock.lost();
@@ -565,7 +569,21 @@ const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { in
  * gate passes when it was started with the mark of a held lock (`GATE_HELD_ENV`), no lock is taken: the
  * sensors run at once in the turn of the process that started this gate, are given the mark as well,
  * and a row named `gate` says so. Without `lock` they run as they are, which is for a caller that is no
- * gate. */
+ * gate.
+ *
+ * A gate, which is a call with `lock` in any of its three states (its own lock, the turn of the process
+ * that started it, no lock because none could be taken), reads the machine's load once before its first
+ * sensor and says it in an INFO row named `load` (`./lib/machine-load.mjs`): a gate's time depends on
+ * what else the machine runs, and a slow gate is then explained by its own report. A second, of a run of
+ * minutes. A gate that waited for another says so in that row, since what it reads is the tail of that
+ * gate. The row decides nothing, and a load that could not be read is said in it. On a loaded machine,
+ * from one busy logical processor on, the gate also looks for what loads it, for some seconds more, and
+ * the row names the three busiest processes at most in lines of its own
+ * (`./lib/machine-busiest.mjs`); a look that finds nobody or fails leaves the row with its figure alone.
+ * No sample is taken, nothing looked for and no row printed where no sensor runs, for a caller that is no
+ * gate, or with `load: false` in `lock`, which is how a gate passes on the switch of its environment
+ * (`GATE_LOAD_ENV`).
+ * `deps.sampleLoad` stands in for the sampler, and `deps.busiest` for the look. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -582,8 +600,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // Git is asked only by a project that declares documents: without them nothing here changed.
   const staged = declared.documents.length > 0 ? stagedDocuments(cwd, declared.documents, deps.git) : null;
   if (staged) return [documentsRow(sensors, staged)];
-  const run = async (gateHeld = false) => {
+  const run = async (gateHeld = false, waited = false) => {
     const rows = [];
+    // Here and nowhere else: every gate comes to its sensors through this, whatever the lock did, and with
+    // the lock in hand where there is one, so the second of the sample is not another gate's.
+    if (lock && lock.load !== false) {
+      const load = await readLoad(deps.sampleLoad, deps.busiest);
+      const lines = loadLines(load);
+      rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(load, { afterGate: waited }), ...(lines.length ? { lines } : {}) });
+    }
     for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
     return rows;
   };
@@ -946,9 +971,11 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // says so with the mark of a held lock (`GATE_HELD_ENV`): it runs its sensors in that turn.
   // The gate of a commit that holds declared documents alone runs no sensor, and takes no lock either
   // (`checkSensors`); the rows above ran all the same, so a contract it breaks still fails it.
+  // A gate that runs sensors reads the machine's load before them, unless its environment switches that
+  // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own).
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true } : { home, wait: !noWait, waitMinutes };
-    rows.push(...(await checkSensors(cwd, deps, lock)));
+    rows.push(...(await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env) })));
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }
