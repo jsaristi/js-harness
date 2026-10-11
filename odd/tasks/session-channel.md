@@ -142,6 +142,20 @@ input tokens for the feature.
 - Two defects follow from the reader ignoring `origin`: a message from another session counts as
   a prompt, so the session reads as working (`bin/lib/sessions.mjs:118`), and it can become the
   session's fallback title (`:92`).
+  Corrected by the build on 2026-10-11, from a tally of keys and enum values over 48 real
+  transcripts (T3; no message text read into the repository): both claims are false. A message
+  from another session is a `user` entry with `isMeta: true` (185 of 185) and `origin.kind:
+  "peer"`, and the reader already skipped meta entries, so it never counted as his prompt and
+  never became a title. The defect that did exist is the opposite one: such a message starts a
+  turn (a reply follows every one; median 9 s, longest 99 s) and the session read as `waiting`
+  during it. Three shapes of a peer entry exist: another session (168: `name`, `fromSession`
+  as `local_<uuid>`, `fromMode`, `msg_id`, sometimes `hopChain`), a sub-agent handing back (15:
+  `handback`, `senderTaskId`) and one the host injects (2: `hostInjected`). An outgoing
+  `SendMessage` carries `to` and `recipient_kind` (`name`, `session`, `agent`, or absent on
+  older hosts); a send to a session returns `msg_id`, one to a sub-agent returns `pin`.
+  `permissionMode` on `user` entries was `bypassPermissions` or `auto`; `fromMode` only ever
+  `bypass`. Nothing in a transcript names its own app session: that id appears only as
+  `fromSession` in the transcripts of the sessions it wrote to.
 - `install` writes one `SessionStart` entry per host, matcher `startup|resume`
   (`bin/lib/manifest.mjs:128-150`); a second entry is one more item and `uninstall` removes it.
 - `appendJsonLine` and `readJsonLines` write and read a `.jsonl` record
@@ -198,6 +212,12 @@ to the title `notify` printed. Three rules, each a count on the board instead of
   sessions --address <role>` prints the title of the one session that holds the role and exits
   0; it exits 1 when none holds it and 2 when more than one does, printing each. It never
   counts the session that runs it, so the answer is always about the others.
+  As built (2026-10-11): the role is `orchestrator` (or `ORQ`) or a work session's number. A
+  session holds a role only when its last timed entry is inside the board's window; the file's
+  date is not enough, since the app appends untimed entries to old transcripts. Exit 1 means
+  that none holds it and every transcript of the window was read; when none is found and one
+  could not be read, the answer is not known and the exit is 2. So 2 is "no clean answer":
+  several holders, cannot tell, or a usage error, and only 0 gives an address.
 - A send that is held or fails is not retried: the record already holds the notice.
 - A relieved or finished session that receives a message answers with one line saying who has
   the role now.
@@ -213,6 +233,16 @@ What it cannot know, said on its last line: whether a silent session is alive or
 command outside a session lists the app's sessions (not documented), so a session with no
 `closed` or `relieved` line is shown as "silent since" its last entry, never as alive. This
 replaces the roster the orchestrators rewrote by hand as a line of the relief file.
+
+Two limits found by the build (2026-10-11), both printed on the section's last line. A row is
+keyed by its title because a transcript does not name its app session: a session the app
+restarted continues in a new file under the same title (seen: one ended and the next began 26 s
+later), so two live sessions under one identical title are one row, and `--address` does not
+see them as two. The record closes this, since a notice carries the sender's session id (T1,
+T4b); a rule on transcripts that overlap in time was considered and not built, because a
+resumed session may copy old entries into a new file. And the folder a row shows is the one its
+entries record: a session that works in a worktree by changing directory still records the main
+checkout, so the real worktree and branch come with the `opened` notice.
 
 ### 5. One orchestrator, checked
 `sessions --address orchestrator` is the check: a session that starts as orchestrator runs it
@@ -431,7 +461,7 @@ reader, and that table names this feature as their owner.
 - [ ] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
   relief writer, the openings
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
-- [ ] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
+- [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [ ] T4 The board: the roster; the channel section (the record's last notices, and the last
   messages between sessions read from the transcripts: time, from, to, first line, arrived or
@@ -506,6 +536,26 @@ reader, and that table names this feature as their owner.
   feature within the order is the lead's under the charter (relief file, lines 4 and 164); he
   had said of the same question on 2026-10-10 "ya te habia dicho que habia autonomia" (relief
   file, line 175). Order of the slices: see "Delivery".
+- 2026-10-11 05:28 local, T3 and T4a written by one delegated writer, test first, in two rounds
+  (the second on four points the parent decided from the first round's open points: the window
+  by last timed entry, exit 2 when the answer is not known, the label `folder`, the help line).
+  What the real transcripts showed against the design is in "What exists to build on"; what was
+  built and its two limits are in points 3 and 4. Decisions: a message from another session
+  starts a turn and reads as `working`; each session's facts gain `permissionMode`, `received`
+  and `sent`, without message text; a roster row is one title; the watch ignores the roster, so
+  a rename wakes nobody; `--address` reads transcripts only and refuses `--watch` and `--json`.
+  Red before green, as the writer reported it: 6 of 8 reader tests failed on `waiting` and on
+  the missing fields; 12 roster tests failed on `rosterOf is not a function`; 5 command tests
+  failed on the unknown flag; the stale holder made `--address orchestrator` exit 2. One test
+  ("a peer message is never the title") passed before any code: it pins what already held.
+  Read by the parent after the second round, 05:28: `node --test bin/lib/sessions.test.mjs`
+  152 pass, 0 fail; `node --test bin/sessions.test.mjs` 132 pass, 0 fail, 1 skipped; `node
+  --test bin/js-harness.test.mjs` 23 pass; on this machine `sessions --address orchestrator`
+  printed `JH ORQ · js-harness`, exit 0; `--address 6` printed the title of work session 6,
+  exit 0; `--address 9` exit 1, with 12 transcripts of the window counted. 815 lines added and
+  19 deleted, of which about 480 are tests: over the 400 guide because the reader, the roster
+  and the command each carry their fixtures. Not built, on purpose: the columns of the roster
+  that come from the record. Not checked here: the whole suite, which the commit's gate runs.
 
 ## Next step
 Slice "roster first", on `feat/session-roster`: T3, then the roster of T4 and `--address`,

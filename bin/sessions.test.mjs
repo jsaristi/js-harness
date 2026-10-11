@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
-import { NOT_VISIBLE, projectSlug, sessionFacts } from './lib/sessions.mjs';
+import { NOT_VISIBLE, ROSTER_NOT_KNOWN, projectSlug, sessionFacts } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
 // `--claude-home` and `--tmp`, and `git`, `gh` and the process listing are fakes, so no test reads this
@@ -160,6 +160,9 @@ const USAGE_ERRORS = [
   ['--context-limit', '0%'], ['--context-limit', '101%'], ['--context-limit', '100.5%'], ['--context-limit', '%'], ['--context-limit', '73%%'], ['--context-limit', '-5%'], ['--context-limit', '7 %'],
   // T6: the relief file is a path like the others.
   ['--relief'], ['--relief', ''], ['--relief', '--json'],
+  // Session channel, T4a: --address takes a role, and answers with a title: no board to watch or to give as data.
+  ['--address'], ['--address', ''], ['--address', 'boss'], ['--address', '5.5'], ['--address', 'JH 5'], ['--address', '--json'], ['--address', HUGE],
+  ['--address', 'orchestrator', '--json'], ['--address', '5', '--watch'], ['--watch', '--address', 'ORQ'],
 ];
 
 /** A usage case as the name of its test says it: its arguments, a long run of digits as its length, so
@@ -185,6 +188,12 @@ for (const argv of USAGE_ERRORS) {
     assert.match(err.join('\n'), /Usage: js-harness sessions/);
   });
 }
+
+test('the usage says what --address takes and what each of its three exits means, as the dispatcher\'s help does', async () => {
+  const err = [];
+  assert.equal(await sessionsMain(['--address'], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
+  assert.match(err.join('\n'), /--address orchestrator\|<number>[\s\S]*exit 0 for one,\s+1 for none with every transcript read,\s+2 for several or when it cannot tell/);
+});
 
 // --- where the sessions are ---
 
@@ -1098,6 +1107,170 @@ test('--watch returns for a gate a pre-commit hook started as js-harness check, 
   assert.deepEqual(end.lines.slice(0, 2), ['sessions --watch: 1 change after 5s', '  gate ended in an unknown worktree (pid 5150)']);
 }));
 
+// --- the roster, and the address of a role ---
+
+const SESSION_E = 'eeeeeeee-5555-4555-8555-555555555555';
+const ORCHESTRATOR = 'JH ORQ · proj';
+const WORKER = 'JH 5 · the roster';
+
+/** Writes a session that was given `title`: his prompt, with the permission mode the host records on it,
+ * and the reply that ended its turn `seconds` ago. Its file was last written then, or `touched` seconds
+ * ago when the app wrote to it since: an entry with no time, as it appends to a transcript it opens. */
+function writeTitled(machine, id, title, seconds, { mode = 'bypassPermissions', cwd = 'C:\\proj', branch = 'main', touched } = {}) {
+  const where = { cwd, gitBranch: branch };
+  const untimed = touched === undefined ? [] : [{ type: 'cost-state', sessionId: id }];
+  const lines = jsonl({ type: 'custom-title', customTitle: title, sessionId: id }, { ...prompt('go', seconds + 10), ...where, permissionMode: mode }, { ...reply('Done.', seconds), ...where }, ...untimed);
+  writeAt(path.join(machine.projectDir, `${id}.jsonl`), lines, touched ?? seconds);
+}
+const transcriptOf = (machine, id) => path.join(machine.projectDir, `${id}.jsonl`);
+/** A `readFile` that cannot read the transcript of `id`, as when the session is writing it. */
+const busyOn = (id) => (absolute) => {
+  if (absolute.endsWith(`${id}.jsonl`)) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+  return fs.readFileSync(absolute, 'utf8');
+};
+
+/** An orchestrator, a work session in the linked worktree that runs in another permission mode, and the
+ * transcript of an orchestrator of thirteen hours ago, outside the window. */
+function writeRoster(machine) {
+  writeTitled(machine, SESSION_A, ORCHESTRATOR, 600);
+  writeTitled(machine, SESSION_B, WORKER, 60, { mode: 'auto', cwd: machine.worktree, branch: 'feat/board' });
+  writeTitled(machine, SESSION_C, 'JH ORQ · long ago', 13 * 3600);
+}
+
+test('the board has a roster after the sessions: a row per title with its role, in the text and in --json', withMachine(async (machine) => {
+  writeRoster(machine);
+  writeAt(path.join(machine.worktree, 'odd', 'tasks', 'board.md'), BOARD_PLAN, 300);
+  const deps = { run: fakeRun(machine, withPlan(machine)).run, env: { CLAUDE_CODE_SESSION_ID: SESSION_B } };
+  const lines = (await runSessions(machine, [], deps)).stdout.split('\n');
+  assert.deepEqual(lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees')), [
+    'Roster',
+    `  orchestrator  ${ORCHESTRATOR}  silent since 10m ago`,
+    '    mode bypassPermissions  folder C:\\proj  branch main  transcript aaaaaaaa',
+    `  work 5  ${WORKER}  this session, last entry 1m ago`,
+    `    mode auto  folder ${machine.worktree}  branch feat/board  feature board  transcript bbbbbbbb`,
+    `  ${ROSTER_NOT_KNOWN}`,
+    '',
+  ]);
+  assert.ok(lines.indexOf('Roster') > lines.findIndex((line) => line.startsWith('aaaaaaaa  ')), 'after the sessions');
+
+  const wide = await runSessions(machine, ['--json', '--hours', '24'], deps);
+  const { roster } = JSON.parse(wide.stdout);
+  assert.deepEqual(roster.rows.map((row) => [row.role, row.number, row.title, row.purpose, row.permissionMode, row.self, row.features, row.transcripts.map((transcript) => transcript.id)]), [
+    ['orchestrator', null, ORCHESTRATOR, 'proj', 'bypassPermissions', false, [], [SESSION_A]],
+    ['orchestrator', null, 'JH ORQ · long ago', 'long ago', 'bypassPermissions', false, [], [SESSION_C]],
+    ['work', 5, WORKER, 'the roster', 'auto', true, ['board'], [SESSION_B]],
+  ]);
+  assert.deepEqual([roster.unread, roster.outside], [0, 0]);
+  const said = (await runSessions(machine, ['--hours', '24'], deps)).stdout.split('\n').filter((line) => line.includes('carry the orchestrator'));
+  assert.deepEqual(said, [`  2 sessions carry the orchestrator's title: "${ORCHESTRATOR}", "JH ORQ · long ago". A message to the orchestrator has no single address.`]);
+}));
+
+test('--address prints the title of the one session that holds a role and exits 0, and reads nothing but the transcripts', withMachine(async (machine) => {
+  writeRoster(machine);
+  const fake = fakeRun(machine);
+  const mustNot = () => {
+    throw new Error('--address must not list the processes');
+  };
+  const found = await runSessions(machine, ['--address', 'orchestrator'], { run: fake.run, listProcesses: mustNot });
+  assert.deepEqual([found.code, found.stdout, found.stderr], [0, ORCHESTRATOR, '']);
+  assert.deepEqual(fake.calls.map((made) => made.args[0]), ['rev-parse'], 'no worktree, no pull request: only where the project is');
+  for (const name of ['ORQ', 'orq']) assert.deepEqual([(await runSessions(machine, ['--address', name])).stdout, name], [ORCHESTRATOR, name]);
+  const worker = await runSessions(machine, ['--address', '5']);
+  assert.deepEqual([worker.code, worker.stdout, worker.stderr], [0, WORKER, '']);
+}));
+
+test('--address exits 1 with one line when no session holds the role', withMachine(async (machine) => {
+  writeRoster(machine);
+  const none = await runSessions(machine, ['--address', '7']);
+  assert.deepEqual([none.code, none.stdout, none.stderr], [1, '', 'js-harness sessions: no session carries the title of work session 7 (transcripts that changed in the last 12h: 2)']);
+  // The window is the board's: an orchestrator that last wrote before it holds nothing, and --hours widens it.
+  writeTitled(machine, SESSION_A, 'JH ORQ relevada · proj', 600);
+  const relieved = await runSessions(machine, ['--address', 'orchestrator']);
+  assert.deepEqual([relieved.code, relieved.stdout, relieved.stderr], [1, '', 'js-harness sessions: no session carries the title of the orchestrator (transcripts that changed in the last 12h: 2)']);
+  const wide = await runSessions(machine, ['--address', 'orchestrator', '--hours', '24']);
+  assert.deepEqual([wide.code, wide.stdout], [0, 'JH ORQ · long ago']);
+  // No sessions folder is no session either, said as the board says it.
+  fs.rmSync(machine.projectDir, { recursive: true });
+  const gone = await runSessions(machine, ['--address', 'orchestrator']);
+  assert.deepEqual([gone.code, gone.stdout, gone.stderr], [1, '', `js-harness sessions: no sessions folder for ${machine.root}: ${machine.projectDir} (ENOENT)`]);
+}));
+
+// The app appends entries with no time to a transcript it opens, so a file can be of this minute and its
+// session of two weeks ago (seen on 2026-10-11). The board still lists the transcript; no role is held by it.
+test('a session is a row of the roster, and holds a role, only while its last timed entry is in the window, however new its file', withMachine(async (machine) => {
+  writeRoster(machine);
+  writeTitled(machine, SESSION_D, 'JH ORQ · days ago', 13 * 86400, { touched: 30 });
+  writeTitled(machine, SESSION_E, 'JH 7 · days ago', 14 * 86400, { touched: 20 });
+  const found = await runSessions(machine, ['--address', 'orchestrator']);
+  assert.deepEqual([found.code, found.stdout, found.stderr], [0, ORCHESTRATOR, '']);
+  const none = await runSessions(machine, ['--address', '7']);
+  assert.deepEqual([none.code, none.stdout, none.stderr], [1, '', 'js-harness sessions: no session carries the title of work session 7 (transcripts that changed in the last 12h: 4, 2 of them with no entry in that time)']);
+  // A window wide enough for their entries, and both hold what their titles say.
+  assert.deepEqual([(await runSessions(machine, ['--address', '7', '--hours', '400'])).stdout, (await runSessions(machine, ['--address', 'orchestrator', '--hours', '400'])).code], ['JH 7 · days ago', 2]);
+
+  const lines = (await runSessions(machine, [])).stdout.split('\n');
+  const roster = lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees'));
+  assert.deepEqual(roster.filter((line) => line.includes('days ago')), []);
+  assert.deepEqual(roster.filter((line) => line.includes('in no row')), ['  2 transcripts with no entry inside the window are in no row']);
+  assert.equal(roster.filter((line) => line.startsWith('  orchestrator  ')).length, 1);
+  // The rest of the board keeps its window: the transcripts are listed as before.
+  assert.equal(lines[0], `Sessions  ${machine.root}  4 changed in the last 12h`);
+  assert.match(lines.find((line) => line.startsWith('dddddddd  ')), /JH ORQ · days ago {2}last entry 13d ago$/);
+  const board = JSON.parse((await runSessions(machine, ['--json'])).stdout);
+  assert.deepEqual([board.sessions.length, board.roster.rows.length, board.roster.outside], [4, 2, 2]);
+}));
+
+// A session that starts as orchestrator takes exit 1 as "you may start": not knowing must not read as "none".
+test('--address exits 1 only when every transcript of the window was read: with no holder and one unread it exits 2 and names the file', withMachine(async (machine) => {
+  writeRoster(machine);
+  const unreadable = `${transcriptOf(machine, SESSION_A)} (EBUSY)`;
+  const unknown = await runSessions(machine, ['--address', 'orchestrator'], { readFile: busyOn(SESSION_A) });
+  assert.deepEqual([unknown.code, unknown.stdout], [2, '']);
+  assert.equal(unknown.stderr, `js-harness sessions: not known whether a session carries the title of the orchestrator: 1 transcript that changed in the last 12h could not be read: ${unreadable}`);
+  // One holder found is still the answer, with what was not read said beside it.
+  const found = await runSessions(machine, ['--address', '5'], { readFile: busyOn(SESSION_A) });
+  assert.deepEqual([found.code, found.stdout, found.stderr], [0, WORKER, `js-harness sessions: 1 transcript that changed in the last 12h could not be read and is not counted: ${unreadable}`]);
+  // Several holders are several whatever else could not be read.
+  writeTitled(machine, SESSION_D, 'JH 5 · another', 30);
+  const several = await runSessions(machine, ['--address', '5'], { readFile: busyOn(SESSION_A) });
+  assert.deepEqual([several.code, several.stdout.split('\n'), several.stderr.split('\n')], [
+    2,
+    ['JH 5 · another', WORKER],
+    ['js-harness sessions: 2 sessions carry the title of work session 5: a message to it has no single address', `js-harness sessions: 1 transcript that changed in the last 12h could not be read and is not counted: ${unreadable}`],
+  ]);
+  // The transcript of the session that asks is not another session's: unread, it leaves the answer whole.
+  const own = await runSessions(machine, ['--address', 'orchestrator'], { readFile: busyOn(SESSION_A), env: { CLAUDE_CODE_SESSION_ID: SESSION_A } });
+  assert.deepEqual([own.code, own.stderr], [1, 'js-harness sessions: no session carries the title of the orchestrator (transcripts that changed in the last 12h: 3, the one that asks is not counted)']);
+  // Two that could not be read are both named.
+  const two = await runSessions(machine, ['--address', '9'], { readFile: (absolute) => busyOn(SESSION_A)(absolute) && busyOn(SESSION_B)(absolute) });
+  assert.deepEqual([two.code, two.stderr], [2, `js-harness sessions: not known whether a session carries the title of work session 9: 2 transcripts that changed in the last 12h could not be read: ${transcriptOf(machine, SESSION_B)} (EBUSY), ${unreadable}`]);
+}));
+
+test('--address exits 2 and prints each title when more than one session holds the role', withMachine(async (machine) => {
+  writeRoster(machine);
+  writeTitled(machine, SESSION_D, 'JH ORQ · other', 30);
+  const several = await runSessions(machine, ['--address', 'orchestrator']);
+  assert.deepEqual([several.code, several.stdout.split('\n')], [2, ['JH ORQ · other', ORCHESTRATOR]]);
+  assert.equal(several.stderr, 'js-harness sessions: 2 sessions carry the title of the orchestrator: a message to it has no single address');
+  // A handover names the one that arrives and the one that leaves otherwise, so one orchestrator is left.
+  writeTitled(machine, SESSION_D, 'JH ORQ nueva · proj', 30);
+  assert.deepEqual([(await runSessions(machine, ['--address', 'orchestrator'])).code, (await runSessions(machine, ['--address', 'orchestrator'])).stdout], [0, ORCHESTRATOR]);
+}));
+
+test('--address never counts the session that asks: CLAUDE_CODE_SESSION_ID, or --self', withMachine(async (machine) => {
+  writeRoster(machine);
+  const asOrchestrator = { env: { CLAUDE_CODE_SESSION_ID: SESSION_A } };
+  const own = await runSessions(machine, ['--address', 'orchestrator'], asOrchestrator);
+  assert.deepEqual([own.code, own.stdout, own.stderr], [1, '', 'js-harness sessions: no session carries the title of the orchestrator (transcripts that changed in the last 12h: 2, the one that asks is not counted)']);
+  assert.equal((await runSessions(machine, ['--address', 'orchestrator', '--self', 'aaaaaaaa'])).code, 1);
+  assert.deepEqual([(await runSessions(machine, ['--address', '5'], asOrchestrator)).stdout, (await runSessions(machine, ['--address', '5', '--self', 'bbbbbbbb'], asOrchestrator)).code], [WORKER, 1]);
+  // A second session under the orchestrator's own title is another session that holds the role: the one
+  // that asks is left out, the other is its answer.
+  writeTitled(machine, SESSION_E, ORCHESTRATOR, 30);
+  const twin = await runSessions(machine, ['--address', 'orchestrator'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_E } });
+  assert.deepEqual([twin.code, twin.stdout], [0, ORCHESTRATOR]);
+}));
+
 // --- read-only ---
 
 test('sessionsMain writes nothing: every file of the machine is as it was', withMachine(async (machine) => {
@@ -1114,5 +1287,6 @@ test('sessionsMain writes nothing: every file of the machine is as it was', with
   await runSessions(machine, []);
   await runSessions(machine, ['--json', '--hours', '24']);
   await watch(machine, ['--interval', '5', '--timeout', '10']);
+  await runSessions(machine, ['--address', 'orchestrator']);
   assert.deepEqual(snapshot(), was);
 }));
