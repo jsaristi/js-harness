@@ -87,8 +87,11 @@ export async function readLoad(sample = sampleLoad, look = busiestProcesses) {
   if (!said || !Number.isFinite(load.busy)) return { notRead: 'the sampler gave no figure' };
   if (!isLoaded(load)) return load;
   try {
-    const busiest = await look();
-    return Array.isArray(busiest) && busiest.length > 0 ? { ...load, busiest } : load;
+    const found = await look();
+    // Only what can be said in a line: a look that stands in for the real one may answer anything, and a
+    // line that throws would fail the gate over its load.
+    const busiest = Array.isArray(found) ? found.filter((one) => one !== null && typeof one === 'object' && typeof one.name === 'string' && Number.isFinite(one.cpuSeconds)) : [];
+    return busiest.length > 0 ? { ...load, busiest } : load;
   } catch {
     return load;
   }

@@ -130,6 +130,18 @@ test('a look that finds nobody, gives no list, throws or rejects leaves the samp
   }
 });
 
+test('a look that names what is no process keeps the ones that are, so that no line of the load can throw', async () => {
+  const loaded = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
+  const [server] = BUSIEST;
+  // No time, a time that is no number, no name, and what is no object at all.
+  const not = [{ name: 'node', script: null, pid: 7 }, { name: 'node', script: null, pid: 8, cpuSeconds: 'much' }, { script: null, pid: 9, cpuSeconds: 1 }, null, 'node', 3];
+  const said = await readLoad(async () => loaded, lookThatFinds([not[0], server, ...not.slice(1)]));
+  assert.deepEqual(said, { ...loaded, busiest: [server] });
+  assert.doesNotThrow(() => loadLines(said));
+  // Nobody left to name is nobody named: the sample as it was.
+  assert.equal(await readLoad(async () => loaded, lookThatFinds(not)), loaded);
+});
+
 test('loadLines says each of the busiest processes of a load in a line of its own, and nothing of a load that names none', () => {
   const load = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
   assert.deepEqual(loadLines({ ...load, busiest: BUSIEST }), ['3.2 s of CPU in 2 s  node tsserver.js (pid 12044)', '1.6 s of CPU in 2 s  chrome (pid 9000)']);

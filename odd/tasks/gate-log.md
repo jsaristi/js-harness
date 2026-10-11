@@ -515,6 +515,36 @@ Progress.
   removes the channel's folder under `<home>/.js-harness`, whole. S2 is cut after `main` is
   merged in, and its removal of the log's folder follows that one's shape.
 
+- 2026-10-11 · gentle-ai reviewed `9c49587` against `84e93a5`, started under the gate lock
+  (`gate -- node rv-run.cjs …`, 07:53 to 08:02 with the wait): one lens, reliability,
+  approved and acknowledged (lineage `review-3d908c2c0a715191`), nothing blocking, two
+  findings, both fixed inline in the commit after it (three files, test first, the new test
+  red before the code): the one real look of the suite asserted that somebody is named, and
+  a look names nobody by design when its helper misses its bound, which a machine as busy
+  as the suite keeps it can cause, so a best-effort feature could turn a gate red; and
+  `readLoad` kept whatever entries a look answered, so one without a numeric time would
+  throw in the line that prints it. The `gate` that ran the review said its own load:
+  `4.4 of 8 logical processors busy before the command (55%, 1 s sample), right after
+  another gate`, then `BackgroundDownload`, and two `claude`.
+- 2026-10-11 · T7, one writer (route: delegated; ten files) in the third worktree. Test
+  first: four new tests of a run failed on the number of questions (`4 !== 1`, `[5,2]`
+  against `[1,0]`), and the new options in the libraries failed before they existed. No
+  existing assertion was changed. A run keeps one object in its own closure, `where`, and
+  hands it on in the options objects: `top` (the root the run already has, so
+  `--show-cdup` is never asked), `commonGitDir` (a lazy getter over `gitDirs`; a null or a
+  throw is not kept) and `marks`, what git said the project marks at a commit, which the
+  profile had not named: the coverage of the records and the files of the range asked
+  `check-attr` about the same paths at the same commit. A caller that passes nothing asks
+  as before; `bin/check.mjs` is untouched. The count again, both files under the lock, 331
+  tests pass: **11,735 to 9,986** git processes; `bin/codex-review.test.mjs` 8,589 to
+  6,840, the other file unchanged at 3,146; `rev-parse` 5,491 to 3,927; `check-attr` 883 to
+  632. Nothing to cut in what the run asks through `gitOutput`: no question is repeated but
+  `HEAD` under `--base HEAD`. Left, each a decision of its own: the two ends of the range,
+  and the top with the git folder, could each be one `rev-parse` (about a thousand more),
+  but they are separate questions with their own error messages that the tests' stand-ins
+  key on; `check` hands on no `where` (171 `topOf` and its record reads). The change is the
+  patch `t7.patch` in the scratchpad, to be applied in the second worktree.
+
 ## Resume here (state at 2026-10-11 08:00, for a session that lost its conversation)
 - Done and committed: on `feat/gate-log` (worktree `D:\js-harness-worktrees\gate-log`) the
   document `287a585`, T1 `84e93a5` (gentle-ai approved), T2 `9c49587` (gentle-ai not yet
