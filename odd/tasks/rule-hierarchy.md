@@ -2,9 +2,9 @@
 
 Locator: `odd/tasks/rule-hierarchy.md` · Engram mirror: `odd/rule-hierarchy/tasks` · Designed on
 branch `docs/channel-and-rules-design` by the session `JH 4 · diseño canal y reglas` (2026-10-10),
-together with `odd/tasks/session-channel.md`. Nothing is built here: the feature is built later,
-in a session of its own, on a branch of its own, after the session channel (roadmap order, items
-3 and 4).
+together with `odd/tasks/session-channel.md`. Built from 2026-10-11 by the session
+`JH 7 · registro de fallas y reglas`, which owns this document from that day: T3 first, then T1,
+while the session channel is still being built (the reason is in Progress, 2026-10-11).
 
 ## Goal
 Every working rule of this project acts from one of three places — a check a command or a hook
@@ -104,6 +104,11 @@ Forecast: about 1,400 to 1,800 authored lines over six slices, each its own pull
 `main`, merged in order (`stacked-to-main`, as every feature since `odd/tasks/project-init.md`).
 Slices: 1 = T1; 2 = T2; 3 = T3 to T6; 4 = T7 to T9; 5 = T10; 6 = T11 to T15.
 
+Changed on 2026-10-11: T3 leaves slice 3 and is delivered first, as a slice of its own on the
+branch `feat/failures-register`; T1 follows as the next slice. T2 and T8 wait for him. The
+forecast for T3 is about 1,000 authored lines (the library and its tests, the command, the row,
+the seeded file), under the 1,200 a reviewed commit may hold.
+
 ## Design
 
 ### The placement rule
@@ -189,14 +194,12 @@ Cost: a refused reply costs one more turn. Proof: `node --test bin/reply.test.mj
 step that installs and removes the hook, and the count of refusals per session on the board
 (session channel, measures), which should fall towards zero.
 
-**C2 The failures register** (`docs/FAILURES.md`, row `failures` of `check`). His words of
-2026-10-10: a mistake is told with how it is solved now, how it does not happen again and how it
-is integrated, and "a futuro comprobar que esto no vuelva a fallar". Each entry has an id, the
-date, what happened, the owner (a feature document), and a state. An open entry names its owner;
-a closed one names its proof: a test the gate runs, a step of the practice journey, or a count a
-command prints. The row fails when an open entry has no owner, when a closed one has no proof,
-or when the file a proof names does not exist. It is seeded with the eighteen entries of
-"Failures of 2026-10-10" below. In an installed project the row acts only when the file exists.
+**C2 The failures register** (`docs/FAILURES.md`, row `failures` of `check`, command
+`js-harness failures`). Designed again on 2026-10-11, before anything was built, in the section
+"The failures register" below; the first design, an id, a date, an owner and a state written by
+hand, is in this file's history (`6d8bc82`). It is seeded with the eighteen entries of "Failures
+of 2026-10-10" and with those of 2026-10-11. In an installed project the row acts only when the
+file exists.
 
 **C3 The specification** (`docs/SPEC.md`, row `spec`). As the roadmap describes it: one entry
 per capability with problem, requirement, reason, proof command, what was discarded, and a
@@ -249,6 +252,124 @@ either designs the audit as a count on the board or records why not.
 Not built here, only pointed to: the gate lock of `feat/gate-lock` is the check for "never two
 gates" and replaces three rules kept by hand (59 to 61 of the survey); the pre-push row already
 checks the Codex record.
+
+### The failures register
+The design of C2, by the session that builds it (`JH 7 · registro de fallas y reglas`,
+2026-10-11).
+
+The need, in his words. On 2026-10-10: a mistake is told with how it is solved now, how it does
+not happen again and how it is integrated, and "a futuro comprobar que esto no vuelva a fallar".
+On 2026-10-11: "tenemos una forma de guardar logs de fallos o informacion erronea para poder
+llevar un registro y poder hacer correciones a futuro y ver que tan repetitivo hacemos algo?"
+(the orchestrator's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1360, read by
+this session). Read as three needs: one record of what went wrong, wrong information included;
+each entry tied to what corrects it; and a count of how often each thing, and each kind of
+thing, comes back. What existed on that day: failures numbered by hand in the orchestrator's
+relief file and in feature documents, in two numberings that already disagree (16 to 18 of
+"Failures of 2026-10-10" below are not the 16 to 18 of the relief file's line 202), and nothing
+that counts them.
+
+What a failure is, for this file: the work went wrong in a way a control could prevent. He was
+asked, or kept waiting, for what was not his; something false or unchecked was stated as a fact;
+a tool showed a state that was not the real one; the machine's load or its leftovers hurt a run;
+a rule existed and nothing made it act; a command failed or did the wrong thing. A test that
+fails and is fixed inside its own task is not one: the gate is that control, working.
+
+The file. `## Classes` declares the classes, one list item each (`` `id` `` and what it means).
+`## Entries` holds one entry per failure: a `### <id>` heading, one paragraph that says what
+happened, and a list of fields.
+
+```
+### language-server-load
+A TypeScript language server per session works while tests write files, and a gate reaches its
+bound.
+- Class: machine
+- Aka: failure 20
+- Seen: 2026-10-11 — relief file, line 202 — found beside the tests of two sessions
+- Seen: 2026-10-11 — relief file, line 224 — a gate at 1,188 s of 1,200
+- Control: owed — odd/tasks/gate-log.md T9
+```
+
+That block shows the shape only: the lines of the seed are written from the records, not from it.
+
+- The id is lowercase words joined by hyphens, not a number: two branches that each add a failure
+  would both take the next number, and the collision would only show on `main`. The numbers the
+  earlier records used stay in `Aka`, so those records can still be followed. Entries are kept in
+  the alphabetical order of their ids, which the row checks: two branches that add entries then
+  seldom touch the same lines, where a file ordered by time is in conflict at its end every time.
+- `Class` is one of the classes the file itself declares, so a project that installs the harness
+  names its own. The seed proposes seven, his to correct: `wrong-information` (stated as a fact,
+  and not checked or not true), `asked-of-him` (asked or kept waiting for what was not his),
+  `unseen-state` (a tool showed a state that was not the real one, or did not show it),
+  `machine` (load or leftovers: processes, folders, locks), `rule-not-acting` (a rule existed and
+  nothing made it act), `tool` (a command of the harness or of the stack failed or did the wrong
+  thing), `delivery` (a commit, a review or a merge left in a shape that could not be checked).
+- `Seen` is one line per sighting, in date order: the date, where the evidence is, a note. The
+  number of these lines is how often the thing came back; it is never written as a figure.
+- `Control` is absent, owed or in place.
+  Owed: `owed — <feature document> <task id>`, the task that will build it.
+  In place: `<check|line|protocol> — <path> — "<phrase>" — since <date>`, one of the three levels
+  of the placement rule. The path is a file of the repository and the phrase is text that file
+  must hold: the name of the test for a check, the sentence for a line of `AGENTS.md`, the
+  heading for a protocol.
+- `Was` is a control that did not hold, moved there when the failure is seen after it. Free text.
+
+There is no state field. The state is computed from the fields: no control, owed, controlled, or
+seen again (a sighting later than `since`). A state written by hand is one more statement that
+can be false, in a file that exists to count those.
+
+What the row refuses. Each refusal says what is missing and how it is written (the refusal
+carries the rule):
+1. A file that cannot be read as a register: an entry with no paragraph, no class or no
+   sighting; a class the file does not declare; an id that is not in the shape, is repeated or is
+   out of order; a date that is no date; sightings out of date order; a field it does not know.
+2. A failure seen twice or more with no `Control`.
+3. A control owed to a document that does not exist, to a task that document does not hold, or
+   to a task already checked off: the task is done, so the entry names what it left.
+4. A control in place whose path does not exist, or whose file no longer holds the phrase. This
+   is what makes a rule leave safely: the commit that drops a line of `AGENTS.md`, or renames a
+   test, fails until the entry names what replaces it.
+5. A sighting later than the `since` of the control in place: the control did not hold. The entry
+   moves it to `Was` and names the next one, or owes it.
+
+Recording stays cheap, on purpose. A second sighting costs one line and the name of a task; it
+never costs building the control in the same commit. A row that asked for more would be obeyed
+by not recording. For the same reason nothing fails by the calendar: a row that turned red with
+the date would refuse a commit that changed nothing. The age of what is owed is printed instead,
+on every gate: the row's detail carries the number of failures, of sightings, of repeated
+failures and of those repeated with a control still owed.
+
+The command. `js-harness failures` prints the totals, the count of entries and sightings by
+class, and one line per entry, the most seen first, with its state. `js-harness failures <id>`
+prints one entry whole, and for a check whose path is a test file the command that proves it
+(`node --test <path>`). `--json` gives the same data. `js-harness failures check` runs the row
+alone and exits 1 when it refuses. It reads; nothing writes the file but an editor.
+
+What the row proves and what it does not. It proves that every repeated failure has a control
+named or a task that owes one, and that every control named is still in the tree. It does not
+prove that a control works: the test it names does, and the gate runs it. It does not prove
+that every failure was recorded: nothing can, and the honesty audit (C9) is the nearest thing.
+A date has no hour, so a failure seen again on the day its control entered reads as seen before
+it.
+
+Judged twice. Here it replaces two hand-kept lists and gives the two numbers this feature ends
+on their first command ("no repeated mistake" becomes: no entry seen after its control). In a
+project that only installs the harness, the row acts only when `docs/FAILURES.md` exists, the
+classes are the project's own, and a task id is what gentle-ai's ODD documents already carry.
+Not built in this slice, and said so: `init` does not write an empty register (it goes with T9,
+with the template), and no command writes a sighting; that is built only if editing by hand
+proves to cost.
+
+A limit of who writes. The orchestrator writes only its relief file, so what it sees reaches the
+register through a work session that reads that file, and the evidence of such a sighting is a
+line of a file that lives on one machine. A notice of kind `failure` on the session channel
+would close that gap; it is proposed to that feature, not built here.
+
+Where the code lives. `bin/lib/failures.mjs` parses, validates and counts, from text, with no
+file access, as `bin/lib/contract.mjs` does. `bin/failures.mjs` is the command and the row: it
+reads the files the entries name. `bin/check.mjs` gains an import and one call, and
+`bin/js-harness.mjs` one entry; both are told to the orchestrator first, because another session
+owns `bin/check.mjs` while this is built.
 
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
@@ -514,13 +635,27 @@ names it, and the entry stays open until it does.
 - [ ] T1 `docs/SPEC.md` from the capability survey, and the row `spec`
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
-- [ ] T3 `docs/FAILURES.md` seeded with the eighteen, and the row `failures`
+- [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
+  writer; the trigger is three files that are not mechanical)
+  - [ ] T3a The design read by a reader that did not write it, and what it found taken or
+    answered
+  - [ ] T3b `bin/lib/failures.mjs` and its tests: the parser, the five refusals, the counts
+  - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
+    `failures` of `check`; the entry in the dispatcher
+  - [ ] T3d `docs/FAILURES.md` seeded with the eighteen and with those of 2026-10-11, each
+    control checked against `origin/main` before it is written as in place
 - [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
   the push row hints the merge commit as the base after `main` is merged in (failure 15)
 - [ ] T5 The row `citations`, INFO
 - [ ] T6 The row `memory-rules` of `doctor`
 - [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
-- [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him
+- [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him. His idea of
+  2026-10-11 for how (relief file, line 203), recorded here and not built yet: the text is
+  drafted in `docs/agents-build.md`, analysed, reordered and polished there with the budget
+  measured on the draft at each step, and when he approves it one commit copies it over
+  `AGENTS.md` and deletes the draft, so there is never a second source. The reason the lead
+  added: a session that edits `AGENTS.md` in its own worktree reads that file on every turn, so
+  a half-written version would govern the session that writes it
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him
 - [ ] T10 The honesty eval: the task and its proof; then, before any spend is asked of him, the
@@ -602,8 +737,24 @@ names it, and the entry stays open until it does.
   name guessed now is a claim nobody checked); the Codex documentation's address stays as the
   sub-agent gave it, marked as not opened by this session.
 
+- 2026-10-11, the build opens at T3. The session `JH 7 · registro de fallas y reglas` was opened
+  by the orchestrator's block, pasted with no typed line of his; before it did anything it
+  compared the paste with the block of the orchestrator's last reply (transcript `7d2ae675`,
+  line 1399: identical, 3,192 characters) and read his words at line 1360. Why T3 comes before T1
+  and before the session channel is merged: he asked on 2026-10-11 for a record of failures and
+  of wrong information that counts repeats (relief file, line 236), and neither T3 nor T1 edits
+  what the channel edits, except one entry of the dispatcher. The constraint "Not built while
+  the session channel is being built" stands for T2, T7, T8 and T9. Worktree
+  `D:\js-harness-worktrees\failures-register`, branch `feat/failures-register`, cut from
+  `origin/main` `51a24db`. The design of the register was written before any code ("The failures
+  register"); what changed against C2 as first designed, and why: the id is a word and not a
+  number (two branches collide on the next number); the state is computed and not written; a
+  control is a place and a phrase the row can find, which replaces the separate proof; and a
+  repeat with no control is refused only until a task owes it, so that recording stays cheap.
+
 ## Next step
-The build waits for the session channel to be merged. Its session opens this document, confirms
-with a logging hook every host fact of "What the hosts allow" that T2 rests on (the `Stop`
-input, the refusal, the flag when two `Stop` hooks are installed), and starts at T1. Before T2
-it asks Sebastián the first item of "Ask me before".
+T3a: the design of "The failures register" is read by a reader that did not write it, while a
+second reader lists every failure of the records with its sightings and the controls already on
+`origin/main`. Then T3b to T3d, test first, and the slice's two reviews. T1 follows. T2 and T8
+wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of "What
+the hosts allow" that T2 rests on are confirmed with a logging hook.
