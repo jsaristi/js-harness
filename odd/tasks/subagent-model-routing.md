@@ -14,6 +14,17 @@ subagent for narrowly scoped work and publishes no measurement of Opus plus Haik
 against Opus alone (engram `roadmap/subagent-model-routing`, 2026-10-08). Routing subagents to a
 cheaper model goes into the harness only if a measurement of ours says it helps (principle 2).
 
+From the roadmap's record of his decision of 2026-10-08 to compare the two: what Anthropic
+published (anthropic.com/claude-haiku-5-5, read on 2026-10-08) is narrower: the 75% is Haiku
+5.5 against Haiku 4.5; Sonnet 5.5 and Opus 5.5 "remain better choices" for complex agentic
+coding (Terminal-Bench 4.0: 39.2% against Sonnet's 70.6%); Haiku is recommended as a subagent
+for narrowly scoped work; and no figure is given for the pairing against Opus alone. So the
+question to measure is the same quality on scoped work, cheaper and faster, read by kind of
+work (exploring, running tests and reporting, writing code): quality by the hidden graders as
+a pass rate over repeated runs, cost in list dollars and tokens of each model, wall time, and
+how many subagents a run spawned. A run that spawns none measures nothing of this, so the
+design has to make delegation happen. Its start prompt was handed to him on 2026-10-08.
+
 ## Done when
 - `npm run check` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/subagent-model-routing.md` exits 0
@@ -64,9 +75,9 @@ cheaper model goes into the harness only if a measurement of ours says it helps 
   probe call (spent), 2 smoke trials, the rest of the first repeat (4 trials, 6 in all), then
   his go-ahead for the other 12. The count of a batch is stated before it starts — because
   other sessions use this machine and the runs draw on the plan's weekly cap.
-- Never two gates at once, and no gate or test suite while trials run — because parallel spawns
-  on this host fail with `0xC0000142` (`odd/tasks/evals.md`, follow-ups). The other session works
-  in `D:\js-harness-worktrees\codex-review-lean`.
+- No gate or test suite beside a batch of trials: the gate lock keeps them apart, and a batch
+  takes it with `js-harness gate -- <command>` (`odd/tasks/gate-lock.md`) — because parallel
+  spawns on this host fail with `0xC0000142` (`odd/tasks/evals.md`, follow-ups).
 - The stack is not updated by this feature, and every trial names Claude Code 2.1.296 by its
   versioned path (`C:\Users\Oficina\.local\share\claude\versions\2.1.296`), never the
   `claude` on PATH — because the native installer updates that one by itself (it went from

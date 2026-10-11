@@ -26,9 +26,18 @@ export const NOTHING_TO_REVIEW = 'nothing-to-review';
 // reviews is one such file and the log of review runs (`codex-review-runs.mjs`) another, in the same folder.
 
 /** `<git common dir>/js-harness/<name>` for the repository at `root`, or `null` when `root` is not
- * inside one. */
-export function jsonLinesPath(root, name, { spawn = spawnSync } = {}) {
-  const { commonGitDir } = gitDirs(root, spawn);
+ * inside one.
+ *
+ * One git process says where that folder is, each time. A caller that reads and writes these files several
+ * times over one repository asks once itself and says so in `where`: an object whose `commonGitDir` is what
+ * `gitDirs` answered for `root`, the folder, or `null` for a `root` that is in no repository. It is read
+ * once and taken as it is, `null` too, and git is not asked. So whoever keeps an answer from one call to the
+ * next is the one who must not keep a `null`: a git that failed once may answer the next time
+ * (`codexReviewMain`). A `where` that does not say (`undefined`) is none. Nothing is kept here: `check` reads
+ * these files too, for a repository after another in one process. */
+export function jsonLinesPath(root, name, { spawn = spawnSync, where } = {}) {
+  const known = where?.commonGitDir;
+  const commonGitDir = known === undefined ? gitDirs(root, spawn).commonGitDir : known;
   return commonGitDir ? path.join(commonGitDir, 'js-harness', name) : null;
 }
 

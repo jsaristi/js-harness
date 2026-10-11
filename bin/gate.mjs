@@ -10,14 +10,26 @@
 // machine that is loaded when the command starts, with what loads it) goes to stderr, each line starting
 // with `gate:`.
 //
+// Every such run leaves its record in the machine's gate log (bin/lib/gate-log.mjs), as a commit's gate
+// does: when it started and under what, and how its command ended. `js-harness gate log` prints the last
+// gates of that log, and is the one form of `gate` that runs no command and prints on stdout.
+//
 // The command is one argument after `--`, a command line the shell is handed as it is written, or several,
 // a command and its arguments. On Windows several arguments cannot hold everything: `commandLineOf` says
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
+import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
-const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]';
+const USAGE = [
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  '       js-harness gate log [--last <n>] [--home <path>]',
+].join('\n');
+
+/** How many gates `gate log` prints when `--last` does not say. */
+const GATE_LOG_LAST = 20;
 
 /** The exit code of a `gate` that ran nothing because the lock was held: with `--no-wait`, or past its
  * wait. It is the "try again later" of sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
@@ -105,6 +117,46 @@ function parseArgs(argv, env, defaultCwd) {
   return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, command };
 }
 
+/** What comes after `gate log`, walked as `parseArgs` walks what comes before `--`: `{ home, last }`. */
+function parseLogArgs(argv, env) {
+  const given = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const token = argv[i];
+    if (!['--last', '--home'].includes(token)) throw new GateArgError(`unknown argument: ${token}`);
+    if (token in given) throw new GateArgError(`${token} given twice`);
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
+    given[token] = value;
+  }
+  const last = given['--last'] ?? String(GATE_LOG_LAST);
+  if (!/^[1-9]\d*$/.test(last)) throw new GateArgError(`--last takes a number of gates from 1, not "${last}"`);
+  return { home: given['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(), last: Number(last) };
+}
+
+/** `js-harness gate log`: prints the last gates of the machine's gate log on stdout, one a line and the
+ * newest last (`formatGates`), twenty or as many as `--last` says, and returns the exit code. It only
+ * reads: no lock is taken and nothing runs, so it answers while a gate runs, and that gate is in its
+ * answer as a start with no end. A home with no log is said in one line and is no error. Lines of the
+ * file that are no lines of this log are left out and counted on stderr, and so is a file that could not
+ * be read, which is then exit 1: "could not look" is not "no gates". So that one line is said only of a log
+ * that was read whole; the gates of a file that could be read are printed all the same. */
+function gateLogMain(argv, env) {
+  let parsed;
+  try {
+    parsed = parseLogArgs(argv, env);
+  } catch (err) {
+    console.error(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { dir, events, skipped, unavailable } = readGateLog(parsed.home);
+  const gates = gatesOf(events);
+  if (gates.length === 0 && !unavailable) console.log(`no gate in the log of ${dir}`);
+  for (const line of formatGates(gates.slice(-parsed.last))) console.log(line);
+  if (skipped > 0) console.error(`gate log: ${skipped} unreadable line${skipped === 1 ? '' : 's'} left out (${dir})`);
+  if (unavailable) console.error(`gate log: could not read ${unavailable.join(', ')} (${dir})`);
+  return unavailable ? 1 : 0;
+}
+
 /** Runs the command of `argv` while this process holds the machine's gate lock, and returns the exit code:
  * the command's own, 2 for a usage error, `GATE_NOT_RUN` when the lock was held and nothing ran.
  *
@@ -147,13 +199,28 @@ function parseArgs(argv, env, defaultCwd) {
  * read is not said, and stops nothing. The switch `JS_HARNESS_GATE_LOAD=off` takes the sample and the
  * look away, and inside a gate there is neither: see `sayLoad`.
  *
+ * The run is written in the machine's gate log (`./lib/gate-log.mjs`), in the home the lock is taken in:
+ * a line before the command, after the sample, that says the state of the lock (its own, the turn of the
+ * process that started it, none), whom this gate waited for and the load it read, and a line after it, on
+ * every way out, with how the command ended: `exit <code>`, `killed`, or `error` for a command that could
+ * not run and for an error thrown here. A gate that ran nothing because the lock was held writes one
+ * line. The command is in those lines as the holder's file says it, cut short, since it can hold a
+ * secret. A line that could not be written is said once on stderr and changes nothing else. Nothing is
+ * written inside a gate, whose own record this run is part of, for a usage error, or with the switch
+ * `JS_HARNESS_GATE_LOG=off`.
+ *
+ * `js-harness gate log` runs no command: see `gateLogMain`.
+ *
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
  * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load),
- * `deps.busiest` (for the look for what loads the machine) and `deps.cwd` are replaceable, and so is
+ * `deps.busiest` (for the look for what loads the machine), `deps.gateLog` (for what the record is
+ * written with: `{ append, now, id }`, each optional) and `deps.cwd` are replaceable, and so is
  * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
  * line of another system and stands in for what would run it. */
 export async function gateMain(argv, env = process.env, deps = {}) {
+  // No command comes before `--`, so a first word `log` was a usage error before it was this.
+  if (argv[0] === 'log') return gateLogMain(argv.slice(1), env);
   let parsed;
   let commandLine;
   try {
@@ -164,49 +231,78 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { cwd, home, noWait, waitMinutes } = parsed;
+  /** Runs the command: `{ code, result }`, the exit code of this gate and how the command ended, as the
+   * log says it. */
   const run = async (given) => {
     const result = await (deps.spawn ?? runSensor)(commandLine, { cwd, env: given, timeout: 0, inherit: true });
-    if (result.error) console.error(`gate: ${commandLine} could not run: ${result.error.message}`);
-    else if (result.status === null) console.error(`gate: ${commandLine} was killed by ${result.signal}`);
-    return result.error || result.status === null ? 1 : result.status;
+    if (result.error) {
+      console.error(`gate: ${commandLine} could not run: ${result.error.message}`);
+      return { code: 1, result: 'error' };
+    }
+    if (result.status === null) {
+      console.error(`gate: ${commandLine} was killed by ${result.signal}`);
+      return { code: 1, result: 'killed' };
+    }
+    return { code: result.status, result: `exit ${result.status}` };
   };
   // The load the command starts under, sampled once and said only on a loaded machine. `afterGate` is
-  // whether this gate waited for another, which ran until a moment ago.
+  // whether this gate waited for another, which ran until a moment ago. Returns the load as it was read,
+  // for the log, or nothing when the sample is switched off.
   const sayLoad = async (afterGate = false) => {
-    if (loadSwitchedOff(env)) return;
+    if (loadSwitchedOff(env)) return undefined;
     const load = await readLoad(deps.sampleLoad, deps.busiest);
-    if (!isLoaded(load)) return;
-    console.error(`gate: ${loadDetail(load, { before: 'the command', afterGate })}`);
-    // What loads it, where the look found it: under the figure, as `check` prints it under its row.
-    for (const line of loadLines(load)) console.error(`gate:   ${line}`);
+    if (isLoaded(load)) {
+      console.error(`gate: ${loadDetail(load, { before: 'the command', afterGate })}`);
+      // What loads it, where the look found it: under the figure, as `check` prints it under its row.
+      for (const line of loadLines(load)) console.error(`gate:   ${line}`);
+    }
+    return load;
   };
-  // Inside a gate there is no sample: the command is one of that gate's sensors or started by one, the
-  // gate read the load before them, and a second here would be a second of every such command.
-  if (env.JS_HARNESS_CHECK_INNER === '1') return run(env);
+  // Inside a gate there is no sample and no record: the command is one of that gate's sensors or started
+  // by one, the gate read the load before them and wrote its own start, and a second here would be a
+  // second of every such command.
+  if (env.JS_HARNESS_CHECK_INNER === '1') return (await run(env)).code;
+  const command = `gate -- ${commandLine}`;
+  const record = gateLogSwitchedOff(env)
+    ? null
+    : gateRecord({ home, cwd: path.resolve(cwd), command, ...deps.gateLog, onFailure: (why) => console.error(`gate: the gate log ${why}`) });
+  /** The command between the two lines of its record: the load is read, the start written, and the end
+   * on every way out. `turn` is the state of the lock, and whom this gate waited for. */
+  const logged = async (turn, given, afterGate = false) => {
+    const load = await sayLoad(afterGate);
+    record?.start({ ...turn, load });
+    let result = 'error';
+    try {
+      const ran = await run(given);
+      result = ran.result;
+      return ran.code;
+    } finally {
+      record?.end({ result });
+    }
+  };
   if (env[GATE_HELD_ENV] === '1') {
     console.error(`gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate takes none`);
     // Sampled here as well, as `check` does in the turn of the process that started it: this is a gate
     // of its own, started once by a person or a script and not once per test, and its command starts
     // now. The figure holds what that process itself is doing, which is the load this command meets.
-    await sayLoad();
-    return run(env);
+    return logged({ lock: 'parent', waitedMs: 0, waitedFor: [] }, env);
   }
 
-  const turn = await takeGateTurn({ name: 'gate', home, cwd, command: `gate -- ${commandLine}`, wait: !noWait, waitMinutes }, deps.takeGateLock);
+  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes }, deps.takeGateLock);
+  const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
     console.error(`gate: nothing ran: ${turn.refused}`);
+    record?.refused({ reason: turn.reason, waitedMs, waitedFor });
     return GATE_NOT_RUN;
   }
   if (turn.without) {
     console.error(`gate: running without ${turn.without}, so a gate may run at the same time`);
-    await sayLoad();
-    return run(env);
+    return logged({ lock: 'none', waitedMs, waitedFor }, env);
   }
   const { lock } = turn;
   let lost = false;
   try {
-    await sayLoad(lock.waitedMs >= GATE_WAIT_SAID_MS);
-    return await run({ ...env, [GATE_HELD_ENV]: '1' });
+    return await logged({ lock: 'own', waitedMs, waitedFor }, { ...env, [GATE_HELD_ENV]: '1' }, waitedMs >= GATE_WAIT_SAID_MS);
   } finally {
     // Asked before the release, after which there is no lock to have lost.
     lost = lock.lost();

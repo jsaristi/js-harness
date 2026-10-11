@@ -1,8 +1,9 @@
 # Practice project
 
 Locator: `odd/tasks/practice-project.md` · Engram mirror: `odd/practice-project/tasks` · Branch:
-`feat/practice-project`, worktree `D:\js-harness-worktrees\practice-project`, cut from `main` at
-`20911ea`. Session: `JH 2 · proyecto de práctica`; orchestrator: `JH ORQ · js-harness`.
+`feat/practice-project`, cut from `main` at `20911ea`, merged via `jsaristi/js-harness#52` as
+`ca013c2` and `#53` as `df15929`. Session: `JH 2 · proyecto de práctica`; orchestrator:
+`JH ORQ · js-harness`.
 
 ## Goal
 One command proves a version of the harness in a project outside this repository, where the
@@ -207,8 +208,7 @@ Read in the code, not run, unless it says so. Reported to the orchestrator; none
 
 ## Constraints on the work
 - Test first, runner `node --test`, for the pure part. The command itself is proven by its run.
-- The writer does not commit: the parent commits, one work unit at a time, and only when "Gates"
-  in `js-harness sessions` reads `none running`.
+- The writer does not commit: the parent commits, one work unit at a time.
 
 ## Effort
 medium
@@ -217,7 +217,6 @@ medium
 - Creating the practice folder, and where. Recommended: `D:\js-harness-practice`, beside
   `D:\js-harness` and `D:\js-harness-worktrees`: outside the repository, outside his home, on the
   drive where the work is, with a short path.
-- Push, pull request, merge.
 - A live session in the practice project: it spends his plan.
 
 ## Delivery
@@ -772,9 +771,6 @@ to do alone:
   (`R3-project-adopt-hook-refusal-unproved`, `R3-unreported-exit-wiring-unproved`,
   `R3-reasonof-empty-or-throwing`) and the two of the delivery
   (`R3-lone-double-dash-message-unasserted`, `R3-practice-script-wiring-manual-only`).
-- The merge of the two pull requests, his: #52 first. Then this session, the owner of the
-  branch, merges `main` into it and pushes, so that #53 shows its six files; then #53, whose
-  base moves to `main`.
 - The gate lock, the session channel, the rule hierarchy and the gate on GitHub each add
   their step to `JOURNEY` and put `node scripts/practice.mjs run --root
   D:\js-harness-practice` in their contract.

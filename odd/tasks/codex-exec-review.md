@@ -38,10 +38,11 @@ including `git diff 438364a…`), no REPL call, one `agent_message` with two P2 
 `turn.completed`.
 
 ## Design
-- `codex-review --base <rev>` spawns `codex exec review --json --ephemeral --base <merge-base of
-  rev and HEAD>`
-  with `-c sandbox_mode=read-only -c approval_policy=never` and the two desktop plugins disabled,
-  stdin ignored, from the repository root; on win32 the child's PATH drops every
+- How the review session runs is `odd/tasks/codex-review-lean.md`'s and
+  `odd/tasks/codex-review-cost.md`'s: one lean session in a home of its own, a large range in
+  parts.
+- `codex-review --base <rev>` runs `codex exec review --json`, read-only and with no approval
+  asked, from the repository root; on win32 the child's PATH drops every
   `\Microsoft\WindowsApps` entry. The Claude Code plugin is no longer involved (it stays useful for
   `/codex:*` commands).
 - Evidence: `reviewed` is recorded only when the JSONL has `turn.completed`, a non-empty final

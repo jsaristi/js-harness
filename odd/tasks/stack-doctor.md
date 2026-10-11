@@ -472,4 +472,5 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
   and the dispatcher tests spawn the CLI with `spawnSync`, so a hang would fail them.
 
 ## Next step
-Merge `fix/doctor-windows-exit`, reinstall the global package from `main`, run `js-harness sync`.
+None for this feature: it is complete. `fix/doctor-windows-exit` was merged via
+`jsaristi/js-harness#5` as `1d8b048`.

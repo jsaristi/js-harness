@@ -163,6 +163,7 @@ import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { gitDirs } from './lib/project.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
@@ -809,14 +810,17 @@ function totalsLine(attempts) {
  * and nothing else of a review. Renames are off, as in `planParts`.
  *
  * With `everyFile`, which only a caller of `codexReviewMain` can ask for, nothing is left out and git is
- * not asked what is marked: every file of the range is in a group, as it was before a review left any out. */
-function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile }) {
+ * not asked what is marked: every file of the range is in a group, as it was before a review left any out.
+ *
+ * `where` is what the run knows of its repository (`codexReviewMain`), so that git is not asked once more
+ * where the top is, nor about a file it has already answered for at `head`. */
+function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, where }) {
   const numstat = gitOutput(spawn, root, ['diff', '--numstat', '-z', '--no-renames', from, head], { maxBuffer: REVIEW_MAX_BUFFER });
   if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
   try {
     const files = numstatFiles(numstat);
     const paths = files.map((changed) => changed.path);
-    const why = everyFile ? new Map() : leftOutOf(paths, { cwd: root, source: head, spawn });
+    const why = everyFile ? new Map() : leftOutOf(paths, { cwd: root, source: head, spawn, where });
     if (why === null) {
       return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)` };
     }
@@ -926,13 +930,16 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
  *    `null` when it does not start later.
  *
  * When the records cannot be read against the range, the range is taken as it was given, `from`, and `said`
- * says so and why: in doubt a run does what it was asked, never less. Nothing here throws. */
-function leftByRecords(spawn, root, { from, head, given }) {
+ * says so and why: in doubt a run does what it was asked, never less. Nothing here throws.
+ *
+ * `where` is what the run knows of its repository (`codexReviewMain`), handed on to the reading of the
+ * records. */
+function leftByRecords(spawn, root, { from, head, given, where }) {
   const asGiven = (why) => ({ start: from, said: `Could not tell which commits of ${given} a Codex review record already covers (${why}), so the range is taken as it was given.` });
   let coverage;
   let start;
   try {
-    coverage = reviewCoverage(root, { from, tip: head, spawn });
+    coverage = reviewCoverage(root, { from, tip: head, spawn, where });
     if (coverage.unknown) return asGiven(coverage.unknown === MARKS_UNREAD ? 'git could not say which of their files a review leaves out' : 'git could not list them');
     ({ start } = reviewStart(coverage.uncovered, { cwd: root, from, tip: head, spawn }));
   } catch (err) {
@@ -1038,6 +1045,25 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     error(`${args.cwd} is not a git repository, so there is no range to record.`);
     return 1;
   }
+  // Where the repository of this run is, for whatever would ask git that (`jsonLinesPath`, `leftOutOf`): a
+  // review asked where the git folder is four times and where the top is twice, the same two answers each
+  // time. The top is `root`, which git has just named, written as the answer of `git rev-parse --show-cdup`
+  // asked there is: nothing more to go up. The git folder is asked for the first time something reads or
+  // writes a file in it, so a run that ends before that never asks, and is kept from then on. An answer git
+  // did not give is not kept: the next read or write asks again, as each did before. With them goes what
+  // git says the project marks at `head` (`marks`, which `leftOutOf` fills): the files of the commits the
+  // records are read against hold the files the review then reads, and were asked about twice. All of it is
+  // this run's and ends with it, never the module's: the next run in this process may be of another
+  // repository, or of this one with HEAD somewhere else.
+  let commonGitDir = null;
+  const where = {
+    top: path.resolve(root),
+    marks: new Map(),
+    get commonGitDir() {
+      commonGitDir ??= gitDirs(root, spawn).commonGitDir;
+      return commonGitDir;
+    },
+  };
   // Where the range of this run starts: the commit `--base` names, until the records have been read. A run
   // that starts later than it was asked to (`startingAt`) has that later commit here from then on, so that
   // its plan, its sessions, its run lines and its record are all of the one range it reviews.
@@ -1059,7 +1085,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   const planOf = ({ groups, leftOut }) => {
     let runs = [];
     try {
-      runs = readCodexReviewRuns(root, { spawn });
+      runs = readCodexReviewRuns(root, { spawn, where });
     } catch {
       // Nothing measured.
     }
@@ -1081,7 +1107,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * names, so its range is taken as it was given too. */
   const startingAt = (given) => {
     if (args.again || everyFile || given === head) return given;
-    const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}` });
+    const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}`, where });
     if (left.covered !== undefined) {
       log(left.covered);
       return null;
@@ -1103,7 +1129,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     const from = startingAt(given);
     if (from === null) return 0;
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile });
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where });
     if (split.error) {
       error(`${split.error}, so there is no plan of its review.`);
       return 1;
@@ -1120,7 +1146,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * `null`, for the caller to exit 1 on. */
   const writeRecord = (fields) => {
     try {
-      return appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: now().toISOString(), ...fields }, { spawn });
+      return appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: now().toISOString(), ...fields }, { spawn, where });
     } catch (err) {
       error(`Could not write the record: ${err.message}`);
       return null;
@@ -1184,7 +1210,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
       return 1;
     };
-    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile });
+    const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where });
     if (split.error) return notSplit(split.error);
     // The plan, where the progress of the run is written and before its first session: what the run is
     // about to spend is on the screen before any of it is spent.
@@ -1417,7 +1443,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
             verdict: review ? review.verdict : null,
             answerSource: review ? 'rollout' : null,
           };
-          appendCodexReviewRun(root, run, { spawn });
+          appendCodexReviewRun(root, run, { spawn, where });
           logged = true;
         } catch (err) {
           error(`Could not write the run log, so what this attempt measured was not kept: ${err.message}`);
