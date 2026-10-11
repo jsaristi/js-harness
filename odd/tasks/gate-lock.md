@@ -1173,16 +1173,38 @@ allows a feature. No spend outside the plan.
     paid its own gate.
   620 lines added and 13 removed in `bin/check.mjs` (126) and `bin/check.test.mjs` (507).
 
+- 2026-10-11 · T7 is commit `74e473c`: gate green in 671 s (00:24:02 to 00:35:14), one try. gentle-ai
+  reviewed `c2485cd..74e473c` (T6b, the shards out, T7: medium, 8 paths, 1,032 lines, one
+  lens, reliability; lineage `review-0002df5395050d7a`) and approved it, acknowledged, with
+  two findings, both fixed in the next commit by T7's writer, test first:
+  - `R3-hook-test-assumes-no-gentle-ai-beside-git` (warning): the test through a real hook
+    read the review row "gentle-ai was not found", which is false wherever gentle-ai sits
+    in git's own folder. It now asserts the rule alone: the row, the marker, what each
+    commit holds.
+  - `R3-staged-git-inherits-hook-repository-binding` (suggestion, and a real hole): a
+    `check --cwd <another project>` started inside a hook read the staged paths of the
+    hook's repository, through the `GIT_DIR` and `GIT_INDEX_FILE` git hands a hook, and
+    judged them by the other project's documents. Seen failing: project A's sensors
+    skipped for repository B's staged document. Now what the environment binds git to is
+    trusted only for the gate's own repository: with any of `GIT_DIR`, `GIT_INDEX_FILE`,
+    `GIT_WORK_TREE` set, the git folder `cwd` has without them must be the one it has with
+    them, and the index named must lie in it; else the sensors run. One more git process
+    for a commit of a project that declares documents. Found with it: git sets `GIT_DIR`
+    for a hook in a linked worktree, and with it set a folder below the top reads as the
+    top, so that guard is now asked without the binding. A commit of documents in a linked
+    worktree, which is what every session here works in, is tested through a real hook.
+  `bin/check.test.mjs`: 120 of 120. 216 lines added and 37 removed in the two files.
+
 ## Next
-1. The commit of T7 and its gate (it changes code, so its sensors run). The commit after
-   it, of documents alone, is the first to skip them: what its report says goes here.
-2. gentle-ai on `c2485cd..HEAD` (`review assess --base-ref c2485cd --committed-only`), then
-   Codex on the same range if its plan fits the 1,309,386 left; if it does not, that is a
-   question of spend, his.
-3. The close: `origin/main` (`1d0a732` on 2026-10-11; it merges with no conflict) merged in
-   and one gate run on the result by hand, since a merge runs no pre-commit hook; push and
-   pull request; the closing notice to the orchestrator, which merges. The session channel
-   waits for that merge (both change the board's files).
+1. The commit of those two fixes and its gate.
+2. Codex on `c2485cd..HEAD` (plan at `74e473c`: 3 parts, 560,000 to 2,620,000 input tokens;
+   1,309,386 left; under the guard set to 1,000,000), before `origin/main` is merged in,
+   so that its range is this branch's code alone.
+3. The close: `origin/main` merged in and one gate run on the result by hand, since a merge
+   runs no pre-commit hook; then this document's last entries in a commit of documents
+   alone, the first to run no sensor: what its report says goes in the pull request. Push
+   and pull request; the closing notice to the orchestrator, which merges. The session
+   channel waits for that merge (both change the board's files).
 For the next slice of the gate, in this order: the gate log; fewer git processes in the
 two long test files; the gate on GitHub. A run that needs the machine quiet, and not only
 its turn (an evals batch that compares durations), is a need the lock does not serve.

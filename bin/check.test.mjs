@@ -2268,47 +2268,189 @@ test('a gate that checks a folder below the top of its repository runs its senso
   }
 });
 
-// `git commit <path>` and `git commit -a` commit from an index of their own, which git names to the hook in
-// GIT_INDEX_FILE: the commit holds that index, not the one `git add` wrote. Proved with a real commit and a
-// real hook, since the variable is git's to set. The gate is a copy of `bin/`, as for the two processes above.
-test('a commit of one named path is judged by what it holds, not by what else is staged', async () => {
+/** Runs `run` with `vars` added to the environment of this process, which is the one a gate asks git in. */
+async function withEnv(vars, run) {
+  const saved = { ...process.env };
+  try {
+    Object.assign(process.env, vars);
+    return await run();
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+}
+
+// A gate started inside a hook inherits the variables by which git bound that hook to its repository. With
+// them, `check --cwd <another project>` would list what the hook's repository has staged and hold it
+// against the other project's documents.
+test('a gate started in the environment of another repository runs its sensors: what that one has staged is not its own', async () => {
+  const [project, other] = [documentsRepo(), documentsRepo()];
+  try {
+    writeFile(other, 'docs/guide.md');
+    git(other, 'add', 'docs/guide.md');
+    const bound = { GIT_DIR: path.join(other, '.git'), GIT_INDEX_FILE: path.join(other, '.git', 'index') };
+    // Bound as the hook of a linked worktree is, with nothing staged in the project.
+    await withEnv(bound, () => gateOfStaged(project, null));
+    // Bound as the hook of `git commit <path>` in a main worktree is, by the index alone, with a code file
+    // staged in the project: its commit is not the one of documents that the other index describes.
+    writeFile(project, 'src/app.js');
+    git(project, 'add', 'src/app.js');
+    await withEnv({ GIT_INDEX_FILE: bound.GIT_INDEX_FILE }, () => gateOfStaged(project, null));
+    // The same binding is the other repository's own, and its gate runs no sensor for what it has staged.
+    await withEnv(bound, () => gateOfStaged(other, ['docs/guide.md']));
+  } finally {
+    for (const dir of [project, other]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensors, where the environment binds git to a repository, asks which one its folder is in without that binding, and runs no sensor only where the two are one', async () => {
+  const dir = makeTmpDir();
+  const elsewhere = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const own = path.join(dir, '.git');
+    fs.mkdirSync(own);
+    const slashes = (file) => file.replace(/\\/g, '/');
+    /** A git whose folder is in the repository `own`, and which the inherited environment binds to `inherited`. */
+    const boundGit = (inherited, { ownFails = false } = {}) => {
+      const spawn = (program, args, options) => {
+        const unbound = options.env !== undefined;
+        spawn.asked.push(`${unbound ? 'unbound: ' : ''}${program} ${args.join(' ')}`);
+        if (unbound) spawn.leaked.push(...Object.keys(options.env).filter((key) => /^git_(dir|index_file|work_tree|common_dir|prefix)$/i.test(key)));
+        if (args[0] === 'diff') return ok('docs/guide.md\0');
+        if (unbound) return ownFails ? notARepository() : ok(`\n${slashes(own)}\n`);
+        return inherited === null ? notARepository() : ok(`${slashes(inherited)}\n`);
+      };
+      return Object.assign(spawn, { asked: [], leaked: [] });
+    };
+    const ran = async (vars, git = boundGit(own)) => {
+      const spawn = countedSensors();
+      await withEnv({ GIT_PREFIX: 'docs/', ...vars }, () => checkSensors(dir, { spawn, git }));
+      return spawn.ran;
+    };
+
+    // What git hands the hook of a plain commit, of `commit -a` and of a commit in a linked worktree.
+    const git = boundGit(own);
+    assert.equal(await ran({ GIT_INDEX_FILE: '.git/index' }, git), 0);
+    assert.deepEqual(git.asked, [
+      'unbound: git rev-parse --show-prefix --absolute-git-dir',
+      'git rev-parse --absolute-git-dir',
+      'git diff --cached --name-only --no-renames --no-relative -z',
+    ]);
+    assert.deepEqual(git.leaked, []);
+    assert.equal(await ran({ GIT_INDEX_FILE: path.join(own, 'index.lock') }), 0);
+    assert.equal(await ran({ GIT_DIR: own, GIT_INDEX_FILE: slashes(path.join(own, 'index')) }), 0);
+    assert.equal(await ran({ GIT_DIR: own }), 0);
+    assert.equal(await ran({ GIT_WORK_TREE: dir }), 0);
+
+    // Another repository, an index kept anywhere else, or a git that does not answer: the sensors run.
+    assert.equal(await ran({ GIT_DIR: elsewhere }, boundGit(elsewhere)), 1);
+    assert.equal(await ran({ GIT_INDEX_FILE: path.join(elsewhere, 'index') }), 1);
+    assert.equal(await ran({ GIT_INDEX_FILE: path.join(own, 'gone', 'index') }), 1);
+    assert.equal(await ran({ GIT_DIR: own }, boundGit(null)), 1);
+    assert.equal(await ran({ GIT_DIR: own }, boundGit(own, { ownFails: true })), 1);
+
+    // No such variable, no such question: `GIT_PREFIX`, which every hook is given, binds nothing.
+    const plain = stagedGit(['docs/guide.md']);
+    assert.equal(await ran({}, plain), 0);
+    assert.deepEqual(plain.asked, ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative -z']);
+  } finally {
+    for (const folder of [dir, elsewhere]) fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+/** A copy of `documentsRepo` whose commits a real pre-commit hook guards with a real gate, since what a
+ * hook is handed is git's to set. The gate is a copy of `bin/`, as for the two processes above, and its one
+ * sensor leaves `marker` and passes; that declaration is committed, so a linked worktree has it too.
+ * `commit(cwd, ...args)` runs `git commit <args>` there and answers how it ended and what its gate said;
+ * `remove()` takes all of it away. */
+function hookedRepo() {
   const repo = documentsRepo();
   const home = makeTmpDir();
   const checkout = makeTmpDir();
-  try {
-    const slashes = (file) => file.replace(/\\/g, '/');
-    fs.cpSync(path.dirname(fileURLToPath(import.meta.url)), path.join(checkout, 'bin'), { recursive: true, filter: (source) => !source.endsWith('.test.mjs') });
-    const marker = slashes(path.join(home, 'sensor-ran'));
-    const sensor = `"${process.execPath}" -e "require('fs').writeFileSync('${marker}', '')"`;
-    writeJson(repo, 'harness.json', { sensors: { tests: sensor }, documents: ['docs/', 'notes.md'] });
-    // The hook leaves on PATH the folder of git and nothing else: the gate finds git, and no gentle-ai.
-    const hooks = path.join(home, 'hooks');
-    writeFile(hooks, 'pre-commit', `#!/bin/sh\ngit=$(command -v git)\nPATH="\${git%/*}"\nexec "${slashes(process.execPath)}" "${slashes(path.join(checkout, 'bin', 'check.mjs'))}"\n`);
-    fs.chmodSync(path.join(hooks, 'pre-commit'), 0o755);
-    git(repo, 'config', 'core.hooksPath', slashes(hooks));
+  const slashes = (file) => file.replace(/\\/g, '/');
+  fs.cpSync(path.dirname(fileURLToPath(import.meta.url)), path.join(checkout, 'bin'), { recursive: true, filter: (source) => !source.endsWith('.test.mjs') });
+  const marker = slashes(path.join(home, 'sensor-ran'));
+  const sensor = `"${process.execPath}" -e "require('fs').writeFileSync('${marker}', '')"`;
+  writeJson(repo, 'harness.json', { sensors: { tests: sensor }, documents: ['docs/', 'notes.md'] });
+  git(repo, ...commitAs, '-m', 'a sensor that leaves a marker', '--', 'harness.json');
+  // The hook leaves on PATH the folder of git and nothing else, so its gate starts no gentle-ai of this
+  // machine unless one sits beside git. Nothing here reads the review row, which says either.
+  const hooks = path.join(home, 'hooks');
+  writeFile(hooks, 'pre-commit', `#!/bin/sh\ngit=$(command -v git)\nPATH="\${git%/*}"\nexec "${slashes(process.execPath)}" "${slashes(path.join(checkout, 'bin', 'check.mjs'))}"\n`);
+  fs.chmodSync(path.join(hooks, 'pre-commit'), 0o755);
+  git(repo, 'config', 'core.hooksPath', slashes(hooks));
+  // The marks of a gate that runs this file would make the hook's gate an inner check, or one that takes no lock.
+  const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context'];
+  const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home };
+  const commit = (cwd, ...args) => {
+    const result = spawnSync('git', [...commitAs, '-m', 'change', ...args], { cwd, env, encoding: 'utf8' });
+    return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+  };
+  const remove = () => {
+    for (const dir of [repo, home, checkout]) fs.rmSync(dir, { recursive: true, force: true });
+  };
+  return { repo, home, marker, commit, remove };
+}
 
+/** The paths the last commit of `cwd` holds. */
+const lastCommitHolds = (cwd) => git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/);
+
+// `git commit <path>` and `git commit -a` commit from an index of their own, which git names to the hook in
+// GIT_INDEX_FILE: the commit holds that index, not the one `git add` wrote.
+test('a commit of one named path is judged by what it holds, not by what else is staged', async () => {
+  const { repo, marker, commit, remove } = hookedRepo();
+  try {
     for (const file of ['docs/guide.md', 'src/app.js']) writeFile(repo, file);
     git(repo, 'add', 'docs/guide.md', 'src/app.js');
-    // The marks of a gate that runs this file would make the hook's gate an inner check, or one that takes no lock.
-    const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context'];
-    const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home };
-    const commit = (file) => {
-      const result = spawnSync('git', [...commitAs, '-m', `change ${file}`, '--', file], { cwd: repo, env, encoding: 'utf8' });
-      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
-    };
 
-    const document = commit('docs/guide.md');
+    const document = commit(repo, '--', 'docs/guide.md');
     assert.equal(document.status, 0, document.said);
     assert.deepEqual(sensorsRow(document.said), noSensorRan(['docs/guide.md']));
+    assert.deepEqual(lastCommitHolds(repo), ['docs/guide.md']);
     assert.equal(fs.existsSync(marker), false, 'the sensor ran for a commit that holds a document alone');
-    assert.match(document.said, /^INFO {2}review {2}gentle-ai was not found/m);
 
-    const code = commit('src/app.js');
+    const code = commit(repo, '--', 'src/app.js');
+    assert.equal(code.status, 0, code.said);
+    assert.match(code.said, /^PASS {2}tests /m);
+    assert.deepEqual(lastCommitHolds(repo), ['src/app.js']);
+    assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+// What git 2.54 hands a pre-commit hook besides: in a main worktree `GIT_INDEX_FILE` alone, `.git/index` for
+// a plain commit and the whole path of `.git/index.lock` for `-a`; in a linked worktree `GIT_DIR` too, both
+// as whole paths under `.git/worktrees/<name>`. Each is the binding of the repository the gate checks.
+test('a commit of documents alone runs no sensor however it is made: plain, with -a, and in a linked worktree', async () => {
+  const { repo, home, marker, commit, remove } = hookedRepo();
+  try {
+    const linked = path.join(home, 'linked');
+    git(repo, 'worktree', 'add', '--quiet', linked);
+    const documentAlone = (cwd, file, ...args) => {
+      const { status, said } = commit(cwd, ...args);
+      assert.equal(status, 0, said);
+      assert.deepEqual(sensorsRow(said), noSensorRan([file]), said);
+      assert.deepEqual(lastCommitHolds(cwd), [file]);
+    };
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    documentAlone(repo, 'docs/guide.md');
+    writeFile(repo, 'notes.md');
+    documentAlone(repo, 'notes.md', '-a');
+    writeFile(linked, 'docs/old.md');
+    git(linked, 'add', 'docs/old.md');
+    documentAlone(linked, 'docs/old.md');
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a commit of documents alone');
+
+    // The same hook runs the sensor of the linked worktree once its commit holds a code file.
+    writeFile(linked, 'src/app.js');
+    const code = commit(linked, '-a');
     assert.equal(code.status, 0, code.said);
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
-    assert.equal(git(repo, 'status', '--porcelain', '--untracked-files=no'), 'M harness.json');
   } finally {
-    for (const dir of [repo, home, checkout]) fs.rmSync(dir, { recursive: true, force: true });
+    remove();
   }
 });

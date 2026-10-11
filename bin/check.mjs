@@ -95,6 +95,10 @@ const GIT_LOCAL_ENV = [
   'GIT_COMMON_DIR',
 ];
 
+// Those of them that say which repository a git command acts on and which index it reads. A pre-commit
+// hook is always given `GIT_INDEX_FILE`, and in a linked worktree `GIT_DIR`; see `stagedDocuments`.
+const GIT_BINDING_ENV = ['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE'];
+
 const NPM_PLACEHOLDER_TEST ='echo "Error: no test specified" && exit 1';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -189,32 +193,65 @@ export function discoverDocuments(cwd) {
   return { documents, source: 'harness.json' };
 }
 
+/** Whether `one` and `other` are the same folder, however each is spelled (a link on the way, a short
+ * Windows name, another case). `false` when either is not there or cannot be looked at. */
+function sameFolder(one, other) {
+  try {
+    return fs.realpathSync.native(one) === fs.realpathSync.native(other);
+  } catch {
+    return false;
+  }
+}
+
 /** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
  * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
  * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
  * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
  *
- * Git is asked in the environment this process was given, as every git call of this file is. A hook is
- * given `GIT_INDEX_FILE` by `git commit <path>` and `git commit -a`, which commit from an index of their
- * own: that index is the commit, not the one `git add` wrote. (A sensor is given none of those
- * variables: `checkSensor`.)
+ * What is staged is listed in the environment this process was given. A hook is given `GIT_INDEX_FILE`
+ * by `git commit <path>` and `git commit -a`, which commit from an index of their own: that index is the
+ * commit, not the one `git add` wrote. (A sensor is given none of those variables: `checkSensor`.)
+ *
+ * That environment is trusted only as the binding of the repository this gate checks. The variables of
+ * a hook bind every git command under it to the hook's repository, wherever it runs: a `check --cwd
+ * <another project>` started there would list what the hook's repository has staged and hold it
+ * against the other project's documents. So where the environment holds one of `GIT_BINDING_ENV`, git
+ * is first asked which repository `cwd` is in with none of the repository variables, and then which one
+ * the environment binds it to: `null` unless both answer the same git folder and the index named, if
+ * one is, lies in that folder, where git keeps its own (`index`, `index.lock`, `next-index-<pid>.lock`;
+ * for a linked worktree, under `worktrees/<name>`, which is its git folder). An environment with none
+ * of those variables is asked nothing more.
  *
  * Renames are off, so a file moved into the documents or out of them is listed at both its paths. The
  * names are ended by a NUL and read as they come, since a path may begin with a space. `documents` are
- * named from the top of the repository, so a gate that checks a folder below it skips nothing. With no
- * commit yet git compares the index with nothing, and lists all that is staged.
+ * named from the top of the repository, so a gate that checks a folder below it skips nothing; under a
+ * binding that is asked without it, since git takes the folder a `GIT_DIR` command runs in for the top.
+ * With no commit yet git compares the index with nothing, and lists all that is staged.
  * `spawn` stands in for `spawnSync`. */
 function stagedDocuments(cwd, documents, spawn = spawnSync) {
-  const git = (...args) => {
+  const git = (args, env) => {
     try {
-      const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...(env && { env }) });
       return result && !result.error && result.status === 0 ? result.stdout : null;
     } catch {
       return null; // no git on PATH
     }
   };
-  if (git('rev-parse', '--show-prefix')?.trim() !== '') return null;
-  const paths = git('diff', '--cached', '--name-only', '--no-renames', '--no-relative', '-z')?.split('\0').filter(Boolean) ?? [];
+  /** The lines of what `git rev-parse <args>` answers, one for each thing asked; none when it fails. */
+  const asked = (args, env) => git(['rev-parse', ...args], env)?.split(/\r?\n/) ?? [];
+  // On Windows a variable is the same in any case, and this process may hold it in another than git's.
+  const bound = Object.keys(process.env).some((key) => GIT_BINDING_ENV.includes(key.toUpperCase()));
+  const unbound = bound ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !GIT_LOCAL_ENV.includes(key.toUpperCase()))) : undefined;
+  const [prefix, own] = asked(['--show-prefix', ...(bound ? ['--absolute-git-dir'] : [])], unbound);
+  if (prefix !== '') return null;
+  if (bound) {
+    const [inherited] = asked(['--absolute-git-dir']);
+    if (!sameFolder(own, inherited)) return null;
+    // A path that is not whole is one from the folder git runs in, which is `cwd`, the top.
+    const index = process.env.GIT_INDEX_FILE;
+    if (index !== undefined && !sameFolder(path.dirname(path.resolve(cwd, index)), own)) return null;
+  }
+  const paths = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '-z'])?.split('\0').filter(Boolean) ?? [];
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
   return paths.length > 0 && paths.every(isDocument) ? paths : null;
 }
