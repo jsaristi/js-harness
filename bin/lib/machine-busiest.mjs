@@ -17,7 +17,11 @@
 // the look costs processor time of its own, which Windows books to the services that answer it
 // (`WmiPrvSE`, a `svchost`): on a machine that is barely loaded they can be among the three.
 //
-// Never a whole command line: it can hold a secret, and what is found here is printed and logged.
+// Never a whole command line: it can hold a secret, and what is found here is printed and logged. Of a
+// command line only one thing is ever said, the base name of a file that exists on this machine: the
+// first argument that is not an option, where it is the whole path of such a file (`scriptOf`). A secret
+// cannot be told from a file name by its spelling, and it is no file on the disk. So a script given by a
+// path relative to its process's folder is not named, and that process reads by its program alone.
 //
 // Best effort throughout. A helper that is missing, fails, prints what cannot be read or does not answer
 // within ten seconds names nobody, and so does a `/proc` that cannot be read: `busiestProcesses` never
@@ -43,8 +47,8 @@ const SAID_FROM_SECONDS = 0.05;
 const TICKS_PER_SECOND = 100;
 
 /** A Windows command line as its arguments: split at the white space outside its double quotes, which are
- * taken off. A backslash before a quote is not read as an escape: what is looked for here is a file name,
- * and `scriptOf` says no argument that does not read as one. */
+ * taken off. A backslash before a quote is not read as an escape: what is looked for here is the path of
+ * a file, and `scriptOf` says no argument that is not one the disk holds. */
 export function splitCommandLine(line) {
   const args = [];
   let argument = null;
@@ -64,21 +68,42 @@ export function splitCommandLine(line) {
   return args;
 }
 
-// What reads as a file name: letters, digits, spaces and the marks a file name usually has, with an
-// extension at its end. Neither a password, nor a header, nor a token in three parts reads as one.
+// What a file name is spelled like: letters, digits, spaces and the marks a file name usually has, with an
+// extension at its end. It keeps an odd name out of a report and is no guard against a secret: a password
+// with a dot in it is spelled the same.
 const FILE_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_ .+@-]*\.[A-Za-z0-9]{1,8}$/u;
+
+// A whole path, which names one file wherever the process runs: on Windows from a drive letter, elsewhere
+// from the root. Not the path of a share (`\\server\share\`): the disk is asked with a call that does not
+// return until it is answered, a share that does not answer can keep it for many seconds, and in those the
+// lock of the gate that looks does not beat. A script on a share is not named.
+const WINDOWS_WHOLE_PATH = /^[A-Za-z]:[\\/]/;
+const isWholePath = (argument, windows) => (windows ? WINDOWS_WHOLE_PATH.test(argument) : argument.startsWith('/'));
+
+/** Whether `file` is a file on this machine's disk. It throws where there is nothing of that name. */
+const isFileOnDisk = (file) => fs.statSync(file).isFile();
 
 /** The script a process runs, from its arguments (`args[0]` is the program): the base name of the first
  * one that is not an option, so that a language server reads `node tsserver.js` and not `node`. An option
  * starts with `-`, and with `windows` a switch such as `/c` is one too. `null` where there is none.
  *
- * That argument may be the value of an option (`-p <password>`), so it is said only when it reads as a
- * file name of 64 characters at most (`FILE_NAME`), and nothing after it is tried. Nor is the program's
- * own name said twice, which is what a program path with spaces and no quotes splits into. */
-export function scriptOf(args, name, { windows = false } = {}) {
+ * That argument may be the value of an option (`-p <password>`) or a secret given bare, and no spelling
+ * tells a secret from a file name. So it is said only when it names a file that exists: it is a whole path
+ * (`isWholePath`), and the disk holds a file there (`isFile`; a disk that cannot be asked holds none).
+ * Nothing after it is tried. The price: an argument relative to the folder the process runs in is never
+ * named, since the look does not know that folder, so `node server.js` reads `node`.
+ *
+ * A file that exists is then said by a base name of 64 characters at most that is spelled as one
+ * (`FILE_NAME`). Nor is the program's own name said twice. `isFile` stands in for the disk in a test. */
+export function scriptOf(args, name, { windows = false, isFile = isFileOnDisk } = {}) {
   const isOption = (argument) => argument.startsWith('-') || (windows && /^\/[^\\/]*$/.test(argument));
   const first = args.slice(1).find((argument) => argument !== '' && !isOption(argument));
-  if (first === undefined) return null;
+  if (first === undefined || !isWholePath(first, windows)) return null;
+  try {
+    if (!isFile(first)) return null;
+  } catch {
+    return null;
+  }
   const base = first.split(/[\\/]/).pop();
   if (base.length > 64 || !FILE_NAME.test(base)) return null;
   return base.toLowerCase().replace(/\.exe$/, '') === name.toLowerCase() ? null : base;
@@ -106,7 +131,7 @@ const printable = (name) => name.replace(/[\u0000-\u001f\u007f]/g, '?');
 
 /** One of the busiest as a gate names it. `args` is its command line in arguments, or nothing where the
  * system did not show it: the process is then named by its program alone. */
-const named = ({ pid, name, cpuSeconds }, args, windows) => ({ name, script: args ? scriptOf(args, name, { windows }) : null, pid, cpuSeconds });
+const named = ({ pid, name, cpuSeconds }, args, options) => ({ name, script: args ? scriptOf(args, name, options) : null, pid, cpuSeconds });
 
 // --- Linux: /proc, read by Node ---
 
@@ -135,7 +160,7 @@ const wait = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
-async function lookLinux({ ms, ownPid, proc, sleep }) {
+async function lookLinux({ ms, ownPid, proc, sleep, isFile }) {
   // A process that ended since the folder was listed, or whose file may not be read, is in no reading.
   const read = (file) => {
     try {
@@ -153,7 +178,7 @@ async function lookLinux({ ms, ownPid, proc, sleep }) {
   return busiestBetween(before, reading(), { skip: [ownPid] }).map((process) => {
     // The arguments end in a zero byte each. A program that rewrote its title has one, and so no script.
     const commandLine = read(`/proc/${process.pid}/cmdline`);
-    return named(process, commandLine === null ? null : commandLine.split('\0'), false);
+    return named(process, commandLine === null ? null : commandLine.split('\0'), { windows: false, isFile });
   });
 }
 
@@ -210,7 +235,7 @@ const lookScript = (ms) => [
  * gate runs in first, which is a project's. */
 const powershell = (env) => path.win32.join(env.SystemRoot ?? env.SYSTEMROOT ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
-function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
+function lookWindows({ ms, boundMs, ownPid, spawn, env, isFile }) {
   return new Promise((resolve) => {
     let child;
     let timer;
@@ -251,7 +276,7 @@ function lookWindows({ ms, boundMs, ownPid, spawn, env }) {
         return;
       }
       const { commandLines } = parseProcessReadings(text);
-      finish(found.map((process) => named(process, commandLines.has(process.pid) ? splitCommandLine(commandLines.get(process.pid)) : null, true)));
+      finish(found.map((process) => named(process, commandLines.has(process.pid) ? splitCommandLine(commandLines.get(process.pid)) : null, { windows: true, isFile })));
     });
   });
 }
@@ -269,11 +294,11 @@ const LOOKS = { linux: lookLinux, win32: lookWindows };
  * start, and is over after `boundMs` at the latest. It resolves to an empty list on a system that is
  * neither Linux nor Windows, and wherever the look fails (see the head of this file).
  *
- * `platform`, `spawn`, `proc` (`list` and `read` of `/proc`), `sleep` and `env` stand in for the system in
- * a test. */
-export async function busiestProcesses({ platform = process.platform, ms = BUSIEST_LOOK_MS, boundMs = BUSIEST_BOUND_MS, ownPid = process.pid, spawn = spawnChild, proc = PROC, sleep = wait, env = process.env } = {}) {
+ * `platform`, `spawn`, `proc` (`list` and `read` of `/proc`), `sleep`, `env` and `isFile` (the disk
+ * `scriptOf` asks) stand in for the system in a test. */
+export async function busiestProcesses({ platform = process.platform, ms = BUSIEST_LOOK_MS, boundMs = BUSIEST_BOUND_MS, ownPid = process.pid, spawn = spawnChild, proc = PROC, sleep = wait, env = process.env, isFile = isFileOnDisk } = {}) {
   try {
-    return (await LOOKS[platform]?.({ ms, boundMs, ownPid, spawn, proc, sleep, env })) ?? [];
+    return (await LOOKS[platform]?.({ ms, boundMs, ownPid, spawn, proc, sleep, env, isFile })) ?? [];
   } catch {
     return [];
   }

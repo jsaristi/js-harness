@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { spawn as spawnChild } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, busiestBetween, busiestLines, busiestProcesses, parseProcStat, parseProcessReadings, scriptOf, splitCommandLine } from './machine-busiest.mjs';
 
 // What loads a loaded machine: every process's CPU time read twice, the difference taken, and the three
@@ -20,43 +21,112 @@ test('splitCommandLine splits a Windows command line at the spaces outside its d
   assert.deepEqual(splitCommandLine('   '), []);
 });
 
-test('scriptOf gives the base name of the first argument that is not an option, and nothing where there is none', () => {
-  const windows = (line, name = 'node') => scriptOf(splitCommandLine(line), name, { windows: true });
-  assert.equal(windows('node --max-old-space-size=4096 C:\\x\\tsserver.js'), 'tsserver.js');
-  assert.equal(windows('"C:\\Program Files\\nodejs\\node.exe" "D:\\my project\\run tests.mjs" --watch'), 'run tests.mjs');
-  assert.equal(windows('node D:/proj/bin/check.mjs --cwd D:/proj'), 'check.mjs');
-  // The first one, whatever comes after it.
-  assert.equal(windows('node --test bin/check.test.mjs bin/gate.test.mjs'), 'check.test.mjs');
+/** A stand-in for the look at the disk: only `files` are files there, and what was asked is kept. */
+function disk(...files) {
+  const isFile = (file) => {
+    isFile.asked.push(file);
+    return files.includes(file);
+  };
+  isFile.asked = [];
+  return isFile;
+}
+
+/** A disk on which whatever is asked is a file: what is not named on it is not named for its form. */
+const anyFile = () => true;
+
+test('scriptOf gives the base name of the first argument that is not an option, where that is the whole path of a file that exists', () => {
+  const windows = (line, isFile, name = 'node') => scriptOf(splitCommandLine(line), name, { windows: true, isFile });
+  assert.equal(windows('node --max-old-space-size=4096 C:\\x\\tsserver.js', disk('C:\\x\\tsserver.js')), 'tsserver.js');
+  assert.equal(windows('"C:\\Program Files\\nodejs\\node.exe" "D:\\my project\\run tests.mjs" --watch', disk('D:\\my project\\run tests.mjs')), 'run tests.mjs');
+  // A drive letter with either slash. The path of a share is never asked of the disk, and so never named:
+  // asking a share that does not answer can take the seconds in which the gate's lock has to beat.
+  assert.equal(windows('node D:/proj/bin/check.mjs --cwd D:/proj', disk('D:/proj/bin/check.mjs')), 'check.mjs');
+  const share = disk('\\\\build\\tools\\bin\\pack.cmd');
+  assert.equal(windows('cmd.exe /c \\\\build\\tools\\bin\\pack.cmd', share, 'cmd'), null);
+  assert.deepEqual(share.asked, []);
+  // The first one, whatever comes after it: the disk is asked about that one alone.
+  const first = disk('D:\\proj\\bin\\check.test.mjs', 'D:\\proj\\bin\\gate.test.mjs');
+  assert.equal(windows('node --test D:\\proj\\bin\\check.test.mjs D:\\proj\\bin\\gate.test.mjs', first), 'check.test.mjs');
+  assert.deepEqual(first.asked, ['D:\\proj\\bin\\check.test.mjs']);
   // Options alone, or no argument at all: the name of the program is all there is to say.
-  assert.equal(windows('"C:\\Program Files\\Google\\Chrome\\chrome.exe" --type=renderer --lang=es', 'chrome'), null);
-  assert.equal(windows('node'), null);
-  assert.equal(windows(''), null);
-  // A switch of Windows is an option too, and a path that starts with a slash is not one.
-  assert.equal(windows('cmd.exe /d /s /c build.cmd', 'cmd'), 'build.cmd');
-  assert.equal(windows('node /work/app/server.js'), 'server.js');
-  assert.equal(scriptOf(['/usr/bin/node', '/srv/app.js'], 'node'), 'app.js');
-  assert.equal(scriptOf(['sh', '/tmp'], 'sh'), null);
-  // A program path with spaces and no quotes around it splits in two: its own name is no script.
-  assert.equal(windows('C:\\Program Files\\nodejs\\node.exe --version'), null);
-  // The arguments of Linux come already split, so a space is part of a name.
-  assert.equal(scriptOf(['python3', '-u', '/home/me/my tools/serve files.py', '--port', '8000'], 'python3'), 'serve files.py');
+  const unasked = disk();
+  assert.equal(windows('"C:\\Program Files\\Google\\Chrome\\chrome.exe" --type=renderer --lang=es', unasked, 'chrome'), null);
+  assert.equal(windows('node', unasked), null);
+  assert.equal(windows('', unasked), null);
+  assert.deepEqual(unasked.asked, []);
+  // A switch of Windows is an option too.
+  assert.equal(windows('cmd.exe /d /s /c C:\\work\\build.cmd', disk('C:\\work\\build.cmd'), 'cmd'), 'build.cmd');
+  // The program's own name is not said twice.
+  assert.equal(windows('"C:\\nodejs\\node.exe" C:\\nodejs\\node.exe', anyFile), null);
+  // Elsewhere a whole path starts with a slash, and the arguments come already split: a space is part of a name.
+  assert.equal(scriptOf(['/usr/bin/node', '/srv/app.js'], 'node', { isFile: disk('/srv/app.js') }), 'app.js');
+  assert.equal(scriptOf(['python3', '-u', '/home/me/my tools/serve files.py', '--port', '8000'], 'python3', { isFile: disk('/home/me/my tools/serve files.py') }), 'serve files.py');
 });
 
-// The first argument that is not an option may be the value of one, and a value may be a secret. Only what
-// reads as a file name is said.
-test('scriptOf says nothing of an argument that does not read as a file name, since it may be a secret', () => {
-  const said = (...args) => scriptOf(['tool', ...args], 'tool');
-  assert.equal(said('-p', 'hunter2'), null);
-  assert.equal(said('-H', 'Authorization: Bearer abc.def.ghi', 'https://example.com/x.json'), null);
-  assert.equal(said('postgres://me:secret@db.example.com'), null);
-  assert.equal(said('https://example.com/report.html?token=abc'), null);
-  assert.equal(said('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c'), null);
-  assert.equal(said('TOKEN=abc.def'), null);
-  assert.equal(said(`${'a'.repeat(70)}.js`), null);
-  // And still says a file, whatever folder it is in.
-  assert.equal(said('https://me:secret@example.com/tools/install.sh'), 'install.sh');
-  assert.equal(said('-jar', 'app-1.2.jar'), 'app-1.2.jar');
-  assert.equal(said('año nuevo.py'), 'año nuevo.py');
+// Found by the Codex review of the slice: `-p P@ssword.123` was said whole, since a credential with a dot
+// in it is spelled as a file name is. What the spelling cannot tell, the disk can.
+test('scriptOf says nothing of an argument that is not the whole path of a file that exists, however it is spelled', () => {
+  const said = (args, options) => scriptOf(['tool', ...args], 'tool', options);
+  for (const isFile of [undefined, anyFile]) {
+    for (const windows of [false, true]) {
+      const options = { windows, ...(isFile && { isFile }) };
+      // The value of an option, and a secret with no option before it.
+      assert.equal(said(['-p', 'P@ssword.123'], options), null);
+      assert.equal(said(['P@ssword.123'], options), null);
+      assert.equal(said(['-p', 'hunter2'], options), null);
+      assert.equal(said(['-H', 'Authorization: Bearer abc.def.ghi', 'https://example.com/x.json'], options), null);
+      assert.equal(said(['postgres://me:secret@db.example.com'], options), null);
+      assert.equal(said(['https://me:secret@example.com/tools/install.sh'], options), null);
+      assert.equal(said(['TOKEN=abc.def'], options), null);
+      // A path from the folder the process runs in, which the look does not know.
+      for (const relative of ['server.js', './server.js', '..\\app\\server.js', 'bin/check.mjs', 'C:server.js']) assert.equal(said([relative], options), null, relative);
+    }
+  }
+  // A whole path of the other system is none of this one, whatever the disk says.
+  assert.equal(said(['/work/app/server.js'], { windows: true, isFile: anyFile }), null);
+  assert.equal(said(['\\work\\app\\server.js'], { windows: true, isFile: anyFile }), null);
+  assert.equal(said(['\\\\build\\pack.cmd'], { windows: true, isFile: anyFile }), null);
+  assert.equal(said(['C:\\x\\tsserver.js'], { isFile: anyFile }), null);
+  assert.equal(said(['\\\\build\\tools\\pack.cmd'], { isFile: anyFile }), null);
+
+  // A whole path that names no file: one that is missing, a folder, and a disk that cannot be asked.
+  const missing = disk('/srv/other.js');
+  assert.equal(said(['/srv/app.js'], { isFile: missing }), null);
+  assert.deepEqual(missing.asked, ['/srv/app.js']);
+  assert.equal(said(['C:\\x\\tsserver.js'], { windows: true, isFile: disk() }), null);
+  const threw = () => {
+    throw Object.assign(new Error("EACCES: permission denied, stat '/srv/app.js'"), { code: 'EACCES' });
+  };
+  assert.equal(said(['/srv/app.js'], { isFile: threw }), null);
+  assert.equal(said(['C:\\x\\tsserver.js'], { windows: true, isFile: threw }), null);
+
+  // A file that exists is still said only by a name that reads as one, of 64 characters at most.
+  assert.equal(said(['/srv/app'], { isFile: anyFile }), null);
+  assert.equal(said(['/srv/key: abc.def'], { isFile: anyFile }), null);
+  assert.equal(said([`/srv/${'a'.repeat(70)}.js`], { isFile: anyFile }), null);
+  assert.equal(said(['/srv/año nuevo.py'], { isFile: anyFile }), 'año nuevo.py');
+});
+
+test('scriptOf asks the real disk unless it is handed another: a file by its whole path is named, a missing one, a folder and the same file by a relative path are not', () => {
+  const windows = process.platform === 'win32';
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-script-'));
+  try {
+    const file = path.join(dir, 'serves pages.mjs');
+    fs.writeFileSync(file, '');
+    fs.mkdirSync(path.join(dir, 'a folder.js'));
+    assert.equal(scriptOf(['node', file], 'node', { windows }), 'serves pages.mjs');
+    assert.equal(scriptOf(['node', path.join(dir, 'gone.mjs')], 'node', { windows }), null);
+    assert.equal(scriptOf(['node', path.join(dir, 'a folder.js')], 'node', { windows }), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // This file, from the folder the tests run in: it exists there, and is not named.
+  const relative = path.relative(process.cwd(), fileURLToPath(import.meta.url));
+  // On Windows there is no relative path to another drive, and nothing to try then.
+  if (path.isAbsolute(relative)) return;
+  assert.equal(fs.statSync(relative).isFile(), true);
+  assert.equal(scriptOf(['node', relative], 'node', { windows }), null);
+  assert.equal(scriptOf(['node', path.resolve(relative)], 'node', { windows }), 'machine-busiest.test.mjs');
 });
 
 const proc = (pid, name, cpuSeconds) => ({ pid, name, cpuSeconds });
@@ -201,10 +271,11 @@ function helper(play) {
   return { child, spawn };
 }
 
-const windowsLook = (spawn, more = {}) => busiestProcesses({ platform: 'win32', ownPid: 7000, spawn, ...more });
+/** The look of Windows through a stand-in for its helper, on a disk that holds no file unless `more` hands it one. */
+const windowsLook = (spawn, more = {}) => busiestProcesses({ platform: 'win32', ownPid: 7000, spawn, isFile: disk(), ...more });
 
 test('on Windows one PowerShell process takes both readings, is asked for the command lines of the three found, and they are named by program and script', async () => {
-  const { child, spawn } = helper((helped) => {
+  const answers = (helped) => {
     const text = recorded(...READINGS);
     // In two pieces, cut inside a line, as a pipe hands them over.
     helped.stdout.emit('data', text.slice(0, 137));
@@ -213,14 +284,20 @@ test('on Windows one PowerShell process takes both readings, is asked for the co
       helped.emit('close', 0);
     });
     helped.stdout.emit('data', text.slice(137));
-  });
-  assert.deepEqual(await windowsLook(spawn, { ownPid: 31337 }), [
+  };
+  const { child, spawn } = helper(answers);
+  const isFile = disk('C:\\Users\\me\\my project\\node_modules\\typescript\\lib\\tsserver.js');
+  assert.deepEqual(await windowsLook(spawn, { ownPid: 31337, isFile }), [
     { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
     { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
     { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
   ]);
+  // The disk the look was handed is asked about the one argument that could be a script, and no other.
+  assert.deepEqual(isFile.asked, ['C:\\Users\\me\\my project\\node_modules\\typescript\\lib\\tsserver.js']);
   assert.deepEqual(child.stdin.sent, ['12044,9000,3064\n']);
   assert.equal(child.killed, 0);
+  // The same answers on a disk without that file: the program is named alone.
+  assert.deepEqual((await windowsLook(helper(answers).spawn, { ownPid: 31337 })).map(({ name, script }) => [name, script]), [['node', null], ['chrome', null], ['Memory Compression', null]]);
 
   assert.equal(spawn.asked.length, 1);
   const [{ command, args, options }] = spawn.asked;
@@ -244,7 +321,7 @@ test('the gate itself and the helper are not named, and a process whose command 
     // 7000 is this gate (`ownPid`) and 4242 the helper: both spent more than the rest.
     helped.stdout.emit('data', recorded('1\t4242\t0\tpowershell.exe', '2\t4242\t1900\tpowershell.exe', ...READINGS.map((line) => line.replace('2\t7000\t1000', '2\t7000\t9000'))));
   });
-  assert.deepEqual(await windowsLook(spawn), [
+  assert.deepEqual(await windowsLook(spawn, { isFile: disk('C:\\pages\\index.html') }), [
     { name: 'node', script: null, pid: 12044, cpuSeconds: 3.2 },
     { name: 'chrome', script: 'index.html', pid: 9000, cpuSeconds: 1.6 },
     { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
@@ -337,7 +414,7 @@ function fakeProc(...readings) {
 const neverSpawned = () => {
   throw new Error('a process was started');
 };
-const linuxLook = (fake, more = {}) => busiestProcesses({ platform: 'linux', ownPid: 500, spawn: neverSpawned, proc: fake.proc, sleep: fake.sleep, ...more });
+const linuxLook = (fake, more = {}) => busiestProcesses({ platform: 'linux', ownPid: 500, spawn: neverSpawned, proc: fake.proc, sleep: fake.sleep, isFile: disk(), ...more });
 
 test('on Linux /proc is read twice, two seconds apart, with no process started, and the three busiest are named by their command lines', async () => {
   const first = {
@@ -367,7 +444,8 @@ test('on Linux /proc is read twice, two seconds apart, with no process started, 
     // 800 ended before its command line was asked for: it is named alone.
   };
   const fake = fakeProc(first, second);
-  assert.deepEqual(await linuxLook(fake), [
+  const isFile = disk('/home/me/my project/node_modules/typescript/lib/tsserver.js');
+  assert.deepEqual(await linuxLook(fake, { isFile }), [
     { name: 'node', script: 'tsserver.js', pid: 600, cpuSeconds: 3.2 },
     { name: 'Web Content', script: null, pid: 700, cpuSeconds: 1.6 },
     { name: 'python3', script: null, pid: 800, cpuSeconds: 0.9 },
@@ -418,7 +496,9 @@ test('busiestLines says each of the busiest in one line: its processor seconds i
 // a machine at rest too, since a process of its own is busy for as long as the look lasts.
 test('the real look of this machine names at most three processes, the busiest first, and never this one', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-busiest-'));
+  // Started by its whole path: a script is named only where the argument is the path of a file that exists.
   const script = path.join(dir, 'spins for the look.mjs');
+  assert.equal(path.isAbsolute(script), true);
   fs.writeFileSync(script, 'const until = Date.now() + 15000;\nwhile (Date.now() < until);\n');
   const spinner = spawnChild(process.execPath, [script], { stdio: 'ignore' });
   try {
