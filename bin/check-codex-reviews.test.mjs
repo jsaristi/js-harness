@@ -7,7 +7,9 @@ import path from 'node:path';
 import { checkCodexReviewDebt, checkCodexReviews, main } from './check.mjs';
 import { PART_MAX_CHANGED_LINES } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
-import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
+import * as reviewRecords from './lib/codex-reviews.mjs';
+import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
+import { gitDirs } from './lib/project.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -47,10 +49,68 @@ function commit(root, file, content, message) {
   return git(root, 'rev-parse', 'HEAD');
 }
 
+// A test writes the records its check is to read (`record`), and the writer asked git where the git folder
+// is each time, one process for an answer that does not change while the repository is there. So the answer
+// is kept here, by the root of the repository, and handed to the writer as its `where` (`jsonLinesPath`). A
+// memo by root is safe in this file and nowhere in the product: every repository here is a folder of its
+// own, made once and removed when the file ends. It is the tests' own shortcut: the rows under test ask git
+// themselves, through the `spawn` they are handed, and a test that counts or fails a question counts it there.
+const gitFolders = new Map();
+
+/** What the tests' writer of records is told of the repository at `root`: its git folder, as `gitDirs`
+ * answers it, asked the first time. An answer git did not give is not kept, and nothing is then said: the
+ * writer asks git itself, as it did. */
+function whereOf(root) {
+  if (!gitFolders.has(root)) {
+    const { commonGitDir } = gitDirs(root);
+    if (commonGitDir === null) return {};
+    gitFolders.set(root, { commonGitDir });
+  }
+  return gitFolders.get(root);
+}
+
+/** The writer of records, under the name the product gives it, told where the git folder is. */
+const appendCodexReview = (root, rec) => reviewRecords.appendCodexReview(root, rec, { where: whereOf(root) });
+
+// Building a repository takes nine git processes, a commit among them, and nearly every test starts from
+// one of the same few. So each distinct one is built once in a run of this file, and a test is handed a
+// copy of it: a folder of its own, which it may commit in, record in and remove, with the same objects and
+// so the same commit ids, and with whatever records the one it was copied from holds in its git folder.
+const built = new Map();
+
+/** A repository of the caller's own: a copy of the one `build` makes, which is made once for `key` and is
+ * never handed out itself. `build` answers `{ root, ... }`, and the rest of it goes with every copy. The
+ * index of a copy holds the dates of the files it was copied from, so the tree reads as clean to what
+ * compares the files themselves, as `git status`, `git add` and `git commit` do, and not to `git diff-files`.
+ *
+ * A copy keeps its git folder where the one it was copied from keeps its own, so git is asked where that
+ * is once, of the one that was built, and never of a copy (`whereOf`). */
+function copyOf(key, build) {
+  if (!built.has(key)) {
+    const template = build();
+    // The sample hooks `git init` leaves are a third of what there is to copy, and nothing reads them.
+    fs.rmSync(path.join(template.root, '.git', 'hooks'), { recursive: true, force: true });
+    built.set(key, template);
+  }
+  const { root: template, ...ids } = built.get(key);
+  const root = tmp('js-harness-check-push-');
+  fs.cpSync(template, root, { recursive: true });
+  // Only a git folder inside the repository went with the copy: one that lies elsewhere is asked for.
+  const asked = whereOf(template).commonGitDir;
+  const gitFolder = asked === undefined ? null : path.relative(template, asked);
+  if (gitFolder !== null && !gitFolder.startsWith('..') && !path.isAbsolute(gitFolder)) gitFolders.set(root, { commonGitDir: path.resolve(root, gitFolder) });
+  return { root, ...ids };
+}
+
 /** A repo on `main` with one code commit, which `origin/<remoteBranch>` also points at: what the
  * check compares a push to is the remote's branch, never the local one. `remoteBranch = null`
  * leaves the repo with no remote refs at all. */
 function makeRepo(remoteBranch = 'main') {
+  return copyOf(`a repo whose remote branch is ${remoteBranch}`, () => buildRepo(remoteBranch));
+}
+
+/** Builds that repository, which is what `makeRepo` hands out copies of. */
+function buildRepo(remoteBranch) {
   const root = tmp('js-harness-check-push-');
   git(root, 'init');
   git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main');
@@ -211,11 +271,13 @@ test('a merge in which git merged a file both sides changed, and nobody wrote a 
 /** `makeRepo`, with a `.gitattributes` of `marks` that the default branch of the remote already holds, so
  * that the commit of the marks is none of the branch's own. */
 function makeMarkedRepo(marks = 'evals/results/** -codex-review\n') {
-  const { root } = makeRepo();
-  const base = commit(root, '.gitattributes', marks, 'chore: say what a review leaves out');
-  git(root, 'update-ref', 'refs/remotes/origin/main', base);
-  feature(root);
-  return { root, base };
+  return copyOf(`a repo that marks ${marks}`, () => {
+    const { root } = makeRepo();
+    const base = commit(root, '.gitattributes', marks, 'chore: say what a review leaves out');
+    git(root, 'update-ref', 'refs/remotes/origin/main', base);
+    feature(root);
+    return { root, base };
+  });
 }
 
 /** Commits `content` at `file` through the index alone and returns the commit's full id: a name the file
@@ -689,15 +751,17 @@ function countingSpawn() {
 /** A branch of two code commits with a record whose head lies past `first`, the commit that is checked,
  * and `unrelated` more records of history the default branch already holds. */
 function repoWithUnrelatedRecords(unrelated) {
-  const { root, base } = makeRepo();
-  const older = commit(root, 'old.js', 'old', 'feat: merged long ago');
-  git(root, 'update-ref', 'refs/remotes/origin/main', older);
-  feature(root);
-  const first = commit(root, 'b.js', 'two', 'feat: two');
-  const second = commit(root, 'c.js', 'three', 'feat: three');
-  record(root, older, second);
-  for (let i = 0; i < unrelated; i += 1) record(root, base, older);
-  return { root, first };
+  return copyOf(`a branch with ${unrelated} unrelated records`, () => {
+    const { root, base } = makeRepo();
+    const older = commit(root, 'old.js', 'old', 'feat: merged long ago');
+    git(root, 'update-ref', 'refs/remotes/origin/main', older);
+    feature(root);
+    const first = commit(root, 'b.js', 'two', 'feat: two');
+    const second = commit(root, 'c.js', 'three', 'feat: three');
+    record(root, older, second);
+    for (let i = 0; i < unrelated; i += 1) record(root, base, older);
+    return { root, first };
+  });
 }
 
 test('the records whose head is outside the range cost one git process together, not one each', () => {
@@ -974,17 +1038,19 @@ test('the plain row names a base that exists for a root commit, as the push chec
 /** A default branch that moved on by one commit of 40 lines, and a branch off it that merged in work which
  * forked before it moved: a record covers the branch's own commit, and none the commit of that work. */
 function repoWithWorkForkedEarlier() {
-  const { root, base } = makeRepo();
-  const moved = commit(root, 'main.js', lines(40), 'feat: on the default branch');
-  git(root, 'update-ref', 'refs/remotes/origin/main', moved);
-  feature(root);
-  const mine = commit(root, 'b.js', lines(4), 'feat: two');
-  record(root, moved, mine);
-  git(root, 'checkout', '--quiet', '-b', 'side', base);
-  commit(root, 's.js', lines(3), 'feat: side work, forked before the default branch moved');
-  git(root, 'checkout', '--quiet', 'feature');
-  git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
-  return root;
+  return copyOf('work that forked before the default branch moved', () => {
+    const { root, base } = makeRepo();
+    const moved = commit(root, 'main.js', lines(40), 'feat: on the default branch');
+    git(root, 'update-ref', 'refs/remotes/origin/main', moved);
+    feature(root);
+    const mine = commit(root, 'b.js', lines(4), 'feat: two');
+    record(root, moved, mine);
+    git(root, 'checkout', '--quiet', '-b', 'side', base);
+    commit(root, 's.js', lines(3), 'feat: side work, forked before the default branch moved');
+    git(root, 'checkout', '--quiet', 'feature');
+    git(root, 'merge', '--no-ff', '-m', 'merge side', 'side');
+    return { root };
+  }).root;
 }
 
 test('the plain row sizes the review from where `js-harness codex-review` would start it, which is not always the parent of the oldest commit', () => {
@@ -1213,15 +1279,20 @@ async function runCheck(argv, deps = {}) {
   }
 }
 
+/** A project, with its `AGENTS.md`, whose one code commit, `head`, no review record covers; `home` is a
+ * state dir of the caller's own. */
 function projectWithUnreviewedCommit() {
-  const { root } = makeRepo();
-  fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
-  git(root, 'add', '.');
-  git(root, 'commit', '-m', 'docs: agents');
-  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
-  feature(root);
-  const head = commit(root, 'b.js', 'two', 'feat: two');
-  return { root, head, home: tmp('js-harness-check-push-home-') };
+  const project = copyOf('a project with an unreviewed commit', () => {
+    const { root } = makeRepo();
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'short', 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-m', 'docs: agents');
+    git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+    feature(root);
+    const head = commit(root, 'b.js', 'two', 'feat: two');
+    return { root, head };
+  });
+  return { ...project, home: tmp('js-harness-check-push-home-') };
 }
 
 test('plain check prints the codex-review row as information and exits 0 on an uncovered commit', async () => {
