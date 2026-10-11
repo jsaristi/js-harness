@@ -6,6 +6,10 @@ on branch `docs/channel-and-rules-design` by the session `JH 4 · diseño canal 
 built later, in a session of its own, on a branch of its own, once `feat/gate-lock` is merged
 (it changes `bin/sessions.mjs` and `bin/lib/sessions.mjs`, which this feature changes too).
 
+Built from 2026-10-11 by the session `JH 5 · canal entre sesiones`, which owns this document
+from then on (tasks, Progress, Next step). Worktree `D:\js-harness-worktrees\session-channel`,
+one branch per slice, each cut from `origin/main`; the first is `feat/session-roster`.
+
 ## Goal
 The sessions of a project tell each other, and tell Sebastián, what happened through a channel
 that is recorded, addressed to a role and read with a command — so that he carries no text
@@ -93,7 +97,10 @@ the same exposure as A). Archiving or deleting any session. Any change to the ch
 
 Three things already put to him and not answered, which this document does not settle:
 - Whether the roster is built ahead of the rest of the channel, as a slice of its own (relief
-  file, line 78). "Delivery" below keeps both orders possible.
+  file, line 78). "Delivery" below keeps both orders possible. Not answered by him in his own
+  words. On 2026-10-11 the lead read his words of line 78 as "the roster first", told him so
+  in its chat and in the opening of the build session, and the build follows that reading: it
+  is the lead's, and his to correct.
 - Whether "one session, the orchestrator is the lead" is reopened, now that its measure tripped
   (see "Why").
 - Tests 1, 2, 3 and 6 of "Tests owed" need him at the app, and test 2 creates a scheduled task
@@ -111,6 +118,15 @@ against `main`, merged in order (`stacked-to-main`). Slices: 1 = T1 and T2; 2 = 
 before slice 1: T3 and the roster of T4 read only transcripts and need nothing of T1; the
 roster then shows role, purpose and last activity, and gains "opened, closed, relieved" when
 the record exists.
+
+Order taken on 2026-10-11 (the lead's reading of line 78, his to correct): the roster first.
+The first pull request, branch `feat/session-roster`, holds T3, the roster of T4 and
+`sessions --address`, which the proposal put to him at line 78 names with the roster (a
+message goes to a role, and a command prints its current address) and which needs only titles.
+The second holds T1 and T2. The rest of T4 (the channel section, `--opening`, `--quote`, the
+watch that wakes on a notice, failures 7 and 8) needs the record and follows T1, in a pull
+request of its own before T5. Strategy: `stacked-to-main`, as above; Codex within 3 million
+input tokens for the feature.
 
 ## Design
 
@@ -422,6 +438,9 @@ reader, and that table names this feature as their owner.
   held); `--address`, `--opening`, `--quote`; the watch wakes on a notice for the orchestrator;
   each wait is printed with the session it hangs from (failure 7); a stopped task and an
   archived session no longer read as live (failure 8)
+  Split by the order taken on 2026-10-11 ("Delivery"): T4a, the roster and `--address`, in the
+  first pull request with T3 (route: delegated, one writer; the reader and the board are two
+  non-trivial files with their tests); T4b, the rest, after T1.
 - [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
 - [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
@@ -477,8 +496,20 @@ reader, and that table names this feature as their owner.
   notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
   their proof.
 
+- 2026-10-11 05:01 local, the build opens. `feat/gate-lock` is on `main` (pull request 56,
+  `8b82c38`), so nothing holds it. Session `JH 5 · canal entre sesiones`, worktree
+  `D:\js-harness-worktrees\session-channel`, branch `feat/session-roster` from `origin/main`
+  `7ef20b9`. Its opening reached it as pasted content with no line of his (a first, accidental
+  reading for test owed 1: a long block arrives wrapped as pasted content; from which device
+  he pasted it is not known here, and the short line of point 6 is still to be tried). It was not answered with a question: the session compared the
+  paste with the block in the last reply of `JH ORQ · js-harness` (identical), and the next
+  feature within the order is the lead's under the charter (relief file, lines 4 and 164); he
+  had said of the same question on 2026-10-10 "ya te habia dicho que habia autonomia" (relief
+  file, line 175). Order of the slices: see "Delivery".
+
 ## Next step
-The build waits for `feat/gate-lock` to be merged. Its session opens this document and first
-settles with Sebastián, one at a time, what of "Ask me before" he has not answered by then
-(the orchestrator puts those to him from its chat). It then runs the tests owed (T2) alongside T1;
-tests 1, 2, 3 and 6 need him at the app.
+Slice "roster first", on `feat/session-roster`: T3, then the roster of T4 and `--address`,
+test first, by one delegated writer; then the gate, the gentle-ai review, the Codex review and
+the pull request. After it: T1 and T2 on a new branch from `origin/main`. Of "Ask me before",
+none blocks this slice. Tests owed 1, 2, 3 and 6 need him at the app and are asked one at a
+time, each before it is run, when T2 starts.
