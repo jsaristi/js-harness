@@ -152,8 +152,13 @@ export const MARKS_UNREAD = 'marks';
  * A file a review reads is one `js-harness codex-review` does not leave out (`./codex-review-scope.mjs`):
  * not a document, and not a path the project marks with `-codex-review`. What is marked is read from the
  * commit `tip`, for the paths of every commit under it in one git process: the commit that is judged, never
- * the tree or the index, which at a commit hold the change being made. */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync }) {
+ * the tree or the index, which at a commit hold the change being made.
+ *
+ * `where` is for a caller that already knows where the repository of `cwd` is. It is handed on as it is to
+ * the two that would ask git: its `top` to `leftOutOf`, with the `marks` that one fills for its caller, and
+ * its `commonGitDir` to the reader of the records (`jsonLinesPath`). Each then starts one git process fewer;
+ * without it both ask, as before. */
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -196,7 +201,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync }) {
   const readIds = new Set(commits?.map((commit) => commit.id));
   const isTheRange = commits !== null && commits.length === rangeIds.size && readIds.size === rangeIds.size && commits.every((commit) => rangeIds.has(commit.id));
   if (!isTheRange) return { unknown: COMMITS_UNREAD };
-  const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn });
+  const leftOut = leftOutOf(commits.flatMap((commit) => commit.files), { cwd, source: tip, spawn, where });
   if (leftOut === null) return { unknown: MARKS_UNREAD };
   const isCode = (commit) => commit.files.some((file) => !leftOut.has(file));
   // A merge is a code commit by the files somebody wrote in it: those the log lists for it that also differ
@@ -214,7 +219,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync }) {
   };
   const codeCommits = commits.filter(isCode).map(ownFiles).filter(isCode);
 
-  const records = readCodexReviews(cwd, { spawn });
+  const records = readCodexReviews(cwd, { spawn, where });
   const valid = records.filter(isValidCodexReview);
   // A record can cover part of the range only when its head is in it, or lies past the tip (a review of
   // base..D still covers C when C is the tip). Any other record is unrelated, and expanding it would cost
