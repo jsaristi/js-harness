@@ -1219,6 +1219,28 @@ names it, and the entry stays open until it does.
   (slice_budget_reached)`, 846 lines in 6 paths since `5b754dd`, and that no Codex review
   covers the code since `9a2edb1^`. `main` moved to `859b9a1` meanwhile (pull request 63); the
   orchestrator says this branch merges clean with it, not checked by this session yet.
+- 2026-10-11, the second gentle-ai review, of `5b754dd..6c687ab` (1,684 changed lines, 584 of
+  them code): lineage `review-0a7d86aca5064eee`, one lens, approved and acknowledged; the
+  reviewer ran inside a turn of the gate lock (15.8 minutes with its wait). The reviewed
+  boundary is `6c687ab`. Its three notes, none blocking, are commit `c941a55`: a test of the
+  gate's `main` for the row (where it sits, the entries it prints, a register refused), a test
+  of a form that prints through the dispatcher, and `ENOTDIR` read as no register, seen
+  failing first with a reader that throws it. Its gate: launched 16:46, the lock after two
+  gates, ended 17:16, `PASS  tests  npm run test passed`, and `review not due (under_budget)`
+  for its 63 lines, which stay in the slice for the next review. The two tests that pin what
+  the code already did were never seen failing; that is said, not hidden.
+- 2026-10-11, the Codex review of the slice's code, `340e960..c941a55`. Its plan: 4 parts,
+  1,513 changed lines in 7 files, about 1,350,000 input tokens, 892 a changed line, under the
+  1,200 that needs no question; Codex's meter before it: 17 percent of the five-hour window,
+  3 percent of the week. It is run before `main` is merged in, so that its range holds this
+  branch's commits alone. `main` is `906fc28` (pull requests 63 and 64, which changed
+  `bin/check.mjs` and `bin/check.test.mjs`); `git merge-tree` gives a tree with no conflict,
+  and a merge that is clean as text is not a proof: the suite is run on the merge result,
+  through the gate, before the push. Its first try started nothing: this session wrote this
+  entry in the worktree while the review waited for the lock, and after 13 minutes of wait the
+  command refused a range whose tracked files had uncommitted changes, which is right of it.
+  Nothing was spent. It is launched again after this entry is committed, and the worktree is
+  not touched while it runs.
 
 ## Next step
 In this order. (1) The reviews of what follows `5b754dd`:
