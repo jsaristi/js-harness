@@ -778,8 +778,9 @@ names it, and the entry stays open until it does.
     review is owed)
   - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
     `failures` of `check`; the entry in the dispatcher
-  - [ ] T3d `docs/FAILURES.md` seeded with the eighteen and with those of 2026-10-11, each
-    control checked against `origin/main` before it is written as in place
+  - [x] T3d `docs/FAILURES.md` seeded from the records, not only with the eighteen: every
+    failure the relief file and the feature documents tell, each control in place found by the
+    command in the file it names
 - [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
   the push row hints the merge commit as the base after `main` is merged in (failure 15)
 - [ ] T5 The row `citations`, INFO
@@ -821,7 +822,8 @@ names it, and the entry stays open until it does.
   - [ ] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
     `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/codex-review-parts.mjs`,
     `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
-  - [ ] T17d One entry of the register for the failure itself, with the sweep as a sighting
+  - [x] T17d One entry of the register for the failure itself, with the sweep as a sighting
+    (`old-rule-beside-new`; its control is owed by T16)
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -1023,18 +1025,43 @@ names it, and the entry stays open until it does.
   for the lock in that hour and it has no queue, so a waiter can lose every turn. It is launched
   again after this entry, with the tests of the review's notes added, and goes into the
   register as a sighting.
+- 2026-10-11, T3d and T17d: `docs/FAILURES.md` is in the repository. `js-harness failures
+  check` reads it with no fault: 59 failures, 153 sightings, 39 seen more than once, 17 not
+  settled (15 `repeated`, 1 `owed, stale`, 1 `seen again`), so `failures check --settled` exits
+  1, as it must until each of the 17 has a control in place or owed; that is work of this
+  feature and of the features that own those controls, not of this slice. Added to the draft
+  by this session: its two slips of the day as sightings (`board-read-loads-gate`,
+  `assessment-counts-main`), the gate wait that gave up (`lock-not-a-queue`, now seen twice
+  and so `repeated`; its control is the feature `gate-turn`, whose document is not on this
+  branch), and the entry `old-rule-beside-new`. Not checked by this session: that each `since`
+  date of a control in place is the day it reached `main`; they are the seed writer's reading
+  of the records. The gate's lead asked this session at 16:03 to yield one turn of the lock to
+  the session channel's slice, which had waited 40 minutes: the waiting commit of T3c was
+  stopped and is launched again, behind that turn, with a wait of 180 minutes.
+- 2026-10-11, a mistake of this session while yielding that turn. What happened: the script
+  written to launch the commit after the other session's turn tested the lock's files with
+  `rg`, which exists in this session's shell and not in a script run by `sh`; the test failed
+  as "command not found", the script read that as "that session neither holds nor waits", and
+  launched the commit at 16:04:26. It took the lock for about 50 seconds before this session
+  saw it in the holder file and stopped it (16:05:29); no sensor finished and nothing was
+  committed. The fix now: the wait is a Node script that reads the holder files, and it
+  launches only when it has read the other session as holder, or as gone on three reads in a
+  row. What stops it recurring: nothing mechanical yet; the same failure was recorded on
+  2026-10-10 (`broken-wait-script`, "rg: command not found" 61 times), and its control is a
+  test of the gate's own wait, which a private script does not use. Where it enters the
+  harness: the lock as a line by arrival that the feature `gate-turn` builds, after which no
+  session writes a script to order turns. The proof that it has not come back: the count of
+  sightings of `broken-wait-script` in `js-harness failures`, which this one raises to four.
 
 ## Next step
 In this order. (1) T3c: the commit through the gate (the command, the row, the wiring and the
-tests of the review's notes are staged); this session's language servers are stopped first.
-(2) T3d: copy the draft to `docs/FAILURES.md`, add the sightings named in Progress (the board
-read beside a gate, the assessment that counted `main`, the gate wait that gave up) and the
-entry of T17d, commit (documents: no sensor). (3) The reviews of what follows `5b754dd`:
+tests of the review's notes are staged), launched by a script of this session's scratchpad
+when the session channel's worktree holds the lock. (2) The reviews of what follows `5b754dd`:
 gentle-ai first (consent is pre-granted), then Codex for the code since the branch point,
 `js-harness codex-review --base 9a2edb1^` after its `--plan` says what it costs; neither beside
-a running gate. (4) Merge `main` in before the push of `feat/failures-register`: three unmerged
+a running gate. (3) Merge `main` in before the push of `feat/failures-register`: three unmerged
 branches change `bin/check.mjs` and `bin/js-harness.mjs` in the same places. Push, open the
-pull request with the twelve doubts of the seed in it, tell the orchestrator. (5) T17c and
-T17d. (6) T16, from the relief file's lines 253 and 254. (7) T1. T2 and T8 wait for him: before
+pull request with the twelve doubts of the seed in it, tell the orchestrator. (4) T17c. (5)
+T16, from the relief file's lines 253 and 254. (6) T1. T2 and T8 wait for him: before
 T2 the first item of "Ask me before" is asked, and the host facts of "What the hosts allow"
 that T2 rests on are confirmed with a logging hook.
