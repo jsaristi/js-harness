@@ -24,8 +24,12 @@ messages and his hands. What the day showed, each in the orchestrator's relief f
 - An opening pasted with no line of his was not taken as his assignment, twice, the second time
   after 28 minutes of waiting (lines 129 and 175; the second is this design session's own
   opening).
-- Three orchestrators were relieved in one day with their context between 65% and 85%, and
-  sessions proposed a cut near 70% because of a mark that limits nothing (lines 124 to 127).
+- The orchestrator was relieved more than once in the day, at 65%, 71% and about 85% of its
+  context (`odd/tasks/session-board.md`, the gaps judged on 2026-10-10; relief file, line 164),
+  and sessions proposed a cut near 70% because of a mark that limits nothing (lines 124 to
+  127). The roadmap names "relieved more than once in a working day" as the measure that would
+  reopen "one session, the orchestrator is the lead". It tripped; this design does not reopen
+  that decision and lists it under "Ask me before" as his.
 - Hours were written from a guess, and "no gate runs" was said while one ran (lines 122, 172).
 
 His words that day ask for one thing under several forms: a place, always current, that says
@@ -53,9 +57,13 @@ does not return (lines 143 and 145).
   `bin/lib/sessions.mjs` (the roster, the channel section, the measures, what the reader takes
   from a transcript, the context figure); `bin/js-harness.mjs` (dispatcher); the orchestrator
   skill and one hook entry in `bin/lib/manifest.mjs`; a row in `bin/lib/stack.mjs`; a step in
-  `scripts/practice*.mjs`; `docs/ROADMAP.md`.
+  `scripts/practice*.mjs`; `docs/ROADMAP.md`; and the two sentences of `AGENTS.md` about the
+  resume prompt of a cut, which become false the day T6 lands. The test files the contract
+  names (`bin/lib/channel.test.mjs`, `bin/notify.test.mjs`) do not exist yet: the build creates
+  them, and adds to "Done when" the test of each command it ships (`--address`, `--quote`,
+  `--measures`, the resume hook, the row `session-classes`).
 - Out: how a reply closes and the rest of "Working with Sebastián" — `odd/tasks/rule-hierarchy.md`
-  owns `AGENTS.md` and the reply check. The gate lock and the gate log — `feat/gate-lock`. A
+  owns the rewrite of `AGENTS.md` and the reply check. The gate lock and the gate log — `feat/gate-lock`. A
   second machine and several accounts — kept for later by him (roadmap, item 5 of the order).
   Opening a session from a session — only its two tests are owed here.
 
@@ -82,6 +90,14 @@ How the two permission classes meet on his machine: option A or B of "Permission
 machine. Whether notices are also pushed into a work session by a hook (option C below; it has
 the same exposure as A). Archiving or deleting any session. Any change to the charter.
 
+Three things already put to him and not answered, which this document does not settle:
+- Whether the roster is built ahead of the rest of the channel, as a slice of its own (relief
+  file, line 78). "Delivery" below keeps both orders possible.
+- Whether "one session, the orchestrator is the lead" is reopened, now that its measure tripped
+  (see "Why").
+- Tests 1, 2, 3 and 6 of "Tests owed" need him at the app, and test 2 creates a scheduled task
+  on his machine: each is asked before it is run.
+
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`. The transcript reader is
 tested with fixture transcripts, as today. The skill is passive text: its test is that the
@@ -90,7 +106,10 @@ installed copy equals the source, which exists.
 ## Delivery
 Forecast: about 1,600 to 2,000 authored lines over five slices, each its own pull request
 against `main`, merged in order (`stacked-to-main`). Slices: 1 = T1 and T2; 2 = T3 and T4;
-3 = T5 and T6; 4 = T7 to T9; 5 = T10 to T12.
+3 = T5 and T6; 4 = T7 to T9; 5 = T10 to T12. If he chooses the roster first, slice 2 is built
+before slice 1: T3 and the roster of T4 read only transcripts and need nothing of T1; the
+roster then shows role, purpose and last activity, and gains "opened, closed, relieved" when
+the record exists.
 
 ## Design
 
@@ -108,8 +127,11 @@ against `main`, merged in order (`stacked-to-main`). Slices: 1 = T1 and T2; 2 = 
   session's fallback title (`:92`).
 - `install` writes one `SessionStart` entry per host, matcher `startup|resume`
   (`bin/lib/manifest.mjs:128-150`); a second entry is one more item and `uninstall` removes it.
-- `appendJsonLine` and `readJsonLines` are generic helpers for a `.jsonl` record
-  (`bin/lib/codex-reviews.mjs:60-93`).
+- `appendJsonLine` and `readJsonLines` write and read a `.jsonl` record
+  (`bin/lib/codex-reviews.mjs:60-93`), but their folder is the repository's git folder and
+  there is none outside a repository (`jsonLinesPath`, `:30-33`, pointed out by the review of
+  this document), so the channel takes their shape and writes under the home folder with a
+  writer of its own.
 - The hosts (official documentation, read by a sub-agent on 2026-10-10, each a claim to confirm
   before it is built on): Claude Code addresses a message by the session's name; hooks receive
   `session_title`; `SessionStart` has the matcher `compact` on both hosts; the `Stop` hook's
@@ -180,7 +202,10 @@ replaces the roster the orchestrators rewrote by hand as a line of the relief fi
 first. Exit 1 (no other session holds the role) lets it start; exit 0 or 2 (another one does)
 makes it refuse, unless it was opened as that one's relief, which the opening says. A work
 session reads the same command the other way: only exit 0 gives it an address. The board prints
-a line when two sessions carry the orchestrator's title. The handover of the title, done more than once on 2026-10-10
+a line when two sessions carry the orchestrator's title. Only the exact title `<code> ORQ ·
+<project>` holds the role: `ORQ nueva` and `ORQ relevada` are other titles on purpose, so a
+handover never reads as two orchestrators and notices keep reaching the one that still holds
+the title. The handover of the title, done more than once on 2026-10-10
 and written nowhere but the relief file, becomes four steps of the skill: the new one opens as
 `<code> ORQ nueva`; it reads the record, the relief file and the board, and asks the one before
 by message only what the files do not hold; on its "ready" the one before renames itself
@@ -233,11 +258,13 @@ of `odd/tasks/rule-hierarchy.md` (C1).
 
 ### 8. How he is told
 For the orchestrator's replies (decided, 2026-10-09): what needs him and where, or nothing; then
-what runs alone; then what was done; in everyday words. A wake with no news is one line. New
-here: a reply no longer ends with a prompt for another session; it says what was recorded and
-sent and whether it arrived. A block for another session exists only when both the record and
-the message cannot reach it, and it then says, under "where it goes", that he types a line of
-his own with the paste.
+what runs alone; then what was done; in everyday Rioplatense Spanish, a technical word explained
+the first time it appears. A wake with no news is one line. New here: a reply no longer ends
+with a prompt for another session; it says what was recorded and sent and whether it arrived.
+Two texts for him to carry remain, and the reply check of the rule hierarchy knows both (its
+C1, "a carry block"): the one line that opens a session (point 6), and a notice for a session
+that neither the record nor a message can reach. Each sits under the three labels, names the
+other session under "where it goes", and says there that he types a line of his own with it.
 
 ### 9. Context
 His rule of 2026-10-10 (relief file, lines 126 and 127): no session stops, slows or proposes a
@@ -252,6 +279,8 @@ there and the same task continues after it, from the document. What makes the ru
 - A `SessionStart` hook with the matcher `compact`, on both hosts: it prints the session's
   title, its opening file, its feature document and the instruction to read "Next step" and to
   repeat any open question. He then pastes no resume prompt, and a cut is the bare `/compact`.
+  Like every hook the harness installs, it acts only in a project that opted in (a
+  `harness.json` at its root) and prints nothing elsewhere.
 - The nudge at 85% rides on the reply check of the rule hierarchy (its `Stop` hook reads the
   transcript the board reads). Until that feature ships, the board flags it and the orchestrator
   tells the session once, as today.
@@ -277,8 +306,8 @@ choose:
   its turn ends. It works across hosts and classes, and its exposure is the one of A, moved
   into the harness.
 
-Recommended: A, which the two orchestrators before also recommended; C is not built unless he
-asks. Whatever he chooses, `doctor` gains a row `session-classes`: it reads the permission mode
+Recommended: A, as the orchestrator recommended when it put the choice to him (relief file,
+line 61); C is not built unless he asks. Whatever he chooses, `doctor` gains a row `session-classes`: it reads the permission mode
 of the project's recent sessions and the setting, and reports when the classes differ and
 nothing joins them. In a project that only uses the harness this is the first thing a second
 device meets, so the row ships.
@@ -296,7 +325,11 @@ The installed skill describes a watchman; he decided a lead (2026-10-09) and cha
   sessions; plan steps and notices; pushes and pull requests once the gate and both reviews are
   green; the merge of a pull request, documents or code, when the gate passed, both reviews are
   recorded with nothing blocking and it is clean; the go-ahead of a later stage inside a plan he
-  approved; a Codex review within the cost its plan prints. His, asked one at a time: spend
+  approved; a Codex review within the cost its plan prints, up to 3 million input tokens for a
+  feature unless he raised it for that feature (6.5 million for the gate lock, 2026-10-10);
+  compaction left to the host, with the feature document as the record. This paragraph is the
+  charter of 2026-10-09 with his change of 2026-10-10 and nothing else: what it does not
+  repeat stands as the roadmap and the relief file have it. His, asked one at a time: spend
   outside the plan; anything installed or changed on a machine; a product choice; what cannot be
   undone; a change of the plan or of its order; a new protocol. Before it calls something his,
   it names which of the six.
@@ -324,10 +357,15 @@ write anything. `js-harness sessions --measures` prints them over a window.
 | Cuts proposed under 85%; tasks reopened after a cut | whether the context rule holds | replies with the cut state and their tokens; feature documents |
 | The orchestrator's context per hour, reliefs per day, wakes with no news | whether one orchestrator lasts a day | its transcript; `relieved` lines |
 | Answers that travelled, and those quoted before use | whether his words are checked | `answer` lines; the quote command in the receiver's transcript |
+| Replies the reply check refused, per session | whether the rules of a reply are learned or only enforced | the hook's refusals in the transcripts, once the rule hierarchy ships it |
 
 The gate's own numbers (each run, its length, what ran beside it) belong to `feat/gate-lock`,
-where no gate log exists yet (searched on the branch on 2026-10-10, nothing found); the finding
-is passed to its session through the orchestrator. Rework and spend per feature are left for a
+where no gate log exists yet. The searches, by the survey's sub-agent on 2026-10-10: `git show
+feat/gate-lock:odd/tasks/gate-lock.md` filtered for "gate log", "gate-log", "log.jsonl" and
+"runs.jsonl", and `git grep` on the branch for "appendJsonLine", ".jsonl", "gate log" and
+"history" in `bin/lib/gate-lock.mjs` and `bin/gate.mjs`; either would have matched a log's
+file name or its writer; the other files of the branch were not searched. The finding was
+passed to its session through the orchestrator the same day. Rework and spend per feature are left for a
 later look: nothing decided today would use them.
 
 ### 13. Tests owed
@@ -344,8 +382,9 @@ Each is run once by the build, with its result recorded in Progress.
 
 ## Failures this feature owns
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
-5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 are the
-next slice of the session board and are built with T4 here, since both change the same reader.
+5, 6, 14, 17 and 18. Each closes only when its proof there exists and passes. 7 and 8 were left
+by the session board for its next slice; they are taken here, in T4, since they change the same
+reader, and that table names this feature as their owner.
 
 ## Tasks
 - [x] T0 Design: what exists, the record, the roster, the opening, the context rule, the skill,
@@ -356,9 +395,11 @@ next slice of the session board and are built with T4 here, since both change th
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
 - [ ] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
-- [ ] T4 The board: the roster, the channel section, `--address`, `--opening`, `--quote`; the
-  watch wakes on a notice for the orchestrator; a stopped task and an archived session no longer
-  read as live
+- [ ] T4 The board: the roster; the channel section (the record's last notices, and the last
+  messages between sessions read from the transcripts: time, from, to, first line, arrived or
+  held); `--address`, `--opening`, `--quote`; the watch wakes on a notice for the orchestrator;
+  each wait is printed with the session it hangs from (failure 7); a stopped task and an
+  archived session no longer read as live (failure 8)
 - [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
 - [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
@@ -368,8 +409,9 @@ next slice of the session board and are built with T4 here, since both change th
 - [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
 - [ ] T11 The real stretch of "Done when", recorded
-- [ ] T12 The roadmap's section replaced by a pointer; the failures this feature owns closed
-  with their proofs
+- [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
+  replaced by a pointer only after what it holds and this document does not (the reasoning of
+  the lead, the advice on width, the two measures that reopen a decision) is moved here
 
 ## Progress
 - 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
@@ -382,11 +424,23 @@ next slice of the session board and are built with T4 here, since both change th
   `odd/tasks/rule-hierarchy.md`, Progress. Two of the review's four findings were in this
   document and are corrected: the exit codes of `sessions --address` (points 3 and 5), and the
   practice run that was a command of the contract while bound to one machine's folder.
+- 2026-10-10, a second review, asked by the orchestrator of a read-only sub-agent before it
+  merged pull request 55: four blocking items and a list of smaller ones, each checked here
+  before it was taken. In this document: the charter restated without its Codex cap and
+  without "compaction left to the host" (both back, with the sentence that what is not repeated
+  still stands); the roster as a slice of its own, which he was asked and has not answered, now
+  under "Ask me before" with a delivery order that allows it; failure 7 named in T4; the two
+  texts he still carries named for the reply check; the handover no longer reading as two
+  orchestrators; the resume hook's opt-in; the helper that cannot write outside a repository;
+  the searches behind "no gate log". Not taken: a contract command for every later command;
+  the build adds each test to "Done when" as it writes it, and naming files that do not exist
+  yet would only add guesses.
 - 2026-10-10, a finding for `feat/gate-lock`, passed to the orchestrator with the closing
   notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
   their proof.
 
 ## Next step
-The build waits for `feat/gate-lock` to be merged. Its session opens this document, runs the six
-tests owed (T2) alongside T1, and asks Sebastián nothing before T6, unless a test of T2 changes
-the design.
+The build waits for `feat/gate-lock` to be merged. Its session opens this document and first
+settles with Sebastián, one at a time, the three things of "Ask me before" he has not answered
+and the choice of A or B if it is still open. It then runs the tests owed (T2) alongside T1;
+tests 1, 2, 3 and 6 need him at the app.

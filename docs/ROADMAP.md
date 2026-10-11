@@ -310,11 +310,12 @@ that each build a real repository.
 ## Rule hierarchy (planned)
 
 Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
-`odd/tasks/session-channel.md`; not built. Where this section and that document differ, the
-document wins. It holds the survey (83 rules, 49 with nothing that makes them act, and the
+`odd/tasks/session-channel.md`; not built. Where this section and that document differ on the design, the
+document wins; a decision of his that the document does not restate stands as it is written
+here and in the orchestrator's relief file. It holds the survey (83 rules, 49 with nothing that makes them act, and the
 place of each), the checks to build, the outline of the rewritten `AGENTS.md`, the protocols,
 and the list of that day's failures with the proof each one owes. This section stays as the
-reasoning it came from and is replaced by a pointer when the feature closes (its T14).
+reasoning it came from and is replaced by a pointer when the feature closes (its last task).
 
 A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08; designed, not
 built. This section was the starting point of that document. It sits outside the Next list
@@ -543,8 +544,9 @@ gentle-ai's managed block (F2), so this orders the thin layer, not the whole pay
 ## Session channel (planned)
 
 Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
-`odd/tasks/rule-hierarchy.md`; not built. Where this section and that document differ, the
-document wins. Four statements below are superseded by decisions Sebastián took on 2026-10-10,
+`odd/tasks/rule-hierarchy.md`; not built. Where this section and that document differ on the design, the
+document wins; a decision of his that the document does not restate stands as it is written
+here and in the orchestrator's relief file. Four statements below are superseded by decisions Sebastián took on 2026-10-10,
 recorded until now only in the orchestrator's relief file:
 
 - Context (below, "Past the board's limit (73% of the window it measures) it does not start

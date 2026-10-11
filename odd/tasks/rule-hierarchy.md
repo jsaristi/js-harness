@@ -13,8 +13,9 @@ session remembering it, here and in a project that only installs the harness.
 
 ## Why
 Rules that live where nothing acts are repeated by Sebastián, session after session. He has
-stated "my wording is the need, not the specification" three times (2026-10-08, 2026-10-09,
-2026-10-10) and it still acts only through an agent's memory note. The line of `AGENTS.md` about a
+said three times that his wording is the need and not the specification (2026-10-08,
+2026-10-09 and 2026-10-10, as the relief file counts them in its line 80), and it still acts
+only through an agent's memory note. The line of `AGENTS.md` about a
 step he would only say yes to was loaded in a session that still stopped for a yes
 (`odd/tasks/session-board.md`, entry of 2026-10-10, "A sentence did not carry it"). A rule
 changed in a memory note did not reach the sessions already open (failure 2 below). And text is
@@ -43,9 +44,15 @@ fourteen matters two places say different things; each is listed, with the text 
 ## In scope / Out of scope
 - In: `AGENTS.md` (rewritten within its budget); `agentsTemplate` (`bin/lib/project.mjs`); a new
   protocols skill and the two hook entries in `bin/lib/manifest.mjs`; new `bin/reply.mjs` with
-  `bin/lib/reply.mjs`; new rows in `bin/check.mjs` (`failures`, `spec`, citations); a row in
-  `bin/lib/stack.mjs` (`memory-rules`); `docs/SPEC.md` and `docs/FAILURES.md`; one eval task
-  under `evals/tasks/`; steps in `scripts/practice*.mjs`; `docs/ROADMAP.md`.
+  `bin/lib/reply.mjs`, and its entry in the dispatcher (`bin/js-harness.mjs`); new rows in
+  `bin/check.mjs` (`failures`, `spec`, citations) with `bin/lib/failures.mjs` and
+  `bin/lib/spec.mjs`; a row in `bin/lib/stack.mjs` (`memory-rules`); `docs/SPEC.md` and
+  `docs/FAILURES.md`; a `harness.json` at the root of this repository, which it does not track
+  today and which C1 needs for the reply check to act here; one eval task under
+  `evals/tasks/`; steps in `scripts/practice*.mjs`; `docs/ROADMAP.md`. The test files the
+  contract names (`bin/reply.test.mjs`, `bin/lib/failures.test.mjs`, `bin/lib/spec.test.mjs`)
+  do not exist yet: the build creates them, and adds to "Done when" the test of each other
+  check as it writes it (C4, C5, C6, the protocols skill, the eval's proof).
 - Out: the orchestrator skill, the notices, the roster, the opening of a session and the context
   hooks — they are `odd/tasks/session-channel.md`, built first. gentle-ai's managed block and
   the global `CLAUDE.md` — not this repository's text (F2); what they already say is not
@@ -55,9 +62,11 @@ fourteen matters two places say different things; each is listed, with the text 
 ## Constraints
 - A check before a line, a line before a protocol — because a check costs no tokens and cannot
   be forgotten, and F5 measured what more text costs.
-- `AGENTS.md` stays within `TOKEN_BUDGET` (1,500, `bin/check.mjs:19`); it stands at 1,499 in a
-  CRLF checkout and 1,477 by committed blob — because every line is paid on every turn, a rule
-  that enters makes another leave.
+- `AGENTS.md` stays within `TOKEN_BUDGET` (1,500, `bin/check.mjs:19`); the gate of this
+  document's commit printed `PASS  budget  1499 estimated tokens (budget 1500)` — because every
+  line is paid on every turn, a rule that enters makes another leave. The new section lists
+  nine items against a file with one token to spare, so T8 is not done by adding: it measures
+  what C1 and the protocols let leave before a line enters.
 - A hook the harness installs acts only in a project that opted in, and is recorded in the
   manifest — because a user-level hook runs in every project of the machine, and what is written
   outside the repository must be undone exactly (`AGENTS.md`, "What good looks like").
@@ -66,8 +75,9 @@ fourteen matters two places say different things; each is listed, with the text 
 - The wording of each line of `AGENTS.md`, and each thing shipped, passes by Sebastián in the
   build session — because he accepted the content and the direction, not the final text
   (`docs/ROADMAP.md`, "Rule hierarchy (planned)").
-- Not built while the session channel is being built — because both edit `AGENTS.md`,
-  `bin/lib/manifest.mjs` and `docs/ROADMAP.md`.
+- Not built while the session channel is being built — because both edit
+  `bin/lib/manifest.mjs` and `docs/ROADMAP.md`, and the channel changes two sentences of
+  `AGENTS.md` (the resume prompt of a cut) that T8 here rewrites with the rest.
 
 ## Effort
 high
@@ -76,8 +86,13 @@ high
 Installing the reply hook on this machine (a change on a machine). Whether `init` turns the reply
 check on in a project by default (a product choice). The final wording of the rewritten
 `AGENTS.md` and of the template. The spend of the honesty eval's trials. Deleting or rewriting the
-memory notes of this project once their rules are placed. Any protocol beyond the six sections
-named in "Protocols" (a new protocol).
+memory notes of this project once their rules are placed. The protocols: the roadmap starts
+with four, and sections 5 and 6 of "Protocols" are proposed to him as two more (a new protocol
+is his); so is any after them.
+
+Already put to him and not answered, which this document does not settle: what enters the
+harness from the sub-agent models result (asked by the orchestrator on 2026-10-10, 22:35). C8
+and the model clause of protocol 6 wait for it.
 
 ## TDD
 Mode: strict (source: user global config). Runner: `node --test`. Passive documents (`AGENTS.md`,
@@ -87,7 +102,7 @@ them are written test first.
 ## Delivery
 Forecast: about 1,400 to 1,800 authored lines over six slices, each its own pull request against
 `main`, merged in order (`stacked-to-main`, as every feature since `odd/tasks/project-init.md`).
-Slices: 1 = T1; 2 = T2; 3 = T3 to T6; 4 = T7 to T9; 5 = T10; 6 = T11 to T14.
+Slices: 1 = T1; 2 = T2; 3 = T3 to T6; 4 = T7 to T9; 5 = T10; 6 = T11 to T15.
 
 ## Design
 
@@ -126,6 +141,10 @@ design session, so each is a claim to confirm with a logging hook before it is b
   all). The description of every installed skill is loaded on every turn.
 - Not documented: whether `Stop` fires in sessions started through `claude remote-control`, and
   whether the desktop app renders a status line.
+- Inferred by the review of this document, not tested: this machine already has a `Stop` hook
+  of gentle-ai. If it refuses a stop first, the next stop arrives with `stop_hook_active` true,
+  and a check that lets such a stop through would be skipped. T2 tests the two hooks together
+  before it relies on that flag.
 
 ### Checks to build
 Each names the incident it comes for, what it refuses, and how it is judged in a project that
@@ -141,10 +160,22 @@ and refuses a final reply when:
   labels (what it is, where it goes, what sending it does), or no line naming which of his six
   items the question falls under;
 - the state is decision and `background_tasks` is not empty (never asked while work runs);
-- the state is working or finished and the reply carries a block;
+- the state is working or finished and the reply carries a block for this chat;
 - the state is finished and no session to return to is named;
 - the state is cut and the blocks are not the two numbered ones (until the resume hook of the
   session channel exists; then a cut carries the bare `/compact` alone).
+Two kinds of block exist, told apart by the label "where it goes". A block for this chat holds
+his answer and belongs to a decision. A carry block names another session: it is the one line
+that opens a session or a notice for a session nothing else can reach
+(`odd/tasks/session-channel.md`, points 6 and 8). The check allows at most one carry block in a
+reply, in any state, and refuses one that does not say there that he types a line of his own
+with it.
+
+It also does one thing without refusing: when the session's context, read from the transcript
+as the board reads it, is at or past 85% of its window, it adds one
+line to the model's context saying so and naming the rule (write the state in the feature
+document, then judge what is left). It says it once per session, not at every stop.
+
 The refusal prints the missing piece and the exact shape, in the project's language. It lets a
 reply through when `stop_hook_active` is true, so a session is refused once per stop and never
 loops. It does not run for sub-agents. It acts only where `harness.json` holds a `reply` key;
@@ -187,7 +218,9 @@ documents cite other branches and removed files on purpose.
 
 **C6 Rules in memory** (row `memory-rules` of `doctor`). It lists the notes of the project's
 agent memory whose type is `feedback` or `project`: each is a rule or a decision living where
-nothing acts. The fix line says: place it with the protocol "recording a new rule", then delete
+nothing acts. The four types (`user`, `feedback`, `project`, `reference`, in each note's front
+matter) are what Claude Code's memory instructions define in this session; the types the
+seventeen notes actually carry were not read here, and T6 reads them before it relies on them. The fix line says: place it with the protocol "recording a new rule", then delete
 the note. Notes of type `user` and `reference` are machine facts and are left. The `SessionStart`
 hook that `install` already writes (`js-harness doctor --hook`) shows the gap when it changes.
 This is the first of the feature's two end numbers, as a command.
@@ -199,9 +232,19 @@ sensors stay. Its trials are spend he approves first.
 
 **C8 Sub-agent models** (last, optional). His rule of 2026-10-10: Haiku only for sub-agents that
 write code; designing, planning and verifying on Opus 5.5 at high effort at least. A `PreToolUse`
-hook can read `model` and refuse one the project does not allow; it cannot read `effort`. Built
-only after `odd/tasks/subagent-model-routing.md` closes and after the matcher's name is confirmed;
-until then the rule is one line of the protocol "handing off".
+hook can read `model` and refuse one the project does not allow; it cannot read `effort`. The
+comparison is closed (`docs/ROADMAP.md`, "Subagent models result", merged on 2026-10-10): the
+same score, 58% less cost for the session, not faster, and a recommendation that nothing is
+turned on by default and that, if it goes in, it is the model of the writing sub-agent only.
+What enters the harness from it is his and not answered, so C8 is built only after his answer
+and after the matcher's name is confirmed; until then the rule is one clause of the protocol
+"handing off".
+
+**C9 The honesty audit** (after the session channel; an assumption first). The roadmap proposes
+that the reader of transcripts take a session's final report and check what can be checked:
+that the paths and commits it names exist, that the test count is the one that ran. Whether the
+reader makes that cheap is an assumption the roadmap itself marks; T14 reads the code and
+either designs the audit as a count on the board or records why not.
 
 Not built here, only pointed to: the gate lock of `feat/gate-lock` is the check for "never two
 gates" and replaces three rules kept by hand (59 to 61 of the survey); the pre-push row already
@@ -219,20 +262,24 @@ session:
 2. What is his, the six items: spend outside the plan; anything installed or changed on a
    machine; a product choice; what cannot be undone; a change of the plan or of its order; a new
    protocol. Asked one at a time, never while work runs, naming the item. Everything else is
-   decided, its cost said, and the work goes on.
+   decided, its cost said, and the work goes on: commit, reviews and the next task chained with
+   no report between them, and never idle on an open question.
 3. His wording is the need, not the specification: an answer to a proposal of his says the need
    that was understood, what would be done differently from his words and why, and what it costs
    or is not known; only then it is recorded.
 4. Every claim is one of three: checked (with its evidence), assumed, or not known. What another
    session, a sub-agent or he reports as done outside the session is a claim: one thing is
-   checked before building on it.
+   checked before building on it. What is passed on always says what failed and what was not
+   checked, with "nothing" when that is true; the full shape is protocol 6, and this sentence
+   is here because it applies to every report and a skill alone loads only when it matches.
 5. One session, one feature; every decision is written to the roadmap or the feature document
    and committed in the same session.
 6. A reply ends with one of four states; the reply check says how.
 7. Review consent is pre-granted; the steps are in the protocol "running something that costs".
 8. Every proposal is judged twice: as it is here, and as it works in a project that only uses
    the harness.
-9. An index of one line: the protocols, by situation.
+9. An index of two lines: the protocols, by situation; and, before changing a piece of the
+   harness, the entry of that capability in `docs/SPEC.md`.
 
 What leaves, and where it goes: the format of the four states, of the block and of a cut (to C1
 and the protocol "closing a reply"); the steps of a review (to the protocol "running something
@@ -259,8 +306,10 @@ the section, it is withdrawn.
    for which session; the map from `js-harness progress`; a cut at the end of a task.
 3. Running something that costs (a gate, an eval batch, a review, a push): its count said first;
    one try; the proof is read before the command it allows, and the two share a command only when
-   the second is conditional on the first; an assessment is read before the next command; the
-   review consent, a candidate being a commit or a slice, and the Codex review of each slice.
+   the second is conditional on the first; an assessment is read before the next command, and
+   after `main` is merged into a branch its base is the merge commit; a stacked pull request is
+   merged after its base, or its base is changed before the first is merged; the review
+   consent, a candidate being a commit or a slice, and the Codex review of each slice.
 4. Recording a new rule: the five questions (did it happen; twice, or once at a cost; can a
    check do it; can an existing protocol be amended; what does it cost and what leaves); its
    level; the memory note deleted. A missing protocol is reported and proposed, never created.
@@ -269,12 +318,16 @@ the section, it is withdrawn.
    it has not come back), and its entry in `docs/FAILURES.md`.
 6. Handing off, to him, to a session or to a sub-agent: what was done, what was checked and how,
    what was not checked, what failed, what stays open; "not checked" and "failed" always filled;
-   bad news first. A sub-agent that designs, plans or verifies runs on Opus 5.5 at high effort;
-   Haiku only to write code.
+   bad news first. A sub-agent that designs, plans or verifies runs on Opus 5.5 at high effort
+   at least, or Fable 5.5 at high effort when it exists, and no other model; Haiku is a
+   candidate only to write code (his rule of 2026-10-10, relief file, line 148; what the
+   harness turns on from the comparison is not answered).
 
-Sections 1 to 4 are the four protocols the roadmap starts with. Sections 5 and 6 are shapes he
-decided afterwards (relief file, lines 6, 125 and 145), so they are placed, not invented. A
-seventh passes the five questions and is his.
+Sections 1 to 4 are the four protocols the roadmap starts with. The shapes of sections 5 and 6
+are his (relief file, lines 6, 125 and 145); making each a section of this skill makes the
+protocols six, and a new protocol is his, so the two are proposed to him in the build session
+and not taken as given. If he says no, the two shapes stay as the one sentence of item 4 of
+`AGENTS.md` and as the fields of `docs/FAILURES.md`. A seventh passes the five questions.
 
 ### Signals of done
 The seven of the roadmap, each as something read and not judged.
@@ -310,8 +363,10 @@ done when each of the fourteen reads one way in every place that states it.
 7. How a reply ends: C1 and the protocol "closing a reply" are the one place.
 8. The handoff record: `AGENTS.md` says the roadmap and the feature document are the handoff
    "and nothing else is"; the relief file is the orchestrator's third. The line is reworded.
-9. Effort: the roadmap's "medium by default" against high on every sub-agent; settled by his
-   models rule of 2026-10-10 and the result of `odd/tasks/subagent-model-routing.md`.
+9. Effort and models: the roadmap's "medium by default" against high effort on every
+   sub-agent. His rule of 2026-10-10 answers it for designing, planning and verifying. For the
+   sub-agent that writes code it is open: the comparison is done and what enters the harness
+   from it waits for his answer.
 10. Stale notes: `merge-from-chat` ("never merge on your own"), `mistake-report-four-parts`
     (titled four, holds five), `cross-session-prompts` (says the skill is the source, and the
     skill lacks those rules), the roadmap's count of twelve memory notes (seventeen).
@@ -428,26 +483,27 @@ board), GL the gate lock, MF a machine fact that stays in memory, DROP stale.
 ## Failures of 2026-10-10
 The list the orchestrators kept that day (relief file, lines 143, 144, 167, 172 and 175), as the
 seed of `docs/FAILURES.md`. None has its proof yet, so all are open. Owner: RH this feature, CH
-the session channel, SB the next slice of the session board, GL `feat/gate-lock`.
+the session channel, GL `feat/gate-lock`. A proof marked "owed" is not designed here: its owner
+names it, and the entry stays open until it does.
 
 | # | What happened | Owner | Control | Proof |
 |---|---|---|---|---|
 | 1 | A yes was asked of him that was not his | RH | C1: a decision names its item | count of bare yes per session is 0 |
 | 2 | A rule changed in a memory note did not reach open sessions | RH | C6; the rule in a check or a line | `doctor`: no `memory-rules` gap |
-| 3 | A block he had not used was referred to by its hour | CH | no block for another session; a notice is a record | count of notices carried by his paste |
+| 3 | A block he had not used was referred to by its hour | CH | no block for another session; a notice is a record | notices carried by his paste, counted by the board: 0 in the stretch of its "Done when" |
 | 4 | An opening pasted with no line of his cost one more yes | CH | the opening is a file, his line is typed | count of a yes after a paste is 0 |
 | 5 | A finished feature sat six hours: a phone session could not be reached | CH | the notice is a record the board reads | a practice step: a notice read with no message sent |
 | 6 | The 73% mark and the cut near 70 | CH | the limit as room left; the pause at 85% | count of cuts proposed under 85% is 0 |
-| 7 | A wait process could not be attributed from the board | SB | the board prints each wait with its session | a test of the board |
-| 8 | Stopped tasks and archived sessions printed as live | SB | the roster; a stopped task reads as stopped | a test of the board |
-| 9 | "No gate runs" said twice while one ran unseen | GL | a gate log, one line per run | the log; no such log exists on the branch yet |
-| 10 | A commit of 2,250 lines passed the gate and could not be reviewed | GL | the size is read before the commit | row `codex-review` (debt) |
-| 11 | An untracked folder made the review assessment fail | GL | the test run leaves no folder | a test |
+| 7 | A wait process could not be attributed from the board | CH (T4) | the board prints each wait with its session | a test of the board, fixture with two waits |
+| 8 | Stopped tasks and archived sessions printed as live | CH (T4) | the roster; a stopped task reads as stopped | a test of the board |
+| 9 | "No gate runs" said twice while one ran unseen | GL | a gate log, one line per run | the log; none exists on the branch yet, so the proof is owed by its session |
+| 10 | A commit of 2,250 lines passed the gate and could not be reviewed | GL | the size is read before the commit | the row `codex-review` (debt) prints the size (`bin/check.mjs:513-560`); whether it refuses is its session's to name |
+| 11 | An untracked folder made the review assessment fail | GL | the test run leaves no folder | owed: a test that a gate leaves the worktree with no untracked path |
 | 12 | The lock left an empty folder on his disk | GL | repaired in `3659fb5` (its session's claim) | its test, not read here |
-| 13 | A gate killed at its bound leaves its temp folders | GL | no owner task yet | — |
-| 14 | An orchestrator's context fills in hours | CH | fewer wakes; measures | reliefs per day, from the record |
-| 15 | After `main` is merged in, the assessment counts its commits | RH | P3: the base after a merge is the merge commit | a test of the push row's hint |
-| 16 | A test started beside an eval batch | GL | every heavy run takes the lock | the gate log shows no overlap |
+| 13 | A gate killed at its bound leaves its temp folders | GL | the gate removes its temp folders when it is killed at its bound; no task in its document yet, passed to its session | owed: a test that kills a gate at its bound and finds no folder left |
+| 14 | An orchestrator's context fills in hours | CH (T9) | fewer wakes; the record instead of board reads | reliefs per working day, from `relieved` lines: at most one |
+| 15 | After `main` is merged in, the assessment counts its commits | RH (T4) | protocol 3: after a merge the base is the merge commit; the push row hints that base | a test of the push row's hint on a fixture branch with `main` merged in |
+| 16 | A test started beside an eval batch | GL | every heavy run takes the lock | the gate log shows no overlap; owed with 9 |
 | 17 | Failure 4 again: the opening of this session, 28 minutes waiting | CH | as 4 | as 4 |
 | 18 | Hours written in the relief file were guessed | CH | the command that appends a line stamps the clock | a test of that command |
 
@@ -459,19 +515,27 @@ the session channel, SB the next slice of the session board, GL `feat/gate-lock`
 - [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json`
 - [ ] T3 `docs/FAILURES.md` seeded with the eighteen, and the row `failures`
-- [ ] T4 Every command that writes outside the repository refuses a flag it does not know
+- [ ] T4 Every command that writes outside the repository refuses a flag it does not know; and
+  the push row hints the merge commit as the base after `main` is merged in (failure 15)
 - [ ] T5 The row `citations`, INFO
 - [ ] T6 The row `memory-rules` of `doctor`
 - [ ] T7 The skill `js-harness-protocols`, six sections, each opening with its incident
 - [ ] T8 `AGENTS.md` rewritten within the budget, its wording passed by him
 - [ ] T9 `agentsTemplate` gains the lines that hold in any project; whether `init` turns the
   reply check on is asked of him
-- [ ] T10 The honesty eval: the task, its proof, the trials with and without the line
+- [ ] T10 The honesty eval: the task and its proof; then, before any spend is asked of him, the
+  number of trials, their cost at list price and the difference in score that counts as "the
+  line moves it"; then the trials with and without the line
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
 - [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
-- [ ] T13 The sub-agent model check, after `odd/tasks/subagent-model-routing.md` closes
-- [ ] T14 The seven signals read and recorded; the roadmap's section replaced by a pointer
+- [ ] T13 The sub-agent model check (C8), after his answer on what enters from the comparison
+- [ ] T14 The honesty audit (C9): the transcript reader read first, then designed as a count or
+  recorded as not worth it
+- [ ] T15 The seven signals read and recorded; the roadmap's section replaced by a pointer only
+  after what it holds and this document does not (the reading of the specification, "how far
+  is far enough", the bullets on bias and research, the team rules) is in `docs/SPEC.md` or
+  here
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -495,7 +559,8 @@ the session channel, SB the next slice of the session board, GL `feat/gate-lock`
   `JOURNEY` and one function in `STEPS` (`scripts/practice-lib.mjs`, `scripts/practice.mjs`).
 - 2026-10-10, host documentation read by a sub-agent: `code.claude.com/docs/en/hooks.md`,
   `statusline.md`, `skills.md`, `commands.md`, `cross-session-messaging.md`, `cli-reference.md`,
-  `remote-control.md`; `learn.chatgpt.com/docs/hooks`. Not retrieved: the full settings
+  `remote-control.md`; `learn.chatgpt.com/docs/hooks` (as the sub-agent gave it; not opened by
+  the design session). Not retrieved: the full settings
   reference and the scheduled-tasks page.
 - 2026-10-10, delivery of the design. Commit `6d8bc82` holds both documents and the roadmap's
   pointers; its gate ran 22:40:05 to 22:55:02 (897 s, one try, after waiting for a gate and two
@@ -508,8 +573,37 @@ the session channel, SB the next slice of the session board, GL `feat/gate-lock`
   and "replaced by a pointer once it exists"; and the practice run bound to a folder of this
   machine, which is now read and not a command of either contract. No Codex review: the range
   holds no code (`check`, row `codex-review`: "no code commits since origin/main").
+- 2026-10-10, a second review, asked by the orchestrator of a read-only sub-agent before it
+  merged pull request 55 and sent here as claims. Four blocking items, each checked before it
+  was taken. (1) The roadmap said "the document wins" while `odd/tasks/session-channel.md`
+  restated the charter without its Codex cap: checked (`rg -c "3 million"` found none); the cap
+  and "compaction left to the host" are back, and the roadmap's sentence now covers the design
+  only, never a decision the documents do not restate. (2) Two questions put to him and not
+  answered were treated as settled: the roster as a slice of its own, and what enters from the
+  sub-agent models comparison, which closed in pull request 54 after this document was written
+  (read now at `origin/main` `e8a0b6a`, "Subagent models result"); both are under "Ask me
+  before" of their document, and contradiction 9, C8, protocol 6 and T13 say "not answered".
+  That the orchestrator asked him at 22:35 is its message's claim, not read here. (3) Failures
+  7, 13 and 15 had no task or no proof: 7 is named in T4 of the channel, 15 in T4 here and in
+  protocol 3, 13 has its control and a proof marked owed by its owner. (4) C1 refused every
+  block outside a decision while the channel keeps two texts he carries: C1 now tells a block
+  for this chat from a carry block.
+- 2026-10-10, taken from the same review's smaller list: the test files the contract names are
+  said not to exist yet; the scope names `bin/lib/failures.mjs`, `bin/lib/spec.mjs`, the
+  dispatcher and a root `harness.json`; the honesty audit has a place (C9, T14); protocol 3
+  carries the merge order of a stacked pull request; `AGENTS.md` item 9 points to the
+  specification, item 2 carries "never idle", item 4 the two fields of a handoff that apply to
+  every report; protocol 6 names Fable 5.5; the 85% line is described in C1; sections 5 and 6
+  of the protocols are proposals for him; the quote marks on a paraphrase are gone; the budget
+  figure cites the gate's own row; the memory types and the two `Stop` hooks are marked as
+  not read and not tested; T10 fixes trials, cost and threshold before any spend; T15 keeps
+  the roadmap's section until what only it holds is moved. Not taken, with the reason: a
+  contract command for each later check (the build adds each test as it writes it; a file
+  name guessed now is a claim nobody checked); the Codex documentation's address stays as the
+  sub-agent gave it, marked as not opened by this session.
 
 ## Next step
 The build waits for the session channel to be merged. Its session opens this document, confirms
-with a logging hook the three host facts marked as claims in "What the hosts allow", and starts
-at T1. Before T2 it asks Sebastián the first item of "Ask me before".
+with a logging hook every host fact of "What the hosts allow" that T2 rests on (the `Stop`
+input, the refusal, the flag when two `Stop` hooks are installed), and starts at T1. Before T2
+it asks Sebastián the first item of "Ask me before".
