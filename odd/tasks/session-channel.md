@@ -590,7 +590,7 @@ reader, and that table names this feature as their owner.
   correct (confidence 0.96), no finding, 257,052 input tokens (212,992 cached), 124 s. Codex
   for the feature so far: 1,069,741 of 3 million input tokens. `origin/main` is still
   `7ef20b9`, so the branch is not behind. Slice delivered as a pull request against `main`;
-  its number is in the line after this one. Not checked: the roster against a session opened
+  it is pull request 58 (https://github.com/jsaristi/js-harness/pull/58), CLEAN and MERGEABLE when it was opened. Not checked: the roster against a session opened
   from the phone (none was alive; `auto` as a permission mode is covered by a fixture only),
   and the watch beside the new section on a long real run.
 
