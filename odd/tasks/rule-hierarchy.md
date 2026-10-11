@@ -180,7 +180,8 @@ reply, in any state, and refuses one that does not say there that he types a lin
 with it.
 
 It also does one thing without refusing: when the session's context, read from the transcript
-as the board reads it, is at or past 85% of its window, it adds one
+as the board reads it, is at or past the context pause (a number the board's code holds, never
+written here: "One home for every rule"), it adds one
 line to the model's context saying so and naming the rule (write the state in the feature
 document, then judge what is left). It says it once per session, not at every stop.
 
@@ -426,6 +427,81 @@ file access, as `bin/lib/contract.mjs` does. `bin/failures.mjs` is the command a
 reads the files the entries name. `bin/check.mjs` gains an import and one call, and
 `bin/js-harness.mjs` one usage line and one entry; both were told to the orchestrator first,
 because other sessions change those files while this is built (Progress, 2026-10-11).
+
+### One home for every rule (T16)
+Not designed to the end: what is firm, what is open, and what was measured. Written on
+2026-10-11 by the session that owns this document.
+
+The need, in his words of 2026-10-11 (the orchestrator's transcript
+`7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, lines 1745 and 1822, both read by this session):
+"Ese error con el 73% es un problema sistemico y repetitivo donde mas de una vez tenemos cosas
+viejas en un harness que debe ser seguro sin contradicciones [...] necesitamos si o si tener el
+mecanismo de poder actualizar la informacion como debe ser y no queda con unas reglas viejas y
+otras nuevas, eso debe quedar super prohibido"; and "tenemos que hacer un barrido completo e
+identificar todos estos errores que tenemos y corregirlos ademas de hacer un protocolo que no se
+como hacerlo para que estos no pase nunca mas". The incident: the share of its context at which
+a session writes its state changed three times in two days (85, 90 for an hour, 88) and was
+carried by hand, by messages between sessions, to each place that states it.
+
+Measured, before designing. The sweep of that day (`docs/sweep-2026-10-11.md`, pull request 61)
+found 278 stale or contradictory statements in 247 places: 158 in force in documents, 62 in
+places that act, 17 dated records read as the present, 10 that could not be told. The most
+repeated is not a number: the state of a feature written in prose (46 between the roadmap and
+the feature documents), then the context pause (about 35 across the five layers), then gate
+etiquette kept by hand after the lock replaced it (17). The pause in force, 88, is in no file of
+`main` and in no branch; the Codex rate of 1,200 input tokens a changed line is in the relief
+file alone. Of the fourteen contradictions listed below, four carry a value.
+
+A first design (one home; an index `docs/RULES.md`; a row that refuses a lost home and any
+phrase listed as retired) was read by two readers that did not write it, one of this session and
+one of the orchestrator (relief file, line 248). Both: the skeleton is right and the detector is
+wrong. The old rule was written in eleven wordings over fifteen lines, of which two example
+phrases found two; a derived value escapes (`467k` for a percentage, `20 * 60 * 1000` for 1,200
+s); the most harmful stale copy holds no value at all (the orchestrator skill's sentence about
+"the limit", `bin/lib/manifest.mjs:85`); and nothing forced the list of retired phrases to be
+written.
+
+Firm:
+1. The home of a rule is the place that acts: the constant or the message of the check that
+   holds it, else its line of `AGENTS.md`, else its protocol. A rule with a value is a constant
+   in code wherever a command can hold it; messages and the skills' texts are rendered from the
+   constant, and tests import it.
+2. Every other text names the rule and does not repeat its value.
+3. The set of text read as in force shrinks first, because most findings are there and no
+   detector of values reaches them: the roadmap's two "(planned)" sections become pointers (T15,
+   brought forward; they are 635 of its 1,156 lines), a closed feature document is a record as a
+   whole and says so at its head, and a memory note holds no rule (T6, T11).
+4. A state that a command computes is not written in prose: the state of a feature is what
+   `js-harness progress` and the board print.
+5. Superseded text is removed, not annotated. History is told by place (`## Progress`,
+   `docs/origin.md`, the sightings of `docs/FAILURES.md`), never by a note beside the text.
+6. No list of retired phrases and no index kept by hand: git is the history, and the list of
+   rules is rendered from the homes.
+7. The detector is a pattern for each rule that finds any statement of a value on its subject,
+   not the old one alone; it runs first on the lines a change adds, where the author pays in
+   seconds and no bystander is refused, and over the whole tree in a mode that reports until
+   the sweep's list is empty; then it refuses.
+8. What no check can do is said: two rules that contradict without sharing a value. Fewer
+   places in force and the slice's reviewers are what there is.
+
+Open, to settle with the sweep's corrections done and before code:
+- Where the list of rules lives so that a project that only installs the harness has its own
+  (a file of the project against a module of the harness).
+- Whether a document may carry a value inside a span rendered from the home, or never carries
+  one (the orchestrator's reader proposes spans; this session's reader proposes none).
+- The doors beyond the commit: the pre-push over the lines a branch adds after `main` is merged
+  in; the lead's merge on the result of `git merge-tree`; a comparison of what is installed with
+  `main` (today nothing can tell: the version is 0.1.0 on both and no release tag exists).
+- How a change reaches a session already open. A hook on each prompt is a change on his
+  machine, and his.
+
+His, and not asked yet: a run of the static rows on `main` after each merge, on GitHub (spend);
+the protocol itself, which the orchestrator proposed to him and whose yes had not come when this
+was written: nothing is written as a protocol before it.
+
+Needs of others, placed by the orchestrator (relief file, lines 247 and 248): the gate stops
+before its sensors when a static row already fails, in a new session after the gate's second
+slice; the entry of the context pause is written when the channel's fourth slice is on `main`.
 
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
@@ -695,8 +771,8 @@ names it, and the entry stays open until it does.
   writer; the trigger is three files that are not mechanical)
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
     answered
-  - [ ] T3b `bin/lib/failures.mjs` and its tests: the parser, the refusals, the seven states,
-    the counts
+  - [x] T3b `bin/lib/failures.mjs` and its tests: the parser, the refusals, the seven states,
+    the counts (commit `9a2edb1`; its two reviews are owed)
   - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
     `failures` of `check`; the entry in the dispatcher
   - [ ] T3d `docs/FAILURES.md` seeded with the eighteen and with those of 2026-10-11, each
@@ -728,6 +804,19 @@ names it, and the entry stays open until it does.
   after what it holds and this document does not (the reading of the specification, "how far
   is far enough", the bullets on bias and research, the team rules) is in `docs/SPEC.md` or
   here
+- [ ] T16 One home for every rule, as "One home for every rule (T16)" leaves it: the open
+  points settled and read again by a reader that did not write them, then the homes, the list
+  rendered from them, and the detector in report mode until the sweep's list is empty (route:
+  delegated; after T17, before T1)
+- [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
+  then one writer for documents)
+  - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
+  - [ ] T17b This session's places corrected in documents: the roadmap and eleven closed
+    feature documents (93 places), on the branch of pull request 61
+  - [ ] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
+    `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/codex-review-parts.mjs`,
+    `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
+  - [ ] T17d One entry of the register for the failure itself, with the sweep as a sighting
 
 ## Progress
 - 2026-10-10, T0. The session opened by Sebastián's paste and waited for a line of his (failure
@@ -851,10 +940,57 @@ names it, and the entry stays open until it does.
   with the error's text, and is not recorded as `--unavailable`. The lead's idea in that line,
   for a later slice and not decided: a row that reads the Codex use left before a review is
   planned.
+- 2026-10-11, T3b and T3c written, test first, by one writer sub-agent (Opus 5.5, high effort):
+  `bin/lib/failures.mjs` (336 lines, 56 tests), `bin/failures.mjs` (195 lines, 23 tests), one
+  import and one call in `bin/check.mjs`, one import, one usage line and one entry in
+  `bin/js-harness.mjs`. Read whole by this session; one change made after it: a literal
+  byte-order mark inside a regular expression replaced by its escape. Choices the writer made
+  where the design was silent, all kept: an owed phrase must sit in a checkbox item that is not
+  checked; a word of an id starts with a letter; a refused register makes every form of the
+  command exit 1; `control lost` wins over `seen again`. The row is a list, empty when the
+  project has no `docs/FAILURES.md`, so the fixtures of `bin/check.test.mjs` keep their rows.
+  Together they are 1,426 changed lines, over the 1,200 a reviewed commit may hold, so they are
+  two commits. T3b is `9a2edb1`: its gate waited 21 min 7 s for the lock and passed (`PASS
+  tests`), and printed `review due (slice_budget_reached)`, 871 lines. T3c was set aside in a
+  stash for that gate (`git stash list`: "T3c: the command, the row and the wiring") and is
+  committed next.
+- 2026-10-11, the inventory for T3d, by a read-only sub-agent: 58 failures and 147 sightings
+  from the relief file (all of it read) and the feature documents, where the hand-kept lists
+  counted about 25. A second sub-agent turned it into a draft of `docs/FAILURES.md` that the
+  command reads with no fault: 58 failures, 148 sightings, 37 seen more than once, 16 not
+  settled (14 `repeated`, 1 `owed, stale`, 1 `seen again`). The draft and the inventory are in
+  this session's scratchpad, not in the repository yet:
+  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\9265156a-3a86-4da5-80f9-aebe66cd887c\scratchpad\`,
+  files `FAILURES.md` and `inventory.md`; `capabilities.md` there is the survey for T1 (16
+  commands, 12 rows of `check`, 8 of `doctor`, 24 paths written outside the repository, 21
+  candidate capabilities), and `one-home-design.md` the first draft of T16. Decisions of this
+  session for the seed: a row that names what loads the machine and stops nothing is not a
+  control (three entries are `repeated` for it); an incident no record dates takes the day of
+  the record that tells it, said in its note; `codex-cap-too-small` stays, as what was asked of
+  him four times. Twelve doubts the sub-agent left for a person are in its report and go into
+  the pull request of T3d.
+- 2026-10-11, his orders of the afternoon, each read in the orchestrator's transcript before it
+  was taken: the context pause is 88 (line 1745; it had been 85, then 90 for an hour); old rules
+  beside new are forbidden and a mechanism must update a rule everywhere (line 1745): T16; a
+  whole sweep, with the corrections made (line 1822): T17. The sweep ran as five read-only
+  sub-agents on one brief; its list is pull request 61. A writer sub-agent is correcting this
+  session's 93 places in documents on that branch (worktree `D:\js-harness-worktrees\sweep`).
+  The orchestrator was not running when the list was announced (14:50): three notices were
+  recorded with `js-harness notify`. One thing reported for him there: the sub-agent that read
+  what is installed says two secret values were printed in its own tool output; they are in no
+  file this session wrote.
+- 2026-10-11, a slip of this session: `js-harness sessions` was run once while another
+  session's gate ran, against the rule that the board is not read beside a gate. It goes into
+  the register as a sighting of `board-read-loads-gate`.
 
 ## Next step
-T3b to T3d, test first, by one writer, from the design above and from the list of failures a
-second reader is taking from the records (each with its sightings and the controls already on
-`origin/main`). Then the slice's two reviews. T1 follows. T2 and T8
+In this order. (1) T3c: `git stash pop`, stop this session's language servers, commit through
+the gate. (2) T3d: copy the draft to `docs/FAILURES.md`, add the sighting of the slip above and
+the entry of T17d, commit (documents: no sensor). (3) The two reviews of `9a2edb1` and of T3c:
+gentle-ai first (consent is pre-granted), then `js-harness codex-review --base <boundary>`, the
+first boundary being `origin/main`; neither beside a running gate. (4) T17b: read the
+correcting writer's report and its diff, commit on `docs/sweep-2026-10-11`. (5) T17c and T17d.
+(6) Merge `main` in before the push of `feat/failures-register`: three unmerged branches change
+`bin/check.mjs` and `bin/js-harness.mjs` in the same places. (7) T16, then T1. T1 follows. T2 and T8
 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of "What
 the hosts allow" that T2 rests on are confirmed with a logging hook.
