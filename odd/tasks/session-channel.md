@@ -204,6 +204,23 @@ memory.
 Judged twice: in a project that only uses the harness the record ships with the board, and it is
 the only channel a Codex session has.
 
+As built (T1, 2026-10-11). A line of the record:
+`{"schema":"js-harness.channel-notice/v1","at":"<clock, ISO>","from":{"host","id","source","title","permissionMode"},"to":{"role","number"},"kind","text","cwd","worktree","branch"}`;
+an `answer` adds `transcript` and `line`, which the command requires for that kind and refuses
+for the others. The folder, the worktree and the branch are read by the command, not written by
+the agent, so `opened` carries the real worktree the roster cannot see. The text is one line of
+500 characters at most (a relief line 6,000, an opening's title 120 and its text 100,000); a
+text that begins with `--` goes after a lone `--`. Each notice is one write on a file opened for
+appending (tested with four processes writing at once). The exit is 0 once the notice is
+recorded, with an address or without one; 2 for a usage error, with nothing written. An opening
+is one JSON file per title under `openings/<project>/`, named from the title's letters and a
+hash of it; the library finds it by the exact title or by `<code> <role>`. `uninstall` removes
+the channel's folder as it does the gate lock's and says so, or fails when it cannot; it does
+not remove the relief file, which predates this feature. Two limits: a Codex session has no id
+this repository reads, so its notice records `host: "unknown"` and no sender (whether Codex
+gives its commands a session id is not verified); and a sender whose transcript carries no
+title records none (see point 4).
+
 ### 3. The doorbell, and a role as the address
 `SendMessage` stays what wakes an idle session: after `notify`, the sender sends the same line
 to the title `notify` printed. Three rules, each a count on the board instead of a sentence:
@@ -243,6 +260,17 @@ T4b); a rule on transcripts that overlap in time was considered and not built, b
 resumed session may copy old entries into a new file. And the folder a row shows is the one its
 entries record: a session that works in a worktree by changing directory still records the main
 checkout, so the real worktree and branch come with the `opened` notice.
+
+A third limit, found on 2026-10-11 while running test owed 4: the transcript of a session
+opened from the phone carries no title at all (`rg -c '"type":"custom-title"'` on `213bd4ec`
+and `4454b298`, both of permission mode `auto` and entry point `sdk-cli`: 0 and 0; the search
+would have matched the entry the desktop sessions' titles are read from). Its title lives in
+the app only. So such a session is a row with no role, and a notice it writes has no sender's
+title. Plan, for T4b: the command by which a session reads its opening (`sessions --opening`)
+appends to the record which session id read which title, so the roster and `notify` take the
+title from the record when the transcript has none; nothing asks the session to state it.
+Whether a phone-opened session has `CLAUDE_CODE_SESSION_ID` in its environment is part of
+test owed 1, which needs him.
 
 ### 5. One orchestrator, checked
 `sessions --address orchestrator` is the check: a session that starts as orchestrator runs it
@@ -458,8 +486,13 @@ reader, and that table names this feature as their owner.
 - [x] T0 Design: what exists, the record, the roster, the opening, the context rule, the skill,
   the measures (route: inline, with three read-only sub-agents for the survey and the host
   documentation)
-- [ ] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
+- [x] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
   relief writer, the openings
+- [ ] T1b Three suggestions of the review of T1, carried to the branch of T4b because a fix
+  commit could not be reviewed by Codex inside the cap: a text given before `--relief` or
+  `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
+  one test pipes an opening through the dispatcher's real standard input; the concurrent
+  append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
@@ -593,12 +626,78 @@ reader, and that table names this feature as their owner.
   it is pull request 58 (https://github.com/jsaristi/js-harness/pull/58), CLEAN and MERGEABLE when it was opened. Not checked: the roster against a session opened
   from the phone (none was alive; `auto` as a permission mode is covered by a fixture only),
   and the watch beside the new section on a long real run.
+- 2026-10-11 06:15 local, pull request 58 merged by the lead as `c1b3594` (its message, a
+  claim, checked: `gh pr view 58` says MERGED at 11:14:53Z, and `git diff 6fca55f origin/main`
+  is empty). The lead also wrote (a claim): he is away for some hours, the Codex cap question
+  is in its queue for him, and of T2 only the tests that do not need him are run.
+- 2026-10-11, the Engram mirror (`odd/session-channel/tasks`, observation 3357) holds the whole
+  document as of `6fca55f`: 44,411 bytes against a limit of 50,000 a record. The document is
+  past that limit from this entry on, so the mirror cannot hold it whole any more: the file in
+  the repository is the only complete record, and the mirror keeps the locator, the tasks and
+  the next step.
+- 2026-10-11 06:46 local, T1 written by one delegated writer, test first, in two rounds, on
+  `feat/session-record` (fast-forwarded to `c1b3594`). What was built is in point 2, "As
+  built". Route: delegated (four new files and five changed). Red before green, as the writer
+  reported it: `channel.test.mjs` failed on the missing module, then 28 pass; `notify.test.mjs`
+  failed to load, then 72, and 87 after the second round; the dispatcher's two tests failed on
+  `Unknown command: notify`; eight manifest tests failed on the missing `channelKept`; the
+  install test failed on a channel folder that could not be removed and was not reported.
+  Second round, decided by the parent from the writer's open points: the board imports
+  `mainCheckout` and `reliefPath` from the library in place of its own copies; `uninstall`
+  prints and counts a channel folder it could not remove; a lone `--` ends the options. One
+  incident of the writer, reported by it: its first concurrency test read its arguments one
+  place off and wrote without end into a stray folder inside the worktree for about two
+  minutes; it stopped the process and removed the folder, and the test now checks its
+  arguments and has a timeout (`git status --short` afterwards: no stray path). Read by the
+  parent at 06:46: `node --test` on `bin/lib/channel.test.mjs` 28 pass, `bin/notify.test.mjs`
+  87, `bin/js-harness.test.mjs` 25, `bin/lib/manifest.test.mjs` 90, `bin/lib/sessions.test.mjs`
+  155, `bin/sessions.test.mjs` 133 and 1 skipped, `bin/install.test.mjs` 58, none failing; and
+  in a throwaway home `notify --to orchestrator --kind note "…"` printed the recorded line and
+  `address of the orchestrator: JH ORQ · js-harness`, exit 0, while an `answer` with no
+  `--transcript` exited 2 with nothing written. About 1,830 changed lines, of which about
+  1,100 are tests: three writers, two readers and the uninstall each carry their fixtures.
+- 2026-10-11, T2, the tests that do not need him.
+  Test 4 (do `Stop` and `SessionStart` fire in a session started through `claude
+  remote-control`): yes for the two events, read from the transcripts and not run. The four
+  transcripts of this project whose `user` entries carry the permission mode `auto` (entry
+  point `sdk-cli`; `213bd4ec` is the phone-opened `JH 2` of 2026-10-10 by the relief file,
+  line 173) each record hook events: `213bd4ec` 4 `SessionStart` and 35 `Stop`. Not shown by
+  this: that the matcher `compact` fires there (no compaction is known in them), nor which
+  hook ran.
+  Test 5 (does an old title stop resolving after a rename): one observation, not a test. A
+  message sent to the title `JH ORQ · js-harness` at 05:01 reached the orchestrator of that
+  hour; one sent to the same title at 06:14, after a handover, reached another session, and
+  the host said "messaging a new session for the first time under a previously used name". So
+  a title that changed hands resolves to its new holder. Not known: whether the one before was
+  still open under its new title at that moment, so whether a renamed and live session keeps
+  answering to its old title is not shown.
+  Tests 1, 2, 3 and 6 wait for him.
+- 2026-10-11 07:13 local, commit `1f9aaa9` (T1). Its gate: `PASS tests npm run test passed`,
+  06:47:21 to 07:02:36, 915 s, one try. gentle-ai: medium risk (`slice_budget_reached`, 1,962
+  lines against `c1b3594`), lineage `review-655ea3ee609a50ec`, one lens (reliability),
+  approved and acknowledged; three suggestions that open no correction, taken as T1b below.
+  Codex on `c1b3594..1f9aaa9`, recorded: seven parts, each "correct", no finding, 1,710,534
+  input tokens (1,327,744 cached), 449 s; its plan had printed about 1,613,000 to 8,050,000,
+  so it was run under a stop written for this session (a wrapper that sums the tokens after
+  each part and ends the run when the next part's estimate would pass what was left; it did
+  not have to act). Three parts said their file-writing tests could not run in Codex's
+  read-only sandbox: those tests are proven by the gate, not by Codex.
+  Codex for the feature: 2,780,275 of 3 million input tokens after two slices of five;
+  219,725 are left, less than the smallest review so far (257,052). So no further code commit
+  of this feature can be reviewed by Codex, or pushed, until he answers on the cap: the three
+  suggestions are therefore not fixed in this pull request, and T4b is built and gated but
+  waits for his answer before its Codex review and its push. For the harness: `codex-review`
+  has no bound of its own on a run, and a feature's cap is kept by hand; a `--budget <tokens>`
+  that ends a run at a part boundary, and a line of the plan that says what a feature has
+  spent, would make the cap a check (proposed, not built; it belongs to the Codex review
+  feature, not to this one).
 
 ## Next step
-The first pull request (`feat/session-roster`: T3, T4a) waits for the lead's merge. Next, on a
-new branch cut from `origin/main` once it is merged (or from this branch if it is not yet, to
-be rebased): T1, `bin/lib/channel.mjs` and `bin/notify.mjs`, test first, by one delegated
-writer; alongside it T2, the six tests owed, of which 1, 2, 3 and 6 need him at the app and
-are asked one at a time, each before it is run. Then T4b. One question of his is open before
-the third slice: the Codex cap of 3 million for the feature, of which 1,069,741 are spent
-after one slice of five.
+The second pull request (`feat/session-record`: T1) waits for the lead's merge. Next, on a new
+branch from `origin/main`: T1b and T4b, by one delegated writer, test first — the channel
+section of the board, `sessions --opening` (which also records which session read which title,
+point 4), `--quote`, the watch that wakes on a notice for the orchestrator, the roster's
+columns from the record, failures 7 and 8. Its commit and gate and its gentle-ai review are
+run; its Codex review and its push wait for his answer on the cap (in the lead's queue).
+Waiting for him as well, none blocking the build: tests owed 1, 2, 3 and 6, each asked before
+it is run.
