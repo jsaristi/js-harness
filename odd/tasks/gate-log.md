@@ -839,6 +839,32 @@ Progress.
 - The orchestrator merges a pull request that is green with both reviews recorded; it is
   told each pull request in one line, at the title "JH ORQ · js-harness".
 
+## A slice added by the lead, for a new session (2026-10-11)
+- What: a gate that stops before its sensors when a static row already fails (`budget`,
+  `contracts`, and the rows `failures` and `rules` other sessions are building). Today such
+  a row is printed after the sensors (`bin/check.mjs`, the rows after `checkSensors` in
+  `main`; the other session read them at lines 964 to 995 of `main`), so a failure that
+  was known in a second costs the whole run, seventeen minutes and a turn of the lock,
+  before anyone reads it.
+- Why now: the row `rules` of the session "JH 7" refuses a retired phrase anywhere in
+  force; without the early stop, a stale phrase that reaches `main` by a clean merge costs
+  the next committer a whole gate. Behind it, his words of 2026-10-11 in the
+  orchestrator's chat (transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, lines 1745
+  and 1822, read by this session): no old rule beside a new one, a sweep of such errors
+  and a protocol against them. The early stop is the orchestrator's derivation from that,
+  placed as lead; it is not a sentence of his.
+- Who: a new session, after S2 is merged, since S2 changes the same functions of
+  `bin/check.mjs`. It does not fit here: this session was at 75% of its context with S3
+  and S2 still to close, and said so to the orchestrator.
+- What that session must hold on to: the order changes when a failure is known, not what
+  a commit proves (a failing static row already fails the gate); the report of a gate
+  that stopped says that no sensor ran and which row stopped it, so nobody reads "no FAIL
+  tests" as a pass; the lock is not taken, or is given back, before the stop; the gate
+  log (S2) writes such a gate as what it was, and not as a start without an end, which
+  reads as a killed gate; a row that cannot be computed (not a failure) stops nothing;
+  `check --push` and an inner check are unchanged. Test first, with the three states of
+  the lock.
+
 ## Next
 S3: the writer's fix, its commit, the merge of `main`, Codex on the fix, push and pull
 request. S2: the merge commit lands by itself; then its documents, the merge of `main`,
