@@ -1,0 +1,275 @@
+// The pure part of the practice command (scripts/practice.mjs): where everything of the practice folder is,
+// what environment every process it starts gets, when `setup` refuses, which steps the journey has, how the
+// user's real home is compared before and after a run, and the line a run leaves in the record. Facts in,
+// values out: nothing here reads the disk, the clock or the environment, or starts a process, so its tests
+// cost the gate nothing. The design is in odd/tasks/practice-project.md.
+import path from 'node:path';
+import crypto from 'node:crypto';
+
+/** The path rules of `platform`. Every function below takes the platform as a parameter and goes through
+ * this, so the Windows and the POSIX behaviour can both be tested on one machine. */
+const pathFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
+
+// ---- the folder -------------------------------------------------------------------------------------------------------
+
+/** Every path of the practice folder, from its root: the one folder whose deletion undoes everything.
+ * `marker` says that this command made the folder, `project` is the practice project (its own git
+ * repository), `prefix` is where the candidate is installed, `home` stands in for the user's home, `releases`
+ * holds the packed candidate and `record` gets one line per run. */
+export function practiceLayout(root, platform = process.platform) {
+  const p = pathFor(platform);
+  return {
+    root,
+    marker: p.join(root, 'practice.json'),
+    project: p.join(root, 'project'),
+    prefix: p.join(root, 'prefix'),
+    home: p.join(root, 'home'),
+    releases: p.join(root, 'releases'),
+    record: p.join(root, 'record.jsonl'),
+  };
+}
+
+/** The folder where `npm install -g --prefix <prefix>` puts the `js-harness` command: the prefix itself on
+ * Windows, its `bin` folder everywhere else. This is the folder that goes first on PATH. */
+export function shimDir(prefix, platform = process.platform) {
+  return platform === 'win32' ? prefix : pathFor(platform).join(prefix, 'bin');
+}
+
+/** The installed module's entry file, for running the candidate through `node` with no shell: npm puts the
+ * modules directly under the prefix on Windows and under `lib` everywhere else. */
+export function installedBin(prefix, platform = process.platform) {
+  const p = pathFor(platform);
+  const modules = platform === 'win32' ? p.join(prefix, 'node_modules') : p.join(prefix, 'lib', 'node_modules');
+  return p.join(modules, 'js-harness', 'bin', 'js-harness.mjs');
+}
+
+// ---- the environment of every child process --------------------------------------------------------------------------
+
+/** The environment of every process the practice command starts, as a new object; `baseEnv` is left as it is.
+ *
+ * - The practice's command comes first on PATH, so the hook `init` writes (`exec js-harness check`) and every
+ *   step find the candidate and never the copy on the user's PATH. Windows does not tell `Path` from `PATH`,
+ *   and Node hands a child only the first of such names in sorted order: the result holds one PATH variable,
+ *   with that value, under that name.
+ * - `JS_HARNESS_HOME` is the practice's home, and every other `JS_HARNESS_*` variable of the caller is
+ *   dropped: `JS_HARNESS_SOURCE`, `JS_HARNESS_PREFIX` and `JS_HARNESS_PM` would point the candidate at the
+ *   machine's own install, and `JS_HARNESS_CHECK_INNER` would make its `check` skip the project's tests
+ *   (`bin/check.mjs`), so a commit that must be refused would pass.
+ * - `DO_NOT_TRACK` is `1`: `js-harness init` runs the real `codegraph init`, which queues telemetry and caches
+ *   an update check under the user's real `~/.codegraph`; this variable switches both off, so the practice
+ *   writes nothing outside its folder.
+ * - `HOME` and `USERPROFILE` are kept: git needs the user's identity to commit. The real home is protected by
+ *   the before-and-after comparison below instead. */
+export function childEnv(layout, baseEnv = process.env, platform = process.platform) {
+  const windows = platform === 'win32';
+  const named = (name, wanted) => (windows ? name.toUpperCase() === wanted : name === wanted);
+  const ofHarness = (name) => (windows ? name.toUpperCase() : name).startsWith('JS_HARNESS_');
+  const replaced = (name) => named(name, 'PATH') || named(name, 'DO_NOT_TRACK') || ofHarness(name);
+
+  const pathName = Object.keys(baseEnv).filter((name) => named(name, 'PATH')).sort()[0];
+  const searchPath = [shimDir(layout.prefix, platform), pathName === undefined ? '' : baseEnv[pathName]];
+  return {
+    ...Object.fromEntries(Object.entries(baseEnv).filter(([name]) => !replaced(name))),
+    [pathName ?? 'PATH']: searchPath.filter(Boolean).join(pathFor(platform).delimiter),
+    JS_HARNESS_HOME: layout.home,
+    DO_NOT_TRACK: '1',
+  };
+}
+
+// ---- the refusals of setup -------------------------------------------------------------------------------------------
+
+/** Whether `child` is `parent` or lies under it, by the path rules of `platform`: on Windows the case of the
+ * drive and of every segment is ignored and both separators count; on POSIX the case matters. `D:\foo-bar` is
+ * not inside `D:\foo`. Both paths are absolute. It compares spellings only: a link or a short name that leads
+ * into `parent` is for the caller to resolve first. */
+export function isInside(parent, child, platform = process.platform) {
+  const p = pathFor(platform);
+  const relative = p.relative(parent, child);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${p.sep}`) && !p.isAbsolute(relative));
+}
+
+/** Why `setup` must not create the practice folder at `root`, in one sentence that names the path, or `null`
+ * when it may. The command gathers the facts: `exists` (something is already at `root`), `gitRoot` (the top
+ * level of the git repository `root` would lie in, or `null`) and `home` (the user's real home). `setup`
+ * refuses a place that exists, because `run` deletes and rewrites inside the folder; one inside a repository,
+ * because the practice project must be a repository of its own; and the home or anything inside it, because
+ * the home is what the practice exists to leave alone. A root or a home that is not an absolute path cannot
+ * be judged, and is refused. */
+export function setupRefusal({ root, exists, gitRoot, home, platform = process.platform }) {
+  const p = pathFor(platform);
+  if (typeof root !== 'string' || !p.isAbsolute(root)) return `the root ${root} is not an absolute path`;
+  if (exists) return `${root} already exists: setup only creates a new folder`;
+  if (typeof home !== 'string' || !p.isAbsolute(home)) {
+    return `the user's home is not known as an absolute path (${home}), so ${root} cannot be shown to lie outside it`;
+  }
+  if (isInside(home, root, platform)) return `${root} is inside the user's home ${home}, which the practice must never write to`;
+  if (gitRoot) return `${root} is inside the git repository ${gitRoot}: the practice project needs a repository of its own`;
+  return null;
+}
+
+// ---- the marker ------------------------------------------------------------------------------------------------------
+
+/** What `madeBy` reads in a marker this command wrote. */
+const MARKER_SIGNATURE = 'js-harness practice';
+
+/** The text of `practice.json`: that this command made the folder, when (`createdAt`, a date as text) and
+ * from which commit (`candidate`: `{ branch, commit, dirty }`). */
+export function markerContent({ createdAt, candidate }) {
+  return `${JSON.stringify({ madeBy: MARKER_SIGNATURE, createdAt, candidate }, null, 2)}\n`;
+}
+
+/** Whether `markerText` (the content of a folder's `practice.json`, or `undefined` when there is none) is a
+ * marker this command wrote. `run` refuses a folder it does not own, because it deletes and rewrites inside
+ * it; a missing marker, text that is not JSON and JSON of any other shape are all not ours. */
+export function ownsFolder(markerText) {
+  if (typeof markerText !== 'string') return false;
+  try {
+    const marker = JSON.parse(markerText);
+    return marker !== null && typeof marker === 'object' && !Array.isArray(marker) && marker.madeBy === MARKER_SIGNATURE;
+  } catch {
+    return false;
+  }
+}
+
+// ---- the real home, before and after ---------------------------------------------------------------------------------
+
+// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
+// for each of two hosts, and one entry in a file of each host.
+const SKILLS = ['js-harness', 'js-harness-orchestrator'];
+const HOSTS = ['.claude', '.codex'];
+// The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
+// an entry onto, and what was written only when asked (the login launcher, which lies outside the home).
+const RECORDED = ['files', 'entries', 'optional'];
+
+/** The `path` of every record of the manifest `manifestText`; none when the text is missing, is not JSON or
+ * has another shape. A manifest that cannot be read is no reason to stop: the fixed list still stands. */
+function recordedPaths(manifestText) {
+  let manifest;
+  try {
+    manifest = JSON.parse(manifestText);
+  } catch {
+    return [];
+  }
+  return RECORDED.flatMap((key) => (Array.isArray(manifest?.[key]) ? manifest[key] : []))
+    .map((record) => record?.path)
+    .filter((recorded) => typeof recorded === 'string' && recorded !== '');
+}
+
+/** The files the harness owns in the user's REAL home `home`, as absolute paths without duplicates: the
+ * manifest, the `SKILL.md` of both skills for both hosts, the two files that hold a `SessionStart` entry,
+ * and every file the real manifest (`manifestText`, the content of `<home>/.js-harness/manifest.json`, or
+ * `undefined`) records. The manifest records absolute paths; a relative one is taken from `home`. On Windows
+ * two paths that differ only in case are one file.
+ *
+ * The practice never writes to this home, and the run proves it: these files are hashed before the first
+ * step and after the last, and any difference fails the run. The doctor cache (`.js-harness/doctor.json`) is
+ * left out on purpose: every session start of the user's rewrites it, so it would fail a run that did
+ * nothing wrong. */
+export function realHomeFiles(home, manifestText, platform = process.platform) {
+  const p = pathFor(platform);
+  const fixed = [
+    p.join(home, '.js-harness', 'manifest.json'),
+    ...HOSTS.flatMap((host) => SKILLS.map((skill) => p.join(home, host, 'skills', skill, 'SKILL.md'))),
+    p.join(home, '.claude', 'settings.json'),
+    p.join(home, '.codex', 'hooks.json'),
+  ];
+  const files = new Map();
+  for (const file of [...fixed, ...recordedPaths(manifestText).map((recorded) => p.resolve(home, recorded))]) {
+    const key = platform === 'win32' ? file.toLowerCase() : file;
+    if (!files.has(key)) files.set(key, file);
+  }
+  return [...files.values()];
+}
+
+/** The SHA-256 of a file's content (a string or the bytes) in hex, or `null` for a file that is not there
+ * (`null` or `undefined`): the value a snapshot holds for one path. */
+export function contentHash(content) {
+  if (content === null || content === undefined) return null;
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/** The differences between two snapshots of the same files, each `{ [absolutePath]: hash or null }` with
+ * `null` for a file that does not exist: a list of `{ path, change }` where `change` is `changed`,
+ * `appeared` or `disappeared`, in the order of `before` and then of what only `after` names. An empty list
+ * means the home is as it was. A path only one snapshot names counts as absent from the other. */
+export function compareSnapshots(before, after) {
+  const differences = [];
+  for (const file of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const was = before[file] ?? null;
+    const is = after[file] ?? null;
+    if (was === is) continue;
+    differences.push({ path: file, change: was === null ? 'appeared' : is === null ? 'disappeared' : 'changed' });
+  }
+  return differences;
+}
+
+// ---- the journey -----------------------------------------------------------------------------------------------------
+
+/** The journey of `run`, in order: the ten steps of the feature document ("The journey"). An `id` goes into
+ * the record, so it never changes once a line was written with it; a feature that changes what a project
+ * receives adds its own step here, with its test. */
+export const JOURNEY = Object.freeze([
+  { id: 'real-home-before', title: 'hash what the harness owns in the real home' },
+  { id: 'pack-install', title: 'pack the candidate and install it into the practice prefix' },
+  { id: 'install', title: 'js-harness install writes the manifest, the skills and the hook entries into the practice home' },
+  { id: 'project-adopt', title: 'the project receives the harness: init the first time, status then sync afterwards' },
+  { id: 'commit-passes', title: 'a commit that should pass goes through the hook and exists afterwards' },
+  { id: 'commit-refused', title: 'a commit that breaks the test of the project is refused, and the file is restored' },
+  { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
+  { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
+  { id: 'real-home-after', title: 'the real home is unchanged' },
+  { id: 'record', title: 'one line is appended to record.jsonl' },
+].map((step) => Object.freeze(step)));
+
+/** The `js-harness` commands of the step `project-adopt`, in order: a project not yet initialized gets
+ * `init`; an initialized one, which is every run after the first, gets `status` and then `sync`, the new
+ * version arriving at a project that already has the harness. */
+export function adoptionCommands(initialized) {
+  return initialized ? ['status', 'sync'] : ['init'];
+}
+
+// ---- the record ------------------------------------------------------------------------------------------------------
+
+/** The line a run appends to `record.jsonl`: one line of JSON with no line break in it (the caller adds the
+ * one that ends it). `date` is the moment of the run as text, `candidate` the checkout that was proven
+ * (`{ branch, commit, dirty }`: the product cannot tell two copies apart, every one reads the same version),
+ * `steps` the result of each step that ran (`{ id, ok, detail }`), `node` and `platform` what it ran on.
+ * `ok` is true only when at least one step ran and every one of them is ok. */
+export function recordLine({ date, candidate, steps, node, platform }) {
+  const results = steps.map(({ id, ok, detail }) => ({ id, ok, detail }));
+  const ok = results.length > 0 && results.every((step) => step.ok === true);
+  const { branch, commit, dirty } = candidate;
+  return JSON.stringify({ date, ok, candidate: { branch, commit, dirty }, steps: results, node, platform });
+}
+
+// ---- the arguments ---------------------------------------------------------------------------------------------------
+
+export const USAGE = `usage:
+  node scripts/practice.mjs setup --root <dir>   create the practice folder
+  node scripts/practice.mjs run --root <dir>     run the journey in it
+There is no default root.`;
+
+const COMMANDS = ['setup', 'run'];
+
+/** Reads the arguments of the practice command: `{ command, root }` for `setup --root <dir>` and
+ * `run --root <dir>`, and `{ error }` for anything else: no command, an unknown one, an unknown flag,
+ * `--root` with no value or given twice, no `--root` at all (there is no default root), one argument too
+ * many. It never throws and never guesses: a command of this project once acted on a flag it did not know. */
+export function parseArgs(argv = []) {
+  const [command, ...rest] = argv;
+  if (command === undefined) return { error: 'no command: expected setup or run' };
+  if (!COMMANDS.includes(command)) return { error: `unknown command ${command}: expected setup or run` };
+
+  let root;
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg !== '--root') return { error: `${arg.startsWith('-') ? 'unknown flag' : 'unexpected argument'} ${arg}` };
+    if (root !== undefined) return { error: '--root was given twice' };
+    const value = rest[i + 1];
+    if (value === undefined || value === '' || value.startsWith('-')) return { error: '--root needs a value: the folder of the practice' };
+    root = value;
+    i += 1;
+  }
+  if (root === undefined) return { error: `${command} needs --root <dir>: there is no default root` };
+  return { command, root };
+}
