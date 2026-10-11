@@ -307,7 +307,7 @@ Progress.
 - [x] T6 · `scripts/count-git.mjs` with its test, then the profile of the two files, recorded
   here, and the cuts chosen from it by the stop rule. (The tool's second commit, `--frames`
   and the review's findings, is still to make.)
-- [ ] T7 · The first cut, chosen from the profile: where the repository is, asked once per
+- [x] T7 · The first cut, chosen from the profile: where the repository is, asked once per
   `codex-review` run and handed on. The git folder (`jsonLinesPath`) and the top of the
   repository (`topOf`) in the options objects, and whatever else the run asks git twice
   through `gitOutput` (`bin/codex-review.mjs:279`). Then the count of
@@ -545,37 +545,70 @@ Progress.
   key on; `check` hands on no `where` (171 `topOf` and its record reads). The change is the
   patch `t7.patch` in the scratchpad, to be applied in the second worktree.
 
-## Resume here (state at 2026-10-11 08:00, for a session that lost its conversation)
-- Done and committed: on `feat/gate-log` (worktree `D:\js-harness-worktrees\gate-log`) the
-  document `287a585`, T1 `84e93a5` (gentle-ai approved), T2 `9c49587` (gentle-ai not yet
-  run); on `feat/gate-git-processes` (worktree `…\gate-git-processes`) the counting tool
-  `a0bf058` (gentle-ai approved). Nothing is pushed; no pull request is open.
-- In flight when this was written: the gate of the tool's second commit in
-  `gate-git-processes` (`--frames`, the review's findings; message in
-  `msg-t6b.txt`); the writer of T7 in a third worktree, `D:\js-harness-worktrees\gate-git-cuts`
-  (branch `feat/gate-git-cuts`, cut from `a0bf058`), waiting for the lock to run its last
-  count. Its change is uncommitted there and is meant to be applied as a patch to
-  `gate-git-processes`, committed there, and the third worktree removed.
-- Next, in this order: gentle-ai on `84e93a5..9c49587`; Codex on S1 whole
-  (`node bin/js-harness.mjs codex-review --base 7ef20b9`, planned at about 730,000 input
-  tokens for T1 alone, so perhaps 2 million for S1: read `--plan` first, the cap of the
-  feature is 3 million and going past it is his); `git push -u origin feat/gate-log` and the
-  pull request of S1; the "closed S1" notice to the orchestrator. Then T7's commit and
-  reviews, T8, and S2 (T3 to T5) on a branch cut from S1 with `main` merged in.
-- Reviews are started under the gate lock, so that none runs beside a gate:
-  `node bin/js-harness.mjs gate -- node <scratchpad>/rv-run.cjs <repo> <base> <tag>`.
-- Scripts and records of this session, in its scratchpad
+- 2026-10-11 · The fix after T2's review is commit `d1c11f9` (gate 959 s after a wait of 15
+  min 22 s; gentle-ai: not due, under the budget, 55 lines, pending in the slice). The tool's
+  second commit is `4e1b244` on `feat/gate-git-processes` (gate 1,012 s; not due, under the
+  budget). T7 is commit `7201bac` there (gate 1,021 s after a wait of 30 min 34 s; review due
+  by the slice budget, against `a0bf058`). The third worktree and its branch are removed: its
+  diff was compared with the committed patch first, byte for byte.
+- 2026-10-11 · Codex reviewed S1, `287a585..d1c11f9`, under the gate lock (`gate -- node
+  bin/js-harness.mjs codex-review --base 7ef20b9`, 09:08 to 09:14): 5 parts, 1,619 changed
+  lines, **942,981 input tokens** (693,632 cached) against 1,660,000 planned, recorded in
+  `D:\js-harness\.git\js-harness\codex-reviews.jsonl`. Four parts with nothing to act on.
+  One finding, P1, and it is right: `scriptOf(['tool', '-p', 'P@ssword.123'], 'tool')`
+  returns the password, which a gate would print: a credential with a dot in it cannot be
+  told from a file name by its spelling. Decided: a script is named only when its argument
+  is an absolute path of a file that exists on this machine; a relative one is never named,
+  so `node server.js` reads `node`. With the writer of T2, test first; then its commit, and
+  Codex on that commit alone.
+- 2026-10-11 · S2 is being written (T3 and T4, one writer, route: delegated) in a fourth
+  worktree, `D:\js-harness-worktrees\gate-log-file`, branch `feat/gate-log-file`, cut from
+  `9814b2b` with `origin/main` (`8654c79`) merged in (`49d2dd7`). Added to the design for
+  it: a switch, `JS_HARNESS_GATE_LOG=off`, with which a gate writes no log, so that no gate
+  of this session writes his home before he says where the log lives; every commit of this
+  session in that worktree is made with it.
+- 2026-10-11 · The Codex cap: 942,981 of 3,000,000 used by S1. S3 is planned at 3 parts and
+  S2 at about as much as S1; if what a plan prints would pass the cap, that slice's Codex
+  review waits for his word and the skip is not recorded as "unavailable", which it is not.
+
+## Resume here (state at 2026-10-11 09:20, for a session that lost its conversation)
+- Four worktrees under `D:\js-harness-worktrees`: `gate-log` (`feat/gate-log`, S1 and this
+  document), `gate-log-file` (`feat/gate-log-file`, S2), `gate-git-processes`
+  (`feat/gate-git-processes`, S3). Nothing is pushed; no pull request is open.
+- S1, `feat/gate-log`: `287a585` document, `84e93a5` T1, `9c49587` T2, `9814b2b` document,
+  `d1c11f9` fix. gentle-ai approved T1 and T2; Codex reviewed the three code commits and
+  found the P1 above. In flight: its fix, with the writer, uncommitted in `gate-log`. Then:
+  commit (the gate), `gentle-ai review assess --base-ref 9c49587 --committed-only` (run a
+  review only if it says due), `codex-review --base 7ef20b9` (it starts where the records
+  end, so it reads the new commit alone), `git push -u origin feat/gate-log`, the pull
+  request to `main`, and the notice "closed S1" to the orchestrator.
+- S3, `feat/gate-git-processes`: `a0bf058` tool (gentle-ai approved), `4e1b244` tool, second
+  pass, `7201bac` T7. In flight: gentle-ai on `a0bf058..7201bac`, queued under the lock (its
+  report: `rv-s3t7.log` in the scratchpad). Then T8 (the tests' helpers hand on the git
+  folder; the repositories of `bin/check-codex-reviews.test.mjs` built once), the counts
+  after, Codex on the slice if the cap allows, push and pull request.
+- S2, `feat/gate-log-file`: the writer of T3 and T4 is at work, nothing committed. Then two
+  commits (the module, the wiring) made with `JS_HARNESS_GATE_LOG=off`, their reviews, T5
+  (`uninstall` removes the log's folder, after `removeChannelFolder` in
+  `bin/lib/manifest.mjs`; the orchestrator is told before that file is touched), the merge
+  of `feat/gate-log` into it once S1's fix is in, and its pull request, which is not merged
+  without his answer on where the log lives.
+- Heavy commands of this session take the gate's turn: a commit by its hook; a review as
+  `node bin/js-harness.mjs gate --wait 180 -- node <scratchpad>/rv-run.cjs <repo> <base>
+  <tag>`; Codex as `node bin/js-harness.mjs gate --wait 120 -- node bin/js-harness.mjs
+  codex-review --base <rev>`. The queue is long today: three sessions take turns, and a
+  commit has waited up to half an hour for its gate.
+- Scripts and records, in the scratchpad
   (`C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\27a0677f-bc17-4331-a050-5cb169a310fb\scratchpad`):
   `rv-run.cjs` (one gentle-ai review from assess to acknowledge, running only what each
-  reply returns, the `granted` invocation included), `rv-step.cjs` (one returned invocation),
-  `msg-*.txt` (commit messages), `commit-*.log` (the gates' reports), `profile1.json` and
-  `profile1.txt` (the two long files, three frames), `profile-all.json` (the whole suite,
-  two frames). If the scratchpad is gone, the numbers that matter are in Progress above and
-  the scripts are short to write again from the review contract in the session's rules.
-- Open and his: where the log's folder lives ("Ask me before"), in the orchestrator's queue;
-  the Codex cap if S2 and S3 do not fit in it.
+  reply returns, the `granted` invocation included), `msg-*.txt` (commit messages),
+  `commit-*.log` (the gates' reports), `codex-s1.log`, `profile1.json` and `profile1.txt`
+  (the two long files, three frames), `profile-all.json` (the whole suite),
+  `t7-count-after.json`. If the scratchpad is gone, the numbers that matter are in Progress
+  and the script is short to write again from the review contract in the session's rules.
+- Open and his: where the log's folder lives ("Ask me before"); the Codex cap. Both are in
+  the orchestrator's queue for him.
 
 ## Next
-gentle-ai on T2 (against `84e93a5`), Codex on S1 whole (against `7ef20b9`), the push and the
-pull request of S1. For S3: T7's patch applied in the second worktree once the tool's second
-commit is in, then its commit, the count after, and T8.
+The fix of the P1 in S1, its commit and reviews, the push and the pull request of S1. Then
+gentle-ai on T7 and T8 in S3, and the two commits of S2 when its writer is done.
