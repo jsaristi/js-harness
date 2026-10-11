@@ -676,11 +676,14 @@ podamos implementar todo"), each a feature of its own with its own document and 
    - The shorter run: measured file by file, the suite is as long as one file,
      `bin/codex-review.test.mjs` (909.7 of 910 s, every other file done by 458 s). Its
      test repositories built once and copied took that file from 640 s to 490 s alone and
-     the gate from about 900 s to 728 s. It is still the longest: 71% of it is the real
-     git that the command under test runs. Running it in three shards, which would bring
-     the gate near the second file's time, and a commit of documents alone skipping the
-     test sensor (205 of 410 commits since 2026-09-26 touched only Markdown, and no test
-     reads `docs/` or `odd/tasks/`) are both asked of him and not built.
+     the gate from about 900 s to 728 s. It was still the longest, 71% of it being the
+     real git that the command under test runs, so, approved by him on 2026-10-10, it now
+     runs as three shards with no test moved (two files of two lines import it with a
+     shard number; the three together take 253 s where the file took 490 s), and `gitDirs`
+     asks git in one process for the two folders it asked for in two. A commit of
+     documents alone skipping the test sensor (205 of 410 commits since 2026-09-26 touched
+     only Markdown, and no test reads `docs/` or `odd/tasks/`) is approved by him too and
+     comes next.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top.

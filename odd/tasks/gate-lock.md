@@ -225,11 +225,12 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
 - [x] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
 - [x] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
       after.
-- [ ] T6b · `bin/codex-review.test.mjs` is still the longest file after T6 (added 2026-10-10;
-      the numbers are in Progress). Running it in three shards, with no code moved, is what
-      would bring the gate near the second file's time. Asked first, as the plan says of
-      splitting that file: not started without Sebastián's answer.
-- [ ] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first).
+- [x] T6b · `bin/codex-review.test.mjs` is still the longest file after T6 (added 2026-10-10;
+      the numbers are in Progress). Approved by Sebastián on 2026-10-10, both things: the file
+      run in three shards with no code moved, and `jsonLinesPath` asking git once for what it
+      uses once. Route: one writer; timed before and after.
+- [ ] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
+      approved by Sebastián on 2026-10-10 with the list in hand). Route: one writer.
 - [ ] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
       gentle-ai and Codex reviews of each slice with code, pull request. Merge is his.
 
@@ -976,20 +977,127 @@ allows a feature. No spend outside the plan.
   (`js-harness-worktrees/gate-lock-demo`, detached at `a1d4360`, removed afterwards), and
   what the two print goes in the next entry.
 
+- 2026-10-10 · Two gates started together, in two worktrees, ran one after the other (the
+  `Done when`), and it is the first time a real gate waited for a real gate. On a clean
+  process list, a plain `node bin/check.mjs` in `gate-lock-demo` at 17:01:31 and, five
+  seconds later, the commit of the roadmap in `gate-lock`, whose hook runs `check`.
+  - The commit's `check` printed at once, on stderr:
+    `check: waiting for the gate of D:\js-harness-worktrees\gate-lock-demo (pid 23636,
+    started 2026-10-10T22:01:32.815Z) to finish, for 60 minutes at most`
+  - 45 s in, the lock's folder held `lock\holder-23636-….json` (`cwd` the demo worktree,
+    `command` `check`) and `wait-21784-…\holder-21784-….json` (`cwd` this worktree,
+    `waitingSince` 22:01:38).
+  - The first gate ended green at 17:16:03 (872 s). The second ran its sensors then and
+    ended green at 17:28:07; its report has the row `INFO  gate  waited 14 min 25 s for the
+    machine's gate lock before the sensors ran`, and its tests took about 12 minutes, as a
+    gate alone does. Two gates side by side on this machine used to take over 1,200 s each
+    and fail at the bound.
+  The roadmap's commit is `c2485cd` (passive for gentle-ai: 2 paths, 63 lines, no review
+  due). The demo worktree is removed and the folder `gate` was gone after both.
+  Where the feature stands: T1 to T6 done, each commit reviewed by gentle-ai; Codex has
+  reviewed up to `1eafe1a` and `f1419af` and `a1d4360` wait for his answer on the budget
+  (plan: 2 parts, 634 changed lines, 770,000 to 4,400,000 input tokens; 471,865 left). The
+  pre-push hook refuses the branch until a record covers them, so the push and the pull
+  request wait for that answer too. Nothing runs.
+
+- 2026-10-10 · Decided by Sebastián, in the orchestrator's chat, where the three questions of this
+  session were put to him with one of the orchestrator's own (transcript `182ad401`, line
+  1403, 2026-10-11T01:10:48Z, read there by this session with the question before it, line
+  1398): "Sí a las cuatro: Codex a 6,5 millones, fusioná vos el código y dá vos el visto
+  bueno de las etapas, los commits de solo documentos no corren las pruebas, y acortá el
+  gate con las dos cosas". So:
+  - The Codex budget of this feature is 6.5 million input tokens: 1,971,865 are left. What
+    he had in front of him: the estimate of 770,000 to 4,400,000 for what waited, which
+    6.5 covers at its low and middle and not at its top. Past 6.5, his again.
+  - T7 is built as designed: a commit whose every path is under `docs/` or `odd/tasks/`
+    runs no test sensor, declared in `harness.json`, off by default in any other project;
+    the static rows still run.
+  - T6b is built, with both things: the three shards, and the change to `jsonLinesPath`,
+    which brings `bin/lib/codex-reviews.mjs` (and `bin/lib/project.mjs`, where `gitDirs`
+    lives) into this feature's scope.
+  - The lead merges code, this pull request included, once its gate passed, both reviews
+    are recorded with nothing blocking and it is clean. Updating the machine's command
+    stays his.
+  The order taken: Codex reviews `1eafe1a..c2485cd` now, so its findings arrive before the
+  next code and a record exists for what is written; then T6b, then T7, each with its
+  commit, gate and gentle-ai review; then Codex on those two, if what is left pays its
+  plan; then the close.
+
+- 2026-10-10 · Codex reviewed `1eafe1a..c2485cd` in 2 parts (20:13:48 to 20:15:32) and the review
+  is recorded: no finding in either part ("the patch is correct", confidence 0.87 and
+  0.91). Spent: 662,479 input tokens (537,600 cached), under its plan's low figure of
+  770,000; it ran under the guard, set to stop past 1,200,000. The feature's Codex spend:
+  5,190,614 of 6.5 million; 1,309,386 are left for T6b and T7.
+
+- 2026-10-10 · A mistake, told by the orchestrator at 20:29: T6b's writer ran tests beside a batch
+  of evals of another session (`node evals/suite.mjs`, pid 31300, since 20:12:57, about 95
+  minutes), whose result compares durations. What happened: the look this session and its
+  writers make before a test names `check.mjs`, `node --test` and the two reviewers, and a
+  batch of evals is none of them; the writer's short test files from about 20:17 and a
+  three-file run of the `codex-review` tests from 20:27:21 ran beside it. Fixed now: the
+  run in flight was left to end, the writer starts no test until that batch ends and waits
+  on its process, and the look (this session's scripts and the writer's) finds
+  `suite.mjs` as it finds `check.mjs`; the other session is told which runs overlapped,
+  with their times, to mark its trials. What it says of the lock: that batch ran outside
+  `js-harness gate`, and under it this would still have happened, since one test file run
+  alone is left free on purpose. A run that needs the machine quiet, and not only its
+  turn, is a need the lock does not serve; noted for the roadmap, not designed here. The
+  timing of T6b is taken again after the batch.
+
+- 2026-10-10 · T6b, one writer (route: delegated; four files and two new ones), both things he
+  approved:
+  - `gitDirs` (`bin/lib/project.mjs`) asks git once: `git rev-parse --git-dir
+    --git-common-dir` prints the two folders on two lines, each as its flag prints it
+    alone (checked at the top of a repository, below it, and in a linked worktree). Seen
+    failing first: three of its tests counted two processes. An answer that is not two
+    lines (a path with a line break in it) is asked again one flag at a time. In one run of
+    the long test file the command under test started 2,161 processes fewer, all of them
+    `rev-parse` (10,008 to 7,847). `jsonLinesPath` itself resolves once per call; one
+    `codex-review` run still resolves it from several modules, and passing it through them
+    is an option not taken.
+  - `bin/codex-review.test.mjs` runs as three shards with no test moved: the file itself
+    registers every third test, by its place in the file, and
+    `bin/codex-review.shard-2.test.mjs` and `bin/codex-review.shard-3.test.mjs`, two lines
+    each, import it with `?shard=2` and `?shard=3` to run the others (a query string, so
+    nothing is inherited by the processes the tests start). A test of another shard is not
+    handed to the runner at all: 78 + 78 + 77 = 233, each name in one shard, checked from
+    the TAP output. No test depended on the one before it. Each run says in one line which
+    shard it is and how many of the tests are its own; `JS_HARNESS_TEST_SHARD=all` runs
+    them all in one process as before, and any other value of it throws. The cost, known:
+    the runner reports the wrapper's line as the place of every test of that file, so a
+    failed one is found by its name (its assertion's stack keeps the real line).
+  Timings, the machine quiet before and after each: the three shards together,
+  22:32:28 to 22:36:41, 252.8 s (252.5, 227.6 and 217.2 s), where the file took 489.5 s
+  after T6 and 640.3 s before it; all 233 in one process with the `gitDirs` change alone,
+  472.4 s; `bin/check-codex-reviews.test.mjs` alone, 176.1 s (451 s inside a whole run
+  before; no number alone from before). Two earlier runs of the shards, 303.7 s and
+  536.4 s, ran beside an evals batch and beside another session's gate and are not timings.
+  Focused runs: `bin/lib/project.test.mjs` 138 of 143 with the same 5 skipped,
+  `bin/lib/codex-reviews.test.mjs` 16 of 16, the three shards 233 of 233,
+  `bin/check-codex-reviews.test.mjs` 94 of 94, and five other files that reach `gitDirs`,
+  all green. 182 lines added and 7 removed in four files, and the two new ones.
+  The writer's own runs beside the evals batch, with their times, went to the orchestrator
+  for the session that owns it; after the correction it started nothing until that batch
+  had ended.
+
 ## Next
-1. The two gates started together (the roadmap's commit here, a plain `check` in
-   `gate-lock-demo`): what each printed, recorded here; then that worktree is removed.
-2. His three answers (see the Progress entry of the three questions). No Codex review
-   before the first; T7 and T6b not started before theirs.
-3. The rest of T8: the Codex review of `1eafe1a..HEAD` or its record as unavailable, by his
-   answer; push and pull request once gate and both reviews are green. The merge is his.
+1. The commit of T6b and its gate: its time against 728 s is what the shards give inside a
+   whole run. Then `gentle-ai review assess --base-ref c2485cd --committed-only`.
+2. T7, one writer: `harness.json` of this repository declares `docs/` and `odd/tasks/`;
+   a commit whose every staged path is under them runs no test sensor and says so in a
+   row; the static rows still run; off by default elsewhere. Its commit, gate, review.
+3. Codex on what T6b and T7 add, if its plan fits the 1,309,386 left; if it does not, that
+   is a question of spend, his.
+4. The close: `origin/main` (at `ca013c2` when last fetched; it merges with no conflict)
+   merged in before the pull request; this document's last entries committed; push and
+   pull request; the closing notice to the orchestrator, which merges.
 Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
 changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
 tree (set this document aside with `git stash`, one stash, popped by the same command);
-no review step beside a running gate; a timing taken beside another session's gate is
-not a timing.
+no review step beside a running gate; a timing is one only with the process list empty
+before and after it; the look finds `evals/suite.mjs` too.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
-   `check.mjs` or `node --test`; if one is alive, wait on that process itself and look again,
+   `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,
    and start nothing beside it (the two mistakes above). A gate that reaches the bound is said
    and not retried, and the orchestrator is told in one line when a gate ends.
