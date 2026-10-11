@@ -756,11 +756,23 @@ const gentleAiNotFound = () => ({
   error: Object.assign(new Error('spawnSync gentle-ai ENOENT'), { code: 'ENOENT' }),
 });
 
+/** What the sampler of `runCheck` reads: a machine with under one of its eight logical processors busy. */
+const QUIET_LOAD = { busy: 0.4, processors: 8, share: 0.05, sampleMs: 1000 };
+const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the sensors (5%, 1 s sample)';
+
 /** Runs `main`, capturing everything it printed via console.log/console.error and the exit code.
  *
  * A gate takes the machine's gate lock in its home. A run that names none (`--home`, or
  * `JS_HARNESS_HOME` in `env`) is given a throwaway one, so a test can neither wait for a real gate of
- * this machine nor hold one up, whether this file is run by a gate or by hand. */
+ * this machine nor hold one up, whether this file is run by a gate or by hand.
+ *
+ * A gate samples the machine's load for a second before its sensors. A run that hands it no sampler
+ * (`deps.sampleLoad`) is given one that answers `QUIET_LOAD` at once, so no test waits for a sample or
+ * reads this machine, but the one that asks for the real sampler by name.
+ *
+ * On a loaded machine a gate looks for the processes that load it, which starts PowerShell on Windows. A
+ * run that hands it no look (`deps.busiest`) is given one that finds nobody at once, so no test starts a
+ * process for it, whatever its sampler says. */
 async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
@@ -774,7 +786,7 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   };
   const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
   try {
-    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, deps);
+    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], ...deps });
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -1261,6 +1273,7 @@ async function withGate(sensors, run) {
 
 const rowsOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
 const gateRows = (output) => rowsOf(output).filter((line) => /^\w+ {2}gate {2}/.test(line));
+const loadRows = (output) => rowsOf(output).filter((line) => /^\w+ {2}load {2}/.test(line));
 
 test('main holds the gate lock while the sensors run and releases it after them', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
   const during = [];
@@ -1370,7 +1383,7 @@ test('main started with the mark of a held gate lock takes no lock and runs its 
       "INFO  gate  the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate took none",
     ]);
     // Not the inner run of old: every row of a gate is there.
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'tests', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'gate', 'load', 'tests', 'review', 'codex-review']);
     assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
     assert.equal(readGateHolder(home).pid, 4321);
   } finally {
@@ -1452,8 +1465,10 @@ test('main waits for the gate that holds the lock, says once on stderr whose it 
   assert.equal(code, 0, output);
   assert.equal(errOutput, `check: waiting for the gate of C:\\work\\other (pid 4321, started ${startedAt}) to finish, for 60 minutes at most\n`);
   assert.deepEqual(gateRows(output), ["INFO  gate  waited 6 s for the machine's gate lock before the sensors ran"]);
+  // The lock was another gate's until a moment ago, so the load read now is the tail of that gate.
+  assert.deepEqual(loadRows(output), [`${QUIET_LOAD_ROW}, right after another gate`]);
   const names = rowsOf(output).map((row) => row.split('  ')[1]);
-  assert.equal(names.indexOf('gate') + 1, names.indexOf('tests'), output);
+  assert.deepEqual(names.slice(names.indexOf('gate'), names.indexOf('tests') + 1), ['gate', 'load', 'tests'], output);
   // The wait is not the sensor's time: its own bound starts when it does, whole.
   assert.deepEqual(timeouts, [20 * 60 * 1000]);
   assert.equal(readGateHolder(home, { now: clock.now }), null);
@@ -1783,11 +1798,12 @@ test('two check processes that share a home run their sensors one after the othe
   });
   // The mark of a gate that runs this file would make these two inner checks, which run no sensor, and
   // the mark of its held lock would make them gates that take none. No gentle-ai and no git either: an
-  // empty PATH leaves both rows saying they found none.
+  // empty PATH leaves both rows saying they found none. And no sample of the load, which no stand-in
+  // reaches in a process of its own: a second each, of a machine this suite itself keeps busy.
   const noPrograms = path.join(home, 'no-programs');
   fs.mkdirSync(noPrograms);
   const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context', 'path'];
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms };
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms, JS_HARNESS_GATE_LOAD: 'off' };
   // They run a copy of `bin/` in a temporary folder. Started from this checkout's own `bin/check.mjs`,
   // they would read on the session board as two gates of this worktree at once, at every run of the suite
   // (`watchedGates` in lib/sessions.mjs leaves out a gate whose folder is no worktree of the project).
@@ -1811,6 +1827,8 @@ test('two check processes that share a home run their sensors one after the othe
     assert.equal(readLog(), 'in one\nout one\nin two\nout two\n');
     assert.equal(a.stderr, '');
     assert.deepEqual(gateRows(a.stdout), []);
+    // The switch reached both processes: neither sampled the load, the one that waited included.
+    assert.deepEqual([loadRows(a.stdout.replace(/\r\n/g, '\n')), loadRows(b.stdout.replace(/\r\n/g, '\n'))], [[], []]);
     const said = b.stderr.replace(/\r\n/g, '\n');
     assert.ok(said.startsWith(`check: waiting for the gate of ${path.resolve(one)} (pid ${first.child.pid}, started `), said);
     // The whole bound, or what is left of it on a machine so slow that a second of it was spent by then.
@@ -2079,6 +2097,258 @@ test('a gate that runs no sensor for staged documents takes no gate lock, with t
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- the load a gate starts under: one sample before the first sensor, said in a row named `load` ---
+// The sample itself is tested in lib/machine-load.test.mjs; here, when a gate takes one and what it says
+// of it. Every sampler is a stand-in that answers at once, but for the last test of this part.
+
+const LOADED = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
+const LOAD_ROW = 'INFO  load  2.2 of 8 logical processors busy before the sensors (27%, 1 s sample)';
+
+/** A lock that cannot be taken at all: the gate runs its sensors without it. */
+const lockRefuses = async () => {
+  throw Object.assign(new Error("EPERM: operation not permitted, mkdir 'somewhere'"), { code: 'EPERM' });
+};
+
+/** The three ways a gate comes to its sensors: what it is started with, the lock it is handed, the row
+ * named `gate` its report has before them, and who holds the lock of its home meanwhile. */
+const LOCK_STATES = [
+  { state: 'its own lock', env: {}, deps: {}, gate: [], holder: process.pid },
+  { state: 'the turn of the process that started it', env: { JS_HARNESS_GATE_HELD: '1' }, deps: {}, gate: ['gate'], holder: undefined },
+  { state: 'no lock, since none could be taken', env: {}, deps: { takeGateLock: lockRefuses }, gate: ['gate'], holder: undefined },
+];
+
+/** A sampler that answers `load` at once and a runner of sensors that passes: each writes into `events`
+ * when it was called, the sampler with the holder of the lock in `home` at that moment. */
+function sampledGate(home, load = LOADED) {
+  const events = [];
+  const sampleLoad = async () => {
+    events.push(['sample', readGateHolder(home)?.pid]);
+    return load;
+  };
+  const spawn = (command) => {
+    events.push(command);
+    return sensorRan();
+  };
+  return { events, sampleLoad, spawn };
+}
+
+test('a gate samples the load once, before its first sensor and inside its turn, and says it in one INFO row named load, in each of the three states of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+  for (const { state, env, deps, gate, holder } of LOCK_STATES) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    assert.deepEqual(events, [['sample', holder], 'run-tests', 'run-lint'], state);
+    assert.deepEqual(loadRows(output), [LOAD_ROW], state);
+    const names = rowsOf(output).map((row) => row.split('  ')[1]);
+    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
+  }
+}));
+
+test('the load row decides nothing: a red sensor stays red beside it, and a load that could not be read, or a sampler that throws, is said in the row of a gate that still runs', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  const red = await runCheck(argv, {}, gateDeps({ spawn: () => ({ ...sensorRan(), status: 3 }), sampleLoad: async () => LOADED }));
+  assert.equal(red.code, 1);
+  assert.deepEqual(loadRows(red.output), [LOAD_ROW]);
+  assert.match(red.output, /^FAIL {2}tests {2}run-tests exited 3$/m);
+
+  const notRead = async () => ({ notRead: 'os.cpus() gave no processor', sampleMs: 1000 });
+  const threw = async () => {
+    throw new Error('the sampler blew up');
+  };
+  for (const [sampleLoad, row] of [[notRead, 'INFO  load  not read: os.cpus() gave no processor'], [threw, 'INFO  load  not read: the sampler blew up']]) {
+    const spawn = countedSensors();
+    const { code, output } = await runCheck(argv, {}, gateDeps({ spawn, sampleLoad }));
+    assert.deepEqual([code, spawn.ran, loadRows(output)], [0, 1, [row]], output);
+    assert.equal(readGateHolder(home), null);
+  }
+}));
+
+test('no load is sampled and no load row printed where no gate runs a sensor: a caller that is no gate, the inner run, a push, no sensor declared, a commit of documents alone', async () => {
+  const dir = sensorProject({ tests: 'run-tests' });
+  const none = sensorProject({});
+  const home = makeTmpDir();
+  try {
+    let sampled = 0;
+    const sampleLoad = async () => {
+      sampled += 1;
+      return LOADED;
+    };
+    // A caller that is no gate hands `checkSensors` no lock: its sensors run, and nothing is sampled.
+    const rows = await checkSensors(dir, { spawn: sensorRan, sampleLoad });
+    assert.deepEqual(rows.map((row) => row.name), ['tests']);
+
+    const deps = { gentleAi: gentleAiNotFound, git: notARepository, takeGateLock: lockTakenAtOnce(), sampleLoad };
+    const argv = ['--cwd', dir, '--home', home];
+    const silent = {
+      inner: await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, deps),
+      push: await runCheck(['--push', ...argv], {}, deps),
+      'no sensor': await runCheck(['--cwd', none, '--home', home], {}, deps),
+    };
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    for (const env of [{}, { JS_HARNESS_GATE_HELD: '1' }]) {
+      silent[`documents alone ${JSON.stringify(env)}`] = await runCheck(argv, env, { ...deps, git: stagedGit(['docs/guide.md']) });
+    }
+    for (const [what, { output }] of Object.entries(silent)) assert.deepEqual(loadRows(output), [], `${what}: ${output}`);
+    assert.equal(sampled, 0);
+
+    // The same stand-ins sample once a sensor runs, so the silence above is not their own.
+    const gate = await runCheck(argv, {}, { ...deps, spawn: sensorRan, git: stagedGit(['docs/guide.md', 'src/app.js']) });
+    assert.deepEqual([loadRows(gate.output), sampled], [[LOAD_ROW], 1]);
+  } finally {
+    for (const folder of [dir, none, home]) fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+// The switch is for the gates a seam cannot reach: the ones a test starts as processes of their own.
+test('JS_HARNESS_GATE_LOAD=off takes no sample and prints no load row in any state of the lock, and only off is the switch', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const argv = ['--cwd', dir, '--home', home];
+  for (const { state, env, deps } of LOCK_STATES) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const { code, output } = await runCheck(argv, { ...env, JS_HARNESS_GATE_LOAD: 'off' }, gateDeps({ spawn, sampleLoad, ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    assert.deepEqual([events, loadRows(output)], [['run-tests'], []], state);
+  }
+  for (const value of ['', '0', 'on', 'OFF']) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const { output } = await runCheck(argv, { JS_HARNESS_GATE_LOAD: value }, gateDeps({ spawn, sampleLoad }));
+    assert.deepEqual([events, loadRows(output)], [[['sample', process.pid], 'run-tests'], [LOAD_ROW]], JSON.stringify(value));
+  }
+}));
+
+// A gate that waited has the lock within two seconds of the gate before it, which still runs the rows it
+// prints after its sensors: what is read then is not the machine's own load, and the row says so.
+test('a gate that waited a second or more for the lock says that its load was read right after another gate', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const row = async (waitedMs, load = LOADED) => {
+    const take = async () => ({ release: () => {}, beat: () => {}, lost: () => false, waitedMs });
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: take, sampleLoad: async () => load }));
+    assert.equal(code, 0, output);
+    return loadRows(output);
+  };
+  assert.deepEqual(await row(1000), [`${LOAD_ROW}, right after another gate`]);
+  assert.deepEqual(await row(6 * 60_000), [`${LOAD_ROW}, right after another gate`]);
+  // A lock taken at once took a few milliseconds, and nobody ran before this gate.
+  assert.deepEqual(await row(999), [LOAD_ROW]);
+  assert.deepEqual(await row(0), [LOAD_ROW]);
+  // A load that was not read has no figure to say that of.
+  assert.deepEqual(await row(6000, { notRead: 'os.cpus() gave no processor', sampleMs: 1000 }), ['INFO  load  not read: os.cpus() gave no processor']);
+}));
+
+// --- what loads a loaded machine: the busiest processes, each in a line under the load row ---
+// The look itself is tested in lib/machine-busiest.test.mjs; here, when a gate looks and where it says
+// what was found. Every look is a stand-in that answers at once.
+
+const BUSIEST = [
+  { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
+  { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
+  { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
+];
+const BUSIEST_LINES = [
+  '      3.2 s of CPU in 2 s  node tsserver.js (pid 12044)',
+  '      1.6 s of CPU in 2 s  chrome (pid 9000)',
+  '      0.9 s of CPU in 2 s  Memory Compression (pid 3064)',
+];
+const TESTS_ROW = 'PASS  tests  run-tests passed';
+
+/** The load row of `output` and the `count` lines after it. */
+function fromLoadRow(output, count) {
+  const lines = output.split('\n');
+  const at = lines.findIndex((line) => /^\w+ {2}load {2}/.test(line));
+  return lines.slice(at, at + 1 + count);
+}
+
+test('a gate on a loaded machine names what loads it in lines under the load row: looked for once, after the sample and before the first sensor, in each state of the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  for (const { state, env, deps, holder } of LOCK_STATES) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const busiest = async () => {
+      events.push(['look', readGateHolder(home)?.pid]);
+      return BUSIEST;
+    };
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, busiest, ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    assert.deepEqual(events, [['sample', holder], ['look', holder], 'run-tests'], state);
+    assert.deepEqual(fromLoadRow(output, 4), [LOAD_ROW, ...BUSIEST_LINES, TESTS_ROW], state);
+    assert.deepEqual(loadRows(output), [LOAD_ROW], state);
+  }
+  // A gate that waited for another names them as well: they may be the tail of that gate, as the row says.
+  const take = async () => ({ release: () => {}, beat: () => {}, lost: () => false, waitedMs: 5000 });
+  const waited = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: take, sampleLoad: async () => LOADED, busiest: async () => BUSIEST.slice(0, 1) }));
+  assert.deepEqual(fromLoadRow(waited.output, 2), [`${LOAD_ROW}, right after another gate`, BUSIEST_LINES[0], TESTS_ROW]);
+}));
+
+test('a look that finds nobody, gives no list or throws leaves the load row as it was, and the gate runs on', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const threw = async () => {
+    throw new Error('the look blew up');
+  };
+  for (const busiest of [async () => [], async () => undefined, threw]) {
+    const spawn = countedSensors();
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, sampleLoad: async () => LOADED, busiest }));
+    assert.deepEqual([code, spawn.ran], [0, 1], output);
+    assert.deepEqual(fromLoadRow(output, 1), [LOAD_ROW, TESTS_ROW]);
+    assert.equal(readGateHolder(home), null);
+  }
+}));
+
+test('nothing is looked for on a machine below one busy logical processor, for a load that was not read, with JS_HARNESS_GATE_LOAD=off, or where no gate runs a sensor', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  let looked = 0;
+  const busiest = async () => {
+    looked += 1;
+    return BUSIEST;
+  };
+  const argv = ['--cwd', dir, '--home', home];
+  const row = async (sampleLoad, env = {}, flags = []) => fromLoadRow((await runCheck([...flags, ...argv], env, gateDeps({ sampleLoad, busiest }))).output, 1);
+  const loaded = async () => LOADED;
+  assert.deepEqual(await row(async () => QUIET_LOAD), [QUIET_LOAD_ROW, TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ ...LOADED, busy: 0.99 })), ['INFO  load  1.0 of 8 logical processors busy before the sensors (27%, 1 s sample)', TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ notRead: 'os.cpus() gave no processor', sampleMs: 1000 })), ['INFO  load  not read: os.cpus() gave no processor', TESTS_ROW]);
+  // A sampler that gives no figure at all is a load that was not read, and the gate runs on.
+  assert.deepEqual(await row(async () => undefined), ['INFO  load  not read: the sampler gave no figure', TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ processors: 8 })), ['INFO  load  not read: the sampler gave no figure', TESTS_ROW]);
+  for (const [env, flags] of [[{ JS_HARNESS_GATE_LOAD: 'off' }, []], [{ JS_HARNESS_GATE_LOAD: 'off', JS_HARNESS_GATE_HELD: '1' }, []], [{ JS_HARNESS_CHECK_INNER: '1' }, []], [{}, ['--push']]]) {
+    assert.deepEqual(loadRows((await runCheck([...flags, ...argv], env, gateDeps({ sampleLoad: loaded, busiest }))).output), [], JSON.stringify([env, flags]));
+  }
+  assert.equal(looked, 0);
+  // The same stand-ins look once the machine is loaded, so the silence above is not their own.
+  assert.deepEqual(await row(loaded), [LOAD_ROW, BUSIEST_LINES[0]]);
+  assert.equal(looked, 1);
+}));
+
+/** What the load row of a gate that read this machine may say, on any machine: a figure, with what a gate
+ * that waited adds to it, or why the load could not be read. */
+const REAL_LOAD_ROW = /^INFO {2}load {2}(?:(\d+\.\d) of (\d+) logical processors? busy before the sensors \((\d+)%, 1 s sample\)(?:, right after another gate)?|not read: \S.*)$/;
+
+// The one real sample of the suite: every other gate of the tests is handed a sampler that answers at
+// once, or is started with the switch off.
+test('a gate that is handed no sampler reads this machine for one second and says what it read', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const startedAt = Date.now();
+  // Naming `sampleLoad` with no value takes away the sampler `runCheck` hands every other gate. The look
+  // for the busiest processes stays the stand-in of `runCheck`: nothing is started here, loaded or not.
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ sampleLoad: undefined }));
+  const took = Date.now() - startedAt;
+  assert.equal(code, 0, output);
+  const said = loadRows(output);
+  assert.equal(said.length, 1, output);
+  // On a host where `os.cpus()` counts nothing the row says so, and a lock that took a second to take adds
+  // its words to the figure: both are a real sample, said once.
+  const read = REAL_LOAD_ROW.exec(said[0]);
+  assert.ok(read, said[0]);
+  if (read[1] !== undefined) {
+    const [busy, processors, percent] = read.slice(1).map(Number);
+    assert.equal(processors, os.cpus().length);
+    assert.ok(busy >= 0 && busy <= processors, said[0]);
+    assert.ok(percent >= 0 && percent <= 100, said[0]);
+  }
+  // The second of the sample was waited for, whatever was read in it.
+  assert.ok(took >= 900, `a gate that sampled for a second took ${took} ms`);
+
+  // What this test takes for the row of a real sample, and what it does not.
+  for (const row of [LOAD_ROW, `${LOAD_ROW}, right after another gate`, 'INFO  load  0.0 of 1 logical processor busy before the sensors (0%, 1 s sample)', 'INFO  load  not read: the two readings of os.cpus() do not differ']) {
+    assert.match(row, REAL_LOAD_ROW);
+  }
+  for (const row of ['INFO  load  not read: ', 'INFO  load  ', `${LOAD_ROW} and more`, 'INFO  load  NaN of 8 logical processors busy before the sensors (NaN%, 1 s sample)', LOAD_ROW.replace('1 s sample', '0 s sample')]) {
+    assert.doesNotMatch(row, REAL_LOAD_ROW);
+  }
+}));
 
 // From here on, real git in real repositories: what `git diff --cached` lists is the fact the rule stands on.
 
@@ -2403,8 +2673,9 @@ function hookedRepo() {
   fs.chmodSync(path.join(hooks, 'pre-commit'), 0o755);
   git(repo, 'config', 'core.hooksPath', slashes(hooks));
   // The marks of a gate that runs this file would make the hook's gate an inner check, or one that takes no lock.
+  // The hook's gate is a process of its own, so the switch keeps it from a second's sample at every commit.
   const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context'];
-  const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home };
+  const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home, JS_HARNESS_GATE_LOAD: 'off' };
   const commit = (cwd, ...args) => {
     const result = spawnSync('git', [...commitAs, '-m', 'change', ...args], { cwd, env, encoding: 'utf8' });
     return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
