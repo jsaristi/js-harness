@@ -52,13 +52,15 @@ const QUIET_LOAD = { busy: 0.4, processors: 8, share: 0.05, sampleMs: 1000 };
 
 /** Runs `gateMain` and captures what it said on stderr, which is all it says itself. A run that hands it
  * no sampler of the load (`deps.sampleLoad`) is given one that answers `QUIET_LOAD` at once, so no test
- * here waits a second for a sample or reads this machine. */
+ * here waits a second for a sample or reads this machine. And one that hands it no look for the busiest
+ * processes (`deps.busiest`) is given one that finds nobody at once, so no test starts PowerShell for it,
+ * whatever its sampler says. */
 async function runGate(argv, env = {}, deps = {}) {
   const said = [];
   const originalError = console.error;
   console.error = (line) => said.push(String(line));
   try {
-    const code = await gateMain(argv, env, { sampleLoad: async () => QUIET_LOAD, ...deps });
+    const code = await gateMain(argv, env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], ...deps });
     return { code, said };
   } finally {
     console.error = originalError;
@@ -548,6 +550,75 @@ test('gate takes no sample inside a gate, with JS_HARNESS_GATE_LOAD=off, or when
   // Only `off` is the switch, and the same stand-in is asked once a gate runs its command.
   for (const value of ['', '0', 'on', 'OFF']) assert.deepEqual((await run({ JS_HARNESS_GATE_LOAD: value })).said, [LOAD_SAID], JSON.stringify(value));
   assert.equal(sampled, 4);
+}));
+
+// --- what loads a loaded machine: the busiest processes, each in a line after the line of the load ---
+// The look itself is tested in lib/machine-busiest.test.mjs. Every look here is a stand-in.
+
+const BUSIEST = [
+  { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
+  { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
+  { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
+];
+const BUSIEST_SAID = [
+  'gate:   3.2 s of CPU in 2 s  node tsserver.js (pid 12044)',
+  'gate:   1.6 s of CPU in 2 s  chrome (pid 9000)',
+  'gate:   0.9 s of CPU in 2 s  Memory Compression (pid 3064)',
+];
+
+test('gate on a loaded machine names what loads it on stderr after the line of the load: looked for once, inside its turn, before the command', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const states = [
+    { state: 'its own lock', env: {}, deps: {}, before: [], holder: process.pid },
+    { state: 'the turn of the process that started it', env: { JS_HARNESS_GATE_HELD: '1' }, deps: {}, before: [IN_TURN], holder: undefined },
+    { state: 'no lock, since none could be taken', env: {}, deps: { takeGateLock: lockRefuses }, before: [WITHOUT_LOCK], holder: undefined },
+  ];
+  for (const { state, env, deps, before, holder } of states) {
+    const { events, sampleLoad, spawn } = sampledGate(home, LOADED, 7);
+    const busiest = async () => {
+      events.push(['look', readGateHolder(home)?.pid]);
+      return BUSIEST;
+    };
+    const { code, said } = await runGate(argv, env, { spawn, sampleLoad, busiest, ...deps });
+    assert.deepEqual([code, said, events], [7, [...before, LOAD_SAID, ...BUSIEST_SAID], [['sample', holder], ['look', holder], 'command']], state);
+  }
+  assert.equal(readGateHolder(home), null);
+}));
+
+test('a look that finds nobody, gives no list or throws leaves the line of the load alone, and the command runs', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const threw = async () => {
+    throw new Error('the look blew up');
+  };
+  for (const busiest of [async () => [], async () => undefined, threw]) {
+    const spawned = ranWith(3);
+    assert.deepEqual(await runGate(argv, {}, { spawn: spawned, sampleLoad: async () => LOADED, busiest }), { code: 3, said: [LOAD_SAID] });
+    assert.equal(spawned.asked.length, 1);
+    assert.equal(readGateHolder(home), null);
+  }
+}));
+
+test('gate looks for nothing below one busy logical processor, for a load that was not read, with JS_HARNESS_GATE_LOAD=off, inside a gate, or when it runs nothing', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  let looked = 0;
+  const busiest = async () => {
+    looked += 1;
+    return BUSIEST;
+  };
+  const said = async (sampleLoad, env = {}, flags = []) => (await runGate([...flags, ...argv], env, { spawn: ranWith(0), sampleLoad, busiest })).said;
+  const loaded = async () => LOADED;
+  assert.deepEqual(await said(async () => ({ ...LOADED, busy: 0.99 })), []);
+  assert.deepEqual(await said(async () => ({ notRead: 'os.cpus() gave no processor', sampleMs: 1000 })), []);
+  // A sampler that gives no figure at all is a load that was not read: nothing is said, and the command runs.
+  assert.deepEqual(await said(async () => undefined), []);
+  assert.deepEqual(await said(async () => ({ processors: 4 })), []);
+  assert.deepEqual(await said(loaded, { JS_HARNESS_GATE_LOAD: 'off' }), []);
+  assert.deepEqual(await said(loaded, { JS_HARNESS_CHECK_INNER: '1' }), []);
+  assert.deepEqual((await said(loaded, {}, ['--bogus'])).length, 1);
+  assert.equal(looked, 0);
+  // The same stand-ins look once the machine is loaded.
+  assert.deepEqual(await said(loaded), [LOAD_SAID, ...BUSIEST_SAID]);
+  assert.equal(looked, 1);
 }));
 
 // --- the real thing: the dispatcher, a real shell, the real lock and the real clock, in a temporary home ---

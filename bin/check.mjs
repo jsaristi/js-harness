@@ -14,7 +14,7 @@ import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
-import { loadDetail, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 
 export { estimateTokens };
 
@@ -576,10 +576,14 @@ const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { in
  * sensor and says it in an INFO row named `load` (`./lib/machine-load.mjs`): a gate's time depends on
  * what else the machine runs, and a slow gate is then explained by its own report. A second, of a run of
  * minutes. A gate that waited for another says so in that row, since what it reads is the tail of that
- * gate. The row decides nothing, and a load that could not be read is said in it. No sample is taken
- * and no row printed where no sensor runs, for a caller that is no gate, or with `load: false` in
- * `lock`, which is how a gate passes on the switch of its environment (`GATE_LOAD_ENV`).
- * `deps.sampleLoad` stands in for the sampler. */
+ * gate. The row decides nothing, and a load that could not be read is said in it. On a loaded machine,
+ * from one busy logical processor on, the gate also looks for what loads it, for some seconds more, and
+ * the row names the three busiest processes at most in lines of its own
+ * (`./lib/machine-busiest.mjs`); a look that finds nobody or fails leaves the row with its figure alone.
+ * No sample is taken, nothing looked for and no row printed where no sensor runs, for a caller that is no
+ * gate, or with `load: false` in `lock`, which is how a gate passes on the switch of its environment
+ * (`GATE_LOAD_ENV`).
+ * `deps.sampleLoad` stands in for the sampler, and `deps.busiest` for the look. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -601,7 +605,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // Here and nowhere else: every gate comes to its sensors through this, whatever the lock did, and with
     // the lock in hand where there is one, so the second of the sample is not another gate's.
     if (lock && lock.load !== false) {
-      rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(await readLoad(deps.sampleLoad), { afterGate: waited }) });
+      const load = await readLoad(deps.sampleLoad, deps.busiest);
+      const lines = loadLines(load);
+      rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(load, { afterGate: waited }), ...(lines.length ? { lines } : {}) });
     }
     for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
     return rows;

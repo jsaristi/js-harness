@@ -768,7 +768,11 @@ const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the 
  *
  * A gate samples the machine's load for a second before its sensors. A run that hands it no sampler
  * (`deps.sampleLoad`) is given one that answers `QUIET_LOAD` at once, so no test waits for a sample or
- * reads this machine, but the one that asks for the real sampler by name. */
+ * reads this machine, but the one that asks for the real sampler by name.
+ *
+ * On a loaded machine a gate looks for the processes that load it, which starts PowerShell on Windows. A
+ * run that hands it no look (`deps.busiest`) is given one that finds nobody at once, so no test starts a
+ * process for it, whatever its sampler says. */
 async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   let output = '';
   let errOutput = '';
@@ -782,7 +786,7 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
   };
   const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
   try {
-    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, ...deps });
+    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], ...deps });
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -2230,23 +2234,120 @@ test('a gate that waited a second or more for the lock says that its load was re
   assert.deepEqual(await row(6000, { notRead: 'os.cpus() gave no processor', sampleMs: 1000 }), ['INFO  load  not read: os.cpus() gave no processor']);
 }));
 
+// --- what loads a loaded machine: the busiest processes, each in a line under the load row ---
+// The look itself is tested in lib/machine-busiest.test.mjs; here, when a gate looks and where it says
+// what was found. Every look is a stand-in that answers at once.
+
+const BUSIEST = [
+  { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
+  { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
+  { name: 'Memory Compression', script: null, pid: 3064, cpuSeconds: 0.9 },
+];
+const BUSIEST_LINES = [
+  '      3.2 s of CPU in 2 s  node tsserver.js (pid 12044)',
+  '      1.6 s of CPU in 2 s  chrome (pid 9000)',
+  '      0.9 s of CPU in 2 s  Memory Compression (pid 3064)',
+];
+const TESTS_ROW = 'PASS  tests  run-tests passed';
+
+/** The load row of `output` and the `count` lines after it. */
+function fromLoadRow(output, count) {
+  const lines = output.split('\n');
+  const at = lines.findIndex((line) => /^\w+ {2}load {2}/.test(line));
+  return lines.slice(at, at + 1 + count);
+}
+
+test('a gate on a loaded machine names what loads it in lines under the load row: looked for once, after the sample and before the first sensor, in each state of the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  for (const { state, env, deps, holder } of LOCK_STATES) {
+    const { events, sampleLoad, spawn } = sampledGate(home);
+    const busiest = async () => {
+      events.push(['look', readGateHolder(home)?.pid]);
+      return BUSIEST;
+    };
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, sampleLoad, busiest, ...deps }));
+    assert.equal(code, 0, `${state}: ${output}`);
+    assert.deepEqual(events, [['sample', holder], ['look', holder], 'run-tests'], state);
+    assert.deepEqual(fromLoadRow(output, 4), [LOAD_ROW, ...BUSIEST_LINES, TESTS_ROW], state);
+    assert.deepEqual(loadRows(output), [LOAD_ROW], state);
+  }
+  // A gate that waited for another names them as well: they may be the tail of that gate, as the row says.
+  const take = async () => ({ release: () => {}, beat: () => {}, lost: () => false, waitedMs: 5000 });
+  const waited = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: take, sampleLoad: async () => LOADED, busiest: async () => BUSIEST.slice(0, 1) }));
+  assert.deepEqual(fromLoadRow(waited.output, 2), [`${LOAD_ROW}, right after another gate`, BUSIEST_LINES[0], TESTS_ROW]);
+}));
+
+test('a look that finds nobody, gives no list or throws leaves the load row as it was, and the gate runs on', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const threw = async () => {
+    throw new Error('the look blew up');
+  };
+  for (const busiest of [async () => [], async () => undefined, threw]) {
+    const spawn = countedSensors();
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ spawn, sampleLoad: async () => LOADED, busiest }));
+    assert.deepEqual([code, spawn.ran], [0, 1], output);
+    assert.deepEqual(fromLoadRow(output, 1), [LOAD_ROW, TESTS_ROW]);
+    assert.equal(readGateHolder(home), null);
+  }
+}));
+
+test('nothing is looked for on a machine below one busy logical processor, for a load that was not read, with JS_HARNESS_GATE_LOAD=off, or where no gate runs a sensor', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  let looked = 0;
+  const busiest = async () => {
+    looked += 1;
+    return BUSIEST;
+  };
+  const argv = ['--cwd', dir, '--home', home];
+  const row = async (sampleLoad, env = {}, flags = []) => fromLoadRow((await runCheck([...flags, ...argv], env, gateDeps({ sampleLoad, busiest }))).output, 1);
+  const loaded = async () => LOADED;
+  assert.deepEqual(await row(async () => QUIET_LOAD), [QUIET_LOAD_ROW, TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ ...LOADED, busy: 0.99 })), ['INFO  load  1.0 of 8 logical processors busy before the sensors (27%, 1 s sample)', TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ notRead: 'os.cpus() gave no processor', sampleMs: 1000 })), ['INFO  load  not read: os.cpus() gave no processor', TESTS_ROW]);
+  // A sampler that gives no figure at all is a load that was not read, and the gate runs on.
+  assert.deepEqual(await row(async () => undefined), ['INFO  load  not read: the sampler gave no figure', TESTS_ROW]);
+  assert.deepEqual(await row(async () => ({ processors: 8 })), ['INFO  load  not read: the sampler gave no figure', TESTS_ROW]);
+  for (const [env, flags] of [[{ JS_HARNESS_GATE_LOAD: 'off' }, []], [{ JS_HARNESS_GATE_LOAD: 'off', JS_HARNESS_GATE_HELD: '1' }, []], [{ JS_HARNESS_CHECK_INNER: '1' }, []], [{}, ['--push']]]) {
+    assert.deepEqual(loadRows((await runCheck([...flags, ...argv], env, gateDeps({ sampleLoad: loaded, busiest }))).output), [], JSON.stringify([env, flags]));
+  }
+  assert.equal(looked, 0);
+  // The same stand-ins look once the machine is loaded, so the silence above is not their own.
+  assert.deepEqual(await row(loaded), [LOAD_ROW, BUSIEST_LINES[0]]);
+  assert.equal(looked, 1);
+}));
+
+/** What the load row of a gate that read this machine may say, on any machine: a figure, with what a gate
+ * that waited adds to it, or why the load could not be read. */
+const REAL_LOAD_ROW = /^INFO {2}load {2}(?:(\d+\.\d) of (\d+) logical processors? busy before the sensors \((\d+)%, 1 s sample\)(?:, right after another gate)?|not read: \S.*)$/;
+
 // The one real sample of the suite: every other gate of the tests is handed a sampler that answers at
 // once, or is started with the switch off.
 test('a gate that is handed no sampler reads this machine for one second and says what it read', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const startedAt = Date.now();
-  // Naming `sampleLoad` with no value takes away the sampler `runCheck` hands every other gate.
+  // Naming `sampleLoad` with no value takes away the sampler `runCheck` hands every other gate. The look
+  // for the busiest processes stays the stand-in of `runCheck`: nothing is started here, loaded or not.
   const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ sampleLoad: undefined }));
   const took = Date.now() - startedAt;
   assert.equal(code, 0, output);
   const said = loadRows(output);
   assert.equal(said.length, 1, output);
-  const read = /^INFO {2}load {2}(\d+\.\d) of (\d+) logical processors? busy before the sensors \((\d+)%, 1 s sample\)$/.exec(said[0]);
+  // On a host where `os.cpus()` counts nothing the row says so, and a lock that took a second to take adds
+  // its words to the figure: both are a real sample, said once.
+  const read = REAL_LOAD_ROW.exec(said[0]);
   assert.ok(read, said[0]);
-  const [busy, processors, percent] = read.slice(1).map(Number);
-  assert.equal(processors, os.cpus().length);
-  assert.ok(busy >= 0 && busy <= processors, said[0]);
-  assert.ok(percent >= 0 && percent <= 100, said[0]);
+  if (read[1] !== undefined) {
+    const [busy, processors, percent] = read.slice(1).map(Number);
+    assert.equal(processors, os.cpus().length);
+    assert.ok(busy >= 0 && busy <= processors, said[0]);
+    assert.ok(percent >= 0 && percent <= 100, said[0]);
+  }
+  // The second of the sample was waited for, whatever was read in it.
   assert.ok(took >= 900, `a gate that sampled for a second took ${took} ms`);
+
+  // What this test takes for the row of a real sample, and what it does not.
+  for (const row of [LOAD_ROW, `${LOAD_ROW}, right after another gate`, 'INFO  load  0.0 of 1 logical processor busy before the sensors (0%, 1 s sample)', 'INFO  load  not read: the two readings of os.cpus() do not differ']) {
+    assert.match(row, REAL_LOAD_ROW);
+  }
+  for (const row of ['INFO  load  not read: ', 'INFO  load  ', `${LOAD_ROW} and more`, 'INFO  load  NaN of 8 logical processors busy before the sensors (NaN%, 1 s sample)', LOAD_ROW.replace('1 s sample', '0 s sample')]) {
+    assert.doesNotMatch(row, REAL_LOAD_ROW);
+  }
 }));
 
 // From here on, real git in real repositories: what `git diff --cached` lists is the fact the rule stands on.

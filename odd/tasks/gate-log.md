@@ -292,7 +292,7 @@ Progress.
   documents alone, with `JS_HARNESS_GATE_LOAD=off`; "right after another gate" when it
   waited; `gate --` silent below the threshold; the real-process helpers set the switch; one
   test runs a real sample.
-- [ ] T2 · What loads a loaded machine. Tests first: the PowerShell and `/proc` parsers on
+- [x] T2 · What loads a loaded machine. Tests first: the PowerShell and `/proc` parsers on
   recorded output; the difference of two samples; the first argument that is not an option;
   a missing command, an error and a timeout each leave the figure alone; nothing is started
   below the threshold or with the switch off.
@@ -304,13 +304,17 @@ Progress.
 - [ ] T5 · `uninstall` removes the log's folder in both paths and keeps it with a gate in use
   (orchestrator told before `bin/lib/manifest.mjs` is touched); the practice run's hash;
   `docs/ROADMAP.md`.
-- [ ] T6 · `scripts/count-git.mjs` with its test, then the profile of the two files, recorded
-  here, and the cuts chosen from it by the stop rule.
-- [ ] T7 · The first cut the profile names (expected: the git folder, and whatever else a
-  `codex-review` run asks git twice, resolved once per run).
-- [ ] T8 · The second, if the stop rule lets one through (expected: repositories built once
-  in `bin/check-codex-reviews.test.mjs`); then the counts after, one whole gate, and
-  `docs/ROADMAP.md`.
+- [x] T6 · `scripts/count-git.mjs` with its test, then the profile of the two files, recorded
+  here, and the cuts chosen from it by the stop rule. (The tool's second commit, `--frames`
+  and the review's findings, is still to make.)
+- [ ] T7 · The first cut, chosen from the profile: where the repository is, asked once per
+  `codex-review` run and handed on. The git folder (`jsonLinesPath`) and the top of the
+  repository (`topOf`) in the options objects, and whatever else the run asks git twice
+  through `gitOutput` (`bin/codex-review.mjs:279`). Then the count of
+  `bin/codex-review.test.mjs` again.
+- [ ] T8 · The second: in the tests, the git folder handed to the record helpers once per
+  repository, and the repositories of `bin/check-codex-reviews.test.mjs` built once and
+  copied; then the counts after, one whole gate, and `docs/ROADMAP.md`.
 
 ## Progress
 - 2026-10-11 · Opened. Worktree and branch made, CodeGraph index of the worktree made. A
@@ -362,7 +366,143 @@ Progress.
   - While the writer's tests ran, real samples on this machine read `8.0 of 8 logical
     processors busy (100%)`: the figure sees a test run as it sees a video.
 
+- 2026-10-11 · T1 is commit `84e93a5`. Its gate, the first to say the load: it waited 4 min
+  28 s for the gate of `session-channel`, then
+  `INFO  load  2.8 of 8 logical processors busy before the sensors (35%, 1 s sample), right
+  after another gate`, and passed in about 1,110 s (06:08:14 to 06:26:44), ninety seconds
+  under the bound. Most likely this session's own doing: the writer of T6 ran its tests in
+  the second worktree during that gate, one of them 852 git processes. Rule kept from here
+  on: a writer looks for the gate lock before each test run and waits for it to go.
+- 2026-10-11 · gentle-ai reviewed `84e93a5` against `7ef20b9` (medium risk, review due by
+  the slice budget; consent pre-granted, the `granted` invocation run): one lens,
+  reliability, approved and acknowledged (lineage `review-580fd5ce286a7f5f`), nothing
+  blocking. Two findings, both taken into T2: the one test that takes a real sample asserts
+  a figure, so it would go red on a host where the load is not read or the lock took a
+  second; `readLoad` says it never throws and does for a sampler that resolves to something
+  that is no sample.
+- 2026-10-11 · Codex, planned and not yet run. `codex-review --base 7ef20b9 --plan` puts T1
+  alone at about 730,000 input tokens (2 parts, 583 changed lines; "to 4,000,000" at the
+  most a line has cost). The cap of this feature is 3 million, and three slices at that
+  rate are about 3.5 million. So Codex reviews a slice once, after its last commit, and not
+  each commit: S1 after T2. If the cap is reached before S3, that is his (spend), said then;
+  the slices are reviewed in the order they are built.
+- 2026-10-11 · T6, first half, one writer (route: delegated; three new files) in a worktree
+  of its own, `D:\js-harness-worktrees\gate-git-processes`, branch `feat/gate-git-processes`
+  cut from `origin/main`, because the gate of T1 was running here. Test first: the test file
+  could not load the preload before it existed; 7 of 7 pass after, read again by this
+  session. `scripts/count-git.mjs` and its preload do what S3 says, and more that the first
+  run asked for: a child `node` started with an environment of its own is handed the
+  counting too, a call Node builds on another is counted once, `util.promisify(execFile)`
+  goes through the count, and the report says how many Node processes were started and
+  never reported (a killed one never reaches its exit). On Node 24 the `node --test` runner
+  itself loads no preload from `NODE_OPTIONS`; its per-file children do. First reading,
+  `bin/lib/project.test.mjs`: 852 git processes in 165 s summed, 659 of them a `rev-parse`,
+  530 from the test's own line 79.
+- 2026-10-11 · `origin/main` moved to `c1b3594` (pull request 58, the session roster),
+  checked with `git fetch`. It touches `bin/js-harness.mjs`, which S2 edits for the help
+  text: `main` is merged in before S2 is pushed. Nothing of S1 or S3 is in its paths.
+
+- 2026-10-11 · The counting tool is commit `a0bf058` on `feat/gate-git-processes`; its gate
+  passed in 991 s (06:30:36 to 06:47:07; that branch has no `load` row yet). gentle-ai
+  reviewed it against `7ef20b9` (medium, due by the slice budget): one lens, reliability,
+  approved and acknowledged (lineage `review-1e377f38447d1621`), five suggestions, none
+  blocking. Taken, with a need of this session's own, by the same writer before the profile
+  is run: a call that started no process is counted as one; an anonymous async frame is not
+  read; the usage error has no test through the process; and `--frames <n>`, because the
+  first frame of this repository in a stack is a helper (`bin/lib/project.mjs:229`) and does
+  not say who asked. Left: worker threads, and the temporary file of a tool that is killed.
+- 2026-10-11 · A slip of this session, in four parts. What happened: the review above was
+  started while another session's gate held the lock; the command looked for the lock,
+  printed that one was held, and went on, against the rule kept from the last slice ("no
+  review step beside a running gate") and the one this document states for writers. Nothing
+  failed that is known: the review passed, and whose gate it was and how long it took was
+  not read. The fix now: reviews of this session start through one command that waits while
+  the lock's folder exists and only then starts. What stops it recurring: the same wait is
+  in that command and not before it, since a look chained before a start is no guard. Where
+  it enters the harness: S2's log is what would have shown it (a review is no gate, so the
+  lock does not serve it; whether `codex-review` and the review step should take the gate's
+  turn is a question for the plan, not built here). Proof it has not come back: every later
+  review in this document names the command it was started by.
+
+- 2026-10-11 · T2, one writer (route: delegated), who looked for the gate lock before each
+  test run. Test first: the new module's test could not load it, the load test lacked
+  `loadLines`, and 2 of 3 new gate tests and 2 of 4 new check tests failed before the code
+  (the others are the guards that hold when nothing changes). After it: 11, 17, 32 and 131
+  pass.
+  - `bin/lib/machine-busiest.mjs` is the look; `readLoad(sample, look)` asks it only for a
+    loaded machine and adds `busiest` to the sample; `check` prints the lines under its
+    `load` row and `gate` after its line on stderr. A real `gate` beside two spinners, 5.4 s
+    in all:
+    `gate: 6.6 of 8 logical processors busy before the command (82%, 1 s sample)`,
+    `gate:   2.1 s of CPU in 2 s  node spins for the gate.mjs (pid 43512)`, the second
+    spinner, and `gate:   2.0 s of CPU in 2 s  MsMpEng (pid 5736)`, the virus scanner.
+  - Changed from the design, by measurement: the readings on Windows come from
+    `Win32_Process` and not from `Get-Process`. At eight of eight processors busy, which is
+    when a gate looks, `Get-Process` took 18.1 s for the look, past its own bound, and
+    `Win32_Process` 4.4 s; it also shows the time of processes `Get-Process` shows only to an
+    administrator. The difference and the three are worked out in Node, the same code as for
+    Linux; PowerShell is told the three pids on its standard input and prints only their
+    command lines. It is started by its whole path: a bare name would be looked for in the
+    project's folder first.
+  - Changed from the design, for what the line says: `2.1 s of CPU in 2 s  node tsserver.js
+    (pid 12044)`, since a bare `1.6 s` read as part of the one-second sample.
+  - Tighter than the design: the first argument that is not an option can be an option's
+    value (`-p <password>`), so it is said only when it reads as a file name, 64 characters
+    at most with an extension, and nothing after it is tried. The price: `node ./bin/www`
+    reads `node`.
+  - Limits, said in the module: a process that started during the look is not counted, so a
+    load of many short processes (a test run) names few; the look's own cost can appear as
+    `WmiPrvSE`; the Linux path ran against recorded `/proc` text only, on no Linux host.
+  - The two findings of the review of T1 are in: `readLoad` turns a sampler's answer that is
+    no sample into "not read", and the test of the real sample accepts what any host may
+    print while it still proves one row and a real second.
+
+- 2026-10-11 · The tool, second pass, by the same writer (not yet committed): `--frames <n>`
+  keys a git process by its first `n` frames in this repository; a call that started no
+  process (a missing command, a result without a pid) is no longer counted, one that started
+  and failed still is; a frame resumed by `await` is read; the usage error is tested through
+  the process. Test first: 4 of 9 failed before, 9 pass after.
+- 2026-10-11 · The profile, both runs under the gate lock (`gate -- node
+  scripts/count-git.mjs …`), on `origin/main` at `7ef20b9`.
+  - The two long files alone (07:04:43 to 07:13:47, 327 tests pass): 11,735 git processes,
+    777 s summed; `bin/codex-review.test.mjs` 8,589 and `bin/check-codex-reviews.test.mjs`
+    3,146. By sub-command: `rev-parse` 5,491, `diff` 1,642, `check-attr` 883, `rev-list`
+    578, `merge-base` 534, `log` 446, `status` 424, `commit` 318, `add` 274.
+  - The whole suite, 64 test files (07:14:42 to 07:30:52, 970 s): **15,467 git processes**,
+    2,363 s summed, and 1,597 other processes, in 941 Node processes that all reported.
+    `rev-parse` is 7,182 of them. By file: the two long ones are 11,735, 76%; then
+    `bin/lib/project.test.mjs` 852, `evals/review/compare.test.mjs` 599,
+    `bin/lib/codex-review-coverage.test.mjs` 545, `bin/remote.test.mjs` 451; 24 files start
+    git at all.
+  - So "some fifty thousand git processes" (`docs/ROADMAP.md:767`, repeated in this
+    document's Why and stop rule) was three times too many, and the reader's arithmetic
+    built on it ("2,500 of fifty thousand") with it. The two files this slice names are
+    three quarters of the suite's git, and the cuts below are about a fifth of all of it.
+  - Five tests failed under the whole-suite count and pass without it
+    (`evals/codex-configs.test.mjs:323, 346` and three like them): they assert the exact
+    environment of a child, and the tool adds its own variables to an environment a caller
+    writes out. An effect of the instrument, to be said in its report.
+  - Where the processes of the two files come from, by the first frames of this repository
+    (the product called by the tests through the spawn they hand it,
+    `bin/codex-review.test.mjs:233`):
+    - where the git folder is, `jsonLinesPath` to `gitDirs` (`bin/lib/project.mjs:229` from
+      `bin/lib/codex-reviews.mjs:31`): 1,238 inside runs and 1,147 from the readers and
+      writers of records called directly, 2,385 `rev-parse` in the whole suite;
+    - where the top is, `topOf` (`bin/lib/codex-review-scope.mjs:75`), once before every
+      `check-attr`: 796 `rev-parse`;
+    - the run's own questions through `gitOutput` (`bin/codex-review.mjs:279`): `rev-parse`
+      1,438, `diff` 1,169, `merge-base` 473, `status` 423;
+    - the tests' own fixtures in `bin/check-codex-reviews.test.mjs`: `add`, `commit` and
+      `rev-parse` 232 each from the `commit` helper (`:45-47`), a `commit` being the dearest
+      process of all, 0.34 s each in that run.
+  - Chosen by the stop rule (a thousand processes or more): T7, where the repository is,
+    asked once per run, about 700 of the 1,238 and the 796, and what `gitOutput` asks twice;
+    T8, the same folder handed on by the tests' helpers (most of the 1,147) and the
+    repositories of the second file built once. Together about 2,800 of 15,467. The tests'
+    own `git diff` stays out, as planned: 303 calls.
+
 ## Next
-T2: what loads a loaded machine, test first. Before it, T1's commit is assessed for review
-(gentle-ai, then Codex on the same range), and its gate's seconds and `load` row are recorded
-here.
+T2's commit, gentle-ai on it (against `84e93a5`), Codex on S1 whole (against `7ef20b9`), the
+push and the pull request of S1. For S3: the tool's second commit in the second worktree,
+and T7 with its writer in a third (`D:\js-harness-worktrees\gate-git-cuts`), its patch
+applied to the second when that one's gate is over.

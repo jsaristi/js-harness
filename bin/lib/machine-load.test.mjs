@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GATE_LOAD_ENV, LOAD_SAID_PROCESSORS, isLoaded, loadBetween, loadDetail, loadSwitchedOff, readLoad, sampleLoad } from './machine-load.mjs';
+import { GATE_LOAD_ENV, LOAD_SAID_PROCESSORS, isLoaded, loadBetween, loadDetail, loadLines, loadSwitchedOff, readLoad, sampleLoad } from './machine-load.mjs';
 
 // The load a gate starts under: how many logical processors were busy during one sample, from two readings
-// of `os.cpus()`. No test here sleeps or reads the machine: the readings are made up, and the clock is a
-// stand-in. The one real sample of the suite is in check.test.mjs.
+// of `os.cpus()`. No test here sleeps or reads the machine: the readings are made up, and the clock and
+// the look for the busiest processes are stand-ins. The one real sample of the suite is in
+// check.test.mjs, and the one real look in machine-busiest.test.mjs.
 
 /** One processor as `os.cpus()` gives it, with the milliseconds it has spent so far. */
 const cpu = (busy, idle) => ({ model: 'made up', speed: 1000, times: { user: busy, nice: 0, sys: 0, idle, irq: 0 } });
@@ -60,14 +61,83 @@ test('sampleLoad reads the processors, waits for the sample and reads them again
   assert.deepEqual(slept, [250]);
 });
 
+/** A look for the busiest processes that answers `found` at once and counts how often it was asked. */
+function lookThatFinds(found) {
+  const look = async () => {
+    look.asked += 1;
+    return typeof found === 'function' ? found() : found;
+  };
+  look.asked = 0;
+  return look;
+}
+
+const BUSIEST = [
+  { name: 'node', script: 'tsserver.js', pid: 12044, cpuSeconds: 3.2 },
+  { name: 'chrome', script: null, pid: 9000, cpuSeconds: 1.6 },
+];
+
 test('readLoad gives the sample of the sampler it is handed, and a sampler that throws is a load that was not read', async () => {
   const sample = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
-  assert.equal(await readLoad(async () => sample), sample);
+  assert.equal(await readLoad(async () => sample, lookThatFinds([])), sample);
   const threw = async () => {
     throw new Error('the sampler blew up');
   };
   assert.deepEqual(await readLoad(threw), { notRead: 'the sampler blew up' });
   assert.deepEqual(await readLoad(() => { throw 'not an error'; }), { notRead: 'not an error' });
+});
+
+// Found in the review of T1: `loadDetail` and `isLoaded` read the figure, and threw inside the gate on a
+// sampler that gave none.
+test('readLoad never hands on what is no load: a sampler that gives nothing, or no figure, is a load that was not read', async () => {
+  const look = lookThatFinds(BUSIEST);
+  for (const given of [undefined, null, {}, { busy: Number.NaN, processors: 8 }, { busy: '2.2', processors: 8 }, { busy: Infinity }, { processors: 8, share: 0.5, sampleMs: 1000 }, 2.2, 'loaded', []]) {
+    const load = await readLoad(async () => given, look);
+    assert.deepEqual(load, { notRead: 'the sampler gave no figure' }, JSON.stringify(given));
+    // What a gate does with it next throws nothing.
+    assert.equal(isLoaded(load), false);
+    assert.equal(loadDetail(load, { afterGate: true }), 'not read: the sampler gave no figure');
+    assert.deepEqual(loadLines(load), []);
+  }
+  assert.equal(look.asked, 0);
+  // What a sampler says it could not read is handed on as it said it.
+  const notRead = { notRead: 'os.cpus() gave no processor', sampleMs: 1000 };
+  assert.equal(await readLoad(async () => notRead, look), notRead);
+  assert.equal(look.asked, 0);
+});
+
+test('readLoad looks for what loads a loaded machine, once, and adds the busiest processes to the sample', async () => {
+  const loaded = { busy: 1, processors: 8, share: 0.125, sampleMs: 1000 };
+  const look = lookThatFinds(BUSIEST);
+  assert.deepEqual(await readLoad(async () => loaded, look), { ...loaded, busiest: BUSIEST });
+  assert.equal(look.asked, 1);
+  assert.equal('busiest' in loaded, false, 'the sample of the sampler is not written to');
+
+  // Below one busy logical processor nothing is looked for, nor for a load that was not read.
+  const quiet = { busy: 0.99, processors: 8, share: 0.12375, sampleMs: 1000 };
+  assert.equal(await readLoad(async () => quiet, look), quiet);
+  assert.deepEqual(await readLoad(async () => { throw new Error('the sampler blew up'); }, look), { notRead: 'the sampler blew up' });
+  assert.equal(look.asked, 1);
+});
+
+test('a look that finds nobody, gives no list, throws or rejects leaves the sample as it was', async () => {
+  const loaded = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
+  const rejects = () => Promise.reject(new Error('the look blew up'));
+  const throws = () => {
+    throw new Error('the look blew up');
+  };
+  for (const look of [lookThatFinds([]), lookThatFinds(undefined), lookThatFinds(null), lookThatFinds('node'), lookThatFinds({ name: 'node' }), rejects, throws]) {
+    assert.equal(await readLoad(async () => loaded, look), loaded);
+  }
+});
+
+test('loadLines says each of the busiest processes of a load in a line of its own, and nothing of a load that names none', () => {
+  const load = { busy: 2.16, processors: 8, share: 0.27, sampleMs: 1000 };
+  assert.deepEqual(loadLines({ ...load, busiest: BUSIEST }), ['3.2 s of CPU in 2 s  node tsserver.js (pid 12044)', '1.6 s of CPU in 2 s  chrome (pid 9000)']);
+  assert.deepEqual(loadLines(load), []);
+  assert.deepEqual(loadLines({ ...load, busiest: [] }), []);
+  assert.deepEqual(loadLines({ notRead: 'os.cpus() gave no processor', sampleMs: 1000 }), []);
+  // The line of the figure is the same with them and without.
+  assert.equal(loadDetail({ ...load, busiest: BUSIEST }), loadDetail(load));
 });
 
 test('loadDetail says the load in one line: the busy processors of all, before what, the share and the sample', () => {

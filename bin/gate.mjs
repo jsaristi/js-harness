@@ -7,14 +7,15 @@
 // It reports nothing of its own on stdout: what the command prints goes to the caller as it is printed,
 // and the exit code is the command's. What `gate` itself has to say (whose gate it waits for, that it ran
 // nothing, that it ran without the lock, or in the turn of the process that started it, and the load of a
-// machine that is loaded when the command starts) goes to stderr, each line starting with `gate:`.
+// machine that is loaded when the command starts, with what loads it) goes to stderr, each line starting
+// with `gate:`.
 //
 // The command is one argument after `--`, a command line the shell is handed as it is written, or several,
 // a command and its arguments. On Windows several arguments cannot hold everything: `commandLineOf` says
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
-import { isLoaded, loadDetail, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 
 const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]';
 
@@ -140,14 +141,18 @@ function parseArgs(argv, env, defaultCwd) {
  * in hand where there is one, as `check` reads it before its sensors. It is said in one line on stderr
  * only on a loaded machine, from one busy logical processor on (`LOAD_SAID_PROCESSORS`): a `gate` on a
  * machine at rest still says nothing of its own. The line says when this gate waited for another, whose
- * tail the figure then is. A load that could not be read is not said, and stops nothing. The switch
- * `JS_HARNESS_GATE_LOAD=off` takes the sample away, and inside a gate there is none: see `sayLoad`.
+ * tail the figure then is. On such a machine the processes that load it are looked for as well, for some
+ * seconds more, and the three busiest at most are named in the lines after it
+ * (`./lib/machine-busiest.mjs`); a look that finds nobody or fails adds no line. A load that could not be
+ * read is not said, and stops nothing. The switch `JS_HARNESS_GATE_LOAD=off` takes the sample and the
+ * look away, and inside a gate there is neither: see `sayLoad`.
  *
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
- * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load)
- * and `deps.cwd` are replaceable, and so is `deps.platform`, the system whose shell the command line is
- * written for: a test asks for the command line of another system and stands in for what would run it. */
+ * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load),
+ * `deps.busiest` (for the look for what loads the machine) and `deps.cwd` are replaceable, and so is
+ * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
+ * line of another system and stands in for what would run it. */
 export async function gateMain(argv, env = process.env, deps = {}) {
   let parsed;
   let commandLine;
@@ -169,8 +174,11 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // whether this gate waited for another, which ran until a moment ago.
   const sayLoad = async (afterGate = false) => {
     if (loadSwitchedOff(env)) return;
-    const load = await readLoad(deps.sampleLoad);
-    if (isLoaded(load)) console.error(`gate: ${loadDetail(load, { before: 'the command', afterGate })}`);
+    const load = await readLoad(deps.sampleLoad, deps.busiest);
+    if (!isLoaded(load)) return;
+    console.error(`gate: ${loadDetail(load, { before: 'the command', afterGate })}`);
+    // What loads it, where the look found it: under the figure, as `check` prints it under its row.
+    for (const line of loadLines(load)) console.error(`gate:   ${line}`);
   };
   // Inside a gate there is no sample: the command is one of that gate's sensors or started by one, the
   // gate read the load before them, and a second here would be a second of every such command.
