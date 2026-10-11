@@ -232,7 +232,7 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       out again (Progress, "What the shards gave"). `gitDirs` stays.
 - [x] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
       approved by Sebastián on 2026-10-10 with the list in hand). Route: one writer.
-- [ ] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
+- [x] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
       gentle-ai and Codex reviews of each slice with code, pull request. Merge is his.
 
 Cost, said before it is spent: about ten commits, each a gate of 8 to 18 minutes of this
@@ -1262,13 +1262,19 @@ allows a feature. No spend outside the plan.
   `tsserver.js` processes were alive (10176, 21056), neither of them hot.
   `docs/ROADMAP.md` says the figures of the merged tree and what no session saw.
 
+- 2026-10-11 · T8, the close. The entries above and the roadmap's are commit `d71d9c8`, of documents alone
+  (3 s, no sensor ran, both paths named in its row). `contract check` of this document:
+  PASS. The branch is pushed (the pre-push row: 14 code commits since origin/main, all
+  covered by a Codex review record) and the pull request is open:
+  https://github.com/jsaristi/js-harness/pull/56. The feature's Codex spend, final:
+  5,955,706 of the 6.5 million approved. Every task is checked off; nothing of this
+  session runs.
+
 ## Next
-1. This entry and the roadmap's in a commit of documents alone; `node bin/js-harness.mjs
-   contract check odd/tasks/gate-lock.md`; push; pull request (its text is
-   `pr-body.md` in the scratchpad); T8 checked off with the pull request's address in a
-   second commit of documents alone, pushed; the closing notice to the orchestrator, which
-   merges. The session channel waits for that merge. Updating the machine's `js-harness`
-   command stays his, and until it is done the installed command takes no lock.
+Nothing is left to this session. With others: the orchestrator merges pull request 56 (the
+lead merges code, by his word of 2026-10-10); Sebastián updates the machine's `js-harness`
+command, and until then the installed command takes no lock; the session channel starts
+after the merge.
 For the next slice of the gate, in this order: the gate log, and with it the load on the
 machine said by a gate when it starts (2026-10-11: two gates were slow, one timed out, for
 a video and a language server no session saw); fewer git processes in the two long test
