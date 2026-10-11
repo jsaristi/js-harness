@@ -279,9 +279,26 @@ test('a field with nothing after its name is refused', () => {
   refusedOnce(faults(entry('empty-field', '- Class: machine', SEEN, '- Was:')), /^entry "empty-field": field "Was" is empty/);
 });
 
+test('a Class field with nothing after its name is one fault, not also an entry with no class', () => {
+  refusedOnce(faults(entry('empty-class', '- Class:', SEEN)), /^entry "empty-class": field "Class" is empty/);
+});
+
+test('a list item of the text that opens with a capitalised word and a colon is read as a field, and refused', () => {
+  refusedOnce(
+    faults(entry('noted-entry', '- Note: the gate was slow that day', '- Class: machine', SEEN)),
+    /^entry "noted-entry": field "Note" is not known.*Class, Aka, Seen, Control, Proof and Was/,
+  );
+  assert.deepEqual(faults(entry('noted-entry', '- note: the gate was slow that day', '- Class: machine', SEEN)), []);
+});
+
 test('a line after the first field that is neither a field nor an indented continuation is refused', () => {
   const lines = [...entry('stray-line', '- Class: machine', SEEN), '', 'A paragraph that came after the fields.'];
   refusedOnce(faults(lines), /^entry "stray-line": cannot read the line "A paragraph that came after the fields\.".*indented/);
+});
+
+test('a fence after the first field is refused by its first line, and what it holds is no field', () => {
+  const lines = entry('late-fence', '- Class: machine', SEEN, '```', '- Seen: someday — nowhere — a line of code', '```');
+  refusedOnce(faults(lines), /^entry "late-fence": cannot read the line "```"/);
 });
 
 test('an entry with two classes or two controls is refused', () => {
@@ -351,6 +368,13 @@ test('a fence left open before any entry is refused too', () => {
   refusedOnce(parseRegister(text).errors, /^a code fence is left open.*every entry after it/);
 });
 
+test('a class shown inside a fence under "## Classes" is not declared', () => {
+  const text = ['## Classes', '- `machine` — load', '```', '- `ghost` — how a class is written', '```', '', '## Entries', '', ...LOAD, ''].join('\n');
+  const { classes, errors } = parseRegister(text);
+  assert.deepEqual(classes, ['machine']);
+  assert.deepEqual(errors, []);
+});
+
 test('a register with no "## Entries" section is refused, so its entries are not lost without a word', () => {
   refusedOnce(parseRegister(['## Classes', '- `machine` — load', '', ...LOAD, ''].join('\n')).errors, /^missing section "## Entries"/);
 });
@@ -393,6 +417,12 @@ test('an owed phrase is found only in a list item that is not checked off', () =
   assert.equal(holdsPhrase(document, 'the gate stops before its sensors'), true);
   assert.equal(holdsPhrase(document, 'prints every entry that is not settled', { unchecked: true }), true);
   assert.equal(holdsPhrase(document, 'an example of a task', { unchecked: true }), false);
+});
+
+test('a list item with no checkbox owes nothing, so a control owed names a checkbox item', () => {
+  const document = ['## Next', '- T7 the row names the entries that are not settled', '- [ ] T8 the command prints one entry whole', ''].join('\n');
+  assert.equal(holdsPhrase(document, 'the row names the entries that are not settled', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the command prints one entry whole', { unchecked: true }), true);
 });
 
 test('a wrapped list item counts as one item, and ends where the next item or a blank line begins', () => {

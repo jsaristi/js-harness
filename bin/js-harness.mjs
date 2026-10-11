@@ -8,6 +8,7 @@ import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { doctorMain } from './doctor.mjs';
 import { progressMain } from './progress.mjs';
 import { contractMain } from './contract.mjs';
+import { failuresMain } from './failures.mjs';
 import { codexReviewMain } from './codex-review.mjs';
 import { remoteMain } from './remote.mjs';
 import { sessionsMain } from './sessions.mjs';
@@ -31,6 +32,7 @@ Commands:
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
+  failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost, or seen again). Read-only: only an editor writes the register.
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
   sessions    Show the project's recent Claude Code sessions (state, context size, background work still open, tail of the last reply), with their roster by the role each title gives, the worktrees and each one's feature plan, the running gates, the open pull requests and the orchestrator's relief file (its path and last lines). Read-only; --json gives the same data. --watch waits and returns only when the board changes in a way that needs a decision, or at --timeout. --address <role> (orchestrator, or a work session's number) prints the title of the one other session that holds the role: exit 0 for one, 1 for none with every transcript read, 2 for several or when it cannot tell.
@@ -52,6 +54,7 @@ const commands = {
   doctor: doctorMain,
   progress: progressMain,
   contract: contractMain,
+  failures: failuresMain,
   'codex-review': codexReviewMain,
   remote: remoteMain,
   sessions: sessionsMain,
