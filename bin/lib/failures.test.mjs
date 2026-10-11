@@ -1,0 +1,535 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { STATES, entryState, holdsPhrase, isSettled, parseRegister, sightings, summarize } from './failures.mjs';
+
+const CLASSES = [
+  '## Classes',
+  '- `machine` — load or leftovers: processes, folders, locks',
+  '- `tool` — a command of the harness or of the stack failed or did the',
+  '  wrong thing',
+  '',
+];
+
+/** A register that declares `machine` and `tool` and holds `entries`, each a list of lines. */
+function register(...entries) {
+  return ['# Failures', '', ...CLASSES, '## Entries', '', ...entries.flatMap((lines) => [...lines, ''])].join('\n');
+}
+
+/** The lines of an entry with one line of text and the given field lines. */
+function entry(id, ...fields) {
+  return [`### ${id}`, 'What happened, in a sentence.', ...fields];
+}
+
+const SEEN = '- Seen: 2026-10-11 — relief file, line 224 — a gate at 1,188 s of 1,200';
+const EARLIER = '- Seen: 2026-10-09 — odd/tasks/gate-log.md, Progress — a gate timed out';
+
+const LOAD = [
+  '### language-server-load',
+  'A TypeScript language server per session works while tests write files, and a gate reaches its',
+  'bound.',
+  '- Class: machine',
+  '- Aka: failure 20',
+  SEEN,
+];
+
+/** The one entry of a register that holds `lines`, which must be read without a fault. */
+function only(lines) {
+  const { entries, errors } = parseRegister(register(lines));
+  assert.deepEqual(errors, []);
+  assert.equal(entries.length, 1);
+  return entries[0];
+}
+
+/** The faults of a register that holds `entries`. */
+function faults(...entries) {
+  return parseRegister(register(...entries)).errors;
+}
+
+/** Asserts the register is refused for exactly one reason, and that the reason reads like `pattern`. */
+function refusedOnce(errors, pattern) {
+  assert.equal(errors.length, 1, errors.join('\n') || '(no fault)');
+  assert.match(errors[0], pattern);
+}
+
+/** An entry as the states and the counts take it, without going through the text. */
+function recorded({ id = 'some-failure', className = 'machine', dates = ['2026-10-11'], control = null, was = [] } = {}) {
+  const seen = dates.map((date, i) => ({ date, evidence: `record ${i}`, note: 'seen' }));
+  return { id, text: 'What happened.', class: className, aka: [], seen, control, proof: [], was };
+}
+
+const yes = () => true;
+const no = () => false;
+
+// ── What a register holds ───────────────────────────────────────────────────────────────────────
+
+test('a register gives its classes and, for each entry, its id, text, class, earlier numbers and sightings', () => {
+  const { classes, entries, errors } = parseRegister(register(LOAD));
+  assert.deepEqual(errors, []);
+  assert.deepEqual(classes, ['machine', 'tool']);
+  assert.equal(entries.length, 1);
+  const [load] = entries;
+  assert.equal(load.id, 'language-server-load');
+  assert.equal(
+    load.text,
+    'A TypeScript language server per session works while tests write files, and a gate reaches its\nbound.',
+  );
+  assert.equal(load.class, 'machine');
+  assert.deepEqual(load.aka, ['failure 20']);
+  assert.deepEqual(load.seen, [{ date: '2026-10-11', evidence: 'relief file, line 224', note: 'a gate at 1,188 s of 1,200' }]);
+  assert.equal(load.control, null);
+  assert.deepEqual(load.proof, []);
+  assert.deepEqual(load.was, []);
+});
+
+test('a register with its two sections and no entry is read with no fault', () => {
+  assert.deepEqual(parseRegister(register()), { classes: ['machine', 'tool'], entries: [], errors: [] });
+});
+
+test('everything between the heading and the first field is the text of the entry, a closed fence included', () => {
+  const read = only([
+    '### gate-reaches-its-bound',
+    'The gate printed:',
+    '',
+    '```',
+    '### not-an-entry',
+    '- Class: tool',
+    '```',
+    '',
+    '- a bullet of the text, which is no field',
+    '- Class: machine',
+    SEEN,
+  ]);
+  assert.equal(
+    read.text,
+    'The gate printed:\n\n```\n### not-an-entry\n- Class: tool\n```\n\n- a bullet of the text, which is no field',
+  );
+  assert.equal(read.class, 'machine');
+});
+
+test('an entry keeps its own lines as written, so it can be printed whole', () => {
+  assert.equal(only(LOAD).source, LOAD.join('\n'));
+});
+
+test('a Seen line is cut at its first two long dashes, so its note may hold dashes, quotes and a date', () => {
+  const read = only(entry(
+    'note-with-dashes',
+    '- Class: tool',
+    '- Seen: 2026-10-11 — relief file, line 224 — he said "no — not yet" on 2026-10-09 - twice — and again',
+  ));
+  assert.deepEqual(read.seen, [
+    { date: '2026-10-11', evidence: 'relief file, line 224', note: 'he said "no — not yet" on 2026-10-09 - twice — and again' },
+  ]);
+});
+
+test('a control owed gives its document and its phrase', () => {
+  const read = only(entry('owed-control', '- Class: tool', SEEN, '- Control: owed — odd/tasks/gate-log.md — "T4 the gate stops before its sensors"'));
+  assert.deepEqual(read.control, { level: 'owed', path: 'odd/tasks/gate-log.md', phrase: 'T4 the gate stops before its sensors' });
+});
+
+test('a control in place gives its level, its path, its phrase and the day it reached main', () => {
+  for (const level of ['check', 'line', 'protocol']) {
+    const read = only(entry('control-in-place', '- Class: tool', SEEN, `- Control: ${level} — bin/check.test.mjs — "two gates never run together" — since 2026-10-12`));
+    assert.deepEqual(read.control, { level, path: 'bin/check.test.mjs', phrase: 'two gates never run together', since: '2026-10-12' }, level);
+  }
+});
+
+test('a Control phrase is what stands between the outermost quotes, so it may hold a quote and a dash', () => {
+  const read = only(entry(
+    'phrase-with-a-quote',
+    '- Class: tool',
+    SEEN,
+    '- Control: check — bin/check.test.mjs — "a gate says "busy" — and waits its turn" — since 2026-10-12',
+  ));
+  assert.deepEqual(read.control, {
+    level: 'check',
+    path: 'bin/check.test.mjs',
+    phrase: 'a gate says "busy" — and waits its turn',
+    since: '2026-10-12',
+  });
+});
+
+test('a long field continues on indented lines, and a break beside a dash or inside a phrase changes nothing', () => {
+  const read = only([
+    '### wrapped-fields',
+    'What happened.',
+    '- Class: machine',
+    '- Seen: 2026-10-11 — relief file,',
+    '  line 224 —',
+    '  a gate at 1,188 s',
+    '- Control: owed — odd/tasks/gate-log.md — "T4 the gate stops',
+    '    before its sensors"',
+    '- Proof: the board prints 0 under',
+    '  "gates that waited"',
+  ]);
+  assert.deepEqual(read.seen, [{ date: '2026-10-11', evidence: 'relief file, line 224', note: 'a gate at 1,188 s' }]);
+  assert.deepEqual(read.control, { level: 'owed', path: 'odd/tasks/gate-log.md', phrase: 'T4 the gate stops before its sensors' });
+  assert.deepEqual(read.proof, ['the board prints 0 under "gates that waited"']);
+});
+
+test('Proof and Was are free text, and every Was line is kept', () => {
+  const read = only(entry(
+    'control-that-left',
+    '- Class: tool',
+    SEEN,
+    '- Proof: `js-harness sessions` prints 0 under "gates that waited"',
+    '- Was: line — AGENTS.md — "never two gates" — dropped on 2026-10-10',
+    '- Was: a note in memory, which no session read',
+  ));
+  assert.deepEqual(read.proof, ['`js-harness sessions` prints 0 under "gates that waited"']);
+  assert.deepEqual(read.was, ['line — AGENTS.md — "never two gates" — dropped on 2026-10-10', 'a note in memory, which no session read']);
+});
+
+test('carriage returns at the ends of the lines change nothing', () => {
+  const text = register(LOAD, entry('other-failure', '- Class: tool', SEEN));
+  assert.deepEqual(parseRegister(text.replace(/\n/g, '\r\n')), parseRegister(text));
+  assert.equal(parseRegister(text).entries.length, 2);
+});
+
+test('a byte-order mark at the start of the file is dropped', () => {
+  const text = `## Classes\n- \`machine\` — load\n\n## Entries\n\n${LOAD.join('\n')}\n`;
+  const read = parseRegister(`\uFEFF${text}`);
+  assert.deepEqual(read, parseRegister(text));
+  assert.deepEqual([read.classes, read.entries.length, read.errors], [['machine'], 1, []]);
+});
+
+test('a heading of the third level outside "## Entries" is no entry', () => {
+  const text = `${register(LOAD)}\n## Notes\n\n### not-an-entry\nSome words.\n`;
+  const { entries, errors } = parseRegister(text);
+  assert.deepEqual([entries.map((read) => read.id), errors], [['language-server-load'], []]);
+});
+
+// ── Sightings ───────────────────────────────────────────────────────────────────────────────────
+
+test('the Seen lines stand in any order among the fields and are read sorted by day', () => {
+  const read = only(entry('seen-in-any-order', SEEN, '- Class: machine', '- Seen: 2026-10-12 — board — once more', EARLIER));
+  assert.deepEqual(sightings(read).map((sighting) => sighting.date), ['2026-10-09', '2026-10-11', '2026-10-12']);
+});
+
+test('two Seen lines with the same date and the same evidence are one sighting, whatever their notes', () => {
+  const read = only(entry(
+    'read-by-two-sessions',
+    '- Class: machine',
+    SEEN,
+    '- Seen: 2026-10-11 — relief   file, line 224 — the same record, read by another session',
+    '- Seen: 2026-10-11 — relief file, line 301 — another record of the same day',
+  ));
+  assert.equal(read.seen.length, 3);
+  assert.deepEqual(sightings(read).map((sighting) => sighting.evidence), ['relief file, line 224', 'relief file, line 301']);
+});
+
+// ── What is refused ─────────────────────────────────────────────────────────────────────────────
+
+test('an entry with no text is refused, and told where the text goes', () => {
+  refusedOnce(faults(['### no-text', '', '- Class: machine', SEEN]), /^entry "no-text": has no text: .*between the heading and the first field/);
+});
+
+test('an entry with no class is refused, and told how a class is written', () => {
+  refusedOnce(faults(entry('no-class', SEEN)), /^entry "no-class": has no class: .*- Class: /);
+});
+
+test('an entry with no sighting is refused, and told how a sighting is written', () => {
+  refusedOnce(faults(entry('no-sighting', '- Class: machine')), /^entry "no-sighting": has no sighting: .*- Seen: <YYYY-MM-DD> — /);
+});
+
+test('a class the file does not declare is refused, and the declared ones are named', () => {
+  refusedOnce(faults(entry('odd-class', '- Class: weather', SEEN)), /^entry "odd-class": class "weather" is not declared.*machine, tool.*## Classes/);
+});
+
+test('an id that is not lowercase words joined by hyphens is refused', () => {
+  for (const id of ['Language-Server', '20', 'failure-20', 'two  words', 'under_score', 'trailing-', '-leading', 'double--hyphen']) {
+    refusedOnce(faults(entry(id, '- Class: machine', SEEN)), /the id is not lowercase words joined by hyphens.*language-server-load/);
+  }
+});
+
+test('a word of an id may hold a digit, as long as it is not a number', () => {
+  assert.deepEqual(faults(entry('utf8-mark-in-a-file', '- Class: machine', SEEN)), []);
+});
+
+test('an id that appears twice is refused', () => {
+  const twice = entry('same-id', '- Class: machine', SEEN);
+  refusedOnce(faults(twice, twice), /^entry "same-id": the id appears twice/);
+});
+
+test('entries out of the alphabetical order of their ids are refused, and the pair is named', () => {
+  const errors = faults(entry('beta-failure', '- Class: machine', SEEN), entry('alpha-failure', '- Class: machine', SEEN));
+  refusedOnce(errors, /^entry "alpha-failure": comes after "beta-failure".*alphabetical order of their ids/);
+});
+
+test('a date that is no date is refused, in a sighting and in a control', () => {
+  for (const date of ['2026-13-01', '2026-02-30', '11-10-2026', '2026-10-1', 'yesterday']) {
+    refusedOnce(faults(entry('bad-date', '- Class: machine', `- Seen: ${date} — relief file — a note`)), /^entry "bad-date": .*is no date.*YYYY-MM-DD/);
+  }
+  refusedOnce(
+    faults(entry('bad-since', '- Class: machine', SEEN, '- Control: check — bin/check.test.mjs — "two gates never run together" — since 2026-02-30')),
+    /^entry "bad-since": .*"2026-02-30" is no date.*YYYY-MM-DD/,
+  );
+});
+
+test('a field it does not know is refused, and the fields are named', () => {
+  refusedOnce(faults(entry('odd-field', '- Class: machine', SEEN, '- State: repeated')), /^entry "odd-field": field "State" is not known.*Class, Aka, Seen, Control, Proof and Was/);
+});
+
+test('a Seen line without its two long dashes is refused, and told how it is written', () => {
+  for (const seen of ['- Seen: 2026-10-11', '- Seen: 2026-10-11 — relief file', '- Seen: 2026-10-11 - relief file - a note', '- Seen: 2026-10-11 —  — a note']) {
+    refusedOnce(faults(entry('short-seen', '- Class: machine', seen)), /^entry "short-seen": .*- Seen: <YYYY-MM-DD> — <where the evidence is> — <a note>/);
+  }
+});
+
+test('a field with nothing after its name is refused', () => {
+  refusedOnce(faults(entry('empty-field', '- Class: machine', SEEN, '- Was:')), /^entry "empty-field": field "Was" is empty/);
+});
+
+test('a line after the first field that is neither a field nor an indented continuation is refused', () => {
+  const lines = [...entry('stray-line', '- Class: machine', SEEN), '', 'A paragraph that came after the fields.'];
+  refusedOnce(faults(lines), /^entry "stray-line": cannot read the line "A paragraph that came after the fields\.".*indented/);
+});
+
+test('an entry with two classes or two controls is refused', () => {
+  refusedOnce(faults(entry('two-classes', '- Class: machine', '- Class: tool', SEEN)), /^entry "two-classes": has 2 Class fields/);
+  const owed = '- Control: owed — odd/tasks/gate-log.md — "T4 the gate stops before its sensors"';
+  refusedOnce(faults(entry('two-controls', '- Class: machine', SEEN, owed, owed)), /^entry "two-controls": has 2 Control fields.*Was/);
+});
+
+test('a control in a shape it does not know is refused, and both shapes are shown', () => {
+  const shapes = /^entry "odd-control": .*owed — <document> — "<phrase>".*<check\|line\|protocol> — <path> — "<phrase>" — since <YYYY-MM-DD>/;
+  for (const control of [
+    'hook — bin/check.mjs — "two gates never run together" — since 2026-10-12',
+    'check — bin/check.test.mjs — two gates never run together — since 2026-10-12',
+    'check — bin/check.test.mjs — "two gates never run together"',
+    'check — bin/check.test.mjs — "two gates never run together" since 2026-10-12',
+    'check — "two gates never run together" — since 2026-10-12',
+    'check bin/check.test.mjs "two gates never run together" — since 2026-10-12',
+    'owed — odd/tasks/gate-log.md — "T4 the gate stops before its sensors" — since 2026-10-12',
+    'owed',
+  ]) {
+    refusedOnce(faults(entry('odd-control', '- Class: machine', SEEN, `- Control: ${control}`)), shapes);
+  }
+});
+
+test('a phrase shorter than twelve characters is refused, because it could be found by accident', () => {
+  refusedOnce(
+    faults(entry('short-phrase', '- Class: machine', SEEN, '- Control: owed — odd/tasks/gate-log.md — "T4 the gate"')),
+    /^entry "short-phrase": the phrase "T4 the gate" has 11 characters.*at least twelve/,
+  );
+  assert.deepEqual(faults(entry('long-enough', '- Class: machine', SEEN, '- Control: owed — odd/tasks/gate-log.md — "T4 the gates"')), []);
+});
+
+test('a path that is absolute, written with a backslash or holding ".." is refused', () => {
+  const cases = [
+    ['/etc/passwd', /is an absolute path/],
+    ['C:/js-harness/AGENTS.md', /is an absolute path/],
+    ['bin\\check.test.mjs', /is written with a backslash/],
+    ['../other/AGENTS.md', /"\.\." segment/],
+    ['docs/../../AGENTS.md', /"\.\." segment/],
+    ['./AGENTS.md', /"\." or "\.\." segment/],
+    ['docs//SPEC.md', /empty, "\." or "\.\." segment/],
+  ];
+  for (const [badPath, why] of cases) {
+    const inPlace = faults(entry('bad-path', '- Class: machine', SEEN, `- Control: line — ${badPath} — "never two gates at once" — since 2026-10-12`));
+    refusedOnce(inPlace, /^entry "bad-path": the path /);
+    assert.match(inPlace[0], why, badPath);
+    const owed = faults(entry('bad-path', '- Class: machine', SEEN, `- Control: owed — ${badPath} — "T4 the gate stops early"`));
+    refusedOnce(owed, why);
+  }
+});
+
+test('a check is never a .md file, though a line or a protocol may be', () => {
+  const control = (level) => `- Control: ${level} — docs/SPEC.md — "never two gates at once" — since 2026-10-12`;
+  refusedOnce(faults(entry('check-in-prose', '- Class: machine', SEEN, control('check'))), /^entry "check-in-prose": a check is never a \.md file.*test/);
+  assert.deepEqual(faults(entry('line-in-prose', '- Class: machine', SEEN, control('line'))), []);
+  assert.deepEqual(faults(entry('protocol-in-prose', '- Class: machine', SEEN, control('protocol'))), []);
+});
+
+test('a fence left open inside an entry is refused, and is the only fault of that entry', () => {
+  const open = ['### open-fence', 'The gate printed:', '```', 'FAIL  tests', '- Class: machine', SEEN];
+  const errors = faults(entry('alpha-failure', '- Class: machine', SEEN), open, entry('swallowed-entry', '- Class: machine', SEEN));
+  refusedOnce(errors, /^entry "open-fence": a code fence is left open.*every entry after it/);
+});
+
+test('a fence left open before any entry is refused too', () => {
+  const text = ['## Classes', '- `machine` — load', '```', '', '## Entries', '', ...LOAD, ''].join('\n');
+  refusedOnce(parseRegister(text).errors, /^a code fence is left open.*every entry after it/);
+});
+
+test('a register with no "## Entries" section is refused, so its entries are not lost without a word', () => {
+  refusedOnce(parseRegister(['## Classes', '- `machine` — load', '', ...LOAD, ''].join('\n')).errors, /^missing section "## Entries"/);
+});
+
+test('every fault is reported, not only the first', () => {
+  const errors = faults(entry('zeta-failure', '- Class: weather', '- Seen: someday — relief file — a note'), entry('Alpha', '- Class: machine'));
+  assert.equal(errors.length, 4, errors.join('\n'));
+  for (const pattern of [/"zeta-failure": class "weather" is not declared/, /"zeta-failure": .*"someday" is no date/, /"Alpha": the id is not/, /"Alpha": has no sighting/]) {
+    assert.ok(errors.some((fault) => pattern.test(fault)), `${pattern}\n${errors.join('\n')}`);
+  }
+});
+
+test('the order is judged among the ids that are in the shape, so one fault is not told twice', () => {
+  refusedOnce(faults(entry('zeta-failure', '- Class: machine', SEEN), entry('Alpha', '- Class: machine', SEEN)), /the id is not lowercase words/);
+});
+
+// ── Whether a file holds a phrase ───────────────────────────────────────────────────────────────
+
+test('a phrase is found across a wrapped line, carriage returns and runs of spaces, on both sides', () => {
+  const file = "test('two gates never run\r\n   together, whatever  the project', () => {});\r\n";
+  assert.equal(holdsPhrase(file, 'two gates never run together, whatever the project'), true);
+  assert.equal(holdsPhrase(file, 'two gates  never run\n together'), true);
+  assert.equal(holdsPhrase(file, 'two gates never ran together'), false);
+});
+
+test('an owed phrase is found only in a list item that is not checked off', () => {
+  const document = [
+    '# A feature',
+    'T4 the gate stops before its sensors, said in the prose.',
+    '',
+    '## Tasks',
+    '- [x] T3 the gate stops before its sensors when a row fails',
+    '- [ ] T5 the row prints every entry that is not settled',
+    '```',
+    '- [ ] T6 an example of a task, inside a fence',
+    '```',
+    '',
+  ].join('\r\n');
+  assert.equal(holdsPhrase(document, 'the gate stops before its sensors', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the gate stops before its sensors'), true);
+  assert.equal(holdsPhrase(document, 'prints every entry that is not settled', { unchecked: true }), true);
+  assert.equal(holdsPhrase(document, 'an example of a task', { unchecked: true }), false);
+});
+
+test('a wrapped list item counts as one item, and ends where the next item or a blank line begins', () => {
+  const document = [
+    '- [ ] T4 the gate stops',
+    '  before its sensors when',
+    '    a static row already fails',
+    '  - [x] T4a the row is computed first',
+    '- [x] T5 done long ago',
+    '  and wrapped as well',
+    '- [ ] T6 the last task',
+    '',
+    '  a paragraph after a blank line',
+    '',
+  ].join('\n');
+  assert.equal(holdsPhrase(document, 'gate stops before its sensors when a static row', { unchecked: true }), true);
+  assert.equal(holdsPhrase(document, 'the row is computed first', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'done long ago and wrapped', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the last task a paragraph', { unchecked: true }), false);
+});
+
+// ── The seven states ────────────────────────────────────────────────────────────────────────────
+
+const OWED = { level: 'owed', path: 'odd/tasks/gate-log.md', phrase: 'T4 the gate stops before its sensors' };
+const IN_PLACE = { level: 'check', path: 'bin/check.test.mjs', phrase: 'two gates never run together', since: '2026-10-12' };
+
+test('seen once with no control is "once"', () => {
+  assert.equal(entryState(recorded(), no), 'once');
+});
+
+test('seen twice or more with no control is "repeated"', () => {
+  assert.equal(entryState(recorded({ dates: ['2026-10-09', '2026-10-11'] }), yes), 'repeated');
+});
+
+test('the same sighting recorded twice does not make an entry "repeated"', () => {
+  const twice = recorded();
+  twice.seen.push({ ...twice.seen[0], note: 'read by another session' });
+  assert.equal(entryState(twice, yes), 'once');
+});
+
+test('a control owed whose document holds the phrase in an unchecked item is "owed", however often it was seen', () => {
+  assert.equal(entryState(recorded({ control: OWED, dates: ['2026-10-09', '2026-10-11'] }), yes), 'owed');
+});
+
+test('a control owed whose document is gone or whose task was checked off is "owed, stale"', () => {
+  assert.equal(entryState(recorded({ control: OWED }), no), 'owed, stale');
+});
+
+test('a control in place whose path holds the phrase, with no sighting after it, is "controlled"', () => {
+  assert.equal(entryState(recorded({ control: IN_PLACE, dates: ['2026-10-09', '2026-10-11'] }), yes), 'controlled');
+});
+
+test('a sighting on the very day the control reached main is not after it', () => {
+  assert.equal(entryState(recorded({ control: IN_PLACE, dates: ['2026-10-12'] }), yes), 'controlled');
+});
+
+test('a control in place whose path is gone or no longer holds the phrase is "control lost"', () => {
+  assert.equal(entryState(recorded({ control: IN_PLACE }), no), 'control lost');
+  assert.equal(entryState(recorded({ control: IN_PLACE, dates: ['2026-10-13'] }), no), 'control lost');
+});
+
+test('a sighting later than the day the control reached main is "seen again"', () => {
+  assert.equal(entryState(recorded({ control: IN_PLACE, dates: ['2026-10-09', '2026-10-13'] }), yes), 'seen again');
+});
+
+test('the state asks for an unchecked item of the owed document, and for the phrase anywhere in a control in place', () => {
+  const asked = [];
+  const holds = (...question) => {
+    asked.push(question);
+    return true;
+  };
+  entryState(recorded({ control: OWED }), holds);
+  entryState(recorded({ control: IN_PLACE }), holds);
+  entryState(recorded(), holds);
+  assert.deepEqual(asked, [
+    ['odd/tasks/gate-log.md', 'T4 the gate stops before its sensors', { unchecked: true }],
+    ['bin/check.test.mjs', 'two gates never run together', { unchecked: false }],
+  ]);
+});
+
+test('there are seven states, and "once", "owed" and "controlled" are the settled ones', () => {
+  assert.deepEqual(STATES, ['once', 'repeated', 'owed', 'owed, stale', 'controlled', 'control lost', 'seen again']);
+  assert.deepEqual(STATES.filter(isSettled), ['once', 'owed', 'controlled']);
+});
+
+// ── The counts ──────────────────────────────────────────────────────────────────────────────────
+
+test('the counts give the entries, the sightings, those seen more than once, those not settled and the Was lines', () => {
+  const entries = [
+    recorded({ id: 'alpha-failure', dates: ['2026-10-09', '2026-10-11', '2026-10-12'] }),
+    recorded({ id: 'beta-failure', className: 'tool', control: IN_PLACE, dates: ['2026-10-09', '2026-10-10'], was: ['a note in memory', 'a line that left'] }),
+    recorded({ id: 'gamma-failure', className: 'tool', control: OWED, was: ['a rule kept by hand'] }),
+    recorded({ id: 'delta-failure' }),
+  ];
+  const counts = summarize({ classes: ['machine', 'tool', 'delivery'], entries }, yes);
+  assert.deepEqual(
+    { entries: counts.entries, sightings: counts.sightings, repeated: counts.repeated, unsettled: counts.unsettled, was: counts.was },
+    { entries: 4, sightings: 7, repeated: 2, unsettled: 1, was: 3 },
+  );
+});
+
+test('the counts by class follow the order the classes are declared in, a class with no entry included', () => {
+  const entries = [
+    recorded({ id: 'alpha-failure', dates: ['2026-10-09', '2026-10-11'] }),
+    recorded({ id: 'beta-failure', className: 'tool' }),
+    recorded({ id: 'gamma-failure', className: 'tool', dates: ['2026-10-09', '2026-10-10', '2026-10-11'] }),
+  ];
+  assert.deepEqual(summarize({ classes: ['tool', 'delivery', 'machine'], entries }, no).byClass, [
+    { class: 'tool', entries: 2, sightings: 4 },
+    { class: 'delivery', entries: 0, sightings: 0 },
+    { class: 'machine', entries: 1, sightings: 2 },
+  ]);
+});
+
+test('the counts by state name all seven, and count the same sighting once', () => {
+  const twice = recorded({ id: 'read-twice' });
+  twice.seen.push({ ...twice.seen[0] });
+  const entries = [
+    twice,
+    recorded({ id: 'came-back', dates: ['2026-10-09', '2026-10-11'] }),
+    recorded({ id: 'lost-control', control: IN_PLACE }),
+  ];
+  const holds = (path) => path !== IN_PLACE.path;
+  const counts = summarize({ classes: ['machine'], entries }, holds);
+  assert.deepEqual(counts.byState, { once: 1, repeated: 1, owed: 0, 'owed, stale': 0, controlled: 0, 'control lost': 1, 'seen again': 0 });
+  assert.equal(counts.sightings, 4);
+});
+
+test('the counts give one row per entry, the most seen first, with its state and the first day it was seen', () => {
+  const entries = [
+    recorded({ id: 'alpha-failure' }),
+    recorded({ id: 'beta-failure', className: 'tool', dates: ['2026-10-11', '2026-10-09'] }),
+    recorded({ id: 'gamma-failure', dates: ['2026-10-12'] }),
+  ];
+  assert.deepEqual(summarize({ classes: ['machine', 'tool'], entries }, no).rows, [
+    { id: 'beta-failure', class: 'tool', state: 'repeated', settled: false, sightings: 2, firstSeen: '2026-10-09' },
+    { id: 'alpha-failure', class: 'machine', state: 'once', settled: true, sightings: 1, firstSeen: '2026-10-11' },
+    { id: 'gamma-failure', class: 'machine', state: 'once', settled: true, sightings: 1, firstSeen: '2026-10-12' },
+  ]);
+});
