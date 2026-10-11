@@ -859,14 +859,21 @@ record. What exists, all local to this machine:
   the installed command on this machine is older until he has it updated.
 - Sub-agents: Opus 5.5 at effort high, one writer at a time, with the allowed edit surfaces in
   the brief. Each writer so far stayed inside them.
+- 2026-10-11 09:32 local, commit `7a19710` (T4c). Its gate: `INFO gate waited 1 min 2 s`,
+  then `PASS tests npm run test passed`; 09:13:07 to 09:32:03 in all, one try. gentle-ai:
+  `review not due (under_budget)`, 313 lines, pending in the slice. Codex: not run (the cap);
+  its plan for the branch, `8654c79..7a19710`, printed today: five parts, 2,378 changed
+  lines, about 1,370,000 to 6,490,000 input tokens.
 
 ## Next step
-On `feat/session-board-channel`: T1b and T4b are committed (`ce8bdf7`), gated and reviewed by
-gentle-ai in two halves. Now T4c, the findings, by the writer of T4b; then its commit and gate
-and its assessment. The branch's Codex review and its push wait for his answer on the cap (the
-first question the lead puts to him on his return). After T4c, on a branch stacked on it: T5 (the context figure
-as room left against the last task's cost; the 73% mark removed) and T6 (the resume hook,
-built and tested; installed only on his word). Waiting for him as well, none blocking the
+The third slice is whole on `feat/session-board-channel` at `7a19710`: T1b, T4b and T4c,
+gated; `ce8bdf7` reviewed by gentle-ai in two halves, `7a19710` not due. It is not pushed. On
+his answer about the cap: the Codex review of `8654c79..7a19710` (five parts, at least
+1,370,000 input tokens by its plan), its findings, the push, the third pull request, the
+notice to the lead. Until then, on a branch stacked on it (`feat/session-context`): T5 (the
+context figure as room left against the last task's cost; the 73% mark removed) and T6 (the
+resume hook, built and tested; installed only on his word, and `AGENTS.md` is not touched
+until it is installed). Waiting for him as well, none blocking the
 build: tests owed 1, 2, 3 and 6, each asked before it is run. For the gate's session, through
 the lead: the lock should record the session id that holds it, so `Gates` names the session
 exactly (point 4, "As built").
