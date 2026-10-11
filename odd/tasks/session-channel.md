@@ -584,10 +584,21 @@ reader, and that table names this feature as their owner.
   (red: the twin case had an empty standard error). Read by the parent: `node --test
   bin/sessions.test.mjs` 133 pass, 0 fail, 1 skipped; `node --test bin/lib/sessions.test.mjs`
   152 pass.
+- 2026-10-11 06:10 local, commit `cf3db68` (the two findings). Its gate: `PASS tests npm run
+  test passed`, 05:52:15 to 06:08:18, 963 s, one try. gentle-ai: `review not due
+  (under_budget)`, 105 lines, pending in the slice. Codex on `d3a4686..cf3db68`, recorded:
+  correct (confidence 0.96), no finding, 257,052 input tokens (212,992 cached), 124 s. Codex
+  for the feature so far: 1,069,741 of 3 million input tokens. `origin/main` is still
+  `7ef20b9`, so the branch is not behind. Slice delivered as a pull request against `main`;
+  its number is in the line after this one. Not checked: the roster against a session opened
+  from the phone (none was alive; `auto` as a permission mode is covered by a fixture only),
+  and the watch beside the new section on a long real run.
 
 ## Next step
-Slice "roster first", on `feat/session-roster`: T3, then the roster of T4 and `--address`,
-test first, by one delegated writer; then the gate, the gentle-ai review, the Codex review and
-the pull request. After it: T1 and T2 on a new branch from `origin/main`. Of "Ask me before",
-none blocks this slice. Tests owed 1, 2, 3 and 6 need him at the app and are asked one at a
-time, each before it is run, when T2 starts.
+The first pull request (`feat/session-roster`: T3, T4a) waits for the lead's merge. Next, on a
+new branch cut from `origin/main` once it is merged (or from this branch if it is not yet, to
+be rebased): T1, `bin/lib/channel.mjs` and `bin/notify.mjs`, test first, by one delegated
+writer; alongside it T2, the six tests owed, of which 1, 2, 3 and 6 need him at the app and
+are asked one at a time, each before it is run. Then T4b. One question of his is open before
+the third slice: the Codex cap of 3 million for the feature, of which 1,069,741 are spent
+after one slice of five.
