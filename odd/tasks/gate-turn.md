@@ -132,6 +132,10 @@ waits.**
 - With a holder, a gate that is not at the head does what it does today except the rename: it
   waits for the holder, and clears a dead one on its second stale reading, after which the
   head takes the lock.
+- A gate whose file has not read for the stale time since it was first seen is taken for a
+  gate that keeps no line (added while building, 2026-10-11): without that end, two live
+  gates that could not read each other's file would each stand back for the other until
+  their bound.
 - **The line never makes a take fail.** Any error while the line is read or the own folder is
   touched (a listing that answers busy, a folder that went away) counts as "nobody ahead" for
   that look: the gate then behaves as it does today.
@@ -314,15 +318,19 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       that needs no load, then the fix where the cause is. Route: one writer. Free today;
       `feat/codex-parity` changes `evals/suite.test.mjs` from its line 844 on, not here.
       Evidence: Progress, "T2 done".
-- [ ] T3 · The line in `bin/lib/gate-lock.mjs`, the bound from the last change of hands, the
+- [x] T3 · Evidence: Progress, "T3 built". The line in `bin/lib/gate-lock.mjs`, the bound
+      from the last change of hands, the
       mark, the session, the words of `check` and `gate`, the test at
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
 - [ ] T4 · The stop in `bin/check.mjs`, its line in the gate log, the
       three states of the lock. Test first. Route: one writer.
 - [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
       the row that lists what the sensors left in the tree.
-- [ ] T6 · Blocked on the two branches of "JH 5": the session's title beside each gate that
-      waits, on the board.
+- [ ] T6 · The session's title beside each gate that waits, on the board. Not built here
+      (the orchestrator, 2026-10-11): `bin/lib/sessions.mjs` is "JH 5"'s and its fourth slice
+      is open, so what the board needs goes to "JH 5" through the orchestrator once T3 is
+      committed: the two readers of the lock return `session`, the host's session id or
+      `null`, and nothing else the board reads changes. Done here when that notice is sent.
 - [ ] T7 · `docs/ROADMAP.md` (the lock's section, near its line 726); the text of
       `bin/lib/manifest.mjs:25-26` and `:98` and the help of `check` and `gate` where they
       describe a wait; the pointer in "Next" of `odd/tasks/gate-lock.md`.
@@ -408,7 +416,44 @@ S2 is T4 with T5. S3 is T6.
 - 2026-10-11 · The bound of a wait is settled (Design, 1): from the last time the lock
   changed hands. Told to the orchestrator in one line, as a change of what the installed
   gate shows by default.
+- 2026-10-11 · From the orchestrator (claims): what `--wait` means by default is his, put to
+  him by the orchestrator when he returns (see "Ask me before"); `main` is `5af56c1` with
+  the third slice of "JH 5" (pull request 65), which rewrote `bin/lib/sessions.mjs`; the
+  board is "JH 5"'s, so T6 is a notice and not code here.
+- 2026-10-11 · T3 built, route one writer (459,808 tokens), its work read back here
+  (`takeGateLock` whole, `gatesAhead`, the changed lines of `bin/check.mjs`). 1,172 lines
+  added and 147 removed in ten files: over the "about 1,200 changed lines" a reviewed
+  commit keeps to (`odd/tasks/gate-lock.md`, "Rules learnt"), and not split, because the
+  lock and the callers' words cannot be green apart (the reader's first hole).
+  Built as designed: `gatesAhead` (order by arrival, then token; a file is read once and
+  remembered), `showUp` (touch, stage again when gone), the branch for a free lock with a
+  gate ahead before the code that throws, one `try` around the line so that any error there
+  reads as nobody ahead, the mark `line: 1`, `refused: 'ahead'`, `onWait(holder, leftMs,
+  line)` with `holder` `null` for a gate that only waits, the anchor `boundFrom` moved by
+  one line in `handsRead`, `session` passed from the environment by `check` and `gate`,
+  the words (`refusalSaid`, `takeGateTurn`), the usage and the skill's text for `--wait`,
+  and holders without a token kept apart in `takeGateTurn`.
+  Two readings the writer made of the design, taken: a file unread for the stale time is a
+  gate that keeps no line (Design, 1); the count of the bound starts again when a look
+  reads a holder that is not what the look before read, a free lock included, and never at
+  the first thing read.
+  Assertions of existing tests changed, each for the line or the bound: the two tests of
+  `bin/lib/gate-lock.test.mjs` where a later arrival took a free lock (the second holder
+  now stands in line first, and the second pins the whole bound); "comes late to a
+  takeover", played on disk; the fixtures gain `session: null`; in `bin/check.test.mjs`,
+  "main says what is left…" (retitled, "for 54 s at most" became the whole bound plus the
+  gates ahead) and the parenthesis "--wait bounds the wait at …" in three tests; the usage
+  texts and the skill's "60 minutes at most".
+  Red, through the lock taken with the stable copy on `main` (the writer rewrites the lock,
+  so it does not take the real one with its own code): the new tests against a snapshot of
+  the old code failed, 20 of 71 in the lock's file, 6 of 48 in `gate`'s, 11 of 13 chosen in
+  `check`'s. Green: lock 71 of 71, `check` 148 of 148, `gate` 48 of 48, manifest 95 of 95,
+  `js-harness` 25 of 25, and four files that read the lock, untouched, 372 passed.
+  Not proved: the line between real processes on a real clock beyond the two existing racer
+  tests; that a commit hook inherits the session id. Left for T4, which works in that file:
+  `bin/lib/gate-log.mjs:293` documents `reason` as `held` or `timeout`, and `ahead` is
+  written too.
 
 ## Next
-T3, one writer, test first, every run through the lock with `--wait 180`. Then the reviews
-of `b016699..` in their turn (gentle-ai, then Codex), then T4 and T5.
+The commit of T3 through the lock, then `main` (`5af56c1`) merged, then the reviews of
+`b016699..` in their turn (gentle-ai, then Codex), the notice of T6, then T4 and T5.

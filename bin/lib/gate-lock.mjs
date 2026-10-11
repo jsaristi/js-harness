@@ -28,6 +28,27 @@
 // A first version made `lock` with `mkdir` and wrote the file after. In between the folder was empty and
 // its maker's, and a gate late to a takeover could remove it and make its own: both then held the lock
 // (found in review, 2026-10-10).
+//
+// The lock is a line, by order of arrival. Every gate that waited used to try the rename at each poll, and
+// a gate that had just arrived tried it before it looked at who waited: the lock went to whichever looked
+// first after a release, and on 2026-10-11 a commit waited an hour and gave up while gates that arrived
+// twenty and thirty minutes after it ran. So a gate tries the rename only when no live gate that arrived
+// before it waits:
+//   - a gate stands in the line by its folder `gate/wait-<token>/`, whose file says when it arrived
+//     (`waitingSince`, set once when the take begins) and that it keeps the line (`line: 1`). It is alive
+//     by the touch it gives that file at every poll, as a holder is by its beat: a folder nothing touched
+//     for the stale time is a dead gate's, and is passed;
+//   - the order of the turn is the arrival, and the token where two arrived in the same millisecond, so
+//     every gate computes the same order (`gatesAhead`). It is not the order `readGateWaiters` shows;
+//   - only the rename grants the lock, as before, which is what makes two holders impossible. The line
+//     decides who may try it and nothing else, so a fault in the line (a folder that cannot be listed, a
+//     file that cannot be read, a machine that slept and woke with every gate stale) costs order, never
+//     the one holder, and never a take that fails: a line that cannot be read is no line, and the gate
+//     does what a gate did before there was one;
+//   - a gate of an older version keeps no line: it tries the rename at every poll, and would pass a gate
+//     that stood back for it each time. One machine's lock is shared by every project, each with the
+//     version it has, so beside a live gate whose file has no mark a gate does the same (`gatesAhead`).
+// Nothing new is on disk for it: the same folders, and two more fields in the same file.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -38,11 +59,16 @@ export const GATE_BEAT_MS = 5_000;
 export const GATE_STALE_MS = 60_000;
 /** How often a waiting gate looks again. */
 export const GATE_POLL_MS = 2_000;
-/** How long a gate waits for the lock before it gives up. */
+/** How long a gate that waits lets the lock go without changing hands before it gives up on it: the bound
+ * of a wait, which counts from the last time the lock changed hands and not from the arrival
+ * (`takeGateLock`). */
 export const GATE_WAIT_MS = 60 * 60_000;
 
 const HOLDER_FILE = /^holder-(.+)\.json$/;
 const WAIT_DIR = /^wait-(.+)$/;
+/** What the file of a gate that keeps the line says under `line`. A file without it is a gate of a version
+ * before the line, which takes no turn. */
+const KEEPS_LINE = 1;
 // What Windows answers for a file or a folder another process holds open, or that is being removed while
 // a handle is still open on it.
 const BUSY = ['EPERM', 'EACCES', 'EBUSY'];
@@ -143,6 +169,7 @@ function holderOf(io, file, token, beatAt, { now, staleMs }) {
     pid: pidOf(said, token),
     cwd: typeof said.cwd === 'string' ? said.cwd : null,
     command: typeof said.command === 'string' ? said.command : null,
+    session: typeof said.session === 'string' ? said.session : null,
     startedAt: typeof said.startedAt === 'string' ? said.startedAt : null,
     beatAt,
     stale: beatAt !== null && isStale(beatAt, now, staleMs),
@@ -151,7 +178,7 @@ function holderOf(io, file, token, beatAt, { now, staleMs }) {
 
 /** The holder that is read when the lock folder is there and nothing in it can be: not even a token. It
  * is not stale, as a holder whose beat could not be read is not. */
-const NOBODY_KNOWN = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+const NOBODY_KNOWN = { token: null, pid: null, cwd: null, command: null, session: null, startedAt: null, beatAt: null, stale: false };
 
 /** What is in the lock folder now: `null` when there is no folder to read, `{}` when it is empty, else
  * `{ file, holder }` for the holder that beat last. A file that went away since the listing is not
@@ -195,9 +222,10 @@ function lookAt(io, dir, clock) {
   return found.sort((a, b) => beat(b) - beat(a))[0] ?? {};
 }
 
-/** Who holds the machine's gate lock: `null` when nobody does, else `{ token, pid, cwd, command,
+/** Who holds the machine's gate lock: `null` when nobody does, else `{ token, pid, cwd, command, session,
  * startedAt, beatAt, stale }`, with `null` for what the holder's file does not say and `stale` true
- * for a holder that stopped beating, whose lock the next gate takes over.
+ * for a holder that stopped beating, whose lock the next gate takes over. `session` is the id of the
+ * host's session that started the gate, where the gate was given one (`takeGateLock`).
  *
  * A holder whose file is there and busy at this look (another process holds it open, or Windows is
  * still removing it) is a holder too: its `token`, the `pid` its token starts with, `beatAt: null`,
@@ -220,11 +248,27 @@ function lastTouched(io, folder) {
   return Math.max(...entries.map((entry) => io.statSync(entry).mtimeMs));
 }
 
-/** The gates that wait for the machine's gate lock: `[{ token, pid, cwd, command, waitingSince }]`, the
- * one that has waited longest first, with `null` for what a waiter's file does not say (`pid` is then
- * the one its token starts with). `waitingSince` is when its wait began, which its file says at every
- * poll. A folder nothing touched for the stale time is left out: it is the litter of a gate that died
- * waiting, which the next gate that takes the lock sweeps.
+/** A gate that waits, as its file says it (`said`, or `{}` for a file that did not read): `{ token, pid,
+ * cwd, command, waitingSince, session }`, with `null` for what the file does not say, and for `pid` the
+ * one its token starts with. */
+const waiterSaid = (said, token) => ({
+  token,
+  pid: pidOf(said, token),
+  cwd: typeof said.cwd === 'string' ? said.cwd : null,
+  command: typeof said.command === 'string' ? said.command : null,
+  waitingSince: typeof said.waitingSince === 'string' ? said.waitingSince : null,
+  session: typeof said.session === 'string' ? said.session : null,
+});
+
+/** The gates that wait for the machine's gate lock: `[{ token, pid, cwd, command, waitingSince,
+ * session }]`, the one that has waited longest first, with `null` for what a waiter's file does not say
+ * (`pid` is then the one its token starts with). `waitingSince` is when its wait began, and `session`
+ * the id of the host's session that started it, where it was given one (`takeGateLock`). A folder nothing
+ * touched for the stale time is left out: it is the litter of a gate that died waiting, which the next
+ * gate that takes the lock sweeps.
+ *
+ * The order is for a reader, and is not the order of the turn: a wait whose start could not be read is
+ * last here, and counts as ahead of every gate where the turn is decided (`gatesAhead`).
  *
  * Reads only. No gate folder is no waiter, and neither is a folder that goes away or cannot be read as
  * it is looked at: a gate whose folder has just become the lock is the holder (`readGateHolder`; a
@@ -244,18 +288,79 @@ export function readGateWaiters(home, { now = Date.now, staleMs = GATE_STALE_MS,
       continue;
     }
     if (isStale(touched, now, staleMs)) continue;
-    const said = saidIn(io, path.join(folder, `holder-${token}.json`));
-    waiters.push({
-      token,
-      pid: pidOf(said, token),
-      cwd: typeof said.cwd === 'string' ? said.cwd : null,
-      command: typeof said.command === 'string' ? said.command : null,
-      waitingSince: typeof said.waitingSince === 'string' ? said.waitingSince : null,
-    });
+    waiters.push(waiterSaid(saidIn(io, path.join(folder, `holder-${token}.json`)), token));
   }
   // A wait whose start is not known sorts last: `~` is above every digit of a date.
   const since = (waiter) => waiter.waitingSince ?? '~';
   return waiters.sort((a, b) => (since(a) < since(b) ? -1 : since(a) > since(b) ? 1 : 0));
+}
+
+/** What the file of a gate in the line says, for the turn: the object in it, or `undefined` for a file
+ * that did not read at this look (not there yet, busy, or half written: a gate that is at the head writes
+ * its file again before each try). Not `saidIn`, which answers `{}` for both: here a file that read and
+ * says nothing of a line is a gate of an older version, and one that did not read is a gate of whom
+ * nothing is known yet. */
+function readInLine(io, file) {
+  try {
+    const parsed = JSON.parse(io.readFileSync(file, 'utf8'));
+    return parsed !== null && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return undefined;
+  }
+}
+
+/** The gates that are before the gate `me` (`{ token, since }`, its arrival in milliseconds) in the line
+ * for the lock of `root`: `[{ token, since, waiter }]` in the order of their turn, `waiter` being the gate
+ * as `readGateWaiters` gives one. Empty when `me` is at the head, which is when it may try the rename.
+ *
+ * The order of the turn is the arrival, then the token: two gates that arrived in the same millisecond
+ * compute the same order, each from the other's file. A gate is in the line while it is alive, which is
+ * while its folder was touched within the stale time, as `readGateWaiters` judges it: a gate that died
+ * stops touching it and is passed a stale time later, which is the longest a free lock waits for a dead
+ * gate. A folder that goes away or cannot be read as it is looked at is no gate in the line: it left, or
+ * it has just become the lock.
+ *
+ * `met` is what the take remembers of the other gates, by token. A gate's file is read until it reads,
+ * once, and then never again: only its folder's last touch is looked at afterwards, so a file is not read
+ * again and again while its owner writes it. Until it reads, nobody knows when that gate arrived, and it
+ * counts as ahead: read as behind, a gate that is ahead would be passed for a file that was busy for an
+ * instant. It counts so for the stale time from the first look that saw it, and no longer: a file that
+ * said nothing for as long as a dead gate is given belongs to no gate that keeps the line. Without that
+ * end, two gates that could not read each other's file would each stand back for the other until their
+ * bound.
+ *
+ * A live gate whose file reads and has no mark of the line (`KEEPS_LINE`) is a gate of an older version,
+ * as is one whose file never read (above). It takes no turn: it tries the rename at every poll. Beside
+ * one, nobody is ahead at this look, whoever else waits, and the gate behaves as before the line.
+ *
+ * Throws when the folder `root` cannot be listed, for its caller to read as no line at all. */
+function gatesAhead(io, root, me, met, { now, staleMs }) {
+  const ahead = [];
+  for (const name of io.readdirSync(root)) {
+    const token = WAIT_DIR.exec(name)?.[1];
+    if (!token || token === me.token) continue;
+    const folder = path.join(root, name);
+    let touched;
+    try {
+      touched = lastTouched(io, folder);
+    } catch {
+      continue;
+    }
+    if (isStale(touched, now, staleMs)) continue;
+    let gate = met.get(token);
+    if (!gate) met.set(token, (gate = { seenAt: now(), read: false, keepsLine: false, since: Infinity, waiter: waiterSaid({}, token) }));
+    if (!gate.read) {
+      const said = readInLine(io, path.join(folder, `holder-${token}.json`));
+      if (said !== undefined) {
+        const since = typeof said.waitingSince === 'string' ? Date.parse(said.waitingSince) : NaN;
+        Object.assign(gate, { read: true, keepsLine: said.line === KEEPS_LINE && Number.isFinite(since), since, waiter: waiterSaid(said, token) });
+      }
+    }
+    if (gate.read ? !gate.keepsLine : now() - gate.seenAt >= staleMs) return [];
+    if (!gate.read || gate.since < me.since || (gate.since === me.since && token < me.token)) ahead.push({ token, since: gate.since, waiter: gate.waiter });
+  }
+  // A gate whose arrival is not known yet is `Infinity` here: after those whose turn is known.
+  return ahead.sort((a, b) => a.since - b.since || (a.token < b.token ? -1 : a.token > b.token ? 1 : 0));
 }
 
 /** Removes the folders of gates that died while they waited: nothing touched them for the stale time.
@@ -295,12 +400,51 @@ function unreadable(dir, { token, since, answer }) {
  * is no longer this gate's. `lost()` says whether the lock was taken from this gate while it held it,
  * which happens only to a gate that did not beat for the whole stale time.
  *
- * Resolves to `{ refused, holder, waitedMs }` when it is not taken: `refused` is `'held'` with `wait`
- * off, at once, and `'timeout'` once `waitMs` have passed. `onWait(holder, leftMs)` is called when the
- * wait begins, and again when the gate waited for changes, or when its beat stops being readable or
- * becomes so, with how long that gate is waited for at most from then on: what is left of `waitMs`, or
- * less for a holder that cannot be read (below). So a notice of the minute an unreadable holder is given
- * is never the last word before the whole of a wait.
+ * The lock is a line: the gate tries the rename, which alone grants the lock, only when no live gate that
+ * arrived before it waits (`gatesAhead`). At each turn of its loop it first shows itself in the line, by
+ * touching its file, or by making its folder and file again when they are gone, and then reads the line.
+ * At the head, it writes its file again and tries the rename, as every gate did before the line. Behind
+ * another gate it does everything else it did (it waits for the holder, and clears a dead one on its
+ * second stale reading) and leaves the rename to the gate ahead; when it finds the lock free it waits a
+ * poll for that gate to take it. It only touches its file meanwhile, so that file reads whole to the gates
+ * that read the line from it. Whatever goes wrong as the gate shows itself or reads the line (a folder
+ * that cannot be listed, a file that cannot be touched) makes this look one with nobody ahead, which is
+ * the take as it was before the line: the line never makes a take reject, and never grants the lock.
+ * `session` is the id of the host's session that started the gate, or `null`: it is written in the gate's
+ * file for whoever reads the lock (`readGateHolder`, `readGateWaiters`), and is given by the caller, which
+ * has the environment; nothing here reads it.
+ *
+ * Resolves to `{ refused, holder, line, waitedMs, stillMs }` when it is not taken. `refused` is:
+ *   - `'held'`, with `wait` off, at once: `holder` holds the lock;
+ *   - `'ahead'`, with `wait` off, at once: nobody holds the lock (`holder` is `null`) and a gate that
+ *     arrived before this one waits for it, which taking the lock would pass. A gate that died as it
+ *     waited refuses so for the stale time after its last touch, and is passed after it;
+ *   - `'timeout'`, once the bound of the wait is over (below): `holder` still holds the lock, or is `null`
+ *     where the lock was free and the gate ahead had not taken it.
+ * What a caller is told is true of what it names: `holder` is the gate that holds the lock, or `null`,
+ * and never a gate that only waits. `line` is `{ ahead, head }`: how many gates are before this one, the
+ * holder included, and the gate that waits first among them, as `readGateWaiters` gives one, or `null`
+ * when only the holder is before this one. `waitedMs` is the whole wait, and `stillMs` how long the lock
+ * had not changed hands when the wait ended.
+ *
+ * The bound of a wait is `waitMs` without the lock changing hands, counted from the last time it did and
+ * not from the arrival (`boundFrom`, the one place the count is anchored). Counted from the arrival, a
+ * gate with four gates of fourteen minutes ahead of it reached its hour while the line moved, was refused
+ * and came back at the end of the line: two commits lost an hour each that way on 2026-10-11. The bound is
+ * there to give up on a lock that does not move. The count starts again when a look reads a holder whose
+ * token is not what the look before it read of the lock, another holder or a free lock, and by nothing
+ * else: not by a gate that leaves the line, not by a lock that is free, not by a look that could not tell
+ * who holds it. So a holder that never ends is given up on `waitMs` after it took the lock, and a free
+ * lock the gate ahead never takes `waitMs` after it last changed hands. No bound is set on the whole of
+ * a wait: behind a line that moves, a gate waits for as long as the line is.
+ *
+ * `onWait(holder, leftMs, line)` is called when the wait begins, and again when the gate waited for
+ * changes, or when its beat stops being readable or becomes so, with how long that gate is waited for at
+ * most from then on: what is left of the bound, which with a new holder is the whole of it, or less for a
+ * holder that cannot be read (below). So a notice of the minute an unreadable holder is given is never
+ * the last word before the whole of a wait. Where the lock is free and a gate ahead is to take it,
+ * `holder` is `null` and `line.head` is that gate: told once for each such gate, and again as the holder
+ * once it holds the lock. No notice is given only because `line.ahead` changed.
  *
  * Rejects when the lock can be neither taken nor read (a home that cannot be written): there is no gate
  * to wait for, and the caller decides what a gate without a lock does. A holder whose file is there and
@@ -310,20 +454,22 @@ function unreadable(dir, { token, since, answer }) {
  * for by polls like any gate (`holder.token` is `null`, and `onWait` says so), refused as `'held'` with
  * `wait` off, and never taken over.
  *
- * Such a holder is waited for inside `waitMs` and for the stale time at most, counted from the first of
+ * Such a holder is waited for inside the bound and for the stale time at most, counted from the first of
  * the looks in a row that could read nothing of it; a look that reads a beat, another holder or a free
  * lock starts the count again. A file that is busy is so for an instant or a few polls. One that stays
  * unreadable for as long as a dead gate is given has shown no gate at all (no access to the folder, for
  * one, which no gate ends): the take rejects with an error of code `GATE_LOCK_UNREADABLE` that says
  * since when nothing could be read, the same case as a lock that cannot be taken. A first version waited
  * for it to the end of `waitMs`, an hour, and then refused: a red gate that blamed another gate when
- * there was none (found in review, 2026-10-10). The same error ends a wait shorter than the stale time in
- * which no look read anything of the lock: it is judged before the end of the wait, since the second
- * version judged it after, and a wait of a minute or less still ended as that red refusal (found in the
- * next review). A holder that one look of the wait did read is a gate that was seen, and its wait times
- * out as any other. Neither verdict rests on a single look that read nothing: a wait that is already
- * over at the first look, which is a `waitMs` of zero, is given one more look a poll later, and that
- * look decides (found in a later review).
+ * there was none (found in review, 2026-10-10). The same error ends a wait whose bound is shorter than
+ * the stale time and in which no look read anything of the lock: it is judged before the end of the
+ * bound, since the second version judged it after, and a wait of a minute or less still ended as that red
+ * refusal (found in the next review). A holder that one look of the wait did read is a gate that was
+ * seen, and its wait times out as any other. Neither verdict rests on a single look that read nothing: a
+ * bound that is already over at the first look, which is a `waitMs` of zero, is given one more look a
+ * poll later, and that look decides (found in a later review). All of it holds as it did when the bound
+ * counted from the arrival: a look that reads nothing of the lock, not even the token of its holder,
+ * never starts the count of the bound again, so a lock that cannot be read ends a take when it did.
  *
  * A dead holder is taken over on its second stale reading, a poll apart: a machine that slept wakes with
  * every beat hours old, and a live holder's timer fires before the next look. Its file is then removed
@@ -336,6 +482,7 @@ export async function takeGateLock({
   cwd,
   command,
   pid = process.pid,
+  session = null,
   wait = true,
   waitMs = GATE_WAIT_MS,
   onWait,
@@ -353,6 +500,27 @@ export async function takeGateLock({
   const staging = path.join(root, `wait-${token}`);
   const fileName = `holder-${token}.json`;
   const startedWaiting = now();
+  // This gate in the line, and what it remembers of the others (`gatesAhead`).
+  const me = { token, since: startedWaiting };
+  const met = new Map();
+  // THE ANCHOR OF THE BOUND: the bound of the wait is counted from `boundFrom`, here and nowhere else.
+  // It starts at the arrival and is moved by `handsRead` alone, to the look that saw the lock change
+  // hands. To count the bound from the arrival again, as before 2026-10-11, the one line that moves it has
+  // to go: every use below then reads the whole wait, and the callers' words follow (`takeGateTurn` says
+  // what is left, and tells a lock that moved from one that did not, from the numbers it is given).
+  let boundFrom = startedWaiting;
+  // What the last look that could tell read of the lock: `undefined` before any did, `null` for a free
+  // lock, else the token of its holder.
+  let hands;
+  /** Keeps what this look read of the lock: free (`null`) or the token of its holder. A holder whose token
+   * is not what the look before read, another holder or a free lock, is the lock changing hands, which
+   * starts the count of the bound again; the first thing read does not, there being no change to see, nor
+   * does a lock that reads free, nor the same holder read again. A look that could not tell who holds the
+   * lock (a folder that could not be listed) is not handed here. */
+  const handsRead = (read) => {
+    if (read !== null && hands !== undefined && hands !== read) boundFrom = now();
+    hands = read;
+  };
   let told;
   let suspect;
   let blind = 0;
@@ -369,14 +537,41 @@ export async function takeGateLock({
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time.
-   * While the gate waits, the file says since when (`readGateWaiters`). */
+   * While the gate waits, the file says since when, which is its place in the line, that it keeps the line,
+   * and which session started it (`readGateWaiters`, `gatesAhead`). */
   const stage = () => {
     const at = new Date(now());
     io.mkdirSync(staging, { recursive: true });
     const file = path.join(staging, fileName);
-    const says = { token, pid, cwd, command, startedAt: at.toISOString(), waitingSince: new Date(startedWaiting).toISOString() };
+    const says = {
+      token,
+      pid,
+      cwd,
+      command,
+      startedAt: at.toISOString(),
+      waitingSince: new Date(startedWaiting).toISOString(),
+      line: KEEPS_LINE,
+      session: typeof session === 'string' && session !== '' ? session : null,
+    };
     io.writeFileSync(file, `${JSON.stringify(says)}\n`);
     io.utimesSync(file, at, at);
+  };
+  /** Shows this gate in the line, which is the first thing a turn of the loop does: touches its file, so
+   * that its folder reads as a live gate's, and stages the folder when it is not there, at the first turn
+   * and after another gate swept it as a dead one's. Returns whether the file was written whole just now,
+   * which is what a gate at the head needs before its rename. A gate that only waits is not to write its
+   * file again at every poll: a file that is being written reads empty to the gates that read the line
+   * from it. */
+  const showUp = () => {
+    const at = new Date(now());
+    try {
+      io.utimesSync(path.join(staging, fileName), at, at);
+      return false;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    stage();
+    return true;
   };
   const unstage = () => {
     try {
@@ -395,21 +590,40 @@ export async function takeGateLock({
   };
 
   for (;;) {
-    let refusedBy;
+    // The line first: this gate shows itself in it, and reads who is before it. Whatever fails here (its
+    // file cannot be touched, its folder cannot be made, the gate folder cannot be listed) leaves a look
+    // with nobody ahead: what follows is then the take as it was before the line, with its own answer to
+    // each of those failures. So the line can cost a gate its place, and never a take.
+    let fresh = false;
+    let ahead = [];
     try {
-      stage();
-      io.renameSync(staging, dir);
-    } catch (err) {
-      // ENOENT: the staging folder was swept between its making and the rename.
-      if (!TAKEN.includes(err.code) && err.code !== 'ENOENT') {
-        unstage();
-        throw err;
-      }
-      refusedBy = err;
+      fresh = showUp();
+      ahead = gatesAhead(io, root, me, met, clock);
+    } catch {
+      ahead = [];
     }
-    if (!refusedBy) {
-      sweepWaiters(io, root, path.basename(staging), clock);
-      return held({ io, root, dir, mine: path.join(dir, fileName), now, beatMs, waitedMs: now() - startedWaiting });
+    // The rename is tried at the head of the line only. It is still the one step that grants the lock:
+    // two gates that both read themselves at the head both try it, and the file system lets one through.
+    // `refusedBy` is what it answered; it stays `undefined` for a gate that left it to the gate ahead.
+    const atHead = ahead.length === 0;
+    let refusedBy;
+    if (atHead) {
+      try {
+        // Written whole, unless this turn has just done so: started now, at the instant it becomes the lock.
+        if (!fresh) stage();
+        io.renameSync(staging, dir);
+      } catch (err) {
+        // ENOENT: the staging folder was swept between its making and the rename.
+        if (!TAKEN.includes(err.code) && err.code !== 'ENOENT') {
+          unstage();
+          throw err;
+        }
+        refusedBy = err;
+      }
+      if (!refusedBy) {
+        sweepWaiters(io, root, path.basename(staging), clock);
+        return held({ io, root, dir, mine: path.join(dir, fileName), now, beatMs, waitedMs: now() - startedWaiting });
+      }
     }
 
     const seen = lookAt(io, dir, clock);
@@ -422,11 +636,49 @@ export async function takeGateLock({
     else unread.answer = seen.unread;
     // No file to name: the folder is there and could not be listed.
     const nobodyKnown = seen?.holder !== undefined && seen.file === undefined;
+    // What this look read of the lock, for the bound: free, or whose it is. Not a folder that could not be
+    // listed, of which nothing was read.
+    if (!nobodyKnown) handsRead(seen?.holder?.token ?? null);
+    // What a caller is told of the line: the gates before this one, the holder included.
+    const line = { ahead: ahead.length + (seen?.holder ? 1 : 0), head: ahead[0]?.waiter ?? null };
+
+    if (!seen?.holder && !atHead) {
+      // The lock is free and a gate is ahead: the turn is that gate's, which takes the lock at its next
+      // poll. This gate says whom it stands behind, sleeps a poll and looks again. A branch of its own,
+      // before the one below, which is for a gate whose rename was refused: that one spends its blind
+      // tries and then throws what the rename answered, and this gate tried no rename. The bound and the
+      // refusals are those of a wait for a holder; the gate ahead is named as what it is, a gate that
+      // waits, and the holder's place is left empty. An empty lock folder is left to the gate ahead too,
+      // which clears it as it takes the lock.
+      blind = 0;
+      unlisted = false;
+      suspect = undefined;
+      const at = now();
+      const waitedMs = at - startedWaiting;
+      const stillMs = at - boundFrom;
+      // With `wait` off a gate ahead is a refusal, as a holder is: taking the lock would pass it.
+      const refused = !wait ? 'ahead' : stillMs >= waitMs ? 'timeout' : undefined;
+      if (refused) {
+        unstage();
+        return { refused, holder: null, line, waitedMs, stillMs };
+      }
+      // Said once for each gate stood behind, as for each holder waited for.
+      const telling = `behind|${ahead[0].token}`;
+      if (told !== telling) {
+        told = telling;
+        onWait?.(null, waitMs - stillMs, line);
+      }
+      await sleep(pollMs);
+      continue;
+    }
+
     if (!seen?.holder || (nobodyKnown && !unlisted)) {
       // No folder (released since the rename failed), or an empty one, which is nobody's: clear it and
       // take the lock at once. One that could not be listed may be on its way out: tried again as well.
       if (seen && !nobodyKnown) unless(['ENOENT', 'ENOTEMPTY', 'EEXIST', ...BUSY], () => io.rmdirSync(dir));
       if (await tryBlind()) continue;
+      // No holder to name, so this gate was at the head (a free lock with a gate ahead went the way of the
+      // branch above), tried the rename, and `refusedBy` is what it answered.
       if (!nobodyKnown) {
         unstage();
         throw refusedBy;
@@ -455,32 +707,39 @@ export async function takeGateLock({
 
     const at = now();
     const waitedMs = at - startedWaiting;
-    // Unreadable for as long as a dead gate is given, or from end to end of a wait shorter than that:
-    // nothing ever showed a gate here. Judged before the end of the wait, which would blame a gate.
+    // How long the lock has not changed hands, which is what the bound is set on, and whether the bound is
+    // over. `waitedMs` is the whole wait, and is only reported.
+    const stillMs = at - boundFrom;
+    const over = stillMs >= waitMs;
+    // Unreadable for as long as a dead gate is given, or from end to end of a bound shorter than that:
+    // nothing ever showed a gate here. Judged before the end of the bound, which would blame a gate.
     const unreadMs = unread ? at - unread.since : 0;
-    // Not on one look, though: a wait that is over at the first look (a wait of zero, which `check`
+    // Not on one look, though: a bound that is over at the first look (a wait of zero, which `check`
     // cannot ask for and a caller of this can) gets one more a poll later, and the verdict is that
     // look's: the lock taken, a holder that was read and times the wait out, or the error below.
-    if (unread && wait && waitedMs >= waitMs && looks === 1) {
+    if (unread && wait && over && looks === 1) {
       await sleep(pollMs);
       continue;
     }
-    if (unread && (unreadMs >= staleMs || (wait && waitedMs >= waitMs && !everRead))) {
+    if (unread && (unreadMs >= staleMs || (wait && over && !everRead))) {
       unstage();
       throw unreadable(dir, unread);
     }
     // A dead holder is no gate to be refused for: with `wait` off its second reading is still waited for.
-    const refused = !wait && !holder.stale ? 'held' : waitedMs >= waitMs ? 'timeout' : undefined;
+    // Behind a gate ahead as well: the dead holder is cleared, and the next look finds the lock free and
+    // that gate ahead, which is the refusal of the branch above.
+    const refused = !wait && !holder.stale ? 'held' : over ? 'timeout' : undefined;
     if (refused) {
       unstage();
-      return { refused, holder, waitedMs };
+      return { refused, holder, line, waitedMs, stillMs };
     }
     // Said for each gate waited for, and again when its beat stops being readable or becomes so: what is
-    // left of the wait is not the same for the two.
+    // left of the wait is not the same for the two. With a new holder what is left of the bound is the
+    // whole of it, since the lock has just changed hands.
     const telling = `${holder.token}|${unread ? 'unread' : 'read'}`;
     if (wait && told !== telling) {
       told = telling;
-      onWait?.(holder, Math.min(waitMs - waitedMs, unread ? staleMs - unreadMs : Infinity));
+      onWait?.(holder, Math.min(waitMs - stillMs, unread ? staleMs - unreadMs : Infinity), line);
     }
     await sleep(pollMs);
   }

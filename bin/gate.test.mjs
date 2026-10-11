@@ -83,7 +83,13 @@ function gateClock() {
   return clock;
 }
 
-const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]\n       js-harness gate log [--last <n>] [--home <path>]';
+// The third line is there since 2026-10-11: the bound of a wait counts from the last time the lock changed
+// hands, which "--wait <minutes>" does not say by itself.
+const USAGE = [
+  'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]',
+  '       js-harness gate log [--last <n>] [--home <path>]',
+  "       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (60 when not given); --no-wait: refuse at once instead of waiting",
+].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
 const IN_TURN = "gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate takes none";
@@ -254,12 +260,45 @@ test('gate gives up when its wait is over: it runs nothing, says so and exits no
   assert.equal(code, GATE_NOT_RUN);
   assert.equal(spawned.asked.length, 0);
   const holder = `the gate of C:\\work\\other (pid 4321, started ${startedAt})`;
+  // What `--wait` means is said as it is since 2026-10-11: how long the lock may go without changing hands.
   assert.deepEqual(said, [
     `gate: waiting for ${holder} to finish, for 0.5 minutes at most`,
-    `gate: nothing ran: ${holder} still held the machine's gate lock after 30 s (--wait bounds the wait at 0.5 minutes)`,
+    `gate: nothing ran: ${holder} still held the machine's gate lock after 30 s (--wait gives up after 0.5 minutes without the lock changing hands)`,
   ]);
   assert.equal(other.lost(), false);
   other.release();
+}));
+
+// The lock is a line since 2026-10-11: a gate that arrived before this one and still waits is ahead of it,
+// and holds nothing. `gate` says so in the words of `check`, whose turn it takes.
+test('gate --no-wait runs nothing when a gate waits ahead of it and the lock is free, and says that this gate waits and holds nothing', withHome(async (home, dir) => {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'holder-22-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '22-aaaaaaaaaaaa', pid: 22, cwd: 'C:\\work\\two', command: 'check', startedAt: since, waitingSince: since, line: 1, session: null })}\n`);
+  const spawned = ranWith(0);
+  const { code, said } = await runGate(['--no-wait', '--home', home, '--cwd', dir, '--', 'node', '--test'], {}, { spawn: spawned });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.equal(spawned.asked.length, 0);
+  assert.deepEqual(said, [
+    `gate: nothing ran: the gate of C:\\work\\two (pid 22, waiting since ${since}) waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`,
+  ]);
+  assert.equal(readGateHolder(home), null);
+}));
+
+test('gate tells the lock which session started it, from the environment it was given, and none where the host says none', withHome(async (home, dir) => {
+  const asked = [];
+  const take = async (options) => {
+    asked.push(options.session);
+    return { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 0 };
+  };
+  const argv = ['--home', home, '--cwd', dir, '--', 'x'];
+  for (const env of [{ CLAUDE_CODE_SESSION_ID: 'a-session' }, {}, { CLAUDE_CODE_SESSION_ID: '' }]) await runGate(argv, env, { spawn: ranWith(0), takeGateLock: take });
+  assert.deepEqual(asked, ['a-session', null, null]);
+  // And the real lock writes it in the gate's file, where the session board reads it.
+  let during;
+  await runGate(argv, { CLAUDE_CODE_SESSION_ID: 'a-session' }, { spawn: ranWith(0, () => (during = readGateHolder(home))) });
+  assert.deepEqual([during?.pid, during?.session], [process.pid, 'a-session']);
 }));
 
 test('gate takes the lock for an hour at most, and --wait and --no-wait change how it waits', withHome(async (home, dir) => {

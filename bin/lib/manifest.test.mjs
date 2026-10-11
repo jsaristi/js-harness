@@ -1288,7 +1288,10 @@ test('the installed skill names check as the gate of a commit, and how it waits 
   const text = components[0].content('0.1.0');
   const line = /^- `js-harness check` — (.+)$/m.exec(text)?.[1] ?? '';
   assert.match(line, /one gate at a time on the machine/);
-  assert.match(line, /60 minutes at most \(`--wait <minutes>`\)/);
+  // The lock is a line since 2026-10-11, and the bound of a wait is how long the lock may go without
+  // changing hands: "60 minutes at most", which this pinned, is no longer what `--wait` means.
+  assert.match(line, /waits for its turn, in the order the gates arrived/);
+  assert.match(line, /gives up once the lock has gone 60 minutes without changing hands \(`--wait <minutes>`\)/);
   assert.match(line, /refuses at once \(`--no-wait`\)/);
 });
 
