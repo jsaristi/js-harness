@@ -431,8 +431,9 @@ reads the files the entries name. `bin/check.mjs` gains an import and one call, 
 because other sessions change those files while this is built (Progress, 2026-10-11).
 
 ### One home for every rule (T16)
-Not designed to the end: what is firm, what is open, and what was measured. Written on
-2026-10-11 by the session that owns this document.
+The need, what was measured, a first design, and the protocol he approved on 2026-10-11. The
+homes' declarations, the command and the row are not designed yet: each is designed, and read
+by a reader that did not write it, before it is built.
 
 The need, in his words of 2026-10-11 (the orchestrator's transcript
 `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, lines 1745 and 1822, both read by this session):
@@ -463,47 +464,174 @@ s); the most harmful stale copy holds no value at all (the orchestrator skill's 
 "the limit", `bin/lib/manifest.mjs:85`); and nothing forced the list of retired phrases to be
 written.
 
-Firm:
-1. The home of a rule is the place that acts: the constant or the message of the check that
-   holds it, else its line of `AGENTS.md`, else its protocol. A rule with a value is a constant
-   in code wherever a command can hold it; messages and the skills' texts are rendered from the
-   constant, and tests import it.
-2. Every other text names the rule and does not repeat its value.
-3. The set of text read as in force shrinks first, because most findings are there and no
-   detector of values reaches them: the roadmap's two "(planned)" sections become pointers (T15,
-   brought forward; they are 635 of its 1,156 lines), a closed feature document is a record as a
-   whole and says so at its head, and a memory note holds no rule (T6, T11).
-4. A state that a command computes is not written in prose: the state of a feature is what
-   `js-harness progress` and the board print.
-5. Superseded text is removed, not annotated. History is told by place (`## Progress`,
-   `docs/origin.md`, the sightings of `docs/FAILURES.md`), never by a note beside the text.
-6. No list of retired phrases and no index kept by hand: git is the history, and the list of
-   rules is rendered from the homes.
-7. The detector is a pattern for each rule that finds any statement of a value on its subject,
-   not the old one alone; it runs first on the lines a change adds, where the author pays in
-   seconds and no bystander is refused, and over the whole tree in a mode that reports until
-   the sweep's list is empty; then it refuses.
-8. What no check can do is said: two rules that contradict without sharing a value. Fewer
-   places in force and the slice's reviewers are what there is.
+The protocol for changing a rule, version 3. Approved by Sebastián on 2026-10-11: "Sí, aprobado
+el protocolo revisado" (the orchestrator's transcript
+`130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470, read by this session; he sent it inside
+a running turn, so it is an entry of type attachment and kind `queued_command`, not an entry of
+type user, which the check of a source has to know). The text put to him is the relief file's
+line 253, with what three readers of the orchestrator found missing before it; his approval is
+its line 254. That text calls itself this session's eight points of 2026-10-11 plus the answers
+to those findings. So the letters below are the approved text, and of the eight points what no
+letter restates still stands: every other text names the rule and does not repeat its value;
+the roadmap's "(planned)" sections become pointers (T15, brought forward) and a memory note
+holds no rule (T6, T11); superseded text is removed, not annotated.
 
-Open, to settle with the sweep's corrections done and before code:
-- Where the list of rules lives so that a project that only installs the harness has its own
-  (a file of the project against a module of the harness).
-- Whether a document may carry a value inside a span rendered from the home, or never carries
-  one (the orchestrator's reader proposes spans; this session's reader proposes none).
-- The doors beyond the commit: the pre-push over the lines a branch adds after `main` is merged
-  in; the lead's merge on the result of `git merge-tree`; a comparison of what is installed with
-  `main` (today nothing can tell: the version is 0.1.0 on both and no release tag exists).
-- How a change reaches a session already open. A hook on each prompt is a change on his
-  machine, and his.
+A. Scope. Everything read as in force, of three kinds: a rule with a value, a rule in prose,
+   and the state of the work. History is exempt by place only.
+B. One home.
+   - A value is a constant in code; messages and the skills' texts are rendered from it, and
+     tests import it.
+   - A rule in prose is one text, its line of `AGENTS.md` or its protocol, with an id in the
+     list `docs/RULES.md`, which is rendered from the homes.
+   - The state of the work is what `js-harness progress` and the board compute, and is never
+     written in prose.
+   - History is the `## Progress` sections, `docs/origin.md`, the sightings of
+     `docs/FAILURES.md`, the closed feature documents, marked at their head, and the
+     orchestrator's relief file.
+   - The relief file and the memory notes are never a home: the roadmap's sentence that says
+     otherwise is removed, and a session that resumes reads the list, not the relief file's
+     lines 1 to 10.
+   - Rules of other tools are not copied.
+C. One act. One command changes the home, renders the list, stores the source, appends to the
+   relief file a line that names the line it supersedes, and prints the memory update that is
+   owed. A retired rule leaves its id, with its date and its successor. A revert and an urgent
+   change are the same command. One rule change is open at a time, and it goes straight to
+   `main`. The source is his words (the quotation and its date, stored and checked once, typed
+   by him and not a paste) with the reading of them and where he accepted it; or "design", with
+   its path.
+D. The row. The text in force shrinks first. For each rule, a pattern finds any statement of a
+   value on its subject, on added lines first. Every id that a text names resolves. The row
+   reports until that rule's findings are zero on `main` and then refuses, rule by rule. A test
+   plants a violation. Each refusal is a sighting.
+E. The doors. The one that refuses is the merge: a command that runs the code of `main` on the
+   merge result, the rule rows first. The commit reads the added lines; the push reports.
+   Prerequisite: the gate stops before its sensors.
+F. Reach. A hook at the start of each turn prints the difference with `main` when the rules
+   changed, after a compaction too, and to a sub-agent at its start; it is confirmed first with
+   a logging hook. A hash of the rules is stamped in the installed command, so that `doctor`
+   can say it is behind. The template's lines sit in a marked block that `sync` renders again
+   when the project did not touch it. A memory note points to the id.
+G. `AGENTS.md` by draft. It is built in `docs/agents-build.md` on its own branch, one draft at a
+   time, with the budget measured on the draft. His approval names the draft's hash, and the
+   commit that copies it is refused on another hash. `main` never holds the draft. A direct
+   edit is denied by the host's rule. The template is rendered from the same lines. No id and
+   no marker goes inside `AGENTS.md`.
+H. Its own home. It replaces protocol 4, opens with the incident of the relief file's line 245
+   (his words of 2026-10-11 on a stale 73 percent: the orchestrator's transcript
+   `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1745), and carries its cost and a review
+   date. Done is one command that exits 0.
 
-His, and not asked yet: a run of the static rows on `main` after each merge, on GitHub (spend);
-the protocol itself, which the orchestrator proposed to him and whose yes had not come when this
-was written: nothing is written as a protocol before it.
+Added by the orchestrator in the same line, outside the letters and found by none of its
+readers: rules of other tools (gentle-ai's managed block, his global instructions) are not this
+repository's text, and where this project differs the difference is one rule here; each rule
+records whose it is, and a rule of his changes only with his words; a red row that is wrong is
+switched to report for that rule by the same command, with a reason, and counted, never passed
+with `--no-verify`; the sweep becomes a brief that is repeated at each phase close, and its
+count is the measure.
 
-Needs of others, placed by the orchestrator (relief file, lines 247 and 248): the gate stops
-before its sensors when a static row already fails, in a new session after the gate's second
-slice; the entry of the context pause is written when the channel's fourth slice is on `main`.
+The order: this text in this document; the gate's early stop; the homes and the list; the
+corrections, by owner; the row, reporting and then refusing rule by rule; the merge command;
+reach; the rewrite of `AGENTS.md` (T8).
+
+Not guaranteed, and said to him: a rule in prose restated without its id; two rules that
+contradict without sharing a value; anything passed with `--no-verify`, until the merge; the
+merge button on GitHub (closing it is spend, his, later); a session's own context until its
+next turn; what engram holds; a project that never runs `sync`; that a quotation means what the
+rule says.
+
+What his yes includes, as it was named to him: (1) the orchestrator may run the one rule-change
+command, an exception to its rule of never committing, because otherwise changing a number
+needs a session he must open; (2) a standing yes to what a rule change needs on his machine:
+the update of the installed command and skills, and the turn-start hook, opt-in by project,
+recorded, removed by `uninstall`; (3) the orchestrator turns a memory note that restates a rule
+into a pointer, and deleting a note stays his; (4) the draft is `docs/agents-build.md`, and one
+commit copies it and deletes it. Not in it: a run on GitHub. None of (1) to (3) can be used
+before the command, the hook and the list exist. This session's reading, in neither line: the
+reply hook of T2 is not the turn-start hook, and is still asked of him.
+
+Where the approved text and the eight points differ, where the approved text pulls two ways,
+and what it leaves open. Each is told to the orchestrator with this session's reading, and
+none is chosen in silence:
+1. When the row refuses. The eight points refused once the whole sweep's list was empty; the
+   approved text refuses rule by rule. Taken as approved: the whole list waits on forty places
+   that are his.
+2. Where a retired id and a source are stored. The list is rendered from the homes, a retired
+   rule has no home, and the eight points forbade an index kept by hand. This session's
+   reading: a rule is declared once, beside its home, as data (`id`, whose it is, its source,
+   the day it entered, and for a rule in prose a phrase of its text, found the way the
+   failures register finds a control); a retired rule keeps its declaration with its date and
+   its successor and no value; `docs/RULES.md` is rendered from the declarations and nothing
+   else. That is an index under another name, and it is said: what differs from the one the
+   eight points forbade is that only the command writes it and the row refuses a declaration
+   that its home no longer bears out.
+3. "Straight to `main`". A value is a constant in code, so its change is a code commit: by
+   this repository's rules that is a gate and two reviews, and the push check refuses a branch
+   whose code commits no Codex record covers. This session's reading: the command runs the gate
+   and refuses when it fails; whether its commit is exempt from the two reviews, or the
+   declarations are data that the reviews do not count, is not in the approved text and is the
+   orchestrator's to put to him. The orchestrator's reading of what he approved, not his
+   words, and his to correct (its message of 2026-10-11): no review is left out. A value in a
+   constant is code, so its change passes the gate and both reviews, and the push rule stands;
+   "straight to `main`" means a pull request of its own against `main`, never riding a
+   feature branch. The cost is written beside each change (one gate and a small Codex review),
+   and if it proves too dear that becomes a question for him, with the numbers.
+4. The order of homes and corrections. The approved order puts the homes before the
+   corrections; the 83 corrections of T17b were merged before any home existed. Where a value
+   had no home they say what the rule is and where his words are recorded, which is not a home.
+   Those places are read again when the list exists, and each pointer becomes the rule's id.
+5. What the commit does. The approved text pulls two ways here: D has the row refuse, rule by
+   rule; E says the door that refuses is the merge, and that the commit reads the added lines.
+   The eight points had the commit refuse on the lines a change adds, where the author pays in
+   seconds. This session's reading: the commit refuses an added line for a rule whose row
+   already refuses, and reports for the others; the merge refuses on the whole result.
+6. A value inside a document. Open in the eight points (a span rendered from the home, or
+   none), and the approved text does not settle it: it renders messages and the skills' texts,
+   and F renders a marked block of a project's `AGENTS.md`. This session's reading, still
+   open: no other document carries a value, and no span is built for one.
+7. A rule in prose whose home is a line of `AGENTS.md`. C changes a home by one command,
+   straight to `main`; G lets `AGENTS.md` change only by a draft on its own branch that he
+   approves by its hash, with a direct edit denied. Both cannot hold for such a line. This
+   session's reading: G governs `AGENTS.md`, and for it the one command of C is the commit
+   that copies the approved draft; C as written covers a value and the text of a protocol.
+   The orchestrator's reading, the same and one step further (its message of 2026-10-11; his
+   words on the draft are the relief file's line 203): a change of one line of `AGENTS.md`
+   also goes through the hashed draft and his approval; for such a rule the command of C does
+   the bookkeeping (the declaration, the source, the list) and refuses unless the change of
+   `AGENTS.md` arrives by the approved draft.
+8. The home of a value. The first of the eight points made a value a constant "wherever a
+   command can hold it" and otherwise gave it the message of its check, its line of
+   `AGENTS.md` or its protocol; B says only that a value is a constant in code. This session's
+   reading: a value that no command can hold is a rule in prose, and its text is its home.
+9. The list in a project that only installs the harness. Open in the eight points, and still
+   open: the approved text places `docs/RULES.md` here and says nothing of where an installed
+   project's own list lives. It is his, a product choice (whether an installed project gets
+   the mechanism for its own rules, beyond the template's block that `sync` renders); the
+   orchestrator keeps it in the queue of his decisions, and nothing of T16 before T9 needs it.
+
+A rule he wants in the harness, in the same words as his approval: "Siempre me gustaria hacewr
+asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores
+resultados". Read by the orchestrator as the need and not as the wording (relief file, line
+254): what is put to him to decide (a protocol, the design of a feature, a change of the
+charter) passes first an independent review and comes back improved, and more than once when
+the first round still finds holes. Only its shape is not designed. The orchestrator's reading
+of the shape, not his words: his earlier words on the subject are searched and the search is
+named; a reader that did not write the proposal attacks it; a second reader looks only for
+what is missing; the improved version says what each review changed and what stays not
+guaranteed. Where it enters, by the same line: this feature, as an amendment of the protocol
+on proposing and not as a new one (this session's reading: protocol 1 below), with the five
+questions, of which the line answers two: it happened, three times that day; and a check can
+hold part of it, since the reply check can refuse a decision block of that kind that names no
+review. Its cost on that day: about 500,000 tokens of sub-agents and 25 minutes for the second
+round of three readers. A memory note of the orchestrator holds it until then.
+
+His, and not asked yet: a run of the static rows on `main` after each merge, on GitHub (spend).
+
+Needs of others, placed by the orchestrator. The gate stops before its sensors when a static
+row already fails, and the lock becomes a line by arrival: a session opened for it that day,
+"JH 8 · turno y corte temprano del gate" (relief file, line 254), which by its own message
+keeps its design in `odd/tasks/gate-turn.md` on `feat/gate-turn`, not read by this session yet.
+The entry of the context pause is written when JH 5's fourth slice is on `main` (relief file,
+line 247).
 
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
@@ -565,9 +693,11 @@ the section, it is withdrawn.
    after `main` is merged into a branch its base is the merge commit; a stacked pull request is
    merged after its base, or its base is changed before the first is merged; the review
    consent, a candidate being a commit or a slice, and the Codex review of each slice.
-4. Recording a new rule: the five questions (did it happen; twice, or once at a cost; can a
-   check do it; can an existing protocol be amended; what does it cost and what leaves); its
-   level; the memory note deleted. A missing protocol is reported and proposed, never created.
+4. Changing a rule, a new one included: the protocol of "One home for every rule (T16)",
+   letters A to H, which replaces "Recording a new rule". A new rule or a new protocol still
+   passes the five questions first (did it happen; twice, or once at a cost; can a check do it;
+   can an existing protocol be amended; what does it cost and what leaves). A missing protocol
+   is reported and proposed, never created.
 5. Reporting a mistake: five parts (what happened; the fix now, checked or only sent; what stops
    it recurring; where it enters the harness, which feature and when; how it is proven later that
    it has not come back), and its entry in `docs/FAILURES.md`.
@@ -776,8 +906,9 @@ names it, and the entry stays open until it does.
   - [x] T3b `bin/lib/failures.mjs` and its tests: the parser, the refusals, the seven states,
     the counts (commit `9a2edb1`; gentle-ai approved the range `51a24db..5b754dd`; the Codex
     review is owed)
-  - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
-    `failures` of `check`; the entry in the dispatcher
+  - [x] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
+    `failures` of `check`; the entry in the dispatcher (commit `547ef55`; its two reviews are
+    owed)
   - [x] T3d `docs/FAILURES.md` seeded from the records, not only with the eighteen: every
     failure the relief file and the feature documents tell, each control in place found by the
     command in the file it names
@@ -808,10 +939,22 @@ names it, and the entry stays open until it does.
   after what it holds and this document does not (the reading of the specification, "how far
   is far enough", the bullets on bias and research, the team rules) is in `docs/SPEC.md` or
   here
-- [ ] T16 One home for every rule, as "One home for every rule (T16)" leaves it: the open
-  points settled and read again by a reader that did not write them, then the homes, the list
-  rendered from them, and the detector in report mode until the sweep's list is empty (route:
-  delegated; after T17, before T1)
+- [ ] T16 One home for every rule, by the protocol of "One home for every rule (T16)" and in
+  its order (route: delegated; after T17, before T1)
+  - [x] T16a The approved protocol in this document, read against the relief file's lines 253
+    and 254 by a reader that did not write it (twelve fixes, all taken), and the nine places
+    where it differs from the eight points, pulls two ways or stays open told to the
+    orchestrator
+  - [ ] T16b The homes and the list: how a rule is declared, designed and read by a reader
+    that did not write it; then the declarations of the rules that have a value today, and
+    `docs/RULES.md` rendered from them
+  - [ ] T16c The one command that changes a rule
+  - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
+    refusing rule by rule, with a planted violation as its test; after the gate stops before
+    its sensors
+  - [ ] T16e The merge command, the rule rows first
+  - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
+    rules in the installed command; the template's marked block
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
@@ -1026,7 +1169,8 @@ names it, and the entry stays open until it does.
   again after this entry, with the tests of the review's notes added, and goes into the
   register as a sighting.
 - 2026-10-11, T3d and T17d: `docs/FAILURES.md` is in the repository. `js-harness failures
-  check` reads it with no fault: 59 failures, 153 sightings, 39 seen more than once, 17 not
+  check` reads it with no fault: 59 failures, 154 sightings with the one of the next entry
+  (153 before it), 39 seen more than once, 17 not
   settled (15 `repeated`, 1 `owed, stale`, 1 `seen again`), so `failures check --settled` exits
   1, as it must until each of the 17 has a control in place or owed; that is work of this
   feature and of the features that own those controls, not of this slice. Added to the draft
@@ -1052,16 +1196,38 @@ names it, and the entry stays open until it does.
   harness: the lock as a line by arrival that the feature `gate-turn` builds, after which no
   session writes a script to order turns. The proof that it has not come back: the count of
   sightings of `broken-wait-script` in `js-harness failures`, which this one raises to four.
+- 2026-10-11, T16a. The approved protocol is in "One home for every rule (T16)". A reader that
+  did not write it (a read-only sub-agent, Opus 5.5, high effort, 111,898 tokens) compared
+  this session's text with the relief file's lines 253 and 254 and found twelve things, all
+  taken: the header said the letters replace the eight points where the approved text is the
+  eight points plus answers, so three points no letter restates were being lost; a sentence of
+  this session stood unmarked as approved in two places; the orchestrator's four additions were
+  half imported with no origin; two differences were missed (C against G for a line of
+  `AGENTS.md`; the list of an installed project); one difference hid that the tension is
+  inside the approved text (D and E); and four facts were wrong (a time of day, a line that
+  names a session and not a feature, whose slice, a dropped clause). Both quotations of his
+  matched character by character. The nine differences went to the orchestrator by message at
+  16:10; this session goes on with its readings, and the third and the seventh are not its to
+  settle. The orchestrator answered within minutes, with its readings of what he approved and
+  not his words: the six readings of this session stand; the third and the seventh are
+  written beside each difference; the ninth is his and waits in the queue of his decisions.
+  Not done: a second round of reading after the fixes.
+- 2026-10-11, T3c is `547ef55`. Its gate was launched at 16:08 with a wait of 180 minutes,
+  took the lock after two other gates and ended at 16:24: `PASS  tests  npm run test passed`,
+  and `PASS  failures  59 failures, 154 sightings, 39 seen more than once, 17 not settled`,
+  the first gate of this repository to print the row. It printed `review due
+  (slice_budget_reached)`, 846 lines in 6 paths since `5b754dd`, and that no Codex review
+  covers the code since `9a2edb1^`. `main` moved to `859b9a1` meanwhile (pull request 63); the
+  orchestrator says this branch merges clean with it, not checked by this session yet.
 
 ## Next step
-In this order. (1) T3c: the commit through the gate (the command, the row, the wiring and the
-tests of the review's notes are staged), launched by a script of this session's scratchpad
-when the session channel's worktree holds the lock. (2) The reviews of what follows `5b754dd`:
+In this order. (1) The reviews of what follows `5b754dd`:
 gentle-ai first (consent is pre-granted), then Codex for the code since the branch point,
 `js-harness codex-review --base 9a2edb1^` after its `--plan` says what it costs; neither beside
-a running gate. (3) Merge `main` in before the push of `feat/failures-register`: three unmerged
+a running gate. (2) Merge `main` in before the push of `feat/failures-register`: three unmerged
 branches change `bin/check.mjs` and `bin/js-harness.mjs` in the same places. Push, open the
-pull request with the twelve doubts of the seed in it, tell the orchestrator. (4) T17c. (5)
-T16, from the relief file's lines 253 and 254. (6) T1. T2 and T8 wait for him: before
+pull request with the twelve doubts of the seed in it, tell the orchestrator. (3) T17c, its
+code places read again on the new `main`, which changed three of the seven files. (4) T16b:
+how a rule is declared, designed and read before it is built. (5) T1. T2 and T8 wait for him: before
 T2 the first item of "Ask me before" is asked, and the host facts of "What the hosts allow"
 that T2 rests on are confirmed with a logging hook.
