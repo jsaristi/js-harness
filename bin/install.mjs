@@ -347,6 +347,10 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   // that is alive in it, which removes its own files when it ends: that is no failure, and it is said
   // with what is left to do. Left because it could not be looked at or removed: that goes to stderr, like
   // a file.
+  // The gate log, the gates' other folder, is in the same list. It is kept with the lock's folder for the
+  // gate that is alive, which has yet to write its end in it, and that entry names it (`log`): the two are
+  // kept for one reason, so they are said in one line. No gate removes its log, so the line says what does.
+  // A log that could not be looked at or removed is an entry of its own, and goes to stderr like the lock's.
   const gateNotUndone = result.gateKept.filter((gate) => gate.reason !== 'in-use');
   for (const gate of result.gateKept) {
     if (gate.reason !== 'in-use') {
@@ -354,8 +358,11 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       continue;
     }
     const whose = [gate.pid !== null && `pid ${gate.pid}`, gate.cwd !== null && `in ${gate.cwd}`].filter(Boolean).join(', ') || 'nothing more of it could be read';
+    const alive = `a gate holds the machine's gate lock or waits for it right now (${whose})`;
     console.log(
-      `kept ${gate.path}: a gate holds the machine's gate lock or waits for it right now (${whose}); it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
+      gate.log
+        ? `kept ${gate.path} and ${gate.log}: ${alive}, and it has yet to write its end in the gate log; it removes its own files when it ends, and running js-harness uninstall --global again removes the log and whatever else is left`
+        : `kept ${gate.path}: ${alive}; it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
     );
   }
   // The folder of the session channel, which `notify` writes under the home. No process lives in it, so

@@ -877,6 +877,40 @@ test('gate log prints the last gates of the log, one a line and the newest last,
   assert.deepEqual([twenty.length, twenty.at(-1)], [20, `${when(at(30))}  no end (killed, or still running)  C:\\work\\more-29`]);
 }));
 
+// Found in review, 2026-10-11: nothing proved the exit code of a log that is there and cannot be read, and on
+// that path the command printed "no gate in the log" as well, the one thing it must not say of a log it
+// could not look at.
+test('gate log exits 1 for a log that is there and cannot be read, names the file on stderr, and does not say that the log holds no gate', withHome(async (home) => {
+  // A folder standing where the log's file would be: the system refuses to read it as a file.
+  fs.mkdirSync(path.join(gateLogDir(home), 'log.jsonl'), { recursive: true });
+  const notRead = [`gate log: could not read log.jsonl: EISDIR (${gateLogDir(home)})`];
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 1, printed: [], said: notRead });
+
+  // The older file can still be read: its gates are printed, and the answer is still not the whole log.
+  const began = { v: 1, event: 'start', id: 'one', at: '2026-10-11T07:01:00.000Z', cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] };
+  fs.writeFileSync(path.join(gateLogDir(home), 'log.1.jsonl'), `${JSON.stringify(began)}\n`);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 1, printed: [`${when(began.at)}  no end (killed, or still running)  C:\\work\\one`], said: notRead });
+
+  // A log that was read and holds no gate is still said in one line, and is no error.
+  fs.rmSync(gateLogDir(home), { recursive: true });
+  fs.mkdirSync(gateLogDir(home));
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+}));
+
+// Found in the same review: a line that is an event by its head and not by its body made the formatter
+// throw, and with it every `gate log` until the file rotated. It is left out and counted, as a torn line is.
+test('gate log leaves out a line whose body is not that of an event, counts it on stderr, and prints the rest', withHome(async (home) => {
+  const began = (id, more = {}) => ({ v: 1, event: 'start', id, at: '2026-10-11T07:01:00.000Z', cwd: `C:\\work\\${id}`, command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
+  const lines = [began('one'), began('two', { waitedFor: [null] }), began('three', { load: { busy: 1.4, processors: 8, busiest: [null] } }), began('four')];
+  for (const line of lines) assert.deepEqual(appendGateEvent(home, line), { ok: true });
+  const at = when('2026-10-11T07:01:00.000Z');
+  assert.deepEqual(await runGateLog(['log', '--home', home]), {
+    code: 0,
+    printed: [`${at}  no end (killed, or still running)  C:\\work\\one`, `${at}  no end (killed, or still running)  C:\\work\\four`],
+    said: [`gate log: 2 unreadable lines left out (${gateLogDir(home)})`],
+  });
+}));
+
 test('gate log errors with usage on stderr and exits 2 for arguments it cannot take, and reads nothing', withHome(async (home) => {
   const refusals = [
     [['log', '--last'], '--last requires a value'],

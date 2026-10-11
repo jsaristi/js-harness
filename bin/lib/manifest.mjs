@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
+import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
 
 function skillContent(version) {
@@ -709,6 +710,13 @@ export function sync(home, version, deps = {}) {
  * too (`removeEmptyDirsUpTo`, which leaves one it cannot list): a test makes either fail as the system
  * does for what it gives no access to.
  *
+ * The gate log is the gates' other folder, beside the lock's, and no gate ever removes it: it is looked for
+ * with a manifest and without, removed whole through the same seams and named in `removed`
+ * (`removeGateLogFolder`). It goes or stays with the lock's folder. While that one is kept `in-use` the log
+ * is kept too, since the gate that is alive has yet to write its end in it, and the same entry of `gateKept`
+ * names it, as `log`: one thing is kept, for one reason, and is said once. A log that could not be looked at
+ * or removed is an entry of `gateKept` of its own, `{ path, reason: 'unremovable', code }`.
+ *
  * The folder of the session channel is the same case: `notify` writes it, not `install`, so it is looked
  * for with a manifest and without, removed with what it holds through the same seams, named in `removed`,
  * and `channelKept` says why it was left, as `[{ path, reason: 'unremovable', code }]`
@@ -739,11 +747,13 @@ export function uninstall(home, deps = {}) {
   const manifest = readManifest(home);
   if (!manifest) {
     // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
-    // component, so it is looked for all the same, and the folder it leaves empty goes with it.
+    // component, and neither is the log of the gates, so they are looked for all the same, and the folder
+    // they leave empty goes with them.
     const gate = removeGateFolder(home, removeFile, statFile);
+    const log = removeGateLogFolder(home, removeFile, statFile, gate.kept);
     const channel = removeChannelFolder(home, removeFile, statFile);
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: [...gate.removed, ...channel.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept, channelKept: channel.kept };
+    return { removed: [...gate.removed, ...log.removed, ...channel.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept };
   }
 
   const removed = [];
@@ -797,8 +807,9 @@ export function uninstall(home, deps = {}) {
 
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
+  const log = removeGateLogFolder(home, removeFile, statFile, gate.kept);
   const channel = removeChannelFolder(home, removeFile, statFile);
-  removed.push(...gate.removed, ...channel.removed);
+  removed.push(...gate.removed, ...log.removed, ...channel.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
@@ -806,7 +817,7 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept, channelKept: channel.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: log.gateKept, channelKept: channel.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -838,6 +849,38 @@ function removeGateFolder(home, removeFile, statFile) {
     return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
   return { removed: [dir], kept: [] };
+}
+
+/** Removes the folder of the gate log under `home` (`gateLogDir` of `gate-log.mjs`) with the two files it
+ * can hold, as `{ removed, gateKept }`: `removed` holds its path when it was there and is gone, and
+ * `gateKept` is what `uninstall` says of the gates' folders that are left, the `gateKept` it is handed
+ * (what `removeGateFolder` kept of the lock's folder) with the log said in it.
+ *
+ * Nothing records that folder: `check` and `js-harness gate` append to it under the home, in a project
+ * with a machine install or without one, and unlike the lock's files no gate removes what it wrote there.
+ * It is kept for a gate that is alive and for nothing else. Such a gate has yet to write its end, and the
+ * writer makes the folder again: a log removed under it would be back when it ends, holding half a gate,
+ * after `uninstall` said it was gone. So when the lock's folder was kept `in-use`, the log stays and that
+ * entry names it as `log`; the next `uninstall` removes it. The lock's folder says whether a gate is alive,
+ * which is why this is asked of what was kept of it and not looked for again. A gate that runs without the
+ * lock is not seen there: its end makes the folder again, as a notice does to the channel's, and the next
+ * `uninstall` removes it.
+ *
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
+ * `code`, in an entry of its own, beside a live gate as well: it is not said to be kept for that gate on a
+ * guess. `removeFile` and `statFile` are `uninstall`'s own seams. */
+function removeGateLogFolder(home, removeFile, statFile, gateKept) {
+  const dir = gateLogDir(home);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], gateKept };
+    if (gateKept.some((kept) => kept.reason === 'in-use')) {
+      return { removed: [], gateKept: gateKept.map((kept) => (kept.reason === 'in-use' ? { ...kept, log: dir } : kept)) };
+    }
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], gateKept: [...gateKept, { path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], gateKept };
 }
 
 /** Removes the folder of the session channel under `home` (`channelDir` of `channel.mjs`) with whatever is

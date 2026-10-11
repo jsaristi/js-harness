@@ -229,7 +229,9 @@ test('checkSensor passes when the command exits 0', async () => {
     // `seconds` and `timedOut` are for the gate log, and nothing of a row that is printed.
     const { seconds, ...row } = await checkSensor(dir, { name: 'lint', command });
     assert.deepEqual(row, { name: 'lint', pass: true, detail: `${command} passed`, output: '', timedOut: false });
-    assert.ok(Number.isFinite(seconds) && seconds > 0 && seconds < 600, String(seconds));
+    // Kept to a tenth of a second, so a command that ends within 50 ms took 0 s: a number, and no fault.
+    // That a time is measured at all is proven below, on a command that is made to take 120 ms.
+    assert.ok(Number.isFinite(seconds) && seconds >= 0 && seconds < 600, String(seconds));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

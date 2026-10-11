@@ -130,6 +130,46 @@ test('readGateLog skips what is no event of this log: a torn line, text, JSON of
   assert.deepEqual(readGateLog(home), { dir: gateLogDir(home), events: [start('a'), end('a')], skipped: garbage.length });
 }));
 
+// Found in review, 2026-10-11: the head of a line was all the reader looked at, and `formatGates` takes the
+// body apart. One line with a `null` where a gate it waited for should be made every `gate log` throw.
+test('readGateLog skips a line with the head of an event and a body that is not one, so that no reader meets it', withHome(async (home) => {
+  appendGateEvent(home, start('a'));
+  const load = { busy: 1.4, processors: 8, sampleMs: 1000 };
+  const malformed = [
+    start('b', { waitedFor: [null] }),
+    start('c', { waitedFor: [{ cwd: 'C:\\work\\two', pid: 7, command: 'check' }, 'C:\\work\\three'] }),
+    start('d', { waitedFor: 'C:\\work\\two' }),
+    start('e', { waitedFor: null }),
+    start('f', { waitedSeconds: '12' }),
+    start('g', { load: 'busy' }),
+    start('h', { load: null }),
+    start('i', { load: [load] }),
+    start('j', { load: { ...load, busiest: [null] } }),
+    start('k', { load: { ...load, busiest: 'node' } }),
+    end('l', { seconds: '12.5' }),
+    end('m', { seconds: null }),
+    end('n', { sensors: [null] }),
+    end('o', { sensors: 'tests' }),
+    refused('p', { waitedFor: [null] }),
+    refused('q', { waitedSeconds: null }),
+  ];
+  for (const line of malformed) fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${JSON.stringify(line)}\n`);
+  // What a gate does not have is no fault: a start with no load, an end with no sensors, a gate it waited
+  // for of which nothing could be read, a load that could not be read and one with nobody named in it.
+  const sparse = [
+    start('r', { waitedFor: [{ cwd: null, pid: null, command: null }], load: { notRead: 'os.cpus() gave no processor', sampleMs: 1000 } }),
+    { v: 1, event: 'end', id: 'r', at: AT, seconds: 0, result: 'exit 3' },
+    start('s', { load: { ...load, busiest: [] } }),
+    end('a'),
+  ];
+  for (const event of sparse) appendGateEvent(home, event);
+
+  const read = readGateLog(home);
+  assert.deepEqual(read, { dir: gateLogDir(home), events: [start('a'), ...sparse], skipped: malformed.length });
+  // And what the reader hands on is what the formatter can say, a line for each gate.
+  assert.equal(formatGates(gatesOf(read.events)).length, 3);
+}));
+
 // A reader may look while a gate rotates: it reads the newer file first, so the worst it sees is the same
 // lines in both files, which it keeps once. Read the other way round it would miss them.
 test('readGateLog keeps once an event that both files hold', withHome(async (home) => {
@@ -261,6 +301,23 @@ test('gateRecord leaves out a load that was not sampled and the sensors of a gat
   other.end({ result: 'pass' });
   assert.equal(events.length, 3);
   assert.deepEqual(events[2].event, { v: 1, event: 'refused', id: 'id-2', at: AT, cwd: 'c', command: long.slice(0, 120), pid: 100, reason: 'timeout', waitedSeconds: 30, waitedFor });
+});
+
+// The lock keeps the command of its holder whole (`gate-lock.mjs`), and a gate hands on what the lock told
+// it. Found in review, 2026-10-11: only the gate's own command was cut, so the secret of another gate's
+// `gate --` line reached the log through the gate that waited for it, in a line of any length.
+test('gateRecord cuts the command of each gate it waited for as it cuts its own, in a start and in a refusal, and leaves the list it was handed alone', () => {
+  const { events, deps } = captured();
+  const long = `gate -- node deploy.mjs --token ${'s'.repeat(300)}`;
+  const waitedFor = [{ cwd: 'C:\\work\\other', pid: 4321, command: long }, { cwd: null, pid: null, command: null }, { cwd: 'C:\\work\\third', pid: 4322, command: 'check' }];
+  const handed = structuredClone(waitedFor);
+  const cut = [{ ...waitedFor[0], command: long.slice(0, GATE_COMMAND_MAX) }, waitedFor[1], waitedFor[2]];
+
+  gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, ...deps }).start({ lock: 'own', waitedMs: 0, waitedFor });
+  gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, ...deps }).refused({ reason: 'timeout', waitedMs: 0, waitedFor });
+  assert.deepEqual(events.map(({ event }) => [event.event, event.waitedFor]), [['start', cut], ['refused', cut]]);
+  assert.equal(JSON.stringify(events[0].event).includes('s'.repeat(GATE_COMMAND_MAX)), false, 'what came after the bound is in the line');
+  assert.deepEqual(waitedFor, handed);
 });
 
 test('gateRecord never throws to its gate: a write that fails is kept as one sentence, said once, and a gate whose start is not in the log writes no end', () => {

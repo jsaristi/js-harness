@@ -138,7 +138,8 @@ function parseLogArgs(argv, env) {
  * reads: no lock is taken and nothing runs, so it answers while a gate runs, and that gate is in its
  * answer as a start with no end. A home with no log is said in one line and is no error. Lines of the
  * file that are no lines of this log are left out and counted on stderr, and so is a file that could not
- * be read, which is then exit 1: "could not look" is not "no gates". */
+ * be read, which is then exit 1: "could not look" is not "no gates". So that one line is said only of a log
+ * that was read whole; the gates of a file that could be read are printed all the same. */
 function gateLogMain(argv, env) {
   let parsed;
   try {
@@ -149,7 +150,7 @@ function gateLogMain(argv, env) {
   }
   const { dir, events, skipped, unavailable } = readGateLog(parsed.home);
   const gates = gatesOf(events);
-  if (gates.length === 0) console.log(`no gate in the log of ${dir}`);
+  if (gates.length === 0 && !unavailable) console.log(`no gate in the log of ${dir}`);
   for (const line of formatGates(gates.slice(-parsed.last))) console.log(line);
   if (skipped > 0) console.error(`gate log: ${skipped} unreadable line${skipped === 1 ? '' : 's'} left out (${dir})`);
   if (unavailable) console.error(`gate log: could not read ${unavailable.join(', ')} (${dir})`);

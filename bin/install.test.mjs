@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
 import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
+import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
 
@@ -395,6 +396,90 @@ test('uninstallMain says a folder of the gate lock it could not remove was left,
     const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
     assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
     assert.deepEqual(unseen.errLines, [`could not remove ${gateDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The gate log is written by every gate, in a folder of its own beside the lock's. No gate removes it, so
+// uninstall does, unless a gate is alive: that gate has yet to write its end, and the log is kept for it.
+
+/** Writes into the log of `home` what a gate that began there writes, through the gates' own writer, and
+ * returns the gate's record: its `end` is what a gate that is alive still has to write. */
+function startedGate(home) {
+  const gate = gateRecord({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321 });
+  gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  assert.equal(gate.failure(), undefined);
+  return gate;
+}
+
+test('uninstallMain removes the gate log, with or without an install, and says so', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    startedGate(home).end({ result: 'pass' });
+    const installed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([installed.code, installed.errLines], [0, []]);
+    assert.ok(installed.outLines.includes(`removed ${gateLogDir(home)}`), installed.outLines.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    startedGate(home).end({ result: 'pass' });
+    const bare = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([bare.code, bare.outLines, bare.errLines], [0, [`removed ${gateLogDir(home)}`], []]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain leaves the gate log of a gate that is alive, in the one line that says the gate lock is kept, and exits 0', async () => {
+  const home = makeTmpHome();
+  try {
+    const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+    const gate = startedGate(home);
+    try {
+      const held = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+      assert.deepEqual([held.code, held.errLines], [0, []]);
+      assert.deepEqual(held.outLines, [
+        `kept ${gateDir(home)} and ${gateLogDir(home)}: a gate holds the machine's gate lock or waits for it right now (pid 4321, in C:\\work\\one), and it has yet to write its end in the gate log; it removes its own files when it ends, and running js-harness uninstall --global again removes the log and whatever else is left`,
+      ]);
+      assert.equal(fs.existsSync(path.join(gateLogDir(home), 'log.jsonl')), true);
+      gate.end({ result: 'pass' });
+    } finally {
+      lock.release();
+    }
+    // The gate has ended and removed its own files: the log is all that is left, and it goes.
+    const after = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([after.code, after.outLines, after.errLines], [0, [`removed ${gateLogDir(home)}`], []]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says a gate log it could not remove was left, with the error code and what to do, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    startedGate(home).end({ result: 'pass' });
+    const removeFile = (target, options) => {
+      if (target === gateLogDir(home)) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+    assert.equal(code, 1, 'a folder left behind is not a clean uninstall');
+    assert.deepEqual(errLines, [`could not remove ${gateLogDir(home)} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+    assert.equal(fs.existsSync(path.join(gateLogDir(home), 'log.jsonl')), true);
+
+    // One it could not even look at is said the same way, and is no "nothing installed" that exits 0.
+    const statFile = (target) => {
+      if (target === gateLogDir(home)) throw Object.assign(new Error('EACCES: permission denied, stat'), { code: 'EACCES' });
+      return fs.statSync(target);
+    };
+    const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
+    assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
+    assert.deepEqual(unseen.errLines, [`could not remove ${gateLogDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

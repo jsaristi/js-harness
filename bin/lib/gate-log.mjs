@@ -35,8 +35,10 @@ export const GATE_LOG_ENV = 'JS_HARNESS_GATE_LOG';
 
 export const gateLogSwitchedOff = (env) => env[GATE_LOG_ENV] === 'off';
 
-/** Where the log of the gates of `home` lives. Nothing else spells this path: deleting the folder undoes
- * all a gate ever wrote of itself. */
+/** Where the log of the gates of `home` lives. Nothing else in the harness spells this path: deleting the
+ * folder undoes all a gate ever wrote of itself. The practice run spells it once more
+ * (`gateLogFolder` of `scripts/practice-lib.mjs`), since it looks at an installed harness from outside and
+ * imports nothing of it; a test there holds the two together. */
 export function gateLogDir(home) {
   return path.join(home, '.js-harness', 'gate-log');
 }
@@ -75,7 +77,25 @@ export function appendGateEvent(home, event, { maxBytes = GATE_LOG_MAX_BYTES, fi
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Whether `value` is a line of this log: enough of one to be paired and printed. */
+const isListOfObjects = (value) => Array.isArray(value) && value.every(isObject);
+
+/** What a field of a line is when it is there, for the fields a reader takes apart or counts with: the
+ * gates it waited for and the sensors, each a list of objects, the load with those it names, and the
+ * seconds. A field that is not there is no fault, since a gate leaves out what it does not have; one that
+ * is there as something else (a `null` among the gates it waited for, a text where the seconds go) is.
+ * What is only printed (the folder, the result) is left as it is: the worst it does is read oddly. */
+const BODY = {
+  waitedFor: isListOfObjects,
+  sensors: isListOfObjects,
+  load: (load) => isObject(load) && (load.busiest === undefined || isListOfObjects(load.busiest)),
+  seconds: Number.isFinite,
+  waitedSeconds: Number.isFinite,
+};
+
+/** Whether `value` is a line of this log: its head, enough to be paired (the version, the event, the id
+ * and when), and a body a reader can take apart (`BODY`). Both are asked here, once, and not by each
+ * reader: a line that is an event by its head alone made `formatGates` throw on its body, and with it
+ * every `gate log` until the file rotated. */
 function isEvent(value) {
   return (
     isObject(value) &&
@@ -83,13 +103,14 @@ function isEvent(value) {
     ['start', 'end', 'refused'].includes(value.event) &&
     typeof value.id === 'string' &&
     typeof value.at === 'string' &&
-    Number.isFinite(Date.parse(value.at))
+    Number.isFinite(Date.parse(value.at)) &&
+    Object.entries(BODY).every(([field, holds]) => value[field] === undefined || holds(value[field]))
   );
 }
 
 /** The log of `home`: `{ dir, events, skipped }`, the events of both files, the older first. A home with
- * no log has none. A line that is torn, that is not JSON or that is no event of this version is counted
- * in `skipped` and left out, never fatal. A file that is there and cannot be read is named in
+ * no log has none. A line that is torn, that is not JSON or that is no event of this version, by its head
+ * or by its body (`isEvent`), is counted in `skipped` and left out, never fatal. A file that is there and cannot be read is named in
  * `unavailable`, so that "could not look" is not read as "no gates".
  *
  * The newer file is read first, since a gate may rotate between the two readings: the worst a reader then
@@ -193,8 +214,8 @@ const seconds = (ms) => (Number.isFinite(ms) ? Math.round(ms / 100) / 10 : 0);
  *
  * - `start({ lock, waitedMs, waitedFor, load })`, when the gate is about to run what it runs: `lock` is
  *   `own`, `parent` (the turn of the process that started it) or `none` (no lock could be taken),
- *   `waitedFor` the gates it waited for as `[{ cwd, pid, command }]`, `load` the sample of the machine's
- *   load as it was read, left out where none was taken.
+ *   `waitedFor` the gates it waited for as `[{ cwd, pid, command }]`, the command of each cut as the
+ *   gate's own, `load` the sample of the machine's load as it was read, left out where none was taken.
  * - `end({ result, sensors })`, on every way out of a gate that started: `result` is `pass`, `fail` or
  *   `timeout` for the sensors of `check`, with a line for each in `sensors`, `exit <code>` or `killed` for
  *   the command of `js-harness gate`, and `error` for a gate that ended by an error of its own. Nothing
@@ -225,7 +246,10 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
     }
     return false;
   };
-  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: waitedFor ?? [] });
+  // The lock keeps its holder's command whole, so the command of a gate this one waited for is cut here as
+  // this gate's own is: it can hold the same secret, and a line has to stay short enough to be one write.
+  const cut = (holder) => (typeof holder?.command === 'string' ? { ...holder, command: holder.command.slice(0, GATE_COMMAND_MAX) } : holder);
+  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).map(cut) });
   return {
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();
