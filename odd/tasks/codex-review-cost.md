@@ -1,8 +1,8 @@
 # Codex review: one model, and a cost that is seen before it is spent
 
 Locator: `odd/tasks/codex-review-cost.md` · Engram mirror: `odd/codex-review-cost/tasks` · Branch:
-`feat/codex-review-cost`, cut from `feat/codex-review-lean` at `5663c8c`, in the linked worktree
-`D:\js-harness-worktrees\codex-review-lean`
+`feat/codex-review-cost`, cut from `feat/codex-review-lean` at `5663c8c`, merged via
+`jsaristi/js-harness#44` as `005507c`
 
 ## Goal
 A Codex review runs only on `gpt-6.1-sol` at `high`, covers only code, is never paid twice, and
@@ -43,8 +43,7 @@ permitiremos sol 6.1 en high e implementa todas las mejoras que propones".
 - In: `bin/codex-review.mjs` and its modules in `bin/lib/`, `bin/check.mjs` where it reports
   review state, `evals/review/` where the comparison could still start a review on his own
   configuration, `docs/ROADMAP.md`, this document.
-- Out: his `~/.codex` (never written; `config.toml` still names `gpt-6-astra` at `low` for his own
-  Codex sessions, which is his to change), gentle-ai's state, the Codex plugin (the proposal in
+- Out: his `~/.codex` (never written), gentle-ai's state, the Codex plugin (the proposal in
   `odd/tasks/codex-review-lean.md` waits for him), `feat/codex-parity` (F6 is paused there).
 - Out: the readings, the report and the roadmap section of the finished comparison. They are the
   record of what was measured, `gpt-6-astra` rows included, and the verdict rests on them. Read
@@ -64,7 +63,7 @@ high
 
 ## Ask me before
 A run above the bound of T3 (it refuses by itself); the measurement of T6, which is a batch of
-Codex reviews with its count; push, pull request and merge.
+Codex reviews with its count.
 
 ## TDD
 Strict: each behaviour arrives with the test that fails first, observed. One writer a slice, one
@@ -658,21 +657,15 @@ push of that branch.
   cost of the parts of 400 lines comes to matter, the thing to measure is how often each
   size finds a known defect over several runs of the same range, not one run more.
 - F8-a-merge-is-reviewed-with-its-side: see the entry of 2026-10-08 on the fix of the merge.
-- F7-gate-near-its-timeout: the gate runs the tests under a bound of 20 minutes, and on
-  2026-10-08 the first commit of the second half of T2 was refused once on that bound alone
-  ("npm run test timed out after 1200 s", no test failing) and passed on the retry in 1,044
-  s for the whole gate. Another session ran its own gate on this machine that evening (seen
-  at 18:04 in the worktree `rule-hierarchy-plan`), so the refusal may have been two gates
-  at once; the retry and the next commit (1,117 s) had the machine to themselves as far as
-  a sample of its processes showed, and that is still within two minutes of the bound. What sets it is one file,
-  `bin/codex-review.test.mjs`: 230 tests that each make a real repository, 12 minutes alone
-  and more beside the other files. Splitting that file lets the runner spread it over the
-  cores; it is a move of thousands of lines, so it is several commits under the review
-  bound, and its own piece of work. A cheaper thing to measure first: most of its tests
-  build the same few repositories with a dozen git processes each, and a repository built
-  once and copied for each test may take a large share of the time off with a small change
-  to the helpers. Until then a commit can fail on time, and is retried, and no gate is
-  started while another session runs one.
+- F7-gate-near-its-timeout: closed on 2026-10-11 by `odd/tasks/gate-lock.md` (#56), which
+  builds the test repositories of `bin/codex-review.test.mjs` once and copies them, and keeps
+  two gates apart by a lock. What opened it: on 2026-10-08 the first commit of the second
+  half of T2 was refused once on the gate's bound alone ("npm run test timed out after 1200
+  s", no test failing) and passed on the retry in 1,044 s for the whole gate. Another session
+  ran its own gate on this machine that evening (seen at 18:04 in the worktree
+  `rule-hierarchy-plan`), so the refusal may have been two gates at once; the retry and the
+  next commit (1,117 s) had the machine to themselves as far as a sample of its processes
+  showed.
 - F2-whole-range-runs-feed-no-estimate: a run line of a range reviewed whole holds no count
   of changed lines, so it never enters the estimate of a plan. Smaller since the first half
   of T2: a one-part range that leaves a file out is asked by its files and logs its part,
@@ -698,13 +691,8 @@ push of that branch.
   recorded as such, and the command and `check` read one definition of what a review reads.
 
 ## Next step
-In this order, each slice committed when it is green and kept under about 1,300 changed
-lines, deletions counted (gentle-ai refused one of 1,571). A defect that is known is fixed before the Codex review of its
-slice, and the plan of that review is read first:
-1. Every task is done and both branches are in `main` (#43 and #44, 2026-10-09). Nothing
-   is left of this feature.
-2. F7 before the next feature that adds tests to the command: the gate runs within two
-   minutes of its bound.
+None: every task is done and both branches are in `main` (#43 and #44, 2026-10-09). Nothing
+is left of this feature.
 
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
 (asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which

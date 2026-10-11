@@ -1110,7 +1110,3 @@ Decided by Sebastián on 2026-10-04: the gate fix goes as its own PR against `ma
 slices, each its own PR merged in order: plan+T1+T1r+T2+T2r (with T2s and T2t, above the
 400-line budget, which that slicing accepts), then T3+T5, then T4+T6. The gate's limit for a
 sensor is twenty minutes.
-Never run two gates at once, and after a failed gate check `git rev-parse --is-inside-work-tree`.
-A gate takes about ten minutes here, so commits run in the background and a document-only
-change rides on the next task's commit when it can; a commit message file is written before
-its commit starts, not inside a command a guard can abort.
