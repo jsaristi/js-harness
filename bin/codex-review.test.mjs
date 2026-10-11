@@ -1,4 +1,4 @@
-import { test as runnerTest, before, after } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
@@ -15,52 +15,6 @@ import { planLines, reviewPlan } from './lib/codex-review-plan.mjs';
 import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { codexReviewRunsPath, readCodexReviewRuns, runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
-
-// This file is run as three. `node --test` runs files side by side and the tests of one file one after
-// another, and the whole suite took as long as this file: 490 s for its 233 tests when it ran alone, with
-// every other file done by 458 s. So it runs every third test, by the place of the test in the file, and the
-// two files beside it, `codex-review.shard-2.test.mjs` and `codex-review.shard-3.test.mjs`, load it to run
-// the other two thirds. A test of another shard is not handed to the runner at all, rather than skipped, so
-// the three counts add up to the tests there are and a skip stays a real one. The hooks run in each.
-//
-// So this file alone is a third of its tests, and a `--test-name-pattern` given to it alone finds a third.
-// All of them, in three processes, from the top of the repository:
-//   node --test bin/codex-review.test.mjs bin/codex-review.shard-2.test.mjs bin/codex-review.shard-3.test.mjs
-// All of them in this one process, as it was, for a debugger or for a test that fails only after another:
-//   JS_HARNESS_TEST_SHARD=all node --test bin/codex-review.test.mjs
-// (in PowerShell, `$env:JS_HARNESS_TEST_SHARD = 'all'` before it), and then the other two files run nothing.
-// Every run of any of the three says in one line how many of the tests were its own.
-const SHARDS = 3;
-const shard = Number(new URL(import.meta.url).searchParams.get('shard') ?? 1);
-if (!Number.isInteger(shard) || shard < 1 || shard > SHARDS) throw new Error(`no shard ${shard} of ${SHARDS}: ${import.meta.url}`);
-const whole = process.env.JS_HARNESS_TEST_SHARD === 'all';
-if (process.env.JS_HARNESS_TEST_SHARD && !whole) {
-  throw new Error(`JS_HARNESS_TEST_SHARD is ${JSON.stringify(process.env.JS_HARNESS_TEST_SHARD)}: the one value it takes is "all"`);
-}
-let registered = 0;
-let own = 0;
-
-/** `register` (`test` of `node:test`, or its `skip`, `todo` or `only`) for the tests of this shard, and
- * nothing for the others. The runner takes the line that called it for the place of a test, which is now a
- * line in here for every test: a failed one is found by its name. */
-const ofThisShard = (register) => (...args) => {
-  const mine = whole ? shard === 1 : registered % SHARDS === shard - 1;
-  registered += 1;
-  if (!mine) return undefined;
-  own += 1;
-  return register(...args);
-};
-const test = Object.assign(ofThisShard(runnerTest), {
-  skip: ofThisShard(runnerTest.skip),
-  todo: ofThisShard(runnerTest.todo),
-  only: ofThisShard(runnerTest.only),
-});
-after((t) => {
-  const tests = `${registered} tests of codex-review.test.mjs`;
-  let said = `shard ${shard} of ${SHARDS}: ${own} of the ${tests} are here, and the top of that file names the command that runs them all`;
-  if (whole) said = shard === 1 ? `all ${tests} are in this one process (JS_HARNESS_TEST_SHARD=all)` : `none of the ${tests} is here: JS_HARNESS_TEST_SHARD=all has them in that file`;
-  t?.diagnostic?.(said);
-});
 
 // Real git and a fake `codex` (injected spawns): no test ever calls a real Codex. The OS home is a
 // temporary folder too (`run` injects it), with a fixture for a Codex login, so no test reads, links or

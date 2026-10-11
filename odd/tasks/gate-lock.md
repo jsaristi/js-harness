@@ -225,10 +225,11 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
 - [x] T5 · Measure the suite per file; record it here; set the numbers T6 is judged by.
 - [x] T6 · Fixtures of `bin/codex-review.test.mjs` built once and copied; timed before and
       after.
-- [x] T6b · `bin/codex-review.test.mjs` is still the longest file after T6 (added 2026-10-10;
-      the numbers are in Progress). Approved by Sebastián on 2026-10-10, both things: the file
-      run in three shards with no code moved, and `jsonLinesPath` asking git once for what it
-      uses once. Route: one writer; timed before and after.
+- [x] T6b · `bin/codex-review.test.mjs` was still the longest file after T6 (added 2026-10-10).
+      Approved by Sebastián the same day, both things: the file run in three shards with no
+      code moved, and `gitDirs` asking git once for what it asked twice. Both built
+      (`b65ea95`); measured inside a whole run the shards gave nothing, and they are taken
+      out again (Progress, "What the shards gave"). `gitDirs` stays.
 - [ ] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
       approved by Sebastián on 2026-10-10 with the list in hand). Route: one writer.
 - [ ] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
@@ -1080,22 +1081,75 @@ allows a feature. No spend outside the plan.
   for the session that owns it; after the correction it started nothing until that batch
   had ended.
 
+- 2026-10-10 · T6b is commit `b65ea95`: gate green in 833 s (23:21:37 to 23:35:30), one try, after
+  waiting on another session's gate. gentle-ai's row: medium, 8 paths, 342 lines, review
+  not due yet (under the slice's budget); it is reviewed with the next commit.
+
+- 2026-10-10 · What the shards gave: nothing inside a whole run, and they are removed. A mistake of
+  this session's estimate, in four parts.
+  - What happened. T5 showed the run as long as its longest file, and from it this session
+    told Sebastián that three shards would bring the gate "near 500 s", saying it was
+    arithmetic and not measured. He approved them on that. Built, the three shards alone
+    take 253 s where the file took 490 s. But the gate with them took 833 s, and the whole
+    suite measured again file by file, alone on the machine under `js-harness gate`
+    (23:35:54 to 23:48:21), took 747.2 s: 63 files, 2,855 tests, 2,845 passed, none failed.
+    The gates of the commit before, without the shards, took 728 s, 872 s and about 724 s.
+    The longest file of that run takes 462.4 s (`bin/check-codex-reviews.test.mjs`), the
+    three shards 432.3, 369.6 and 358.8 s (1,161 s between them, where they take 697 s when
+    only they run), and the files' seconds added up are 3,959.9, as before the shards
+    (3,942.4). So the run is no longer as long as one file, and no shorter: this machine
+    has four cores (eight logical, so seven files at a time), and the suite is some fifty
+    thousand git processes that slow each other down. The shards moved work from the end
+    of the run, where one file ran alone and fast, to its crowded start. The bound is the
+    work, not its arrangement.
+  - The fix now. The shards are taken out in the commit after `b65ea95`: the file is as it
+    was at `c2485cd` and the two small files are gone. `git revert` of that commit brings
+    them back, should a machine with more cores make them worth their cost (a wrapper whose
+    line the runner reports for every test, and a file that alone runs a third). `gitDirs`
+    in one process stays: it is less work, 2,161 processes in that file alone.
+  - What stops it happening again. An estimate of a run's time is taken from the same kind
+    of run it is about: a whole run for the gate, never one file alone. T5's table was a
+    whole run and was read as if the files did not slow each other; the sum of the files'
+    seconds against the run's own (four and a third at a time on seven slots) said they
+    did.
+  - Where it enters the harness. What shortens this gate is fewer processes: T6 took out
+    about 150 s that way and `gitDirs` some more. The next ones of that kind, measured and
+    not done here: `jsonLinesPath` resolved once per `codex-review` run and handed on
+    (three modules), the tests' own `git diff` kept per repository, and the same build-once
+    fixtures in `bin/check-codex-reviews.test.mjs`, now the longest file. They belong to a
+    next slice, with T7 doing the most for the half of the commits that are documents.
+
+- 2026-10-10 · The gate log, placed: one line per gate in a file (start, end, seconds, worktree,
+  result, whom it waited for). The orchestrator before this one proposed it and this
+  session wrote it down as a thing to put to Sebastián with T5, and did not put it: it was
+  left out of the three questions. Two failures of the day (9 and 16 in the orchestrator's
+  count) name that log as their proof, "which gates ran beside which" read from a file and
+  not from a session's memory; this session's own overlap with the evals batch is a third.
+  Decided with the orchestrator: it is the first task of the next slice of the gate, not
+  of this one. It is a file that stays on disk after every gate, which the lock is not, so
+  it wants a bound on its size and its removal by `uninstall`, and that it writes a
+  lasting file outside the repository is put to Sebastián when that slice is planned.
+
 ## Next
-1. The commit of T6b and its gate: its time against 728 s is what the shards give inside a
-   whole run. Then `gentle-ai review assess --base-ref c2485cd --committed-only`.
+1. The commit that takes the shards out, with this entry, and its gate.
 2. T7, one writer: `harness.json` of this repository declares `docs/` and `odd/tasks/`;
    a commit whose every staged path is under them runs no test sensor and says so in a
-   row; the static rows still run; off by default elsewhere. Its commit, gate, review.
-3. Codex on what T6b and T7 add, if its plan fits the 1,309,386 left; if it does not, that
-   is a question of spend, his.
-4. The close: `origin/main` (at `ca013c2` when last fetched; it merges with no conflict)
-   merged in before the pull request; this document's last entries committed; push and
-   pull request; the closing notice to the orchestrator, which merges.
+   row; the static rows still run; off by default elsewhere. Its commit, gate, and the
+   gentle-ai review of `c2485cd..HEAD`.
+3. Codex on `c2485cd..HEAD`, if its plan fits the 1,309,386 left; if it does not, that is
+   a question of spend, his.
+4. The close: `origin/main` (at `e8a0b6a` on 2026-10-10, pull requests 51 to 54 merged)
+   merged in before the pull request, which is one more gate; this document's last entries
+   committed; push and pull request; the closing notice to the orchestrator, which merges.
+For the next slice of the gate, in this order: the gate log; fewer git processes in the
+two long test files; the gate on GitHub. A run that needs the machine quiet, and not only
+its turn (an evals batch that compares durations), is a need the lock does not serve.
 Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
 changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
 tree (set this document aside with `git stash`, one stash, popped by the same command);
 no review step beside a running gate; a timing is one only with the process list empty
-before and after it; the look finds `evals/suite.mjs` too.
+before and after it; the look finds `evals/suite.mjs` too; a gate's time is estimated
+from whole runs.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,
