@@ -95,6 +95,17 @@ test('with no docs/FAILURES.md the gate has no failures row', async () => {
   });
 });
 
+test('a project whose "docs" is a file keeps no register either, whatever the system answers for it', async () => {
+  await inProject({ docs: 'a file where a folder could be\n' }, (dir) => {
+    assert.deepEqual(checkFailures(dir), []);
+  });
+  // What POSIX answers for a file in the place of a folder; Windows answers ENOENT.
+  const notADirectory = () => {
+    throw Object.assign(new Error('ENOTDIR: not a directory'), { code: 'ENOTDIR' });
+  };
+  assert.deepEqual(checkFailures('/a/project', { readFile: notADirectory }), []);
+});
+
 test('a register read without a fault passes: its detail gives the failures, the sightings, those seen more than once and those not settled', async () => {
   await inProject(FULL, (dir) => {
     const rows = checkFailures(dir);
@@ -351,4 +362,19 @@ test('--help lists failures, and failures with a flag it does not know exits 2 w
   const { code, stderr } = await dispatched(['failures', '--nope']);
   assert.equal(code, 2);
   assert.match(stderr, /unknown argument: --nope\n\nUsage: js-harness failures/);
+});
+
+test('a form that prints runs through the dispatcher too, on the project it is run in', async () => {
+  await inProject(FULL, async (dir) => {
+    const before = process.cwd();
+    process.chdir(dir);
+    try {
+      const { code, stdout, stderr } = await dispatched(['failures', 'check']);
+      assert.equal(code, 0);
+      assert.match(stdout, /^PASS {2}failures {2}4 failures, 5 sightings, 1 seen more than once, 1 not settled; /);
+      assert.equal(stderr, '');
+    } finally {
+      process.chdir(before);
+    }
+  });
 });

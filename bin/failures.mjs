@@ -57,9 +57,10 @@ function readRegister(cwd, readFile) {
   try {
     text = readFile(path.join(cwd, ...REGISTER.split('/')));
   } catch (err) {
-    // Only a file that is not there is no register. One that is there and cannot be read is not
-    // known to be clean, and a gate must not hide it.
-    if (err.code === 'ENOENT') return null;
+    // Only a file that is not there is no register: `ENOENT`, or `ENOTDIR` where `docs` is a file
+    // (what POSIX answers for it). One that is there and cannot be read is not known to be clean,
+    // and a gate must not hide it.
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
     return { row: { name, pass: false, detail: `cannot read ${REGISTER}: ${err.code ?? err.message}` } };
   }
   const register = parseRegister(text);
