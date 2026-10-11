@@ -9,12 +9,18 @@
 // a decision, so a session can wait on the others without spending anything while nothing happens.
 // The board also prints the relief file of the session that orchestrates the others (its path and last
 // lines): that session writes it, this command only reads it.
+// The gates come from two sources: the process listing, which shows every `check` process, and the
+// machine's gate lock (bin/lib/gate-lock.mjs), which says which of them runs its sensors and which wait
+// for their turn. Both are read, neither is written. A gate of a checkout from before the lock asks for
+// no turn and runs whenever it is started: it is told apart by the lock's library, which is beside the
+// script of a gate that knows the lock and of no other (`lockLibraryBesideScript`).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -175,6 +181,21 @@ function listGateCandidates(run, platform) {
   return windows ? parseProcessList(result.stdout) : parsePsList(result.stdout);
 }
 
+/** Whether the machine's gate lock has its library beside the script at `script`: `lib/gate-lock.mjs` in
+ * the folder of `bin/check.mjs`, or of the dispatcher, which is where this version keeps it and where a
+ * checkout from before the lock has nothing. That is what tells a gate that waits for its turn from one
+ * that runs whenever it is started (`findGates`). The script is followed through a link first: an install
+ * on macOS or Linux links the dispatcher from a folder of commands. A script that cannot be looked at
+ * has no library beside it. Reads only; `realpath` and `exists` are replaceable, since a test cannot make
+ * a link on every machine. */
+export function lockLibraryBesideScript(script, { realpath = fs.realpathSync, exists = fs.existsSync } = {}) {
+  try {
+    return exists(path.join(path.dirname(realpath(script)), 'lib', 'gate-lock.mjs'));
+  } catch {
+    return false;
+  }
+}
+
 /** The id of the subagent the tool call `toolUseId` launched, from the `agent-<id>.meta.json` that names
  * it — the only place it is written while a foreground subagent runs. `null` when no file names it. */
 function agentOfCall(subagentsDir, toolUseId, { readdir, readFile }) {
@@ -267,6 +288,8 @@ export async function sessionsMain(
     // an unavailable fact, not a board that never prints.
     run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 30000 }),
     listProcesses = () => listGateCandidates(run, platform),
+    // Whether a gate's script has the lock's library beside it, replaceable so a test places none.
+    lockLibraryBeside = (script) => lockLibraryBesideScript(script),
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     readdir = (absolute) => fs.readdirSync(absolute),
     stat = (absolute) => fs.statSync(absolute),
@@ -293,7 +316,11 @@ export async function sessionsMain(
   // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`. An empty
   // JS_HARNESS_HOME is no home: joined as it is, it would put the file under the folder the command runs
   // in. A relative `--relief` is read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
-  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(env.JS_HARNESS_HOME || homedir(), '.js-harness', 'relief', `${slug}.md`));
+  const harnessHome = env.JS_HARNESS_HOME || homedir();
+  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? path.join(harnessHome, '.js-harness', 'relief', `${slug}.md`));
+  // The machine's gate lock is under the same home, read through the same three functions as every other
+  // file of the board, so a test hands it a folder of its own.
+  const lockFiles = { readdirSync: readdir, statSync: stat, readFileSync: readFile };
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
@@ -330,6 +357,20 @@ export async function sessionsMain(
     for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
 
     const worktrees = readWorktrees(run, root, { readFile });
+    // The processes first, the lock after: a gate that starts is a process for a moment before it stands
+    // in line, and read the other way round more of them would be shown as not yet in line. The waiters
+    // before the holder: a gate that takes the lock between the two reads is then in one of them.
+    const gates = readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : [], { lockLibraryBeside });
+    const gateLock = readGateLock(() => {
+      // Against the clock of this moment, not the one the look began at: the transcripts, `git` and the
+      // process listing took their time (16 s, measured here), and a holder whose last beat was a
+      // minute before now would still read alive against the earlier time. One time for both reads,
+      // which goes with what was read: the board says the ages of these gates against it.
+      const readAt = now();
+      const reading = { now: () => readAt, fileSystem: lockFiles };
+      const waiters = readGateWaiters(harnessHome, reading);
+      return { holder: readGateHolder(harnessHome, reading), waiters, readAt };
+    });
     return {
       root,
       projectDir,
@@ -341,7 +382,8 @@ export async function sessionsMain(
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
       worktrees,
-      gates: readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : []),
+      gates,
+      gateLock,
       pullRequests: readPullRequests(run, root),
       relief: readRelief(reliefFile, readFile),
       notVisible: NOT_VISIBLE,

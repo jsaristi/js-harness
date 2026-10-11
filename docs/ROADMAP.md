@@ -48,7 +48,7 @@ First request of a one-word prompt, estimated tokens:
 | Release source | Git tags while the repo is private (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine; npm publish once it is public. A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Commands | `install`, `sync`, `status`, `update`, `upgrade`, `uninstall`, `check`, `doctor`, `init`, `codex-review` (2026-09-29, T7), `contract` (2026-09-29, F3), `remote` (2026-10-04), `sessions` (2026-10-06, read-only, no TUI entry), and a TUI over the same commands |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
-| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`) |
+| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
 | Command scope | A command that exists at both levels acts by location, like npm: inside an initialized project (a git repo with `harness.json` or a project manifest) it acts on the project, anywhere else on the machine; `--global` forces the machine from anywhere. Inside a git repository that is not an initialized project, or with an explicit `--cwd` that is not one, the command refuses and names `--global`, so repeating it never reaches the machine by accident. `uninstall` first, `sync` next (decided 2026-09-28) |
@@ -737,6 +737,47 @@ podamos implementar todo"), each a feature of its own with its own document and 
    within two minutes of its own bound), and the same gate run by GitHub on every pull
    request. In a project that uses the harness the lock comes with `check`; whether `init`
    also writes the GitHub workflow is a product choice, his.
+   Its first slice is built (2026-10-10, `odd/tasks/gate-lock.md`): the lock and a shorter
+   run. The gate on GitHub stays for a later slice, his to start.
+   - What the lock covers: every `check` that runs sensors, and any command run through
+     `js-harness gate -- <command>` (a batch of evals, a whole test run by hand), for one
+     user on one machine, across projects and worktrees, since the lock is a folder under
+     the home (`~/.js-harness/gate`). A second gate waits for its turn, an hour unless
+     `--wait` says otherwise, and says whose gate it waits for; `--no-wait` refuses
+     instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
+     watch no longer raises an alarm for a gate that only waits. A gate that is killed
+     leaves a holder that the next one takes over a minute after its last beat. A gate that
+     ends leaves nothing on disk, and `uninstall` removes what a killed one left.
+   - What it does not cover: a gate of a branch, or of an installed version, from before
+     the lock, which runs beside the others as it always did, so the lock holds for
+     everybody only once it is merged and the machine's command is updated, both his; a
+     test file run alone by hand, left free on purpose; a `check` that could not take the
+     lock at all, which runs and says so in a row; a process that carries the mark of a
+     held lock without a holder behind it; two machines; and `check --push`, which runs
+     no sensor. On Windows `gate` refuses, among several arguments, one that `cmd.exe`
+     cannot be handed whole (a double quote, a percent sign, a line break): such a command
+     goes as one argument.
+   - The shorter run: measured file by file, the suite is as long as one file,
+     `bin/codex-review.test.mjs` (909.7 of 910 s, every other file done by 458 s). Its
+     test repositories built once and copied took that file from 640 s to 490 s alone and
+     the gate from about 900 s to between 730 and 870 s. `gitDirs` now asks git in one
+     process for the two folders it asked for in two. Running that file in three shards,
+     approved by him on 2026-10-10, was built and measured and gave nothing inside a whole
+     run (747 s and 833 s), so it was taken out again: on this machine of four cores the
+     bound is the work, some fifty thousand git processes that slow each other down, and
+     not how the files are arranged. What shortens the gate is fewer of them, which is
+     for the next slice. And, approved by him the same day, a commit of documents alone
+     runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
+     only Markdown, each paying a gate of 13 minutes that no document could fail, since no
+     test reads `docs/` or `odd/tasks/`.
+   - What the time of a gate depends on that no session saw (2026-10-11): on main with this
+     slice merged in, the whole suite took 867 s and the gate 832 s, and what pull requests
+     53 and 54 added costs 3.4 s of it. The same hour a gate on main without this slice
+     timed out at 1,200 s and one of this slice took 1,069 s, beside a video playing in a
+     browser and a TypeScript language server of a session spinning at about 1.5 logical
+     processors with nothing to do. The process look counts neither. The bound stays at
+     1,200 s; a gate that says the load on the machine when it starts is for the next
+     slice, with the gate log.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top.

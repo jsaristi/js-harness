@@ -729,6 +729,9 @@ test('parsePsList reads pid and command line, with no start time', () => {
   ]);
 });
 
+/** What `knowsLock` is for a gate whose script the command line names by a relative path. */
+const RELATIVE_SCRIPT = { unavailable: 'its command line names its script by a relative path' };
+
 test('findGates keeps the node processes that run bin/check.mjs, with their worktree and start time', () => {
   const processes = [
     { pid: 1, createdAt: 1767261600000, commandLine: '"C:\\Program Files\\nodejs\\node.exe" "D:/proj-worktrees/board/bin/check.mjs"' },
@@ -742,11 +745,45 @@ test('findGates keeps the node processes that run bin/check.mjs, with their work
     { pid: 9, createdAt: 1767261600000, commandLine: 'node "D:/proj/sbin/check.mjs"' },
   ];
   assert.deepEqual(lib.findGates(processes, ['D:/proj', 'D:/proj-worktrees/board']), [
-    { pid: 1, startedAt: '2026-01-01T10:00:00.000Z', worktree: 'D:/proj-worktrees/board', commandLine: processes[0].commandLine },
-    { pid: 2, startedAt: '2026-01-01T10:01:00.000Z', worktree: 'D:/proj', commandLine: processes[1].commandLine },
-    { pid: 3, startedAt: { unavailable: 'the process listing gave no start time' }, worktree: { unavailable: 'its command line names bin/check.mjs by a relative path' }, commandLine: 'node bin/check.mjs' },
-    { pid: 4, startedAt: '2026-01-01T10:00:00.000Z', worktree: '/elsewhere', commandLine: 'node /elsewhere/bin/check.mjs' },
+    { pid: 1, startedAt: '2026-01-01T10:00:00.000Z', worktree: 'D:/proj-worktrees/board', knowsLock: false, commandLine: processes[0].commandLine },
+    { pid: 2, startedAt: '2026-01-01T10:01:00.000Z', worktree: 'D:/proj', knowsLock: false, commandLine: processes[1].commandLine },
+    { pid: 3, startedAt: { unavailable: 'the process listing gave no start time' }, worktree: { unavailable: 'its command line names bin/check.mjs by a relative path' }, knowsLock: RELATIVE_SCRIPT, commandLine: 'node bin/check.mjs' },
+    { pid: 4, startedAt: '2026-01-01T10:00:00.000Z', worktree: '/elsewhere', knowsLock: false, commandLine: 'node /elsewhere/bin/check.mjs' },
   ]);
+});
+
+// Whether a `check` process knows the machine's gate lock is a fact of the script it runs, not of what it
+// is doing: the lock's library is beside it (`lib/gate-lock.mjs` in its folder) or it is not, as in every
+// checkout from before the lock. The board asks for the script by the path its command line gives.
+test('findGates says of each gate whether its script has the lock library beside it, and cannot say for a relative path', () => {
+  const processes = [
+    { pid: 1, createdAt: null, commandLine: '"C:\\Program Files\\nodejs\\node.exe" "D:/new tree/bin/check.mjs" --wait 5' },
+    { pid: 2, createdAt: null, commandLine: 'node D:\\old\\bin\\check.mjs' },
+    { pid: 3, createdAt: null, commandLine: 'node bin/check.mjs' },
+    { pid: 4, createdAt: null, commandLine: 'node "C:\\Users\\me\\pnpm\\global\\node_modules\\js-harness\\bin\\js-harness.mjs" check' },
+    { pid: 5, createdAt: null, commandLine: 'node /usr/local/bin/js-harness check' },
+    { pid: 6, createdAt: null, commandLine: 'node bin/js-harness.mjs check' },
+    { pid: 7, createdAt: null, commandLine: 'node ../other/bin/check.mjs' },
+  ];
+  const asked = [];
+  const lockLibraryBeside = (script) => {
+    asked.push(script);
+    return script.startsWith('D:/new tree/') || script.startsWith('C:\\Users\\me\\');
+  };
+  assert.deepEqual(lib.findGates(processes, [], { lockLibraryBeside }).map((gate) => [gate.pid, gate.knowsLock]), [
+    [1, true],
+    [2, false],
+    [3, RELATIVE_SCRIPT],
+    [4, true],
+    [5, false],
+    [6, RELATIVE_SCRIPT],
+    [7, RELATIVE_SCRIPT],
+  ]);
+  // The script as the command line names it, with no quotes: the caller follows a link and looks beside it.
+  assert.deepEqual(asked, ['D:/new tree/bin/check.mjs', 'D:\\old\\bin\\check.mjs', 'C:\\Users\\me\\pnpm\\global\\node_modules\\js-harness\\bin\\js-harness.mjs', '/usr/local/bin/js-harness']);
+  // Through `readGates` as well, and with nobody to ask no script is taken to know the lock.
+  assert.deepEqual(lib.readGates(() => processes, [], { lockLibraryBeside }).items.map((gate) => gate.knowsLock === true), [true, false, false, true, false, false, false]);
+  assert.deepEqual(lib.readGates(() => processes, []).items.map((gate) => gate.knowsLock === true), [false, false, false, false, false, false, false]);
 });
 
 // Codex review of 764c9b0, finding 1: the pre-commit hook `js-harness init` writes runs `js-harness check`
@@ -780,15 +817,15 @@ test('findGates keeps the node processes that run the gate through the dispatche
   const unnamed = { unavailable: 'js-harness check checks the folder it runs in, and its command line names none' };
   const noStart = { unavailable: 'the process listing gave no start time' };
   assert.deepEqual(lib.findGates([...gatesIn, ...others], ['D:/proj', 'D:/proj-worktrees/board']), [
-    { pid: 1, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, commandLine: gatesIn[0].commandLine },
+    { pid: 1, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, knowsLock: false, commandLine: gatesIn[0].commandLine },
     // `check --push` is listed as `bin/check.mjs --push` is: it is the push's gate.
-    { pid: 2, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, commandLine: gatesIn[1].commandLine },
+    { pid: 2, startedAt: '2026-01-01T10:00:00.000Z', worktree: unnamed, knowsLock: false, commandLine: gatesIn[1].commandLine },
     // The dispatcher of a checkout the board knows is taken to check that checkout, as its bin/check.mjs is.
-    { pid: 3, startedAt: '2026-01-01T10:01:00.000Z', worktree: 'D:/proj', commandLine: gatesIn[2].commandLine },
-    { pid: 4, startedAt: noStart, worktree: unnamed, commandLine: 'node bin/js-harness.mjs check' },
-    { pid: 5, startedAt: noStart, worktree: unnamed, commandLine: 'node /usr/local/bin/js-harness check' },
+    { pid: 3, startedAt: '2026-01-01T10:01:00.000Z', worktree: 'D:/proj', knowsLock: false, commandLine: gatesIn[2].commandLine },
+    { pid: 4, startedAt: noStart, worktree: unnamed, knowsLock: RELATIVE_SCRIPT, commandLine: 'node bin/js-harness.mjs check' },
+    { pid: 5, startedAt: noStart, worktree: unnamed, knowsLock: false, commandLine: 'node /usr/local/bin/js-harness check' },
     // Any other folder is where a dispatcher is installed, not what it checks.
-    { pid: 6, startedAt: noStart, worktree: unnamed, commandLine: 'node /elsewhere/bin/js-harness.mjs check' },
+    { pid: 6, startedAt: noStart, worktree: unnamed, knowsLock: false, commandLine: 'node /elsewhere/bin/js-harness.mjs check' },
   ]);
 });
 
@@ -904,7 +941,8 @@ test('boardChanges leaves out the session that is watching', () => {
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [] }, { self: A }), []);
 });
 
-const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, commandLine: 'node bin/check.mjs' });
+/** A gate that does not know the machine's gate lock, as every gate was before there was one. */
+const gate = (pid, worktree) => ({ pid, startedAt: before(10), worktree, knowsLock: false, commandLine: 'node D:/old/bin/check.mjs' });
 /** A board's gates, on a machine whose worktrees are `D:/a` and `D:/b`. */
 const gates = (...items) => ({ gates: { available: true, items }, worktrees: { available: true, items: [{ path: 'D:/a' }, { path: 'D:/b' }] } });
 
@@ -1019,6 +1057,254 @@ test('watchBaseline keeps the older gates across a look that could not list the 
   assert.deepEqual(lib.boardChanges(baseline, boardOf(gates(gate(5, 'D:/a')))), ['gate started in D:/a (pid 5)']);
 });
 
+// --- the machine's gate lock: which gate runs and which wait ---
+// Since `check` waits for the lock, the process listing shows two `check` processes for one gate that
+// runs. The lock says which is which, and the folder each one checks.
+
+/** A board's `gateLock`: `holder` holds the lock and `waiters` are in line for it. */
+const lockOf = (holder, ...waiters) => ({ gateLock: { available: true, holder, waiters } });
+const holds = (pid, cwd, more = {}) => ({ pid, cwd, command: 'check', startedAt: before(170), beatAt: before(2), stale: false, ...more });
+const waits = (pid, cwd, seconds = 60) => ({ pid, cwd, command: 'check', waitingSince: before(seconds) });
+const asHolder = (more = {}) => ({ role: 'holder', since: before(170), beatAt: before(2), stale: false, command: 'check', ...more });
+const asWaiter = (pid, seconds = 60) => ({ role: 'waiter', since: before(seconds), for: pid, command: 'check' });
+/** A gate whose script has the lock's library beside it, started `seconds` ago: before `holds` took the
+ * lock and before `waits` began to wait, as the process of either was. */
+const aware = (pid, worktree, seconds = 300) => ({ pid, startedAt: before(seconds), worktree, knowsLock: true, commandLine: 'node D:/new/bin/check.mjs' });
+/** A gate started as `npm run check`: its command line does not say which script it runs, nor where. */
+const unplaced = (pid, seconds = 300) => ({ pid, startedAt: before(seconds), worktree: { unavailable: 'its command line names bin/check.mjs by a relative path' }, knowsLock: RELATIVE_SCRIPT, commandLine: 'node bin/check.mjs' });
+/** The row of `boardGates` for a gate of the lock whose process is `item`, checking `worktree`. */
+const ofLock = (item, worktree, lock) => ({ pid: item.pid, startedAt: item.startedAt, worktree, commandLine: item.commandLine, lock });
+
+test('readGateLock gives the holder and the waiters as the board holds them, and the reason when the lock cannot be read', () => {
+  const holder = { token: '11-aaaaaaaaaaaa', pid: 11, cwd: 'D:\\a', command: 'check', startedAt: before(170), beatAt: NOW - 2000, stale: false };
+  const waiter = { token: '22-bbbbbbbbbbbb', pid: 22, cwd: 'D:\\b', command: 'check', waitingSince: before(60) };
+  assert.deepEqual(lib.readGateLock(() => ({ holder, waiters: [waiter] })), lockOf(holds(11, 'D:\\a'), waits(22, 'D:\\b')).gateLock);
+  assert.deepEqual(lib.readGateLock(() => ({ holder: null, waiters: [] })), { available: true, holder: null, waiters: [] });
+  // A lock that is held and of which nothing could be read is a holder all the same, with nothing in it.
+  const nobody = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+  assert.deepEqual(lib.readGateLock(() => ({ holder: nobody, waiters: [] })).holder, { pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false });
+  const noAccess = () => {
+    throw new Error("EACCES: permission denied, scandir 'C:\\home\\.js-harness\\gate'");
+  };
+  assert.deepEqual(lib.readGateLock(noAccess), { available: false, reason: "the gate lock: EACCES: permission denied, scandir 'C:\\home\\.js-harness\\gate'" });
+  // The clock the lock was read against goes with what was read, as a date, when the reader gives it.
+  assert.deepEqual(lib.readGateLock(() => ({ holder: null, waiters: [], readAt: NOW + 16_000 })), { available: true, holder: null, waiters: [], readAt: before(-16) });
+});
+
+// Found in review, 2026-10-10: the lock is read after the transcripts, `git` and the process listing, which
+// took 16 s here, and its ages were said against the time the board began. A holder read as silent, whose
+// last beat was a minute before the read, was then shown with a last beat of 44 s.
+test('renderBoard: the ages of the gates of the lock are said against the clock the lock was read with, and those of the listing against the board\'s', () => {
+  const section = (parts) => {
+    const lines = lib.renderBoard({ ...BOARD, ...parts }, { now: NOW });
+    return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1);
+  };
+  const readLater = (holder, ...waiters) => ({ gateLock: { ...lockOf(holder, ...waiters).gateLock, readAt: before(-16) } });
+  const listed = (...items) => ({ gates: { available: true, items } });
+  const idle = { pid: 4260, startedAt: before(50), worktree: 'D:/proj', knowsLock: true, commandLine: 'node "D:/proj/bin/check.mjs"' };
+  // Silent since 44 s before the board began, which is a minute before the lock was read.
+  const silent = holds(4242, 'D:\\proj-worktrees\\board', { beatAt: before(44), stale: true });
+  assert.deepEqual(section({ ...listed(idle), ...readLater(silent, waits(4250, 'D:\\proj', 50)) }), [
+    '  pid 4242  D:/proj-worktrees/board  silent: holds the gate lock, its last beat was 1m ago and the next gate takes it over  check (no process of the listing has this pid)',
+    '  pid 4250  D:/proj  waiting for the gate of pid 4242, began 1m ago  check (no process of the listing has this pid)',
+    '  pid 4260  D:/proj  not in its sensors (before or after them), started 50s ago  node "D:/proj/bin/check.mjs"',
+  ]);
+  // A holder that runs: when it took the lock, and its last beat where that is all its file gives.
+  assert.deepEqual(section({ ...listed(), ...readLater(holds(4242, 'D:\\proj', { startedAt: before(110) })) }), [
+    '  pid 4242  D:/proj  running, took the gate lock 2m ago  check (no process of the listing has this pid)',
+  ]);
+  assert.deepEqual(section({ ...listed(), ...readLater(holds(4242, 'D:\\proj', { startedAt: null, beatAt: before(44) })) }), [
+    '  pid 4242  D:/proj  running, holds the gate lock since an unknown time, its last beat was 1m ago  check (no process of the listing has this pid)',
+  ]);
+  // A board that does not say when its lock was read says every age against its own time, as before.
+  assert.deepEqual(section({ ...listed(), ...lockOf(silent) }), [
+    '  pid 4242  D:/proj-worktrees/board  silent: holds the gate lock, its last beat was 44s ago and the next gate takes it over  check (no process of the listing has this pid)',
+  ]);
+});
+
+test('boardGates: the process that holds the lock is one gate that runs, the one in line waits, and any other is as the listing has it', () => {
+  const board = boardOf({ ...gates(aware(7, 'D:/a'), gate(8, 'D:/b'), aware(6, 'D:/b'), aware(5, 'D:/a')), ...lockOf(holds(5, 'D:\\A\\'), waits(6, 'd:/b')) });
+  assert.deepEqual(lib.boardGates(board), [
+    // The folder is the one the lock names, in the board's spelling of it.
+    ofLock(aware(5), 'D:/a', asHolder()),
+    ofLock(aware(6), 'D:/b', asWaiter(5)),
+    // A process that knows the lock and that the lock says nothing of, and one that does not know it.
+    aware(7, 'D:/a'),
+    gate(8, 'D:/b'),
+  ]);
+  // No lock on the board, or one that could not be read: the gates of the listing, as before there was one.
+  const listed = [aware(7, 'D:/a'), gate(6, 'D:/b')];
+  assert.deepEqual(lib.boardGates(boardOf(gates(...listed))), listed);
+  assert.deepEqual(lib.boardGates(boardOf({ ...gates(...listed), gateLock: { available: false, reason: 'the gate lock: boom' } })), listed);
+  assert.deepEqual(lib.boardGates(boardOf({ ...gates(...listed), ...lockOf(null) })), listed);
+  // Read as a waiter, then as the holder: it took the lock between the two reads, and it is one gate.
+  assert.deepEqual(lib.boardGates(boardOf({ ...gates(aware(5, 'D:/a')), ...lockOf(holds(5, 'D:\\a'), waits(5, 'D:\\a')) })), [ofLock(aware(5), 'D:/a', asHolder())]);
+});
+
+// The two reviews of the first version, 2026-10-10: the board took the process with the pid of a gate of
+// the lock for that gate, and worked out from it what each `check` process was doing. A pid is free again
+// once its process ends, and a holder's file outlives a gate that was killed by a minute.
+test('boardGates: the process with the pid of a gate of the lock is that gate only when it can be: it knows the lock, and it did not start after', () => {
+  const notThisGate = { unavailable: 'the listed process with this pid is not this gate' };
+  const rows = (...items) => lib.boardGates(boardOf({ ...gates(...items), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) }));
+  const fromTheLock = [
+    { pid: 5, startedAt: notThisGate, worktree: 'D:/a', commandLine: notThisGate, lock: asHolder() },
+    { pid: 6, startedAt: notThisGate, worktree: 'D:/b', commandLine: notThisGate, lock: asWaiter(5) },
+  ];
+  // A gate from before the lock that got the pid of a gate that died: never the gate of the lock.
+  assert.deepEqual(rows(gate(5, 'D:/b'), gate(6, 'D:/a')), [...fromTheLock, gate(5, 'D:/b'), gate(6, 'D:/a')]);
+  // A process that knows the lock and started after the holder took it, or after the waiter began to wait.
+  assert.deepEqual(rows(aware(5, 'D:/b', 169), aware(6, 'D:/a', 59)), [...fromTheLock, aware(5, 'D:/b', 169), aware(6, 'D:/a', 59)]);
+  assert.deepEqual(rows(aware(5, 'D:/b', 171), aware(6, 'D:/a', 61)), [ofLock(aware(5, null, 171), 'D:/a', asHolder()), ofLock(aware(6, null, 61), 'D:/b', asWaiter(5))]);
+  // With no start time on either side (`ps` gives none; a file that could not be read says none) the pid
+  // is all there is, and it only decides which command line the gate's row shows.
+  const untimed = { ...aware(5, 'D:/b'), startedAt: { unavailable: 'the process listing gave no start time' } };
+  assert.deepEqual(rows(untimed)[0], ofLock(untimed, 'D:/a', asHolder()));
+  const unread = lib.boardGates(boardOf({ ...gates(aware(5, 'D:/b', 1)), ...lockOf(holds(5, null, { startedAt: null })) }));
+  assert.deepEqual(unread, [ofLock(aware(5, null, 1), 'D:/b', asHolder({ since: null }))]);
+});
+
+// `npm run check` starts `node bin/check.mjs`: nothing on its command line says which script that is, so
+// the library cannot be looked for beside it. The lock naming its pid is then the one proof there is.
+test('boardGates: a gate whose script the command line does not place is the gate of the lock that has its pid, and a gate without the lock otherwise', () => {
+  const board = boardOf({ ...gates(unplaced(5), unplaced(6), unplaced(9)), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) });
+  assert.deepEqual(lib.boardGates(board), [ofLock(unplaced(5), 'D:/a', asHolder()), ofLock(unplaced(6), 'D:/b', asWaiter(5)), unplaced(9)]);
+  // Not when it started after that gate took the lock: it is another process with a pid used again.
+  assert.deepEqual(lib.boardGates(boardOf({ ...gates(unplaced(5, 20)), ...lockOf(holds(5, 'D:\\a')) })).map((row) => typeof row.commandLine), ['object', 'string']);
+});
+
+test('boardGates: the lock gives the folder a gate checks when its command line names none', () => {
+  const unnamed = { unavailable: 'js-harness check checks the folder it runs in, and its command line names none' };
+  const installed = { pid: 5, startedAt: before(300), worktree: unnamed, knowsLock: true, commandLine: 'node C:/pnpm/global/node_modules/js-harness/bin/js-harness.mjs check' };
+  const folderWith = (cwd) => lib.boardGates(boardOf({ ...gates(installed), ...lockOf(holds(5, cwd)) }))[0].worktree;
+  assert.equal(folderWith('D:\\b'), 'D:/b');
+  // The lock is the machine's: the gate of another project is named by its own folder.
+  assert.equal(folderWith('C:\\other\\project'), 'C:\\other\\project');
+  // A holder's file that names no folder leaves what the listing says.
+  assert.deepEqual(folderWith(null), unnamed);
+});
+
+test('boardGates: a gate the lock tells of is given even when no listed process has its pid, or no process could be listed', () => {
+  const noProcess = { unavailable: 'no process of the listing has this pid' };
+  const board = boardOf({ ...gates(gate(7, 'D:/a')), ...lockOf(holds(5, 'D:\\b'), { pid: null, cwd: null, command: null, waitingSince: null }) });
+  assert.deepEqual(lib.boardGates(board), [
+    { pid: 5, startedAt: noProcess, worktree: 'D:/b', commandLine: noProcess, lock: asHolder() },
+    { pid: null, startedAt: noProcess, worktree: { unavailable: 'the gate lock does not say which folder it checks' }, commandLine: noProcess, lock: { role: 'waiter', since: null, for: 5, command: null } },
+    gate(7, 'D:/a'),
+  ]);
+  const unlisted = { unavailable: 'the process listing could not be read' };
+  const blind = boardOf({ gates: { available: false, reason: 'the process listing: boom' }, ...lockOf(holds(5, 'D:\\b')) });
+  assert.deepEqual(lib.boardGates(blind), [{ pid: 5, startedAt: unlisted, worktree: 'D:\\b', commandLine: unlisted, lock: asHolder() }]);
+});
+
+const runs = { ...gates(aware(5, 'D:/a')), ...lockOf(holds(5, 'D:\\a')) };
+const runsAndWaits = { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) };
+
+test('boardChanges: a gate that starts and waits for the lock is said to wait, not to run beside another', () => {
+  assert.deepEqual(changes(runs, runsAndWaits), ['gate started in D:/b (pid 6), waiting for the gate in D:/a (pid 5)']);
+  // The gate it waits for may be another project's: the lock is the machine's.
+  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(holds(99, 'C:\\other'), waits(6, 'D:\\b')) }), ['gate started in D:/b (pid 6), waiting for the gate in C:\\other (pid 99)']);
+  // Read in the instant between a release and its take, the lock has no holder.
+  assert.deepEqual(changes(gates(), { ...gates(aware(6, 'D:/b')), ...lockOf(null, waits(6, 'D:\\b')) }), ["gate started in D:/b (pid 6), waiting for the machine's gate lock"]);
+});
+
+test('boardChanges: nothing is said when the gate that waited takes the lock, beyond the end of the gate before it', () => {
+  const tookIt = lockOf(holds(6, 'D:\\b'));
+  assert.deepEqual(changes(runsAndWaits, { ...gates(aware(6, 'D:/b')), ...tookIt }), ['gate ended in D:/a (pid 5)']);
+  // The gate before it is still there for a moment, writing its report with the lock released.
+  assert.deepEqual(changes(runsAndWaits, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...tookIt }), []);
+  // Neither the lock alone starts or ends a gate: a holder no listed process has the pid of is only shown.
+  assert.deepEqual([changes(gates(), { ...gates(), ...lockOf(holds(5, 'D:\\a')) }), changes({ ...gates(), ...lockOf(holds(5, 'D:\\a')) }, gates())], [[], []]);
+});
+
+// The alarm is for a gate that does not know the lock, as every gate of a checkout from before it: beside
+// another such gate, as it always was, or beside the gate that holds the lock.
+test('boardChanges: a gate that does not know the lock is said to run beside another such gate, and beside the gate that holds the lock', () => {
+  assert.deepEqual(changes(gates(gate(5, 'D:/a')), gates(gate(5, 'D:/a'), gate(8, 'D:/b'))), ['gate started in D:/b (pid 8) while another runs in D:/a (pid 5)']);
+  // A checkout from before the lock starts its gate beside the one that holds it.
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), gate(8, 'D:/b')), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in D:/b (pid 8) while another runs in D:/a (pid 5)']);
+  // And the other way round: a gate that knows the lock starts beside one that never asks for it, and
+  // will not wait for it, whether it has taken the lock yet or not.
+  for (const lock of [lockOf(holds(5, 'D:\\a')), lockOf(null)]) {
+    assert.deepEqual(changes({ ...gates(gate(8, 'D:/b')), ...lockOf(null) }, { ...gates(gate(8, 'D:/b'), aware(5, 'D:/a')), ...lock }), ['gate started in D:/a (pid 5) while another runs in D:/b (pid 8)']);
+  }
+  // The gate that holds the lock runs, whatever it checks, and whether a process of the listing is it or
+  // not: another project's shares the machine too.
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), ...lockOf(holds(99, 'C:\\other')) }), ['gate started in D:/b (pid 8) while another runs in C:\\other (pid 99)']);
+  // So does a holder whose beat could not be read at this look: its file is there, with its pid.
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), ...lockOf(holds(99, null, { startedAt: null, beatAt: null })) }), ['gate started in D:/b (pid 8) while another runs in an unknown worktree (pid 99)']);
+});
+
+test('boardChanges: a gate that only waits, a holder that stopped beating and a lock of which nothing could be read are not another gate', () => {
+  const alone = ['gate started in D:/b (pid 8)'];
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b'), aware(6, 'D:/a')), ...lockOf(null, waits(6, 'D:\\a')) }), ["gate started in D:/a (pid 6), waiting for the machine's gate lock", ...alone]);
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), ...lockOf(holds(99, 'C:\\other', { stale: true })) }), alone);
+  // Found in review, 2026-10-10: a lock folder that could not be listed, or a holder's file that is not
+  // a gate's, named nobody and was still "another gate" a gate ran beside.
+  const nobody = { pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), ...lockOf(nobody) }), alone);
+  // Nor is a lock that could not be read at all, which leaves the gates of the listing.
+  assert.deepEqual(changes(gates(), { ...gates(gate(8, 'D:/b')), gateLock: { available: false, reason: 'the gate lock: boom' } }), alone);
+});
+
+// The four findings of the two reviews, 2026-10-10, were one mistake: the board worked out from the
+// process list and the lock what each `check` process was doing, and each guess had its moment of being
+// wrong. A gate that knows the lock runs its sensors only while it holds it, so the lock alone says
+// whether it runs, and the process list raises no alarm for it or against it.
+test('boardChanges: a gate that knows the lock is never said to run beside the gate that holds it, whatever it is doing', () => {
+  const holder = lockOf(holds(5, 'D:\\a'));
+  // Listed before it has staged its folder in line: neither holder nor waiter yet.
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b', 1)), ...holder }), ['gate started in D:/b (pid 6)']);
+  // Past its sensors, with the lock released, writing its report while the next gate takes the lock: at
+  // the look after its release, and at any later one, when no look remembers that it held the lock.
+  const released = gates(aware(5, 'D:/a'), aware(7, 'D:/b'));
+  assert.deepEqual(changes(runs, { ...released, ...lockOf(holds(7, 'D:\\b')) }), ['gate started in D:/b (pid 7)']);
+  assert.deepEqual(changes({ ...gates(aware(5, 'D:/a')), ...lockOf(null) }, { ...released, ...lockOf(holds(7, 'D:\\b')) }), ['gate started in D:/b (pid 7)']);
+  // A new gate that got the pid of a gate that died holding the lock, whose file still reads alive.
+  assert.deepEqual(changes(gates(), { ...gates(aware(5, 'D:/b', 3)), ...holder }), ['gate started in D:/b (pid 5)']);
+  // Two gates that know the lock and that the lock says nothing of.
+  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(null) }), ['gate started in D:/b (pid 6)']);
+  // Nor when the lock could not be read at this look: the process list alone says nothing of such a gate.
+  assert.deepEqual(changes(gates(aware(5, 'D:/a')), { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), gateLock: { available: false, reason: 'the gate lock: boom' } }), ['gate started in D:/b (pid 6)']);
+});
+
+test('boardChanges: a gate that does not know the lock and has the pid of a holder that died is not said to run beside itself', () => {
+  assert.deepEqual(changes(gates(), { ...gates(gate(5, 'D:/b')), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in D:/b (pid 5)']);
+});
+
+// Not built, and pinned so that it is a decision: a gate that knows the lock, waited for it, and then ran
+// its sensors without it (the lock could not be read for a minute) is seen as a gate that waits no more.
+// That happens when the lock folder can be neither read nor written, which is when the gate could leave
+// no trace either, and its own report says so in a row.
+test('boardChanges says nothing of a gate that knows the lock and leaves the line without taking it', () => {
+  assert.deepEqual(changes(runsAndWaits, { ...gates(aware(5, 'D:/a'), aware(6, 'D:/b')), ...lockOf(holds(5, 'D:\\a')) }), []);
+});
+
+test('boardChanges: a gate started as npm run check is one that waits when the lock has its pid in line, and one without the lock otherwise', () => {
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), unplaced(6)), ...lockOf(holds(5, 'D:\\a'), waits(6, 'D:\\b')) }), ['gate started in D:/b (pid 6), waiting for the gate in D:/a (pid 5)']);
+  assert.deepEqual(changes(gates(), { ...gates(unplaced(5)), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in D:/a (pid 5)']);
+  assert.deepEqual(changes(runs, { ...gates(aware(5, 'D:/a'), unplaced(6)), ...lockOf(holds(5, 'D:\\a')) }), ['gate started in an unknown worktree (pid 6) while another runs in D:/a (pid 5)']);
+});
+
+test('boardChanges: the lock names the folder of a gate whose command line names none, so another project\'s gate wakes nobody', () => {
+  const installed = { pid: 5, startedAt: before(300), worktree: { unavailable: 'its command line names none' }, knowsLock: true, commandLine: 'node C:/pnpm/js-harness/bin/js-harness.mjs check' };
+  assert.deepEqual(changes(gates(), gates(installed)), ['gate started in an unknown worktree (pid 5)']);
+  assert.deepEqual(changes(gates(), { ...gates(installed), ...lockOf(holds(5, 'D:\\b')) }), ['gate started in D:/b (pid 5)']);
+  assert.deepEqual(changes(gates(), { ...gates(installed), ...lockOf(holds(5, 'C:\\other\\project')) }), []);
+  assert.deepEqual(changes({ ...gates(installed), ...lockOf(holds(5, 'C:\\other\\project')) }, gates()), []);
+});
+
+test('watchBaseline keeps what the lock said last across a look that could not read it', () => {
+  const older = boardOf(runsAndWaits);
+  const unread = { gateLock: { available: false, reason: 'the gate lock: boom' } };
+  assert.deepEqual(lib.watchBaseline(older, boardOf({ ...gates(gate(5, 'D:/a'), gate(6, 'D:/b')), ...unread })).gateLock, older.gateLock);
+  const newer = boardOf({ ...gates(gate(6, 'D:/b')), ...lockOf(holds(6, 'D:\\b')) });
+  assert.deepEqual(lib.watchBaseline(older, newer).gateLock, newer.gateLock);
+  // A lock that was never read stays unread, and a board with none gets none.
+  assert.deepEqual(lib.watchBaseline(boardOf(gates()), boardOf({ ...gates(), ...unread })).gateLock, unread.gateLock);
+  assert.equal('gateLock' in lib.watchBaseline(boardOf(gates()), boardOf(gates())), false);
+});
+
 // --- the relief file ---
 
 test('reliefTail gives how many lines a relief file holds and its last ones, blank lines apart', () => {
@@ -1070,8 +1356,8 @@ const BOARD = {
   gates: {
     available: true,
     items: [
-      { pid: 4242, startedAt: before(180), worktree: 'D:/proj-worktrees/board', commandLine: 'node "D:/proj-worktrees/board/bin/check.mjs"' },
-      { pid: 77, startedAt: { unavailable: 'the process listing gave no start time' }, worktree: { unavailable: 'its command line names bin/check.mjs by a relative path' }, commandLine: 'node bin/check.mjs' },
+      { pid: 4242, startedAt: before(180), worktree: 'D:/proj-worktrees/board', knowsLock: false, commandLine: 'node "D:/proj-worktrees/board/bin/check.mjs"' },
+      { pid: 77, startedAt: { unavailable: 'the process listing gave no start time' }, worktree: { unavailable: 'its command line names bin/check.mjs by a relative path' }, knowsLock: RELATIVE_SCRIPT, commandLine: 'node bin/check.mjs' },
     ],
   },
   pullRequests: { available: false, reason: 'gh pr: gh is not installed or not on PATH' },
@@ -1127,6 +1413,78 @@ test('renderBoard says so when there is nothing: no session, no gate, no pull re
     '',
     lib.NOT_VISIBLE,
   ]);
+});
+
+test('renderBoard: Gates says which gate runs and which wait, from the lock, and any other gate as the listing has it', () => {
+  const section = (parts) => {
+    const lines = lib.renderBoard({ ...BOARD, ...parts }, { now: NOW });
+    return lines.slice(lines.indexOf('Gates') + 1, lines.indexOf('Pull requests') - 1);
+  };
+  const listed = (...items) => ({ gates: { available: true, items } });
+  const [old, relative] = BOARD.gates.items;
+  // The same two processes from checkouts that have the lock, and a third started a minute ago.
+  const first = { ...old, knowsLock: true };
+  const second = { pid: 4250, startedAt: before(61), worktree: 'D:/proj', knowsLock: true, commandLine: 'node "D:/proj/bin/check.mjs"' };
+  const holder = holds(4242, 'D:\\proj-worktrees\\board');
+  const RUNS = '  pid 4242  D:/proj-worktrees/board  running, took the gate lock 2m ago  node "D:/proj-worktrees/board/bin/check.mjs"';
+  const UNLOCKED = '  pid 77  worktree unavailable: its command line names bin/check.mjs by a relative path  start unavailable: the process listing gave no start time  node bin/check.mjs';
+
+  // One gate, and it runs.
+  assert.deepEqual(section({ ...listed(first), ...lockOf(holder) }), [RUNS]);
+  // One runs and one waits: two `check` processes, one gate at work, the one that runs first.
+  assert.deepEqual(section({ ...listed(second, first), ...lockOf(holder, waits(4250, 'D:\\proj')) }), [RUNS, '  pid 4250  D:/proj  waiting for the gate of pid 4242, began 1m ago  node "D:/proj/bin/check.mjs"']);
+  // A gate that does not know the lock beside the one that holds it: its line is the listing's, as before.
+  assert.deepEqual(section({ ...listed(relative, first), ...lockOf(holder) }), [RUNS, UNLOCKED]);
+  assert.deepEqual(section({ ...listed({ ...second, knowsLock: false }, first), ...lockOf(holder) }), [RUNS, '  pid 4250  D:/proj  started 1m ago  node "D:/proj/bin/check.mjs"']);
+  // A `check` process that knows the lock and neither holds it nor waits for it is not a gate that runs:
+  // it has not reached its sensors, or it is past them and writes its report.
+  const IDLE = '  pid 4250  D:/proj  not in its sensors (before or after them), started 1m ago  node "D:/proj/bin/check.mjs"';
+  assert.deepEqual(section({ ...listed(second, first), ...lockOf(holder) }), [RUNS, IDLE]);
+  assert.deepEqual(section({ ...listed(second), ...lockOf(null) }), [IDLE]);
+  assert.deepEqual(section({ ...listed({ ...second, startedAt: relative.startedAt }), ...lockOf(null) }), ['  pid 4250  D:/proj  not in its sensors (before or after them), start unavailable: the process listing gave no start time  node "D:/proj/bin/check.mjs"']);
+  // With no lock to read, nothing says where such a process is: its line is the listing's.
+  assert.deepEqual(section(listed(second)), ['  pid 4250  D:/proj  started 1m ago  node "D:/proj/bin/check.mjs"']);
+  // A holder that stopped beating is not a gate that runs, and here its process is gone as well.
+  assert.deepEqual(section({ ...listed(), ...lockOf(holds(4242, 'D:\\proj-worktrees\\board', { beatAt: before(300), stale: true })) }), [
+    '  pid 4242  D:/proj-worktrees/board  silent: holds the gate lock, its last beat was 5m ago and the next gate takes it over  check (no process of the listing has this pid)',
+  ]);
+  // A process that got the pid of a gate that died holding the lock is listed on its own line, and the
+  // dead gate's line does not borrow its command line.
+  assert.deepEqual(section({ ...listed({ ...second, pid: 4242, knowsLock: false }), ...lockOf(holder) }), [
+    '  pid 4242  D:/proj-worktrees/board  running, took the gate lock 2m ago  check (the listed process with this pid is not this gate)',
+    '  pid 4242  D:/proj  started 1m ago  node "D:/proj/bin/check.mjs"',
+  ]);
+  // `js-harness gate -- <command>` holds the lock or waits for it like a gate, and is shown from the lock
+  // with what it runs: it is no `check` process, so the listing has none for it.
+  const batch = { ...holds(4300, 'D:\\proj'), command: 'gate -- node evals/runner.mjs --all' };
+  const suite = { ...waits(4301, 'D:\\proj-worktrees\\board'), command: 'gate -- node --test' };
+  assert.deepEqual(section({ ...listed(), ...lockOf(batch, suite) }), [
+    '  pid 4300  D:/proj  running, took the gate lock 2m ago  gate -- node evals/runner.mjs --all (no process of the listing has this pid)',
+    '  pid 4301  D:/proj-worktrees/board  waiting for the gate of pid 4300, began 1m ago  gate -- node --test (no process of the listing has this pid)',
+  ]);
+  // Found in review, 2026-10-10: a holder whose file gives a beat and no start time.
+  assert.deepEqual(section({ ...listed(first), ...lockOf(holds(4242, 'D:\\proj-worktrees\\board', { startedAt: null })) }), [
+    '  pid 4242  D:/proj-worktrees/board  running, holds the gate lock since an unknown time, its last beat was 2s ago  node "D:/proj-worktrees/board/bin/check.mjs"',
+  ]);
+  // A lock that is held and of which nothing could be read, and a gate in line while nobody holds it.
+  const nobody = { pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+  assert.deepEqual(section({ ...listed(), ...lockOf(nobody) }), [
+    '  pid unknown  worktree unavailable: the gate lock does not say which folder it checks  holds the gate lock, and nothing more of it could be read  command unknown (no process of the listing has this pid)',
+  ]);
+  assert.deepEqual(section({ ...listed(second), ...lockOf(null, waits(4250, 'D:\\proj')) }), ["  pid 4250  D:/proj  waiting for the machine's gate lock, began 1m ago  node \"D:/proj/bin/check.mjs\""]);
+
+  // A source that could not be read is said under what the other one told.
+  const noListing = { gates: { available: false, reason: 'the process listing: boom' } };
+  assert.deepEqual(section({ ...noListing, ...lockOf(holder) }), [
+    '  pid 4242  D:/proj-worktrees/board  running, took the gate lock 2m ago  check (the process listing could not be read)',
+    '  unavailable: the process listing: boom',
+  ]);
+  const noLock = { gateLock: { available: false, reason: 'the gate lock: EACCES: permission denied' } };
+  assert.deepEqual(section({ ...listed(relative), ...noLock }), [UNLOCKED, '  unavailable: the gate lock: EACCES: permission denied']);
+  assert.deepEqual(section({ ...listed(), ...noLock }), ['  none running', '  unavailable: the gate lock: EACCES: permission denied']);
+  assert.deepEqual(section({ ...noListing, ...noLock }), ['  unavailable: the process listing: boom', '  unavailable: the gate lock: EACCES: permission denied']);
+  // And a lock nobody holds changes nothing of the section.
+  assert.deepEqual(section({ ...listed(), ...lockOf(null) }), ['  none running']);
 });
 
 test('renderBoard prints the relief file after the pull requests: its path and last lines, that there is none yet, or why it cannot be read', () => {

@@ -529,12 +529,27 @@ function gateFileWorktree(folder, worktrees) {
   return /^([A-Za-z]:|[\\/])/.test(folder) ? (known ?? folder) : { unavailable: 'its command line names bin/check.mjs by a relative path' };
 }
 
+/** Whether the gate that runs `script` knows the machine's gate lock (`bin/lib/gate-lock.mjs`): `true`
+ * or `false` as `lockLibraryBeside(script)` says, which is asked whether the lock's library is beside
+ * that script, `lib/gate-lock.mjs` in its folder; `{ unavailable }` for a script named by a relative
+ * path, which nothing places (a process has no working directory the listing could read).
+ *
+ * It is a fact of the script and not of what the process is doing, so it is the same at every look. A
+ * gate that knows the lock runs its sensors only while it holds it; one that does not is a gate of a
+ * checkout from before the lock, and runs them whenever it is started. */
+function knowsLockOf(script, lockLibraryBeside) {
+  if (!/^([A-Za-z]:|[\\/])/.test(script)) return { unavailable: 'its command line names its script by a relative path' };
+  return lockLibraryBeside(script) === true;
+}
+
 /** The running gates among `processes`: every process whose program is `node` and whose command line
  * names `bin/check.mjs` as an argument, or runs `check` through the dispatcher (`gateDispatcher`). A
  * shell whose text mentions either is not one, and neither is `bin/check.test.mjs`. `worktree` is the
  * folder the gate checks as far as the command line says (`gateFileWorktree`, `dispatcherWorktree`): a
- * process has no working directory the listing could read instead. */
-export function findGates(processes, worktrees = []) {
+ * process has no working directory the listing could read instead. `knowsLock` says whether the script
+ * it runs, `bin/check.mjs` or the dispatcher, has the lock's library beside it (`knowsLockOf`); with no
+ * `lockLibraryBeside` to ask, none has. */
+export function findGates(processes, worktrees = [], { lockLibraryBeside = () => false } = {}) {
   const gates = [];
   for (const { pid, createdAt, commandLine } of processes) {
     const program = /^\s*(?:"([^"]+)"|(\S+))/.exec(commandLine);
@@ -547,20 +562,112 @@ export function findGates(processes, worktrees = []) {
       pid,
       startedAt: Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : { unavailable: 'the process listing gave no start time' },
       worktree: named ? gateFileWorktree(named[1] ?? named[2] ?? '', worktrees) : dispatcherWorktree(dispatcher, worktrees),
+      knowsLock: knowsLockOf(named ? named[0].replace(/"/g, '') : dispatcher, lockLibraryBeside),
       commandLine,
     });
   }
   return gates;
 }
 
-/** The running gates, from `listProcesses()` (which throws when it could not look). */
-export function readGates(listProcesses, worktrees = []) {
+/** The gates among the machine's processes, from `listProcesses()` (which throws when it could not look).
+ * Which of them runs its sensors and which waits for its turn is the lock's to say (`boardGates`).
+ * `options` are those of `findGates`. */
+export function readGates(listProcesses, worktrees = [], options = {}) {
   try {
-    return { available: true, items: findGates(listProcesses(), worktrees) };
+    return { available: true, items: findGates(listProcesses(), worktrees, options) };
   } catch (err) {
     return { available: false, reason: `the process listing: ${err.message}` };
   }
 }
+
+/** What the machine's gate lock says (`bin/lib/gate-lock.mjs`): `{ available: true, holder, waiters }`,
+ * from `read()`, which gives `{ holder, waiters }` as `readGateHolder` and `readGateWaiters` do and throws
+ * when it could not look. `holder` is `null` for a free lock, else `{ pid, cwd, command, startedAt, beatAt,
+ * stale }`: when it took the lock, its last beat as a date, and whether it stopped beating. A waiter is
+ * `{ pid, cwd, command, waitingSince }`. Each field is `null` where the gate's file does not say it.
+ * `readAt` is the clock `read()` says it read against, as a date, where it says one: `stale` was judged
+ * against it, so the ages of these gates are said against it as well (`gateLines`).
+ *
+ * The process listing shows every `check` process and cannot tell one that runs its sensors from one that
+ * waits for its turn, nor which folder an installed `js-harness check` checks; the lock says all three. */
+export function readGateLock(read) {
+  try {
+    const { holder, waiters, readAt } = read();
+    const beatAt = holder === null || holder.beatAt === null ? null : new Date(holder.beatAt).toISOString();
+    return {
+      available: true,
+      holder: holder && { pid: holder.pid, cwd: holder.cwd, command: holder.command, startedAt: holder.startedAt, beatAt, stale: holder.stale },
+      waiters: waiters.map(({ pid, cwd, command, waitingSince }) => ({ pid, cwd, command, waitingSince })),
+      ...(readAt !== undefined && { readAt: new Date(readAt).toISOString() }),
+    };
+  } catch (err) {
+    return { available: false, reason: `the gate lock: ${err.message}` };
+  }
+}
+
+/** Whether the listing says that the process `item` started after `since`, an ISO time: `false` when
+ * either side gives no time. */
+function startedAfter(item, since) {
+  return typeof item.startedAt === 'string' && typeof since === 'string' && Date.parse(item.startedAt) > Date.parse(since);
+}
+
+/** The gates of `board`, as it prints them and as a watch compares them: what the lock and the process
+ * listing say together. First the gate that holds the machine's gate lock, then the gates that wait for
+ * it, the longest wait first, then every other `check` process of the listing, given as the listing has
+ * it: a gate that does not know the lock (a checkout from before it) and runs its sensors as it always
+ * did, or one that knows it (`knowsLock`) and is not in its sensors, having not reached them yet or
+ * being past them.
+ *
+ * A gate of the lock has `lock`: `{ role: 'holder', command, since, beatAt, stale }` or `{ role: 'waiter',
+ * command, since, for }`, `for` being the pid of the gate it waits for. Its `worktree` is the folder its
+ * file names, in the board's spelling when it is one of its worktrees, and the listing's only where the
+ * file names none. The process that is this gate gives `startedAt` and `commandLine`, so that process is
+ * listed once; with no such process (the listing failed, or it runs where the listing cannot see) both
+ * are `{ unavailable }` and the gate is still given, from the lock. A gate read as a waiter and as the
+ * holder took the lock between the two reads: it is the holder.
+ *
+ * Which process is a gate of the lock is told by its pid, and decides only what that gate's line shows.
+ * A pid is free again once its process ends, and the file of a gate that was killed is there for a
+ * minute more, so the process with the pid is not that gate when it cannot be: its script does not have
+ * the lock's library (`knowsLock` is `false`), or the listing says it started after the gate took the
+ * lock, or began to wait. A first version took every process with the pid, and showed a new gate as the
+ * dead one (found in review, 2026-10-10).
+ *
+ * A board with no `gateLock`, or one that could not be read, has the gates of its process listing alone. */
+export function boardGates(board) {
+  const lock = board.gateLock?.available ? board.gateLock : { holder: null, waiters: [] };
+  const listed = board.gates.available ? board.gates.items : [];
+  const trees = board.worktrees?.available ? board.worktrees.items.map((tree) => tree.path) : [];
+  const matched = new Set();
+  const noProcess = (pid) => {
+    if (!board.gates.available) return { unavailable: 'the process listing could not be read' };
+    return { unavailable: listed.some((item) => item.pid === pid) ? 'the listed process with this pid is not this gate' : 'no process of the listing has this pid' };
+  };
+  const ofLock = (gate, since, role) => {
+    const process = gate.pid === null ? undefined : listed.find((item) => item.pid === gate.pid && !matched.has(item) && item.knowsLock !== false && !startedAfter(item, since));
+    if (process) matched.add(process);
+    const named = gate.cwd === null ? undefined : (trees.find((tree) => comparable(tree) === comparable(gate.cwd)) ?? gate.cwd);
+    const worktree = named ?? process?.worktree ?? { unavailable: 'the gate lock does not say which folder it checks' };
+    const none = process ? undefined : noProcess(gate.pid);
+    return { pid: gate.pid, startedAt: process?.startedAt ?? none, worktree, commandLine: process?.commandLine ?? none, lock: { ...role, since, command: gate.command } };
+  };
+  const { holder } = lock;
+  const holding = holder ? [ofLock(holder, holder.startedAt, { role: 'holder', beatAt: holder.beatAt, stale: holder.stale })] : [];
+  const waiting = lock.waiters
+    .filter((waiter) => waiter.pid === null || waiter.pid !== holder?.pid)
+    .map((waiter) => ofLock(waiter, waiter.waitingSince, { role: 'waiter', for: holder?.pid ?? null }));
+  return [...holding, ...waiting, ...listed.filter((item) => !matched.has(item))];
+}
+
+/** Whether a gate of `boardGates` is a process of the listing: one the lock alone tells of has no command
+ * line. A watch compares processes, which start and end; what the lock says of them is how it words it. */
+const isProcess = (gate) => typeof gate.commandLine === 'string';
+
+/** Whether a gate of `boardGates` knows the machine's gate lock: its script has the lock's library beside
+ * it, or the lock itself tells of it. The second is the one proof there is for a process whose command
+ * line does not place its script (`npm run check` starts `node bin/check.mjs`), and it holds for as long
+ * as that gate holds the lock or waits for it. */
+const knowsLock = (gate) => gate.lock !== undefined || gate.knowsLock === true;
 
 /** The repository's open pull requests, `{ number, title, branch }`, from `gh pr list`. */
 export function readPullRequests(run, root) {
@@ -628,17 +735,19 @@ function sessionChanges(before, after, self) {
   return lines;
 }
 
-const gatePlace = (gate) => `in ${gate.worktree?.unavailable ? 'an unknown worktree' : gate.worktree} (pid ${gate.pid})`;
+const gatePlace = (gate) => `in ${gate.worktree?.unavailable ? 'an unknown worktree' : gate.worktree} (${gate.pid === null ? 'pid unknown' : `pid ${gate.pid}`})`;
 
 /** The gates of `board` a watch compares, or `null` when it cannot tell which they are (the gates or the
  * worktrees could not be listed). A gate whose command line names a folder that is none of the board's
  * worktrees is left out: the test suite of a running gate starts `bin/check.mjs` in temporary folders, and
  * those start and end all through it. One whose command line names no folder stays in: `npm run check`,
- * started by a relative path, is one, and so is the `js-harness check` of a pre-commit hook. */
+ * started by a relative path, is one, and so is the `js-harness check` of a pre-commit hook. Where the
+ * lock names the folder a gate checks, that is its folder (`boardGates`): the lock is the machine's, so
+ * the `js-harness check` of another project is then known to be none of this one's. */
 function watchedGates(board) {
   if (!board.gates.available || !board.worktrees.available) return null;
   const trees = new Set(board.worktrees.items.map((tree) => comparable(tree.path)));
-  return board.gates.items.filter((gate) => gate.worktree?.unavailable || trees.has(comparable(String(gate.worktree))));
+  return boardGates(board).filter((gate) => isProcess(gate) && (gate.worktree?.unavailable || trees.has(comparable(String(gate.worktree)))));
 }
 
 /** Whether two gates, of two looks, are one process: the same pid and the same start time. A pid is free
@@ -651,17 +760,44 @@ function sameGate(one, other) {
 
 /** A gate started when it is no gate of the older board, and ended when it is none of the newer one
  * (`sameGate`): the worktrees say which gates are watched, never whether one runs. So a worktree removed
- * or added under a running gate is neither its end nor its start. */
+ * or added under a running gate is neither its end nor its start.
+ *
+ * A gate that starts and waits for the machine's gate lock is said so, with the gate it waits for: that
+ * is one gate running and one in line, which is the lock doing its work and no mistake. Nothing is said
+ * when it then takes the lock: the gate before it ended, which is said, and the board shows who runs.
+ *
+ * Two gates that run at once are still said, and they can only be so when one of them does not know the
+ * lock (`knowsLock`), as every gate of a checkout from before it: such a gate runs its sensors whenever
+ * it is started, and no gate waits for it. So the alarm is for a gate that does not know the lock, beside
+ * another such gate or beside the gate that holds the lock and still beats; and for a gate that knows the
+ * lock when it starts beside one that does not, which it will not wait for.
+ *
+ * A gate that knows the lock runs its sensors only while it holds it, so the lock alone says whether it
+ * runs, and it is never "another gate" on the strength of the process listing, whatever it is doing: not
+ * yet in line, in line, or past its sensors and writing its report. A first version worked that out for
+ * each process from the listing and the lock, and each guess had a moment of being wrong: a process
+ * listed before it stood in line, one past its sensors for more than a look, a pid used again (found in
+ * two reviews, 2026-10-10). What is not seen from here: a gate that knows the lock and ran its sensors
+ * without it, which happens when the lock can be neither read nor written, and its own report says so. */
 function gateChanges(before, after) {
   const was = watchedGates(before);
   const is = watchedGates(after);
   if (was === null || is === null) return []; // a listing that failed is not a gate that ended
+  const holder = boardGates(after).find((gate) => gate.lock?.role === 'holder');
+  // The gate that holds the lock and still beats runs, whatever folder it checks: the lock is the
+  // machine's. A lock of which nothing could be read, not even a pid, has shown no gate.
+  const holding = holder && !holder.lock.stale && !(holder.pid === null && holder.lock.beatAt === null) ? [holder] : [];
+  const without = is.filter((gate) => !knowsLock(gate));
   const lines = [];
   for (const gate of is) {
-    if (before.gates.items.some((earlier) => sameGate(earlier, gate))) continue;
+    if (before.gates.items.some((old) => sameGate(old, gate))) continue;
+    if (gate.lock?.role === 'waiter') {
+      lines.push(`gate started ${gatePlace(gate)}, waiting for ${holder ? `the gate ${gatePlace(holder)}` : "the machine's gate lock"}`);
+      continue;
+    }
     // Two gates at once is what the board exists to catch: they share the machine and one of them is
-    // probably a mistake.
-    const other = is.find((item) => item.pid !== gate.pid);
+    // probably a mistake. A pid is one process, so a gate is never beside what carries its own.
+    const other = (knowsLock(gate) ? without : [...holding, ...without]).find((item) => item.pid !== gate.pid);
     lines.push(`gate started ${gatePlace(gate)}${other ? ` while another runs ${gatePlace(other)}` : ''}`);
   }
   for (const gate of was) if (!after.gates.items.some((now) => sameGate(now, gate))) lines.push(`gate ended ${gatePlace(gate)}`);
@@ -726,15 +862,17 @@ function planChanges(before, after) {
  *
  * - a session that appears, one that starts waiting (from any other state) or that waits again after
  *   another turn, one that passes the context limit, one that leaves the window;
- * - a gate that starts (said apart when another one is running) or ends, among the gates of the board's
- *   worktrees (`watchedGates`);
+ * - a gate that starts (said apart when it waits for the one that holds the machine's gate lock, and when
+ *   it runs beside another and one of the two does not know the lock) or ends, among the gates of the
+ *   board's worktrees (`watchedGates`, `gateChanges`);
  * - a pull request that opens or is no longer open;
  * - a feature plan that appears, stops differing from `origin/main`, or whose done or total count,
  *   pending tasks or next step changed.
  *
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
- * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree.
+ * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree,
+ * a gate that takes the lock it waited for.
  * `self` names the session that is watching, which is never compared: it works for as long as it watches.
  * A fact that could not be read on either side is not compared, so a failed listing is never a change. */
 export function boardChanges(before, after, { self } = {}) {
@@ -761,6 +899,8 @@ export function watchBaseline(older, newer) {
     // Which gates are compared depends on the worktrees (`watchedGates`): a look that could not list them
     // compared none, so its gates are not yet what the next look is compared with.
     gates: newer.worktrees.available ? kept(newer.gates, older.gates) : older.gates,
+    // What the lock said last still names the folder of a gate whose command line names none (`watchedGates`).
+    ...(newer.gateLock && { gateLock: newer.gateLock.available ? newer.gateLock : (older.gateLock ?? newer.gateLock) }),
     pullRequests: kept(newer.pullRequests, older.pullRequests),
     worktrees: newer.worktrees.available ? { ...newer.worktrees, items: newer.worktrees.items.map((tree) => (tree.plans === undefined ? tree : { ...tree, plans: plansOf(tree) })) } : older.worktrees,
   };
@@ -887,9 +1027,60 @@ function reliefLines(relief) {
   return ['Relief', `  ${relief.path}  ${count}`, ...relief.lines.map((line) => `  | ${clipped(line)}`), ''];
 }
 
+/** What a gate does, as its line in `Gates` says it. A `check` process the lock says nothing of is given
+ * its start, as the listing has it. One that does not know the lock runs its sensors, as before there was
+ * a lock. One that knows it is then not in its sensors, and its line says so, lest it be read as a gate
+ * that runs; with no lock read (`lockRead` is false) nothing says where it is, and its line is the
+ * listing's alone.
+ *
+ * `now` is the board's time, against which what the listing gives is said. `lockNow` is the time the lock
+ * was read at, against which what the lock gives is said: when a gate took it or began to wait, and the
+ * holder's last beat. */
+function gateState(gate, now, lockRead, lockNow = now) {
+  const { lock } = gate;
+  if (!lock) {
+    const started = gate.startedAt?.unavailable ? `start unavailable: ${gate.startedAt.unavailable}` : `started ${ago(gate.startedAt, now)}`;
+    return lockRead && gate.knowsLock === true ? `not in its sensors (before or after them), ${started}` : started;
+  }
+  if (lock.role === 'waiter') {
+    const whom = lock.for === null ? "the machine's gate lock" : `the gate of pid ${lock.for}`;
+    return `waiting for ${whom}${lock.since === null ? '' : `, began ${ago(lock.since, lockNow)}`}`;
+  }
+  // A holder that stopped beating is not a gate that runs: it died or froze, and its lock is taken over.
+  if (lock.stale) return `silent: holds the gate lock, its last beat was ${ago(lock.beatAt, lockNow)} and the next gate takes it over`;
+  if (lock.beatAt === null) return 'holds the gate lock, and nothing more of it could be read';
+  // A file whose beat was read and whose text was not (busy at that instant), or that is not a gate's.
+  if (lock.since === null) return `running, holds the gate lock since an unknown time, its last beat was ${ago(lock.beatAt, lockNow)}`;
+  return `running, took the gate lock ${ago(lock.since, lockNow)}`;
+}
+
+/** The `Gates` section: a line per gate of `boardGates`, the one that runs first and then those that
+ * wait; `none running` for none; and under them whichever of the two sources could not be read, with
+ * the reason, since the gates above it are then what the other source alone could tell.
+ *
+ * What the lock says of a gate is said against the clock the lock was read with (`gateLock.readAt`), not
+ * against `now`, the time the board began: the lock is read last, after reads that take seconds, and
+ * whether its holder is silent was judged at that moment. Said against the earlier time, a holder read as
+ * silent, a minute after its last beat, was shown with a last beat of under a minute (found in review,
+ * 2026-10-10). A board that does not say when its lock was read is said against `now` throughout. */
+function gateLines(board, now) {
+  const lockRead = board.gateLock?.available === true;
+  const readAt = Date.parse(board.gateLock?.readAt ?? '');
+  const lockNow = Number.isNaN(readAt) ? now : readAt;
+  const lines = boardGates(board).map((gate) => {
+    const worktree = gate.worktree?.unavailable ? `worktree unavailable: ${gate.worktree.unavailable}` : gate.worktree;
+    const command = isProcess(gate) ? gate.commandLine : `${gate.lock.command ?? 'command unknown'} (${gate.commandLine.unavailable})`;
+    return `  ${gate.pid === null ? 'pid unknown' : `pid ${gate.pid}`}  ${worktree}  ${gateState(gate, now, lockRead, lockNow)}  ${command}`;
+  });
+  if (!board.gates.available) lines.push(`  unavailable: ${board.gates.reason}`);
+  else if (lines.length === 0) lines.push('  none running');
+  if (board.gateLock && !board.gateLock.available) lines.push(`  unavailable: ${board.gateLock.reason}`);
+  return ['Gates', ...lines, ''];
+}
+
 /** The board as lines of text: the sessions (in the order given, most recent first), then worktrees,
- * running gates, open pull requests and the orchestrator's relief file, and a last line that says what
- * the board cannot see. */
+ * the gates that run and wait, open pull requests and the orchestrator's relief file, and a last line
+ * that says what the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
   const sizes = contextSizes(board);
@@ -901,11 +1092,7 @@ export function renderBoard(board, { now }) {
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
       return [line, ...planLines(tree.plans)];
     }),
-    ...sectionLines('Gates', board.gates, 'none running', (gate) => {
-      const worktree = gate.worktree?.unavailable ? `worktree unavailable: ${gate.worktree.unavailable}` : gate.worktree;
-      const started = gate.startedAt?.unavailable ? `start unavailable: ${gate.startedAt.unavailable}` : `started ${ago(gate.startedAt, now)}`;
-      return `  pid ${gate.pid}  ${worktree}  ${started}  ${gate.commandLine}`;
-    }),
+    ...gateLines(board, now),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
     ...(board.relief ? reliefLines(board.relief) : []),
     NOT_VISIBLE,

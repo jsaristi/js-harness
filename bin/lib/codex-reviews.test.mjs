@@ -133,6 +133,21 @@ test("a linked worktree shares the clone's one record file", () => {
   assert.deepEqual(readCodexReviews(worktree), [record]);
 });
 
+test('finding the record, appending to it and reading it each start one git process', () => {
+  const root = makeRepo();
+  let started = 0;
+  const spawn = (cmd, args, opts) => {
+    started += 1;
+    return spawnSync(cmd, args, opts);
+  };
+  const file = codexReviewsPath(root, { spawn });
+  assert.equal(started, 1);
+  assert.equal(appendCodexReview(root, record, { spawn }), file);
+  assert.equal(started, 2);
+  assert.deepEqual(readCodexReviews(root, { spawn }), [record]);
+  assert.equal(started, 3);
+});
+
 test('a well-formed reviewed or unavailable record is valid', () => {
   assert.equal(isValidCodexReview(record), true);
   assert.equal(isValidCodexReview({ ...record, base: 'a'.repeat(64), head: 'b'.repeat(64) }), true);

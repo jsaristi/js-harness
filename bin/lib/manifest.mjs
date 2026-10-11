@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
+import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 
 function skillContent(version) {
   return `---
@@ -20,6 +21,8 @@ js-harness commands:
 - \`js-harness upgrade\` — install the newer release, then sync.
 - \`js-harness uninstall --global\` — remove exactly what install wrote.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run.
+- \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for the gate that runs, 60 minutes at most (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
+- \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), and its exit code is the command's.
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin).
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 
@@ -67,7 +70,7 @@ When the user asks for something, place it with the roadmap and the board:
 Write to the user only when:
 1. a session starts waiting on them;
 2. a session finished with nothing running behind it;
-3. a gate is about to start while another runs;
+3. two gates run at once (a gate that waits for its turn is not one of them);
 4. a prompt they hold became stale;
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
 6. a session's context passed the limit.
@@ -90,7 +93,7 @@ You are the orchestrator of this project's sessions. Follow the js-harness-orche
 ## A work session
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
-- Before a commit, check \`Gates\` in \`js-harness sessions\`, and never start a gate while another runs.
+- Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When you have finished, say so in your first line. Your last prompt is the closing notice to the orchestrator: what you delivered, and that nothing more goes to you.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
@@ -394,9 +397,10 @@ export function recordOptionalFile(home, file, content) {
 
 /** Forgets the record of `file`, never touching the file itself; `false` when there was none. An empty `optional`
  * is dropped, so the manifest reads as it did before the first record, and a manifest left with nothing in it
- * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. */
-export function forgetOptionalFile(home, file) {
-  return forgetRecord(home, 'optional', (entry) => entry.path === file);
+ * (the one `recordOptionalFile` created) is removed, with its folder when that is empty. `deps.listDir` is the
+ * seam that lists that folder (see `uninstall`). */
+export function forgetOptionalFile(home, file, deps = {}) {
+  return forgetRecord(home, 'optional', (entry) => entry.path === file, deps.listDir);
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
@@ -416,8 +420,9 @@ function keepRecord(home, key, record, matches) {
 
 /** Takes the records `matches` finds out of the array `key`; `false` when there was none. An array left empty is
  * dropped, and a manifest that then records nothing at all (no version, no file, no entry, and nothing in any
- * array of `ON_REQUEST`) is removed, with its folder when that is empty. */
-function forgetRecord(home, key, matches) {
+ * array of `ON_REQUEST`) is removed, with its folder when that is empty and can be removed
+ * (`removeEmptyDirsUpTo`, whose `listDir` this hands on). */
+function forgetRecord(home, key, matches, listDir) {
   const manifest = readManifest(home);
   if (!manifest?.[key]?.some(matches)) return false;
   const left = manifest[key].filter((entry) => !matches(entry));
@@ -428,7 +433,7 @@ function forgetRecord(home, key, matches) {
     writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
     fs.rmSync(manifestPath(home), { force: true });
-    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   } else {
     writeManifest(home, rest);
   }
@@ -460,9 +465,10 @@ export function recordScheduledTask(home, task) {
 }
 
 /** Forgets the record of the task `name`, never touching the task itself; `false` when there was none. What is
- * left of the manifest is what `forgetOptionalFile` leaves: no empty `tasks`, and no manifest that records nothing. */
-export function forgetScheduledTask(home, name) {
-  return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name));
+ * left of the manifest is what `forgetOptionalFile` leaves: no empty `tasks`, and no manifest that records nothing.
+ * `deps.listDir` is the same seam as there. */
+export function forgetScheduledTask(home, name, deps = {}) {
+  return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name), deps.listDir);
 }
 
 /** Puts one record back as it was, for a command that takes back what it did: `record` (what the manifest held
@@ -584,13 +590,22 @@ export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(t
   return { status: 'removed' };
 }
 
-/** Removes `dir` and any now-empty parent up to (but not including) `home`. */
-function removeEmptyDirsUpTo(dir, home) {
+/** Removes `dir` and any now-empty parent up to (but not including) `home`. Best effort: a folder that
+ * cannot be listed is not known to be empty, and it is left, as is one that cannot be removed; the walk
+ * ends there. It is the tidying after the caller's own work, which is done by then and must still be
+ * reported: thrown from here, a failure took the result of `uninstall` with it (found in review,
+ * 2026-10-10). `listDir` is the seam of its callers: `deps.listDir` of `uninstall`, `sync` and the two
+ * that forget a record. */
+function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   let current = path.resolve(dir);
   const stop = path.resolve(home);
   while (current !== stop && current.startsWith(stop)) {
-    if (!fs.existsSync(current) || fs.readdirSync(current).length > 0) break;
-    fs.rmdirSync(current);
+    try {
+      if (!fs.existsSync(current) || listDir(current).length > 0) break;
+      fs.rmdirSync(current);
+    } catch {
+      break;
+    }
     current = path.dirname(current);
   }
 }
@@ -641,7 +656,8 @@ export function install(home, version, deps = {}) {
 /** Re-writes components for `version`, drops files and entries the current release no longer
  * ships, and updates the manifest. An old manifest with no `entries` field (written before T4)
  * still loads: pruning simply has nothing to prune. `deps` is forwarded to `install` (see its
- * `deps.writeFile` seam above). */
+ * `deps.writeFile` seam above), and `deps.listDir` is the seam that lists the folder a pruned file
+ * leaves behind (see `uninstall`). */
 export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
   const manifest = install(home, version, deps);
@@ -657,7 +673,7 @@ export function sync(home, version, deps = {}) {
       if (declaredTargets.has(file.path)) continue;
       if (fs.existsSync(file.path)) {
         fs.rmSync(file.path);
-        removeEmptyDirsUpTo(path.dirname(file.path), home);
+        removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
       }
     }
 
@@ -679,7 +695,18 @@ export function sync(home, version, deps = {}) {
  * included (reported in the same two lists). Removes each
  * recorded entry the same way (deep-equal match only, file left alone otherwise — see
  * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content") and finally the manifest itself.
+ * `files`/`entries` since it is not "installed content"), the folder of the machine's gate lock, and
+ * finally the manifest itself.
+ *
+ * The gate lock's folder is written by `check` and `gate`, not by `install`, so it is looked for under a
+ * home with no manifest as well, which is otherwise left as it is. Its path is in `removed` when it was
+ * there and is gone, and `gateKept` says why it was left, as `[{ path, reason, ... }]`: `in-use` with the
+ * `pid` and `cwd` of the gate that is alive in it, or `unremovable` with the error's `code`, for a folder
+ * that could not be looked at as for one that could not be removed (`removeGateFolder`).
+ * `deps.statFile` (default `fs.statSync`) is the seam that looks for that folder, and `deps.listDir`
+ * (default `fs.readdirSync`) the one that lists a folder left behind to see whether it is empty and goes
+ * too (`removeEmptyDirsUpTo`, which leaves one it cannot list): a test makes either fail as the system
+ * does for what it gives no access to.
  *
  * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
  * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
@@ -701,8 +728,16 @@ export function sync(home, version, deps = {}) {
  * that could not be removed has no such second chance: that older gap is left as it is. */
 export function uninstall(home, deps = {}) {
   const removeFile = deps.removeFile ?? fs.rmSync;
+  const statFile = deps.statFile ?? fs.statSync;
+  const listDir = deps.listDir ?? fs.readdirSync;
   const manifest = readManifest(home);
-  if (!manifest) return { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [] };
+  if (!manifest) {
+    // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
+    // component, so it is looked for all the same, and the folder it leaves empty goes with it.
+    const gate = removeGateFolder(home, removeFile, statFile);
+    removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
+    return { removed: gate.removed, kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept };
+  }
 
   const removed = [];
   const kept = [];
@@ -711,7 +746,7 @@ export function uninstall(home, deps = {}) {
     const current = fs.readFileSync(file.path, 'utf8');
     if (sha256(current) === file.sha256) {
       removeFile(file.path);
-      removeEmptyDirsUpTo(path.dirname(file.path), home);
+      removeEmptyDirsUpTo(path.dirname(file.path), home, listDir);
       removed.push(file.path);
     } else {
       kept.push(file.path);
@@ -754,14 +789,60 @@ export function uninstall(home, deps = {}) {
   }
 
   fs.rmSync(cachePath(home), { force: true });
+  const gate = removeGateFolder(home, removeFile, statFile);
+  removed.push(...gate.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
-    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home);
+    removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept };
+}
+
+/** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
+ * is in it, as `{ removed, kept }`: `removed` holds its path when it was there and is gone, `kept` says
+ * why it was left, as `{ path, reason, ... }`, and both are empty when there was no such folder.
+ *
+ * Nothing records that folder: `check` and `js-harness gate` write it under the home, a gate that ends
+ * removes its own files and the folder with them, and what is found here is what a gate that was killed
+ * left, or the empty folder an older version left after every gate. It is not removed from under a gate
+ * that is alive, which would take its lock away: while a gate holds the lock and still beats, or waits
+ * for it, the folder is kept with reason `in-use` and that gate's `pid` and `cwd`, and the gate removes it
+ * when it ends. A holder that stopped beating a minute ago is no live gate. One that started in the
+ * instant between this look and the removal loses its lock, and its own report says so.
+ *
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
+ * `code`. `removeFile` and `statFile` are `uninstall`'s own seams. */
+function removeGateFolder(home, removeFile, statFile) {
+  const dir = gateDir(home);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
+    // The waiters first, as the session board reads them: a gate that takes the lock between the two
+    // reads is then in one of them.
+    const [waiting] = readGateWaiters(home);
+    const holder = readGateHolder(home);
+    const alive = holder && !holder.stale ? holder : waiting;
+    if (alive) return { removed: [], kept: [{ path: dir, reason: 'in-use', pid: alive.pid, cwd: alive.cwd }] };
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
+}
+
+/** Whether something is at `target`: `false` only when the system says nothing is (ENOENT, or ENOTDIR for
+ * a parent that is a file). Throws when it could not be looked at (no access to it), which `existsSync`
+ * answers as not there. */
+function isThere(target, statFile) {
+  try {
+    statFile(target);
+    return true;
+  } catch (err) {
+    if (['ENOENT', 'ENOTDIR'].includes(err.code)) return false;
+    throw err;
+  }
 }
 
 /** Removes the optional file of the record `file` when its bytes are still what was recorded. Returns nothing

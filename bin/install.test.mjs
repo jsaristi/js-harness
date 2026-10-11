@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { installMain, syncMain, uninstallMain, currentVersion } from './install.mjs';
 import { manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
+import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { initProject } from './lib/project.mjs';
 
 // T3 (project-init): uninstallMain now spawns real `git` for its project-scope detection (see
@@ -291,6 +292,108 @@ test('uninstallMain --global over a manifest that only records a file that is go
     assert.equal(code, 0);
     assert.deepEqual(outLines, [`nothing installed under ${home}`]);
     assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The folder of the machine's gate lock is written by `check` and `gate`, outside any manifest. A gate
+// that was killed leaves its files in it; uninstall removes them, unless a gate is alive in it right now.
+test('uninstallMain removes what a killed gate left of the gate lock, with or without an install, and says so', async () => {
+  const home = makeTmpHome();
+  try {
+    const old = new Date(Date.now() - 3600 * 1000);
+    const leave = () => {
+      const file = path.join(gateLockDir(home), 'holder-4321-aaaaaaaaaaaa.json');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify({ pid: 4321, cwd: 'C:\\work\\dead', command: 'check', startedAt: old.toISOString() })}\n`);
+      fs.utimesSync(file, old, old);
+    };
+    await captureConsole(() => installMain(['--home', home]));
+    leave();
+    const installed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(installed.code, 0);
+    assert.ok(installed.outLines.includes(`removed ${gateDir(home)}`), installed.outLines.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    leave();
+    const bare = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([bare.code, bare.outLines, bare.errLines], [0, [`removed ${gateDir(home)}`], []]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain leaves the gate lock of a gate that is alive, says whose it is and what removes it, and exits 0', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+    try {
+      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+      assert.equal(code, 0);
+      assert.deepEqual(errLines, []);
+      assert.ok(
+        outLines.includes(
+          `kept ${gateDir(home)}: a gate holds the machine's gate lock or waits for it right now (pid 4321, in C:\\work\\one); it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
+        ),
+        outLines.join('\n'),
+      );
+      assert.doesNotMatch(outLines.join('\n'), /nothing installed/);
+      assert.equal(lock.lost(), false);
+
+      // With nothing else under the home, that line is still the whole of what is said.
+      const again = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+      assert.deepEqual([again.code, again.outLines.length, again.outLines[0].startsWith(`kept ${gateDir(home)}: `)], [0, 1, true]);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says that nothing more could be read of a live gate whose file names neither a pid nor a folder', async () => {
+  const home = makeTmpHome();
+  try {
+    // A holder's file that beats and names nobody: no pid in its name, and no JSON in it.
+    const file = path.join(gateLockDir(home), 'holder-unknown.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, 'not json');
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([code, errLines], [0, []]);
+    assert.deepEqual(outLines, [
+      `kept ${gateDir(home)}: a gate holds the machine's gate lock or waits for it right now (nothing more of it could be read); it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
+    ]);
+    assert.equal(fs.existsSync(file), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain says a folder of the gate lock it could not remove was left, with the error code and what to do, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    fs.mkdirSync(gateDir(home), { recursive: true });
+    const removeFile = (target, options) => {
+      if (target === gateDir(home)) throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
+      fs.rmSync(target, options);
+    };
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { removeFile }));
+    assert.equal(code, 1, 'a folder left behind is not a clean uninstall');
+    assert.deepEqual(errLines, [`could not remove ${gateDir(home)} (EBUSY): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+
+    // One it could not even look at is said the same way, and is no "nothing installed" that exits 0.
+    const statFile = (target) => {
+      if (target === gateDir(home)) throw Object.assign(new Error('EACCES: permission denied, stat'), { code: 'EACCES' });
+      return fs.statSync(target);
+    };
+    const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
+    assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
+    assert.deepEqual(unseen.errLines, [`could not remove ${gateDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

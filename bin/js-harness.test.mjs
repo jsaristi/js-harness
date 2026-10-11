@@ -245,6 +245,24 @@ test('--help says what --at-login does to remote start and stop, and so does the
   assert.match(run(['remote']).stderr, /start also takes .*\[--watchdog\]/);
 });
 
+// Hermetic: `run` marks the dispatcher as inside a gate, as a sensor's process is, so `gate` takes no lock
+// and this machine's real gates are neither waited for nor held up.
+test('--help lists gate, gate without a command exits 2 with its usage, and gate -- <command> exits with the command\'s code through the dispatcher', () => {
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
+  const refused = run(['gate', '--no-wait']);
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n$/);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
+  try {
+    const ran = run(['gate', '--home', home, '--', 'node', '-e', "console.log('through the gate'); process.exit(3)"]);
+    assert.equal(ran.status, 3, ran.stderr);
+    assert.equal(ran.stdout.trim(), 'through the gate');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'inside a gate it takes no lock');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
   assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*worktrees.*feature plan.*gates.*pull requests.*relief file.*--watch waits/m);
   const result = run(['sessions', '--bogus']);

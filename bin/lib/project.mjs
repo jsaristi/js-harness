@@ -216,12 +216,27 @@ function isOutsideRelative(rel) {
  * R3-worktree-submodule-hook-misclassified-outside). A submodule's own `.git` file points its git
  * dir at `<superproject>/.git/modules/<name>`, outside the submodule's own working tree the same
  * way. Either result is `null` on a git failure, in which case `resolveHookContainment` falls back
- * to judging containment against the working tree alone, same as before this item. */
+ * to judging containment against the working tree alone, same as before this item.
+ *
+ * One process answers both: `git rev-parse --git-dir --git-common-dir` prints the two paths on two
+ * lines, in that order, each as the flag alone prints it. Whatever reads or writes a line of the Codex
+ * review records asks this each time (`jsonLinesPath`), several times in one `codex-review` run. Both
+ * are `null` together when that process fails. An answer that is not two lines is a path with a line
+ * break in it, which two lines cannot carry: each is then asked for alone. */
 export function gitDirs(root, spawn = spawnSync) {
-  return {
-    gitDir: revParseAbsolute(root, '--git-dir', spawn),
-    commonGitDir: revParseAbsolute(root, '--git-common-dir', spawn),
-  };
+  let result;
+  try {
+    result = spawn('git', ['rev-parse', '--git-dir', '--git-common-dir'], { cwd: root, encoding: 'utf8' });
+  } catch {
+    return { gitDir: null, commonGitDir: null };
+  }
+  if (!result || result.error || result.status !== 0 || !result.stdout) return { gitDir: null, commonGitDir: null };
+  const lines = result.stdout.trim().split('\n');
+  if (lines.length !== 2) {
+    return { gitDir: revParseAbsolute(root, '--git-dir', spawn), commonGitDir: revParseAbsolute(root, '--git-common-dir', spawn) };
+  }
+  const [gitDir, commonGitDir] = lines.map((line) => absoluteFrom(root, line.trim()));
+  return { gitDir, commonGitDir };
 }
 
 function revParseAbsolute(root, flag, spawn) {
@@ -232,7 +247,11 @@ function revParseAbsolute(root, flag, spawn) {
     return null;
   }
   if (!result || result.error || result.status !== 0 || !result.stdout) return null;
-  const raw = result.stdout.trim();
+  return absoluteFrom(root, result.stdout.trim());
+}
+
+/** `raw`, a path as git printed it, absolute: one that is relative is relative to `root`. */
+function absoluteFrom(root, raw) {
   return path.isAbsolute(raw) ? raw : path.resolve(root, raw);
 }
 

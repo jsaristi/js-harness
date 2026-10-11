@@ -70,9 +70,36 @@ const fileId = (file) => {
 /** The entries of `dir`, or none when it is not there. */
 const listed = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []);
 
+// Building a repository takes eight git processes, and most tests ask for one of the same few. So each
+// distinct one is built once in a run of this file, and a test is handed a copy of it: a folder of its
+// own, which it may commit in, dirty and remove, with the same objects and so the same commit ids.
+const built = new Map();
+
+/** A repository of the caller's own: a copy of the one `build` makes, which is made once for `key` and is
+ * never handed out itself. `build` answers `{ root, ... }`, and the rest of it goes with every copy. The
+ * index of a copy holds the dates of the files it was copied from, so the tree reads as clean to what
+ * compares the files themselves, as `git status` and `git commit` do, and not to `git diff-files`. */
+function copyOf(key, build) {
+  if (!built.has(key)) {
+    const template = build();
+    // The sample hooks `git init` leaves are a third of what there is to copy, and nothing reads them.
+    fs.rmSync(path.join(template.root, '.git', 'hooks'), { recursive: true, force: true });
+    built.set(key, template);
+  }
+  const { root: template, ...ids } = built.get(key);
+  const root = tmp('js-harness-codex-review-');
+  fs.cpSync(template, root, { recursive: true });
+  return { root, ...ids };
+}
+
 /** A repo whose first commit (`base`) holds `before` and second (`head`) holds `after`, both maps
  * of file name to content. */
 function makeRepoWith(before, after) {
+  return copyOf(JSON.stringify([before, after]), () => buildRepoWith(before, after));
+}
+
+/** Builds that repository, which is what `makeRepoWith` hands out copies of. */
+function buildRepoWith(before, after) {
   const root = tmp('js-harness-codex-review-');
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
@@ -301,6 +328,38 @@ function clock(...times) {
   const next = ticking(...times);
   return () => new Date(next());
 }
+
+// --- the repositories the tests are handed ---
+
+test('each call for a repository gives a copy of its own with the same commits, which shares nothing with another copy and does not need the one it was copied from', () => {
+  const content = [{ 'only.txt': 'in the first commit\n' }, { 'only.txt': 'in the second commit\n' }];
+  const first = makeRepoWith(...content);
+  const second = makeRepoWith(...content);
+  const key = JSON.stringify(content);
+  const template = built.get(key).root;
+  assert.equal(new Set([first.root, second.root, template]).size, 3, 'three folders');
+  assert.match(first.base, /^[0-9a-f]{40}$/);
+  assert.notEqual(first.base, first.head);
+  assert.deepEqual([second.base, second.head], [first.base, first.head]);
+  for (const { root, head } of [first, second]) {
+    assert.deepEqual([git(root, 'rev-parse', 'HEAD'), git(root, 'status', '--porcelain')], [head, '']);
+  }
+
+  // A commit and a file that is not tracked, in one copy: the other is as it was handed out.
+  fs.writeFileSync(path.join(first.root, 'only.txt'), 'changed in one copy\n', 'utf8');
+  git(first.root, 'commit', '-am', 'three');
+  fs.writeFileSync(path.join(first.root, 'scratch.txt'), 'not tracked', 'utf8');
+  assert.notEqual(git(first.root, 'rev-parse', 'HEAD'), first.head);
+  assert.deepEqual([git(second.root, 'rev-parse', 'HEAD'), git(second.root, 'status', '--porcelain')], [second.head, '']);
+
+  // With the one it was copied from gone, a copy is still a whole repository. No other test asks for this
+  // content, and the next one that did would have it built again.
+  fs.rmSync(template, { recursive: true, force: true });
+  built.delete(key);
+  assert.equal(git(second.root, 'status', '--porcelain'), '');
+  assert.equal(git(second.root, 'log', '--format=%H'), `${second.head}\n${second.base}`);
+  assert.equal(git(second.root, 'show', `${second.base}:only.txt`), 'in the first commit');
+});
 
 // --- the run ---
 
@@ -4478,6 +4537,10 @@ test('--max-parts takes a positive integer, and --plan does not stand beside --u
 /** A repository of four commits: `base`, then `one`, `two` and `three`, each of which changes two lines in
  * a file of its own, `a.txt`, `b.txt` and `c.txt`. `HEAD~3` is `base`. */
 function makeSlicedRepo() {
+  return copyOf('sliced', buildSlicedRepo);
+}
+
+function buildSlicedRepo() {
   const { root, base, head: one } = makeRepoWith({ 'a.txt': 'a1\n', 'b.txt': 'b1\n', 'c.txt': 'c1\n' }, { 'a.txt': 'A1 changed\n' });
   const change = (name, message) => {
     fs.writeFileSync(path.join(root, name), `${name} changed\n`, 'utf8');

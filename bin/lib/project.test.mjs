@@ -1218,6 +1218,101 @@ test('gitDirs returns null on both when run outside a git repository', () => {
   }
 });
 
+/** `spawn`, with the arguments of every process it was asked to start in `asked`. */
+function countingSpawn(spawn = spawnSync) {
+  const asked = [];
+  const counting = (cmd, args, opts) => {
+    asked.push([cmd, ...args]);
+    return spawn(cmd, args, opts);
+  };
+  counting.asked = asked;
+  return counting;
+}
+
+const BOTH_DIRS = ['git', 'rev-parse', '--git-dir', '--git-common-dir'];
+
+test('gitDirs asks git for both directories with one process, in a repository and outside one', () => {
+  const root = makeTmpRepo();
+  const dir = makeTmpDir();
+  try {
+    const inside = countingSpawn();
+    assert.deepEqual(gitDirs(root, inside), { gitDir: path.join(root, '.git'), commonGitDir: path.join(root, '.git') });
+    assert.deepEqual(inside.asked, [BOTH_DIRS]);
+
+    const outside = countingSpawn();
+    assert.deepEqual(gitDirs(dir, outside), { gitDir: null, commonGitDir: null });
+    assert.deepEqual(outside.asked, [BOTH_DIRS]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('gitDirs gives what asking git for each directory alone gives: at the top of a repository, below it, and in a linked worktree', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-gitdirs-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-gitdirs'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+    fs.mkdirSync(path.join(main, 'below'));
+    fs.mkdirSync(path.join(worktree, 'below'));
+
+    // What one flag alone answers in `cwd`, resolved against `cwd` when it is relative. Git 2.54 answers
+    // `--git-common-dir` below the top of a repository with a relative path (`../.git`) and `--git-dir`
+    // with an absolute one; in a linked worktree both are absolute.
+    const alone = (cwd, flag) => {
+      const raw = spawnSync('git', ['rev-parse', flag], { cwd, encoding: 'utf8' }).stdout.trim();
+      return path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
+    };
+    for (const cwd of [main, path.join(main, 'below'), worktree, path.join(worktree, 'below')]) {
+      assert.deepEqual(gitDirs(cwd, spawnSync), { gitDir: alone(cwd, '--git-dir'), commonGitDir: alone(cwd, '--git-common-dir') }, cwd);
+    }
+
+    const linked = gitDirs(worktree, spawnSync);
+    assert.equal(fs.realpathSync(linked.commonGitDir), fs.realpathSync(path.join(main, '.git')));
+    assert.equal(fs.realpathSync(path.dirname(linked.gitDir)), fs.realpathSync(path.join(main, '.git', 'worktrees')));
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+test('gitDirs returns null on both, having started one process, when git cannot be started, fails or prints nothing', () => {
+  const root = path.resolve('no-such-root');
+  const answers = [
+    ['a spawn that throws', () => {
+      throw new Error('spawn git EACCES');
+    }],
+    ['a spawn that answers nothing', () => undefined],
+    ['git that could not be started', () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' })],
+    ['git that fails', () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' })],
+    ['git that prints nothing', () => ({ status: 0, stdout: '', stderr: '' })],
+  ];
+  for (const [which, answer] of answers) {
+    const spawn = countingSpawn(answer);
+    assert.deepEqual(gitDirs(root, spawn), { gitDir: null, commonGitDir: null }, which);
+    assert.deepEqual(spawn.asked, [BOTH_DIRS], which);
+  }
+});
+
+// A folder name may hold a line break where the file system allows one, and then the two paths do not
+// come back as two lines: each directory is asked for alone, as it was before one process asked for both.
+test('gitDirs asks for each directory alone when the one answer is not two lines', () => {
+  const root = path.resolve('no-such-root');
+  const answerOf = {
+    '--git-dir --git-common-dir': '/tmp/a\nb/.git/worktrees/w\n/tmp/a\nb/.git\n',
+    '--git-dir': '/tmp/a\nb/.git/worktrees/w\n',
+    '--git-common-dir': 'common\n',
+  };
+  const spawn = countingSpawn((cmd, args) => ({ status: 0, stdout: answerOf[args.slice(1).join(' ')], stderr: '' }));
+  const { gitDir, commonGitDir } = gitDirs(root, spawn);
+  assert.equal(gitDir, '/tmp/a\nb/.git/worktrees/w');
+  assert.equal(commonGitDir, path.join(root, 'common'));
+  assert.deepEqual(spawn.asked, [BOTH_DIRS, ['git', 'rev-parse', '--git-dir'], ['git', 'rev-parse', '--git-common-dir']]);
+});
+
 // --- worktrees and submodules: the shared hooks directory lives outside the working tree ---
 // (T2e item 4, R3-worktree-submodule-hook-misclassified-outside)
 
