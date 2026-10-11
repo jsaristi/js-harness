@@ -501,8 +501,51 @@ Progress.
     repositories of the second file built once. Together about 2,800 of 15,467. The tests'
     own `git diff` stays out, as planned: 303 calls.
 
+- 2026-10-11 · T2 is commit `9c49587`; its gate passed in 1,075 s (07:33:28 to 07:51:23) and
+  is the first to name what loads the machine, which was the very case of the morning:
+  `INFO  load  1.4 of 8 logical processors busy before the sensors (18%, 1 s sample)`,
+  `1.1 s of CPU in 2 s  node tsserver.js (pid 41012)`, `1.0 s of CPU in 2 s  MsMpEng (pid
+  5736)`, `0.7 s of CPU in 2 s  claude (pid 16424)`. The language server is another
+  session's: its parent chain ends in `claude.exe` 27012, and this session's is 9672 (read
+  with `Get-CimInstance Win32_Process`). Not this session's to stop; said to the
+  orchestrator. Three gates of today, all on a machine with other sessions at work: 1,110,
+  991 and 1,075 s, against 832 s on the quiet machine of the last slice.
+- 2026-10-11 · `origin/main` moved again, to `8654c79` (pull request 59, the channel's
+  folder): it changes `bin/lib/manifest.mjs` and `bin/install.mjs`, where `uninstall` now
+  removes the channel's folder under `<home>/.js-harness`, whole. S2 is cut after `main` is
+  merged in, and its removal of the log's folder follows that one's shape.
+
+## Resume here (state at 2026-10-11 08:00, for a session that lost its conversation)
+- Done and committed: on `feat/gate-log` (worktree `D:\js-harness-worktrees\gate-log`) the
+  document `287a585`, T1 `84e93a5` (gentle-ai approved), T2 `9c49587` (gentle-ai not yet
+  run); on `feat/gate-git-processes` (worktree `…\gate-git-processes`) the counting tool
+  `a0bf058` (gentle-ai approved). Nothing is pushed; no pull request is open.
+- In flight when this was written: the gate of the tool's second commit in
+  `gate-git-processes` (`--frames`, the review's findings; message in
+  `msg-t6b.txt`); the writer of T7 in a third worktree, `D:\js-harness-worktrees\gate-git-cuts`
+  (branch `feat/gate-git-cuts`, cut from `a0bf058`), waiting for the lock to run its last
+  count. Its change is uncommitted there and is meant to be applied as a patch to
+  `gate-git-processes`, committed there, and the third worktree removed.
+- Next, in this order: gentle-ai on `84e93a5..9c49587`; Codex on S1 whole
+  (`node bin/js-harness.mjs codex-review --base 7ef20b9`, planned at about 730,000 input
+  tokens for T1 alone, so perhaps 2 million for S1: read `--plan` first, the cap of the
+  feature is 3 million and going past it is his); `git push -u origin feat/gate-log` and the
+  pull request of S1; the "closed S1" notice to the orchestrator. Then T7's commit and
+  reviews, T8, and S2 (T3 to T5) on a branch cut from S1 with `main` merged in.
+- Reviews are started under the gate lock, so that none runs beside a gate:
+  `node bin/js-harness.mjs gate -- node <scratchpad>/rv-run.cjs <repo> <base> <tag>`.
+- Scripts and records of this session, in its scratchpad
+  (`C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\27a0677f-bc17-4331-a050-5cb169a310fb\scratchpad`):
+  `rv-run.cjs` (one gentle-ai review from assess to acknowledge, running only what each
+  reply returns, the `granted` invocation included), `rv-step.cjs` (one returned invocation),
+  `msg-*.txt` (commit messages), `commit-*.log` (the gates' reports), `profile1.json` and
+  `profile1.txt` (the two long files, three frames), `profile-all.json` (the whole suite,
+  two frames). If the scratchpad is gone, the numbers that matter are in Progress above and
+  the scripts are short to write again from the review contract in the session's rules.
+- Open and his: where the log's folder lives ("Ask me before"), in the orchestrator's queue;
+  the Codex cap if S2 and S3 do not fit in it.
+
 ## Next
-T2's commit, gentle-ai on it (against `84e93a5`), Codex on S1 whole (against `7ef20b9`), the
-push and the pull request of S1. For S3: the tool's second commit in the second worktree,
-and T7 with its writer in a third (`D:\js-harness-worktrees\gate-git-cuts`), its patch
-applied to the second when that one's gate is over.
+gentle-ai on T2 (against `84e93a5`), Codex on S1 whole (against `7ef20b9`), the push and the
+pull request of S1. For S3: T7's patch applied in the second worktree once the tool's second
+commit is in, then its commit, the count after, and T8.
