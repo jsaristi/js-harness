@@ -345,6 +345,34 @@ test('a sender whose transcript carries no title takes the title of the opening 
   assert.equal(recorded(machine).notices.at(-1).from.title, 'JH 5 · renombrada');
 }));
 
+// Review of ce8bdf7, finding 6: with the record unreadable the notice was written with no title and no word of why.
+test('a notice from a session with no title in its transcript is written when the record cannot be read, and one line says the title is not known', withMachine(async (machine) => {
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  writeUntitled(machine, SENDER);
+  await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => OPENING, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } });
+  assert.equal(await sessionsMain(['--opening', 'JH 5', '--claude-home', machine.claudeHome], { cwd: machine.worktree, stdout: () => {}, stderr: () => {}, env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_SESSION_ID: SENDER }, now: () => NOW, run: fakeGit(machine).run }), 0);
+  const record = recorded(machine).path;
+  // The record as the board's test has it: busy, as when another session is writing it.
+  const busy = (absolute) => {
+    if (absolute === record) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+    return fs.readFileSync(absolute, 'utf8');
+  };
+  const notKnown = `js-harness notify: the title of the sender is not known: its transcript carries none, and the channel's record ${record} could not be read (EBUSY) to look for the opening it read`;
+  const sent = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'probe'], { readFile: busy });
+  assert.equal(sent.code, 0);
+  assert.deepEqual(sent.err.filter((line) => line.startsWith('js-harness notify: ')), [notKnown]);
+  assert.match(sent.out[0], / from session aaaaaaaa in /);
+  assert.deepEqual(recorded(machine).notices.map((one) => [one.text, one.from.id, one.from.title]), [['probe', SENDER, null]]);
+  // An opening it stores then is stored the same way, and says the same.
+  const stored = await runNotify(machine, ['--opening', 'JH 8 · otra'], { readStdin: () => OPENING, readFile: busy });
+  assert.deepEqual([stored.code, stored.err.filter((line) => line.includes('title of the sender'))], [0, [notKnown]]);
+  // With the record readable there is nothing to say, nor for a sender whose transcript has its title.
+  const read = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'again']);
+  assert.deepEqual([read.err, recorded(machine).notices.at(-1).from.title], [[], SENDER_TITLE]);
+  const titled = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe'], { readFile: busy, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } });
+  assert.deepEqual(titled.err.filter((line) => line.includes('title of the sender')), []);
+}));
+
 test('the address is asked of the record notify writes: under --home, a session known only by the opening it read is the address of its role', withMachine(async (machine) => {
   writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
   writeUntitled(machine, SENDER);

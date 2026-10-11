@@ -2011,6 +2011,21 @@ test('a session whose transcript carries no title takes the title of the opening
   assert.deepEqual(lib.roleHolders(lib.rosterOf(titled), lib.roleNamed('2')).map((item) => item.title), ['JH 2 · the board']);
 });
 
+// Review of ce8bdf7, finding 1: a notice written under the start of an id was its row's, and a reading
+// written under the same start (`sessions --opening --self <start>`) gave nobody its title.
+test('a reading written under the start of a session id gives that session its title, by the rule that makes a notice its row\'s', () => {
+  const readings = [readingOf(600, B.slice(0, 8), 'JH 2 · the board'), readingOf(500, B.slice(0, 7), 'JH 9 · seven characters name nobody')];
+  assert.deepEqual([lib.titleRead(readings, B), lib.titleRead(readings, C)], ['JH 2 · the board', null]);
+  const [titled] = lib.titledByReadings([member(B, null, 120, { titleSource: null })], readings);
+  assert.deepEqual([titled.title, titled.titleSource], ['JH 2 · the board', 'reading']);
+  // The last reading is still the one that counts, whichever way its id was written.
+  assert.equal(lib.titleRead([...readings, readingOf(400, B, 'JH 2 · renamed')], B), 'JH 2 · renamed');
+  assert.equal(lib.titleRead([readingOf(700, B, 'JH 2 · first'), ...readings], B), 'JH 2 · the board');
+  // And it is the same row for the record: the notice under that start is this session's.
+  const roster = lib.rosterOf([titled], { record: recordOf([noticeOf(300, { id: B.slice(0, 8), source: 'flag' }, 'orchestrator', 'opened', 'the board')]) });
+  assert.deepEqual(roster.rows.map((item) => [item.title, item.record?.status?.kind]), [['JH 2 · the board', 'opened']]);
+});
+
 test('rosterOf says of each row what the record says of its session: the last of opened, waiting, closed and relieved, and where its notices were written from', () => {
   const sessions = [member(A, 'JH ORQ · proj', 60), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'Board feature', 240)];
   const notices = [
@@ -2083,6 +2098,40 @@ test('channelOf gives the last notices of the record, those for the orchestrator
   assert.deepEqual(unread, { path: 'H:\\.js-harness\\channel\\D--proj.jsonl', unavailable: 'EACCES', skipped: 0, noticeCount: 0, notices: [], forOrchestrator: { count: 0, notices: [] }, messageCount: 0, messages: [] });
   // Sessions the board could not read, or that the reader gave no messages for, have none.
   assert.deepEqual(lib.channelOf(recordOf(), [{ id: D, unavailable: 'EBUSY' }, member(A, 'JH ORQ · proj', 60)]).messages, []);
+});
+
+// Review of ce8bdf7, finding 3: a send with no id (it failed, or its result was never written) that a
+// restarted session wrote again in its new transcript was two messages.
+test('channelOf counts once a message with no id that a restarted session wrote again in a second transcript, and merges no two that are not one', () => {
+  const count = (...sessions) => lib.channelOf(recordOf(), sessions).messageCount;
+  const again = SENT(90, 'JH ORQ · proj', null, { failed: true, summary: 'again' });
+  const first = member(B, 'JH 2 · the board', 120, { sent: [again, SENT(80, 'JH ORQ · proj', null, { summary: 'another' })] });
+  const restarted = (sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.equal(count(first, restarted([{ ...again }])), 2, 'the copy is the message it copies');
+  assert.equal(count(first, restarted([{ ...again }]), member(D, 'JH 2 · the board', 100, { sent: [{ ...again }] })), 2, 'and so is the copy of a second restart');
+  // What is not the same message stays two: another summary, another address, a send that did not fail,
+  // another moment, a session of another title, and a send with no time.
+  for (const other of [{ summary: 'again, differently' }, { to: 'JH 9 · other' }, { failed: false }, { at: before(91) }]) {
+    assert.equal(count(first, restarted([{ ...again, ...other }])), 3, JSON.stringify(other));
+  }
+  assert.equal(count(first, member(C, 'JH 3 · the lock', 110, { sent: [{ ...again }] })), 3, 'a session of another title sent its own');
+  const untimed = { ...again, at: null };
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [untimed] }), restarted([{ ...untimed }])), 2, 'no time, nothing to know it by');
+  // Two calls of one transcript are two messages, whatever they share: one reply can make both.
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] })), 2);
+  assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] }), restarted([{ ...again }, { ...again }])), 2, 'and their two copies are those two');
+});
+
+// Review of ce8bdf7, finding 4: a board from before the tasks were kept read as a plan with no task, so
+// the first look after an update said "task added" for every task of every plan.
+test('boardChanges: a plan with no list of tasks on either side has none to compare, and its next step is still compared', () => {
+  const { tasks: _tasks, ...before } = plan();
+  assert.deepEqual(changes(trees(before), trees(plan())), []);
+  assert.deepEqual(changes(trees(plan()), trees(before)), []);
+  assert.deepEqual(changes(trees(plan({ tasks: undefined })), trees(plan({ tasks: [...TASKS, 'T4 Ship it'] }))), []);
+  assert.deepEqual(changes(trees(before), trees(plan({ nextStep: [] }))), ['plan odd/tasks/board.md in D:/wt changed: its next step is now empty']);
+  // A plan that has a list with nothing in it has no task, and gains each one.
+  assert.deepEqual(changes(trees(plan({ tasks: [] })), trees(plan({ tasks: ['T1 Read the transcripts'] }))), ['plan odd/tasks/board.md in D:/wt changed: task added "T1 Read the transcripts"']);
 });
 
 // Seen live on 2026-10-11: a session that had said `closed` woke the orchestrator each time it ended a turn.
@@ -2384,6 +2433,15 @@ test('quoteOf says which entry it is when it is not the person\'s: another sessi
   assert.equal(said(1).person, false);
   assert.equal(lib.quoteOf('', 1).what, 'no line of the transcript, which has 0 lines');
   assert.equal(lib.quoteOf(transcript(reply('x', 1)), 2).what, 'no line of the transcript, which has 1 line');
+});
+
+// Review of ce8bdf7, finding 2: line 1.5 passed the range check and then read no line, with a TypeError.
+test('quoteOf answers that there is no such line for whatever is not a whole number inside the transcript', () => {
+  const text = transcript(prompt('one', 1), prompt('two', 2));
+  for (const line of [1.5, 0.5, 2.000001, 0, -1, 3, NaN, Infinity, '2', null, undefined]) {
+    assert.deepEqual(lib.quoteOf(text, line), { person: false, what: 'no line of the transcript, which has 2 lines' }, `line ${String(line)}`);
+  }
+  assert.equal(lib.quoteOf(text, 2).text, 'two');
 });
 
 test('quoteOf says when the person\'s entry is only pasted content: nothing typed before it or after it', () => {

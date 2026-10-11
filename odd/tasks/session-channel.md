@@ -542,7 +542,7 @@ reader, and that table names this feature as their owner.
   Split by the order taken on 2026-10-11 ("Delivery"): T4a, the roster and `--address`, in the
   first pull request with T3 (route: delegated, one writer; the reader and the board are two
   non-trivial files with their tests); T4b, the rest, after T1.
-- [ ] T4c The nine findings of the two reviews of `ce8bdf7` (Progress, 2026-10-11), in one
+- [x] T4c The nine findings of the two reviews of `ce8bdf7` (Progress, 2026-10-11), in one
   follow-up commit on `feat/session-board-channel` (route: delegated, the writer of T4b)
 - [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
 - [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
@@ -810,6 +810,27 @@ reader, and that table names this feature as their owner.
   untitled session that reads an opening meant for another takes its title, and two readers
   of one opening make its role's address exit 2 (`:478`): kept, since the exit says so, with
   the tests of which reading wins.
+- 2026-10-11 09:12 local, T4c written by the writer of T4b, test first: the nine findings.
+  Red before green, as it reported: a reading under the start of an id gave no title; line
+  1.5 threw a TypeError; a message with no id counted 3 against 2; a baseline with no tasks
+  gave three "task added"; a forged file outside the sessions folder was quoted with exit 0;
+  `notify` said nothing of an unreadable record; `--opening -- "--a title"` was refused; an
+  ambiguous `--self` recorded a reading. Not observed red: the trim of a final carriage
+  return. One finding was not as the reviewer described it: two untitled sessions that read
+  the same opening get one title, and a row is a title, so `--address` exits 0 with that one
+  title (the limit of point 4, not a new one); what does exit 2 with both printed is two
+  sessions that read two openings of one role, and both cases are pinned. Chosen beyond the
+  brief: `--quote <file>` also refuses a file nested in the sessions folder (a sub-agent's
+  transcript) and one that is not `.jsonl`; a file written straight into the sessions folder
+  is still quoted, which the check cannot stop. A mistake caught by the parent's spot check:
+  the dispatcher's test still expected exit 1 for a file outside the sessions folder; it was
+  outside the writer's surface and its verification list, failed here, and was corrected by
+  the parent (`bin/js-harness.test.mjs`), so the surface of a fix must name the tests of
+  every caller of what it changes. Read by the parent at 09:12: `node --test` on
+  `bin/lib/sessions.test.mjs` 180 pass, `bin/sessions.test.mjs` 179 and 1 skipped,
+  `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, `bin/js-harness.test.mjs` 27,
+  `bin/lib/manifest.test.mjs` 90, `bin/install.test.mjs` 58, none failing; `sessions --quote`
+  on a log file outside the sessions folder: exit 2, "not quoted".
 
 ## State for a resume (written 2026-10-11, before the session's context is compacted)
 Read this document's "Next step" and this section; the summary of a compaction is not the

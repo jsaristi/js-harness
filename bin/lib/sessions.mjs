@@ -842,10 +842,12 @@ export function roleNamed(text) {
 export const hasTitle = (session) => (session.titleSource === 'custom-title' || session.titleSource === 'reading') && typeof session.title === 'string';
 
 /** The title the record gives the session `id`: the one of the opening it read last (`readings`, the
- * readings of the record in the order written), or `null` when it read none. */
+ * readings of the record in the order written), or `null` when it read none. A reading is the session's
+ * when its reader's id is the session's id or the start of it (`isSelf`), which is how `--self` names a
+ * session and the rule by which a notice is its row's (`recordOfRows`). */
 export function titleRead(readings, id) {
   if (typeof id !== 'string') return null;
-  for (let index = readings.length - 1; index >= 0; index--) if (readings[index].reader.id === id) return readings[index].title;
+  for (let index = readings.length - 1; index >= 0; index--) if (isSelf(id, readings[index].reader.id)) return readings[index].title;
   return null;
 }
 
@@ -1020,7 +1022,7 @@ export const CHANNEL_LINES = 5;
  * `summary` is the line the call gave about the message (`sentMessage`), `null` for one seen only from
  * the receiver's side. No text of a message is kept: the notice of the record is what was said, and the
  * transcript has the message. A message written twice (a session the app restarted writes its entries
- * again in a new transcript) is one. */
+ * again in a new transcript) is one: by its id, and by `copyKey` when it has none. */
 function messagesBetween(sessions) {
   const readable = sessions.filter((session) => !session.unavailable);
   const whose = (session) => ({ session: session.id, title: hasTitle(session) ? session.title : null });
@@ -1032,11 +1034,23 @@ function messagesBetween(sessions) {
   }
   const messages = [];
   const sent = new Set();
+  // A send with no id (it failed, or its result was never written) has nothing of its own to be known
+  // by. Its copy in the transcript of a restart is the same entry again, so it has the same time to the
+  // millisecond, address, summary and outcome, under the same title. Those five are the key, and only
+  // across transcripts: two calls of one transcript are two messages whatever they share, since one
+  // reply can make both, and a send with no time is known by nothing. Two different messages would have
+  // to come from two sessions of one title, in the same millisecond, to one address, in the same words.
+  const copies = new Map(); // key -> the id of the transcript that had it first
+  const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null, message.failed === true]) : null);
   for (const session of readable) {
     for (const message of session.sent ?? []) {
       if (message.id !== null) {
         if (sent.has(message.id)) continue;
         sent.add(message.id);
+      } else {
+        const key = copyKey(session, message);
+        if (key !== null && copies.has(key) && copies.get(key) !== session.id) continue;
+        if (key !== null && !copies.has(key)) copies.set(key, session.id);
       }
       const arrival = message.id === null ? undefined : arrivals.get(message.id);
       const to = arrival ? whose(arrival.receiver) : { session: null, title: null };
@@ -1116,7 +1130,8 @@ function notThePersons(entry) {
 export function quoteOf(text, line) {
   const lines = text.split('\n');
   if (lines.at(-1) === '') lines.pop(); // what follows the last line break is not a line
-  if (!(line >= 1 && line <= lines.length)) return { person: false, what: `no line of the transcript, which has ${lines.length} line${lines.length === 1 ? '' : 's'}` };
+  // A whole number only: 1.5 is inside the range and names no line.
+  if (!(Number.isSafeInteger(line) && line >= 1 && line <= lines.length)) return { person: false, what: `no line of the transcript, which has ${lines.length} line${lines.length === 1 ? '' : 's'}` };
   const written = lines[line - 1];
   if (written.trim() === '') return { person: false, what: 'an empty line' };
   let entry;
@@ -1308,9 +1323,10 @@ const startOf = (text) => JSON.stringify(text.length > START_LENGTH ? `${text.sl
  * looked at, nor the order of the tasks: a ticked box is the plan advancing, not changing. A plan with no
  * `tasks` (a board from before they were kept) has none to compare. */
 function taskDifferences(was, plan) {
+  if (!Array.isArray(was.tasks) || !Array.isArray(plan.tasks)) return [];
   const byTask = (tasks) => {
     const texts = new Map();
-    for (const text of tasks ?? []) {
+    for (const text of tasks) {
       const key = taskId(text) ?? text;
       texts.set(key, [...(texts.get(key) ?? []), text]);
     }

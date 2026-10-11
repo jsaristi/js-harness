@@ -330,7 +330,7 @@ test('notify dispatches: it records one notice under a temp home and exits 0 wit
 
 // Hermetic, like the dispatch of `notify` above: temp folders for the harness home, the Claude home and
 // the folder it runs from. The opening is stored through the dispatcher, then read through it.
-test('sessions --opening dispatches: it prints the opening notify stored under a temp home, and --quote says a missing transcript is not his words', () => {
+test('sessions --opening dispatches: it prints the opening notify stored under a temp home, and --quote refuses a file outside the sessions folder', () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-cwd-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-home-'));
   const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-claude-'));
@@ -343,9 +343,11 @@ test('sessions --opening dispatches: it prints the opening notify stored under a
     assert.deepEqual([read.status, read.stdout, read.stderr], [0, 'Sos JH 9.\nSeguí.\n', '']);
     // No session is named, so nothing is recorded: the home holds the opening and no record.
     assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness', 'channel')), ['openings']);
-    const missing = path.join(cwd, 'none.jsonl');
-    const quote = dispatch(['sessions', '--quote', missing, '1', '--cwd', cwd, '--claude-home', claudeHome]);
-    assert.deepEqual([quote.status, quote.stdout, quote.stderr.trimEnd()], [1, '', `js-harness sessions: no transcript at ${missing}`]);
+    // A file outside the project's sessions folder is never quoted, whether it exists or not: exit 2.
+    const outside = path.join(cwd, 'none.jsonl');
+    const quote = dispatch(['sessions', '--quote', outside, '1', '--cwd', cwd, '--claude-home', claudeHome]);
+    assert.deepEqual([quote.status, quote.stdout], [2, '']);
+    assert.ok(quote.stderr.startsWith(`js-harness sessions: not quoted: ${outside} is not a transcript of this project's sessions folder`), quote.stderr);
   } finally {
     for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });
   }

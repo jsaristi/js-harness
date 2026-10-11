@@ -44,14 +44,16 @@ const USAGE = [
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the title of the one other session that holds the role: exit 0 for one,',
   '         1 for none with every transcript read, 2 for several or when it cannot tell',
-  '       js-harness sessions --opening "<title>"|"<code> <role>" [--self <session id>]',
+  '       js-harness sessions --opening [--] "<title>"|"<code> <role>" [--self <session id>]',
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the opening stored for that session (notify --opening) and records in the channel which session read it:',
-  '         exit 0 for one, 1 for none, 2 for several or when it cannot tell',
+  '         exit 0 for one, 1 for none, 2 for several or when it cannot tell;',
+  '         a lone -- before a title that begins with -- (--opening -- "--a title")',
   '       js-harness sessions --quote <transcript file or session id> <line> [--cwd <path>] [--claude-home <path>]',
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
   '         or no such line, saying which; 2 when it cannot look. It warns when the entry is only pasted content.',
+  '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -128,7 +130,15 @@ function parseArgs(argv) {
       parsed.address = roleNamed(requireValue(argv, i, token));
       if (parsed.address === null) throw new SessionsArgError('--address takes a role: orchestrator (or ORQ), or the number of a work session');
     } else if (token === '--opening') {
-      parsed.opening = requireValue(argv, i, token);
+      // A lone `--` says that what follows is the title, whatever it begins with: `notify --opening --
+      // "--a title"` stores such a title, and this is how it is asked for.
+      if (argv[i + 1] === '--') {
+        parsed.opening = argv[i + 2];
+        if (parsed.opening === undefined || parsed.opening === '') throw new SessionsArgError(`${token} requires a value`);
+        i += 1; // the `--`, beside the title consumed below
+      } else {
+        parsed.opening = requireValue(argv, i, token);
+      }
     } else if (token === '--quote') {
       const transcript = requireValue(argv, i, token);
       // A file is named by a path; anything else is a session id, or the start of one as `--self` takes it.
@@ -470,9 +480,24 @@ export async function sessionsMain(
       return 2;
     }
     const [opening] = found.openings;
-    stdout(opening.text.replace(/\n$/, ''));
+    // Without its final line ending, whichever it is: `notify --opening` stores plain line breaks, and a
+    // file written by anything else may end in a carriage return and a line feed.
+    stdout(opening.text.replace(/(\r\n|\n|\r)$/, ''));
     if (found.unreadable > 0) stderr(`js-harness sessions: ${unreadable} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`);
     const reader = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile, readFacts });
+    // An id no transcript completes is recorded as given, as a notice written with it is (`senderOf`). One
+    // that several transcripts start with is not: the reading would give each of them the title
+    // (`titleRead`), and nothing says which of them read. A folder that cannot be listed names none.
+    let named = [];
+    try {
+      if (reader.id !== null) named = readdir(projectDir).filter((name) => name.endsWith('.jsonl') && isSelf(name.slice(0, -'.jsonl'.length), reader.id));
+    } catch {
+      named = [];
+    }
+    if (named.length > 1) {
+      stderr(`js-harness sessions: the opening was read, and no reading was recorded: ${named.length} transcripts of this project are named by ${JSON.stringify(reader.id)}, and a reading under it would give each of them the title. Give more of the id`);
+      return 0;
+    }
     // The session that stored the opening reads it back to check it: it is not the session it is for,
     // and a reading of its own would give it that title on the board if its transcript carried none.
     if (reader.id !== null && reader.id !== opening.from?.id) {
@@ -497,6 +522,16 @@ export async function sessionsMain(
     let file;
     if (parsed.quote.file) {
       file = path.resolve(defaultCwd, transcript);
+      // Only a transcript of this project's sessions folder, directly in it, as the board reads them. This
+      // is the check a session runs before it takes carried words as the user's, and a session can write
+      // a file anywhere with a line marked as a person's; a subagent's transcript, in a folder of this
+      // one, holds what its parent session wrote to it. What this does not stop: a file written into the
+      // folder itself, which is the host's to keep.
+      const inside = path.relative(projectDir, file);
+      if (inside === '' || /[\\/]/.test(inside) || path.isAbsolute(inside) || !inside.endsWith('.jsonl')) {
+        stderr(`js-harness sessions: not quoted: ${file} is not a transcript of this project's sessions folder, ${projectDir}. Only the transcripts the board reads there are quoted: a session can write a file anywhere else and mark a line of it as the user's`);
+        return 2;
+      }
     } else {
       let names;
       try {

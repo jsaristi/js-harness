@@ -213,9 +213,17 @@ export async function notifyMain(
   const from = senderOf({ self: parsed.self ?? null, env, projectDir: path.join(claudeHome, 'projects', slug), readdir, readFile });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
   // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
-  if (from.id !== null && from.title === null) from.title = titleRead(readNotices(home, slug, { readFile }).readings, from.id);
+  // A record that cannot be read gives no title and stops nothing: the notice is written without one,
+  // and that is said, so a notice with no title is never taken for a session that read no opening.
+  let titleNotRead = null;
+  if (from.id !== null && from.title === null) {
+    const record = readNotices(home, slug, { readFile });
+    from.title = titleRead(record.readings, from.id);
+    if (record.unavailable !== undefined) titleNotRead = `the channel's record ${record.path} could not be read (${record.unavailable})`;
+  }
   const senderNotKnown = () => {
     if (from.id === null) stderr('js-harness notify: the sender is not known: the host gave no session id (CLAUDE_CODE_SESSION_ID is not set) and --self names none');
+    if (titleNotRead !== null) stderr(`js-harness notify: the title of the sender is not known: its transcript carries none, and ${titleNotRead} to look for the opening it read`);
   };
 
   if (parsed.opening !== undefined) {
