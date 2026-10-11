@@ -310,8 +310,9 @@ that each build a real repository.
 ## Subagent models result
 
 Measured on 2026-10-10 (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort
-orchestrating one subagent that writes the change, with that subagent forced to Opus 5.5 in one
-arm and to Haiku 5.5 in the other. Three tasks, three trials a cell, 18 trials, under
+orchestrating a subagent that writes the change, with every subagent forced to Opus 5.5 in one
+arm and to Haiku 5.5 in the other (one subagent a trial, except two trials of the Haiku arm
+that spawned a second). Three tasks, three trials a cell, 18 trials, under
 `bypassPermissions`, Claude Code 2.1.296 with gentle-ai 4.0.0 and engram 3.3.0 (`node
 evals/subagents-report.mjs --modes write` over `evals/results/subagents/write-high.json`). The
 orchestrator plans, delegates the writing and reviews the result; every trial delegated and none

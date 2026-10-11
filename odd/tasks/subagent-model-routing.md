@@ -545,3 +545,18 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   in one direction, so every duration is used and the roadmap says the speed line is the
   weakest; nothing was repeated. `origin/main` (`ca013c2`, with slice 2 merged as `fdbff46`)
   merged in as `9cf9801` after the batch.
+- 2026-10-10 — T6 and T7 committed as `8bfa4e7` (gate 10, 988 s, passed alone after waiting 780 s
+  for another session's gate). Reviews of `9cf9801..8bfa4e7`: gentle-ai assessed it as medium
+  risk, review due (`slice_budget_reached`, the results file counted), approved and acknowledged
+  (lineage `review-813f14064554c533`), with one suggestion, taken: the roadmap said "one
+  subagent" where two trials of the Haiku arm spawned a second (`R3-one-subagent-wording`).
+  Codex reviewed the one code file (15 changed lines), found no defect and is recorded
+  (`js-harness codex-review --base 9cf9801`, 103,892 input tokens). `origin/main` (`df15929`,
+  pull request 53 of another session) merged in clean after the reviews. Every command of Done
+  when was run on this branch and exits 0, `npm run check` as the gate of the commit that
+  carries this entry. Slice 3 is `3a58457`, `8bfa4e7` and that commit; the lead merges it. Open,
+  his: what goes into the harness from the result, with the recommendation in the roadmap, and
+  the two measurements it names (Opus alone on this version, 9 trials and about $9; one task
+  hard enough to leave the score ceiling), each his to approve. Follow-ups left in the code, none
+  blocking: `SUBAGENTS_DIR` is not exported from `evals/suite.mjs`, the three task ids are a
+  constant in the report, and the text helpers of `evals/report.mjs` are copied into it.
