@@ -94,7 +94,13 @@ PowerShell cache written into the working tree) are gone.
 high
 
 ## Ask me before
-- Nothing of his is open. The installed `js-harness` command takes the line only when it is
+- Open, his (judged so by the orchestrator, 2026-10-11): what `--wait` means by default in
+  the installed gate. It is built as "minutes without the lock changing hands" (Design, 1,
+  "The bound of a wait"), which neither he nor his words chose. The orchestrator puts it to
+  him as one question when he returns and does not merge the slice of the line before his
+  answer; the pull request of that slice says it plainly, as a default that changed and
+  waits for his word. "From arrival" is one line away.
+- The installed `js-harness` command takes the line only when it is
   updated on his machine, which is his; the orchestrator is told when a slice that changes it
   is on `main`.
 
@@ -166,8 +172,9 @@ takes the lock (order lost, never exclusion); a clock set back keeps a dead wait
 as long as it was set back; a gate that outlives its killed `git commit` keeps its place and
 runs for nobody, as it could before.
 
-The bound of a wait (settled 2026-10-11 by this session, after the orchestrator sent the
-question back to this feature; its reading and this one agree, neither is his words): **the
+The bound of a wait (built as settled on 2026-10-11 by this session, after the orchestrator
+sent the question back to this feature; its reading and this one agree, neither is his
+words, and the default is his to confirm: see "Ask me before"): **the
 bound counts from the last time the lock changed hands**, and no longer from the arrival.
 - Why: with gates of about fourteen minutes, a gate with four or more ahead reaches sixty
   minutes while the line moves, is refused and comes back at the end. Two commits lost an
