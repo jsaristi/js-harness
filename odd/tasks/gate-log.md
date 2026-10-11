@@ -102,6 +102,22 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
 high
 
 ## Ask me before
+- **Answered 2026-10-11 18:33 UTC: the log lives in `<home>/.js-harness/gate-log/`, the
+  recommendation below.** His words, typed in the orchestrator's chat to the question of
+  keeping the gates' log in a folder of its own there, removed whole by `uninstall`: "Sí,
+  en .js-harness/gate-log" (the beginning of a longer entry;
+  `C:\Users\Oficina\.claude\projects\D--js-harness\7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
+  line 1360, a user entry whose origin is a human, read by this session before it was
+  used). So S2's pull request is merged like the others, when it is green and both reviews
+  are recorded. This session's own gates in `gate-log-file` keep `JS_HARNESS_GATE_LOG=off`
+  until that merge all the same: the installed command of this machine is older than S2
+  and its `uninstall` would not remove the folder yet. The same entry says "te apruebo
+  todo lo que me pides", which the orchestrator reads, for what it had proposed to him
+  just before, as: a review tool that fails does not stop a session (go on, repeat the
+  review in a turn of the lock, tell the orchestrator afterwards; a report outside stays
+  his), and the Codex cap as a rate, up to 1,200 input tokens a changed line of a slice by
+  `codex-review --plan`, over which a session asks. That reading is the orchestrator's;
+  his words are those quoted. The question as it stood:
 - Where the lasting file of the gate log lives. It is the first thing the gate leaves on disk
   after it ends, outside the repository, so it is his. Recommendation: a folder of its own,
   `<home>/.js-harness/gate-log/`, beside the lock's folder and not in it, holding two files at
@@ -722,54 +738,108 @@ Progress.
   holds the three by plan: 1,772,493 spent, 1,520,000 planned for S3, at most 2,860,000 for
   S2.
 
-## Resume here (state at 2026-10-11 13:00, for a session that lost its conversation)
-- Three worktrees under `D:\js-harness-worktrees`: `gate-log` (`feat/gate-log`, S1 and this
-  document), `gate-log-file` (`feat/gate-log-file`, S2), `gate-git-processes`
-  (`feat/gate-git-processes`, S3). This document is current only in `gate-log`; the other
-  two branches hold older copies.
-- S1, `feat/gate-log`, finished at `b9645f4` plus the commit of this document. Next: `git
-  push -u origin feat/gate-log`, the pull request to `main` (its text is `pr-s1.md` in the
-  scratchpad), the notice "closed S1" to the orchestrator. If `git log origin/feat/gate-log`
-  answers, the push is done; `gh pr list --head feat/gate-log` says whether the pull request
-  is open.
-- S3, `feat/gate-git-processes`, finished at `cd574c9`: T6 to T8, the roadmap. gentle-ai
-  approved up to `7201bac` and found nothing due after. Next, after S1's pull request: `node
-  bin/js-harness.mjs gate --wait 180 -- node bin/js-harness.mjs codex-review --base
-  origin/main`, the fixes of what it finds, push and pull request. Its
-  pull request and S1's both touch `docs/ROADMAP.md`, in hunks a few lines apart: whoever
-  merges second merges `main` in.
-- S2, `feat/gate-log-file`, at `2023f9d`: T3 to T5. Next, after S3: merge `feat/gate-log`
-  into it (`git merge feat/gate-log`; a merge commit holds code, so its hook runs the gate:
-  `JS_HARNESS_GATE_LOG=off`), then the roadmap of S2 (`docs/ROADMAP.md`: the gate log; "A
-  gate that ends leaves nothing on disk" reworded, since it now leaves its two lines), the
-  small fix left from the review (above), Codex (`--max-parts` as its plan says), push and
-  pull request. The pull request may be opened and reviewed; it is not merged without his
-  answer on where the log lives, and its text says so in its first line.
-- Every commit of this session in `gate-log-file` is made with `JS_HARNESS_GATE_LOG=off`,
-  and `C:\Users\Oficina\.js-harness\gate-log` must not exist until he answers; look after
-  each gate.
+- 2026-10-11 · **S1 is merged**: pull request 60, `feat/gate-log` into `main`, merge commit
+  `51a24db` (the orchestrator merged it; `git merge-base --is-ancestor de50a40 origin/main`
+  answers yes). From here this document is carried by `feat/gate-log-file`, which merged
+  `feat/gate-log`; `feat/gate-git-processes` gets it when it merges `main`.
+- 2026-10-11 · Codex on S3, `51a24db..cd574c9`, under the lock (ended 13:15): 5 parts,
+  **1,338,355** input tokens (541,283; 205,188; 299,887; 172,718; 119,279) against
+  1,520,000 planned. Three parts correct. Two findings, both P2, both on the count tool and
+  both about what it may fail to count: a child whose environment clears `NODE_OPTIONS`
+  but keeps the run's output variable runs without the preload, and the git processes it
+  starts are in no count (`scripts/count-git-preload.mjs:150`); and the reports of nested
+  `node --test` runs are subtracted as if they were counted children, so each can hide a
+  child that never reported (`scripts/count-git.mjs:123-124`). With one writer, test
+  first (route: delegated), who also answers whether the first could have hidden git
+  processes in the counts the roadmap states, and counts the two long files again.
+- 2026-10-11 · The desktop app restarted at 13:14 and this session's process ended with it;
+  the session came back with its conversation. Its two background commands were
+  orphaned and neither was started again. Codex on S3 had ended a minute after (its
+  record is written). The merge commit of S2 lives on by itself: `git commit` (pid
+  47380), its hook and the gate (pid 45832) all survived, waiting for the lock with
+  `JS_HARNESS_GATE_LOG=off` in their environment; when its gate passes the commit is made,
+  and its report is `commit-merge-s2.log` in the scratchpad. Nothing notifies this
+  session of it: look at `git log` of `gate-log-file`.
+- 2026-10-11 · Two notes the orchestrator holds for a later slice of the lock, from the
+  other work session and from its own looks: the lock could record the id of the session
+  that holds it, so `Gates` of `js-harness sessions` names the session; and the lock is
+  not a line (at 11:02 a gate that had waited 1 h 04 min was passed by one that began
+  later), which this document also recorded from the gate of T4.
+- 2026-10-11 · The Codex spend: **3,110,848** of 7,000,000 (S1 1,772,493; S3 1,338,355).
+  To come: the fix of S3's two findings (small), and S2 (up to 2,860,000 by plan).
+
+- 2026-10-11 · The merge of `feat/gate-log` into S2 is commit `07725c3`, made by the
+  orphaned `git commit` by itself at 13:58: its gate waited 41 min 24 s, 19 minutes short
+  of its hour, and passed (load row: 7.2 of 8 busy, right after another gate). Its report
+  could not assess the review ("gentle-ai could not assess the pending change"), which a
+  merge commit made by an orphan explains or not; assess runs again before the push.
+- 2026-10-11 · He said where the log lives, `<home>/.js-harness/gate-log/` ("Ask me
+  before"), so nothing of S2 waits for him.
+- 2026-10-11 · The fix of S3's two findings is with its commit's gate
+  (`scripts/count-git.mjs`, `scripts/count-git-preload.mjs`, its test: 12 of 12). The
+  counts stand: the two long files start nothing but git (other 0, reported 2 of 2), and
+  counted again with the fix they give the same 8,213, row for row
+  (`s3-count-after-p2.json`); no test of the repository clears `NODE_OPTIONS` for a child
+  (`rg -n "NODE_OPTIONS" bin evals scripts` finds the tool's own files and one comment).
+  The whole suite's 15,467 was not counted again.
+- 2026-10-11 · Seen in passing and not this feature's: that gate left an untracked
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` at the root of `gate-log-file`
+  (13:41:10), and the worktree `session-board` holds one since 2026-10-10 05:26. Windows
+  PowerShell writes that cache under `LOCALAPPDATA`, and beside its working folder when
+  the variable is missing: some test starts PowerShell from the repository's root with a
+  reduced environment. Removed from this worktree and handed on as a task of its own
+  (which test, and its fix). Until then a commit of this session names its paths: `git
+  add -A` would have taken that folder.
+
+## Resume here (state at 2026-10-11 14:05, for a session that lost its conversation)
+- S1 is merged in `main` (`51a24db`). Its worktree `gate-log` and branch `feat/gate-log`
+  hold nothing more; this document is carried by `feat/gate-log-file`.
+- S3, `D:\js-harness-worktrees\gate-git-processes`, `feat/gate-git-processes` at `cd574c9`,
+  not pushed. A writer is fixing the two P2 of Codex in `scripts/count-git.mjs`,
+  `scripts/count-git-preload.mjs` and `scripts/count-git.test.mjs`, uncommitted, and
+  counts the two long files again (`s3-count-after-p2.json` in the scratchpad). Then: the
+  parent's spot check, the commit (the gate), `git merge origin/main` (a conflict in
+  `docs/ROADMAP.md` is possible, the hunks are a few lines apart; the merge commit runs
+  the gate), the roadmap's numbers if the recount changed them, Codex on the fix
+  (`codex-review --base origin/main`, it starts where the records end), `git push -u
+  origin feat/gate-git-processes`, the pull request to `main`, one line to the
+  orchestrator.
+- S2, `D:\js-harness-worktrees\gate-log-file`, `feat/gate-log-file`: `2023f9d` (T3 to T5)
+  and `07725c3`, the merge of `feat/gate-log`, then a commit of documents: the roadmap of
+  S2 (`docs/ROADMAP.md`) and this document. Then: `git merge origin/main`, the small
+  fix left from the review (a member of `waitedFor` that is no object, in `gateRecord`),
+  Codex (`--max-parts` as its plan says), push and its pull request, merged by the
+  orchestrator like the others now that he said where the log lives.
+- Every commit of this session in `gate-log-file` is made with `JS_HARNESS_GATE_LOG=off`
+  until S2 is merged and the machine's command updated, so that
+  `C:\Users\Oficina\.js-harness\gate-log` is not written before an `uninstall` that
+  removes it is installed; look after each gate.
 - Before each gate of this session: `powershell -NoProfile -ExecutionPolicy Bypass -File
   <scratchpad>/stop-own-ls.ps1`. Before a commit that adds or changes a test: `node --test
   --test-name-pattern="signals a process by its number" bin/lib/process-tree.test.mjs`.
 - Heavy commands of this session take the gate's turn: a commit by its hook; a review as
   `node bin/js-harness.mjs gate --wait 180 -- node <scratchpad>/rv-run.cjs <repo> <base>
   <tag>`; Codex as `node bin/js-harness.mjs gate --wait 180 -- node bin/js-harness.mjs
-  codex-review --base <rev>`. The queue is not in order of arrival: do not put a second
-  command of this session in the queue while a commit of it waits. A review or a Codex run
-  on S2 is started from another worktree's `bin/` or with `JS_HARNESS_GATE_LOG=off`, since
-  S2's own `gate` writes the log.
+  codex-review --base <rev>`. The queue is not in order of arrival. A review or a Codex
+  run on S2 is started with `JS_HARNESS_GATE_LOG=off`, since S2's own `gate` writes the
+  log. A background command of this session dies as a notification when the app
+  restarts, and may live on as a process: after a restart, read each command's output
+  file and the process list before starting anything again.
 - Scripts and records, in the scratchpad
   (`C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\27a0677f-bc17-4331-a050-5cb169a310fb\scratchpad`):
   `rv-run.cjs`, `stop-own-ls.ps1`, `splice-doc.cjs` and `mirror.mjs` (this document's tail
-  and its copy in Engram), `msg-*.txt`, `commit-*.log`, `rv-*.log`, `codex-s1*.log`,
-  `pr-s1.md`, the counts (`profile*.json`, `t7-count-after.json`, `t8-count-after.json`).
-  If the scratchpad is gone, the numbers that matter are in Progress and the scripts are
-  short to write again.
-- Open and his, in the orchestrator's queue: where the log's folder lives ("Ask me
-  before"). The Codex cap is answered: 7,000,000.
+  and its copy in Engram), `his-words.cjs` (reads an entry of a transcript and the
+  question before it), `msg-*.txt`, `commit-*.log`, `rv-*.log`, `codex-s1*.log`,
+  `codex-s3.log`, the counts (`profile*.json`, `t7-count-after.json`,
+  `t8-count-after.json`).
+- Nothing is open that is his: the Codex cap (7,000,000, and by the orchestrator's
+  reading of his later words a rate of 1,200 input tokens a changed line) and the place
+  of the log's folder (`<home>/.js-harness/gate-log/`) are both answered ("Ask me
+  before").
 - The orchestrator merges a pull request that is green with both reviews recorded; it is
-  told each pull request in one line.
+  told each pull request in one line, at the title "JH ORQ · js-harness".
 
 ## Next
-The push and the pull request of S1. Codex on S3, its push and pull request. Then S2: the
-merge of S1, the roadmap, Codex, push and a pull request that waits for his answer.
+S3: the writer's fix, its commit, the merge of `main`, Codex on the fix, push and pull
+request. S2: the merge commit lands by itself; then its documents, the merge of `main`,
+the small fix, Codex, push and its pull request.
