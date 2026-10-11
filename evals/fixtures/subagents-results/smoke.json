@@ -1,0 +1,375 @@
+{
+  "format": 1,
+  "name": "smoke",
+  "createdAt": "2026-10-09T00:00:00.000Z",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "stack": {
+    "claude": "2.1.292 (Claude Code)",
+    "gentleAi": "4.0.0",
+    "engram": "3.0.0",
+    "engramPlugin": "0.1.5"
+  },
+  "subagentConfigs": {
+    "sub-opus-write": {
+      "model": "claude-opus-5-5",
+      "delegationSha256": "25160c8f82fa55c3034b62cff2d9e7cb150265eae98133114625ff7b980d5397"
+    },
+    "sub-haiku-write": {
+      "model": "claude-haiku-5-5",
+      "delegationSha256": "25160c8f82fa55c3034b62cff2d9e7cb150265eae98133114625ff7b980d5397"
+    }
+  },
+  "args": {
+    "claude": "claude",
+    "configs": [
+      "sub-opus-write",
+      "sub-haiku-write"
+    ],
+    "efforts": [
+      "medium"
+    ],
+    "repeats": 1,
+    "tasks": [
+      "house-rules"
+    ],
+    "workRoot": "work"
+  },
+  "trials": [
+    {
+      "task": "house-rules",
+      "config": "sub-opus-write",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 1,
+      "passed": 40,
+      "total": 40,
+      "inputTokens": 100,
+      "outputTokens": 50,
+      "turns": 18,
+      "usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 40,
+        "cache_read_input_tokens": 50,
+        "output_tokens": 50
+      },
+      "costUsd": 1.812,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 60,
+          "outputTokens": 15000,
+          "cacheReadInputTokens": 3600000,
+          "cacheCreationInputTokens": 99000,
+          "costUSD": 1.812
+        }
+      },
+      "subagents": 2,
+      "subagentStats": {
+        "spawned": 2,
+        "requested": {
+          "background": 0,
+          "foreground": 2,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 2,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 2
+        }
+      },
+      "wallMs": 412000,
+      "cliVersion": "2.1.292 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-09T00:00:00.000Z",
+      "transcripts": {
+        "files": 5,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 18,
+          "inputTokens": 40,
+          "outputTokens": 9000,
+          "cacheReadTokens": 2400000,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 67475,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.2,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 18,
+              "inputTokens": 40,
+              "outputTokens": 9000,
+              "cacheReadTokens": 2400000,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 67475,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.2
+            }
+          }
+        },
+        "subagents": {
+          "requests": 9,
+          "inputTokens": 20,
+          "outputTokens": 6000,
+          "cacheReadTokens": 1200000,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 29990,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.6,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 9,
+              "inputTokens": 20,
+              "outputTokens": 6000,
+              "cacheReadTokens": 1200000,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 29990,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.6
+            }
+          },
+          "agents": []
+        },
+        "total": {
+          "requests": 27,
+          "inputTokens": 60,
+          "outputTokens": 15000,
+          "cacheReadTokens": 3600000,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 97465,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.8,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 27,
+              "inputTokens": 60,
+              "outputTokens": 15000,
+              "cacheReadTokens": 3600000,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 97465,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.8
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": false,
+          "models": {
+            "claude-opus-5-5": false
+          }
+        }
+      }
+    },
+    {
+      "task": "house-rules",
+      "config": "sub-haiku-write",
+      "effort": "medium",
+      "repeat": 1,
+      "score": 1,
+      "passed": 40,
+      "total": 40,
+      "inputTokens": 100,
+      "outputTokens": 50,
+      "turns": 21,
+      "usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 40,
+        "cache_read_input_tokens": 50,
+        "output_tokens": 50
+      },
+      "costUsd": 0.5052734,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 4,
+          "outputTokens": 152,
+          "cacheReadInputTokens": 40882,
+          "cacheCreationInputTokens": 41266,
+          "costUSD": 0.3413604
+        },
+        "claude-haiku-5-5": {
+          "inputTokens": 2,
+          "outputTokens": 4,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 32765,
+          "costUSD": 0.163913,
+          "costBasis": "unknown"
+        }
+      },
+      "subagents": 1,
+      "subagentStats": {
+        "spawned": 1,
+        "requested": {
+          "background": 0,
+          "foreground": 1,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 1,
+        "spawned_by_subagents": 0,
+        "completed": 1,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {
+          "general-purpose": 1
+        }
+      },
+      "wallMs": 245000,
+      "cliVersion": "2.1.292 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-09T00:00:00.000Z",
+      "transcripts": {
+        "files": 3,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 2,
+          "inputTokens": 4,
+          "outputTokens": 152,
+          "cacheReadTokens": 40882,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 41266,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.3413604,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 2,
+              "inputTokens": 4,
+              "outputTokens": 152,
+              "cacheReadTokens": 40882,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 41266,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3413604
+            }
+          }
+        },
+        "subagents": {
+          "requests": 1,
+          "inputTokens": 2,
+          "outputTokens": 4,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 32765,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.004097825,
+          "models": {
+            "claude-haiku-5-5": {
+              "requests": 1,
+              "inputTokens": 2,
+              "outputTokens": 4,
+              "cacheReadTokens": 0,
+              "cacheWrite5mTokens": 32765,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.004097825
+            }
+          },
+          "agents": [
+            {
+              "agentId": "ab860aba0e9ba7266",
+              "agentType": "general-purpose",
+              "models": [
+                "claude-haiku-5-5"
+              ],
+              "requests": 1,
+              "inputTokens": 2,
+              "outputTokens": 4,
+              "cacheReadTokens": 0,
+              "cacheWrite5mTokens": 32765,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.004097825,
+              "efforts": [
+                "medium"
+              ],
+              "firstTimestamp": "2026-10-08T19:17:57.457Z",
+              "lastTimestamp": "2026-10-08T19:17:58.799Z",
+              "spanMs": 1342
+            }
+          ]
+        },
+        "total": {
+          "requests": 3,
+          "inputTokens": 6,
+          "outputTokens": 156,
+          "cacheReadTokens": 40882,
+          "cacheWrite5mTokens": 32765,
+          "cacheWrite1hTokens": 41266,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.345458225,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 2,
+              "inputTokens": 4,
+              "outputTokens": 152,
+              "cacheReadTokens": 40882,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 41266,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3413604
+            },
+            "claude-haiku-5-5": {
+              "requests": 1,
+              "inputTokens": 2,
+              "outputTokens": 4,
+              "cacheReadTokens": 0,
+              "cacheWrite5mTokens": 32765,
+              "cacheWrite1hTokens": 0,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.004097825
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true,
+            "claude-haiku-5-5": true
+          }
+        }
+      }
+    }
+  ]
+}
