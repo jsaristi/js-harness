@@ -251,13 +251,18 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
   assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n$/);
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n$/);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
   try {
     const ran = run(['gate', '--home', home, '--', 'node', '-e', "console.log('through the gate'); process.exit(3)"]);
     assert.equal(ran.status, 3, ran.stderr);
     assert.equal(ran.stdout.trim(), 'through the gate');
-    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'inside a gate it takes no lock');
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'inside a gate it takes no lock and writes no log');
+    // `gate log` reads the log of the home it is given, and an empty one is no error.
+    assert.match(run(['--help']).stdout, /^ {2}gate\s+.*js-harness gate log \[--last <n>\] prints the last gates of the machine's gate log/m);
+    const log = run(['gate', 'log', '--home', home]);
+    assert.deepEqual([log.status, log.stdout.trim(), log.stderr], [0, `no gate in the log of ${path.join(home, '.js-harness', 'gate-log')}`, '']);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'reading the log made no folder');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

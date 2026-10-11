@@ -15,6 +15,7 @@ import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS, takeGateLock } from './lib/gate-lock.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
+import { gateLogSwitchedOff, gateRecord } from './lib/gate-log.mjs';
 
 export { estimateTokens };
 
@@ -401,7 +402,10 @@ export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
  * plain result or a promise of one, so a test can stub it with either. `gateHeld` says that the gate
  * which runs this sensor does so inside a turn at the machine's gate lock, its own or the one of the
  * process that started it: the sensor is then given the mark of a held lock (`GATE_HELD_ENV`), and
- * otherwise never has it, whatever this process was given. */
+ * otherwise never has it, whatever this process was given.
+ *
+ * Beside what a row prints, the result says how long the command took (`seconds`, to a tenth) and
+ * whether its time ran out (`timedOut`), which is what the gate log keeps of a sensor. */
 export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
@@ -420,6 +424,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   let result;
+  const startedAt = Date.now();
   try {
     result = await spawn(sensor.command, { cwd, env, timeout: sensorTimeout });
   } finally {
@@ -430,10 +435,12 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
       // left behind in the temp directory
     }
   }
+  const seconds = Math.round((Date.now() - startedAt) / 100) / 10;
   const { name, command } = sensor;
   const pass = !result.error && result.status === 0;
+  const timedOut = result.error?.code === 'ETIMEDOUT';
   let detail = `${command} passed`;
-  if (result.error?.code === 'ETIMEDOUT') detail = `${command} timed out after ${sensorTimeout / 1000} s`;
+  if (timedOut) detail = `${command} timed out after ${sensorTimeout / 1000} s`;
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
@@ -441,7 +448,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   if (result.sweepError) detail += `; could not stop what it left running: ${result.sweepError}`;
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
-  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  return { name, pass, detail, output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut };
 }
 
 /** `ms` as a person reads a wait: `45 s`, `3 min 12 s`. */
@@ -476,17 +483,32 @@ export const GATE_WAIT_SAID_MS = 1000;
  * reads as a hang.
  *
  * Resolves to `{ lock }` once the lock is held (`takeGateLock`), for the caller to release. Resolves to
- * `{ refused }` when nothing may run: the lock is held and `wait` is off, or the wait went past
- * `waitMinutes`; `refused` is the sentence that says which, and names the holder. Resolves to
+ * `{ refused, reason }` when nothing may run: the lock is held and `wait` is off (`reason` is `held`), or
+ * the wait went past `waitMinutes` (`timeout`); `refused` is the sentence that says which, and names the
+ * holder. Resolves to
  * `{ without }` when the lock cannot be taken at all (the home cannot be written, or a lock is there of
  * which nothing could be read for a minute, which is no gate to wait an hour for): `without` names the
  * lock and why, and the caller runs without it and says so, since the lock guards the machine's time
  * and not what is run.
+ *
+ * Every outcome also says whom this gate waited for and for how long, which is what the gate log keeps
+ * (`./lib/gate-log.mjs`): `waitedMs`, and `waitedFor`, the gates the lock told of while it waited, as
+ * `[{ cwd, pid, command }]`. Each is there once, by the token of its holder's file, since the lock tells of
+ * a gate again when its beat stops being readable; a gate of which nothing is known is there once, with
+ * nothing said of it. The gate a refusal names is among them: told not to wait, a gate is told of nobody.
+ * The lock says how long a wait was that ended in a lock or a refusal; one that ended in no lock at all
+ * is timed here.
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
 export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
+  const met = new Map();
+  const meet = (holder) => {
+    if (!met.has(holder.token)) met.set(holder.token, { cwd: holder.cwd, pid: holder.pid, command: holder.command });
+  };
+  const waitedFor = () => [...met.values()];
   const onWait = (holder, leftMs = waitMs) => {
+    meet(holder);
     // What is left of the bound when this gate is first waited for: the whole of it, as `--wait` takes
     // it, while under a second is spent, which is the wait's first line.
     const left = waitMs - leftMs < GATE_WAIT_SAID_MS ? minutes(waitMinutes) : duration(leftMs);
@@ -495,16 +517,18 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
     console.error(`${name}: waiting for ${gateOf(holder)} to finish, for ${left} at most${silent}`);
   };
   let lock;
+  const askedAt = Date.now();
   try {
     lock = await take({ home, cwd: path.resolve(cwd), command, wait, waitMs, onWait });
   } catch (err) {
-    return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})` };
+    return { without: `the machine's gate lock, which could not be taken (${err instanceof Error ? err.message : String(err)})`, waitedMs: Date.now() - askedAt, waitedFor: waitedFor() };
   }
-  if (lock.refused === 'held') return { refused: `${gateOf(lock.holder)} holds the machine's gate lock, and --no-wait was given` };
-  if (lock.refused) {
-    return { refused: `${gateOf(lock.holder)} still held the machine's gate lock after ${duration(lock.waitedMs)} (--wait bounds the wait at ${minutes(waitMinutes)})` };
-  }
-  return { lock };
+  if (!lock.refused) return { lock, waitedMs: lock.waitedMs, waitedFor: waitedFor() };
+  if (lock.holder) meet(lock.holder);
+  const refused = lock.refused === 'held'
+    ? `${gateOf(lock.holder)} holds the machine's gate lock, and --no-wait was given`
+    : `${gateOf(lock.holder)} still held the machine's gate lock after ${duration(lock.waitedMs)} (--wait bounds the wait at ${minutes(waitMinutes)})`;
+  return { refused, reason: lock.refused, waitedMs: lock.waitedMs, waitedFor: waitedFor() };
 }
 
 /** Runs `run`, the sensors of the gate that checks `cwd`, while this gate holds the machine's gate lock
@@ -528,20 +552,28 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * to release it sooner: a handler would have to end the process itself, and `check` would no longer end
  * on a Ctrl-C the way it does today.
  *
- * `run(true, waited)` is called with the lock in hand, and the sensors are then given the mark of a held
- * lock (`GATE_HELD_ENV`); `waited` says that the wait for the lock was long enough to be said, which is
- * a gate that ran until a moment ago. `run(false)` is called without the lock.
+ * `run({ lock: 'own', waitedMs, waitedFor })` is called with the lock in hand, and the sensors are then
+ * given the mark of a held lock (`GATE_HELD_ENV`); `run({ lock: 'none', ... })` is called without the
+ * lock. Both are told whom this gate waited for and for how long, as `takeGateTurn` says it, which the
+ * gate writes in its log. A gate that is refused writes one line there through `record`, where it has
+ * one (`gateRecord` of `./lib/gate-log.mjs`), and a line that could not be written is one more row.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
-async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run) {
+async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: take = takeGateLock }, run, record) {
   const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes }, take);
-  if (turn.without) return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run(false))];
-  if (turn.refused) return [gateRow(`no sensor ran: ${turn.refused}`, false)];
+  const { waitedMs, waitedFor } = turn;
+  if (turn.without) {
+    return [gateRow(`the sensors ran without ${turn.without}, so another gate may have run at the same time`), ...(await run({ lock: 'none', waitedMs, waitedFor }))];
+  }
+  if (turn.refused) {
+    record?.refused({ reason: turn.reason, waitedMs, waitedFor });
+    return [gateRow(`no sensor ran: ${turn.refused}`, false), ...gateLogRows(record)];
+  }
   const { lock } = turn;
   const waited = lock.waitedMs >= GATE_WAIT_SAID_MS;
   const rows = waited ? [gateRow(`waited ${duration(lock.waitedMs)} for the machine's gate lock before the sensors ran`)] : [];
   let lost = false;
   try {
-    rows.push(...(await run(true, waited)));
+    rows.push(...(await run({ lock: 'own', waitedMs, waitedFor })));
   } finally {
     // Asked before the release, after which a gate has no lock to have lost.
     lost = lock.lost();
@@ -554,6 +586,18 @@ async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: t
 /** A row named `gate`: what the machine's gate lock did that a reader of the report must know. It informs
  * and fails nothing, but for a gate that ran no sensor (`pass` false). */
 const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { info: true }), detail });
+
+/** The row named `gate log` of a gate whose record could not be written, saying why and what is missing
+ * from the log; no row for a gate that wrote its lines, or that has no record. It informs: nothing a gate
+ * proves is in its log. */
+function gateLogRows(record) {
+  const failure = record?.failure();
+  return failure ? [{ name: 'gate log', pass: true, info: true, detail: failure }] : [];
+}
+
+/** What the sensors of a gate came to, for its log: `timeout` when the time of one ran out, which is what
+ * explains a slow gate, else `pass` or `fail`. */
+const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : rows.every((row) => row.pass) ? 'pass' : 'fail');
 
 /** One row per sensor, run one after another; a broken declaration, of the sensors or of the documents,
  * is one FAIL row and no sensor at all is one INFO row.
@@ -583,7 +627,16 @@ const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { in
  * No sample is taken, nothing looked for and no row printed where no sensor runs, for a caller that is no
  * gate, or with `load: false` in `lock`, which is how a gate passes on the switch of its environment
  * (`GATE_LOAD_ENV`).
- * `deps.sampleLoad` stands in for the sampler, and `deps.busiest` for the look. */
+ * `deps.sampleLoad` stands in for the sampler, and `deps.busiest` for the look.
+ *
+ * A gate also leaves a record of itself in the gate log of its home (`./lib/gate-log.mjs`), which is why
+ * `lock` names the home in each of its states: a line when its sensors are about to run, after the sample,
+ * that says the state of the lock, whom it waited for and the load it read, and a line when they are done,
+ * on every way out of them, a throw included, with what each sensor came to. A gate that was refused its
+ * turn writes one line. A line that could not be written is said once in an INFO row named `gate log`,
+ * and changes nothing else. Nothing is written where no sensor runs, for a caller that is no gate, or with
+ * `log: false` in `lock`, which is how a gate passes on the switch of its environment (`GATE_LOG_ENV`).
+ * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -600,24 +653,43 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // Git is asked only by a project that declares documents: without them nothing here changed.
   const staged = declared.documents.length > 0 ? stagedDocuments(cwd, declared.documents, deps.git) : null;
   if (staged) return [documentsRow(sensors, staged)];
-  const run = async (gateHeld = false, waited = false) => {
+  const record = lock && lock.log !== false && lock.home !== undefined
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
+    : null;
+  // `turn` is how a gate came to its sensors: the state of the lock, and whom it waited for. A caller that
+  // is no gate has none.
+  const run = async (turn) => {
     const rows = [];
+    // With the lock in hand, its own or the one of the process that started it.
+    const gateHeld = turn !== undefined && turn.lock !== 'none';
     // Here and nowhere else: every gate comes to its sensors through this, whatever the lock did, and with
     // the lock in hand where there is one, so the second of the sample is not another gate's.
+    let load;
     if (lock && lock.load !== false) {
-      const load = await readLoad(deps.sampleLoad, deps.busiest);
+      load = await readLoad(deps.sampleLoad, deps.busiest);
       const lines = loadLines(load);
-      rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(load, { afterGate: waited }), ...(lines.length ? { lines } : {}) });
+      // A wait long enough to be said is a gate that ran until a moment ago, whose tail the figure is.
+      const afterGate = turn.lock === 'own' && turn.waitedMs >= GATE_WAIT_SAID_MS;
+      rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(load, { afterGate }), ...(lines.length ? { lines } : {}) });
     }
-    for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
-    return rows;
+    record?.start({ ...turn, load });
+    const ran = [];
+    let result = 'error';
+    try {
+      for (const sensor of sensors) ran.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
+      result = sensorsResult(ran);
+    } finally {
+      // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
+      record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut }) => ({ name, seconds, pass, timedOut })) });
+    }
+    return [...rows, ...ran, ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
-    return [gateRow(inTurn), ...(await run(true))];
+    return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return underGateLock(cwd, lock, deps, run);
+  return underGateLock(cwd, lock, deps, run, record);
 }
 
 /** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
@@ -972,10 +1044,11 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // The gate of a commit that holds declared documents alone runs no sensor, and takes no lock either
   // (`checkSensors`); the rows above ran all the same, so a contract it breaks still fails it.
   // A gate that runs sensors reads the machine's load before them, unless its environment switches that
-  // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own).
+  // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own), and leaves its record in the
+  // gate log of `home`, whatever the lock did, unless its environment switches that off (`GATE_LOG_ENV`).
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
-    const lock = env[GATE_HELD_ENV] === '1' ? { held: true } : { home, wait: !noWait, waitMinutes };
-    rows.push(...(await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env) })));
+    const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes };
+    rows.push(...(await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env) })));
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }
