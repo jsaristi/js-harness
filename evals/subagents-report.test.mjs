@@ -544,3 +544,18 @@ test('--modes takes a list of the delegation modes of configs.mjs: an unknown, a
   const nope = await run(['--modes', 'nope'], { run: docOf('run', [trial()]) });
   assert.match(nope.err, /^--modes needs a comma separated list of delegation modes \(explore, verify, write\), got "nope"\n/);
 });
+
+test('a mode left out by --modes is still held to the checks of its run: a duplicate or a wrong pin there refuses the report', async () => {
+  const write = trial();
+  const explore = trial({ config: 'sub-opus-explore' });
+  const wrongPin = { 'sub-opus-write': subagentPin('sub-opus-write'), 'sub-opus-explore': { ...subagentPin('sub-opus-explore'), model: 'claude-haiku-5-5' } };
+  const cases = [
+    [{ a: docOf('a', [write, explore]), b: docOf('b', [trial({ repeat: 2 }), explore]) }, /house-rules sub-opus-explore medium #1 is recorded in runs a and b/],
+    [{ a: docOf('a', [write, explore], { subagentConfigs: wrongPin }) }, /run a pins sub-opus-explore to subagent model "claude-haiku-5-5", and the sub-opus arm is claude-opus-5-5/],
+  ];
+  for (const [docs, message] of cases) {
+    const { code, out, err } = await run(['--modes', 'write'], docs);
+    assert.deepEqual([code, out], [1, ''], String(message));
+    assert.match(err, message);
+  }
+});

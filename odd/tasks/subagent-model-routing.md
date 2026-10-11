@@ -68,7 +68,7 @@ cheaper model goes into the harness only if a measurement of ours says it helps 
   on this host fail with `0xC0000142` (`odd/tasks/evals.md`, follow-ups). The other session works
   in `D:\js-harness-worktrees\codex-review-lean`.
 - The stack is not updated by this feature, and every trial names Claude Code 2.1.296 by its
-  versioned path (`C:UsersOficina.localshareclaudeersions.1.296`), never the
+  versioned path (`C:\Users\Oficina\.local\share\claude\versions\2.1.296`), never the
   `claude` on PATH — because the native installer updates that one by itself (it went from
   2.1.292 to 2.1.296 on 2026-10-09), a run refuses to continue on another version, and 2.1.296
   knows Haiku 5.5 where 2.1.292 ran it on fallback limits (Sebastián, 2026-10-10).
@@ -195,8 +195,11 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
 - [x] T5 The rest of the first repeat: 4 trials (`format-v2` and `lost-updates`), 6 with the smoke
   (route: inline; the same run `write-high`, continued). All 6 delegated and none failed;
   `--require-complete --modes write` exits 1 as it must, each cell at 1 of 3
-- [ ] T6 The other two repeats: 12 trials, after Sebastián's go-ahead
-- [ ] T7 The result and the recommendation in `docs/ROADMAP.md`
+- [x] T6 The other two repeats: 12 trials, after Sebastián's go-ahead (route: inline; the run
+  `write-high` continued with `--repeats 3`, 4,947 s, exit 0). 18 of 18 trials delegated, none
+  failed; `node evals/subagents-report.mjs --require-complete --modes write` exits 0
+- [x] T7 The result and the recommendation in `docs/ROADMAP.md` (route: inline, one document):
+  the section "Subagent models result", and item 8 of Next points to it
 
 ## Progress
 
@@ -488,3 +491,57 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   Haiku arm spawned 2). Spent so far on trials: $7.16 at list price, and $0.35 for the probe.
   The 12 trials of the other two repeats are his go-ahead: about $14 and 95 minutes of
   machine by the first repeat's figures.
+- 2026-10-10 — T3c, T4 and T5 committed together as `3a58457` (gate 9, 948 s, passed alone; one
+  commit so that one gate covered the three). gentle-ai assessed `301c4ce..3a58457` as medium
+  risk, review due (`slice_budget_reached`, the results file counted), and approved it,
+  acknowledged (lineage `review-27e04df35559b137`), with two suggestions, both taken and waiting
+  in the working tree for the next commit: a test that a mode left out by `--modes` is still
+  held to its run's checks (`R3-leftout-checks-unasserted`; added, `subagents-report` 25 pass,
+  green from the start since it pins what the code already does), and the path of the pinned
+  binary in the Constraints, which a scripted edit of this document had stripped of its
+  backslashes (`R3-mangled-pinned-path`; restored). Codex reviewed the two code files (135
+  changed lines; the document and the results file are left out by the plan of the command),
+  found no defect and is recorded (`js-harness codex-review --base 301c4ce`, 182,984 input
+  tokens). Not pushed: pull request #51 is open from this branch and a push would add to what
+  he is asked to merge; `3a58457` and what follows are slice 3, pushed once #51 is merged. Open
+  with him, asked through the lead: the go-ahead for the 12 trials of T6.
+- 2026-10-10 — The go-ahead for T6, and slice 2 merged. His words, in the lead's transcript
+  `182ad401-252a-4cbe-afcc-929fcd905c6a.jsonl` at line 1403 (origin `human`,
+  2026-10-11T01:10:48Z): "Sí a las cuatro: Codex a 6,5 millones, fusioná vos el código y dá vos
+  el visto bueno de las etapas, los commits de solo documentos no corren las pruebas, y acortá
+  el gate con las dos cosas". The second of the four things put to him (line 1398) is that the
+  lead merges code once the gate passed and both reviews are clean, and gives the go-ahead of
+  the later stages of a plan he approved, naming pull requests 51, 52 and 53 and the 12 trials
+  of this feature. Under it the lead gave the go for the 12 and merged #51 as `fdbff46`
+  (`gh pr view 51`: MERGED); `origin/main` is at `ca013c2`. Batch 3 of 3 started by this
+  session's own look at the process list: the same command with `--repeats 3`, 12 trials to
+  run. `main` is brought into the branch after the batch, not during it, since the run reads
+  the tasks from this worktree.
+- 2026-10-10 — Notice from the orchestrator while batch 3 runs (`evals/suite.mjs`, pid 31300,
+  started 20:12:57 local): another session's tests ran beside it, a Codex review from 20:13:48
+  to 20:15:32, short test files from about 20:17, and `node --test` pid 3800 with three
+  children from 20:27:21, still alive at 20:30:21. The cause is on the lead's side: its list of
+  what a session looks for before a heavy run left out `evals/suite.mjs`. Scores and list cost
+  do not depend on machine load; wall time does. To do when the batch ends: mark each trial in
+  flight in those windows from its start time and wall time, compare it with its cell's other
+  repeats and with the subagent's span, and report wall time over the unmarked trials if a
+  marked one is out of line, saying which were used. The durations of the first repeat were
+  not checked against other sessions' work either.
+- 2026-10-10 — T6 and T7. Batch 3 started on an idle machine and ran 4,947 s, exit 0. With
+  three trials a cell: the same score in every pair (1.00, 0.98, 1.00); list cost $14.64 for
+  the Opus arm and $6.11 for the Haiku arm over nine trials each (42%), the subagents' part
+  $9.30 against $1.04 and the orchestrator's $5.35 against $5.08; wall time 62 against 65
+  minutes. The table, the reading, the limits and the recommendation are in `docs/ROADMAP.md`,
+  "Subagent models result". Spent on trials in all: $20.76 at list price, and $0.35 for the
+  probe, against an estimate of $22 to $31. Durations, by the windows the lead passed on
+  (another session's claims, local time): `format-v2` `sub-opus` #2 (20:12:58 to 20:23:30) ran
+  beside a Codex review and short test files and is the slowest of its cell (632 s against 536
+  and 502), with the most orchestrator work too; `format-v2` `sub-haiku` #2 (20:23:37 to
+  20:31:56) ran beside the heavy test run of 20:27:21 to 20:32:25 and is the fastest of its
+  cell (499 s against 719 and 633); `house-rules` `sub-opus` #2 caught its last 22 seconds. A
+  browser playing video was open from 21:05:36, beside the last five trials; of those
+  `lost-updates` `sub-opus` #3 is the slowest of its cell (665 s against 496 and 463) and
+  `lost-updates` `sub-haiku` #3 the fastest of its own (346 s). No marked trial is out of line
+  in one direction, so every duration is used and the roadmap says the speed line is the
+  weakest; nothing was repeated. `origin/main` (`ca013c2`, with slice 2 merged as `fdbff46`)
+  merged in as `9cf9801` after the batch.
