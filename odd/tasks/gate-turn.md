@@ -65,26 +65,22 @@ PowerShell cache written into the working tree) are gone.
 
 ## In scope / Out of scope
 - In: `bin/lib/gate-lock.mjs`, `bin/check.mjs`, `bin/gate.mjs`, `bin/lib/gate-log.mjs` and
-  their tests, and the text of `bin/lib/manifest.mjs` that says how a gate waits, all of them
-  only after the orchestrator says that `feat/gate-git-processes` and `feat/gate-log-file`
-  are on `main`; `evals/suite.test.mjs`, `evals/runner.mjs`, `bin/lib/process-tree.mjs` and
+  their tests, and the text of `bin/lib/manifest.mjs` that says how a gate waits (free since
+  both branches of "JH 6" reached `main`, 2026-10-11); `evals/suite.test.mjs`, `evals/runner.mjs`, `bin/lib/process-tree.mjs` and
   their tests for the test that fails on a busy machine; `bin/lib/sessions.mjs` and its test
   for the session's title beside a waiting gate, only after the two branches of "JH 5" that
   change it are on `main`; `docs/ROADMAP.md`; this document.
 - Out: the rows `failures` and `rules` themselves, which are "JH 7"'s: this feature gives
   them the place they stand in. The merge command of section E of the protocol. The gate on
-  GitHub: his to start. Waiting for a quiet machine. The 1,200 s bound of a sensor. The bound
-  of a wait and what `--wait` means (see "Not taken"). `AGENTS.md`: at its budget, and
+  GitHub: his to start. Waiting for a quiet machine. The 1,200 s bound of a sensor. A bound
+  on the whole of a wait. `AGENTS.md`: at its budget, and
   nothing here needs a line of it. The installed command on his machine: updating it is his.
 
 ## Constraints
-- No code in a file that `feat/gate-git-processes` or `feat/gate-log-file` changes until the
-  orchestrator says both are on `main`, because the stop changes the same functions of
-  `bin/check.mjs` that the second one rewrites (`git diff --name-only main...<branch>`, read
-  2026-10-11: `bin/check.mjs`, `bin/check.test.mjs`, `bin/gate.mjs`, `bin/gate.test.mjs`,
-  `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/gate-log.mjs`, `bin/lib/manifest.mjs`,
-  `scripts/practice*.mjs`, their tests, and the codex-review files of the first).
-  `bin/lib/gate-lock.mjs` is in neither, and still waits: see "What the reader changed", 1.
+- The gate's files have no other owner since pull requests 63 and 64 are on `main`
+  (`906fc28`, merged here at `cd58923`). Still another session's: `bin/lib/sessions.mjs`
+  and `bin/sessions.mjs`, which two unmerged branches of "JH 5" change, and the place in
+  `bin/check.mjs` where "JH 7" adds its rows (`feat/failures-register`).
 - Only the rename grants the lock, as today, because that is what makes two holders
   impossible; the line decides who may try it and nothing else. A fault in the line may cost
   order, never exclusion, and never a rejected take: `check` runs its sensors without the
@@ -150,7 +146,7 @@ waits.**
   the same slice: "waiting behind the gate of … which waits for its turn, N gates ahead",
   and a refusal that says "waits ahead of this one" and not "holds".
 - What stays as it is: the rename, the beat, the stale takeover, the unreadable lock, the
-  release, the bound of a wait. Exclusion does not depend on the line: two gates that both
+  release. Exclusion does not depend on the line: two gates that both
   think they are first both try the rename and one of them gets it.
 
 The session: the file of a gate gains `session`, the host's session id, or `null` where the
@@ -170,23 +166,37 @@ takes the lock (order lost, never exclusion); a clock set back keeps a dead wait
 as long as it was set back; a gate that outlives its killed `git commit` keeps its place and
 runs for nobody, as it could before.
 
+The bound of a wait (settled 2026-10-11 by this session, after the orchestrator sent the
+question back to this feature; its reading and this one agree, neither is his words): **the
+bound counts from the last time the lock changed hands**, and no longer from the arrival.
+- Why: with gates of about fourteen minutes, a gate with four or more ahead reaches sixty
+  minutes while the line moves, is refused and comes back at the end. Two commits lost an
+  hour each that way on 2026-10-11 (those of "JH 6" at 13:42 and "JH 7" at 14:55). The bound
+  exists to give up on a lock that does not move, and a line that moves is not that.
+- What it is: `--wait <minutes>` (sixty when not given) is how long a gate waits **without
+  the lock changing hands**. The count starts again when a look reads a holder whose token
+  is not the one read before. Nothing else restarts it: not a gate that leaves the line,
+  not a free lock. `waitedMs` stays the whole wait.
+- A holder that never ends is still given up on after the bound, as today: it does not
+  change. That holds behind `js-harness gate -- <command>`, which has no bound of its own.
+- A gate of an older version that passes the line changes the holder and restarts the
+  count. That is a gate that ran, so the machine moved; beside such a gate this one already
+  behaves as today (the mark, above).
+- What a wait says: with each holder it names, the whole bound again ("for 60 minutes at
+  most"), which is now what is true. The review finding that asked for "for 54 s at most"
+  (`odd/tasks/gate-lock.md:493`) asked that a line say what is really left, and the test
+  that pins it (`bin/check.test.mjs`, "main says what is left of its wait…") changes with
+  the meaning. A refusal says how long the lock did not move and how long the whole wait
+  was.
+- No bound on the whole wait is added. What a user of the installed gate sees by default
+  therefore changes: a commit may wait more than an hour in a line that moves. Told to the
+  orchestrator as that, for it to take to him if it judges it his; the anchor of the count
+  is one place in the code, so "from arrival" is one line away until the merge.
+- The text that says what `--wait` means changes in the same slice: the usage and the
+  comment of `parseGateWait` in `bin/check.mjs`, the help of `gate`, the skill's text in
+  `bin/lib/manifest.mjs`, `docs/ROADMAP.md`.
+
 Not taken:
-- The bound of a wait counted from the last time the line moved (the first version's T4). It
-  reverses a reviewed decision (`odd/tasks/gate-lock.md:493`; the test at
-  `bin/check.test.mjs:1688` pins "for 54 s at most"), changes what `--wait` means in four
-  places, and has no bound behind a `js-harness gate -- <command>`, which has none of its
-  own (`bin/gate.mjs:168`). The cost of leaving it: with gates of about fourteen minutes, a
-  gate with four or more ahead reaches the sixty minutes while the line moves, is refused,
-  and comes back at the end. The refusal says how many were ahead. Told to the orchestrator
-  as an open need; placed by it back in this feature, in the slice of the line (T3), as a
-  design question this session settles with that slice's reader, and his only if it changes
-  what a user of the installed gate sees by default. The orchestrator's reading, its own and
-  not his words: the bound measures the time since the holder last changed. What that
-  reading must answer before it is taken: what `--wait` then means and where that is said
-  (`bin/check.mjs:892`, `:904-908`, `bin/lib/manifest.mjs:25`, `docs/ROADMAP.md:726`), which
-  is what a user sees; a holder that has no bound of its own (`js-harness gate --`); a gate
-  of an older version that passes the line and "changes the holder" each time; and the
-  message "for 54 s at most" that a review asked for. Open until T3.
 - A ticket number in a shared counter file (a second thing to lock); asking the system
   whether a waiter's pid is alive (the lock judges life by the beat everywhere, and a pid is
   reused); a release that hands the lock to the next gate by name (a dead heir holds
@@ -297,12 +307,12 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       that needs no load, then the fix where the cause is. Route: one writer. Free today;
       `feat/codex-parity` changes `evals/suite.test.mjs` from its line 844 on, not here.
       Evidence: Progress, "T2 done".
-- [ ] T3 · Blocked on the two branches of "JH 6": the line in `bin/lib/gate-lock.mjs`, the
+- [ ] T3 · The line in `bin/lib/gate-lock.mjs`, the bound from the last change of hands, the
       mark, the session, the words of `check` and `gate`, the test at
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
-- [ ] T4 · Blocked on the same: the stop in `bin/check.mjs`, its line in the gate log, the
+- [ ] T4 · The stop in `bin/check.mjs`, its line in the gate log, the
       three states of the lock. Test first. Route: one writer.
-- [ ] T5 · Blocked on the same: `PSModuleAnalysisCachePath` in the sensor's environment, and
+- [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
       the row that lists what the sensors left in the tree.
 - [ ] T6 · Blocked on the two branches of "JH 5": the session's title beside each gate that
       waits, on the board.
@@ -316,7 +326,8 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       missing (a child started through a shell by a synchronous call; two launches whose
       shell got the same pid). Their text is in pull request 63. Not read yet.
 
-Slices: S1 is T2, now. S2 is T3 and S3 is T4 with T5, after the merges of "JH 6". S4 is T6.
+Slices: S1 is T2 with T3 (T2's commit was under the review budget and rides in T3's range).
+S2 is T4 with T5. S3 is T6.
 
 ## Progress
 - 2026-10-11 · Opened. Read: `AGENTS.md`, the brief, relief lines 227 and 250 to 254, "Next"
@@ -373,8 +384,24 @@ Slices: S1 is T2, now. S2 is T3 and S3 is T4 with T5, after the merges of "JH 6"
   (6.4 s). The two runs waited about 20 and 35 minutes for their turn. Left: a recorded
   process that answers at the exit and is gone when the snapshot is taken a second later
   passes, and the test's diagnostic says that it answered.
+- 2026-10-11 17:29 · T2 committed: `3a7c9c8`, through the lock (`gate --wait 180 -- git
+  commit`), which waited behind three gates from 16:45; the whole gate passed on `main`
+  merged at `859b9a1` (`PASS tests`). Its report: review "medium risk, 4 paths, 200 lines:
+  review not due (under_budget)", so the commit stays pending in the slice until a later
+  one reaches the budget; no Codex review is owed yet.
+- 2026-10-11 · From the orchestrator (claims): pull request 64, `feat/gate-log-file`, is on
+  `main` as `906fc28`; the hold on the gate's files is lifted and "JH 6" is closed. Merged
+  here at `cd58923`, clean. Read in `odd/tasks/gate-log.md` on `main`: the reader's silence
+  for a kind it does not know is commit `88165ec` (its line 836 and 867); two findings of
+  gentle-ai left for this feature (its lines 869 to 873): the writer of the gate log does
+  not filter `load` as it filters `waitedFor`, which goes with T4, and holders with no
+  token share one entry in `takeGateTurn`, which goes with T3. Its gates ran with the log
+  switched off (`JS_HARNESS_GATE_LOG=off`); the gates of this branch write the log from now
+  on, as `main` does. The slices are numbered again under Tasks.
+- 2026-10-11 · The bound of a wait is settled (Design, 1): from the last time the lock
+  changed hands. Told to the orchestrator in one line, as a change of what the installed
+  gate shows by default.
 
 ## Next
-The commit of T2 through the lock (`gate --wait 180 -- git commit`), on `main` merged at
-`859b9a1`; then its two reviews, each in its turn. T3 to T5 wait for the orchestrator's word
-that `feat/gate-log-file` is on `main`.
+T3, one writer, test first, every run through the lock with `--wait 180`. Then the reviews
+of `b016699..` in their turn (gentle-ai, then Codex), then T4 and T5.
