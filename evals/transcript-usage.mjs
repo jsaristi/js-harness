@@ -328,9 +328,20 @@ function estimateFromModelUsage(modelUsage) {
 /** What a trial's record keeps as its list cost. With transcripts in `dir`, their summary (`summarizeTranscripts`)
  * and `modelUsageCheck`, whether its totals equal `modelUsage`'s (`checkModelUsage`). Without any, because the
  * session wrote none or they could not be kept, the estimate from `modelUsage` (`estimateFromModelUsage`), and `null`
- * when there is neither. `source` says which of the two a record holds. */
+ * when there is neither. `source` says which of the two a record holds.
+ *
+ * `dir` is `null` when no directory holds this trial's own transcripts (`runner.mjs`, `keepTranscripts`): nothing is
+ * read then, and the cost is the estimate.
+ *
+ * Transcripts that were kept and hold no readable request give the estimate too, and the estimate says so, with two
+ * fields it has in no other case: `transcriptsWithoutRequests`, how many transcript files (`*.jsonl`) were there, and
+ * `unreadableLines`, how many of their lines could not be read (as in a summary). Without them such a record would
+ * read like one of a session that wrote no transcript, and a copy cut short would pass for nothing to copy. */
 export function trialListCost({ dir, modelUsage }) {
+  if (dir === null) return estimateFromModelUsage(modelUsage);
   const summary = summarizeTranscripts(dir);
-  if (summary.total.requests === 0) return estimateFromModelUsage(modelUsage);
-  return { ...summary, modelUsageCheck: checkModelUsage(summary, modelUsage) };
+  if (summary.total.requests > 0) return { ...summary, modelUsageCheck: checkModelUsage(summary, modelUsage) };
+  const estimate = estimateFromModelUsage(modelUsage);
+  const transcripts = filesBelow(dir).filter((file) => file.endsWith('.jsonl')).length;
+  return estimate === null || transcripts === 0 ? estimate : { ...estimate, transcriptsWithoutRequests: transcripts, unreadableLines: summary.unreadableLines };
 }

@@ -282,6 +282,38 @@ test('the estimate names a model without a price and leaves the total unknown; w
   for (const none of [null, undefined, {}, 'none']) assert.equal(trialListCost({ dir, modelUsage: none }), null, JSON.stringify(none));
 });
 
+test('a kept transcript that holds no readable request is said in the estimate it falls back to: how many files, and how many lines could not be read', () => {
+  const plain = trialListCost({ dir: tmp('none'), modelUsage: PROBE_MODEL_USAGE });
+  // A session file cut short while it was copied, beside a subagent's that never got an answer.
+  const torn = transcripts({
+    main: ['{"type":"assistant","isSidechain":false,"message":{"id":"msg_torn","model":"claude-op', { type: 'assistant', isSidechain: false, message: { id: 'msg_half', model: OPUS, usage: { input_tokens: 5 } } }],
+    agents: { a1: [other({ agent: 'a1', at: '2026-10-08T10:00:00.000Z' })] },
+    types: { a1: 'Explore' },
+  });
+  assert.deepEqual(trialListCost({ dir: torn, modelUsage: PROBE_MODEL_USAGE }), { ...plain, transcriptsWithoutRequests: 2, unreadableLines: 2 }, 'the estimate, and that two transcripts were there');
+  // Every line readable and none a request: still a transcript that gave no cost.
+  const silent = transcripts({ main: [other({ at: '2026-10-08T10:00:00.000Z' }), assistant({ model: '<synthetic>' })] });
+  assert.deepEqual(trialListCost({ dir: silent, modelUsage: PROBE_MODEL_USAGE }), { ...plain, transcriptsWithoutRequests: 1, unreadableLines: 0 });
+  // A trial that kept none says neither: there was nothing to read.
+  assert.ok(!('transcriptsWithoutRequests' in plain) && !('unreadableLines' in plain));
+  // With no `modelUsage` either there is no cost to mark: the record's `transcripts.files` is what says they were kept.
+  assert.equal(trialListCost({ dir: torn, modelUsage: null }), null);
+});
+
+test('a trial whose kept directory is not its own (`dir` null) is estimated from modelUsage, and no directory is read', () => {
+  const plain = trialListCost({ dir: tmp('none'), modelUsage: PROBE_MODEL_USAGE });
+  // Nothing is looked for: Node answers a path that is no string with a deprecation warning, and a default one would
+  // be somebody else's directory.
+  const realExists = fs.existsSync;
+  fs.existsSync = (target) => assert.fail(`looked for ${JSON.stringify(target)}`);
+  try {
+    assert.deepEqual(trialListCost({ dir: null, modelUsage: PROBE_MODEL_USAGE }), plain);
+    assert.equal(trialListCost({ dir: null, modelUsage: null }), null);
+  } finally {
+    fs.existsSync = realExists;
+  }
+});
+
 // ---- keeping the transcripts of a trial ---------------------------------------------------------------------------------
 
 /** A trial's `projects` directory as Claude Code leaves it: the probe's transcripts under a project named after the

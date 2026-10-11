@@ -167,7 +167,7 @@ What each phase must deliver. Its steps are the checkboxes under [Checklist](#ch
 - [x] Live check on this machine with two or more sessions open, and the memories point to the command
 - [x] `sessions --watch` returns when the board changes and costs nothing while it does not
 - [x] The orchestrator ships as a skill the installer writes and removes through the manifest
-- [ ] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
+- [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 
 ### F6 Codex parity
 - [ ] The eval tasks run on Codex
@@ -307,12 +307,72 @@ Left open, in the feature document: its follow-ups, the first of them that the g
 repository runs within two minutes of its own bound of 20, on one test file of 232 tests
 that each build a real repository.
 
+## Subagent models result
+
+Measured on 2026-10-10 (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort
+orchestrating a subagent that writes the change, with every subagent forced to Opus 5.5 in one
+arm and to Haiku 5.5 in the other (one subagent a trial, except two trials of the Haiku arm
+that spawned a second). Three tasks, three trials a cell, 18 trials, under
+`bypassPermissions`, Claude Code 2.1.296 with gentle-ai 4.0.0 and engram 3.3.0 (`node
+evals/subagents-report.mjs --modes write` over `evals/results/subagents/write-high.json`). The
+orchestrator plans, delegates the writing and reviews the result; every trial delegated and none
+failed. Score is the hidden grader's, the same in every trial of a cell; cost is the mean list
+cost of one session, read from its transcripts, with the orchestrator apart from its subagents.
+
+| Task | Score Opus / Haiku | Cost Opus / Haiku | Ratio | Orchestrator Opus / Haiku | Subagents Opus / Haiku | Wall Opus / Haiku |
+|------|------|------|------|------|------|------|
+| format-v2 | 1.00 / 1.00 | $2.40 / $1.03 | 0.43× | $0.84 / $0.79 | $1.56 / $0.24 | 9m17s / 10m17s |
+| house-rules | 0.98 / 0.98 | $0.81 / $0.40 | 0.50× | $0.39 / $0.38 | $0.41 / $0.03 | 2m21s / 3m44s |
+| lost-updates | 1.00 / 1.00 | $1.68 / $0.61 | 0.36× | $0.55 / $0.53 | $1.13 / $0.08 | 9m02s / 7m40s |
+
+Read plainly, against what he had read (75% cheaper at the same quality, and much faster):
+
+- Quality: the same. The Haiku subagent's change scored what the Opus subagent's did in all nine
+  pairs.
+- Cost: 58% less for the session, $6.11 against $14.64 over nine trials each. The subagent's own
+  work costs 89% less ($1.04 against $9.30), but the orchestrator is Opus in both arms and costs
+  the same ($5.08 against $5.35), so it is 83% of what the Haiku arm costs. Haiku also spends
+  more to make the same change: 2.3 times the output tokens and 2 times the cache reads, and on
+  `format-v2` and `lost-updates` 54 of its requests passed the 100,000-token prompt, where its
+  price is five times higher.
+- Speed: not faster. 65 minutes against 62 over the nine trials. Slower on the small task in
+  every repeat (1.58×), and on the two larger ones the repeats of the two arms overlap.
+
+What it does not show. These tasks sit at the score ceiling with any config (F5), so they can
+show that Haiku costs less on scoped work and cannot show where it starts to write worse code;
+Anthropic's own figures put it well under Sonnet 5.5 and Opus 5.5 on complex agentic coding. Three
+tasks and three trials a cell are a small sample. Wall time was taken on a machine other
+sessions were using: tests of another session ran beside three of the trials and a browser
+beside five more; the marked trials are not out of line with their cells, but the speed line
+above is the weakest of the three. And both arms delegate: F5 ran the same three tasks with
+Opus 5.5 alone at high effort, on Claude Code 2.1.284, for $2.86 and 11 minutes the three, which
+is less than Opus with an Opus subagent ($4.88, 21 minutes) and faster than either arm. That
+figure is from another version and another week, so it is a pointer, not a comparison.
+
+Recommendation, his to decide. Where a session already delegates the writing of scoped code,
+forcing that subagent to Haiku 5.5 is supported by this measurement: same score, less than half
+the cost. It is no reason to delegate more: on tasks this size the delegation is what costs,
+not the model. So nothing is turned on by default in the harness from this alone. If it goes
+in, it goes in as the model of the writing subagent only, set on the call that delegates the
+writing, never as `CLAUDE_CODE_SUBAGENT_MODEL` for the session, which would also move the
+subagents that explore, review and verify, and his rule of 2026-10-10 keeps those on Opus 5.5
+at high effort. Two measurements would settle what this one leaves open, each his to approve:
+the same three tasks with Opus 5.5 alone at high effort on this version (9 trials, about $9), so
+that not delegating is in the same table; and one task hard enough to leave the ceiling.
+
 ## Rule hierarchy (planned)
 
-A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08 and not started.
-That session opens `odd/tasks/rule-hierarchy.md`; this section is its starting point and is
-replaced by a pointer to that document once it exists. It sits outside the Next list only so
-that it does not collide with the items `feat/codex-review-cost` adds there.
+Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
+`odd/tasks/session-channel.md`; not built. Where this section and that document differ on the design, the
+document wins; a decision of his that the document does not restate stands as it is written
+here and in the orchestrator's relief file. It holds the survey (83 rules, 49 with nothing that makes them act, and the
+place of each), the checks to build, the outline of the rewritten `AGENTS.md`, the protocols,
+and the list of that day's failures with the proof each one owes. This section stays as the
+reasoning it came from and is replaced by a pointer when the feature closes (its last task).
+
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-08; designed, not
+built. This section was the starting point of that document. It sits outside the Next list
+only so that it does not collide with the items `feat/codex-review-cost` adds there.
 
 He approved the design below on 2026-10-08, to be done in a new session with the main session
 told of it. What stays open is the detail that session works out, and each thing it ships is
@@ -536,12 +596,36 @@ gentle-ai's managed block (F2), so this orders the thin layer, not the whole pay
 
 ## Session channel (planned)
 
-A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09 and not started.
-It builds on the session board (`odd/tasks/session-board.md`) and starts after that feature is
-merged. The design below is the main session's proposal, put to him that day and approved by
-him ("me parece excelente tu propuesta"); point 6 answers the question he asked next. Each
-thing the feature ships is still his to decide then, and what he changes is written here
-before the feature document `odd/tasks/session-channel.md` opens.
+Designed on 2026-10-10 in `odd/tasks/session-channel.md`, by the design session that also wrote
+`odd/tasks/rule-hierarchy.md`; not built. Where this section and that document differ on the design, the
+document wins; a decision of his that the document does not restate stands as it is written
+here and in the orchestrator's relief file. Four statements below are superseded by decisions Sebastián took on 2026-10-10,
+recorded until now only in the orchestrator's relief file:
+
+- Context (below, "Past the board's limit (73% of the window it measures) it does not start
+  one"): no session stops, slows or proposes a cut for a percentage. At 85% it pauses, writes
+  its state in its feature document, and judges: little left, it finishes well; much left, the
+  compaction is done there and the same task continues after it. His words: "al 85% pausamos
+  no detenemos y miramos si falta poco para poder terminar bien o sino para compactar y
+  continuar post-compactacion".
+- The charter (below, "and, for now, the merge of code"): the lead merges a pull request with
+  code when the gate passed, both reviews are recorded with nothing blocking and it is clean,
+  and gives the go-ahead of a later stage inside a plan he approved. His list is six items.
+- Point 2 (below, "push and merge are asked and answered in the chat of the session that needs
+  them"): push and pull request need no yes once the gate and both reviews are green, which
+  the charter already said.
+- Point 2 (below, "no session takes one as the answer to a question it put to him"): his
+  answers given in the orchestrator's chat travel to the session that asked, with his exact
+  words and the transcript line where that session reads them before using them. The document
+  states the limit seen the same day: such an answer does not approve a question still pending
+  in a session whose host tells it that a message from another session approves nothing.
+
+A feature of its own, in a session of its own, asked by Sebastián on 2026-10-09; designed, not
+built. It builds on the session board (`odd/tasks/session-board.md`), which is merged. The
+design below is the main session's proposal, put to him that day and approved by him ("me
+parece excelente tu propuesta"); point 6 answers the question he asked next. Each thing the
+feature ships is still his to decide then; what he changes from here on is written in the
+feature document.
 
 The problem. Sessions that work side by side talk to each other only through him: a session
 that finishes hands him a block of text to paste into the orchestrator, and he carries it
@@ -692,8 +776,21 @@ podamos implementar todo"), each a feature of its own with its own document and 
    Each of the four is proven before it reaches a project of his, as he asked the same day
    ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
    by its tests, then by use on this repository, then in a practice project made for the
-   purpose, where the harness is only installed and never edited. That third step does not
-   exist yet and is the first thing to build for it.
+   purpose, where the harness is only installed and never edited. That third step exists
+   since 2026-10-10 (`odd/tasks/practice-project.md`). `node scripts/practice.mjs run --root
+   D:\js-harness-practice` packs the checkout it is run from, installs it into a prefix and
+   a stand-in home inside that one folder, and walks a journey of named steps in a small
+   project that only receives the harness: `install`, `init` the first time and `status`
+   then `sync` afterwards, a commit that passes through the hook and one that is refused,
+   both uninstalls. It hashes what the harness owns in his real home before and after, and
+   any difference fails the run. A run takes under fifteen seconds, spends no model, and
+   appends one line to the folder's `record.jsonl` with the commit that was proven. A
+   feature that changes what a project receives adds its own step, in its own branch: an
+   entry in `JOURNEY` (`scripts/practice-lib.mjs`) and its function in `STEPS`
+   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. What the run does
+   not prove is that a host loads what was installed: no Claude Code or Codex session is
+   started in the practice project, and that proof is designed when the first feature that
+   needs it is planned.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
@@ -842,6 +939,35 @@ The new orchestrator's reading, his to correct, for the rewrite of the skill:
 It was done that way the same day: five questions asked by message and answered the same
 way (`odd/tasks/session-board.md`, entries of that day).
 
+Two classes of session, found on 2026-10-10 in the first stretch with two work sessions
+(`odd/tasks/session-board.md`). Claude Code delivers a message between sessions only when
+both ask for permissions the same way: a receiver that bypasses permission prompts holds a
+message from a sender that does not, and in the desktop app the held message expires
+unseen. His desktop sessions bypass; a session he opens from the phone through `js-harness
+remote` runs in `auto`. So the notice of a phone-opened work session never reached the
+orchestrator. His decision that day: such a session is read on the board for now, the
+repair goes here, and making the modes meet is his, at the computer (the host documents
+`crossSessionInbound: "accept"` in the user's settings, and the roadmap's open decision 2,
+the permission mode, is the other road). Proposed by the orchestrator for this feature, not
+decided: a work session whose first notice is held does not retry and says so once; the
+stack doctor reports when a project's sessions run in different classes; an orchestrator is
+opened from the desktop app. In a project that only uses the harness this is the first
+thing a second device would meet, so the check belongs in what is installed, not in advice.
+
+A test owed, carried here from the session board's last task on 2026-10-10. A session that
+the orchestrator opens by itself, through a scheduled task with no schedule, was seen to
+start, take a title, receive a message and run with permission prompts bypassed
+(`odd/tasks/session-board.md`, criterion 3). Not tried: whether he can type in its chat, and
+whether it can commit in a folder of its own. The second costs one gate turn, so it is run
+once the gate lock is merged; until then work sessions open by his paste, because a session
+opened that way has no tool to ask him anything. The same stretch left for this feature,
+none of it decided: a notice goes to a role and never to a remembered reply address, with a
+command that prints the orchestrator's current address; a wait handed to a session that
+cannot be reached names a process that ends, never a commit that may not come; the handover
+of the orchestrator's title, done twice that night by renaming in one step, has no protocol;
+and the roster he asked for (who is alive, what each is for, who left and who took its
+place) as a section of the board computed at each read.
+
 Limits known before starting. The channel is Claude Code's: a Codex session keeps the pasted
 block. A session in another permission mode holds incoming messages for his approval. The
 rule about how a reply ends is paid on every turn, so where it lives is settled by the rule
@@ -898,7 +1024,8 @@ hierarchy above, not by this feature.
    on 2026-10-09 with the measurement of the part size; the numbers are in "Codex review
    cost result" above. Merged the same day (#44, on top of #43). Whether `high` stays at
    what it costs is his, with the number in that section.
-8. Subagent models, decided by Sebastián on 2026-10-08 and not started: compare side by side,
+8. Subagent models, decided by Sebastián on 2026-10-08, measured on 2026-10-10 ("Subagent models
+   result" above; what goes into the harness from it is his). As it was decided: compare side by side,
    in a session of its own and with the evals of this repository, Opus 5.5 orchestrating Opus
    5.5 subagents (what runs today) against Opus 5.5 orchestrating Haiku 5.5 subagents, with as
    many measurements as the runs give, and put it in the harness only if it helps. He had
