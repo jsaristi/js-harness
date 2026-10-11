@@ -659,8 +659,21 @@ podamos implementar todo"), each a feature of its own with its own document and 
    Each of the four is proven before it reaches a project of his, as he asked the same day
    ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
    by its tests, then by use on this repository, then in a practice project made for the
-   purpose, where the harness is only installed and never edited. That third step does not
-   exist yet and is the first thing to build for it.
+   purpose, where the harness is only installed and never edited. That third step exists
+   since 2026-10-10 (`odd/tasks/practice-project.md`). `node scripts/practice.mjs run --root
+   D:\js-harness-practice` packs the checkout it is run from, installs it into a prefix and
+   a stand-in home inside that one folder, and walks a journey of named steps in a small
+   project that only receives the harness: `install`, `init` the first time and `status`
+   then `sync` afterwards, a commit that passes through the hook and one that is refused,
+   both uninstalls. It hashes what the harness owns in his real home before and after, and
+   any difference fails the run. A run takes under fifteen seconds, spends no model, and
+   appends one line to the folder's `record.jsonl` with the commit that was proven. A
+   feature that changes what a project receives adds its own step, in its own branch: an
+   entry in `JOURNEY` (`scripts/practice-lib.mjs`) and its function in `STEPS`
+   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. What the run does
+   not prove is that a host loads what was installed: no Claude Code or Codex session is
+   started in the practice project, and that proof is designed when the first feature that
+   needs it is planned.
 5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
    each working three features at once, orchestrated together and able to talk to each
    other. What is known: the app's messages stay inside one account, so across accounts the
