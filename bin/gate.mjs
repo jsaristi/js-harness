@@ -6,14 +6,15 @@
 //
 // It reports nothing of its own on stdout: what the command prints goes to the caller as it is printed,
 // and the exit code is the command's. What `gate` itself has to say (whose gate it waits for, that it ran
-// nothing, that it ran without the lock, or in the turn of the process that started it) goes to stderr,
-// each line starting with `gate:`.
+// nothing, that it ran without the lock, or in the turn of the process that started it, and the load of a
+// machine that is loaded when the command starts) goes to stderr, each line starting with `gate:`.
 //
 // The command is one argument after `--`, a command line the shell is handed as it is written, or several,
 // a command and its arguments. On Windows several arguments cannot hold everything: `commandLineOf` says
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
-import { GATE_HELD_ENV, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
+import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
+import { isLoaded, loadDetail, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 
 const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]';
 
@@ -121,7 +122,8 @@ function parseArgs(argv, env, defaultCwd) {
  * taken: the gate that runs this already holds it, and waiting for it would be waiting for itself. Nor
  * is one taken by a `gate` that a holder of the lock started, which says so with the mark of a held lock
  * (`JS_HARNESS_GATE_HELD=1`, `GATE_HELD_ENV` of `check`, where it is told why the mark is trusted and
- * what it cannot protect against). In both cases the command runs at once, in the environment as given.
+ * what it cannot protect against). In both cases the command runs with no wait for the lock, in the
+ * environment as given.
  * Under the mark alone, stderr says that the command runs in the turn of the process that started this
  * gate, as `check` says it in a row of its report: a mark left in a shell by mistake turns the lock off
  * for every `gate` started there, and that line is its trace. Inside a gate nothing is said, as the
@@ -134,11 +136,18 @@ function parseArgs(argv, env, defaultCwd) {
  * A usage error is said on stderr with the usage, before a lock is taken or anything runs: a flag `gate`
  * cannot take (`parseArgs`), or arguments it cannot make a command line of (`commandLineOf`).
  *
+ * Before the command the machine's load is read for a second (`./lib/machine-load.mjs`), with the lock
+ * in hand where there is one, as `check` reads it before its sensors. It is said in one line on stderr
+ * only on a loaded machine, from one busy logical processor on (`LOAD_SAID_PROCESSORS`): a `gate` on a
+ * machine at rest still says nothing of its own. The line says when this gate waited for another, whose
+ * tail the figure then is. A load that could not be read is not said, and stops nothing. The switch
+ * `JS_HARNESS_GATE_LOAD=off` takes the sample away, and inside a gate there is none: see `sayLoad`.
+ *
  * The lock is released on every way out of the command, a throw included. Killed, this process leaves
  * its holder's file, which the next gate takes over a minute after its last beat, as with `check`.
- * `deps.takeGateLock`, `deps.spawn` (for `runSensor`) and `deps.cwd` are replaceable, and so is
- * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
- * line of another system and stands in for what would run it. */
+ * `deps.takeGateLock`, `deps.spawn` (for `runSensor`), `deps.sampleLoad` (for the sampler of the load)
+ * and `deps.cwd` are replaceable, and so is `deps.platform`, the system whose shell the command line is
+ * written for: a test asks for the command line of another system and stands in for what would run it. */
 export async function gateMain(argv, env = process.env, deps = {}) {
   let parsed;
   let commandLine;
@@ -156,9 +165,22 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     else if (result.status === null) console.error(`gate: ${commandLine} was killed by ${result.signal}`);
     return result.error || result.status === null ? 1 : result.status;
   };
+  // The load the command starts under, sampled once and said only on a loaded machine. `afterGate` is
+  // whether this gate waited for another, which ran until a moment ago.
+  const sayLoad = async (afterGate = false) => {
+    if (loadSwitchedOff(env)) return;
+    const load = await readLoad(deps.sampleLoad);
+    if (isLoaded(load)) console.error(`gate: ${loadDetail(load, { before: 'the command', afterGate })}`);
+  };
+  // Inside a gate there is no sample: the command is one of that gate's sensors or started by one, the
+  // gate read the load before them, and a second here would be a second of every such command.
   if (env.JS_HARNESS_CHECK_INNER === '1') return run(env);
   if (env[GATE_HELD_ENV] === '1') {
     console.error(`gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate takes none`);
+    // Sampled here as well, as `check` does in the turn of the process that started it: this is a gate
+    // of its own, started once by a person or a script and not once per test, and its command starts
+    // now. The figure holds what that process itself is doing, which is the load this command meets.
+    await sayLoad();
     return run(env);
   }
 
@@ -169,11 +191,13 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   }
   if (turn.without) {
     console.error(`gate: running without ${turn.without}, so a gate may run at the same time`);
+    await sayLoad();
     return run(env);
   }
   const { lock } = turn;
   let lost = false;
   try {
+    await sayLoad(lock.waitedMs >= GATE_WAIT_SAID_MS);
     return await run({ ...env, [GATE_HELD_ENV]: '1' });
   } finally {
     // Asked before the release, after which there is no lock to have lost.

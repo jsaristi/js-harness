@@ -285,7 +285,7 @@ would run a long file twice in every gate).
 Each closes with its commit and this file saying what is next. Routes are recorded per task in
 Progress.
 
-- [ ] T1 · `bin/lib/machine-load.mjs` and the `load` row. Tests first: `loadBetween` on
+- [x] T1 · `bin/lib/machine-load.mjs` and the `load` row. Tests first: `loadBetween` on
   made-up processor times, an empty list and two equal readings; `check` with an injected
   sampler prints the row once, before the first sensor, in each of the three lock states; no
   row for a direct `checkSensors` call that is no gate, under `JS_HARNESS_CHECK_INNER`, for
@@ -341,6 +341,28 @@ Progress.
     The reader's arithmetic, kept in S3 as the stop rule: the three cuts first planned are
     about 2,500 of fifty thousand processes, under what a whole gate can show.
 
+- 2026-10-11 · T1, one writer (route: delegated; three product files and their tests). Test
+  first: before any code the new module's test could not load it, 4 of 29 tests of
+  `bin/gate.test.mjs` failed and 8 of 128 of `bin/check.test.mjs` (six new, and the two
+  assertions on the order of rows that a new row changes). After it: 7, 29, 128 and the 23 of
+  `bin/js-harness.test.mjs` pass; this session ran the first two again and read the same.
+  - The sample point is one line in the `run` closure of `checkSensors`
+    (`bin/check.mjs:604`), taken only when the call came with a lock state; the switch of
+    the environment travels in that object (`load: false`), since `checkSensors` does not
+    see the environment.
+  - Choices the design left open, made by the writer and kept: a `gate` started in the turn
+    of a holder samples too, so `gate -- npm run check` reads the load twice, two seconds;
+    a `gate` whose load could not be read says nothing (`check` says it in its row); the
+    threshold compares the figure as read, so 0.96 is not said though it would print as 1.0;
+    two more reasons for "not read" (the number of processors changed between the readings,
+    times that went back).
+  - Known and left: `scripts/practice-lib.mjs` starts real gates in its journey, which now
+    take the real sample, a second each; no test file does (searched every `*.test.mjs` for
+    `pre-commit`, `js-harness check` and `check.mjs`).
+  - While the writer's tests ran, real samples on this machine read `8.0 of 8 logical
+    processors busy (100%)`: the figure sees a test run as it sees a video.
+
 ## Next
-T1, test first, by one writer (`bin/lib/machine-load.mjs`, `bin/check.mjs`, `bin/gate.mjs`
-and their tests are more than one non-trivial file).
+T2: what loads a loaded machine, test first. Before it, T1's commit is assessed for review
+(gentle-ai, then Codex on the same range), and its gate's seconds and `load` row are recorded
+here.
