@@ -220,7 +220,8 @@ function isOutsideRelative(rel) {
  *
  * One process answers both: `git rev-parse --git-dir --git-common-dir` prints the two paths on two
  * lines, in that order, each as the flag alone prints it. Whatever reads or writes a line of the Codex
- * review records asks this each time (`jsonLinesPath`), several times in one `codex-review` run. Both
+ * review records asks this each time (`jsonLinesPath`), unless its caller asked once and hands the answer
+ * on, as a `codex-review` run does for the several times it reads and writes them. Both
  * are `null` together when that process fails. An answer that is not two lines is a path with a line
  * break in it, which two lines cannot carry: each is then asked for alone. */
 export function gitDirs(root, spawn = spawnSync) {

@@ -261,6 +261,25 @@ test('a coverage that cannot be told says what could not be read, and never read
   assert.deepEqual(reviewCoverage(root, { from: first, tip: three, spawn: oldGit }), { unknown: MARKS_UNREAD });
 });
 
+test('a caller that knows where the repository is hands it on: the coverage is the same, and git is asked neither where the top is nor where the git folder is', () => {
+  const { root, first, doc, three } = fourCommits();
+  record(root, first, doc);
+  const asked = countingSpawn();
+  const whole = reviewCoverage(root, { from: first, tip: three, spawn: asked.spawn });
+  assert.equal(whole.covers.length, 1);
+  assert.equal(asked.started.filter((command) => command === 'rev-parse').length, 2, 'where the top is, and where the git folder is');
+  const where = { top: root, commonGitDir: path.join(root, '.git') };
+  const told = countingSpawn();
+  assert.deepEqual(reviewCoverage(root, { from: first, tip: three, spawn: told.spawn, where }), whole);
+  // Every other question is put as before, in its order.
+  assert.deepEqual(told.started, asked.started.filter((command) => command !== 'rev-parse'));
+  // A caller that says there is no git folder has no record read, and is asked about by nobody.
+  const none = countingSpawn();
+  const unrecorded = reviewCoverage(root, { from: first, tip: three, spawn: none.spawn, where: { top: root, commonGitDir: null } });
+  assert.deepEqual([unrecorded.covers, ids(unrecorded.uncovered)], [[], ids(whole.codeCommits)]);
+  assert.equal(none.started.includes('rev-parse'), false);
+});
+
 // --- where the review of what is left starts ---
 
 /** The commits `revs` name, as a coverage holds them, as far as `reviewStart` reads them. */

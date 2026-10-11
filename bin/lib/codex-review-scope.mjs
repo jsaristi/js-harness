@@ -25,7 +25,8 @@
 // Where git is asked from. From the top of the repository, wherever the caller runs: git reads a path it is
 // asked the attributes of from the folder it runs in, and the paths here are written from the top. Asked in
 // a folder below it, `evals/results/a.json` would be the path of that name under that folder: a marked file
-// would be read as code, and nothing would say so. So the lookup first asks git where the top is.
+// would be read as code, and nothing would say so. So the lookup first asks git where the top is, unless its
+// caller says.
 //
 // It is the project that decides, in a file that is committed like any other: `* -codex-review` leaves a
 // review nothing to read, and the plan of every run says how many files were left out and why.
@@ -86,34 +87,51 @@ function topOf(cwd, spawn) {
  *
  * Two git processes, however many the paths: one that says where the top of the repository is, and one,
  * run there, that is asked about all the paths, on its standard input, which no count of them makes too
- * long for a command line. None at all when every path is a document, which no attribute is asked for. */
-export function leftOutOf(paths, { cwd, source, spawn = spawnSync }) {
+ * long for a command line. None at all when every path is a document, which no attribute is asked for.
+ *
+ * One, when the caller says where the top is: `where`, an object whose `top` is the top of the repository
+ * `cwd` is in, as the folder a git command is run in. A command that asks this more than once in one run
+ * hands on what it already knows (`codexReviewMain`). A `where` that names no top is none, and git is asked.
+ *
+ * And none for the paths the caller was already answered about: `where.marks`, a `Map` the caller makes and
+ * keeps for one run, which this function fills, from `source` to what git said of each path asked at it.
+ * A path in it is not asked about again, so a run that asks for the files of the commits of a range and
+ * then for the files of that range asks once. It is for a `source` that is a full commit id, whose
+ * attributes do not change under a run. An answer git did not give puts nothing in it. */
+export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
   const leftOut = new Map();
-  const asked = [];
+  const code = [];
   for (const path of new Set(paths)) {
     if (isDocument(path)) leftOut.set(path, DOCUMENT);
-    else asked.push(path);
+    else code.push(path);
   }
-  if (asked.length === 0) return leftOut;
-  let unset;
-  try {
-    const top = topOf(cwd, spawn);
-    if (top === null) return null;
-    const result = spawn('git', ['check-attr', '--source', source, '--stdin', '-z', REVIEW_ATTRIBUTE], {
-      cwd: top,
-      encoding: 'utf8',
-      maxBuffer: ATTR_MAX_BUFFER,
-      input: asked.map((path) => `${path}\0`).join(''),
-    });
-    if (!result || result.error || result.status !== 0) return null;
-    // A record for every path that was asked, or the answer is not the answer to this question.
-    if (result.stdout.split('\0').length - 1 !== asked.length * 3) return null;
-    unset = unsetPaths(result.stdout);
-  } catch {
-    return null;
+  // Whether each path is marked, as git said it of this commit: to this call, or to an earlier one of a
+  // caller that keeps the answers.
+  const said = where?.marks?.get(source) ?? new Map();
+  const asked = code.filter((path) => !said.has(path));
+  if (asked.length > 0) {
+    let unset;
+    try {
+      const top = where?.top ?? topOf(cwd, spawn);
+      if (top === null) return null;
+      const result = spawn('git', ['check-attr', '--source', source, '--stdin', '-z', REVIEW_ATTRIBUTE], {
+        cwd: top,
+        encoding: 'utf8',
+        maxBuffer: ATTR_MAX_BUFFER,
+        input: asked.map((path) => `${path}\0`).join(''),
+      });
+      if (!result || result.error || result.status !== 0) return null;
+      // A record for every path that was asked, or the answer is not the answer to this question.
+      if (result.stdout.split('\0').length - 1 !== asked.length * 3) return null;
+      unset = unsetPaths(result.stdout);
+    } catch {
+      return null;
+    }
+    for (const path of asked) said.set(path, unset.has(path));
+    where?.marks?.set(source, said);
   }
-  for (const path of asked) {
-    if (unset.has(path)) leftOut.set(path, MARKED);
+  for (const path of code) {
+    if (said.get(path)) leftOut.set(path, MARKED);
   }
   return leftOut;
 }
