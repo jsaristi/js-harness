@@ -85,9 +85,10 @@ does not return (lines 143 and 145).
 high
 
 ## Ask me before
-How the two permission classes meet on his machine: option A or B of "Permission classes" below
-(a security setting, his alone, done by him at the computer). Installing the resume hook on this
-machine. Whether notices are also pushed into a work session by a hook (option C below; it has
+How the two permission classes meet on his machine was asked and answered on 2026-10-11: A
+("Permission classes" below); the setting is a security setting, his alone, changed by him at
+the computer. Whether `install` may write that setting for him on an explicit flag (a product
+choice, and a change on a machine). Installing the resume hook on this machine. Whether notices are also pushed into a work session by a hook (option C below; it has
 the same exposure as A). Archiving or deleting any session. Any change to the charter.
 
 Three things already put to him and not answered, which this document does not settle:
@@ -307,10 +308,31 @@ choose:
   into the harness.
 
 Recommended: A, as the orchestrator recommended when it put the choice to him (relief file,
-line 61); C is not built unless he asks. Whatever he chooses, `doctor` gains a row `session-classes`: it reads the permission mode
-of the project's recent sessions and the setting, and reports when the classes differ and
-nothing joins them. In a project that only uses the harness this is the first thing a second
-device meets, so the row ships.
+line 61); C is not built unless he asks.
+
+Decided by Sebastián on 2026-10-11, in the design session's chat, his words: "Entonces la A
+pero quiero que sea lo mas automatico posible". So it is A, and C and B are not taken. The
+reading of the second half, his to correct: the need is that he does nothing by hand that a
+program can do, and that what stays by hand is done once and is said to him plainly. What it
+changes in this design:
+
+- The setting is one step, once, and the harness says which. `doctor` gains a row
+  `session-classes`: it reads the permission mode of the project's recent sessions and the
+  setting, and when the classes differ and nothing joins them it reports the gap with the
+  exact fix. Since `install` already writes a `SessionStart` entry that shows a new gap, he is
+  told at the next session he opens, not by an agent that remembers.
+- Proposed, his to decide when it is built: `install` writes the setting for him on an
+  explicit flag, recorded in the manifest and removed by `uninstall`, as it does for its hook
+  entries. Without the flag the harness never writes a security setting. No agent writes it
+  either: the design session did not, and told him the steps.
+- Everything else in the channel is already designed to need no hands: a notice is written and
+  read by commands, the watch wakes the orchestrator, the resume after a compaction is a hook.
+  What still needs him after this feature, as a list the build keeps honest: the setting, once;
+  one short line to open a session, until one of the two automatic openings passes its test
+  (tests 2 and 3); and the six kinds of decision that are his.
+
+In a project that only uses the harness this is the first thing a second device meets, so the
+row ships.
 
 ### 11. The orchestrator skill, rewritten
 The installed skill describes a watchman; he decided a lead (2026-10-09) and changed its charter
@@ -403,7 +425,8 @@ reader, and that table names this feature as their owner.
 - [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
 - [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
-- [ ] T7 The row `session-classes` of `doctor`
+- [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
+  word, the flag of `install` that writes the setting and records it
 - [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session
 - [ ] T9 `--measures`
 - [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
@@ -435,12 +458,27 @@ reader, and that table names this feature as their owner.
   the searches behind "no gate log". Not taken: a contract command for every later command;
   the build adds each test to "Done when" as it writes it, and naming files that do not exist
   yet would only add guesses.
+- 2026-10-11, his answer to the question carried from the relief file's line 61, typed in the
+  design session's chat: "Entonces la A pero quiero que sea lo mas automatico posible". A is
+  decided; the reading of "as automatic as possible" and what it adds (the fix in the doctor
+  row, the flag of `install` as a proposal, the list of what still needs his hands) are in
+  point 10. Not done by the design session: the setting itself, which is his to change; he
+  was given the steps (an interactive `claude` terminal, `/config`, the row "Messages from
+  your other sessions", accept), and whether he has done it is not known here. Pull request 55
+  was merged by the lead as `1d0a732` (`gh pr view 55`: MERGED), so this entry travels in a
+  follow-up pull request of documents.
+- 2026-10-11, the first try at committing that entry failed its gate: `FAIL  tests  npm run
+  test timed out after 1200 s`, 03:27:59 to 03:48:06, with nothing heavy alive at the look
+  before it. Not retried. Not known why; two facts, neither shown to be the cause: the tree
+  was `main` with pull requests 53 and 54 in it, whose last gate another session reported at
+  1,167 s, and another session's test runs may have started beside it. The commit waits for a
+  gate in which documents alone run no sensor (`feat/gate-lock`, T7).
 - 2026-10-10, a finding for `feat/gate-lock`, passed to the orchestrator with the closing
   notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
   their proof.
 
 ## Next step
 The build waits for `feat/gate-lock` to be merged. Its session opens this document and first
-settles with Sebastián, one at a time, the three things of "Ask me before" he has not answered
-and the choice of A or B if it is still open. It then runs the tests owed (T2) alongside T1;
+settles with Sebastián, one at a time, what of "Ask me before" he has not answered by then
+(the orchestrator puts those to him from its chat). It then runs the tests owed (T2) alongside T1;
 tests 1, 2, 3 and 6 need him at the app.
