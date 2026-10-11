@@ -34,8 +34,14 @@ const FILES = {
     "  assert.match((await promisify(execFile)('git', ['version'])).stdout, /^git version/); // m-promisified",
     "  assert.match((await promisify(exec)('git version')).stdout, /^git version/); // m-shell-async",
     '  viaHelper();',
+    '  viaHelper();',
     "  assert.throws(() => execFileSync('git', ['no-such-command'], { stdio: 'ignore' })); // m-failing",
     "  assert.throws(() => spawnSync('git', ['status'], { timeout: 'soon' }), { code: /^ERR_/ });",
+    "  const noGit = here + '/missing/git'; // git by its name, and not there: the three calls start nothing",
+    "  assert.throws(() => execFileSync(noGit, ['status']), { code: 'ENOENT' });",
+    "  assert.equal(spawnSync(noGit, ['status']).error.code, 'ENOENT');",
+    "  assert.equal((await once(spawn(noGit, ['status']), 'error'))[0].code, 'ENOENT');",
+    "  assert.equal(spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 9000)'], { timeout: 300 }).error.code, 'ETIMEDOUT');",
     "  spawnSync(process.execPath, ['child.mjs'], { cwd: here });",
     "  spawnSync(process.execPath, ['child.mjs'], { cwd: here, env: lean });",
     "  execSync('echo not git');",
@@ -54,6 +60,22 @@ const FILES = {
     "import { test } from 'node:test';",
     "import cp from 'node:child_process';",
     "test('b', () => { cp.spawnSync('git', ['--version']); }); // m-default-import",
+  ],
+  'frames.test.mjs': [
+    "import { test } from 'node:test';",
+    "import cp from 'node:child_process';",
+    "import { viaHelper } from './helper.mjs';",
+    'const lean = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };',
+    "test('frames', () => {",
+    "  cp.spawnSync('git', ['--version']); // m-direct",
+    '  viaHelper(); // m-first-site',
+    '  viaHelper(); // m-second-site',
+    "  cp.spawnSync(process.execPath, ['deep-child.mjs'], { cwd: import.meta.dirname, env: lean });",
+    '});',
+  ],
+  'deep-child.mjs': [
+    "import { viaHelper } from './helper.mjs';",
+    'viaHelper(); // m-deep',
   ],
   'fail.test.mjs': [
     "import { test } from 'node:test';",
@@ -84,14 +106,16 @@ test('a run of two files: every git process once, by sub-command, caller and tes
   assert.match(run.stderr, /pass 2/, 'with --json the output of the tests goes to stderr');
   const report = JSON.parse(run.stdout); // nothing but the report is on stdout
   assert.equal(report.exitCode, 0);
-  assert.equal(report.git.count, 11);
+  assert.equal(report.git.count, 12);
   assert.equal(report.git.untimed, 0);
   assert.ok(report.git.seconds > 0, 'the time of the processes is measured');
-  // Two `node child.mjs`, the `node -e 0` of each, and one `echo`. Not counted: the call Node refused, and the
-  // runner's own process per test file.
-  assert.deepEqual(report.other, { count: 5, shell: 1 });
+  // Two `node child.mjs`, the `node -e 0` of each, one `echo`, and the `node` that ran into its timeout: a
+  // process that started and failed counts. Not counted: the call Node refused, the three calls of a git that
+  // is not there (a thrown ENOENT, a result without a pid, a child without one), and the runner's own process
+  // per test file.
+  assert.deepEqual(report.other, { count: 6, shell: 1 });
   assert.deepEqual(report.bySubcommand.map((row) => [row.name, row.count]),
-    [['--version', 4], ['version', 4], ['rev-parse', 2], ['no-such-command', 1]]);
+    [['--version', 5], ['version', 4], ['rev-parse', 2], ['no-such-command', 1]]);
   // One per line, also where Node builds the function on another one (`execSync` and `execFileSync` on
   // `spawnSync`, `exec` on `execFile` on `spawn`) and where `util.promisify` gives the promise form.
   assert.deepEqual(Object.fromEntries(report.byCaller.map((row) => [row.name, row.subcommands])), {
@@ -103,14 +127,36 @@ test('a run of two files: every git process once, by sub-command, caller and tes
     [at('a.test.mjs', 'm-promisified')]: { version: 1 },
     [at('a.test.mjs', 'm-shell-async')]: { version: 1 },
     [at('a.test.mjs', 'm-failing')]: { 'no-such-command': 1 },
-    [at('helper.mjs', 'm-helper')]: { '--version': 1 },
+    [at('helper.mjs', 'm-helper')]: { '--version': 2 }, // two call sites and one row: the caller is one frame deep
     [at('b.test.mjs', 'm-default-import')]: { '--version': 1 },
   });
   assert.equal(report.byCaller[0].name, at('child.mjs', 'm-child'), 'the largest caller is first');
-  assert.deepEqual(report.byTestFile.map((row) => [row.name, row.count]), [['a.test.mjs', 10], ['b.test.mjs', 1]]);
-  // The two test files, two `node child.mjs` and their two `node -e 0`; the runner is not one of them.
-  assert.deepEqual(report.processes, { reported: 6, missing: 0, unreadable: 0 });
+  assert.deepEqual(report.byTestFile.map((row) => [row.name, row.count]), [['a.test.mjs', 11], ['b.test.mjs', 1]]);
+  // The two test files, two `node child.mjs` and their two `node -e 0`; the runner is not one of them, and
+  // the `node` that was killed at its timeout never reported.
+  assert.deepEqual(report.processes, { reported: 6, missing: 1, unreadable: 0 });
   assert.deepEqual(fs.readdirSync(tmp), [], 'the temporary file is removed');
+});
+
+test('--frames 2: the caller is two frames deep, so a helper is split by who called it', () => {
+  const run = runTool('--json', '--frames', '2', 'frames.test.mjs');
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.frames, 2);
+  assert.deepEqual(report.byCaller.map((row) => [row.name, row.count]), [
+    [at('frames.test.mjs', 'm-direct'), 1], // one frame is all this stack has
+    [`${at('helper.mjs', 'm-helper')} < ${at('deep-child.mjs', 'm-deep')}`, 1], // the depth reaches a child with a written environment
+    [`${at('helper.mjs', 'm-helper')} < ${at('frames.test.mjs', 'm-first-site')}`, 1],
+    [`${at('helper.mjs', 'm-helper')} < ${at('frames.test.mjs', 'm-second-site')}`, 1],
+  ]);
+});
+
+test('a wrong option: exit code 2, the reason and the usage on stderr, and no run', () => {
+  const run = runTool('--unknown', 'a.test.mjs');
+  assert.equal(run.status, 2);
+  assert.equal(run.stdout, '');
+  assert.match(run.stderr, /^count-git: unknown option --unknown\nusage: node scripts\/count-git\.mjs /);
+  assert.deepEqual(fs.readdirSync(tmp), []);
 });
 
 test('a failing run: its exit code, the output of the tests and then the report, no temporary file left', () => {
@@ -149,7 +195,7 @@ test('what a call starts: git by the base name of the command, a shell string by
   assert.equal(describeCall('spawnSync', [process.execPath, ['--test', 'x.test.mjs']]).node, false);
 });
 
-test('the caller is the first frame in a file of the repository that is not the preload', () => {
+test('the caller is the first frames in files of the repository that are not the preload', () => {
   const base = path.resolve('repo');
   const inside = (...parts) => path.join(base, ...parts);
   const stack = [
@@ -159,7 +205,17 @@ test('the caller is the first frame in a file of the repository that is not the 
     `    at helper (${pathToFileURL(path.resolve('elsewhere', 'x.mjs')).href}:7:1)`,
     `    at Object.run (${inside('bin', 'lib', 'old.cjs')}:42:9)`,
     `    at ${pathToFileURL(inside('bin', 'a b.test.mjs')).href}:5:1`,
+    `    at ${pathToFileURL(inside('bin', 'a b.test.mjs')).href}:5:9`, // the same line again is no new frame
+    `    at async ${pathToFileURL(inside('bin', 'run.mjs')).href}:8:3`, // an async frame without a name
+    '    at async Promise.all (index 0)',
+    `    at async main (${pathToFileURL(inside('bin', 'main.mjs')).href}:2:1)`,
   ].join('\n');
+  const preload = inside('scripts', 'count-git-preload.mjs');
+  const whole = 'bin/lib/old.cjs:42 < bin/a b.test.mjs:5 < bin/run.mjs:8 < bin/main.mjs:2';
+  assert.equal(repositoryFrame(stack, base, preload, 2), 'bin/lib/old.cjs:42 < bin/a b.test.mjs:5');
+  assert.equal(repositoryFrame(stack, base, preload, 4), whole);
+  assert.equal(repositoryFrame(stack, base, preload, 9), whole, 'fewer frames than asked: what there is');
+  assert.equal(repositoryFrame('Error\n    at node:internal/x:1:2', base, 'none', 3), '(outside the repository)');
   assert.equal(repositoryFrame(stack, base, inside('scripts', 'count-git-preload.mjs')), 'bin/lib/old.cjs:42');
   assert.equal(repositoryFrame(stack, inside('bin', 'a b.test.mjs', '..'), 'none'), 'lib/old.cjs:42');
   assert.equal(repositoryFrame(stack.split('\n').slice(0, 4).join('\n'), base, 'none'), 'scripts/count-git-preload.mjs:10');
@@ -188,10 +244,10 @@ test('the summary is ordered by count and then by name, and says what never repo
 });
 
 test('the arguments: the options, the files, and what is refused', () => {
-  assert.deepEqual(parseArgs(['--json', '--top', '3', '--root', 'r', 'a.test.mjs', 'b.test.mjs']),
-    { json: true, top: 3, root: 'r', files: ['a.test.mjs', 'b.test.mjs'] });
-  assert.equal(parseArgs(['a.test.mjs']).top, 25);
-  for (const argv of [[], ['--json'], ['--top', '0', 'a'], ['--top', 'a'], ['--root'], ['--unknown', 'a']]) {
+  assert.deepEqual(parseArgs(['--json', '--top', '3', '--frames', '2', '--root', 'r', 'a.test.mjs', 'b.test.mjs']),
+    { json: true, top: 3, frames: 2, root: 'r', files: ['a.test.mjs', 'b.test.mjs'] });
+  assert.deepEqual([parseArgs(['a.test.mjs']).top, parseArgs(['a.test.mjs']).frames], [25, 1]);
+  for (const argv of [[], ['--json'], ['--top', '0', 'a'], ['--top', 'a'], ['--frames', '0', 'a'], ['--frames'], ['--root'], ['--unknown', 'a']]) {
     assert.equal(typeof parseArgs(argv).error, 'string', argv.join(' '));
   }
 });

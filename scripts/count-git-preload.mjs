@@ -23,6 +23,7 @@ import { promisify } from 'node:util';
 export const OUT_VARIABLE = 'COUNT_GIT_OUT';
 export const ROOT_VARIABLE = 'COUNT_GIT_ROOT';
 export const TEST_FILE_VARIABLE = 'COUNT_GIT_TEST_FILE';
+export const FRAMES_VARIABLE = 'COUNT_GIT_FRAMES';
 
 const SELF = fileURLToPath(import.meta.url);
 const WRAPPED = ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork'];
@@ -75,10 +76,15 @@ export function below(root, file) {
   return relative.split(path.sep).join('/');
 }
 
-/** The first frame of `stack` that is in a file below `root` and is not `self`, as `path:line`. */
-export function repositoryFrame(stack, root, self = SELF) {
+/** The caller in `stack`: its first `frames` distinct frames in files below `root` that are not `self`,
+ * innermost first, each as `path:line`, joined with ` < ` (`git.mjs:10 < review.mjs:20`). One frame names the
+ * line that started the process, often a helper every caller shares; more say who asked. A stack with fewer
+ * such frames gives what it has. */
+export function repositoryFrame(stack, root, self = SELF, frames = 1) {
+  const found = [];
   for (const line of String(stack).split('\n')) {
-    const frame = line.trim().replace(/^at /, '');
+    // `at fn (place)`, `at place`, and both after `async `, which V8 prints for a frame an `await` resumed.
+    const frame = line.trim().replace(/^at (async )?/, '');
     const place = frame.endsWith(')') ? frame.slice(frame.indexOf('(') + 1, -1) : frame;
     const match = /^(.+):(\d+):\d+$/.exec(place);
     if (!match || match[1].startsWith('node:')) continue;
@@ -89,9 +95,10 @@ export function repositoryFrame(stack, root, self = SELF) {
       continue;
     }
     const inside = path.isAbsolute(file) && path.relative(self, file) !== '' ? below(root, file) : null;
-    if (inside) return `${inside}:${match[2]}`;
+    if (inside && !found.includes(`${inside}:${match[2]}`)) found.push(`${inside}:${match[2]}`);
+    if (found.length >= frames) break;
   }
-  return '(outside the repository)';
+  return found.length > 0 ? found.join(' < ') : '(outside the repository)';
 }
 
 /** The stack of the caller, deeper than the default ten frames: a helper may sit far below a test. */
@@ -112,6 +119,7 @@ function install(out) {
     process.env[TEST_FILE_VARIABLE] = path.resolve(process.argv[1]);
   }
   const testFile = process.env[TEST_FILE_VARIABLE] ?? null;
+  const frames = Math.max(1, Number.parseInt(process.env[FRAMES_VARIABLE], 10) || 1);
   const totals = { other: 0, shell: 0, nodes: 0 };
   const git = new Map();
   let depth = 0;
@@ -140,7 +148,7 @@ function install(out) {
   const withCounting = (arg) => {
     const env = arg && typeof arg === 'object' && !Array.isArray(arg) ? arg.env : null;
     if (!env || typeof env !== 'object' || env[OUT_VARIABLE] !== undefined) return arg;
-    const added = { [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, NODE_OPTIONS: `${env.NODE_OPTIONS ?? ''} --import=${import.meta.url}`.trim() };
+    const added = { [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames), NODE_OPTIONS: `${env.NODE_OPTIONS ?? ''} --import=${import.meta.url}`.trim() };
     if (testFile) added[TEST_FILE_VARIABLE] = testFile;
     return { ...arg, env: { ...env, ...added } };
   };
@@ -151,20 +159,25 @@ function install(out) {
     const wrapper = function (...args) {
       if (depth > 0) return original.apply(this, args);
       const call = describeCall(name, args);
-      const caller = call.git ? repositoryFrame(stackHere(), root) : null;
+      const caller = call.git ? repositoryFrame(stackHere(), root, SELF, frames) : null;
       const started = performance.now();
       let result;
       depth += 1;
       try {
         result = original.apply(this, args.map(withCounting));
       } catch (error) {
-        // A sync call throws for a process that ran and failed (`execSync` on a non-zero exit, a timeout),
-        // which counts, and for arguments Node refuses (`ERR_INVALID_ARG_TYPE`), which start nothing.
-        if (sync && !String(error?.code).startsWith('ERR_')) count(call, caller, started)();
+        // A sync call throws for a process that ran and failed (`execSync` on a non-zero exit, a timeout): Node
+        // puts its pid on the error, and it counts. A command that is not there (ENOENT, pid 0) and arguments
+        // Node refuses (no pid at all) started nothing.
+        if (sync && error?.pid > 0) count(call, caller, started)();
         throw error;
       } finally {
         depth -= 1;
       }
+      // `spawnSync` and the async functions also return when nothing started: a result with an `error` and
+      // pid 0, a child without a pid. `execSync` and `execFileSync` return the output of a process that ran.
+      const ran = name === 'execSync' || name === 'execFileSync' || result?.pid > 0;
+      if (!ran) return result;
       const ended = count(call, caller, started);
       if (sync) ended();
       else result?.once?.('close', ended); // no `error` listener: that would hide a failed start from the caller

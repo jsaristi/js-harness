@@ -1,54 +1,64 @@
 #!/usr/bin/env node
 // Counts the git processes that test files start:
 //
-//   node scripts/count-git.mjs [--json] [--top <n>] [--root <dir>] <test file…>
+//   node scripts/count-git.mjs [--json] [--top <n>] [--frames <n>] [--root <dir>] <test file…>
 //
-// The test gate of this repository is some fifty thousand git processes, and a cut in them is proven by a
-// count (odd/tasks/gate-log.md, S3). This runs `node --test <files>` with scripts/count-git-preload.mjs in
+// The test gate of this repository is some fifteen thousand git processes (15,467 on 2026-10-11, counted
+// with this), and a cut in them is proven by a count (odd/tasks/gate-log.md, S3). This runs `node --test <files>` with scripts/count-git-preload.mjs in
 // every Node process of the run, lets the output of the tests through as it is, and prints after it what
-// the processes reported: the git processes in total, by git sub-command, by the first frame of the caller
-// that is a file of this repository, and by test file. It exits with the exit code of the test run.
+// the processes reported: the git processes in total, by git sub-command, by the caller (its first frame
+// that is a file of this repository), and by test file. It exits with the exit code of the test run.
 //
 // - `--json` prints the report as JSON on stdout, alone; the output of the tests goes to stderr then.
 // - `--top <n>` is how many callers the text report lists (25); the JSON always has all of them.
+// - `--frames <n>` is how deep a caller is (1): with more, a helper that asks git for everybody is split by
+//   who called it, `helper.mjs:10 < review.mjs:20 < review.test.mjs:30`, innermost first.
 // - `--root <dir>` is the folder whose files count as callers: this repository unless said otherwise.
-// The counts travel through one temporary file, removed when the run ends, also when it fails.
+// The counts travel through one temporary file, removed when the test run ends, passed or failed. It stays
+// behind when the tool itself is killed: no signal is handled here.
+//
+// The count changes what it counts in one way: a child started with an environment its caller wrote out
+// is handed the counting variables too, so a test that asserts the exact environment of a child fails
+// under this tool and passes without it (five of `evals/` did in the whole suite, 2026-10-11). The counts
+// of such a run stand; its exit code is not the suite's.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { OUT_VARIABLE, ROOT_VARIABLE, TEST_FILE_VARIABLE, below } from './count-git-preload.mjs';
+import { FRAMES_VARIABLE, OUT_VARIABLE, ROOT_VARIABLE, TEST_FILE_VARIABLE, below } from './count-git-preload.mjs';
 
 const PRELOAD = fileURLToPath(new URL('./count-git-preload.mjs', import.meta.url));
 const REPO_ROOT = path.resolve(path.dirname(PRELOAD), '..');
-const USAGE = 'usage: node scripts/count-git.mjs [--json] [--top <n>] [--root <dir>] <test file…>';
+const USAGE = 'usage: node scripts/count-git.mjs [--json] [--top <n>] [--frames <n>] [--root <dir>] <test file…>';
 const NOT_SEEN = 'not seen: the processes git starts itself (hooks, `git maintenance`), anything started by a non-Node child, '
   + 'git after the first word of a shell string, and what a Node process started when it was killed before its exit.';
 
 /** The options and test files of the command line, or `{ error }`. */
 export function parseArgs(argv) {
-  const options = { json: false, top: 25, root: REPO_ROOT, files: [] };
+  const options = { json: false, top: 25, frames: 1, root: REPO_ROOT, files: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--json') options.json = true;
-    else if (arg === '--top') options.top = Number(argv[index += 1]);
+    else if (arg === '--top' || arg === '--frames') options[arg.slice(2)] = Number(argv[index += 1]);
     else if (arg === '--root') options.root = argv[index += 1];
     else if (arg.startsWith('--')) return { error: `unknown option ${arg}` };
     else options.files.push(arg);
   }
-  if (!Number.isInteger(options.top) || options.top < 1) return { error: '--top takes a whole number, 1 or more' };
+  for (const name of ['top', 'frames']) {
+    if (!Number.isInteger(options[name]) || options[name] < 1) return { error: `--${name} takes a whole number, 1 or more` };
+  }
   if (!options.root) return { error: '--root takes a folder' };
   if (options.files.length === 0) return { error: 'no test file given' };
   return options;
 }
 
 /** The environment of the test run: `base` with the preload added to whatever NODE_OPTIONS holds, and the
- * two variables the preload reads. NODE_TEST_CONTEXT goes: under it (this tool run from a test) `node --test`
+ * variables the preload reads. NODE_TEST_CONTEXT goes: under it (this tool run from a test) `node --test`
  * takes itself for a test file of the run above and runs nothing. */
-export function runEnv(base, { out, root }) {
-  const env = { ...base, [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root };
+export function runEnv(base, { out, root, frames = 1 }) {
+  const env = { ...base, [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames) };
   delete env.NODE_TEST_CONTEXT;
   delete env[TEST_FILE_VARIABLE];
   const option = `--import=${pathToFileURL(PRELOAD).href}`;
@@ -158,7 +168,7 @@ function main(argv) {
   try {
     run = spawnSync(process.execPath, ['--test', ...options.files], {
       stdio: ['inherit', options.json ? 2 : 'inherit', 'inherit'],
-      env: runEnv(process.env, { out, root }),
+      env: runEnv(process.env, { out, root, frames: options.frames }),
     });
     counts = readCounts(out);
   } finally {
@@ -170,7 +180,7 @@ function main(argv) {
   }
   const exitCode = run.status ?? 1; // ended by a signal: no exit code, and not a pass
   const summary = summarize(counts.lines, { runnerPid: run.pid, root, unreadable: counts.unreadable });
-  if (options.json) console.log(JSON.stringify({ exitCode, files: options.files, ...summary, notSeen: NOT_SEEN }, null, 2));
+  if (options.json) console.log(JSON.stringify({ exitCode, files: options.files, frames: options.frames, ...summary, notSeen: NOT_SEEN }, null, 2));
   else console.log(renderReport(summary, { top: options.top, byFile: options.files.length > 1 }));
   return exitCode;
 }
