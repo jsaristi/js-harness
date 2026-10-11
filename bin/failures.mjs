@@ -21,14 +21,21 @@ const readText = (absolute) => fs.readFileSync(absolute, 'utf8');
 /** `n` things, in the singular for one: `1 failure`, `2 failures`. */
 const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
+/** Whether `target` is a path below `root`, both absolute. */
+function isBelow(root, target) {
+  const inside = path.relative(root, target);
+  return inside !== '' && inside.split(path.sep)[0] !== '..' && !path.isAbsolute(inside);
+}
+
 /** The content of the file at `file`, a path from the top of `root`, or `null` when it is gone,
  * cannot be read or lies outside `root`: the register is never a reason to open a file of another
- * project. */
+ * project. Outside is judged twice, as the path is written and as the disk resolves it, because a
+ * link or a junction inside the project can point out of it. */
 function readUnder(root, file, readFile) {
   const absolute = path.resolve(root, file);
-  const inside = path.relative(root, absolute);
-  if (inside === '' || inside.split(path.sep)[0] === '..' || path.isAbsolute(inside)) return null;
+  if (!isBelow(root, absolute)) return null;
   try {
+    if (!isBelow(fs.realpathSync(root), fs.realpathSync(absolute))) return null;
     return readFile(absolute);
   } catch {
     return null;

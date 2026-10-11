@@ -346,7 +346,8 @@ would be one more statement that can be false, in a file that exists to count th
 - `once`: seen once, nothing owed. Nothing is asked of it.
 - `repeated`: seen twice or more, and no `Control`.
 - `owed`: the document holds the phrase in a checkbox item that is not checked (`- [ ]`). A
-  list item with no checkbox owes nothing.
+  list item with no checkbox owes nothing, under such an item too; nor does a task kept in a
+  comment or shown inside a fence, a fence indented under an item included.
 - `owed, stale`: it does not: the document is gone, or the task was checked off and the entry
   still says owed.
 - `controlled`: the path holds the phrase and no sighting is later than `since`.
@@ -357,7 +358,7 @@ would be one more statement that can be false, in a file that exists to count th
 
 What the row refuses, and what it only counts. It refuses what the register alone shows, which
 the session editing it can always repair: an entry with no text, no class or no sighting; a
-class the file does not declare; an id that is not in the shape, is repeated or is out of order;
+class the file does not declare, or declares twice; an id that is not in the shape, is repeated or is out of order;
 a date that is no date; a field it does not know or cannot read; a control in a shape it does
 not know; a fence left open. Each refusal says what is missing and how it is written. Every
 state that depends on another file, or on another day, is counted and printed with the ids on
@@ -1241,6 +1242,21 @@ names it, and the entry stays open until it does.
   command refused a range whose tracked files had uncommitted changes, which is right of it.
   Nothing was spent. It is launched again after this entry is committed, and the worktree is
   not touched while it runs.
+- 2026-10-11, the Codex review of `340e960..8ee13e9`, in a turn of the gate lock (17:30 to
+  17:48): 4 parts, 792,965 input tokens (592,768 cached) and 7,762 output in 265 s, which is
+  524 input tokens a changed line against a plan of 892; recorded. Two parts were found
+  correct and two incorrect, with five findings of the second priority, each seen wrong
+  through a script that calls the functions before its fix and right after it: a link or a
+  junction inside the project let a control's phrase be found in a file of another project
+  (the path is now judged as the disk resolves it too); a class declared twice was counted
+  twice (refused now); a task kept in a comment, a checkbox shown in a fence indented under a
+  task, and a plain bullet under an unchecked task each made a control read as owed (none
+  does now). The route was inline, against the rule that two files that are not mechanical go
+  to a writer: this session had read both files whole in the hour before, a writer would have
+  read them again, and the plan's five-hour window stood at 84 percent with him away. The
+  tests were not run by the runner before the commit, because a gate ran the whole time; the
+  commit's gate runs them. The real register reads the same after the fixes: 59 failures, 17
+  not settled.
 
 ## Next step
 In this order. (1) The reviews of what follows `5b754dd`:

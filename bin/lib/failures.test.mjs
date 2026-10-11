@@ -375,6 +375,13 @@ test('a class shown inside a fence under "## Classes" is not declared', () => {
   assert.deepEqual(errors, []);
 });
 
+test('a class declared twice is refused, so no class is counted twice', () => {
+  const text = ['## Classes', '- `tool` — a command failed', '- `tool` — the same class again', '', '## Entries', '', ...entry('some-failure', '- Class: tool', SEEN), ''].join('\n');
+  const { classes, errors } = parseRegister(text);
+  assert.deepEqual(classes, ['tool']);
+  refusedOnce(errors, /^class "tool" is declared twice under "## Classes": declare it once/);
+});
+
 test('a register with no "## Entries" section is refused, so its entries are not lost without a word', () => {
   refusedOnce(parseRegister(['## Classes', '- `machine` — load', '', ...LOAD, ''].join('\n')).errors, /^missing section "## Entries"/);
 });
@@ -423,6 +430,44 @@ test('a list item with no checkbox owes nothing, so a control owed names a check
   const document = ['## Next', '- T7 the row names the entries that are not settled', '- [ ] T8 the command prints one entry whole', ''].join('\n');
   assert.equal(holdsPhrase(document, 'the row names the entries that are not settled', { unchecked: true }), false);
   assert.equal(holdsPhrase(document, 'the command prints one entry whole', { unchecked: true }), true);
+});
+
+test('a task kept inside a comment owes nothing', () => {
+  const document = ['- [x] T1 done', '<!--', '- [ ] T9 an old task kept in a comment', '-->', '- [ ] T2 a task <!-- with a note aside --> still owed', ''].join('\n');
+  assert.equal(holdsPhrase(document, 'an old task kept in a comment', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'with a note aside', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'a task', { unchecked: true }), true);
+  assert.equal(holdsPhrase(document, 'an old task kept in a comment'), true, 'a control in place is looked for in the whole file');
+});
+
+test('a fence indented under a task is not part of it, and a checkbox inside it is no task', () => {
+  const document = [
+    '- [ ] T4 the gate stops early',
+    '    ```',
+    '    - [ ] T6 an example of a task, under a task',
+    '    the phrase only an example holds',
+    '    ```',
+    '- [ ] T5 the row prints every entry',
+    '    ~~~~',
+    '    ```',
+    '    a line between two kinds of marker',
+    '    ~~~~',
+    '',
+  ].join('\n');
+  assert.equal(holdsPhrase(document, 'an example of a task', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the phrase only an example holds', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'a line between two kinds of marker', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'the gate stops early', { unchecked: true }), true);
+  assert.equal(holdsPhrase(document, 'the row prints every entry', { unchecked: true }), true);
+});
+
+test('a list item with no checkbox under an unchecked task ends it', () => {
+  const document = ['- [ ] Another task', '  - the gate stops before its sensors', '- [ ] A third task', '  1. a numbered note under the task', '  and a line after the note', ''].join('\n');
+  assert.equal(holdsPhrase(document, 'the gate stops before its sensors', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'a numbered note under the task', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'and a line after the note', { unchecked: true }), false);
+  assert.equal(holdsPhrase(document, 'Another task', { unchecked: true }), true);
+  assert.equal(holdsPhrase(document, 'A third task', { unchecked: true }), true);
 });
 
 test('a wrapped list item counts as one item, and ends where the next item or a blank line begins', () => {

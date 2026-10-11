@@ -29,6 +29,11 @@ const CONTINUATION_PATTERN = /^\s+\S/;
 // A class is declared by a list item that opens with its id in a code span.
 const CLASS_PATTERN = /^\s*[-*+]\s+`([^`]+)`/;
 const SINCE_PATTERN = /^ — since (\S+)$/;
+// A list item, with a checkbox or without one: `- text`, `* text`, `1. text`, `2) text`.
+const LIST_ITEM_PATTERN = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
+// A fence indented by four spaces or more, as one under a list item is: the tokenizer takes a fence
+// only up to three, so it reads this one, and what it holds, as text.
+const NESTED_FENCE_PATTERN = /^\s{4,}(`{3,}|~{3,})/;
 
 // Refused, and not read around: it would swallow every entry after it without a word.
 const OPEN_FENCE =
@@ -198,6 +203,7 @@ export function parseRegister(markdown) {
   const fenceLeftOpen = tokens.at(-1).fence === true;
 
   const classes = [];
+  const declaredTwice = new Set();
   const drafts = [];
   let section = null; // the title of the `## ` section being read
   let hasEntries = false;
@@ -209,8 +215,9 @@ export function parseRegister(markdown) {
       hasEntries ||= section === 'Entries';
       draft = null;
     } else if (section === 'Classes') {
-      const declared = token.fence ? null : token.line.match(CLASS_PATTERN);
-      if (declared) classes.push(declared[1].trim());
+      const declared = token.fence ? null : token.line.match(CLASS_PATTERN)?.[1].trim();
+      if (declared && classes.includes(declared)) declaredTwice.add(declared);
+      else if (declared) classes.push(declared);
     } else if (section === 'Entries' && level === 3) {
       draft = { id: token.heading.title, lines: [token.line], text: [], fields: [], open: null, stray: null };
       drafts.push(draft);
@@ -219,7 +226,8 @@ export function parseRegister(markdown) {
     }
   }
 
-  const errors = [];
+  // A class kept twice would be counted twice, with every entry and sighting of it.
+  const errors = [...declaredTwice].map((id) => `class "${id}" is declared twice under "## Classes": declare it once`);
   const entries = [];
   const ids = new Set();
   let previous = null; // the id of the entry above, among the ids that are in the shape
@@ -261,16 +269,26 @@ export function sightings(entry) {
   return [...unique.values()].sort((a, b) => compare(a.date, b.date) || compare(a.evidence, b.evidence));
 }
 
-/** The list items of `markdown` that are not checked off, one string each: a wrapped item is one
- * item, ended by the next item, a blank line, a heading or a fence. Items inside a fence are none. */
+/** The checkbox items of `markdown` that are not checked off, one string each: a wrapped item is one
+ * item, ended by the next list item, with a checkbox or without one, a blank line, a heading or a
+ * fence. Items inside a fence are none, a fence indented under an item included, and what a comment
+ * holds is not read: a task kept in a comment or shown as an example owes nothing. */
 function uncheckedItems(markdown) {
   const items = [];
   let open = false; // whether the lines that follow continue the last item of `items`
-  for (const token of tokenize(markdown)) {
-    if (token.step) {
+  let nested = null; // the marker of a fence indented under a list item, which the tokenizer reads as text
+  for (const token of tokenize(markdown, { stripComments: true })) {
+    const marker = token.fence ? null : token.line.match(NESTED_FENCE_PATTERN)?.[1];
+    if (nested) {
+      // The fence ends at a line that holds only its marker, as long or longer.
+      if (marker?.[0] === nested[0] && marker.length >= nested.length && token.line.trim() === marker) nested = null;
+    } else if (marker) {
+      nested = marker;
+      open = false;
+    } else if (token.step) {
       open = !token.step.done;
       if (open) items.push(token.step.text);
-    } else if (open && !token.fence && !token.heading && CONTINUATION_PATTERN.test(token.line)) {
+    } else if (open && !token.fence && !token.heading && CONTINUATION_PATTERN.test(token.line) && !LIST_ITEM_PATTERN.test(token.line)) {
       items[items.length - 1] += ` ${token.line}`;
     } else {
       open = false;

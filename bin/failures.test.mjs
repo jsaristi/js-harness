@@ -218,6 +218,28 @@ test('a path that leaves the project is answered as not held, and nothing is rea
   });
 });
 
+test('a link inside the project that points out of it is answered as not held, and nothing is read', async () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-failures-out-'));
+  try {
+    fs.writeFileSync(path.join(outside, 'gate.test.mjs'), TEST_FILE);
+    await inProject({ 'bin/gate.test.mjs': TEST_FILE }, (dir) => {
+      // A junction on Windows, which needs no privilege; a symbolic link elsewhere.
+      fs.symlinkSync(outside, path.join(dir, 'linked'), 'junction');
+      const read = [];
+      const readFile = (absolute) => {
+        read.push(absolute);
+        return fs.readFileSync(absolute, 'utf8');
+      };
+      const holds = holdsUnder(dir, readFile);
+      assert.equal(holds('linked/gate.test.mjs', 'two gates never run together', {}), false);
+      assert.deepEqual(read, []);
+      assert.equal(holds('bin/gate.test.mjs', 'two gates never run together', {}), true);
+    });
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 // ── The command ─────────────────────────────────────────────────────────────────────────────────
 
 test('with no docs/FAILURES.md every form of the command says so and exits 0', async () => {
