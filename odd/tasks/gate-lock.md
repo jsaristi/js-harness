@@ -1212,35 +1212,81 @@ allows a feature. No spend outside the plan.
   no sensor; nothing runs. What is left does not fit before the app's own compaction, so
   the compaction is asked for here.
 
+- 2026-10-11 · After the compaction (HEAD `4a2fe8c`, clean tree, as this document said). The Codex
+  finding is fixed in commit `4af1292`, inline (two files, one line of code), test first: two
+  cases of the table of staged changes, a submodule that is new and one moved to another
+  commit, each beside a document under `diff.ignoreSubmodules=all`, seen failing (the gate
+  exited 0, its sensors skipped) and then passing with `--ignore-submodules=none` on the
+  list of staged paths. `bin/check.test.mjs`: 122 of 122. Gate green in 1,069 s (03:51:03 to
+  04:08:52), one try, no wait for another gate.
+  Reviews of that commit: Codex (`4a2fe8c..4af1292`, 1 part, 30 s, 69,346 input tokens,
+  36,608 cached, plan 73,000 to 240,000, guard at 300,000): "the patch is correct", no
+  finding, recorded. The feature's Codex spend: 5,955,706 of 6.5 million; 544,294 left.
+  gentle-ai (`74e473c..4af1292`): medium, 3 paths, 349 lines, not due (under budget).
+  `origin/main` (`1d0a732`, 36 commits, 18 files) is merged in: `43f05e0`, no conflict.
+- 2026-10-11 · The bound is in question again, and why. A gate of another session on the tree of main
+  (`1d0a732`) timed out at 1,200 s (03:27:59 to 03:48:06); nothing of this session ran a
+  test in that time (git alone, and a wait on that gate's process). This session's own gate
+  of 1,069 s is 255 s over its slowest before on a tree 35 lines apart. What the process
+  look does not see, found by the orchestrator and measured here: a video playing in Chrome
+  since 03:24:56 (about 1.4 logical processors), and a TypeScript language server, pid 4536,
+  which is this session's own (its parent is this session's process, started 2026-10-09
+  22:41:11) and used 7.1 and 7.2 CPU-seconds in two samples of 5 s with no test running.
+  Both together: 17 to 19 CPU-seconds of the 40 this machine gives in 5 s, taken before a
+  gate starts. The gates of 671 to 833 s ran with Chrome open and no sound. So a gate's
+  wall time on this machine moves by a third with what its owner does on it, and a bound
+  set near the measured run fails for reasons that are not the code.
+
+- 2026-10-11 · The language server was stopped at 04:12:40 (`Stop-Process`, this session's own child;
+  the whole machine went from 17.4 to 8.5 CPU-seconds per 5 s, Chrome's video about 6 of
+  them). Then the whole suite on `43f05e0` (main and this branch), by file, under
+  `js-harness gate`: 867 s (04:12:50 to 04:27:16), 2,975 tests, 2,965 passed, 10 skipped,
+  none failed; the load after it 4.8 CPU-seconds per 5 s. By file, wall time, files side
+  by side: `bin/codex-review.test.mjs` 865.8 s, which is the run; `evals/runner.test.mjs`
+  547.0; `bin/check-codex-reviews.test.mjs` 514.8; `evals/isolation-probe.test.mjs` 452.5;
+  `evals/task-proof.test.mjs` 363.1; `evals/configs.test.mjs` 246.5; `bin/check.test.mjs`
+  128.8. What main added: `evals/subagents-report.test.mjs` 2.3 s,
+  `evals/transcript-usage.test.mjs` 0.9 s, `scripts/practice-lib.test.mjs` 0.2 s.
+  The choice about the bound, mine as the orchestrator put it and told to it before the
+  gate: it stays at 1,200 s. The tests of pull requests 53 and 54 are not what moved the
+  time; main without this branch builds the long file's fixtures for each test (640 s
+  alone there, 490 s here) and so stood near its bound, and the two loads put it over.
+  With this branch on main the margin is 333 s under the video. Raising the bound would
+  hide the next loss.
+  The delivery gate, by hand on `43f05e0` with this document modified and nothing staged
+  (`npm run check` after a look at the process list, `gate-by-hand.ps1`): green, 832 s
+  (04:28:11 to 04:42:03), one try. Its rows: `PASS budget` 1499 of 1500, `PASS contracts`
+  14 checked, `PASS tests`, `INFO review` passive (this document alone), `INFO
+  codex-review` 14 code commits since origin/main, all covered. Load before it 5.6
+  CPU-seconds per 5 s, after it 6.0; the video stopped during it. Two other
+  `tsserver.js` processes were alive (10176, 21056), neither of them hot.
+  `docs/ROADMAP.md` says the figures of the merged tree and what no session saw.
+
 ## Next
-After the compaction, in this order, nothing of it started:
-1. The Codex finding above: one writer or inline (two files, `bin/check.mjs` and
-   `bin/check.test.mjs`), test first; its commit and gate (code, so the sensors run).
-2. Codex on that one commit (`codex-review --base 58fce26`): its plan first; 613,640 are
-   left, and if the plan's low figure is over that it is a question of spend, his. Under
-   the guard (`codex-run.ps1`, which looks at the process list, sets this document aside
-   and puts it back). gentle-ai: `review assess --base-ref 74e473c --committed-only` and
-   what it asks for.
-3. The close: `git fetch`, `origin/main` merged in (`1d0a732` on 2026-10-11 merged with no
-   conflict), one gate run on the result by hand (`node bin/js-harness.mjs gate --
-   "npm run check"` or `npm run check` after a look at the process list), since a merge
-   runs no pre-commit hook; T8 checked off; this document's last entries in a commit of
-   documents alone; push; pull request (its text: what the lock covers and does not, the
-   numbers, the shards tried and removed, the two things left for the next slice); the
-   closing notice to the orchestrator, which merges. The session channel waits for that
-   merge. Updating the machine's `js-harness` command stays his.
-For the next slice of the gate, in this order: the gate log; fewer git processes in the
-two long test files; the gate on GitHub. A run that needs the machine quiet, and not only
-its turn (an evals batch that compares durations), is a need the lock does not serve.
+1. This entry and the roadmap's in a commit of documents alone; `node bin/js-harness.mjs
+   contract check odd/tasks/gate-lock.md`; push; pull request (its text is
+   `pr-body.md` in the scratchpad); T8 checked off with the pull request's address in a
+   second commit of documents alone, pushed; the closing notice to the orchestrator, which
+   merges. The session channel waits for that merge. Updating the machine's `js-harness`
+   command stays his, and until it is done the installed command takes no lock.
+For the next slice of the gate, in this order: the gate log, and with it the load on the
+machine said by a gate when it starts (2026-10-11: two gates were slow, one timed out, for
+a video and a language server no session saw); fewer git processes in the two long test
+files; the gate on GitHub. A run that needs the machine quiet, and not only its turn (an
+evals batch that compares durations), is a need the lock does not serve.
 Rules learnt, to keep: a commit that will be reviewed stays under about 1,200 changed
 lines; nothing untracked when a review is assessed; a Codex review wants a clean tree
 (set this document aside with `git stash`, one stash, popped by the same command); no
 review step beside a running gate; a timing is one only with the process list empty
-before and after it; the look finds `evals/suite.mjs` too; a gate's time is estimated
-from whole runs; a writer works in a worktree of its own while a gate runs here.
+before and after it, and with the load on the machine sampled (`load.ps1`): sound, a
+browser and a language server are not in the process look; a session looks for a
+`tsserver.js` of its own (the parent chain, `owner.ps1`) before it blames a tree for a
+slow gate; the look finds `evals/suite.mjs` too; a gate's time is estimated from whole
+runs; a writer works in a worktree of its own while a gate runs here.
 The scripts of this session are in its scratchpad (`commit-after.ps1`, `codex-run.ps1`,
-`review-open.cjs`, `review-capture.cjs`, `mirror-fit.cjs`); gates since T4b, in seconds:
-885, 728, 872, 724, 833, 817, 671, 814.
+`review-open.cjs`, `review-capture.cjs`, `mirror-fit.cjs`, `look.ps1`, `load.ps1`,
+`owner.ps1`, `measure-after.ps1`, `gate-by-hand.ps1`); gates since T4b, in seconds: 885,
+728, 872, 724, 833, 817, 671, 814, 1,069, and on the merged tree 832.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,

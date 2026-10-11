@@ -770,6 +770,14 @@ podamos implementar todo"), each a feature of its own with its own document and 
      runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
      only Markdown, each paying a gate of 13 minutes that no document could fail, since no
      test reads `docs/` or `odd/tasks/`.
+   - What the time of a gate depends on that no session saw (2026-10-11): on main with this
+     slice merged in, the whole suite took 867 s and the gate 832 s, and what pull requests
+     53 and 54 added costs 3.4 s of it. The same hour a gate on main without this slice
+     timed out at 1,200 s and one of this slice took 1,069 s, beside a video playing in a
+     browser and a TypeScript language server of a session spinning at about 1.5 logical
+     processors with nothing to do. The process look counts neither. The bound stays at
+     1,200 s; a gate that says the load on the machine when it starts is for the next
+     slice, with the gate log.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top.
