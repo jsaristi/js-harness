@@ -222,7 +222,9 @@ function sameFolder(one, other) {
  * for a linked worktree, under `worktrees/<name>`, which is its git folder). An environment with none
  * of those variables is asked nothing more.
  *
- * Renames are off, so a file moved into the documents or out of them is listed at both its paths. The
+ * Renames are off, so a file moved into the documents or out of them is listed at both its paths. A
+ * submodule is listed whatever the repository is set to leave out of a diff (`diff.ignoreSubmodules`,
+ * `ignore` in `.gitmodules`): the commit holds its new commit all the same. The
  * names are ended by a NUL and read as they come, since a path may begin with a space. `documents` are
  * named from the top of the repository, so a gate that checks a folder below it skips nothing; under a
  * binding that is asked without it, since git takes the folder a `GIT_DIR` command runs in for the top.
@@ -251,7 +253,8 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
     const index = process.env.GIT_INDEX_FILE;
     if (index !== undefined && !sameFolder(path.dirname(path.resolve(cwd, index)), own)) return null;
   }
-  const paths = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '-z'])?.split('\0').filter(Boolean) ?? [];
+  const listed = git(['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '--ignore-submodules=none', '-z']);
+  const paths = listed?.split('\0').filter(Boolean) ?? [];
   const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
   return paths.length > 0 && paths.every(isDocument) ? paths : null;
 }

@@ -1956,7 +1956,7 @@ test('checkSensors asks git what is staged only where documents are declared and
     // the top of the repository whatever `diff.relative` says, and ended by a NUL, so none is quoted.
     assert.deepEqual(await asked({ sensors: { tests: 'run-tests' }, documents: ['docs/'] }), [
       'git rev-parse --show-prefix',
-      'git diff --cached --name-only --no-renames --no-relative -z',
+      'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z',
     ]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -2192,6 +2192,28 @@ const STAGED = [
       git(repo, 'add', '.');
     },
   },
+  // A submodule is a path of the commit like any other, whatever git is set to leave out of a diff: with
+  // `diff.ignoreSubmodules` git lists neither a submodule that is new nor one moved to another commit.
+  {
+    name: 'a document and a new submodule that git is set to ignore',
+    stage: (repo) => {
+      git(repo, 'config', 'diff.ignoreSubmodules', 'all');
+      writeFile(repo, 'docs/guide.md');
+      git(repo, 'add', 'docs/guide.md');
+      git(repo, 'update-index', '--add', '--cacheinfo', `160000,${'1'.repeat(40)},vendor/lib`);
+    },
+  },
+  {
+    name: 'a document and a submodule moved to another commit, which git is set to ignore',
+    stage: (repo) => {
+      git(repo, 'update-index', '--add', '--cacheinfo', `160000,${'1'.repeat(40)},vendor/lib`);
+      git(repo, ...commitAs, '-m', 'submodule');
+      git(repo, 'config', 'diff.ignoreSubmodules', 'all');
+      writeFile(repo, 'docs/guide.md');
+      git(repo, 'add', 'docs/guide.md');
+      git(repo, 'update-index', '--cacheinfo', `160000,${'2'.repeat(40)},vendor/lib`);
+    },
+  },
   {
     name: 'Markdown alone in a project that declares no documents',
     stage: (repo) => {
@@ -2335,7 +2357,7 @@ test('checkSensors, where the environment binds git to a repository, asks which 
     assert.deepEqual(git.asked, [
       'unbound: git rev-parse --show-prefix --absolute-git-dir',
       'git rev-parse --absolute-git-dir',
-      'git diff --cached --name-only --no-renames --no-relative -z',
+      'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z',
     ]);
     assert.deepEqual(git.leaked, []);
     assert.equal(await ran({ GIT_INDEX_FILE: path.join(own, 'index.lock') }), 0);
@@ -2353,7 +2375,7 @@ test('checkSensors, where the environment binds git to a repository, asks which 
     // No such variable, no such question: `GIT_PREFIX`, which every hook is given, binds nothing.
     const plain = stagedGit(['docs/guide.md']);
     assert.equal(await ran({}, plain), 0);
-    assert.deepEqual(plain.asked, ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative -z']);
+    assert.deepEqual(plain.asked, ['git rev-parse --show-prefix', 'git diff --cached --name-only --no-renames --no-relative --ignore-submodules=none -z']);
   } finally {
     for (const folder of [dir, elsewhere]) fs.rmSync(folder, { recursive: true, force: true });
   }
