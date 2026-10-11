@@ -488,6 +488,11 @@ reader, and that table names this feature as their owner.
   documentation)
 - [x] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
   relief writer, the openings
+- [ ] T1b Three suggestions of the review of T1, carried to the branch of T4b because a fix
+  commit could not be reviewed by Codex inside the cap: a text given before `--relief` or
+  `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
+  one test pipes an opening through the dispatcher's real standard input; the concurrent
+  append test proves its writers overlapped, or starts them on a barrier
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
@@ -667,12 +672,32 @@ reader, and that table names this feature as their owner.
   still open under its new title at that moment, so whether a renamed and live session keeps
   answering to its old title is not shown.
   Tests 1, 2, 3 and 6 wait for him.
+- 2026-10-11 07:13 local, commit `1f9aaa9` (T1). Its gate: `PASS tests npm run test passed`,
+  06:47:21 to 07:02:36, 915 s, one try. gentle-ai: medium risk (`slice_budget_reached`, 1,962
+  lines against `c1b3594`), lineage `review-655ea3ee609a50ec`, one lens (reliability),
+  approved and acknowledged; three suggestions that open no correction, taken as T1b below.
+  Codex on `c1b3594..1f9aaa9`, recorded: seven parts, each "correct", no finding, 1,710,534
+  input tokens (1,327,744 cached), 449 s; its plan had printed about 1,613,000 to 8,050,000,
+  so it was run under a stop written for this session (a wrapper that sums the tokens after
+  each part and ends the run when the next part's estimate would pass what was left; it did
+  not have to act). Three parts said their file-writing tests could not run in Codex's
+  read-only sandbox: those tests are proven by the gate, not by Codex.
+  Codex for the feature: 2,780,275 of 3 million input tokens after two slices of five;
+  219,725 are left, less than the smallest review so far (257,052). So no further code commit
+  of this feature can be reviewed by Codex, or pushed, until he answers on the cap: the three
+  suggestions are therefore not fixed in this pull request, and T4b is built and gated but
+  waits for his answer before its Codex review and its push. For the harness: `codex-review`
+  has no bound of its own on a run, and a feature's cap is kept by hand; a `--budget <tokens>`
+  that ends a run at a part boundary, and a line of the plan that says what a feature has
+  spent, would make the cap a check (proposed, not built; it belongs to the Codex review
+  feature, not to this one).
 
 ## Next step
-On `feat/session-record` (T1): the commit and its gate, the gentle-ai review, the Codex review
-if its plan fits what is left of the cap (1,930,259 of 3 million), then the second pull
-request. After it T4b, on a new branch from `origin/main`: the channel section of the board,
-`sessions --opening` (which also records which session read which title, point 4), `--quote`,
-the watch that wakes on a notice for the orchestrator, the roster's columns from the record,
-failures 7 and 8. Waiting for him, none blocking T4b: the Codex cap for the feature (in the
-lead's queue); tests owed 1, 2, 3 and 6, each asked before it is run.
+The second pull request (`feat/session-record`: T1) waits for the lead's merge. Next, on a new
+branch from `origin/main`: T1b and T4b, by one delegated writer, test first — the channel
+section of the board, `sessions --opening` (which also records which session read which title,
+point 4), `--quote`, the watch that wakes on a notice for the orchestrator, the roster's
+columns from the record, failures 7 and 8. Its commit and gate and its gentle-ai review are
+run; its Codex review and its push wait for his answer on the cap (in the lead's queue).
+Waiting for him as well, none blocking the build: tests owed 1, 2, 3 and 6, each asked before
+it is run.
