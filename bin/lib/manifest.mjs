@@ -142,6 +142,18 @@ export const entryComponents = [
     pointer: ['hooks', 'SessionStart'],
     entry: () => hookEntry(),
   },
+  {
+    id: 'claude-resume-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => resumeHookEntry(),
+  },
+  {
+    id: 'codex-resume-hook',
+    target: (home) => path.join(home, '.codex', 'hooks.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => resumeHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -150,6 +162,21 @@ function hookEntry() {
   return {
     matcher: 'startup|resume',
     hooks: [{ type: 'command', command: 'js-harness doctor --hook', timeout: 10 }],
+  };
+}
+
+/** `resume --hook` (bin/resume.mjs) registered as a `SessionStart` hook for the matcher `compact`: after
+ * a compaction the session reads its title, its opening and its feature document from files, so nobody
+ * pastes it a resume prompt (odd/tasks/session-channel.md, "Context"). Both hosts match a `SessionStart`
+ * entry against the way the session started, and both name a compaction `compact` (their hooks
+ * documentation, read on 2026-10-11; in this project's Claude Code transcripts the hooks of other tools
+ * ran under `SessionStart:compact` after 40 compactions). It is an entry of its own because the doctor's
+ * matcher must not fire on a compaction. Fifteen seconds: the command asks git a handful of questions,
+ * each with a limit of its own. */
+function resumeHookEntry() {
+  return {
+    matcher: 'compact',
+    hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }],
   };
 }
 
@@ -330,20 +357,28 @@ function removeEntryFromFile(target, pointer, entry, createdFile) {
 /** Installs every entry component, carrying forward `createdFile` from a previous manifest record
  * for the same target file (matched by path) rather than recomputing it from "does the file exist
  * right now" — a file js-harness created on the first install still existed for every later
- * install/sync call, but js-harness must still remember it made it, so uninstall can delete it. */
+ * install/sync call, but js-harness must still remember it made it, so uninstall can delete it.
+ *
+ * Two components can graft an entry on the same file (the doctor's hook and the resume hook), and who
+ * created the file is a fact of the file, not of the entry: the second entry of a first install finds the
+ * file the first one has just made, and recorded as not created it would be the last one `uninstall`
+ * removes and would leave the file behind. So every entry of one file carries what the first one of this
+ * run settled for it. */
 function installEntries(home, previousManifest) {
+  const createdByTarget = new Map();
   return entryComponents.map((component) => {
     const target = component.target(home);
     const pointer = component.pointer;
     const entry = component.entry();
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
     const result = appendEntryToFile(target, pointer, entry);
+    if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
     return {
       path: target,
       pointer,
       entry,
       sha256: sha256(JSON.stringify(entry)),
-      createdFile: previousEntry ? previousEntry.createdFile : result.createdFile,
+      createdFile: createdByTarget.get(target),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
     };

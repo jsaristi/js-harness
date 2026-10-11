@@ -23,6 +23,9 @@
 // The channel is the record `notify` writes under the harness home (bin/lib/channel.mjs): the board
 // prints its last notices and the last messages between sessions, gives a session opened from the phone
 // the title of the opening it read, and a watch returns for a notice written to the orchestrator.
+// A session's row says the context it holds, the room left before the host compacts it and what its last
+// task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the pause, 85% of the
+// window, to judge whether what is left fits. A watch returns once when a session reaches the pause.
 // `--opening <title>` prints the opening stored for a session, and `--quote <transcript> <line>` the
 // entry at a line of a transcript only when the user sent it: the check a session runs before it takes
 // words another session carried as his.
@@ -33,11 +36,11 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, shareOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
-  '                           [--context-window <tokens>] [--context-limit <tokens>|<n>%]',
+  '                           [--context-window <tokens>] [--context-pause <tokens>|<n>%] [--context-compaction <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
   '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>] [--relief <path>]',
   '       js-harness sessions --address orchestrator|<number> [--hours <n>] [--self <session id>]',
@@ -84,18 +87,26 @@ function plainNumber(value, { decimals }) {
 // and one above it fires after a millisecond, which would make the watch look at the machine in a loop.
 const MAX_WAIT = 2147483;
 
-/** `--context-limit` as tokens: a whole number of them, or `<N>%` of `window` (above zero, up to 100).
- * `NaN` for anything else. */
-function contextLimitOf(spec, window) {
+/** `--context-pause` or `--context-compaction` as tokens: a whole number of them, or `<N>%` of `window`
+ * (above zero, up to 100). `NaN` for anything else. */
+function contextMarkOf(spec, window) {
   if (!spec.endsWith('%')) return plainNumber(spec, { decimals: false });
   const percent = plainNumber(spec.slice(0, -1), { decimals: true });
-  return percent > 0 && percent <= 100 ? Math.round((window * percent) / 100) : NaN;
+  return percent > 0 && percent <= 100 ? shareOf(window, percent) : NaN;
 }
+
+// The two marks of a context a flag sets, each with the share of the window it is by default and what it
+// is: the pause is the user's rule, the compaction is the host's (bin/lib/sessions.mjs, the context figures).
+const CONTEXT_MARKS = new Map([
+  ['--context-pause', { key: 'contextPause', percent: DEFAULT_CONTEXT_PAUSE_PERCENT }],
+  ['--context-compaction', { key: 'contextCompactionDefault', percent: DEFAULT_CONTEXT_COMPACTION_PERCENT }],
+]);
 
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
 function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, contextLimitSpec: `${DEFAULT_CONTEXT_LIMIT_PERCENT}%`, watch: false };
+  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false };
+  const marks = new Map([...CONTEXT_MARKS].map(([flag, mark]) => [flag, `${mark.percent}%`]));
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
   // would pass for flags.
   const paths = new Map([['--cwd', 'cwd'], ['--claude-home', 'claudeHome'], ['--tmp', 'tmp'], ['--relief', 'relief']]);
@@ -124,8 +135,12 @@ function parseArgs(argv) {
     } else if (token === '--context-window') {
       parsed.contextWindow = plainNumber(requireValue(argv, i, token), { decimals: false });
       if (!(parsed.contextWindow > 0)) throw new SessionsArgError('--context-window takes a whole number of tokens above zero');
+    } else if (CONTEXT_MARKS.has(token)) {
+      marks.set(token, requireValue(argv, i, token));
     } else if (token === '--context-limit') {
-      parsed.contextLimitSpec = requireValue(argv, i, token);
+      // The flag of the 73% mark. Taken for the pause it would move the pause to wherever an old command
+      // line put the mark; refused as unknown it would not say where to go.
+      throw new SessionsArgError('--context-limit left with the 73% mark: --context-pause sets where a session pauses (85% of the window), and --context-compaction where the host compacts it when the session has measured no point of its own (93%)');
     } else if (token === '--address') {
       parsed.address = roleNamed(requireValue(argv, i, token));
       if (parsed.address === null) throw new SessionsArgError('--address takes a role: orchestrator (or ORQ), or the number of a work session');
@@ -164,10 +179,12 @@ function parseArgs(argv) {
   for (const [flag, , what] of answers) {
     if (parsed.watch || parsed.json) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
   }
-  // The limit is read last: as a percentage it is a share of the window, whichever flag came first.
-  const contextLimit = contextLimitOf(parsed.contextLimitSpec, parsed.contextWindow);
-  if (!(contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (73%)');
-  return { ...parsed, contextLimit, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
+  // The marks are read last: as a percentage each is a share of the window, whichever flag came first.
+  for (const [flag, mark] of CONTEXT_MARKS) {
+    parsed[mark.key] = contextMarkOf(marks.get(flag), parsed.contextWindow);
+    if (!(parsed[mark.key] > 0)) throw new SessionsArgError(`${flag} takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (${mark.percent}%)`);
+  }
+  return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 
 // One row of the shared listing (`Format-ProcessRow`, bin/lib/process-tree.mjs) and one `C` line per
@@ -271,7 +288,7 @@ function workFile(work, { sessionDir, tasksDir }, io) {
 /** One session of the board: its transcript's facts plus, for each piece of work with no recorded end,
  * the last write of its file. A transcript that cannot be read, or that the reader cannot turn into
  * facts, is a session with `unavailable` and the reason: one transcript never costs the whole board. */
-function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit, contextWindow }, io) {
+function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault }, io) {
   let text;
   try {
     text = io.readFile(path.join(projectDir, `${id}.jsonl`));
@@ -280,7 +297,7 @@ function readSession(id, modifiedAt, { projectDir, tasksRoot, tail, contextLimit
   }
   let facts;
   try {
-    facts = io.readFacts(text, { tail, contextLimit, contextWindow });
+    facts = io.readFacts(text, { tail, contextWindow, contextPause, contextCompactionDefault });
   } catch (err) {
     return { id, modifiedAt, unavailable: `its transcript could not be read into facts: ${err.message}` };
   }
@@ -374,7 +391,7 @@ export async function sessionsMain(
 
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
-    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextLimit: parsed.contextLimit, contextWindow: parsed.contextWindow };
+    const where = { projectDir, tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug), tail: parsed.tail, contextWindow: parsed.contextWindow, contextPause: parsed.contextPause, contextCompactionDefault: parsed.contextCompactionDefault };
     const read = [];
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
@@ -429,8 +446,13 @@ export async function sessionsMain(
       projectDir,
       hours: parsed.hours,
       contextWindow: parsed.contextWindow,
-      contextLimit: parsed.contextLimit,
-      contextLimitPercent: percentOf(parsed.contextLimit, parsed.contextWindow),
+      // Where a session pauses, and where the host compacts one that has measured no point of its own. That
+      // one is the default and is named so: a session's `contextCompaction` is another thing, the point it
+      // is counted against with whether the session measured it, and one key with two shapes reads wrong.
+      contextPause: parsed.contextPause,
+      contextPausePercent: percentOf(parsed.contextPause, parsed.contextWindow),
+      contextCompactionDefault: parsed.contextCompactionDefault,
+      contextCompactionDefaultPercent: percentOf(parsed.contextCompactionDefault, parsed.contextWindow),
       self,
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,

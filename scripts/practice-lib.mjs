@@ -239,7 +239,7 @@ export function ownsFolder(markerText) {
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
 // What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): two skills
-// for each of two hosts, and one entry in a file of each host.
+// for each of two hosts, and two entries in a file of each host (`HARNESS_HOOKS` below).
 const SKILLS = ['js-harness', 'js-harness-orchestrator'];
 const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
@@ -306,6 +306,55 @@ export function compareSnapshots(before, after) {
     differences.push({ path: file, change: was === null ? 'appeared' : is === null ? 'disappeared' : 'changed' });
   }
   return differences;
+}
+
+// ---- the hook entries of a host file ---------------------------------------------------------------------------------
+
+/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the
+ * event it hangs from, its matcher and its command: the doctor's at the start of a session, and the resume
+ * hook's after a compaction. The test holds this list to what `bin/lib/manifest.mjs` declares
+ * (`entryComponents`), so a journey cannot go on passing against an install that changed. */
+export const HARNESS_HOOKS = Object.freeze([
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook' }),
+]);
+
+/** The commands of the hook entry `entry` as one string (`a && b` for more than one), or `null` when it has
+ * none or is no entry. */
+function entryCommand(entry) {
+  const commands = Array.isArray(entry?.hooks) ? entry.hooks.map((hook) => hook?.command).filter((command) => typeof command === 'string') : [];
+  return commands.length === 0 ? null : commands.join(' && ');
+}
+
+/** What is wrong with the hook entries of a host file after `install`, or `null` when nothing is. `text` is
+ * the content of the file (`.claude/settings.json`, `.codex/hooks.json`) and `seededCommand` the command of
+ * the one entry that was there before, the user's. Nothing is wrong when `hooks.SessionStart` holds that
+ * entry first and untouched in what it runs, and then each entry of `HARNESS_HOOKS` once, in order, with
+ * its matcher and its command: an entry missing, one written twice by a second install, and the right
+ * command under another matcher are each a problem. The message says what was expected and every entry
+ * found, so a failed step shows the file without opening it. */
+export function hostHooksProblem(text, seededCommand) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return 'the file is not JSON';
+  }
+  const entries = data?.hooks?.SessionStart;
+  if (!Array.isArray(entries)) return 'the file holds no list at hooks.SessionStart';
+  const ours = HARNESS_HOOKS.filter((hook) => hook.event === 'SessionStart');
+  const asExpected =
+    entries.length === ours.length + 1 &&
+    entryCommand(entries[0]) === seededCommand &&
+    ours.every((hook, index) => entryCommand(entries[index + 1]) === hook.command && entries[index + 1].matcher === hook.matcher);
+  if (asExpected) return null;
+  const shown = (entry) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return 'not an entry';
+    const command = entryCommand(entry);
+    return `${command === null ? 'no command' : `"${command}"`} (${typeof entry.matcher === 'string' ? `matcher ${entry.matcher}` : 'no matcher'})`;
+  };
+  const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
+  return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(shown).join(' | ')}`;
 }
 
 // ---- the journey -----------------------------------------------------------------------------------------------------

@@ -137,10 +137,20 @@ function logFiles(files) {
   }
 }
 
+/** Which hook a recorded entry is, for the line that says it was registered: its commands, the event it
+ * hangs from (the last key of its pointer) and its matcher. A host file holds more than one of ours (the
+ * doctor's and the resume hook's), and two lines that only name the file would read as one written twice. */
+function hookName(record) {
+  const commands = (record.entry?.hooks ?? []).map((hook) => hook?.command).filter((command) => typeof command === 'string');
+  if (commands.length === 0) return '';
+  const matcher = typeof record.entry.matcher === 'string' ? `, matcher ${record.entry.matcher}` : '';
+  return `: ${commands.join(', ')} (${record.pointer.at(-1)}${matcher})`;
+}
+
 function logEntries(entries) {
   for (const entry of entries ?? []) {
     if (entry.skipped) logSkip(entry);
-    else console.log(`registered hook entry in ${entry.path}`);
+    else console.log(`registered hook entry in ${entry.path}${hookName(entry)}`);
   }
 }
 

@@ -8,18 +8,36 @@ import { parseFeature, tokenize } from './progress.mjs';
 
 const TITLE_LENGTH = 60;
 
-/** The window a context is a share of, in tokens. One reading of this machine, 2026-10-06: the desktop
- * app showed 71% for a session the board gave 342,000 tokens, which is a window of about 480,000. It
- * belongs to the model and the app, so it is a default (`--context-window`), not a constant. */
-export const DEFAULT_CONTEXT_WINDOW = 480000;
+// ---- the context figures ------------------------------------------------------------------------------
+//
+// Every statement the board makes about a context comes from the three figures below, and each says where
+// it comes from. None of them is in a transcript as a figure (no entry of this project's transcripts holds
+// the window or the compaction point as a number, 2026-10-11), so each is a default a flag can replace.
 
-/** The share of the window above which a session is marked as past the limit. It limits nothing: it is
- * where the board says "replace this session before the harness compacts it". Every automatic compaction
- * in this project's transcripts (six of six) fired between 466,887 and 468,151 tokens; 73% of the window
- * is 350,400, which leaves about 115,000 tokens to hand over in, and the user's own manual compactions
- * sat around it (243,607 to 406,565, median 322,517). A new session starts near 84,000. */
-export const DEFAULT_CONTEXT_LIMIT_PERCENT = 73;
-export const DEFAULT_CONTEXT_LIMIT = Math.round((DEFAULT_CONTEXT_WINDOW * DEFAULT_CONTEXT_LIMIT_PERCENT) / 100);
+/** The window a context is a share of, in tokens: the 500,000 the desktop app reports for a session
+ * (odd/tasks/session-channel.md, "Context"). It replaces the 480,000 the board worked out from one
+ * percentage the app showed on 2026-10-06. It belongs to the model and the app, so it is a default
+ * (`--context-window`), not a constant. */
+export const DEFAULT_CONTEXT_WINDOW = 500000;
+
+/** Where the host compacts a session by itself, as a share of the window: the app reports 93%, which is
+ * 465,000 tokens. Six automatic compactions of this project's transcripts fired between 466,887 and
+ * 468,151 tokens, just above it; a seventh fired at 524,781 (2026-10-09, host 2.1.293) in a session whose
+ * reply before it was sent with 523,422, so the point is not the same for every session. That is why a
+ * transcript's own measure wins (`sessionFacts`, `contextCompaction`) and this is only what is said of a
+ * session that has measured none (`--context-compaction`). */
+export const DEFAULT_CONTEXT_COMPACTION_PERCENT = 93;
+
+/** The pause, as a share of the window: the user's rule of 2026-10-10. No session stops, slows or
+ * proposes a cut for a percentage; at 85% it pauses, writes its state in its feature document and judges
+ * whether what is left fits before the compaction. It limits nothing: it is where the board says so and
+ * where a watch wakes (`--context-pause`). */
+export const DEFAULT_CONTEXT_PAUSE_PERCENT = 85;
+
+/** `percent` of `window`, in whole tokens: 93% of 500,000 is 465,000. */
+export function shareOf(window, percent) {
+  return Math.round((window * percent) / 100);
+}
 
 /** `tokens` as a whole percentage of `window`: the number the desktop app shows for a context. */
 export function percentOf(tokens, window) {
@@ -100,6 +118,19 @@ function oneLine(text) {
   return flat.length > TITLE_LENGTH ? `${flat.slice(0, TITLE_LENGTH)}…` : flat;
 }
 
+/** Who gave the instruction `entry` is, `'person'` or `'session'`, or `null` when it is none: what starts
+ * a task for the board (`sessionFacts`, `lastTask`). The person's is a prompt (`promptText`) or anything
+ * else the host marks as sent by a person, which is a paste with nothing typed beside it (`origin.kind:
+ * "human"`; 24 of the 583 such entries of this project's transcripts start with a tag, 2026-10-11). A
+ * session's is a message from another session. A subagent's hand-back, what the host puts in, a task
+ * notification and the result of a tool are part of the work an instruction started, not a new one. */
+function instructionBy(entry) {
+  if (entry.type !== 'user' || entry.isSidechain) return null;
+  if (isPeerMessage(entry)) return peerMessageOf(entry).from === 'session' ? 'session' : null;
+  if (promptText(entry) !== null) return 'person';
+  return !entry.isMeta && isObject(entry.origin) && entry.origin.kind === 'human' ? 'person' : null;
+}
+
 /** Whether `entry` is a message that did not come from the person: a user entry whose `origin.kind` is
  * `peer`. That is how the host writes what another session sent, what a subagent hands back to its
  * parent and what the app itself put in. It marks every one of them `isMeta` (185 of 185 in this
@@ -161,6 +192,27 @@ function contextOf(entry) {
   const tokens = usage.input_tokens + counted(usage.cache_read_input_tokens) + counted(usage.cache_creation_input_tokens);
   if (tokens <= 0) return null;
   return { tokens, model: typeof entry.message.model === 'string' ? entry.message.model : null, at: entry.timestamp ?? null };
+}
+
+/** What a compaction's own entry says, `{ before, after, automatic, at }`, or `null` for any other entry.
+ * The host writes one `compact_boundary` per compaction, with the tokens the session held before it and
+ * after it and what set it off (`trigger`: `auto` when the host did, `manual` when the user asked; 40 of
+ * 40 in this project's transcripts carry the three, 2026-10-11). A count that is not a number is `null`. */
+function compactionOf(entry) {
+  if (entry.type !== 'system' || entry.subtype !== 'compact_boundary') return null;
+  const counted = (value) => (Number.isFinite(value) ? value : null);
+  const said = isObject(entry.compactMetadata) ? entry.compactMetadata : {};
+  return { before: counted(said.preTokens), after: counted(said.postTokens), automatic: said.trigger === 'auto', at: entry.timestamp ?? null };
+}
+
+/** What the stretch of work `stretch` cost, as the board keeps a task: `{ tokens, startedBy, startedAt,
+ * endedAt, compactions }`, or `{ unavailable }` with the reason when the transcript does not say.
+ * `tokens` is how much the context grew from the instruction that started it to its last reply, added up
+ * on both sides of a compaction, and never below zero: the host drops what a context no longer needs. */
+function taskOf(stretch) {
+  if (stretch.blind) return { unavailable: 'a compaction inside its last task does not record the size before it' };
+  if (stretch.replies === 0) return { unavailable: 'no reply of its last task records its token usage' };
+  return { tokens: Math.max(0, stretch.grown + stretch.last - stretch.base), startedBy: stretch.by, startedAt: stretch.startedAt, endedAt: stretch.endedAt, compactions: stretch.compactions };
 }
 
 const isAgent = (name) => name === 'Agent' || name === 'Task';
@@ -238,8 +290,27 @@ function end(work, at, status) {
  *
  * `context` is what the session's last reply was sent with (`contextOf`), or, after a compaction and
  * until the next reply, what the harness says the compaction left. `contextPercent` is its share of
- * `contextWindow` and `pastContextLimit` says whether it is above `contextLimit` (tokens); both are
+ * `contextWindow` and `atContextPause` says whether it is at `contextPause` (tokens) or past it; both are
  * `null` when the context could not be read.
+ *
+ * `contextCompaction` is where the host compacts this session by itself, `{ tokens, measured, at }`: what
+ * the session held at its own latest automatic compaction, with its time, when the transcript records one
+ * (`compactionOf`), and otherwise `contextCompactionDefault` (tokens), with `measured: false`. The
+ * session's own measure wins because the point is the host's and has not been the same for every session.
+ * `contextRoom` is what is left before it, in tokens: below zero for a session already past the point,
+ * `null` with no context.
+ *
+ * `lastTask` is what the last task cost (`taskOf`). A task is the work one instruction started
+ * (`instructionBy`: a prompt of the person, or a message from another session) up to the next one, and
+ * an instruction that arrives before the one before it was answered joins it. The last one is the last
+ * that ended: the stretch the session just finished when it waits, and the one before while it works on
+ * a stretch or has work open, whose cost nobody knows yet. `lastTaskFits` says whether a task of that
+ * cost still fits in `contextRoom`, and is `null` when either is not known. What a transcript cannot
+ * show: which instruction was a whole task and which a one-word answer in the middle of one (each starts
+ * a stretch), what a subagent spent in a context of its own, and what the next task will cost.
+ *
+ * A resumed session writes its earlier entries again, with their ids: an entry seen before starts no
+ * task, costs nothing and measures no compaction a second time.
  *
  * `permissionMode` is the one the last user entry that records it has (`bypassPermissions`, `auto`), and
  * `null` when none does: the host delivers a message only between sessions of one class, so it says
@@ -253,8 +324,21 @@ function end(work, at, status) {
  * (`sentMessage`). `id` is `null` until the result is written, and when the result gives none. A
  * follow-up to a subagent is not one of them: it is work (`resumedWork`), or nothing. A resumed session
  * writes earlier entries again, so each message is listed once. */
-export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT, contextWindow = DEFAULT_CONTEXT_WINDOW } = {}) {
+export function sessionFacts(
+  text,
+  {
+    tail = 3,
+    contextWindow = DEFAULT_CONTEXT_WINDOW,
+    contextPause = shareOf(contextWindow, DEFAULT_CONTEXT_PAUSE_PERCENT),
+    contextCompactionDefault = shareOf(contextWindow, DEFAULT_CONTEXT_COMPACTION_PERCENT),
+  } = {},
+) {
   const { entries, skipped } = parseTranscript(text);
+  const written = new Set(); // the ids of the entries read so far: a resumed session writes them again
+  let held = null; // the tokens the session holds, by the entries read once
+  let stretch = null; // the work the last instruction started
+  let finished = null; // the stretch before it
+  let measured = null; // the session's latest automatic compaction, `{ tokens, at }`
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
   const endsByTask = new Map(); // task id -> the latest end that closed nothing, and the index of its entry
@@ -277,6 +361,35 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
     // A compaction replaces the context: until the next reply the harness's own count is all there is.
     if (entry.type === 'system' && entry.subtype === 'compact_boundary' && Number.isFinite(entry.compactMetadata?.postTokens)) {
       context = { tokens: entry.compactMetadata.postTokens, model: context?.model ?? null, at: entry.timestamp ?? null };
+    }
+    const repeated = typeof entry.uuid === 'string' && written.has(entry.uuid);
+    if (typeof entry.uuid === 'string') written.add(entry.uuid);
+    if (!repeated) {
+      const compaction = compactionOf(entry);
+      const sentWith = compaction ? null : contextOf(entry);
+      const by = compaction || sentWith ? null : instructionBy(entry);
+      if (compaction) {
+        if (compaction.automatic && compaction.before !== null && (measured === null || (compaction.at ?? '') >= (measured.at ?? ''))) measured = { tokens: compaction.before, at: compaction.at };
+        if (stretch && (compaction.before === null || compaction.after === null)) stretch.blind = true;
+        else if (stretch) {
+          if (stretch.base !== null) stretch.grown += Math.max(0, compaction.before - stretch.base);
+          stretch.base = compaction.after;
+          stretch.last = compaction.after;
+          stretch.compactions += 1;
+        }
+        held = compaction.after ?? held;
+      } else if (sentWith) {
+        if (stretch) {
+          stretch.base ??= sentWith.tokens; // the first stretch of a transcript is counted from its first reply
+          stretch.last = sentWith.tokens;
+          stretch.endedAt = sentWith.at;
+          stretch.replies += 1;
+        }
+        held = sentWith.tokens;
+      } else if (by && !(stretch && stretch.replies === 0)) {
+        finished = stretch;
+        stretch = { by, startedAt: entry.timestamp ?? null, base: held, grown: 0, last: held, endedAt: null, replies: 0, compactions: 0, blind: false };
+      }
     }
     if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') customTitle = entry.customTitle;
     if (typeof entry.timestamp === 'string' && (lastEntryAt === null || entry.timestamp > lastEntryAt)) lastEntryAt = entry.timestamp;
@@ -382,6 +495,13 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
   }
 
   const work = [...workByCall.values()];
+  const state = turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting';
+  const compactsAt = measured === null ? { tokens: contextCompactionDefault, measured: false, at: null } : { tokens: measured.tokens, measured: true, at: measured.at };
+  const room = context === null ? null : compactsAt.tokens - context.tokens;
+  let lastTask;
+  if (stretch === null) lastTask = { unavailable: 'the transcript holds no prompt of a person and no message from another session' };
+  else if (state === 'waiting') lastTask = taskOf(stretch);
+  else lastTask = finished === null ? { unavailable: 'its first task has not ended' } : taskOf(finished);
   const facts = {
     title: customTitle ?? (firstPrompt === null ? null : oneLine(firstPrompt)),
     titleSource: customTitle !== null ? 'custom-title' : firstPrompt !== null ? 'first-prompt' : null,
@@ -393,8 +513,12 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
     sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
     contextPercent: context === null ? null : percentOf(context.tokens, contextWindow),
-    pastContextLimit: context === null ? null : context.tokens > contextLimit,
-    state: turn === null ? 'unknown' : turn === 'working' ? 'working' : work.some((item) => !item.ended) ? 'background' : 'waiting',
+    atContextPause: context === null ? null : context.tokens >= contextPause,
+    contextCompaction: compactsAt,
+    contextRoom: room,
+    lastTask,
+    lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
+    state,
     turnEndedAt,
     work,
     tail: tail > 0 && lastReply !== null ? lastReply.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() !== '').slice(-tail) : [],
@@ -1160,13 +1284,31 @@ export function isSelf(id, self) {
   return typeof self === 'string' && self !== '' && (id === self || (self.length >= 8 && id.startsWith(self)));
 }
 
-/** How a board says context sizes: `of(tokens)` is `342k tokens (71%)`, `limit` is `73% (350k)`. The
- * percentage is the share of the board's context window, the number the desktop app shows; the limit
- * leads with it because that is how it is set and read. */
+/** How a board says context sizes: `of(tokens)` is `342k tokens (68%)`, `pause` is `85% of the window
+ * (425k)`. The percentage is the share of the board's context window, the number the desktop app shows;
+ * the pause leads with it because that is how the rule is said and how it is set. */
 function contextSizes(board) {
   const window = board.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
-  const limit = board.contextLimit ?? DEFAULT_CONTEXT_LIMIT;
-  return { of: (tokens) => `${thousands(tokens)} tokens (${percentOf(tokens, window)}%)`, limit: `${percentOf(limit, window)}% (${thousands(limit)})` };
+  const pause = board.contextPause ?? shareOf(window, DEFAULT_CONTEXT_PAUSE_PERCENT);
+  return { of: (tokens) => `${thousands(tokens)} tokens (${percentOf(tokens, window)}%)`, pause: `${percentOf(pause, window)}% of the window (${thousands(pause)})` };
+}
+
+/** What a board says of a session's context, piece by piece, for a session whose context was read: what
+ * it holds; the room left before the host compacts it, with the point and whether the session measured
+ * it; and what its last task cost, with whether a task of that cost still fits in the room. The judgment
+ * the pause asks for needs the three. A piece the session does not carry (a board from before it was
+ * kept) is left out. The row of the board and the line of a watch are made of the same pieces. */
+function contextPieces(session, sizes) {
+  const pieces = [`context ${sizes.of(session.context.tokens)}`];
+  const point = session.contextCompaction;
+  if (point && Number.isFinite(session.contextRoom)) {
+    const where = `(${thousands(point.tokens)}${point.measured ? ', measured in this session' : ''})`;
+    pieces.push(session.contextRoom > 0 ? `room ${thousands(session.contextRoom)} before the host compacts ${where}` : `no room: ${thousands(-session.contextRoom)} past where the host compacts ${where}`);
+  }
+  const task = session.lastTask;
+  if (task?.unavailable) pieces.push(`last task not known: ${task.unavailable}`);
+  else if (task) pieces.push(`last task ${thousands(task.tokens)}${session.lastTaskFits === false ? ', which no longer fits' : ''}`);
+  return pieces;
 }
 
 const sessionLabel = (session) => `session ${session.id.slice(0, 8)} ${JSON.stringify(session.title ?? '(no title)')}`;
@@ -1197,8 +1339,10 @@ function sessionChanges(before, after, self) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
       lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
     }
-    if (session.pastContextLimit === true && was?.pastContextLimit !== true) {
-      lines.push(`${sessionLabel(session)} passed the context limit: ${sizes.of(session.context.tokens)}, limit ${sizes.limit}`);
+    // Once, when it reaches the pause: what it does there is its own judgment, and the line carries what
+    // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
+    if (session.atContextPause === true && was?.atContextPause !== true) {
+      lines.push(`${sessionLabel(session)} reached the context pause, ${sizes.pause}: ${contextPieces(session, sizes).join(', ')}`);
     }
   }
   const now = new Set(after.sessions.map((session) => session.id));
@@ -1389,7 +1533,7 @@ function planChanges(before, after) {
  * and `[]` when nothing did:
  *
  * - a session that appears, one that starts waiting (from any other state) or that waits again after
- *   another turn, one that passes the context limit, one that leaves the window. The waiting of a session
+ *   another turn, one that reaches the context pause, one that leaves the window. The waiting of a session
  *   whose last word in the record is `closed` or `relieved` is not among them (`endedSessions`);
  * - a gate that starts beside another that runs, when one of the two does not know the machine's gate
  *   lock, among the gates of the board's worktrees (`watchedGates`, `gateChanges`);
@@ -1488,7 +1632,7 @@ const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
 function contextText(session, sizes) {
   const context = session.context ?? { unavailable: 'not read' };
   if (context.unavailable) return `context unavailable: ${context.unavailable}`;
-  return `context ${sizes.of(context.tokens)}${session.pastContextLimit ? `, past the limit of ${sizes.limit}` : ''}`;
+  return [...contextPieces(session, sizes), ...(session.atContextPause === true ? [`at the pause: ${sizes.pause}`] : [])].join('  ');
 }
 
 /** The lines of one session. `ended` is the notice by which the session said that nothing more comes from
@@ -1505,7 +1649,9 @@ function sessionLines(session, now, sizes, ended) {
   const state = ended ? `${ended.kind} ${ago(ended.at, now)} by its own notice (its transcript: ${read})` : read;
   const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
-  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}  ${contextText(session, sizes)}`);
+  lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}`);
+  // A line of its own: it is the one read to judge whether what is left of a task fits.
+  lines.push(`  ${contextText(session, sizes)}`);
 
   if (session.work.length > 0) {
     const open = session.work.filter((work) => !work.ended);

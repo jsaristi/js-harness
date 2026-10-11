@@ -544,8 +544,8 @@ reader, and that table names this feature as their owner.
   non-trivial files with their tests); T4b, the rest, after T1.
 - [x] T4c The nine findings of the two reviews of `ce8bdf7` (Progress, 2026-10-11), in one
   follow-up commit on `feat/session-board-channel` (route: delegated, the writer of T4b)
-- [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
-- [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
+- [x] T5 The context figure as room left against the last task's cost; the 73% mark removed
+- [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
 - [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
@@ -910,6 +910,20 @@ record. What exists, all local to this machine:
   twelve neighbouring files green.
 - 2026-10-11, this session's context: 400k tokens (80%) by the board the writer ran, 77% by
   `get_usage` at 09:13. It writes this state at the pause and goes on while the task fits.
+- 2026-10-11 10:19 local, the writer's second round and the parent's read. The check of the
+  host files moved into `scripts/practice-lib.mjs` (`HARNESS_HOOKS`, `hostHooksProblem`): a
+  host file holds the seeded entry, then the `startup|resume` and the `compact` entries once
+  each, by matcher and command; `scripts/practice.mjs` and `scripts/e2e.mjs` call it. Proven
+  by a test: the helper's verdicts, and that `HARNESS_HOOKS` equals what the manifest
+  declares. Proven only by reading: that the two scripts call it at the right steps; neither
+  script was run, since both install into real folders. In `--json` the board's figure is
+  `contextCompactionDefault`, a number, and a session keeps `contextCompaction: { tokens,
+  measured, at }`. Read by the parent at 10:19: `node --test` on `bin/lib/sessions.test.mjs`
+  185 pass, `bin/sessions.test.mjs` 192 and 1 skipped, `bin/resume.test.mjs` 12,
+  `bin/lib/manifest.test.mjs` 94, `bin/install.test.mjs` 59, `bin/js-harness.test.mjs` 28,
+  `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, `scripts/practice-lib.test.mjs` 67,
+  none failing; and `resume --hook` run in a folder with no `harness.json` printed 0 bytes,
+  exit 0.
 
 ## Next step
 FIRST, if the working tree of `feat/session-context` still holds uncommitted code (`git status

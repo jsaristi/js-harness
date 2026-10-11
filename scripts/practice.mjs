@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
-  contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE,
+  contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, HARNESS_HOOKS, hostHooksProblem,
 } from './practice-lib.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
@@ -26,9 +26,6 @@ const CHILD_OUTPUT_LIMIT = 16 * 1024 * 1024;
 // What keeps npm quiet and inside the folder: no audit and no funding note (both would ask the registry),
 // no check for a newer npm, and its cache and logs under the practice root (`--cache`, added per call).
 const NPM_QUIET = ['--no-audit', '--no-fund', '--no-update-notifier'];
-
-// The command of the `SessionStart` entry `install` registers in each host file (`bin/lib/manifest.mjs`).
-const HOOK_COMMAND = 'js-harness doctor --hook';
 
 // ---- the practice project -------------------------------------------------------------------------------------------
 
@@ -262,15 +259,13 @@ const STEPS = {
     for (const time of ['first', 'second']) expectOk(harness(ctx, 'install', '--home', home), `the ${time} js-harness install`);
     const { manifest, skills } = installedFiles(home);
     for (const file of [manifest, ...skills]) assertThat(fs.existsSync(file), `js-harness install left no ${file}`);
+    // Each host file: the seeded entry, then each entry of the harness once, by its matcher and its command.
     for (const seed of hostSeeds(home)) {
-      const entries = JSON.parse(fs.readFileSync(seed.path, 'utf8'))?.hooks?.SessionStart ?? [];
-      const commands = entries.flatMap((entry) => (entry?.hooks ?? []).map((hook) => hook?.command));
-      assertThat(
-        JSON.stringify(commands) === JSON.stringify([seed.command, HOOK_COMMAND]),
-        `expected the seeded entry and then one "${HOOK_COMMAND}" in ${seed.path}, found: ${commands.join(' | ') || 'no entry'}`,
-      );
+      const problem = hostHooksProblem(readIfThere(seed.path)?.toString('utf8'), seed.command);
+      assertThat(problem === null, `${seed.path} after two installs: ${problem}`);
     }
-    return `the manifest and ${skills.length} skills are in ${home}; each host file holds its seeded entry and one "${HOOK_COMMAND}"`;
+    const ours = HARNESS_HOOKS.map((hook) => `"${hook.command}" (${hook.event}, matcher ${hook.matcher})`).join(' and ');
+    return `the manifest and ${skills.length} skills are in ${home}; each host file holds its seeded entry and then, once each, ${ours}`;
   },
 
   'project-adopt': (ctx) => {
