@@ -264,7 +264,7 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
 });
 
 test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*roster.*worktrees.*feature plan.*gates.*pull requests.*relief file.*--watch waits.*--address <role>.*exit 0 for one, 1 for none.*2 for several or when it cannot tell/m);
+  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*roster.*worktrees.*feature plan.*gates.*pull requests.*relief file.*channel.*--watch waits.*notice for the orchestrator.*--address <role>.*exit 0 for one, 1 for none.*2 for several or when it cannot tell.*--opening "<title>" prints the opening stored for a session.*records in the channel which session read it.*--quote <transcript> <line> prints the entry at that line of a transcript only when the user sent it.*exit 1 otherwise/m);
   const result = run(['sessions', '--bogus']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --bogus/);
@@ -323,6 +323,61 @@ test('notify dispatches: it records one notice under a temp home and exits 0 wit
     assert.match(recorded, /^js-harness notify: recorded note for work session 9 at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z from /);
     assert.ok(recorded.endsWith(` in ${path.join(channel, records[0])}`), recorded);
     assert.ok(address.startsWith('address of work session 9: no single one now (sessions --address exit 1): no sessions folder for '), address);
+  } finally {
+    for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Hermetic, like the dispatch of `notify` above: temp folders for the harness home, the Claude home and
+// the folder it runs from. The opening is stored through the dispatcher, then read through it.
+test('sessions --opening dispatches: it prints the opening notify stored under a temp home, and --quote says a missing transcript is not his words', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-cwd-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-home-'));
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-read-claude-'));
+  const env = { ...process.env, JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: home };
+  delete env.CLAUDE_CODE_SESSION_ID;
+  const dispatch = (args, input) => spawnSync(process.execPath, [dispatcher, ...args], { encoding: 'utf8', env, input, timeout: 60000 });
+  try {
+    assert.equal(dispatch(['notify', '--opening', 'JH 9 · una prueba', '--cwd', cwd, '--claude-home', claudeHome], 'Sos JH 9.\nSeguí.\n').status, 0);
+    const read = dispatch(['sessions', '--opening', 'JH 9', '--cwd', cwd, '--claude-home', claudeHome]);
+    assert.deepEqual([read.status, read.stdout, read.stderr], [0, 'Sos JH 9.\nSeguí.\n', '']);
+    // No session is named, so nothing is recorded: the home holds the opening and no record.
+    assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness', 'channel')), ['openings']);
+    const missing = path.join(cwd, 'none.jsonl');
+    const quote = dispatch(['sessions', '--quote', missing, '1', '--cwd', cwd, '--claude-home', claudeHome]);
+    assert.deepEqual([quote.status, quote.stdout, quote.stderr.trimEnd()], [1, '', `js-harness sessions: no transcript at ${missing}`]);
+  } finally {
+    for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** The dispatcher with `input` on its real standard input, in temp folders and as a session the host does
+ * not name: the id of the session that runs this suite never reaches a file. */
+function runPiped(args, input) {
+  const env = { ...process.env, JS_HARNESS_CHECK_INNER: '1' };
+  delete env.CLAUDE_CODE_SESSION_ID;
+  return spawnSync(process.execPath, [dispatcher, ...args], { encoding: 'utf8', env, input, timeout: 60000 });
+}
+
+// The other tests of an opening hand `notify` a reader of their own. This one pipes the text through the
+// process's standard input, so the reader the command has by default is the one that runs.
+test('notify --opening reads the opening from the real standard input of the dispatcher, as UTF-8', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-opening-cwd-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-opening-home-'));
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-opening-claude-'));
+  const text = 'Sos JH 9.\nSeguí el "Next step" de la sesión.\n';
+  try {
+    const result = runPiped(['notify', '--opening', 'JH 9 · una prueba', '--cwd', cwd, '--home', home, '--claude-home', claudeHome], text);
+    assert.equal(result.status, 0, result.stderr);
+    const openings = path.join(home, '.js-harness', 'channel', 'openings');
+    const [project, ...others] = fs.readdirSync(openings);
+    assert.deepEqual(others, []);
+    const files = fs.readdirSync(path.join(openings, project));
+    assert.equal(files.length, 1);
+    const stored = JSON.parse(fs.readFileSync(path.join(openings, project, files[0]), 'utf8'));
+    assert.deepEqual([stored.schema, stored.title, stored.text, stored.from.id], ['js-harness.channel-opening/v1', 'JH 9 · una prueba', text, null]);
+    assert.equal(result.stdout.trimEnd(), `js-harness notify: opening for "JH 9 · una prueba" written in ${path.join(openings, project, files[0])} (2 lines, ${text.length} characters)`);
+    assert.match(result.stderr, /^js-harness notify: the sender is not known: /);
   } finally {
     for (const dir of [cwd, home, claudeHome]) fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -134,6 +134,8 @@ const USAGE_ERRORS = [
   ['--to', '5', '--kind', 'note', '--'], ['--to', '5', '--kind', 'note', '--', 'one', 'two'], ['--to', '5', '--kind', 'note', 'probe', '--', '--more'],
   ['--to', '5', '--', '--text', '--kind', 'note'], ['--relief', '--'], ['--relief', '--', 'one', 'two'], ['--relief', 'a line', '--', '--more'],
   ['--opening', '--'], ['--opening', '--', '--draft', '--to', '5'], ['--to', '--', '5', '--kind', 'note', 'probe'],
+  // A text given before the flag is not the value of a lone -- that nothing follows: the flag has no value.
+  ['a line', '--relief', '--'], ['JH 5 · x', '--opening', '--'], ['a line', '--relief', '--', 'and the line'],
 ];
 
 const usageName = (argv) => JSON.stringify(argv).replace(/x{20,}/g, (run) => `<${run.length} x>`);
@@ -193,6 +195,17 @@ test('--relief and --opening take what follows a lone -- as their line and their
   const opening = await runNotify(machine, ['--opening', '--', '--draft · una prueba'], { readStdin: () => OPENING });
   assert.equal(opening.code, 0);
   assert.deepEqual(findOpenings(machine.home, machine.slug, '--draft · una prueba').openings.map((one) => one.text), [OPENING]);
+}));
+
+// Found by the review of T1: a text before the flag was taken for the value the lone -- did not give.
+test('a lone -- with nothing after it gives --relief and --opening no value, whatever text came before the flag', withMachine(async (machine) => {
+  const neverRun = () => assert.fail('a usage error must not run anything');
+  for (const [argv, flag] of [[['a line', '--relief', '--'], '--relief'], [['JH 5 · x', '--opening', '--'], '--opening']]) {
+    const { code, out, err } = await runNotify(machine, argv, { run: neverRun, sessions: neverRun, readStdin: () => OPENING });
+    assert.deepEqual([code, out], [2, []], flag);
+    assert.equal(err.join('\n').split('\n')[0], `${flag} requires a value`);
+  }
+  assert.equal(fs.existsSync(machine.home), false, 'nothing is written under the home');
 }));
 
 // --- a notice ---
@@ -298,6 +311,50 @@ test('a sender whose transcript gives no title is named by the start of its id',
   assert.match(out[0], / from session aaaaaaaa in /);
 }));
 
+/** A session as the phone opens one: its transcript carries no title, only what was typed to it. */
+function writeUntitled(machine, id, { seconds = 60 } = {}) {
+  const at = before(seconds).toISOString();
+  const entries = [
+    { type: 'user', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content: 'made up' } },
+    { type: 'assistant', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }] } },
+  ];
+  const file = path.join(machine.projectDir, `${id}.jsonl`);
+  fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n', 'utf8');
+  fs.utimesSync(file, before(seconds), before(seconds));
+}
+
+// The transcript of a session opened from the phone carries no title: the opening it read says which it is.
+test('a sender whose transcript carries no title takes the title of the opening it read, and a title in its transcript wins', withMachine(async (machine) => {
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  writeUntitled(machine, SENDER);
+  assert.equal((await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => OPENING, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } })).code, 0);
+  const reads = (env) => sessionsMain(['--opening', 'JH 5', '--claude-home', machine.claudeHome], { cwd: machine.worktree, stdout: () => {}, stderr: () => {}, env: { JS_HARNESS_HOME: machine.home, ...env }, now: () => NOW, run: fakeGit(machine).run });
+  const first = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'opened', 'before it read its opening']);
+  assert.match(first.out[0], / from session aaaaaaaa in /);
+  assert.equal(await reads({ CLAUDE_CODE_SESSION_ID: SENDER }), 0);
+  const second = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'waiting', 'on his answer']);
+  assert.deepEqual([second.code, second.err], [0, []]);
+  assert.match(second.out[0], new RegExp(` from "${SENDER_TITLE}" in `));
+  assert.deepEqual(recorded(machine).notices.map((one) => [one.from.id, one.from.title, one.from.permissionMode]), [[SENDER, null, 'auto'], [SENDER, SENDER_TITLE, 'auto']]);
+  // The reading of another session gives this one nothing.
+  const other = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe'], { env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } });
+  assert.match(other.out[0], new RegExp(` from "${ORCHESTRATOR_TITLE}" in `));
+  // Renamed in the app on a desktop, its transcript has a title, and that is the one.
+  writeSession(machine, SENDER, 'JH 5 · renombrada');
+  await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'probe']);
+  assert.equal(recorded(machine).notices.at(-1).from.title, 'JH 5 · renombrada');
+}));
+
+test('the address is asked of the record notify writes: under --home, a session known only by the opening it read is the address of its role', withMachine(async (machine) => {
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  writeUntitled(machine, SENDER);
+  await runNotify(machine, ['--opening', SENDER_TITLE], { readStdin: () => OPENING, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } });
+  assert.equal(await sessionsMain(['--opening', 'JH 5', '--claude-home', machine.claudeHome], { cwd: machine.worktree, stdout: () => {}, stderr: () => {}, env: { JS_HARNESS_HOME: machine.home, CLAUDE_CODE_SESSION_ID: SENDER }, now: () => NOW, run: fakeGit(machine).run }), 0);
+  const { code, out } = await runNotify(machine, ['--to', '5', '--kind', 'note', 'the gate is free'], { env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR } });
+  assert.equal(code, 0);
+  assert.equal(out[1], `address of work session 5: ${SENDER_TITLE}`);
+}));
+
 // --- the address ---
 
 test('the address notify prints is the answer of sessions --address, and the notice is recorded with exit 0 whatever that answer is', withMachine(async (machine) => {
@@ -372,9 +429,12 @@ test('notify hands sessions --address the role, the folder, the Claude home and 
   const env = { CLAUDE_CODE_SESSION_ID: SENDER };
   await runNotify(machine, ['--to', '7', '--kind', 'note', 'probe', '--self', 'bbbbbbbb', '--cwd', machine.root], { sessions, env });
   await runNotify(machine, ['--to', 'ORQ', '--kind', 'note', 'probe'], { sessions, env });
+  // The harness home goes with the environment: the board has no flag for it, and it reads the record
+  // notify has just written, where a session opened from the phone has its title.
+  const withHome = { ...env, JS_HARNESS_HOME: machine.home };
   assert.deepEqual(asked, [
-    { argv: ['--address', '7', '--cwd', machine.root, '--claude-home', machine.claudeHome, '--self', 'bbbbbbbb'], cwd: machine.worktree, env },
-    { argv: ['--address', 'ORQ', '--cwd', machine.worktree, '--claude-home', machine.claudeHome], cwd: machine.worktree, env },
+    { argv: ['--address', '7', '--cwd', machine.root, '--claude-home', machine.claudeHome, '--self', 'bbbbbbbb'], cwd: machine.worktree, env: withHome },
+    { argv: ['--address', 'ORQ', '--cwd', machine.worktree, '--claude-home', machine.claudeHome], cwd: machine.worktree, env: withHome },
   ]);
 }));
 

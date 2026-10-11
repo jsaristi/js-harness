@@ -103,11 +103,11 @@ test('appendNotice writes one JSON line per notice, creating the folder, and rea
   channel.appendNotice(home, SLUG, second);
   const text = fs.readFileSync(file, 'utf8');
   assert.deepEqual(text.split('\n'), [JSON.stringify(first), JSON.stringify(second), '']);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], skipped: 0 });
 }));
 
 test('a project with no record yet has no notices, and that is not an error', withHome((home) => {
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], skipped: 0 });
 }));
 
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {
@@ -138,7 +138,35 @@ test('a record that is there and cannot be read is unavailable with the reason, 
   const readFile = () => {
     throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
   };
-  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], skipped: 0 });
+}));
+
+// --- the readings: which session read which opening ---
+
+test('a reading is a line of its own schema: the time, the session that read and the title of the opening', () => {
+  const reading = channel.newReading({ at: AT, reader: FROM, title: '  JH 5 · canal entre sesiones ' });
+  assert.deepEqual(reading, { schema: 'js-harness.channel-reading/v1', at: AT, reader: { host: 'claude-code', id: FROM.id, source: 'environment' }, title: 'JH 5 · canal entre sesiones' });
+  assert.equal(channel.NOTICE_KINDS.includes('reading'), false, 'it is not a seventh kind of notice');
+  // Without the id of a session there is nobody to say it of, and a title is one line.
+  for (const [fields, pattern] of [[{ reader: { ...FROM, id: null } }, /session id/], [{ reader: null }, /session id/], [{ title: '' }, /empty/], [{ title: 'two\nlines' }, /one line/], [{ title: 'x'.repeat(121) }, /121 characters/]]) {
+    assert.throws(() => channel.newReading({ at: AT, reader: FROM, title: 'JH 5 · x', ...fields }), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), JSON.stringify(fields));
+  }
+});
+
+test('appendReading adds the reading to the record, and readNotices gives the readings apart from the notices, neither skipped', withHome((home) => {
+  const first = note();
+  const reading = channel.newReading({ at: AT, reader: FROM, title: 'JH 5 · canal entre sesiones' });
+  channel.appendNotice(home, SLUG, first);
+  assert.equal(channel.appendReading(home, SLUG, reading), channel.recordPath(home, SLUG));
+  const second = note({ kind: 'closed', text: 'delivered' });
+  channel.appendNotice(home, SLUG, second);
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], skipped: 0 });
+  // A reading that lost what makes it one is a line the reader does not know, counted as such.
+  for (const broken of [{ ...reading, reader: { ...reading.reader, id: 7 } }, { ...reading, title: '' }, { ...reading, at: 'yesterday' }, { ...reading, reader: 'somebody' }]) {
+    fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify(broken)}\n`);
+  }
+  const read = channel.readNotices(home, SLUG);
+  assert.deepEqual([read.notices.length, read.readings.length, read.skipped], [2, 1, 4]);
 }));
 
 test('a tail left without its line break does not swallow the notice appended after it', withHome((home) => {
@@ -152,19 +180,40 @@ test('a tail left without its line break does not swallow the notice appended af
 
 // Two sessions write at the same moment. What the writer relies on: the file is opened for appending and
 // each notice is one write of one whole line, a few hundred bytes, which the system puts at the end of
-// the file as a whole. What can be tested is that it holds here: several processes that start together
-// and write as fast as they can leave nothing but whole lines, every one of them, each writer's in order.
+// the file as a whole. What can be tested is that it holds here: several processes that write as fast as
+// they can, all of them in the middle of their writes at once, leave nothing but whole lines, every one
+// of them, each writer's in order.
+//
+// That they wrote at once is made, not hoped for (the review of T1: writers started at a set time could
+// have run one after another on a loaded machine, and the test would have passed all the same). Two
+// barriers, each a file in a folder of the test: no writer appends before \`go\`, which the test creates
+// once every writer has said it is ready; and no writer appends its last notice before every writer has
+// appended its first. So each writer's last line can only come after every other writer's first line,
+// which the record itself then shows.
 const WRITER = `
+import fs from 'node:fs';
 import path from 'node:path';
 import { appendNotice, newNotice } from${JSON.stringify(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'channel.mjs')).href)};
 // Under \`node -e\` the arguments start at the second place, not the third. A writer that read them one
-// place off took the start time for its count and wrote without end: so it checks what it was given.
-const [home, slug, writer, count, startAt] = process.argv.slice(1);
-if (!path.isAbsolute(home) || !(Number(count) <= 1000) || !(Number(startAt) - Date.now() < 60000)) throw new Error('writer: bad arguments ' + JSON.stringify(process.argv.slice(1)));
-while (Date.now() < Number(startAt)) {}
-for (let i = 0; i < Number(count); i++) {
-  appendNotice(home, slug, newNotice({ at: new Date().toISOString(), from: { host: 'unknown', id: null, source: null, title: null, permissionMode: null }, to: writer, kind: 'note', text: String(i) + ' ' + 'x'.repeat(400) }));
-}
+// place off took another argument for its count and wrote without end: so it checks what it was given.
+const [home, slug, writer, count, barrier, writers] = process.argv.slice(1);
+const given = path.isAbsolute(home) && path.isAbsolute(barrier) && Number(count) >= 2 && Number(count) <= 1000 && Number(writers) >= 1 && Number(writers) <= 16 && Number(writer) >= 1 && Number(writer) <= Number(writers);
+if (!given) throw new Error('writer: bad arguments ' + JSON.stringify(process.argv.slice(1)));
+// A wait is a tight loop on purpose, so every writer goes on within the same instant, and it has an end.
+const waitFor = (names) => {
+  const until = Date.now() + 30000;
+  while (!names.every((name) => fs.existsSync(path.join(barrier, name)))) {
+    if (Date.now() > until) throw new Error('writer ' + writer + ': waited 30 s for ' + names.join(', '));
+  }
+};
+const append = (i) => appendNotice(home, slug, newNotice({ at: new Date().toISOString(), from: { host: 'unknown', id: null, source: null, title: null, permissionMode: null }, to: writer, kind: 'note', text: String(i) + ' ' + 'x'.repeat(400) }));
+fs.writeFileSync(path.join(barrier, 'ready-' + writer), '');
+waitFor(['go']);
+append(0);
+fs.writeFileSync(path.join(barrier, 'started-' + writer), '');
+for (let i = 1; i < Number(count) - 1; i++) append(i);
+waitFor(Array.from({ length: Number(writers) }, (_, index) => 'started-' + (index + 1)));
+append(Number(count) - 1);
 `;
 
 test('notices appended by several processes at the same moment are all there, each one whole', { timeout: 60000 }, withHome(async (home) => {
@@ -172,24 +221,41 @@ test('notices appended by several processes at the same moment are all there, ea
   // this test 240 of them took 17 s. A hundred show the same thing.
   const writers = 4;
   const each = 25;
-  const startAt = Date.now() + 1500;
-  const exits = await Promise.all(
+  const barrier = path.join(home, 'barrier');
+  fs.mkdirSync(barrier);
+  const closed = [];
+  const exits = Promise.all(
     Array.from({ length: writers }, (_, index) =>
       new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, ['--input-type=module', '-e', WRITER, home, SLUG, String(index + 1), String(each), String(startAt)], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 45000 });
+        const child = spawn(process.execPath, ['--input-type=module', '-e', WRITER, home, SLUG, String(index + 1), String(each), barrier, String(writers)], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 45000 });
         let stderr = '';
         child.stderr.on('data', (chunk) => (stderr += chunk));
         child.on('error', reject);
-        child.on('close', (code) => resolve({ code, stderr }));
+        child.on('close', (code) => {
+          closed.push(index + 1);
+          resolve({ code, stderr });
+        });
       }),
     ),
   );
-  assert.deepEqual(exits, Array.from({ length: writers }, () => ({ code: 0, stderr: '' })));
+  // The first barrier: every writer is loaded and waits. A writer that ended before it is a failure the
+  // exits below say; the wait is given up then, and after 30 s, so the test never hangs on it.
+  const ready = () => Array.from({ length: writers }, (_, index) => `ready-${index + 1}`).every((name) => fs.existsSync(path.join(barrier, name)));
+  for (const until = Date.now() + 30000; !ready() && closed.length === 0 && Date.now() < until; ) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(fs.existsSync(channel.recordPath(home, SLUG)), false, 'no writer appends before the barrier is lifted');
+  fs.writeFileSync(path.join(barrier, 'go'), '');
+  assert.deepEqual(await exits, Array.from({ length: writers }, () => ({ code: 0, stderr: '' })));
   const read = channel.readNotices(home, SLUG);
   assert.deepEqual([read.notices.length, read.skipped], [writers * each, 0]);
+  const lineOf = (writer, number) => read.notices.findIndex((one) => one.to.number === writer && Number(one.text.split(' ')[0]) === number);
   for (let writer = 1; writer <= writers; writer++) {
     const sequence = read.notices.filter((one) => one.to.number === writer).map((one) => Number(one.text.split(' ')[0]));
     assert.deepEqual(sequence, Array.from({ length: each }, (_, i) => i), `writer ${writer}`);
+    // The proof that they overlapped, read from the record: this writer's last line is after the first
+    // line of every writer, so all of them were between their first and their last append at one moment.
+    for (let other = 1; other <= writers; other++) {
+      assert.ok(lineOf(other, 0) < lineOf(writer, each - 1), `writer ${writer} ended before writer ${other} began: line ${lineOf(writer, each - 1)} against ${lineOf(other, 0)}`);
+    }
   }
   assert.equal(fs.readFileSync(channel.recordPath(home, SLUG), 'utf8').endsWith('\n'), true);
 }));

@@ -16,8 +16,8 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, recordPath, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
-import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingTextOf, openingTitleOf, placeOf, readNotices, recordPath, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
+import { mainCheckout, projectSlug, roleOfTitle, titleRead } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] "<one line>"',
@@ -67,11 +67,14 @@ function parseArgs(argv) {
   const texts = [];
   // `--relief` or `--opening` when a lone `--` follows it: its value is the text after that `--`.
   let fromText;
+  // What follows the lone `--`, apart from the texts before it: only this is the value of `fromText`.
+  let afterDashes = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     // A lone `--` ends the options: what follows is text as it is, so a text may begin with `--`.
     if (token === '--') {
-      texts.push(...argv.slice(i + 1));
+      afterDashes = argv.slice(i + 1);
+      texts.push(...afterDashes);
       break;
     }
     if (!token.startsWith('--')) {
@@ -87,7 +90,9 @@ function parseArgs(argv) {
     i += 1; // consume the value too, so it is never re-read as its own token
   }
   if (fromText !== undefined) {
-    if (texts.length === 0) throw new NotifyArgError(`${fromText} requires a value`);
+    // A text given before the flag is not its value: a first version took it for one when nothing
+    // followed the `--`, and wrote it as the line or the title (found in review, 2026-10-11).
+    if (afterDashes.length === 0) throw new NotifyArgError(`${fromText} requires a value`);
     if (texts.length === 1) parsed[values.get(fromText)] = texts.pop();
   }
   for (const flag of ['self', 'cwd', 'home', 'claudeHome']) {
@@ -206,6 +211,9 @@ export async function notifyMain(
   // Who sends, from the transcript the host's id names: read where the board reads the sessions.
   const claudeHome = path.resolve(defaultCwd, parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
   const from = senderOf({ self: parsed.self ?? null, env, projectDir: path.join(claudeHome, 'projects', slug), readdir, readFile });
+  // A session opened from the phone has no title in its transcript: its title is the one of the opening
+  // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
+  if (from.id !== null && from.title === null) from.title = titleRead(readNotices(home, slug, { readFile }).readings, from.id);
   const senderNotKnown = () => {
     if (from.id === null) stderr('js-harness notify: the sender is not known: the host gave no session id (CLAUDE_CODE_SESSION_ID is not set) and --self names none');
   };
@@ -248,7 +256,9 @@ export async function notifyMain(
   let code;
   try {
     const asked = ['--address', parsed.notice.to, '--cwd', cwd, ...(parsed.claudeHome !== undefined ? ['--claude-home', claudeHome] : []), ...(parsed.self !== undefined ? ['--self', parsed.self] : [])];
-    code = await sessions(asked, { cwd: defaultCwd, stdout: (line) => out.push(line), stderr: (line) => err.push(line), env, now, homedir, run, readFile, readdir });
+    // The harness home goes in the environment, where the board looks for it: it reads the record this
+    // command writes, by which a session with no title in its transcript holds its role.
+    code = await sessions(asked, { cwd: defaultCwd, stdout: (line) => out.push(line), stderr: (line) => err.push(line), env: { ...env, JS_HARNESS_HOME: home }, now, homedir, run, readFile, readdir });
   } catch (failure) {
     stdout(`address of ${role}: not known: sessions --address could not be asked (${failure.message})`);
     return 0;

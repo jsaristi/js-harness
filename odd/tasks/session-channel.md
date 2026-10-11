@@ -47,6 +47,8 @@ does not return (lines 143 and 145).
 - `node --test bin/lib/channel.test.mjs` exits 0
 - `node --test bin/notify.test.mjs` exits 0
 - `node --test bin/sessions.test.mjs` exits 0
+- `node --test bin/lib/sessions.test.mjs` exits 0
+- `node --test bin/js-harness.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
 - The practice journey, with this feature's step in it, passes on the machine that builds it
   (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
@@ -272,6 +274,35 @@ title from the record when the transcript has none; nothing asks the session to 
 Whether a phone-opened session has `CLAUDE_CODE_SESSION_ID` in its environment is part of
 test owed 1, which needs him.
 
+As built (T4b, 2026-10-11). `sessions --opening "<title or role>"` prints the stored opening
+(exit 0 for one, 1 for none, 2 for several or a usage error) and appends a line of its own
+schema to the record, `{"schema":"js-harness.channel-reading/v1","at","reader":{"host","id",
+"source"},"title"}`; nothing is appended when the session id is not known or when the reader is
+the session that wrote the opening. A transcript with no title takes the title of the last
+reading by its session id, on the board, in the roster, for `--address` and as the sender of a
+`notify`; a title in the transcript wins. Each row gains what the record says of its session:
+the last of `opened`, `waiting`, `closed`, `relieved` with its time, and the worktree and
+branch its notices were written from, matched by the sender's session id first and by title
+otherwise; `folder` stays what the transcript records. A row whose last word in the record is
+`closed` or `relieved` reads as closed by its own notice (failure 8). The limit of two
+sessions under one title stays: a restarted session gets a new session id too, so the record
+cannot tell a restart from a twin either.
+
+The `Channel` section prints the record's last five notices and the last five messages
+between sessions. Of a message it prints the `summary` field of the `SendMessage` call (every
+one of the 290 real calls carries one, 17 to 69 characters for those sent to a session), cut
+at 100 characters, and not the message's first line as designed: the reader keeps no message
+body, and the summary is the sender's own one-line label. A message is "arrived" when its id
+is a received message in a transcript of the window, "failed" when the send failed, and
+otherwise "not seen in a transcript of the window"; never "held", which no transcript shows.
+The watch returns on a notice addressed to the orchestrator that the watching session did not
+write. Each line of `Gates` names the session it hangs from by folder, the worktree of its
+notices first and the transcript's folder otherwise (failure 7); a gate in a worktree no
+session wrote from reads "session not known", and naming it exactly needs the lock to record
+the session id, which is `bin/lib/gate-lock.mjs`, the gate feature's. A task stopped with
+`TaskStop` no longer reads as open background work (failure 8): the real transcripts hold 13
+such calls, and the tool's result is the only record of the stop.
+
 ### 5. One orchestrator, checked
 `sessions --address orchestrator` is the check: a session that starts as orchestrator runs it
 first. Exit 1 (no other session holds the role) lets it start; exit 0 or 2 (another one does)
@@ -320,6 +351,13 @@ reads them in the orchestrator's transcript. Two things make it a check:
   receiving session runs it before it uses the words.
 - The notice of kind `answer` is in the record, so the board lists the answers that travelled
   and whether the receiver quoted the line.
+
+As built (T4b, 2026-10-11): `--quote` exits 0 only for an entry whose `origin.kind` is
+`human`; 1 for anything else, saying which (an entry with no `origin` counts as not his); 2
+when it cannot look. Pasted text is wrapped by the host in `<pasted_content id="…">` blocks:
+of 30 such entries in the real transcripts 22 are nothing else, and for those the command
+warns that nothing was typed with the paste. On the opening of the build session itself
+(`sessions --quote e5376fe9 6`) it exits 0 and warns.
 
 A limit found in this session, to state plainly. A travelling answer carries information and a
 choice among options already put to him; it does not approve a pending question in a session
@@ -488,7 +526,7 @@ reader, and that table names this feature as their owner.
   documentation)
 - [x] T1 `bin/lib/channel.mjs` and `bin/notify.mjs`: the record, the kinds, the clock, the
   relief writer, the openings
-- [ ] T1b Three suggestions of the review of T1, carried to the branch of T4b because a fix
+- [x] T1b Three suggestions of the review of T1, carried to the branch of T4b because a fix
   commit could not be reviewed by Codex inside the cap: a text given before `--relief` or
   `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
   one test pipes an opening through the dispatcher's real standard input; the concurrent
@@ -496,7 +534,7 @@ reader, and that table names this feature as their owner.
 - [ ] T2 The six tests owed, run and recorded, before anything is built on their answers
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
-- [ ] T4 The board: the roster; the channel section (the record's last notices, and the last
+- [x] T4 The board: the roster; the channel section (the record's last notices, and the last
   messages between sessions read from the transcripts: time, from, to, first line, arrived or
   held); `--address`, `--opening`, `--quote`; the watch wakes on a notice for the orchestrator;
   each wait is printed with the session it hangs from (failure 7); a stopped task and an
@@ -691,13 +729,56 @@ reader, and that table names this feature as their owner.
   that ends a run at a part boundary, and a line of the plan that says what a feature has
   spent, would make the cap a check (proposed, not built; it belongs to the Codex review
   feature, not to this one).
+- 2026-10-11 07:16 local, pull request 59 merged by the lead as `8654c79` (its message, a
+  claim, checked: `gh pr view 59` says MERGED at 12:15:51Z, and `git diff 860a31d origin/main`
+  is empty). The lead also wrote (claims): the cap is the first question he gets on his
+  return; and the watch woke it this morning on progress that needs no decision (a gate that
+  starts or ends, checkboxes moving, a plan appearing or equal to `main` again).
+- 2026-10-11 08:10 local, T1b and T4b written by one delegated writer, test first, in two
+  rounds, on `feat/session-board-channel` (fast-forwarded to `8654c79`). Route: delegated.
+  What was built is in points 2, 4 and 7, "As built". The second round, decided by the parent:
+  the watch's own contract is "silent until the board changes in a way that needs a decision",
+  and the lead's report was checked in the code before anything changed. What wakes the watch
+  now: a session that appears, starts waiting or ends another turn (not one whose last word in
+  the record is `closed` or `relieved`), passes the context limit or leaves the window; a gate
+  that starts while another runs; a pull request that opens or stops being open; a task added,
+  removed or reworded in a plan; a plan's next step; a plan that appears or stops differing
+  from `main`; a notice for the orchestrator. Silent now: a gate that starts alone, waits or
+  ends; a plan whose only change is its count of done tasks. Left as it was, with what it
+  needs: a plan that appears or disappears still wakes, because the board never reads the
+  document's version on the default branch and so cannot tell "new tasks" from "the same
+  tasks, now listed". Two limits of the task comparison: a task reworded only on its
+  continuation lines is not seen, and a session that reuses a closed row's title stays silent
+  until it writes `opened`.
+  Red before green, as the writer reported it: 20 command tests and 23 library tests failed
+  on the missing `--opening`, `--quote`, summary, `TaskStop` and record columns; 13 library
+  tests failed in the second round (a gate that starts alone, the tasks of a plan, a closed
+  session that starts waiting). No red was possible for three tests of behaviour that already
+  held (the piped standard input, the dispatch of `sessions --opening`, the barrier of the
+  concurrent append; for the last a scratch mutant with writers in a row fails).
+  Read by the parent at 08:10 (clock read after the run): `node --test` on `bin/lib/channel.test.mjs` 30 pass,
+  `bin/notify.test.mjs` 93, `bin/lib/sessions.test.mjs` 176, `bin/sessions.test.mjs` 173 and 1
+  skipped, `bin/js-harness.test.mjs` 27, `bin/lib/manifest.test.mjs` 90, `bin/install.test.mjs`
+  58, none failing; and `sessions --quote e5376fe9 6`, the opening of this very session,
+  printed the entry, exit 0, with `line 6 is only pasted content: nothing was typed with it,
+  and a paste alone is not his word` on standard error. 1,960 lines added and 198 deleted, of
+  which about 1,200 are tests.
+  The board's time, measured by the writer: 33.8, 41.5 and 38.8 s with another session's gate
+  running each time, against about 9 s on a quiet machine before this slice. The new sections
+  cost 5 ms together and each transcript is read once; 30 of 39 s were 80 git calls over 16
+  worktrees (five a worktree), which a running gate slows to 140 to 375 ms each. So the board
+  is slow beside a gate because of its count of git calls, most of them for worktrees of
+  merged features. Not changed here: fewer git calls per worktree belongs with the gate's
+  next slice, and the worktrees are his to remove.
+  A mistake of the parent: one read of the board, between the writer's two rounds (hour not read from a clock), while another session's gate
+  ran, to see the `Gates` section. Not repeated; the writer's timings were asked for instead.
 
 ## Next step
-The second pull request (`feat/session-record`: T1) waits for the lead's merge. Next, on a new
-branch from `origin/main`: T1b and T4b, by one delegated writer, test first — the channel
-section of the board, `sessions --opening` (which also records which session read which title,
-point 4), `--quote`, the watch that wakes on a notice for the orchestrator, the roster's
-columns from the record, failures 7 and 8. Its commit and gate and its gentle-ai review are
-run; its Codex review and its push wait for his answer on the cap (in the lead's queue).
-Waiting for him as well, none blocking the build: tests owed 1, 2, 3 and 6, each asked before
-it is run.
+On `feat/session-board-channel` (T1b, T4b): the commit and its gate, then the gentle-ai
+review. Its Codex review and its push wait for his answer on the cap (the first question the
+lead puts to him on his return). Meanwhile, on a branch stacked on it: T5 (the context figure
+as room left against the last task's cost; the 73% mark removed) and T6 (the resume hook,
+built and tested; installed only on his word). Waiting for him as well, none blocking the
+build: tests owed 1, 2, 3 and 6, each asked before it is run. For the gate's session, through
+the lead: the lock should record the session id that holds it, so `Gates` names the session
+exactly (point 4, "As built").
