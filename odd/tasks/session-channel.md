@@ -864,8 +864,62 @@ record. What exists, all local to this machine:
   `review not due (under_budget)`, 313 lines, pending in the slice. Codex: not run (the cap);
   its plan for the branch, `8654c79..7a19710`, printed today: five parts, 2,378 changed
   lines, about 1,370,000 to 6,490,000 input tokens.
+- 2026-10-11, T5 and T6 written by one delegated writer, test first, on `feat/session-context`
+  (stacked on `82cd2c2`). IN FLIGHT when this entry was written: the code is in the working
+  tree, not committed (ten changed files and the new `bin/resume.mjs` and
+  `bin/resume.test.mjs`); what is left is listed under "Next step".
+  T5 as built: one block of `bin/lib/sessions.mjs` holds the figures — the window the app
+  reports, 500,000; the point where the host compacts by itself, 93% or 465,000 (six measured
+  between 466,887 and 468,151; a seventh fired at 524,781 in session `77a27016` on host
+  2.1.293, so the point is not the same for every session); the pause at 85%. A session's own
+  last automatic compaction (`compact_boundary`, `compactMetadata.trigger: "auto"`,
+  `preTokens`) wins over the default. `--context-window` stays, `--context-pause` and
+  `--context-compaction` are new, `--context-limit` is refused and names them. A row prints
+  `context 457k tokens (91%)  room 8k before the host compacts (465k)  last task 100k, which
+  no longer fits  at the pause: 85% of the window (425k)`. `atContextPause` replaces
+  `pastContextLimit` and `lastTaskFits` is a separate fact; the watch wakes once at the pause.
+  "The last task" is the growth of the context from one instruction (a person's prompt or
+  paste, or another session's message) to the last reply before the next, summed across a
+  compaction, and it is the last stretch that ended. It cannot tell a task from a one-word
+  answer (4k to 7k on the orchestrator's rows) nor see a sub-agent's spend; whether the
+  largest stretch since the last compaction is the better yardstick is a product choice, his.
+  T6 as built: `js-harness resume --hook`, a `SessionStart` entry `{ matcher: "compact",
+  timeout: 15 }` that `install` writes for both hosts, recorded in the manifest and removed by
+  `uninstall`. Both hosts confirmed: Claude Code's matchers are `startup|resume|clear|compact|
+  fork` and the hook's input carries `session_id`, `transcript_path`, `cwd`, `source` and an
+  optional `session_title` (its hooks documentation; and 79 `SessionStart:compact` hook
+  attachments in this project's transcripts); Codex matches on `source`, which includes
+  `compact`, with no title (its hooks documentation; no Codex compaction was run). The hook
+  prints the title (hook input, then transcript, then the record's readings), the stored
+  opening if any, the feature document when the worktree of the session's last notice tells
+  it and "not known" with the latest `odd/tasks` documents otherwise, and the instruction to
+  read "Next step" and "State for a resume" over the summary and to repeat any open question.
+  It acts only where a `harness.json` is at the project root, prints nothing on any error,
+  writes nothing. Run by hand for this session: it gave the title and "feature document not
+  known", since this machine has no record yet. NOT installed here: his decision; `AGENTS.md`
+  is untouched. A fix that came with it: two manifest entries on one host file now share
+  `createdFile`, or `uninstall` left behind the file it created.
+  Open, found by the writer: `scripts/practice.mjs:266-271` and `scripts/e2e.mjs:131-229`
+  assert exactly one entry of ours per host file and will fail when run (neither is in `node
+  --test`); `doctor --hook` has no `harness.json` guard of its own; the skill text at
+  `bin/lib/manifest.mjs:85` still says "past the limit" (T8); in `--json`,
+  `contextCompaction` is a number on the board and an object on each session.
+  Tests, as the writer reported them (not yet read by the parent): `bin/lib/sessions.test.mjs`
+  185, `bin/sessions.test.mjs` 192 and 1 skipped, `bin/resume.test.mjs` 12,
+  `bin/lib/manifest.test.mjs` 94, `bin/install.test.mjs` 59, `bin/js-harness.test.mjs` 28, and
+  twelve neighbouring files green.
+- 2026-10-11, this session's context: 400k tokens (80%) by the board the writer ran, 77% by
+  `get_usage` at 09:13. It writes this state at the pause and goes on while the task fits.
 
 ## Next step
+FIRST, if the working tree of `feat/session-context` still holds uncommitted code (`git status
+--short`): (1) have a writer make `scripts/practice.mjs` and `scripts/e2e.mjs` expect the two
+hook entries, with their tests (`scripts/practice-lib.test.mjs` and any test of `e2e`), and
+make `contextCompaction` one shape in `--json`; (2) the parent's spot check of the test files
+above; (3) the commit and its gate (stop this session's `tsserver.js` first); (4) the
+gentle-ai review of `7a19710..HEAD` in the worktree (`review-chain.mjs`, then
+`capture-ack.mjs`), in two halves against a boundary if it does not fit; (5) its findings.
+
 The third slice is whole on `feat/session-board-channel` at `7a19710`: T1b, T4b and T4c,
 gated; `ce8bdf7` reviewed by gentle-ai in two halves, `7a19710` not due. It is not pushed. On
 his answer about the cap: the Codex review of `8654c79..7a19710` (five parts, at least
