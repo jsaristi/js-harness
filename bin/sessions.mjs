@@ -14,19 +14,27 @@
 // for their turn. Both are read, neither is written. A gate of a checkout from before the lock asks for
 // no turn and runs whenever it is started: it is told apart by the lock's library, which is beside the
 // script of a gate that knows the lock and of no other (`lockLibraryBesideScript`).
+// The roster is those sessions again, a row per title with the role the title gives (odd/tasks/
+// session-channel.md): computed at each read, stored nowhere. `--address <role>` answers with the title
+// of the one other session that holds a role, which is where a message to that role goes; it reads the
+// transcripts and nothing of the machine, so it costs no `git`, no `gh` and no process listing.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, sessionFacts, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, isSelf, parseProcessList, parsePsList, percentOf, projectSlug, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
   '                           [--context-window <tokens>] [--context-limit <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
   '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>] [--relief <path>]',
+  '       js-harness sessions --address orchestrator|<number> [--hours <n>] [--self <session id>]',
+  '                           [--cwd <path>] [--claude-home <path>]',
+  '         prints the title of the one other session that holds the role: exit 0 for one,',
+  '         1 for none with every transcript read, 2 for several or when it cannot tell',
 ].join('\n');
 
 // How often a watch looks, and how long it waits before it returns with nothing, in seconds. A look is
@@ -99,6 +107,9 @@ function parseArgs(argv) {
       if (!(parsed.contextWindow > 0)) throw new SessionsArgError('--context-window takes a whole number of tokens above zero');
     } else if (token === '--context-limit') {
       parsed.contextLimitSpec = requireValue(argv, i, token);
+    } else if (token === '--address') {
+      parsed.address = roleNamed(requireValue(argv, i, token));
+      if (parsed.address === null) throw new SessionsArgError('--address takes a role: orchestrator (or ORQ), or the number of a work session');
     } else {
       throw new SessionsArgError(`unknown argument: ${token}`);
     }
@@ -108,6 +119,8 @@ function parseArgs(argv) {
   for (const [flag, key] of waits) {
     if (!parsed.watch && parsed[key] !== undefined) throw new SessionsArgError(`${flag} only applies with --watch`);
   }
+  // An address is one title and an exit code: there is no board in it to watch, or to give as data.
+  if (parsed.address && (parsed.watch || parsed.json)) throw new SessionsArgError('--address prints a title: it does not go with --watch or --json');
   // The limit is read last: as a percentage it is a share of the window, whichever flag came first.
   const contextLimit = contextLimitOf(parsed.contextLimitSpec, parsed.contextWindow);
   if (!(contextLimit > 0)) throw new SessionsArgError('--context-limit takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (73%)');
@@ -324,14 +337,17 @@ export async function sessionsMain(
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
-  /** One look at the machine: the board, or `null` (said on stderr) when the project has no sessions folder. */
-  const look = () => {
+  /** One look at the transcripts: `{ generatedAt, since, sessions }`, the sessions whose transcript changed
+   * in the window, the most recent first, and where that window starts (ms); or `{ unlisted }` when the
+   * sessions folder could not be listed, with the system's code for why, or its message when it gave no
+   * code. `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions
+   * and did not show them, which is not the same answer to every caller (`--address`). */
+  const lookAtSessions = () => {
     let names;
     try {
       names = readdir(projectDir);
     } catch (err) {
-      stderr(`js-harness sessions: no sessions folder for ${root}: ${projectDir} (${err.code ?? err.message})`);
-      return null;
+      return { unlisted: err.code ?? err.message };
     }
 
     const generatedAt = now();
@@ -355,7 +371,20 @@ export async function sessionsMain(
     const recency = (session) => session.lastEntryAt ?? session.modifiedAt ?? '';
     sessions.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : 0));
     for (const session of sessions) if (isSelf(session.id, self)) session.self = true;
+    return { generatedAt, since, sessions };
+  };
 
+  const noFolder = (code) => `js-harness sessions: no sessions folder for ${root}: ${projectDir} (${code})`;
+
+  /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
+   * listed: there is then no board to print, whatever the reason, and the line gives it. */
+  const look = () => {
+    const seen = lookAtSessions();
+    if (seen.unlisted !== undefined) {
+      stderr(noFolder(seen.unlisted));
+      return null;
+    }
+    const { generatedAt, since, sessions } = seen;
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
     // in line, and read the other way round more of them would be shown as not yet in line. The waiters
@@ -381,6 +410,8 @@ export async function sessionsMain(
       self,
       generatedAt: new Date(generatedAt).toISOString(),
       sessions,
+      // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
+      roster: rosterOf(sessions, { worktrees, since }),
       worktrees,
       gates,
       gateLock,
@@ -390,6 +421,63 @@ export async function sessionsMain(
     };
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
+
+  // The address of a role: the title of the one session that holds it, among the sessions the board
+  // would list and without the one that asks, so the answer is always about the others. A session that
+  // starts as orchestrator learns from it whether another one is there (0 or 2), and a work session
+  // where its notices go (0 only). Two transcripts under one title are one holder, and a transcript holds
+  // a role only while its last timed entry is in the window, whatever the date of its file (`rosterOf`).
+  //
+  // Exit 1 says more than "none found": no other session holds the role, and every transcript of the
+  // window was read. A transcript that could not be read has no title, so it may be the holder: with no
+  // holder found the answer is then not known, and that is exit 2, with the file. The session that starts
+  // as orchestrator takes exit 1 as leave to start, so not knowing must never read as "none". Exit 2 is
+  // "no clean answer": several holders, cannot tell, or a usage error. The same holds one step earlier: a
+  // sessions folder that does not exist has no session in it, and one that is there and could not be
+  // listed (no permission, busy, a disk error) may be full of them, so only the first is exit 1. A first
+  // version took every failure of the listing for "no folder" (found by both reviews, 2026-10-11).
+  if (parsed.address) {
+    const role = parsed.address.role === 'orchestrator' ? 'the orchestrator' : `work session ${parsed.address.number}`;
+    const seen = lookAtSessions();
+    if (seen.unlisted === 'ENOENT') {
+      stderr(noFolder(seen.unlisted));
+      return 1;
+    }
+    if (seen.unlisted !== undefined) {
+      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: the sessions folder ${projectDir} could not be listed (${seen.unlisted})`);
+      return 2;
+    }
+    // The session that asks is left out by its transcript, not by its title. Leaving out every transcript
+    // of its title would answer "none" to a second session that took the same title, and a session that
+    // starts as orchestrator must never read that as leave to start. What it costs: after the app
+    // restarts a session into a new file, its own earlier transcript is found as the holder, which is
+    // said beside the answer (`sameTitle` below), since no transcript tells the two cases apart.
+    const others = seen.sessions.filter((session) => !session.self);
+    const roster = rosterOf(others, { since: seen.since });
+    const holders = roleHolders(roster, parsed.address);
+    const window = `that changed in the last ${parsed.hours}h`;
+    const unread = others.filter((session) => session.unavailable).map((session) => `${path.join(projectDir, `${session.id}.jsonl`)} (${session.unavailable})`);
+    const notRead = `${unread.length} transcript${unread.length === 1 ? '' : 's'} ${window} could not be read`;
+    for (const holder of holders) stdout(holder.title);
+    if (holders.length === 0 && unread.length > 0) {
+      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: ${notRead}: ${unread.join(', ')}`);
+      return 2;
+    }
+    if (holders.length === 0) {
+      const apart = others.length < seen.sessions.length ? ', the one that asks is not counted' : '';
+      const outside = roster.outside > 0 ? `, ${roster.outside} of them with no entry in that time` : '';
+      stderr(`js-harness sessions: no session carries the title of ${role} (transcripts ${window}: ${seen.sessions.length}${apart}${outside})`);
+      return 1;
+    }
+    if (holders.length > 1) stderr(`js-harness sessions: ${holders.length} sessions carry the title of ${role}: a message to it has no single address`);
+    // Only a title a session was given is one, as in the roster: the start of a first prompt names nobody.
+    const sameTitle = holders.length === 1 && seen.sessions.some((session) => session.self && session.titleSource === 'custom-title' && session.title === holders[0].title);
+    if (sameTitle) {
+      stderr(`js-harness sessions: ${JSON.stringify(holders[0].title)} is also the title of the session that asks: the transcript found may be an earlier one of this same session, or another session under the same title, and the transcripts cannot tell which`);
+    }
+    if (unread.length > 0) stderr(`js-harness sessions: ${notRead} and ${unread.length === 1 ? 'is' : 'are'} not counted: ${unread.join(', ')}`);
+    return holders.length === 1 ? 0 : 2;
+  }
 
   const first = look();
   if (first === null) return 1;

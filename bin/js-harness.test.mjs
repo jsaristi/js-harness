@@ -264,7 +264,7 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
 });
 
 test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*worktrees.*feature plan.*gates.*pull requests.*relief file.*--watch waits/m);
+  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*roster.*worktrees.*feature plan.*gates.*pull requests.*relief file.*--watch waits.*--address <role>.*exit 0 for one, 1 for none.*2 for several or when it cannot tell/m);
   const result = run(['sessions', '--bogus']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --bogus/);
