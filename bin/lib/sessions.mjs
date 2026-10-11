@@ -1049,37 +1049,60 @@ function messagesBetween(sessions) {
   // in the same millisecond, to one address, in the same words.
   const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null]) : null);
   const known = (message) => (message.id !== null ? 2 : message.failed ? 1 : 0);
-  const calls = []; // one per send, in the order first seen: { session, message }, the copy that knows most
+  //
+  // The sends are kept in the order of the calls: sends of one reply share their moment, so that order
+  // is all that tells the last of them from the first. A send a transcript adds goes before the send
+  // its next call is, so a transcript that holds only the last sends of a reply, read first, does not
+  // put them before the rest.
+  const calls = []; // one per send, in the order of the calls: { session, message }, the copy that knows most
   const slots = new Map(); // key -> the sends of that key held so far
   for (const session of readable) {
-    const here = new Map(); // key -> the calls of this transcript that have it, in their order
-    for (const message of session.sent ?? []) {
+    const sent = session.sent ?? [];
+    const sends = new Array(sent.length); // the send each call of this transcript is, by its place
+    const added = new Set(); // those no transcript before this one had
+    const here = new Map(); // key -> the places of the calls of this transcript that have it, in their order
+    sent.forEach((message, place) => {
       const key = copyKey(session, message);
-      if (key === null) calls.push({ session, message });
-      else here.set(key, [...(here.get(key) ?? []), message]);
-    }
-    for (const [key, mine] of here) {
+      if (key === null) {
+        sends[place] = { session, message };
+        added.add(sends[place]);
+      } else {
+        here.set(key, [...(here.get(key) ?? []), place]);
+      }
+    });
+    for (const [key, places] of here) {
       const held = slots.get(key) ?? [];
       slots.set(key, held);
       const taken = new Set(); // the held sends a call of this transcript already is
       const rest = [];
-      for (const message of mine) {
-        const same = message.id === null ? undefined : held.find((send) => send.message.id === message.id && !taken.has(send));
-        if (same) taken.add(same);
-        else rest.push(message);
-      }
-      for (const message of rest) {
-        const copied = held.find((send) => !taken.has(send) && (message.id === null || send.message.id === null));
-        if (copied === undefined) {
-          const send = { session, message };
-          held.push(send);
-          taken.add(send);
-          calls.push(send);
+      for (const place of places) {
+        const { id } = sent[place];
+        const same = id === null ? undefined : held.find((send) => send.message.id === id && !taken.has(send));
+        if (same === undefined) {
+          rest.push(place);
           continue;
         }
-        taken.add(copied);
-        if (known(message) > known(copied.message)) Object.assign(copied, { session, message });
+        taken.add(same);
+        sends[place] = same;
       }
+      for (const place of rest) {
+        const message = sent[place];
+        const copied = held.find((send) => !taken.has(send) && (message.id === null || send.message.id === null));
+        const send = copied ?? { session, message };
+        taken.add(send);
+        sends[place] = send;
+        if (copied === undefined) {
+          held.push(send);
+          added.add(send);
+        } else if (known(message) > known(copied.message)) {
+          Object.assign(copied, { session, message });
+        }
+      }
+    }
+    let next = calls.length; // where in `calls` the send of the following call of this transcript is
+    for (let place = sent.length - 1; place >= 0; place -= 1) {
+      if (added.has(sends[place])) calls.splice(next, 0, sends[place]);
+      else next = calls.indexOf(sends[place]);
     }
   }
   const messages = [];

@@ -866,8 +866,58 @@ reader, and that table names this feature as their owner.
   after another gate`) failed on one test of 3,281, in a file this change does not touch:
   `evals/suite.test.mjs:748`, "an interrupt during a real trial against a hanging fake agent
   leaves nothing of it", one process still alive after the interrupt (`alive: [false, true]`
-  against `[false, false]`). The same tree was committed again without a change; the result
-  is in the next entry of this kind or in the pull request.
+  against `[false, false]`). During that run, at 14:26, an untracked folder appeared in the
+  working tree, `Microsoft\Windows\PowerShell\ModuleAnalysisCache`: what PowerShell writes when
+  it is started with no `LOCALAPPDATA`; which test starts it so was not looked for. Removed, and
+  both told to the lead for the gate's session. The same tree was committed again without a
+  change.
+- 2026-10-11 15:23 local, commit `0543030`, the second try: `INFO gate waited 30 min 55 s`,
+  `INFO load 6.3 of 8 logical processors busy (79%)`, `PASS tests npm run test passed`; no
+  folder appeared this time.
+- 2026-10-11 16:06 to 16:47 local, the two reviews of the fixes, each inside the gate lock.
+  gentle-ai on `5d150ae..0543030` (645 lines, medium, one lens, lineage
+  `review-0ce42d85c88b57de`): the bound STATUS answered this time, the capture closed approved
+  in 93 s and was acknowledged (`authority burned`); one suggestion,
+  `R3-send-order-unproved`. Codex on `25cf031..0543030`, recorded: 233,435 input tokens, one
+  finding (P2), the same thing proved: taking the calls of a transcript key by key changed the
+  order of sends of one moment (three sends of one reply with the keys K, L, K came out first,
+  third, second), and the sort by time keeps that order, so the last message shown was not the
+  last sent. A defect `0543030` brought in, the second fix in a row to bring one: each was
+  tested for what it fixed and not for what it moved. Fixed test first in the commit this
+  entry is in: red `actual: ['m1', 'm3', 'm2']`; green, `bin/lib/sessions.test.mjs` 185 pass.
+  The sends are kept in the order of the calls, and a send a transcript adds goes before the
+  send its next call is; the test reads the order of the board in both orders of reading, with
+  a transcript that holds the first, the last and the last two, and with sends that have no
+  time. Codex for the feature: 5,964,941 of 7,000,000 input tokens; 1,035,059 left.
+  For the wait: no wait of this session ran out its 60 minutes, but four other gates took the
+  lock while this session's review waited 43 minutes, so the lock is not
+  taken in the order of arrival; every wait is now started with `--wait 180` (the lead's
+  request), and what follows a review (its capture, then Codex only if it approved) runs in
+  one turn (`after-chain.mjs` in the session's scratchpad).
+- 2026-10-11, a defect of `sessions --quote`, found and not fixed in this slice: a message he
+  sends while a session works is written by the host as an entry of `type: "attachment"` whose
+  `attachment` is `{ type: "queued_command", prompt, origin: { kind: "human" }, humanTurn: true
+  }`, and `--quote` exits 1 for it ("not the user's words: … an entry of type attachment").
+  Seen on the lead's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470. Told to
+  the lead; fixed test first in the fourth slice, by the origin's kind and not by the type of
+  the attachment alone.
+- 2026-10-11, what the fourth slice takes besides T5 and T6, each by his words read at their
+  line or as a claim of the lead that is named so. (1) The context pause is 88%, the
+  compaction stays at 93%: "ejemos entonces la regla del 88% y la compactacion al queda en el
+  93% con eso le deja 5%", and in the same entry that old rules beside new ones are "super
+  prohibido" (the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1745,
+  read with `sessions --quote`; line 1666 of it, 90%, is replaced by it). So the number lives
+  in one constant that everything reads, the 85 and the 73 leave every text of this feature,
+  and a test fails if they return. The lead merges that slice only when the constant reads 88.
+  (2) `AGENTS.md` is not edited by this feature: its text is built in `docs/agents-build.md`
+  and he approves it (his words in the entry of line 470 above: "Sí, aprobado el protocolo
+  revisado."); the two sentences of this plan about the resume prompt stay in this document as
+  proposed text. (3) The sweep of JH 7, `docs/sweep-2026-10-11.md` on `main`: 42 items under
+  "JH 5", each a reader's claim, read at its place before it is corrected and checked off
+  there. (4) A fact for T6, the lead's: the host has a `PreCompact` hook (matchers `manual` and
+  `auto`; exit 2 blocks; its output does not enter the context).
+  `main` moved to `859b9a1` meanwhile (pull requests 61, 62 and 63); by the lead's `git
+  merge-tree` both branches of this feature merge clean with it.
 - 2026-10-11, the failure of gentle-ai (the bound STATUS of the fourth slice's review, on the
   branch `feat/session-context`, whose copy of this document has the entry): his choice, read
   with `sessions --quote` in the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
@@ -928,11 +978,11 @@ record. What exists, all local to this machine:
 
 ## Next step
 The third slice, `feat/session-board-channel`: T1b, T4b and T4c with the fixes of both
-reviews. Owed before it is delivered, in this order: the gentle-ai review of the fixes as one
-candidate (`7a19710`, `25cf031` and the commit after it, against the unreferenced boundary
-`5d150ae`, which is the tree of `25cf031` with the seven files of those commits as `ce8bdf7`
-has them, so the range leaves out what the merge of `main` brought), run inside the gate lock;
-the Codex review of the one commit no record covers; then the push, the third pull request
+reviews. gentle-ai has reviewed the fixes up to `0543030` as one candidate (against the
+unreferenced boundary `5d150ae`, which is the tree of `25cf031` with the seven files of those
+commits as `ce8bdf7` has them, so the range leaves out what the merge of `main` brought). Owed
+before it is delivered: the Codex review of the one commit after `0543030`, which no record
+covers, inside the gate lock; its gentle-ai assessment; then the push, the third pull request
 (its text is drafted in the session's scratchpad, `pr-board.md`) and the notice to the lead.
 Then the fourth slice on `feat/session-context` (T5 and T6, built and gated at `9dd1622`):
 merge this branch in, join the two copies of this document, gate, its gentle-ai review as

@@ -2171,6 +2171,27 @@ test('channelOf never takes two sends with two ids for one, whichever transcript
   assert.deepEqual(ids(whole, resumed({ ...same, id: 'm3' })), ['m1', 'm2', 'm3'], 'a third id is a third send');
 });
 
+// Codex review of 0543030, and gentle-ai's of the same change: the calls of a transcript were taken key by
+// key, so three sends of one reply (one moment) with the keys K, L, K came out as the first, the third,
+// the second, and the last message of the board was not the last one sent.
+test('channelOf keeps the sends of one moment in the order their transcript has them, whatever their keys and whichever transcript is read first', () => {
+  const order = (sessions, options = { count: 10 }) => lib.channelOf(recordOf(), sessions, options).messages.map((message) => message.id ?? message.summary);
+  const one = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const other = { ...one, summary: 'and pushed' };
+  const reply = member(B, 'JH 2 · the board', 120, { sent: [{ ...one, id: 'm1' }, { ...other, id: 'm2' }, { ...one, id: 'm3' }] });
+  assert.deepEqual(order([reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply], { count: 1 }), ['m3'], 'the last one shown is the last one sent');
+  // A transcript that holds only some of them, read first, does not put its own before the rest.
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(order([resumed({ ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...other, id: 'm2' }, { ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...one, id: 'm1' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply, resumed({ ...one, id: 'm3' }, { ...other, id: 'm4' })]), ['m1', 'm2', 'm3', 'm4']);
+  // Sends with no time have no key; they stay in the order of their transcript among themselves.
+  const untimed = (summary) => ({ ...one, at: null, summary });
+  assert.deepEqual(order([member(B, 'JH 2 · the board', 120, { sent: [untimed('first'), { ...one, id: 'm1' }, untimed('second'), { ...other, id: 'm2' }, untimed('third')] })]), ['first', 'second', 'third', 'm1', 'm2']);
+});
+
 // Codex review of 7a19710, finding 4: the session whose notices were written from a gate's folder was
 // named as the gate's, and a session opened in that folder, which could have started it, was left out.
 test('renderBoard: a gate in a folder one session wrote its notices from and another was opened in hangs from one of them, each named with what places it', () => {
