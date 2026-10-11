@@ -248,8 +248,10 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
   };
   // The lock keeps its holder's command whole, so the command of a gate this one waited for is cut here as
   // this gate's own is: it can hold the same secret, and a line has to stay short enough to be one write.
-  const cut = (holder) => (typeof holder?.command === 'string' ? { ...holder, command: holder.command.slice(0, GATE_COMMAND_MAX) } : holder);
-  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).map(cut) });
+  const cut = (holder) => (typeof holder.command === 'string' ? { ...holder, command: holder.command.slice(0, GATE_COMMAND_MAX) } : holder);
+  // A member that is no gate is left out: the reader refuses a whole line for one (`BODY`), and a start it
+  // refuses takes the gate's end with it, so writing such a member would cost the gate its place in the log.
+  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).filter(isObject).map(cut) });
   return {
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();

@@ -320,6 +320,23 @@ test('gateRecord cuts the command of each gate it waited for as it cuts its own,
   assert.deepEqual(waitedFor, handed);
 });
 
+test('gateRecord writes no member of the gates it waited for that the reader would refuse: what it writes is read back, start, refusal and end', withHome(async (home) => {
+  const holder = { cwd: 'C:\\work\\other', pid: 4321, command: 'check' };
+  // What is no gate at all, as a caller that went wrong might hand it. The reader leaves out a whole line
+  // for one such member, and a start that is left out takes its end with it.
+  const waitedFor = [holder, null, 'a gate', 7, ['C:\\work\\third'], undefined];
+  const record = gateRecord({ home, cwd: 'C:\\work\\one', command: 'check' });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor });
+  record.end({ result: 'pass', sensors: [] });
+  gateRecord({ home, cwd: 'C:\\work\\two', command: 'check' }).refused({ reason: 'timeout', waitedMs: 0, waitedFor });
+
+  const read = readGateLog(home);
+  assert.equal(read.skipped, 0);
+  assert.deepEqual(read.events.map(({ event, waitedFor: waited }) => [event, waited]), [['start', [holder]], ['end', undefined], ['refused', [holder]]]);
+  const [gate] = gatesOf(read.events);
+  assert.equal(gate.end.id, gate.start.id);
+}));
+
 test('gateRecord never throws to its gate: a write that fails is kept as one sentence, said once, and a gate whose start is not in the log writes no end', () => {
   const cannot = { error: "ENOTDIR: not a directory, mkdir 'somewhere'" };
   const failed = captured(() => cannot);
