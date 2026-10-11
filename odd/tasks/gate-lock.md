@@ -1195,16 +1195,40 @@ allows a feature. No spend outside the plan.
     worktree, which is what every session here works in, is tested through a real hook.
   `bin/check.test.mjs`: 120 of 120. 216 lines added and 37 removed in the two files.
 
+- 2026-10-11 · The two fixes are commit `58fce26`: gate green in 814 s (00:45:42 to 00:59:16), one
+  try (gentle-ai's row: medium, 3 paths, 293 lines, not due yet). Codex reviewed
+  `c2485cd..58fce26` in 3 parts (00:59:31 to 01:02:59) and the review is recorded. Spent:
+  695,746 input tokens (539,648 cached), against a plan of 670,000 to 3,060,000, under the
+  guard set to 1,000,000. The feature's Codex spend: 5,886,360 of 6.5 million; 613,640 left.
+  Parts 2 and 3: no finding. Part 1, one finding, P2, true on reading:
+  - `bin/check.mjs:254`: `git diff --cached --name-only` leaves out a staged change of a
+    submodule when git is set to ignore submodules (`diff.ignoreSubmodules`, or `ignore`
+    in `.gitmodules`), so a commit of a document and a submodule's new commit reads as
+    documents alone and its sensors are skipped. The fix is `--ignore-submodules=none` on
+    that call, with a test first: a gitlink staged beside a document, under
+    `diff.ignoreSubmodules=all`, and the sensors must run. Not done yet.
+  State at 85% of this session's window, by his rule: everything is committed but this
+  entry, which goes in a commit of documents alone, the first of this repository to run
+  no sensor; nothing runs. What is left does not fit before the app's own compaction, so
+  the compaction is asked for here.
+
 ## Next
-1. The commit of those two fixes and its gate.
-2. Codex on `c2485cd..HEAD` (plan at `74e473c`: 3 parts, 560,000 to 2,620,000 input tokens;
-   1,309,386 left; under the guard set to 1,000,000), before `origin/main` is merged in,
-   so that its range is this branch's code alone.
-3. The close: `origin/main` merged in and one gate run on the result by hand, since a merge
-   runs no pre-commit hook; then this document's last entries in a commit of documents
-   alone, the first to run no sensor: what its report says goes in the pull request. Push
-   and pull request; the closing notice to the orchestrator, which merges. The session
-   channel waits for that merge (both change the board's files).
+After the compaction, in this order, nothing of it started:
+1. The Codex finding above: one writer or inline (two files, `bin/check.mjs` and
+   `bin/check.test.mjs`), test first; its commit and gate (code, so the sensors run).
+2. Codex on that one commit (`codex-review --base 58fce26`): its plan first; 613,640 are
+   left, and if the plan's low figure is over that it is a question of spend, his. Under
+   the guard (`codex-run.ps1`, which looks at the process list, sets this document aside
+   and puts it back). gentle-ai: `review assess --base-ref 74e473c --committed-only` and
+   what it asks for.
+3. The close: `git fetch`, `origin/main` merged in (`1d0a732` on 2026-10-11 merged with no
+   conflict), one gate run on the result by hand (`node bin/js-harness.mjs gate --
+   "npm run check"` or `npm run check` after a look at the process list), since a merge
+   runs no pre-commit hook; T8 checked off; this document's last entries in a commit of
+   documents alone; push; pull request (its text: what the lock covers and does not, the
+   numbers, the shards tried and removed, the two things left for the next slice); the
+   closing notice to the orchestrator, which merges. The session channel waits for that
+   merge. Updating the machine's `js-harness` command stays his.
 For the next slice of the gate, in this order: the gate log; fewer git processes in the
 two long test files; the gate on GitHub. A run that needs the machine quiet, and not only
 its turn (an evals batch that compares durations), is a need the lock does not serve.
@@ -1214,6 +1238,9 @@ lines; nothing untracked when a review is assessed; a Codex review wants a clean
 review step beside a running gate; a timing is one only with the process list empty
 before and after it; the look finds `evals/suite.mjs` too; a gate's time is estimated
 from whole runs; a writer works in a worktree of its own while a gate runs here.
+The scripts of this session are in its scratchpad (`commit-after.ps1`, `codex-run.ps1`,
+`review-open.cjs`, `review-capture.cjs`, `mirror-fit.cjs`); gates since T4b, in seconds:
+885, 728, 872, 724, 833, 817, 671, 814.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,
