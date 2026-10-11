@@ -874,16 +874,19 @@ Progress.
   Codex on `88165ec`: 2 parts, both correct, 423,298 input tokens.
 - 2026-10-11 · The Codex spend of the feature: **5,700,616** input tokens of 7,000,000
   (S1 1,772,493; S3 1,552,158; S2 2,375,965).
+- 2026-10-11 17:01 · S2 delivered: `origin/main` (`859b9a1`, S3's code) merged at
+  `aeb63ea` inside a turn of the lock, the whole gate passed on the merged tree, `check
+  --push` passed, the branch was pushed and pull request 64 opened. The home holds no
+  `gate-log` folder: every gate of this session ran with the log switched off.
 
-## Resume here (state at 2026-10-11 16:45, for a session that lost its conversation)
-- S1 and S3 are merged in `main`. S2 is at `88165ec` plus this document: every code commit
-  has a Codex record and gentle-ai approved each range. What is left, in this order: the
-  merge of `origin/main` inside a turn (`gate --wait 180 -- sh <script>` with `git merge
-  --no-commit --no-ff origin/main` and then `git commit`: it brings S3's code, so the
-  hook runs the gate), `node bin/check.mjs --push`, `git push -u origin
-  feat/gate-log-file`, the pull request with the text in `pr-s2.md` of the scratchpad,
-  one line to the orchestrator (the pull request, and for "JH 8" that the reader's
-  change is commit `88165ec`), `mem_session_summary`, the closing notice. Every command
+## Resume here (state at 2026-10-11 17:05, for a session that lost its conversation)
+- S1 and S3 are merged in `main`. S2 is pull request 64
+  (https://github.com/jsaristi/js-harness/pull/64), branch `feat/gate-log-file` pushed at
+  `aeb63ea` plus this document: the merge of `origin/main` (`859b9a1`) was committed
+  inside a turn and the whole gate passed on it (17:01, `PASS tests`), and `check --push`
+  passed (5 code commits, all covered by a Codex record). Nothing is left to build. What
+  is left is the lead's: the merge. If a review of the pull request asks for a change,
+  it is made here, in a turn (`gate --wait 180 -- sh <script>`). Every command
   of this session in `gate-log-file` runs with `JS_HARNESS_GATE_LOG=off` until S2 is
   merged and the machine's command updated; a commit names its paths; a script run
   inside a turn uses `grep`, never `rg`. The scripts and logs are in the scratchpad
