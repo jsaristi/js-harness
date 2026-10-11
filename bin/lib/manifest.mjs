@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
+import { channelDir } from './channel.mjs';
 
 function skillContent(version) {
   return `---
@@ -708,6 +709,11 @@ export function sync(home, version, deps = {}) {
  * too (`removeEmptyDirsUpTo`, which leaves one it cannot list): a test makes either fail as the system
  * does for what it gives no access to.
  *
+ * The folder of the session channel is the same case: `notify` writes it, not `install`, so it is looked
+ * for with a manifest and without, removed with what it holds through the same seams, named in `removed`,
+ * and `channelKept` says why it was left, as `[{ path, reason: 'unremovable', code }]`
+ * (`removeChannelFolder`). The orchestrator's relief file is not part of it and stays.
+ *
  * `keptOptional` says why each optional file in `kept` is there, as `{ path, reason }`: `edited` (its bytes are
  * no longer what was recorded), or `unreadable` or `unremovable` with the `code` of the error that stopped it.
  * The last two are not the user's doing, and the manifest that named the file is gone when this returns, so
@@ -735,8 +741,9 @@ export function uninstall(home, deps = {}) {
     // No install to undo, and still a home `check` may have run under: the gate lock's folder is no
     // component, so it is looked for all the same, and the folder it leaves empty goes with it.
     const gate = removeGateFolder(home, removeFile, statFile);
+    const channel = removeChannelFolder(home, removeFile, statFile);
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
-    return { removed: gate.removed, kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept };
+    return { removed: [...gate.removed, ...channel.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: gate.kept, channelKept: channel.kept };
   }
 
   const removed = [];
@@ -790,7 +797,8 @@ export function uninstall(home, deps = {}) {
 
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
-  removed.push(...gate.removed);
+  const channel = removeChannelFolder(home, removeFile, statFile);
+  removed.push(...gate.removed, ...channel.removed);
   if (stillRecorded.length > 0) {
     writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
   } else {
@@ -798,7 +806,7 @@ export function uninstall(home, deps = {}) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
 
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept };
+  return { removed, kept, keptOptional, entriesRemoved, entriesKept, tasksRemoved, tasksKept, gateKept: gate.kept, channelKept: channel.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -825,6 +833,29 @@ function removeGateFolder(home, removeFile, statFile) {
     const holder = readGateHolder(home);
     const alive = holder && !holder.stale ? holder : waiting;
     if (alive) return { removed: [], kept: [{ path: dir, reason: 'in-use', pid: alive.pid, cwd: alive.cwd }] };
+    removeFile(dir, { recursive: true, force: true });
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  return { removed: [dir], kept: [] };
+}
+
+/** Removes the folder of the session channel under `home` (`channelDir` of `channel.mjs`) with whatever is
+ * in it, the record of every project and the openings of their sessions, as `{ removed, kept }`, like
+ * `removeGateFolder`: `removed` holds its path when it was there and is gone, `kept` says why it was left,
+ * and both are empty when there was no such folder.
+ *
+ * Nothing records that folder either: `js-harness notify` writes it under the home, in a project with a
+ * machine install or without one. No process lives in it, so there is no "in use": a notice appended
+ * while it goes makes the folder again, and the next `uninstall` removes it. A folder that could not be
+ * looked at or removed is kept with reason `unremovable` and the error's `code`.
+ *
+ * The orchestrator's relief file is beside it and is not touched: it is that session's own log, written by
+ * hand before `notify --relief` existed, and no `uninstall` ever removed it. */
+function removeChannelFolder(home, removeFile, statFile) {
+  const dir = channelDir(home);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
     removeFile(dir, { recursive: true, force: true });
   } catch (err) {
     return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import nodePath from 'node:path';
 import * as lib from './sessions.mjs';
 
 // Every transcript below is synthetic: the entry shapes are the ones odd/tasks/session-board.md records
@@ -463,6 +464,106 @@ test('a tool result whose call the transcript never recorded starts no work and 
   const facts = lib.sessionFacts(transcript(prompt('go', 1), ...orphans, notified({ task: 'b9', status: 'completed' }, 6), reply('Done.', 7)));
   assert.deepEqual([facts.work, facts.state, facts.skippedLines], [[], 'waiting', 0]);
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), ...orphans)).state, 'working');
+});
+
+// --- sessionFacts: messages between sessions, and the permission mode ---
+//
+// The shapes are the ones a key tally of this project's real transcripts gave on 2026-10-11 (48
+// transcripts, 185 entries of origin `peer`, 205 `SendMessage` calls to a session; no text was read):
+// a message from another session is a user entry the host marks `isMeta`, with `origin.kind: "peer"`
+// and the sender in `name`, `fromSession`, `fromMode` and `msg_id`; a subagent that hands back to its
+// parent has `handback` and no session; one the app put in has `hostInjected`. Every user entry that
+// starts a turn carries `permissionMode`. The contents are made up.
+
+const peer = (minute, origin = {}, more = {}) => ({
+  type: 'user',
+  ...base(minute),
+  isMeta: true,
+  permissionMode: 'bypassPermissions',
+  origin: { kind: 'peer', from: 'uds:made-up', fromSession: 'local_sender-1', fromMode: 'bypass', name: 'JH 1 · made up', msg_id: 'msg-1', body: 'made up', ...origin },
+  message: { role: 'user', content: 'Another session sent this: made up' },
+  ...more,
+});
+const handback = (minute) => ({ ...peer(minute), origin: { kind: 'peer', from: 'a1f', senderTaskId: 'a1f', handback: true, body: 'made up' } });
+const injected = (minute) => ({ ...peer(minute), origin: { kind: 'peer', from: 'local_sender-2', fromMode: 'bypass', hostInjected: true } });
+
+test('a message from another session starts a turn: the session works until its reply ends it', () => {
+  const arrived = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), peer(3)));
+  assert.deepEqual([arrived.state, arrived.turnEndedAt], ['working', null]);
+  const answered = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), peer(3), reply('noted', 4)));
+  assert.deepEqual([answered.state, answered.turnEndedAt], ['waiting', at(4)]);
+  // Any other entry the host marks as meta still decides nothing, and neither does a peer entry of a side chain.
+  const reminder = { type: 'user', ...base(3), isMeta: true, message: { role: 'user', content: 'a reminder' } };
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), reminder, { ...peer(4), isSidechain: true })).state, 'waiting');
+});
+
+test('a message from another session is not his prompt: it is never the title a session falls back to', () => {
+  const facts = lib.sessionFacts(transcript(peer(1), reply('noted', 2), prompt('build the roster', 3)));
+  assert.deepEqual([facts.title, facts.titleSource], ['build the roster', 'first-prompt']);
+  const onlyPeers = lib.sessionFacts(transcript(peer(1), reply('noted', 2)));
+  assert.deepEqual([onlyPeers.title, onlyPeers.titleSource], [null, null]);
+});
+
+test('sessionFacts lists the messages a session received: when, from whom, and the sender\'s session, mode and message id', () => {
+  const second = peer(5, { name: 'JH ORQ · made up', fromSession: 'local_sender-9', msg_id: 'msg-2', hopChain: ['x'] });
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), peer(3), reply('noted', 4), second, handback(6), injected(7)));
+  assert.deepEqual(facts.received, [
+    { at: at(3), from: 'session', name: 'JH 1 · made up', session: 'local_sender-1', mode: 'bypass', id: 'msg-1' },
+    { at: at(5), from: 'session', name: 'JH ORQ · made up', session: 'local_sender-9', mode: 'bypass', id: 'msg-2' },
+    { at: at(6), from: 'subagent', name: null, session: null, mode: null, id: null },
+    { at: at(7), from: 'host', name: null, session: null, mode: 'bypass', id: null },
+  ]);
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2))).received, []);
+});
+
+test('a message a resumed session writes again is listed once, and what he or a task sends is not a message from a session', () => {
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), peer(2), reply('noted', 3), peer(2), reply('noted', 3), prompt('his', 4), notified({ task: 'b1', status: 'completed' }, 5)));
+  assert.deepEqual(facts.received.map((message) => message.id), ['msg-1']);
+  // Two messages with no id of their own are told apart by the entry that holds each.
+  const twice = lib.sessionFacts(transcript({ ...handback(1), uuid: 'u-1' }, { ...handback(2), uuid: 'u-2' }, { ...handback(1), uuid: 'u-1' }));
+  assert.deepEqual(twice.received.map((message) => message.at), [at(1), at(2)]);
+});
+
+const send = (id, input, minute) => call(id, 'SendMessage', { type: 'message', summary: 'made up', message: 'made up', content: 'made up', recipient: input.to, ...input }, minute);
+
+test('sessionFacts lists the messages a session sent to another session: when, to which address, and the id the host returned', () => {
+  const facts = lib.sessionFacts(
+    transcript(
+      prompt('go', 1),
+      send('toolu_m1', { to: 'JH ORQ · made up', recipient_kind: 'name' }, 2),
+      result('toolu_m1', { success: true, msg_id: 'msg-7', display: 'made up', message: 'made up' }, 2),
+      send('toolu_m2', { to: 'uds:made-up', recipient_kind: 'session' }, 3),
+      result('toolu_m2', { success: true, display: 'made up', message: 'made up' }, 3),
+      send('toolu_m3', { to: 'JH 9 · made up', recipient_kind: 'name' }, 4),
+      result('toolu_m3', 'Error: made up', 4, { is_error: true }),
+      send('toolu_m4', { to: 'JH 2 · made up', recipient_kind: 'name' }, 5),
+    ),
+  );
+  assert.deepEqual(facts.sent, [
+    { at: at(2), to: 'JH ORQ · made up', toKind: 'name', id: 'msg-7', failed: false },
+    { at: at(3), to: 'uds:made-up', toKind: 'session', id: null, failed: false },
+    { at: at(4), to: 'JH 9 · made up', toKind: 'name', id: null, failed: true },
+    { at: at(5), to: 'JH 2 · made up', toKind: 'name', id: null, failed: false },
+  ]);
+  assert.deepEqual(facts.work, [], 'a message to a session is not background work');
+});
+
+test('a follow-up to a subagent is work and not a message to a session, and a send written again is listed once', () => {
+  const toAgent = [send('toolu_f1', { to: 'a1', recipient_kind: 'agent' }, 2), result('toolu_f1', { success: true, resumedAgentId: 'a1', pin: { id: 'a1' } }, 2)];
+  // The host of an earlier version named no kind of recipient: what its result returns tells the two apart.
+  const older = [send('toolu_f2', { to: 'a2' }, 3), result('toolu_f2', { success: true, pin: { id: 'a2' } }, 3), send('toolu_f3', { to: 'JH 1 · made up' }, 4), result('toolu_f3', { success: true, msg_id: 'msg-8' }, 4)];
+  const again = [send('toolu_f3', { to: 'JH 1 · made up' }, 4), result('toolu_f3', { success: true, msg_id: 'msg-8' }, 4)];
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...toAgent, ...older, ...again));
+  assert.deepEqual(facts.sent, [{ at: at(4), to: 'JH 1 · made up', toKind: null, id: 'msg-8', failed: false }]);
+  assert.deepEqual(facts.work.map((work) => [work.id, work.resumed]), [['a1', true]]);
+});
+
+test('sessionFacts gives the permission mode the last entry that records one has, and none when no entry does', () => {
+  const moded = (mode, minute) => ({ ...prompt('go', minute), permissionMode: mode });
+  assert.equal(lib.sessionFacts(transcript(moded('bypassPermissions', 1), reply('done', 2), moded('auto', 3), reply('done', 4))).permissionMode, 'auto');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), peer(3))).permissionMode, 'bypassPermissions', 'a message from a session records the receiver\'s mode too');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2))).permissionMode, null);
+  assert.equal(lib.sessionFacts(transcript({ ...prompt('go', 1), permissionMode: 7 })).permissionMode, null);
 });
 
 // --- machine facts: every external command is a fake `run`, keyed on what it is asked ---
@@ -1581,4 +1682,256 @@ test('renderBoard gives the reason of an unknown state and of a time it cannot r
   const session = { id: 'dddddddd-4444', title: 't', state: 'unknown', stateReason: 'the transcript holds no prompt, reply or tool entry', lastEntryAt: null, cwd: 'C:\\p', gitBranch: 'main', skippedLines: 0, work: [], tail: [] };
   const lines = lib.renderBoard({ ...BOARD, sessions: [session] }, { now: NOW });
   assert.equal(lines[2], 'dddddddd  unknown (the transcript holds no prompt, reply or tool entry)  t  last entry at an unknown time');
+});
+
+// --- the roster: who is who, from the titles ---
+//
+// A session's title is the address of its role: `<project code> <role> · <what it does>`, the role being
+// `ORQ` for the orchestrator or the number of a work session. The titles below are made up.
+
+test('roleOfTitle reads the project code, the role and what the session is for from a title of the agreed shape', () => {
+  assert.deepEqual(lib.roleOfTitle('JH ORQ · js-harness'), { code: 'JH', role: 'orchestrator', number: null, purpose: 'js-harness' });
+  assert.deepEqual(lib.roleOfTitle('JH 5 · canal entre sesiones'), { code: 'JH', role: 'work', number: 5, purpose: 'canal entre sesiones' });
+  assert.deepEqual(lib.roleOfTitle('AB 0 · a · b'), { code: 'AB', role: 'work', number: 0, purpose: 'a · b' });
+  // A handover renames the two orchestrators on purpose, so that neither holds the role by its title.
+  const others = ['JH ORQ nueva · js-harness', 'JH ORQ relevada · js-harness', 'Board feature', 'JH orq · x', 'JH ORQ - x', 'JH ORQ ·x', 'JH ORQ· x', 'JH 5 · ', 'JH 5.5 · x', 'JH -5 · x', 'ORQ · x', ' JH ORQ · x', '', null, undefined, 7];
+  for (const title of others) assert.equal(lib.roleOfTitle(title), null, JSON.stringify(title));
+});
+
+test('roleNamed reads the role an --address asks for: the orchestrator by either of its names, a work session by its number', () => {
+  for (const text of ['orchestrator', 'ORQ', 'orq', 'Orchestrator']) assert.deepEqual(lib.roleNamed(text), { role: 'orchestrator', number: null }, text);
+  assert.deepEqual([lib.roleNamed('5'), lib.roleNamed('05'), lib.roleNamed('0')], [{ role: 'work', number: 5 }, { role: 'work', number: 5 }, { role: 'work', number: 0 }]);
+  for (const text of ['', ' ', 'boss', '5.5', '-5', '0x5', '1e1', 'JH 5', 'ORQ nueva', '9'.repeat(400)]) assert.equal(lib.roleNamed(text), null, JSON.stringify(text.slice(0, 20)));
+});
+
+const C = 'cccccccc-3333-4333-8333-333333333333';
+const D = 'dddddddd-4444-4444-8444-444444444444';
+const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], ...more });
+
+test('rosterOf gives one row per title, with its role, what it is for, its mode, where it works and when it last wrote', () => {
+  const roster = lib.rosterOf([member(A, 'JH 2 · the board', 60, { permissionMode: 'auto', cwd: 'C:\\elsewhere', gitBranch: 'feat/x' }), member(B, 'JH ORQ · proj', 600)]);
+  assert.deepEqual(roster, {
+    rows: [
+      row('JH ORQ · proj', 'orchestrator', { purpose: 'proj', lastEntryAt: before(600), transcripts: [{ id: B, lastEntryAt: before(600) }] }),
+      row('JH 2 · the board', 'work', { number: 2, purpose: 'the board', lastEntryAt: before(60), permissionMode: 'auto', cwd: 'C:\\elsewhere', gitBranch: 'feat/x', transcripts: [{ id: A, lastEntryAt: before(60) }] }),
+    ],
+    unread: 0,
+    outside: 0,
+  });
+  assert.deepEqual(lib.rosterOf([]), { rows: [], unread: 0, outside: 0 });
+});
+
+// The app appends entries with no time to a transcript it opens (`cost-state`, seen on 2026-10-11 in two
+// whose last timed entry was 13 and 14 days old): the file is then new and the session is not.
+test('rosterOf: a transcript whose last timed entry is before the window is no row and holds no role, however new its file', () => {
+  const since = NOW - 12 * 3600 * 1000;
+  const sessions = [
+    member(A, 'JH ORQ · proj', 600),
+    member(B, 'JH ORQ · days ago', 13 * 86400),
+    member(C, 'JH 1 · restarted', 60),
+    member(D, 'JH 1 · restarted', 14 * 86400),
+    member('eeeeeeee-5555', 'JH 2 · no time', 0, { lastEntryAt: null }),
+    member('ffffffff-6666', 'JH 3 · at the edge', 12 * 3600),
+  ];
+  const roster = lib.rosterOf(sessions, { since });
+  assert.deepEqual(roster.rows.map((item) => [item.title, item.transcripts.map((transcript) => transcript.id.slice(0, 8))]), [
+    ['JH ORQ · proj', ['aaaaaaaa']],
+    ['JH 1 · restarted', ['cccccccc']],
+    ['JH 3 · at the edge', ['ffffffff']],
+  ]);
+  assert.equal(roster.outside, 3);
+  assert.deepEqual(lib.roleHolders(roster, lib.roleNamed('orchestrator')).map((item) => item.title), ['JH ORQ · proj']);
+  assert.deepEqual(lib.roleHolders(roster, lib.roleNamed('2')), []);
+  // With no window given every transcript handed in is a row, as before.
+  assert.deepEqual([lib.rosterOf(sessions).rows.length, lib.rosterOf(sessions).outside], [5, 0]);
+});
+
+test('rosterOf: the transcripts of one title are one row, which says what the latest of them records', () => {
+  // One app session restarted by the app writes a new transcript under the title it had.
+  const older = member(A, 'JH 1 · the lock', 7200, { permissionMode: 'auto', cwd: 'C:\\old', gitBranch: 'feat/old' });
+  const newer = member(B, 'JH 1 · the lock', 60, { permissionMode: null, cwd: 'C:\\new', gitBranch: null, self: true });
+  const [only, ...rest] = lib.rosterOf([older, newer]).rows;
+  assert.deepEqual(rest, []);
+  // The mode of the latest transcript that records one; the folder and the branch together, from the
+  // latest that records a folder, since a branch is the branch of a folder.
+  assert.deepEqual(only, row('JH 1 · the lock', 'work', { number: 1, purpose: 'the lock', self: true, lastEntryAt: before(60), permissionMode: 'auto', cwd: 'C:\\new', gitBranch: null, transcripts: [{ id: B, lastEntryAt: before(60) }, { id: A, lastEntryAt: before(7200) }] }));
+  const unplaced = lib.rosterOf([older, { ...newer, cwd: null }]).rows[0];
+  assert.deepEqual([unplaced.cwd, unplaced.gitBranch], ['C:\\old', 'feat/old']);
+});
+
+test('rosterOf: a title outside the shape is a row with no role, a session with no title of its own is a row of its own, and a transcript that cannot be read is counted', () => {
+  const sessions = [
+    member(A, 'Board feature', 60),
+    member(B, 'fix the review', 120, { titleSource: 'first-prompt' }),
+    member(C, 'fix the review', 180, { titleSource: 'first-prompt' }),
+    member(D, null, 240, { titleSource: null, lastEntryAt: null }),
+    { id: 'eeeeeeee-5555', modifiedAt: before(1), unavailable: 'EBUSY' },
+    // The start of a first prompt is not a name, whatever it looks like: it holds no role.
+    member('ffffffff-6666', 'JH ORQ · proj', 300, { titleSource: 'first-prompt' }),
+  ];
+  const roster = lib.rosterOf(sessions);
+  assert.equal(roster.unread, 1);
+  assert.deepEqual(roster.rows.map((item) => [item.title, item.titleSource, item.role, item.transcripts.map((transcript) => transcript.id.slice(0, 8))]), [
+    ['Board feature', 'custom-title', null, ['aaaaaaaa']],
+    ['fix the review', 'first-prompt', null, ['bbbbbbbb']],
+    ['fix the review', 'first-prompt', null, ['cccccccc']],
+    ['JH ORQ · proj', 'first-prompt', null, ['ffffffff']],
+    [null, null, null, ['dddddddd']],
+  ]);
+});
+
+test('rosterOf puts the orchestrator first, then the work sessions by number, then the rest, the latest first', () => {
+  const titles = ['Loose notes', 'JH 10 · ten', 'JH ORQ · proj', 'JH 2 · two', 'Other notes'];
+  const roster = lib.rosterOf(titles.map((title, index) => member(`${index}0000000-0000`, title, 60 * (index + 1))));
+  assert.deepEqual(roster.rows.map((item) => item.title), ['JH ORQ · proj', 'JH 2 · two', 'JH 10 · ten', 'Loose notes', 'Other notes']);
+});
+
+test('rosterOf says which worktree the folder a session records is, and the feature plans of its branch when the worktree is still on it', () => {
+  const plans = (...names) => ({ available: true, items: names.map((name) => ({ path: `odd/tasks/${name}.md`, title: name, done: 0, total: 1, pending: [], nextStep: [] })) });
+  const worktrees = {
+    available: true,
+    items: [
+      { path: 'D:/proj', branch: 'main', plans: plans() },
+      { path: 'D:/proj-worktrees/board', branch: 'feat/board', plans: plans('session-board', 'draft') },
+      { path: 'D:/proj-worktrees/lock', branch: 'feat/lock', plans: { available: false, reason: 'git diff: boom' } },
+    ],
+  };
+  const sessions = [
+    member(A, 'JH 1 · board', 60, { cwd: 'd:\\proj-worktrees\\board\\', gitBranch: 'feat/board' }),
+    member(B, 'JH 2 · moved on', 60, { cwd: 'D:\\proj-worktrees\\board', gitBranch: 'feat/earlier' }),
+    member(C, 'JH 3 · lock', 60, { cwd: 'D:\\proj-worktrees\\lock', gitBranch: 'feat/lock' }),
+    member(D, 'JH 4 · elsewhere', 60, { cwd: 'C:\\elsewhere', gitBranch: 'main' }),
+  ];
+  const places = (given) => lib.rosterOf(sessions, given).rows.map((item) => [item.worktree, item.features]);
+  assert.deepEqual(places({ worktrees }), [['D:/proj-worktrees/board', ['session-board', 'draft']], ['D:/proj-worktrees/board', []], ['D:/proj-worktrees/lock', []], [null, []]]);
+  assert.deepEqual(places({ worktrees: { available: false, reason: 'git worktree: boom' } }), [[null, []], [null, []], [null, []], [null, []]]);
+});
+
+test('roleHolders gives the rows that hold a role', () => {
+  const roster = lib.rosterOf([member(A, 'JH ORQ · proj', 60), member(B, 'XX ORQ · other', 120), member(C, 'JH 5 · five', 180), member(D, 'JH ORQ nueva · proj', 240)]);
+  assert.deepEqual(lib.roleHolders(roster, lib.roleNamed('orchestrator')).map((item) => item.title), ['JH ORQ · proj', 'XX ORQ · other']);
+  assert.deepEqual(lib.roleHolders(roster, lib.roleNamed('5')).map((item) => item.title), ['JH 5 · five']);
+  assert.deepEqual(lib.roleHolders(roster, lib.roleNamed('6')), []);
+});
+
+const rosterSection = (sessions, given) => {
+  const lines = lib.renderBoard({ ...BOARD, sessions, roster: lib.rosterOf(sessions, given) }, { now: NOW });
+  assert.equal(lines[lines.indexOf('Roster') - 1], '', 'after the sessions');
+  return lines.slice(lines.indexOf('Roster'), lines.indexOf('Worktrees') - 1);
+};
+
+test('renderBoard prints the roster after the sessions: a row per title with its role, then where it works, and last what it cannot know', () => {
+  const sessions = [
+    member(A, 'JH ORQ · proj', 600),
+    member(B, 'JH 2 · the board', 5, { self: true, permissionMode: 'auto', cwd: 'D:\\proj-worktrees\\board', gitBranch: 'feat/board' }),
+    member(C, 'JH 2 · the board', 7500, { cwd: null, gitBranch: null, permissionMode: null }),
+    member(D, 'Board feature', 3 * 86400, { permissionMode: null, cwd: null, gitBranch: null }),
+    member('eeeeeeee-5555', 'fix the review', 60, { titleSource: 'first-prompt' }),
+    member('ffffffff-6666', null, 60, { titleSource: null, lastEntryAt: null }),
+    { id: '99999999-7777', modifiedAt: before(1), unavailable: 'EBUSY' },
+  ];
+  const worktrees = { available: true, items: [{ path: 'D:/proj-worktrees/board', branch: 'feat/board', plans: { available: true, items: [{ path: 'odd/tasks/session-board.md' }] } }] };
+  assert.deepEqual(rosterSection(sessions, { worktrees }), [
+    'Roster',
+    '  orchestrator  JH ORQ · proj  silent since 10m ago',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript aaaaaaaa',
+    '  work 2  JH 2 · the board  this session, last entry 5s ago',
+    // `folder`, as the entries record it, and not `worktree`: a session that reaches one by `cd` records another.
+    '    mode auto  folder D:\\proj-worktrees\\board  branch feat/board  feature session-board  transcripts bbbbbbbb (5s ago), cccccccc (2h 05m ago)',
+    '  no role  fix the review  silent since 1m ago  (it has no title: this is the start of its first prompt)',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript eeeeeeee',
+    '  no role  Board feature  silent since 3d ago  (its title is not "<code> <role> · <what it does>")',
+    '    mode unknown  folder unknown  branch unknown  transcript dddddddd',
+    '  no role  (no title)  silent, no entry of it has a time  (it has no title)',
+    '    mode bypassPermissions  folder D:\\proj  branch main  transcript ffffffff',
+    '  1 transcript that could not be read is in no row',
+    `  ${lib.ROSTER_NOT_KNOWN}`,
+  ]);
+  assert.match(lib.ROSTER_NOT_KNOWN, /alive or archived/);
+  assert.match(lib.ROSTER_NOT_KNOWN, /the worktree a session reaches by `cd`/);
+});
+
+test('renderBoard says how many transcripts of the window have no entry in it, and are in no row of the roster', () => {
+  const since = NOW - 12 * 3600 * 1000;
+  const old = (id, title) => member(id, title, 13 * 86400);
+  const counted = (sessions) => rosterSection(sessions, { since }).filter((line) => line.includes('no entry inside the window'));
+  assert.deepEqual(counted([member(A, 'JH ORQ · proj', 600), old(B, 'JH ORQ · days ago')]), ['  1 transcript with no entry inside the window is in no row']);
+  assert.deepEqual(counted([member(A, 'JH ORQ · proj', 600), old(B, 'JH 1 · one'), old(C, 'JH 2 · two')]), ['  2 transcripts with no entry inside the window are in no row']);
+  assert.deepEqual(counted([member(A, 'JH ORQ · proj', 600)]), []);
+  // Nothing but such transcripts is still a roster that says so, not "no session".
+  assert.deepEqual(rosterSection([old(B, 'JH 1 · one')], { since }), ['Roster', '  1 transcript with no entry inside the window is in no row', `  ${lib.ROSTER_NOT_KNOWN}`]);
+});
+
+test('renderBoard says in one line when more than one session carries the orchestrator\'s title, and only then', () => {
+  const warning = (sessions) => rosterSection(sessions).filter((line) => /carry the orchestrator/.test(line));
+  assert.deepEqual(warning([member(A, 'JH ORQ · proj', 60), member(B, 'JH ORQ · other', 120), member(C, 'JH 1 · one', 180)]), [
+    '  2 sessions carry the orchestrator\'s title: "JH ORQ · proj", "JH ORQ · other". A message to the orchestrator has no single address.',
+  ]);
+  // A handover: the one that arrives and the one that leaves hold other titles, and one orchestrator is left.
+  assert.deepEqual(warning([member(A, 'JH ORQ · proj', 60), member(B, 'JH ORQ nueva · proj', 120), member(C, 'JH ORQ relevada · proj', 180)]), []);
+  // Two work sessions under one number are two rows, and no line of this kind.
+  assert.deepEqual(warning([member(A, 'JH 1 · one', 60), member(B, 'JH 1 · another', 120)]), []);
+});
+
+test('renderBoard prints a roster with no session as such, and no section for a board that was given none', () => {
+  assert.deepEqual(rosterSection([]), ['Roster', '  no session']);
+  assert.equal(lib.renderBoard(BOARD, { now: NOW }).includes('Roster'), false);
+});
+
+test('boardChanges does not compare the roster: it is the sessions again, and a title that changes wakes nobody', () => {
+  const titled = (title) => {
+    const sessions = [seen(A, 'waiting', { title, titleSource: 'custom-title' })];
+    return { sessions, roster: lib.rosterOf(sessions) };
+  };
+  assert.deepEqual(changes(titled('JH ORQ nueva · proj'), titled('JH ORQ · proj')), []);
+});
+
+// --- the project a folder belongs to ---
+//
+// `mainCheckout` is shared by the board and by `notify`, which must name the same project from the same
+// folder: the board's own tests (bin/sessions.test.mjs) go through every layout with a whole machine,
+// and these pin the function where both take it from.
+
+/** A fake `git rev-parse` that answers each list of options, joined by a space, from `answers`; anything
+ * else fails as git does outside a repository. */
+function revParse(answers) {
+  const calls = [];
+  const run = (command, args, { cwd }) => {
+    calls.push({ command, args, cwd });
+    const answer = answers[`${args.slice(1).join(' ')} @ ${cwd}`] ?? answers[args.slice(1).join(' ')];
+    return answer === undefined ? { status: 128, stdout: '', stderr: 'fatal: not a git repository\n' } : { status: 0, stdout: `${answer}\n`, stderr: '' };
+  };
+  return { run, calls };
+}
+
+test('mainCheckout is the folder that holds the common git dir, from the checkout and from a linked worktree', () => {
+  const here = nodePath.resolve('proj');
+  const fromCheckout = revParse({ '--git-common-dir': '.git' });
+  assert.equal(lib.mainCheckout(fromCheckout.run, here), here);
+  assert.deepEqual(fromCheckout.calls, [{ command: 'git', args: ['rev-parse', '--git-common-dir'], cwd: here }]);
+  const worktree = nodePath.resolve('proj-worktrees', 'board');
+  assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': nodePath.join(here, '.git').split(nodePath.sep).join('/') }).run, worktree), here);
+});
+
+test('mainCheckout is the folder itself outside a repository, and without git', () => {
+  const here = nodePath.resolve('no-repository');
+  assert.equal(lib.mainCheckout(revParse({}).run, here), here);
+  assert.equal(lib.mainCheckout(() => ({ error: Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT' }) }), here), here);
+});
+
+test('mainCheckout asks git for the working tree of a git dir kept apart from its checkout, and falls back on that git dir', () => {
+  const here = nodePath.resolve('proj');
+  const meta = nodePath.resolve('meta');
+  // A submodule's git dir records its working tree.
+  const recorded = revParse({ '--git-common-dir': meta, [`--show-toplevel @ ${meta}`]: here });
+  assert.equal(lib.mainCheckout(recorded.run, here), here);
+  // A `--separate-git-dir` checkout: the git dir records none, and the folder is the main working tree.
+  const apart = revParse({ '--git-common-dir': meta, [`--git-dir --show-toplevel @ ${here}`]: `${meta}\n${here}` });
+  assert.equal(lib.mainCheckout(apart.run, here), here);
+  assert.deepEqual(apart.calls.map((made) => made.args.slice(1)), [['--git-common-dir'], ['--show-toplevel'], ['--git-dir', '--show-toplevel']]);
+  // A worktree linked to such a checkout, a bare repository: nothing ties them to a checkout.
+  const linked = revParse({ '--git-common-dir': meta, [`--git-dir --show-toplevel @ ${here}`]: `${nodePath.join(meta, 'worktrees', 'board')}\n${here}` });
+  assert.equal(lib.mainCheckout(linked.run, here), meta);
+  assert.equal(lib.mainCheckout(revParse({ '--git-common-dir': meta }).run, here), meta);
 });

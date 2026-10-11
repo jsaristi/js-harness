@@ -2,6 +2,7 @@
 // format this file reads, established from real transcripts). No fs and no process here: a transcript's
 // text goes in and session facts come out, and every external command is a `run` the caller hands in,
 // so the tests use inline synthetic transcripts and fake commands, never this machine's sessions.
+import path from 'node:path';
 import { parseSnapshot } from './process-tree.mjs';
 import { parseFeature, tokenize } from './progress.mjs';
 
@@ -83,8 +84,9 @@ function notificationsOf(entry) {
   }));
 }
 
-/** A user entry's text when somebody typed it: not a meta entry, not a compaction summary, not a
- * notification or a command wrapper (those start with a tag). `null` otherwise. */
+/** A user entry's text when somebody typed it: not a meta entry (which is also what the host makes of a
+ * message from another session, `isPeerMessage`), not a compaction summary, not a notification or a
+ * command wrapper (those start with a tag). `null` otherwise. */
 function promptText(entry) {
   if (entry.type !== 'user' || entry.isMeta || entry.isCompactSummary) return null;
   const content = entry.message?.content;
@@ -98,13 +100,38 @@ function oneLine(text) {
   return flat.length > TITLE_LENGTH ? `${flat.slice(0, TITLE_LENGTH)}…` : flat;
 }
 
-/** What one entry says about the turn: `'working'` (a tool call, a tool result, a prompt or a
- * notification the session has not answered yet, a message still being written), `'ended'` (a reply
- * that closes its message, an interruption, the output of a local command, a compaction summary), or
- * `null` when the entry does not take part (meta entries, side chains, everything that is neither a user
- * nor an assistant entry). */
+/** Whether `entry` is a message that did not come from the person: a user entry whose `origin.kind` is
+ * `peer`. That is how the host writes what another session sent, what a subagent hands back to its
+ * parent and what the app itself put in. It marks every one of them `isMeta` (185 of 185 in this
+ * project's transcripts, 2026-10-11), which is what keeps such a message from being read as a prompt
+ * somebody typed (`promptText`), and so from ever being a session's title. */
+const isPeerMessage = (entry) => entry.type === 'user' && isObject(entry.origin) && entry.origin.kind === 'peer';
+
+/** A peer message as the board keeps it: `{ at, from, name, session, mode, id }`. `from` is `'session'`
+ * for another session, which gives its title in `name`, its own id in `session` (the app's, which is not
+ * the name of a transcript), the permission mode it runs in and the id of the message; `'subagent'` for a
+ * hand-back, and `'host'` for a message the app put in, which give less. What they do not give is `null`.
+ * The text of the message is not kept: the board says who wrote to whom, and the transcript has the rest. */
+function peerMessageOf(entry) {
+  const { origin } = entry;
+  const given = (value) => (typeof value === 'string' ? value : null);
+  const from = origin.handback === true ? 'subagent' : origin.hostInjected === true ? 'host' : 'session';
+  return { at: entry.timestamp ?? null, from, name: given(origin.name), session: given(origin.fromSession), mode: given(origin.fromMode), id: given(origin.msg_id) };
+}
+
+/** What one entry says about the turn: `'working'` (a tool call, a tool result, a prompt, a notification
+ * or a message from another session that the session has not answered yet, a message still being
+ * written), `'ended'` (a reply that closes its message, an interruption, the output of a local command, a
+ * compaction summary), or `null` when the entry does not take part (side chains, every other meta entry,
+ * everything that is neither a user nor an assistant entry).
+ *
+ * A peer message is a meta entry and still starts a turn: every one in this project's transcripts is
+ * followed by a reply, 9 seconds later at the median and 99 at the most. Left out like the other meta
+ * entries, it showed a session as waiting while it was answering. */
 function turnOf(entry) {
-  if (entry.isSidechain || entry.isMeta) return null;
+  if (entry.isSidechain) return null;
+  if (isPeerMessage(entry)) return 'working';
+  if (entry.isMeta) return null;
   const content = entry.message?.content;
   const blocks = blocksOf(entry);
   if (entry.type === 'assistant') {
@@ -162,6 +189,16 @@ function resumedWork(block, entry, agent, kind) {
   return { ...newWork(block, entry, 'background'), tool: 'Agent', kind, id: agent, description: block.input?.summary ?? null, resumed: true };
 }
 
+// The kinds of recipient a `SendMessage` call names for another session: its title, or its own address.
+// The third, `agent`, is a subagent of the session that calls.
+const SESSION_RECIPIENTS = new Set(['name', 'session']);
+
+/** The message a `SendMessage` call sends to another session, before its result is known (`sessionFacts`). */
+function sentMessage(block, entry) {
+  const given = (value) => (typeof value === 'string' ? value : null);
+  return { at: entry.timestamp ?? null, to: given(block.input?.to), toKind: given(block.input?.recipient_kind), id: null, failed: false };
+}
+
 function end(work, at, status) {
   if (work.ended) return; // the first recorded end wins: the same notification is written more than once
   work.ended = true;
@@ -192,13 +229,28 @@ function end(work, at, status) {
  * `context` is what the session's last reply was sent with (`contextOf`), or, after a compaction and
  * until the next reply, what the harness says the compaction left. `contextPercent` is its share of
  * `contextWindow` and `pastContextLimit` says whether it is above `contextLimit` (tokens); both are
- * `null` when the context could not be read. */
+ * `null` when the context could not be read.
+ *
+ * `permissionMode` is the one the last user entry that records it has (`bypassPermissions`, `auto`), and
+ * `null` when none does: the host delivers a message only between sessions of one class, so it says
+ * which sessions can ring each other.
+ *
+ * `received` is every peer message the transcript holds (`peerMessageOf`), in the order written, and
+ * `sent` every `SendMessage` call to another session, as `{ at, to, toKind, id, failed }`: the address
+ * it was sent to, as the call gives it (a title, or a session's own address), the kind of recipient the
+ * call names (`name`, `session`, or `null` from a host that named none), the id the host returned for
+ * the message, and whether the call failed. `id` is `null` until the result is written, and when the
+ * result gives none. A follow-up to a subagent is not one of them: it is work (`resumedWork`), or
+ * nothing. A resumed session writes earlier entries again, so each message is listed once. */
 export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT, contextWindow = DEFAULT_CONTEXT_WINDOW } = {}) {
   const { entries, skipped } = parseTranscript(text);
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
   const endsByTask = new Map(); // task id -> the latest end that closed nothing, and the index of its entry
   const launchIndex = (work) => calls.get(work.toolUseId).index;
+  const received = new Map(); // the message's id, or its entry's when it has none -> the message
+  const sentByCall = new Map(); // tool_use id -> the message that call sent to another session
+  let permissionMode = null;
   let customTitle = null;
   let firstPrompt = null;
   let lastEntryAt = null;
@@ -219,6 +271,13 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
     if (typeof entry.timestamp === 'string' && (lastEntryAt === null || entry.timestamp > lastEntryAt)) lastEntryAt = entry.timestamp;
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
     if (typeof entry.gitBranch === 'string') gitBranch = entry.gitBranch;
+    if (entry.type === 'user' && typeof entry.permissionMode === 'string') permissionMode = entry.permissionMode;
+    if (isPeerMessage(entry) && !entry.isSidechain) {
+      const message = peerMessageOf(entry);
+      // A message with no id of its own (a hand-back, one from the host) is told by the entry that holds it.
+      const key = message.id !== null ? `message ${message.id}` : `entry ${typeof entry.uuid === 'string' ? entry.uuid : index}`;
+      if (!received.has(key)) received.set(key, message);
+    }
     firstPrompt ??= promptText(entry);
     const said = turnOf(entry);
     if (said !== null) {
@@ -256,6 +315,7 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
         calls.set(block.id, { block, entry, index });
         if (isAgent(block.name)) workByCall.set(block.id, newWork(block, entry, block.input?.run_in_background === true ? 'background' : 'foreground'));
         else if (block.name === 'Bash' && block.input?.run_in_background === true) workByCall.set(block.id, newWork(block, entry, 'background'));
+        else if (block.name === 'SendMessage' && SESSION_RECIPIENTS.has(block.input?.recipient_kind)) sentByCall.set(block.id, sentMessage(block, entry));
       }
       if (entry.type !== 'user' || block.type !== 'tool_result' || !calls.has(block.tool_use_id)) continue;
       const launch = calls.get(block.tool_use_id);
@@ -267,6 +327,13 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
         if (!work && typeof outcome.resumedAgentId === 'string') {
           const firstRun = [...workByCall.values()].find((earlier) => earlier.id === outcome.resumedAgentId);
           workByCall.set(block.tool_use_id, (work = resumedWork(launch.block, launch.entry, outcome.resumedAgentId, firstRun?.kind ?? null)));
+        }
+        // A call that named no kind of recipient went to a session when its result returns a message id.
+        let message = sentByCall.get(block.tool_use_id);
+        if (!message && typeof outcome.msg_id === 'string') sentByCall.set(block.tool_use_id, (message = sentMessage(launch.block, launch.entry)));
+        if (message) {
+          if (typeof outcome.msg_id === 'string') message.id = outcome.msg_id;
+          if (block.is_error === true) message.failed = true;
         }
       } else if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
@@ -300,6 +367,9 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
     lastEntryAt,
     cwd,
     gitBranch,
+    permissionMode,
+    received: [...received.values()],
+    sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
     contextPercent: context === null ? null : percentOf(context.tokens, contextWindow),
     pastContextLimit: context === null ? null : context.tokens > contextLimit,
@@ -323,6 +393,32 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
  * character outside `[A-Za-z0-9]` turned into `-` (`D:\js-harness` is `D--js-harness`). */
 export function projectSlug(root) {
   return root.replace(/[^A-Za-z0-9]/g, '-');
+}
+
+/** The main checkout of the repository `cwd` is in, so the project is the same from any worktree: for the
+ * board, and for `notify`, whose record and relief file are the project's. Outside a repository (or
+ * without git) the folder itself is the project, as it is for Claude Code.
+ *
+ * It is the folder that holds the common git dir when that dir is a `.git`: an ordinary checkout, and
+ * every worktree linked to it. A common git dir of another name is kept apart from its checkout (a
+ * submodule's is under the superproject's `.git/modules`, `--separate-git-dir` puts it anywhere) and its
+ * place says nothing, so git is asked for the working tree: the one that git dir records, which a
+ * submodule's does, and otherwise the one `cwd` is in when that is the main one, its git dir being the
+ * common one. With neither (a bare repository; a worktree linked to a `--separate-git-dir` checkout,
+ * which nothing in git ties to it) the project is the git dir itself, as it always was. */
+export function mainCheckout(run, cwd) {
+  const revParse = (args, folder) => {
+    const result = run('git', ['rev-parse', ...args], { cwd: folder });
+    return result.error || result.status !== 0 ? [] : result.stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
+  };
+  const [common] = revParse(['--git-common-dir'], cwd);
+  if (common === undefined) return cwd;
+  const commonDir = path.resolve(cwd, common);
+  if (path.basename(commonDir) === '.git') return path.dirname(commonDir);
+  const [recorded] = revParse(['--show-toplevel'], commonDir);
+  if (recorded !== undefined) return path.resolve(recorded);
+  const [gitDir, top] = revParse(['--git-dir', '--show-toplevel'], cwd);
+  return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
 const failed = (result) => Boolean(result.error) || result.status !== 0;
@@ -681,6 +777,124 @@ export function readPullRequests(run, root) {
   }
 }
 
+// ---- the roster: who is who ---------------------------------------------------------------------------
+//
+// A session's title is the address of its role (odd/tasks/session-channel.md, points 1, 4 and 5):
+// `<project code> <role> · <what it does>`, the role being `ORQ` for the orchestrator or the number of a
+// work session. The roster is the board's sessions again, one row per title, computed at each read and
+// stored nowhere, so it is never older than the transcripts it comes from.
+
+// One token for the code, one for the role, the dot between two spaces, and something after it. A title
+// with a word more before the dot is another title: a handover names the orchestrator that arrives `ORQ
+// nueva` and the one that leaves `ORQ relevada`, so that neither holds the role by its title.
+const TITLE_SHAPE = /^(\S+) (ORQ|\d+) · (.*\S.*)$/;
+const TITLE_WORDS = '<code> <role> · <what it does>';
+
+/** What a title of the agreed shape says: `{ code, role, number, purpose }`, `role` being `'orchestrator'`
+ * or `'work'` with the session's `number`, and `purpose` the text after the dot. `null` for any other
+ * title, and for what is not one. */
+export function roleOfTitle(title) {
+  const shaped = typeof title === 'string' ? TITLE_SHAPE.exec(title) : null;
+  if (!shaped) return null;
+  const [, code, role, purpose] = shaped;
+  if (role === 'ORQ') return { code, role: 'orchestrator', number: null, purpose: purpose.trim() };
+  const number = Number(role);
+  return Number.isSafeInteger(number) ? { code, role: 'work', number, purpose: purpose.trim() } : null;
+}
+
+/** The role `text` names, as `sessions --address` takes it: `orchestrator`, or `ORQ` as the titles spell
+ * it, in any case, and the number of a work session in plain digits. `{ role, number }`, or `null`. */
+export function roleNamed(text) {
+  if (/^(orchestrator|orq)$/i.test(text)) return { role: 'orchestrator', number: null };
+  const number = /^\d+$/.test(text) ? Number(text) : NaN;
+  return Number.isSafeInteger(number) ? { role: 'work', number } : null;
+}
+
+/** The roster of `sessions`, the sessions of a board: `{ rows, unread, outside }`.
+ *
+ * A row is a title, not a transcript: the app can restart a session's process, which goes on under its
+ * title in a new transcript (seen on 2026-10-10; in this project's transcripts one title is carried by
+ * up to four in a row), and nothing a transcript holds names the app session it belongs to. So every
+ * transcript whose own title is that title is in the row, the latest first, each with its last entry.
+ * The other side of it: two sessions that carry one same title are one row too, which the row cannot
+ * tell and the roster's last line says (`ROSTER_NOT_KNOWN`). Only a title a session was given is one:
+ * the start of a first prompt, which the board shows for a session with none, names nobody, and such a
+ * session is a row of its own, as is one with nothing to show.
+ *
+ * A row has `title` and `titleSource`; what the title says, `code`, `role`, `number` and `purpose`
+ * (`roleOfTitle`), all `null` for a title outside the shape; `self` when the session that asked is one of
+ * its transcripts; `lastEntryAt`, the last entry of the latest; `permissionMode`, of the latest transcript
+ * that records one; `cwd` and `gitBranch`, together, of the latest that records a folder; `worktree`, the
+ * one of `worktrees` (the board's) that folder is, or `null`; `features`, the feature documents of that
+ * worktree's branch (`readPlans`), named without folder or extension, when the worktree is still on the
+ * branch the session recorded, and none otherwise; and `transcripts`, `[{ id, lastEntryAt }]`. The folder
+ * is the one the entries record, which is where the session was opened: one that reaches a worktree by
+ * `cd` still records the other, so neither `worktree` nor `features` says where a session works.
+ *
+ * The orchestrator comes first, then the work sessions by number, then the rows with no role; among
+ * equals the latest first. `unread` counts the transcripts that could not be read: they have no title,
+ * so they are in no row.
+ *
+ * `since` (ms) is where the board's window starts. The board lists a transcript when its file changed in
+ * the window, and a file changes without its session doing anything: the app appends entries with no
+ * time to a transcript it opens (`cost-state`; on 2026-10-11 two transcripts whose last timed entry was
+ * 13 and 14 days old were in a window of 12 hours). So a transcript is in a row, and holds a role, only
+ * when its last timed entry is in the window; the others, and those with no timed entry at all, are
+ * counted in `outside`. With no `since` every transcript given is in a row. */
+export function rosterOf(sessions, { worktrees, since } = {}) {
+  const trees = worktrees?.available ? worktrees.items : [];
+  const groups = new Map();
+  let unread = 0;
+  let outside = 0;
+  for (const session of sessions) {
+    if (session.unavailable) {
+      unread += 1;
+      continue;
+    }
+    if (since !== undefined && !(Date.parse(session.lastEntryAt ?? '') >= since)) {
+      outside += 1;
+      continue;
+    }
+    const key = session.titleSource === 'custom-title' && typeof session.title === 'string' ? `title ${session.title}` : `transcript ${session.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), session]);
+  }
+  const recency = (item) => item.lastEntryAt ?? '';
+  const latestFirst = (one, other) => (recency(one) < recency(other) ? 1 : recency(one) > recency(other) ? -1 : 0);
+  const rows = [...groups.values()].map((group) => {
+    const members = [...group].sort(latestFirst);
+    const [latest] = members;
+    const said = latest.titleSource === 'custom-title' ? roleOfTitle(latest.title) : null;
+    const placed = members.find((member) => typeof member.cwd === 'string') ?? latest;
+    const tree = typeof placed.cwd === 'string' ? trees.find((item) => comparable(item.path) === comparable(placed.cwd)) : undefined;
+    const sameBranch = typeof placed.gitBranch === 'string' && tree?.branch === placed.gitBranch;
+    return {
+      title: latest.title ?? null,
+      titleSource: latest.titleSource ?? null,
+      code: said?.code ?? null,
+      role: said?.role ?? null,
+      number: said?.number ?? null,
+      purpose: said?.purpose ?? null,
+      self: members.some((member) => member.self === true),
+      lastEntryAt: latest.lastEntryAt ?? null,
+      permissionMode: members.find((member) => typeof member.permissionMode === 'string')?.permissionMode ?? null,
+      cwd: placed.cwd ?? null,
+      gitBranch: placed.gitBranch ?? null,
+      worktree: tree?.path ?? null,
+      features: sameBranch && tree.plans?.available ? tree.plans.items.map((plan) => plan.path.split('/').at(-1).replace(/\.md$/, '')) : [],
+      transcripts: members.map((member) => ({ id: member.id, lastEntryAt: member.lastEntryAt ?? null })),
+    };
+  });
+  const rank = (row) => (row.role === 'orchestrator' ? 0 : row.role === 'work' ? 1 : 2);
+  rows.sort((one, other) => rank(one) - rank(other) || (one.number ?? 0) - (other.number ?? 0) || latestFirst(one, other));
+  return { rows, unread, outside };
+}
+
+/** The rows of `roster` that hold the role `wanted` (`roleNamed`): none, the one whose title is the
+ * role's address, or several, and then a message to the role has no single address. */
+export function roleHolders(roster, wanted) {
+  return roster.rows.filter((row) => row.role === wanted.role && row.number === wanted.number);
+}
+
 // ---- what changed between two boards ------------------------------------------------------------------
 //
 // `sessions --watch` looks at the board again and again and returns only when something on it calls for
@@ -872,7 +1086,8 @@ function planChanges(before, after) {
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
  * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree,
- * a gate that takes the lock it waited for.
+ * a gate that takes the lock it waited for. The roster is not compared either: it is the sessions again,
+ * whose arrival is already said, and a title that changes is a handover the sessions do themselves.
  * `self` names the session that is watching, which is never compared: it works for as long as it watches.
  * A fact that could not be read on either side is not compared, so a failed listing is never a change. */
 export function boardChanges(before, after, { self } = {}) {
@@ -1027,6 +1242,45 @@ function reliefLines(relief) {
   return ['Relief', `  ${relief.path}  ${count}`, ...relief.lines.map((line) => `  | ${clipped(line)}`), ''];
 }
 
+/** The roster's last line: what no transcript tells it, so a row is never read as "this session is there". */
+export const ROSTER_NOT_KNOWN =
+  'Not known from here: whether a silent session is alive or archived (nothing outside a session lists the sessions of the app), whether the transcripts of one row are one session the app restarted or several sessions under one title, and the worktree a session reaches by `cd` (`folder` is the one its entries record).';
+
+/** The `Roster` section: two lines per row of `rosterOf`. The first has the role, the title and how long
+ * the session has been silent, never that it is alive, which no transcript says; the session that asked
+ * is the one exception, and is said to be this one. A row with no role says why it has none. The second
+ * has the permission mode, the folder and the branch the entries record, the feature of that branch when
+ * it is known, and the transcripts of the row, each with its age when there are several. It says
+ * `folder` and not `worktree`: that is where the session was opened, and one that works in a worktree it
+ * reached by `cd` records the other (every session of this project did, 2026-10-11). Then one line when
+ * more than one row holds the orchestrator's role, since a message to the orchestrator then has no
+ * single address; the transcripts that could not be read, and those of the window with no entry in it
+ * (`rosterOf`); and what the roster cannot know (`ROSTER_NOT_KNOWN`). */
+function rosterLines(roster, now) {
+  if (roster.rows.length === 0 && roster.unread === 0 && roster.outside === 0) return ['Roster', '  no session', ''];
+  const inNoRow = (count, what) => `  ${count} transcript${count === 1 ? '' : 's'} ${what} ${count === 1 ? 'is' : 'are'} in no row`;
+  const short = (id) => id.slice(0, 8);
+  const lines = ['Roster'];
+  for (const row of roster.rows) {
+    const role = row.role === 'orchestrator' ? 'orchestrator' : row.role === 'work' ? `work ${row.number}` : 'no role';
+    const last = row.lastEntryAt === null ? null : ago(row.lastEntryAt, now);
+    const activity = row.self ? `this session${last === null ? '' : `, last entry ${last}`}` : last === null ? 'silent, no entry of it has a time' : `silent since ${last}`;
+    const noRole = row.titleSource === 'custom-title' ? `its title is not "${TITLE_WORDS}"` : row.titleSource === 'first-prompt' ? 'it has no title: this is the start of its first prompt' : 'it has no title';
+    lines.push(`  ${role}  ${row.title ?? '(no title)'}  ${activity}${row.role === null ? `  (${noRole})` : ''}`);
+    const feature = row.features.length > 0 ? `  feature ${row.features.join(', ')}` : '';
+    const transcripts = row.transcripts.length === 1 ? `transcript ${short(row.transcripts[0].id)}` : `transcripts ${row.transcripts.map((transcript) => `${short(transcript.id)} (${ago(transcript.lastEntryAt, now)})`).join(', ')}`;
+    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}`);
+  }
+  const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
+  if (orchestrators.length > 1) {
+    lines.push(`  ${orchestrators.length} sessions carry the orchestrator's title: ${orchestrators.map((row) => JSON.stringify(row.title)).join(', ')}. A message to the orchestrator has no single address.`);
+  }
+  if (roster.unread > 0) lines.push(inNoRow(roster.unread, 'that could not be read'));
+  if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));
+  lines.push(`  ${ROSTER_NOT_KNOWN}`, '');
+  return lines;
+}
+
 /** What a gate does, as its line in `Gates` says it. A `check` process the lock says nothing of is given
  * its start, as the listing has it. One that does not know the lock runs its sensors, as before there was
  * a lock. One that knows it is then not in its sensors, and its line says so, lest it be read as a gate
@@ -1078,15 +1332,16 @@ function gateLines(board, now) {
   return ['Gates', ...lines, ''];
 }
 
-/** The board as lines of text: the sessions (in the order given, most recent first), then worktrees,
- * the gates that run and wait, open pull requests and the orchestrator's relief file, and a last line
- * that says what the board cannot see. */
+/** The board as lines of text: the sessions (in the order given, most recent first), the roster of
+ * those sessions by role when the board has one, then worktrees, the gates that run and wait, open pull
+ * requests and the orchestrator's relief file, and a last line that says what the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
   const sizes = contextSizes(board);
   for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes), '');
 
   lines.push(
+    ...(board.roster ? rosterLines(board.roster, now) : []),
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {
       const upstream = tree.aheadOfUpstream === 'no upstream' ? 'no upstream' : counted(tree.aheadOfUpstream, 'not pushed');
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
