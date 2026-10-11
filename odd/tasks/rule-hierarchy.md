@@ -345,7 +345,8 @@ There is no state field. The state is computed from the fields, and a state writ
 would be one more statement that can be false, in a file that exists to count those:
 - `once`: seen once, nothing owed. Nothing is asked of it.
 - `repeated`: seen twice or more, and no `Control`.
-- `owed`: the document holds an unchecked item with the phrase.
+- `owed`: the document holds the phrase in a checkbox item that is not checked (`- [ ]`). A
+  list item with no checkbox owes nothing.
 - `owed, stale`: it does not: the document is gone, or the task was checked off and the entry
   still says owed.
 - `controlled`: the path holds the phrase and no sighting is later than `since`.
@@ -412,7 +413,8 @@ Judged twice. Here it replaces two hand-kept lists, and "no repeated mistake" of
 becomes a number that can be other than zero on a green tree: the entries seen again, and the
 `Was` lines. In a project that only installs the harness, the row acts only when
 `docs/FAILURES.md` exists, the classes are the project's own, and a control owed is a phrase of
-any unchecked list item, which needs no convention of task numbers. Not built in this slice,
+any checkbox item that is not checked, which needs no convention of task numbers; a plan kept
+as plain bullets has to turn the one that owes into a checkbox. Not built in this slice,
 and said so: `init` does not write an empty register (it goes with T9, with the template); no
 command writes a sighting, which is built only if editing by hand proves to cost; no `--json`,
 which waits for a reader.
@@ -772,7 +774,8 @@ names it, and the entry stays open until it does.
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
     answered
   - [x] T3b `bin/lib/failures.mjs` and its tests: the parser, the refusals, the seven states,
-    the counts (commit `9a2edb1`; its two reviews are owed)
+    the counts (commit `9a2edb1`; gentle-ai approved the range `51a24db..5b754dd`; the Codex
+    review is owed)
   - [ ] T3c `bin/failures.mjs` and its tests: the command `js-harness failures` and the row
     `failures` of `check`; the entry in the dispatcher
   - [ ] T3d `docs/FAILURES.md` seeded with the eighteen and with those of 2026-10-11, each
@@ -811,8 +814,10 @@ names it, and the entry stays open until it does.
 - [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
-  - [ ] T17b This session's places corrected in documents: the roadmap and eleven closed
-    feature documents (93 places), on the branch of pull request 61
+  - [x] T17b This session's places corrected in documents: the roadmap and eleven closed
+    feature documents, 83 places, pull request 62 (commit `119adbc`); four more are left
+    unchecked in the list with their reason, and the six of `odd/tasks/codex-parity.md` wait
+    for that document's branch
   - [ ] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
     `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/codex-review-parts.mjs`,
     `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
@@ -982,15 +987,54 @@ names it, and the entry stays open until it does.
 - 2026-10-11, a slip of this session: `js-harness sessions` was run once while another
   session's gate ran, against the rule that the board is not read beside a gate. It goes into
   the register as a sighting of `board-read-loads-gate`.
+- 2026-10-11, the gentle-ai review of `51a24db..5b754dd` (the design, T3b and this document):
+  lineage `review-ea88b679a75a95f8`, one lens, approved and acknowledged, so the reviewed
+  boundary is `5b754dd`. The first assessment was asked with `--base-ref origin/main` after
+  `main` had moved and counted 2,552 lines that were not this branch's; the base of a review is
+  the branch point, then the last reviewed commit. It goes into the register as a sighting of
+  `assessment-counts-main`. The review's three notes, none blocking, all taken in the commit of
+  T3c: the design said "any unchecked list item" where the code reads checkbox items only (the
+  design is corrected and a test pins a plain bullet); a list item of an entry's text that
+  opens with a capitalised word and a colon is read as a field and refused (a test pins it);
+  three branches of the parser had no test (a fence after the first field, a class shown inside
+  a fence, an empty `Class` field).
+- 2026-10-11, T17b closed: the writer's 83 corrections were read hunk by hunk by a reader that
+  did not write them, which found eleven things to fix (three dated records removed with their
+  notes, his words of 2026-10-10 among them; three sentences that overstated their source; five
+  minor), all applied before the commit. Pull requests 61 and 62 are merged; `main` is
+  `b016699`. The roadmap's sections are now titled "Rule hierarchy" and "Session channel", so
+  this document's citation of the old title is one of the places of T17c.
+- 2026-10-11, the protocol for changing a rule, version 3, approved by Sebastián ("Sí, aprobado
+  el protocolo revisado", the orchestrator's transcript `130317af-a818-419c-a3de-3a21335db0a8`,
+  line 470, read by this session; the text is the relief file's line 253 and the approval its
+  line 254). It is written into this document as T16 and as the replacement of protocol 4 when
+  T16 is taken, and where it differs from the eight firm points here the difference is told to
+  the orchestrator, not chosen in silence. In the same line he asked for a second rule, a
+  candidate for T16 and not designed yet: what is put to him to decide passes a review by a
+  reader that did not write it, and comes back improved ("Siempre me gustaria hacewr asi una
+  doble revision con mejora quiero añadirlo al harness").
+- 2026-10-11, a fact of the gate's design, from the session that builds it (`feat/gate-turn`,
+  `odd/tasks/gate-turn.md`), to be read on that branch before T16 rests on it: the gate's early
+  stop names no row and stops on any static row that fails before the lock is taken, so the
+  rows `failures` and `rules` stop a gate by being static; `bin/check.test.mjs` pins the order
+  of the rows, and whichever of the two branches lands second changes that test.
+- 2026-10-11, the commit of T3c did not land at its first try: launched at 14:55, it waited 60
+  min 1 s for the machine's gate lock and gave up without running a sensor. Four sessions asked
+  for the lock in that hour and it has no queue, so a waiter can lose every turn. It is launched
+  again after this entry, with the tests of the review's notes added, and goes into the
+  register as a sighting.
 
 ## Next step
-In this order. (1) T3c: `git stash pop`, stop this session's language servers, commit through
-the gate. (2) T3d: copy the draft to `docs/FAILURES.md`, add the sighting of the slip above and
-the entry of T17d, commit (documents: no sensor). (3) The two reviews of `9a2edb1` and of T3c:
-gentle-ai first (consent is pre-granted), then `js-harness codex-review --base <boundary>`, the
-first boundary being `origin/main`; neither beside a running gate. (4) T17b: read the
-correcting writer's report and its diff, commit on `docs/sweep-2026-10-11`. (5) T17c and T17d.
-(6) Merge `main` in before the push of `feat/failures-register`: three unmerged branches change
-`bin/check.mjs` and `bin/js-harness.mjs` in the same places. (7) T16, then T1. T1 follows. T2 and T8
-wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of "What
-the hosts allow" that T2 rests on are confirmed with a logging hook.
+In this order. (1) T3c: the commit through the gate (the command, the row, the wiring and the
+tests of the review's notes are staged); this session's language servers are stopped first.
+(2) T3d: copy the draft to `docs/FAILURES.md`, add the sightings named in Progress (the board
+read beside a gate, the assessment that counted `main`, the gate wait that gave up) and the
+entry of T17d, commit (documents: no sensor). (3) The reviews of what follows `5b754dd`:
+gentle-ai first (consent is pre-granted), then Codex for the code since the branch point,
+`js-harness codex-review --base 9a2edb1^` after its `--plan` says what it costs; neither beside
+a running gate. (4) Merge `main` in before the push of `feat/failures-register`: three unmerged
+branches change `bin/check.mjs` and `bin/js-harness.mjs` in the same places. Push, open the
+pull request with the twelve doubts of the seed in it, tell the orchestrator. (5) T17c and
+T17d. (6) T16, from the relief file's lines 253 and 254. (7) T1. T2 and T8 wait for him: before
+T2 the first item of "Ask me before" is asked, and the host facts of "What the hosts allow"
+that T2 rests on are confirmed with a logging hook.
