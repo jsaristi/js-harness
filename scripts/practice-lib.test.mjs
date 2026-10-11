@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
-  realHomeFiles, contentHash, compareSnapshots, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs,
+  realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs,
 } from './practice-lib.mjs';
+import { gateLogDir } from '../bin/lib/gate-log.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
 // platform is a parameter, so the Windows and the POSIX behaviour are both proven on any machine.
@@ -461,6 +462,21 @@ test('compareSnapshots tells a changed file from one that appeared and one that 
 test('compareSnapshots reads a path that only one snapshot names as absent from the other', () => {
   assert.deepEqual(compareSnapshots({ 'C:\\a': 'h1' }, {}), [{ path: 'C:\\a', change: 'disappeared' }]);
   assert.deepEqual(compareSnapshots({}, { 'C:\\b': 'h2' }), [{ path: 'C:\\b', change: 'appeared' }]);
+});
+
+// ---- the gate log of the practice home -------------------------------------------------------------------------------
+
+test('gateLogFolder is where the gates of a home keep their log, spelled as the harness spells it', () => {
+  assert.equal(gateLogFolder(WIN_LAYOUT.home, 'win32'), 'D:\\js-harness-practice\\home\\.js-harness\\gate-log');
+  assert.equal(gateLogFolder(POSIX_LAYOUT.home, 'linux'), '/srv/practice/home/.js-harness/gate-log');
+  // The practice imports nothing of the candidate, so its spelling could drift from the harness's own, and
+  // the journey would then look for the log in a folder no gate writes. This holds the two together.
+  for (const home of [WIN_LAYOUT.home, POSIX_LAYOUT.home]) assert.equal(gateLogFolder(home), gateLogDir(home));
+});
+
+test('realHomeFiles names nothing of the gate log, which the gates of the user\'s own sessions append to during a run', () => {
+  const files = realHomeFiles(WIN_HOME, undefined, 'win32');
+  assert.deepEqual(files.filter((file) => isInside(gateLogFolder(WIN_HOME, 'win32'), file, 'win32')), []);
 });
 
 // ---- the journey -----------------------------------------------------------------------------------------------------

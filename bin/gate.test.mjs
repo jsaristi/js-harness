@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
+import { appendGateEvent, gateLogDir, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -82,7 +83,7 @@ function gateClock() {
   return clock;
 }
 
-const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]';
+const USAGE = 'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]\n       js-harness gate log [--last <n>] [--home <path>]';
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
 const IN_TURN = "gate: the command runs in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate takes none";
@@ -621,6 +622,350 @@ test('gate looks for nothing below one busy logical processor, for a load that w
   assert.equal(looked, 1);
 }));
 
+// --- the gate log: a start and an end around the command, a line for a gate that ran nothing ---
+// The file itself is tested in lib/gate-log.test.mjs. Most gates of this part are handed a writer that keeps
+// the events and writes no file (`deps.gateLog`); the others write the log of their temporary home.
+
+/** A stand-in for the writer of the gate log, in `deps`, which is what a gate is handed: it keeps the
+ * `events` it is handed, and answers what `during` does, which is called as each event comes, or that the
+ * line was written. */
+function capturedLog(during = () => {}) {
+  const events = [];
+  const append = (home, event) => {
+    events.push({ ...event, home });
+    return during(event) ?? { ok: true };
+  };
+  return { events, deps: { gateLog: { append } } };
+}
+
+const OTHER_GATE = { cwd: 'C:\\work\\other', pid: 4321, command: 'check' };
+const isIsoTime = (text) => typeof text === 'string' && new Date(text).toISOString() === text;
+const fieldsOf = (events) => events.map((event) => Object.keys(event).join(' '));
+
+test('gate writes a start after the sample and before the command, and an end after it with its exit code, in each state of the lock', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const states = [
+    { lock: 'own', env: {}, deps: {}, holder: process.pid },
+    { lock: 'parent', env: { JS_HARNESS_GATE_HELD: '1' }, deps: {}, holder: undefined },
+    { lock: 'none', env: {}, deps: { takeGateLock: lockRefuses }, holder: undefined },
+  ];
+  for (const { lock, env, deps, holder } of states) {
+    const { events: order, sampleLoad, spawn } = sampledGate(home, QUIET_LOAD, 7);
+    const log = capturedLog((event) => void order.push([event.event, readGateHolder(home)?.pid]));
+    const { code } = await runGate(argv, env, { spawn, sampleLoad, ...deps, ...log.deps });
+    // The end is written with the lock still in hand, where the gate has one.
+    assert.deepEqual([code, order], [7, [['sample', holder], ['start', holder], 'command', ['end', holder]]], lock);
+    const [start, end] = log.events;
+    assert.deepEqual(fieldsOf(log.events), ['v event id at cwd command pid lock waitedSeconds waitedFor load home', 'v event id at seconds result home'], lock);
+    assert.deepEqual({ ...start, id: '', at: '', waitedSeconds: Math.floor(start.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: path.resolve(dir), command: 'gate -- node --test', pid: process.pid, lock, waitedSeconds: 0, waitedFor: [], load: QUIET_LOAD, home }, lock);
+    assert.deepEqual([end.v, end.event, end.id, end.result, end.home], [1, 'end', start.id, 'exit 7', home], lock);
+    assert.ok(isIsoTime(start.at) && isIsoTime(end.at) && start.at <= end.at && end.seconds >= 0 && end.seconds < 60, JSON.stringify(end));
+  }
+  assert.equal(fs.existsSync(gateLogDir(home)), false, 'a gate that is handed a writer writes no file');
+
+  // With the sample of the load switched off there is no load to write.
+  const unsampled = capturedLog();
+  await runGate(argv, { JS_HARNESS_GATE_LOAD: 'off' }, { spawn: ranWith(0), ...unsampled.deps });
+  assert.deepEqual(fieldsOf(unsampled.events), ['v event id at cwd command pid lock waitedSeconds waitedFor home', 'v event id at seconds result home']);
+}));
+
+test('the end of a gate says how its command ended: its exit code, killed, or an error of the gate itself, a thrown one included', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const ended = async (spawn) => {
+    const log = capturedLog();
+    const code = (await runGate(argv, {}, { spawn, ...log.deps })).code;
+    assert.deepEqual(log.events.map(({ event }) => event), ['start', 'end']);
+    return [code, log.events[1].result];
+  };
+  assert.deepEqual(await ended(ranWith(0)), [0, 'exit 0']);
+  assert.deepEqual(await ended(ranWith(3)), [3, 'exit 3']);
+  assert.deepEqual(await ended(async () => ({ status: null, signal: 'SIGKILL', stdout: '', stderr: '' })), [1, 'killed']);
+  assert.deepEqual(await ended(async () => ({ status: null, signal: null, stdout: '', stderr: '', error: new Error('spawn ENOENT') })), [1, 'error']);
+
+  const log = capturedLog();
+  const threw = async () => {
+    throw new Error('the runner blew up');
+  };
+  await assert.rejects(runGate(argv, {}, { spawn: threw, ...log.deps }), /the runner blew up/);
+  assert.deepEqual(log.events.map(({ event, id, result }) => [event, id === log.events[0].id, result]), [['start', true, undefined], ['end', true, 'error']]);
+  assert.equal(readGateHolder(home), null);
+}));
+
+// What comes after `--` can hold a secret, and the log is a file that stays.
+test('gate writes its command cut at 120 characters', withHome(async (home, dir) => {
+  const log = capturedLog();
+  const secret = `--token=${'s'.repeat(200)}`;
+  await runGate(['--home', home, '--cwd', dir, '--', 'node', 'deploy.mjs', secret], {}, { spawn: ranWith(0), ...log.deps });
+  assert.equal(log.events[0].command, `gate -- node deploy.mjs ${secret}`.slice(0, 120));
+  assert.equal(log.events[0].command.length, 120);
+}));
+
+test('gate that waited for another writes in its start whose gate that was and for how long, and one that ran nothing writes one line that says why', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const waiting = gateClock();
+  const first = await waiting.take({ home, ...OTHER_GATE });
+  let sleeps = 0;
+  waiting.onSleep = () => {
+    sleeps += 1;
+    first.beat();
+    if (sleeps === 3) first.release();
+  };
+  const waited = capturedLog();
+  await runGate(argv, {}, { spawn: ranWith(0), takeGateLock: waiting.take, ...waited.deps });
+  assert.deepEqual([waited.events[0].lock, waited.events[0].waitedSeconds, waited.events[0].waitedFor], ['own', 6, [OTHER_GATE]]);
+
+  const refusal = { v: 1, event: 'refused', id: '', at: '', cwd: path.resolve(dir), command: 'gate -- node --test', pid: process.pid, home };
+  const other = await takeGateLock({ home, ...OTHER_GATE, beatMs: 0 });
+  try {
+    const log = capturedLog();
+    const { code, said } = await runGate(['--no-wait', ...argv], {}, { spawn: ranWith(0), ...log.deps });
+    assert.deepEqual([code, said.length], [GATE_NOT_RUN, 1]);
+    // Refused at the first look, which on the real clock took some milliseconds.
+    assert.deepEqual(log.events.map((event) => ({ ...event, id: '', at: '', waitedSeconds: Math.floor(event.waitedSeconds) })), [{ ...refusal, reason: 'held', waitedSeconds: 0, waitedFor: [OTHER_GATE] }]);
+    assert.ok(isIsoTime(log.events[0].at));
+  } finally {
+    other.release();
+  }
+
+  const clock = gateClock();
+  const holder = await clock.take({ home, ...OTHER_GATE });
+  clock.onSleep = () => holder.beat();
+  const log = capturedLog();
+  const { code } = await runGate(['--wait', '0.5', ...argv], {}, { spawn: ranWith(0), takeGateLock: clock.take, ...log.deps });
+  assert.equal(code, GATE_NOT_RUN);
+  assert.deepEqual(log.events.map((event) => ({ ...event, id: '', at: '' })), [{ ...refusal, reason: 'timeout', waitedSeconds: 30, waitedFor: [OTHER_GATE] }]);
+  holder.release();
+}));
+
+test('gate writes nothing to the log inside a gate, for arguments it cannot take, or with JS_HARNESS_GATE_LOG=off, and only off is the switch', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const log = capturedLog();
+  const run = (env, deps = {}, flags = []) => runGate([...flags, ...argv], env, { spawn: ranWith(0), ...log.deps, ...deps });
+  await run({ JS_HARNESS_CHECK_INNER: '1' });
+  await run({ JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_GATE_HELD: '1' });
+  assert.equal((await run({}, {}, ['--bogus'])).code, 2);
+  // The switch, in each state of the lock and for a gate that is refused: nothing written, and nothing said.
+  const off = { JS_HARNESS_GATE_LOG: 'off' };
+  assert.deepEqual((await run(off)).said, []);
+  assert.deepEqual((await run({ ...off, JS_HARNESS_GATE_HELD: '1' })).said, [IN_TURN]);
+  assert.deepEqual((await run(off, { takeGateLock: lockRefuses })).said, [WITHOUT_LOCK]);
+  const other = await takeGateLock({ home, ...OTHER_GATE, beatMs: 0 });
+  try {
+    assert.equal((await run(off, {}, ['--no-wait'])).code, GATE_NOT_RUN);
+  } finally {
+    other.release();
+  }
+  assert.deepEqual(log.events, []);
+  // With the real writer the home is left as a gate left it before there was a log.
+  const { gateLog, ...real } = log.deps;
+  await run(off, real);
+  await run({ JS_HARNESS_CHECK_INNER: '1' }, real);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness')), []);
+
+  for (const value of ['', '0', 'on', 'OFF']) await run({ JS_HARNESS_GATE_LOG: value });
+  assert.deepEqual(log.events.map(({ event }) => event), ['start', 'end', 'start', 'end', 'start', 'end', 'start', 'end']);
+}));
+
+test('gate that is handed no writer writes the log of its home, in a folder beside the lock\'s, which is gone', withHome(async (home, dir) => {
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  assert.deepEqual(await runGate(argv, {}, { spawn: ranWith(0) }), { code: 0, said: [] });
+  assert.deepEqual(await runGate(argv, { JS_HARNESS_GATE_HELD: '1' }, { spawn: ranWith(3) }), { code: 3, said: [IN_TURN] });
+  assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness')), ['gate-log']);
+  const { events, skipped } = readGateLog(home);
+  assert.deepEqual([events.length, skipped], [4, 0]);
+  assert.deepEqual(gatesOf(events).map(({ start, end }) => [start.cwd, start.command, start.lock, start.load, end.id === start.id, end.result, 'sensors' in end]), [
+    [path.resolve(dir), 'gate -- node --test', 'own', QUIET_LOAD, true, 'exit 0', false],
+    [path.resolve(dir), 'gate -- node --test', 'parent', QUIET_LOAD, true, 'exit 3', false],
+  ]);
+}));
+
+// Never in the way: the lock guards the machine's time and the log only tells of it.
+test('a gate log that cannot be written is said in one line on stderr, and the command runs and gives its exit code all the same', withHome(async (home, dir) => {
+  // The folder's path is taken by a file.
+  fs.mkdirSync(path.join(home, '.js-harness'));
+  fs.writeFileSync(gateLogDir(home), 'not a folder');
+  const argv = ['--home', home, '--cwd', dir, '--', 'node', '--test'];
+  const NOT_WRITTEN = /^gate: the gate log could not be written \(E[A-Z]+: [^\n]*\), so this gate is not in it$/;
+  for (const [env, before] of [[{}, []], [{ JS_HARNESS_GATE_HELD: '1' }, [IN_TURN]]]) {
+    const spawned = ranWith(7);
+    const { code, said } = await runGate(argv, env, { spawn: spawned });
+    // One line for the gate, not one for each of its two lines.
+    assert.deepEqual([code, spawned.asked.length, said.slice(0, -1), said.length], [7, 1, before, before.length + 1], said.join('\n'));
+    assert.match(said.at(-1), NOT_WRITTEN);
+  }
+  assert.equal(readGateHolder(home), null);
+
+  // A gate that ran nothing says it after the line that says so, and its exit code is the same.
+  const other = await takeGateLock({ home, ...OTHER_GATE, beatMs: 0 });
+  try {
+    const { code, said } = await runGate(['--no-wait', ...argv], {}, { spawn: ranWith(0) });
+    assert.deepEqual([code, said.length], [GATE_NOT_RUN, 2]);
+    assert.match(said[0], /^gate: nothing ran: /);
+    assert.match(said[1], /^gate: the gate log could not be written \(E[A-Z]+: [^\n]*\), so this refusal is not in it$/);
+  } finally {
+    other.release();
+  }
+
+  // An end that could not be written, after a start that could.
+  const lost = capturedLog((event) => (event.event === 'end' ? { error: 'EBUSY: resource busy or locked' } : undefined));
+  assert.deepEqual(await runGate(argv, {}, { spawn: ranWith(2), ...lost.deps }), { code: 2, said: ['gate: the gate log could not be written (EBUSY: resource busy or locked), so the end of this gate is not in it'] });
+  assert.equal(fs.readFileSync(gateLogDir(home), 'utf8'), 'not a folder');
+}));
+
+// --- `gate log`: the last gates of the log, one a line ---
+
+/** Runs `gateMain` and captures what it printed, on stdout and on stderr. */
+async function runGateLog(argv, env = {}) {
+  const out = { printed: [], said: [] };
+  const [originalLog, originalError] = [console.log, console.error];
+  console.log = (line) => out.printed.push(String(line));
+  console.error = (line) => out.said.push(String(line));
+  try {
+    const take = async () => {
+      throw new Error('not to be asked');
+    };
+    const code = await gateMain(argv, env, { takeGateLock: take, spawn: take, sampleLoad: take });
+    return { code, ...out };
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
+}
+
+/** `iso` as a line of `gate log` says it: the local month, day and time. */
+function when(iso) {
+  const at = new Date(iso);
+  const two = (number) => String(number).padStart(2, '0');
+  return `${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())}`;
+}
+
+test('gate log prints the last gates of the log, one a line and the newest last, and takes no lock and runs nothing', withHome(async (home) => {
+  const empty = await runGateLog(['log', '--home', home]);
+  assert.deepEqual(empty, { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'reading made no folder');
+
+  const at = (minute) => `2026-10-11T07:${String(minute).padStart(2, '0')}:00.000Z`;
+  const load = { busy: 1.42, processors: 8, share: 0.1775, sampleMs: 1000, busiest: [{ name: 'node', script: 'tsserver.js', pid: 41012, cpuSeconds: 1.1 }] };
+  const start = (id, minute, more = {}) => ({ v: 1, event: 'start', id, at: at(minute), cwd: `C:\\work\\${id}`, command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
+  const events = [
+    start('one', 1, { load }),
+    { v: 1, event: 'end', id: 'one', at: at(19), seconds: 1075.2, result: 'pass', sensors: [{ name: 'tests', seconds: 1075, pass: true, timedOut: false }] },
+    { v: 1, event: 'refused', id: 'two', at: at(20), cwd: 'C:\\work\\two', command: 'check', pid: 101, reason: 'held', waitedSeconds: 0, waitedFor: [{ cwd: 'C:\\work\\three', pid: 102, command: 'gate -- node --test' }] },
+    start('three', 21, { command: 'gate -- node --test', waitedSeconds: 268.4, waitedFor: [{ cwd: 'C:\\work\\one', pid: 100, command: 'check' }] }),
+    { v: 1, event: 'end', id: 'three', at: at(22), seconds: 41, result: 'exit 3' },
+    start('four', 23, { lock: 'none' }),
+  ];
+  for (const event of events) assert.deepEqual(appendGateEvent(home, event), { ok: true });
+  fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), 'a torn li');
+  const lines = [
+    `${when(at(1))}  1075 s  pass  load 1.4 of 8 (node tsserver.js)  C:\\work\\one`,
+    `${when(at(20))}  refused (held)  waited 0 s for C:\\work\\three  C:\\work\\two`,
+    `${when(at(21))}  41 s  exit 3  waited 268 s for C:\\work\\one  C:\\work\\three`,
+    `${when(at(23))}  no end (killed, or still running)  without the lock  C:\\work\\four`,
+  ];
+  const skippedOne = [`gate log: 1 unreadable line left out (${gateLogDir(home)})`];
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: lines, said: skippedOne });
+  // The home as `gate` resolves it, and the last of them alone.
+  assert.deepEqual(await runGateLog(['log'], { JS_HARNESS_HOME: home }), { code: 0, printed: lines, said: skippedOne });
+  assert.deepEqual((await runGateLog(['log', '--last', '2', '--home', home])).printed, lines.slice(2));
+  assert.deepEqual((await runGateLog(['log', '--home', home, '--last', '50'])).printed, lines);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.js-harness')), ['gate-log'], 'it took no lock');
+
+  // Twenty by default.
+  for (let n = 0; n < 30; n++) appendGateEvent(home, start(`more-${n}`, 30));
+  const twenty = (await runGateLog(['log', '--home', home])).printed;
+  assert.deepEqual([twenty.length, twenty.at(-1)], [20, `${when(at(30))}  no end (killed, or still running)  C:\\work\\more-29`]);
+}));
+
+// Found in review, 2026-10-11: nothing proved the exit code of a log that is there and cannot be read, and on
+// that path the command printed "no gate in the log" as well, the one thing it must not say of a log it
+// could not look at.
+test('gate log exits 1 for a log that is there and cannot be read, names the file on stderr, and does not say that the log holds no gate', withHome(async (home) => {
+  // A folder standing where the log's file would be: the system refuses to read it as a file.
+  fs.mkdirSync(path.join(gateLogDir(home), 'log.jsonl'), { recursive: true });
+  const notRead = [`gate log: could not read log.jsonl: EISDIR (${gateLogDir(home)})`];
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 1, printed: [], said: notRead });
+
+  // The older file can still be read: its gates are printed, and the answer is still not the whole log.
+  const began = { v: 1, event: 'start', id: 'one', at: '2026-10-11T07:01:00.000Z', cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] };
+  fs.writeFileSync(path.join(gateLogDir(home), 'log.1.jsonl'), `${JSON.stringify(began)}\n`);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 1, printed: [`${when(began.at)}  no end (killed, or still running)  C:\\work\\one`], said: notRead });
+
+  // A log that was read and holds no gate is still said in one line, and is no error.
+  fs.rmSync(gateLogDir(home), { recursive: true });
+  fs.mkdirSync(gateLogDir(home));
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+}));
+
+// Found in the same review: a line that is an event by its head and not by its body made the formatter
+// throw, and with it every `gate log` until the file rotated. It is left out and counted, as a torn line is.
+test('gate log leaves out a line whose body is not that of an event, counts it on stderr, and prints the rest', withHome(async (home) => {
+  const began = (id, more = {}) => ({ v: 1, event: 'start', id, at: '2026-10-11T07:01:00.000Z', cwd: `C:\\work\\${id}`, command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
+  const lines = [began('one'), began('two', { waitedFor: [null] }), began('three', { load: { busy: 1.4, processors: 8, busiest: [null] } }), began('four')];
+  for (const line of lines) assert.deepEqual(appendGateEvent(home, line), { ok: true });
+  const at = when('2026-10-11T07:01:00.000Z');
+  assert.deepEqual(await runGateLog(['log', '--home', home]), {
+    code: 0,
+    printed: [`${at}  no end (killed, or still running)  C:\\work\\one`, `${at}  no end (killed, or still running)  C:\\work\\four`],
+    said: [`gate log: 2 unreadable lines left out (${gateLogDir(home)})`],
+  });
+}));
+
+// Found in review (Codex), 2026-10-11: what a line is printed from was not asked, and a folder that is an
+// object no text can be made of (`{"toString":null}`) made the command end with a TypeError and no gate.
+test('gate log leaves out a line with a field it cannot print, counts it on stderr, and prints the rest', withHome(async (home) => {
+  const began = (id, more = {}) => ({ v: 1, event: 'start', id, at: '2026-10-11T07:01:00.000Z', cwd: `C:\\work\\${id}`, command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
+  const odd = { toString: null };
+  const lines = [
+    began('one'),
+    began('two', { cwd: odd }),
+    began('three', { waitedFor: [{ cwd: odd, pid: 7, command: 'check' }] }),
+    began('four', { load: { busy: 1.4, processors: 8, busiest: [{ name: odd, script: null, pid: 7, cpuSeconds: 1 }] } }),
+    { v: 1, event: 'end', id: 'one', at: '2026-10-11T07:01:00.000Z', seconds: 2, result: odd },
+    began('five'),
+  ];
+  fs.mkdirSync(gateLogDir(home), { recursive: true });
+  fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  const at = when('2026-10-11T07:01:00.000Z');
+  assert.deepEqual(await runGateLog(['log', '--home', home]), {
+    code: 0,
+    printed: [`${at}  no end (killed, or still running)  C:\\work\\one`, `${at}  no end (killed, or still running)  C:\\work\\five`],
+    said: [`gate log: 4 unreadable lines left out (${gateLogDir(home)})`],
+  });
+}));
+
+// A gate of a newer harness writes into the same file of the machine. What it writes that this version does
+// not know is no damaged line: nothing is printed for it and nothing is said of it.
+test('gate log prints nothing and says nothing for a line of a kind of event this version does not know', withHome(async (home) => {
+  const at = '2026-10-11T07:01:00.000Z';
+  const began = { v: 1, event: 'start', id: 'one', at, cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] };
+  const stopped = (id) => ({ v: 1, event: 'stopped', id, at, cwd: `C:\\work\\${id}`, command: 'check', pid: 100, reason: 'no sensor declared' });
+  fs.mkdirSync(gateLogDir(home), { recursive: true });
+  const write = (lines) => fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+
+  write([stopped('two'), began, stopped('one'), stopped('three')]);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`${when(at)}  no end (killed, or still running)  C:\\work\\one`], said: [] });
+  // A log that holds nothing else holds no gate this version can say.
+  write([stopped('two')]);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+}));
+
+test('gate log errors with usage on stderr and exits 2 for arguments it cannot take, and reads nothing', withHome(async (home) => {
+  const refusals = [
+    [['log', '--last'], '--last requires a value'],
+    [['log', '--last', '0'], '--last takes a number of gates from 1, not "0"'],
+    [['log', '--last', 'few'], '--last takes a number of gates from 1, not "few"'],
+    [['log', '--last', '1.5'], '--last takes a number of gates from 1, not "1.5"'],
+    [['log', '--home'], '--home requires a value'],
+    [['log', '--wait', '5'], 'unknown argument: --wait'],
+    [['log', '--', 'node', '--test'], 'unknown argument: --'],
+    [['log', '--last', '1', '--last', '2'], '--last given twice'],
+  ];
+  for (const [argv, why] of refusals) {
+    assert.deepEqual(await runGateLog(argv, { JS_HARNESS_HOME: home }), { code: 2, printed: [], said: [`${why}\n\n${USAGE}`] }, argv.join(' '));
+  }
+}));
+
 // --- the real thing: the dispatcher, a real shell, the real lock and the real clock, in a temporary home ---
 
 /** The environment of this process without what a gate that runs this file gives it: the mark of a sensor,
@@ -629,9 +974,13 @@ test('gate looks for nothing below one busy logical processor, for a load that w
  *
  * And with the sample of the load switched off (`JS_HARNESS_GATE_LOAD=off`), for these gates and for what
  * they start: no stand-in reaches a process of its own, each would wait a second for its sample, and on a
- * machine this suite keeps busy each would say the load on the stderr these tests read whole. */
+ * machine this suite keeps busy each would say the load on the stderr these tests read whole.
+ *
+ * The switch of the gate log is dropped and not set: a gate that runs this file with its log switched off
+ * (`JS_HARNESS_GATE_LOG=off`) would hand that on, and the gates below would not write the log these tests
+ * read in a home of their own. */
 function outsideAGate(more = []) {
-  const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_load', ...more];
+  const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_load', 'js_harness_gate_log', ...more];
   return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_GATE_LOAD: 'off' };
 }
 
@@ -691,6 +1040,33 @@ test('a real gate streams what the command prints while it runs, holds the lock 
   assert.deepEqual(stdout.split(/\r?\n/), ['first line', 'last line', '']);
   assert.deepEqual(stderr.split(/\r?\n/), ['on stderr', '']);
   assert.equal(readGateHolder(home), null);
+  assert.equal(fs.existsSync(gateDir(home)), false);
+}));
+
+// The one real `gate` whose log is read back from the real file, by the reader and by `gate log`, a
+// process of its own as well. The home is temporary, as for every gate of this file.
+test('a real gate leaves its two lines in the log of its home, and a real gate log prints them as one', withHome(async (home, dir) => {
+  fs.writeFileSync(path.join(dir, 'three.cjs'), 'process.exit(3);\n');
+  const ran = await startGate(['--home', home, '--', 'node', 'three.cjs'], { cwd: dir }).done;
+  assert.deepEqual([ran.status, ran.stdout, ran.stderr], [3, '', '']);
+  assert.deepEqual(fs.readdirSync(gateLogDir(home)), ['log.jsonl']);
+  const text = fs.readFileSync(path.join(gateLogDir(home), 'log.jsonl'), 'utf8');
+  const [start, end, ...rest] = text.split('\n');
+  assert.deepEqual(rest, ['']);
+  const began = JSON.parse(start);
+  // No load: these gates are started with the sample switched off.
+  assert.deepEqual({ ...began, id: '', at: '', pid: 0, waitedSeconds: Math.floor(began.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: dir, command: 'gate -- node three.cjs', pid: 0, lock: 'own', waitedSeconds: 0, waitedFor: [] });
+  assert.ok(Number.isInteger(began.pid) && began.pid !== process.pid, String(began.pid));
+  const ended = JSON.parse(end);
+  assert.deepEqual({ ...ended, at: '', seconds: 0 }, { v: 1, event: 'end', id: began.id, at: '', seconds: 0, result: 'exit 3' });
+  assert.ok(ended.seconds >= 0 && ended.seconds < 300, String(ended.seconds));
+
+  const log = await startGate(['log', '--home', home], { cwd: dir }).done;
+  assert.deepEqual([log.status, log.stderr], [0, '']);
+  assert.match(log.stdout, /^\d\d-\d\d \d\d:\d\d:\d\d {2}\d+ s {2}exit 3 {2}\S.*\r?\n$/);
+  assert.equal(log.stdout.trimEnd().split('  ').at(-1), dir);
+  // Reading it took no lock and added no line.
+  assert.equal(fs.readFileSync(path.join(gateLogDir(home), 'log.jsonl'), 'utf8'), text);
   assert.equal(fs.existsSync(gateDir(home)), false);
 }));
 
@@ -810,6 +1186,13 @@ test('a real check started by a real gate, in the same home, runs its sensors in
     assert.equal(said.lock.length, 1);
     assert.ok(said.lock[0].startsWith(`holder-${gate.child.pid}-`), said.lock[0]);
     assert.equal(fs.existsSync(gateDir(home)), false);
+    // The log of their home tells the two apart: the gate with its own lock, and the check that ran
+    // inside its turn, from start to end.
+    const [outer, inner, ...more] = gatesOf(readGateLog(home).events);
+    assert.deepEqual(more, []);
+    assert.deepEqual([outer.start.lock, outer.start.pid, outer.start.command.slice(0, 8), outer.end.result], ['own', gate.child.pid, 'gate -- ', 'exit 0']);
+    assert.deepEqual([inner.start.lock, inner.start.command, inner.start.cwd, inner.end.result], ['parent', 'check', path.resolve(dir), 'pass']);
+    assert.ok(outer.start.at <= inner.start.at && inner.end.at <= outer.end.at, JSON.stringify([outer, inner]));
   } finally {
     fs.rmSync(checkout, { recursive: true, force: true });
   }

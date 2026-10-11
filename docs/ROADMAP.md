@@ -728,7 +728,8 @@ podamos implementar todo"), each a feature of its own with its own document and 
      instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
      watch no longer raises an alarm for a gate that only waits. A gate that is killed
      leaves a holder that the next one takes over a minute after its last beat. A gate that
-     ends leaves nothing on disk, and `uninstall` removes what a killed one left.
+     ends leaves nothing of the lock on disk (its two lines in the gate log, below, are all
+     it leaves), and `uninstall` removes what a killed one left.
    - What it does not cover: a gate of a branch, or of an installed version, from before
      the lock, which runs beside the others as it always did; a test file run alone by
      hand, left free on purpose; a `check` that could not take the
@@ -770,7 +771,7 @@ podamos implementar todo"), each a feature of its own with its own document and 
      browser and a TypeScript language server of a session spinning at about 1.5 logical
      processors with nothing to do. The process look counts neither. The bound stays at
      1,200 s; a gate that says the load on the machine when it starts is built (below),
-     and the gate log comes in the slice after it.
+     and so is the gate log (below both).
    - The load a gate starts under (2026-10-11, `odd/tasks/gate-log.md`): every gate that
      runs sensors, and every `js-harness gate -- <command>`, reads the machine's processors
      twice, a second apart, after it took the lock and before its first sensor, and says
@@ -785,6 +786,26 @@ podamos implementar todo"), each a feature of its own with its own document and 
      `JS_HARNESS_GATE_LOAD=off` takes no sample. What it does not do: it does not wait for
      a quiet machine, it does not say whose session a busy process belongs to, and it
      changes no bound.
+   - The gate log (2026-10-11, `odd/tasks/gate-log.md`): which gates ran beside which, how
+     long each took and under what load was a session's memory, and three failures of
+     2026-10-10 name a log of gates as the proof they lacked. Every gate now writes it: a
+     line when its sensors are about to run (when, where, which command, how it had the
+     lock: its own, its parent's turn or none; how long it waited and for whose gates; the
+     load it read) and a line when it ends (the seconds and the result of each sensor), so
+     a gate that was killed stays in it as a start alone; a gate that was refused the
+     lock, or ran out of patience, writes one line saying so. `js-harness gate log [--last
+     <n>]` prints the last gates, one short line each. It is JSON lines in a folder of its
+     own under the home, `~/.js-harness/gate-log`, two files at most and about a megabyte:
+     past 512 KiB the file is renamed over the older one, never rewritten, since gates
+     that could not take the lock write side by side. A command line is cut at 120
+     characters, the gate's own and those of the gates it waited for. A log that cannot be
+     written is said once and changes no result; `JS_HARNESS_GATE_LOG=off` writes nothing.
+     `uninstall` removes the folder, and keeps it beside the lock's while a gate is alive.
+     Where that folder lives was his to say, and he said it on 2026-10-11: there ("Sí, en
+     .js-harness/gate-log"); it is one function, `gateLogDir`. What the log first showed, before it
+     existed, from the gates' own reports: the lock gives no turns in order of arrival (a
+     commit waited 36 minutes while one that asked five minutes later ran), which the
+     `waitedFor` of each start will now put on record.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
