@@ -542,6 +542,8 @@ reader, and that table names this feature as their owner.
   Split by the order taken on 2026-10-11 ("Delivery"): T4a, the roster and `--address`, in the
   first pull request with T3 (route: delegated, one writer; the reader and the board are two
   non-trivial files with their tests); T4b, the rest, after T1.
+- [ ] T4c The nine findings of the two reviews of `ce8bdf7` (Progress, 2026-10-11), in one
+  follow-up commit on `feat/session-board-channel` (route: delegated, the writer of T4b)
 - [ ] T5 The context figure as room left against the last task's cost; the 73% mark removed
 - [ ] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
@@ -772,11 +774,76 @@ reader, and that table names this feature as their owner.
   next slice, and the worktrees are his to remove.
   A mistake of the parent: one read of the board, between the writer's two rounds (hour not read from a clock), while another session's gate
   ran, to see the `Gates` section. Not repeated; the writer's timings were asked for instead.
+- 2026-10-11 08:51 local, commit `ce8bdf7` (T1b and T4b). Its gate: `INFO gate waited 24 min
+  8 s for the machine's gate lock`, behind the gates of two other worktrees, then `PASS tests
+  npm run test passed`; 08:11:20 to 08:51:32 in all, so about 16 minutes of run, one try.
+  gentle-ai refused the commit as one candidate: `lens_context_budget_exceeded` at 2,221
+  lines ("review this change as smaller candidates that each fit"), with no authority created
+  (the record slice, 1,962 lines, had fitted). A split into commits that each pass the gate was
+  tried at the level of files and is not possible: with the library layer alone, seven tests
+  of the command fail. So the gated commit was kept whole and reviewed as two candidates
+  against a boundary that is never delivered: an unreferenced commit `33837e2`, made with
+  `git commit-tree` from the tree of `8654c79` plus the four library files of `ce8bdf7`
+  (`bin/lib/channel.mjs`, `bin/lib/sessions.mjs` and their tests). First half, `8654c79..33837e2`,
+  1,324 lines, lineage `review-a712efd963c04120`: approved and acknowledged. Second half,
+  `33837e2..ce8bdf7`, 897 lines, lineage `review-b3a4d33059c7cc17`: see the next entry. The
+  local tag `jh5-slice3-final` points at `ce8bdf7`; neither it nor `33837e2` is pushed.
+  For the harness: a task of this size does not fit one review, and a work-unit commit cannot
+  always be cut into commits that each pass the gate; the forecast at the start of a task
+  should cut it under about 1,900 lines with its tests, which is a change for the task
+  contract or the ODD rules, proposed and not built.
+  The first half's four findings, none opening a correction, taken in a follow-up commit (T4c):
+  a reading is matched to a session by the whole id only, while notices also match the start
+  of an id (`bin/lib/sessions.mjs:848`); `quoteOf` throws on a line that is not a whole number
+  (`:1119`); a message with no id written twice by a restarted session is counted twice
+  (`:1037`); a plan from before tasks were kept reads every task as added (`:1313`).
+- 2026-10-11, the second half, `33837e2..ce8bdf7`: approved and acknowledged (`authority:
+  burned`), so the whole of `ce8bdf7` is reviewed. Six findings, none opening a correction.
+  One is an effect of the split and not a defect (the reviewer of the second half could not
+  see the library the commands import). Five are taken in T4c: `--quote` reads any file it is
+  given, so a file a session wrote itself with a line marked as a person's would print as his
+  (`bin/sessions.mjs:498`): only a transcript inside the project's sessions folder is his
+  word; `notify` says nothing when it wanted the sender's title from the record and the record
+  could not be read (`bin/notify.mjs:216`); `sessions --opening` cannot be given a title that
+  begins with `--` (`bin/sessions.mjs:131`); an opening stored with a final carriage return
+  prints it, and a `--self` that matches no transcript or several is unproved (`:473`); an
+  untitled session that reads an opening meant for another takes its title, and two readers
+  of one opening make its role's address exit 2 (`:478`): kept, since the exit says so, with
+  the tests of which reading wins.
+
+## State for a resume (written 2026-10-11, before the session's context is compacted)
+Read this document's "Next step" and this section; the summary of a compaction is not the
+record. What exists, all local to this machine:
+- Worktree `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index. Branch
+  `feat/session-board-channel` at `ce8bdf7` plus what the entries after this one name; not
+  pushed, because its code has no Codex record and the cap forbids one (below).
+- On `origin/main` (`8654c79`): pull requests 58 (T3, T4a) and 59 (T1), merged by the lead.
+- Waiting for Sebastián: (1) the Codex cap, 2,780,275 of 3 million input tokens spent, 219,725
+  left; the lead asks him first thing on his return. On his answer: `node bin/js-harness.mjs
+  codex-review --base origin/main --plan`, then the run under the stop script below, then the
+  push and the pull request, then the notice to the lead. (2) Tests owed 1, 2, 3 and 6, asked
+  one at a time, each before it is run, never while work runs.
+- Scripts of this session, in its scratchpad
+  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\e5376fe9-d1cc-4288-b9e9-cf533ba35a5a\scratchpad\`:
+  `review-chain.mjs <repo> <base>` (assess, status, start with the granted choice, bound
+  status; prints the capture command), `capture-ack.mjs <repo> <out.json> "<capture command>"`
+  (runs the capture, prints the findings, acknowledges when approved), `codex-capped.mjs <repo>
+  <budget> <log> <estimates> -- <codex-review args>` (ends a Codex run at a part boundary when
+  the next part would pass the budget). They are conveniences: every step they run is the
+  command gentle-ai or `codex-review` returned, verbatim.
+- Before a gate: stop the `tsserver.js` processes whose parent chain ends in this session's
+  own `claude.exe` (failure 20); the app starts them again, so it is done before each commit.
+- Notices to the lead go by `SendMessage` to the title `JH ORQ · js-harness`: delivered,
+  waiting, closed. From this slice on, `js-harness notify` exists on `main` and records them;
+  the installed command on this machine is older until he has it updated.
+- Sub-agents: Opus 5.5 at effort high, one writer at a time, with the allowed edit surfaces in
+  the brief. Each writer so far stayed inside them.
 
 ## Next step
-On `feat/session-board-channel` (T1b, T4b): the commit and its gate, then the gentle-ai
-review. Its Codex review and its push wait for his answer on the cap (the first question the
-lead puts to him on his return). Meanwhile, on a branch stacked on it: T5 (the context figure
+On `feat/session-board-channel`: T1b and T4b are committed (`ce8bdf7`), gated and reviewed by
+gentle-ai in two halves. Now T4c, the findings, by the writer of T4b; then its commit and gate
+and its assessment. The branch's Codex review and its push wait for his answer on the cap (the
+first question the lead puts to him on his return). After T4c, on a branch stacked on it: T5 (the context figure
 as room left against the last task's cost; the 73% mark removed) and T6 (the resume hook,
 built and tested; installed only on his word). Waiting for him as well, none blocking the
 build: tests owed 1, 2, 3 and 6, each asked before it is run. For the gate's session, through
