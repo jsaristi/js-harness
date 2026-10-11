@@ -1156,30 +1156,90 @@ function messagesBetween(sessions) {
       if (message.from === 'session' && message.id !== null && !arrivals.has(message.id)) arrivals.set(message.id, { at: message.at, name: message.name, receiver: session });
     }
   }
+  // A send is a call, and its copy in the transcript of a restart is the same entry again: the same time
+  // to the millisecond, address, kind of address and summary, under the same title. Those are the key by
+  // which two copies are one send. What its result gave is not part of it, because the result can be in
+  // one transcript only (a session restarted between the call and its result): one copy then has no id
+  // and the other has it, or one failed and the other says nothing yet. The copy that knows more is
+  // kept: an id, then a failure, then neither.
+  //
+  // Copies are matched across transcripts only: two calls of one transcript are two messages whatever
+  // they share, since one reply can make both, so a send of a key held so far takes at most one call of
+  // each transcript. Two ids are two sends: a call with an id is the held send with that id, or else the
+  // first held send of its key that has no id yet, and never one with another id (a transcript resumed
+  // part way holds only some of the sends of a key, so the place of a call among them says nothing). A
+  // call with no id is the first held send of its key that no call of its transcript is yet. A send
+  // with no time has no key. Two different messages would have to come from two sessions of one title,
+  // in the same millisecond, to one address, in the same words.
+  const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null]) : null);
+  const known = (message) => (message.id !== null ? 2 : message.failed ? 1 : 0);
+  //
+  // The sends are kept in the order of the calls: sends of one reply share their moment, so that order
+  // is all that tells the last of them from the first. A send a transcript adds goes before the send
+  // its next call is, so a transcript that holds only the last sends of a reply, read first, does not
+  // put them before the rest.
+  const calls = []; // one per send, in the order of the calls: { session, message }, the copy that knows most
+  const slots = new Map(); // key -> the sends of that key held so far
+  for (const session of readable) {
+    const sent = session.sent ?? [];
+    const sends = new Array(sent.length); // the send each call of this transcript is, by its place
+    const added = new Set(); // those no transcript before this one had
+    const here = new Map(); // key -> the places of the calls of this transcript that have it, in their order
+    sent.forEach((message, place) => {
+      const key = copyKey(session, message);
+      if (key === null) {
+        sends[place] = { session, message };
+        added.add(sends[place]);
+      } else {
+        here.set(key, [...(here.get(key) ?? []), place]);
+      }
+    });
+    for (const [key, places] of here) {
+      const held = slots.get(key) ?? [];
+      slots.set(key, held);
+      const taken = new Set(); // the held sends a call of this transcript already is
+      const rest = [];
+      for (const place of places) {
+        const { id } = sent[place];
+        const same = id === null ? undefined : held.find((send) => send.message.id === id && !taken.has(send));
+        if (same === undefined) {
+          rest.push(place);
+          continue;
+        }
+        taken.add(same);
+        sends[place] = same;
+      }
+      for (const place of rest) {
+        const message = sent[place];
+        const copied = held.find((send) => !taken.has(send) && (message.id === null || send.message.id === null));
+        const send = copied ?? { session, message };
+        taken.add(send);
+        sends[place] = send;
+        if (copied === undefined) {
+          held.push(send);
+          added.add(send);
+        } else if (known(message) > known(copied.message)) {
+          Object.assign(copied, { session, message });
+        }
+      }
+    }
+    let next = calls.length; // where in `calls` the send of the following call of this transcript is
+    for (let place = sent.length - 1; place >= 0; place -= 1) {
+      if (added.has(sends[place])) calls.splice(next, 0, sends[place]);
+      else next = calls.indexOf(sends[place]);
+    }
+  }
   const messages = [];
   const sent = new Set();
-  // A send with no id (it failed, or its result was never written) has nothing of its own to be known
-  // by. Its copy in the transcript of a restart is the same entry again, so it has the same time to the
-  // millisecond, address, summary and outcome, under the same title. Those five are the key, and only
-  // across transcripts: two calls of one transcript are two messages whatever they share, since one
-  // reply can make both, and a send with no time is known by nothing. Two different messages would have
-  // to come from two sessions of one title, in the same millisecond, to one address, in the same words.
-  const copies = new Map(); // key -> the id of the transcript that had it first
-  const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null, message.failed === true]) : null);
-  for (const session of readable) {
-    for (const message of session.sent ?? []) {
-      if (message.id !== null) {
-        if (sent.has(message.id)) continue;
-        sent.add(message.id);
-      } else {
-        const key = copyKey(session, message);
-        if (key !== null && copies.has(key) && copies.get(key) !== session.id) continue;
-        if (key !== null && !copies.has(key)) copies.set(key, session.id);
-      }
-      const arrival = message.id === null ? undefined : arrivals.get(message.id);
-      const to = arrival ? whose(arrival.receiver) : { session: null, title: null };
-      messages.push({ id: message.id, at: message.at, from: whose(session), to: { address: message.to, ...to }, summary: message.summary ?? null, state: arrival ? 'arrived' : message.failed ? 'failed' : 'not-seen' });
+  for (const { session, message } of calls) {
+    // An id is one message whatever else its copies say (a session renamed between two transcripts).
+    if (message.id !== null) {
+      if (sent.has(message.id)) continue;
+      sent.add(message.id);
     }
+    const arrival = message.id === null ? undefined : arrivals.get(message.id);
+    const to = arrival ? whose(arrival.receiver) : { session: null, title: null };
+    messages.push({ id: message.id, at: message.at, from: whose(session), to: { address: message.to, ...to }, summary: message.summary ?? null, state: arrival ? 'arrived' : message.failed ? 'failed' : 'not-seen' });
   }
   for (const [id, arrival] of arrivals) {
     if (!sent.has(id)) messages.push({ id, at: arrival.at, from: { session: null, title: arrival.name }, to: { address: null, ...whose(arrival.receiver) }, summary: null, state: 'arrived' });
@@ -1284,6 +1344,13 @@ export function isSelf(id, self) {
   return typeof self === 'string' && self !== '' && (id === self || (self.length >= 8 && id.startsWith(self)));
 }
 
+/** Whether two ids as they were written name one session: the same id, or one of them the start (eight
+ * characters or more) of the other. Either side may be the short one: `--self` takes the start of an id,
+ * and what was written with it keeps that start when no transcript could be read to complete it. */
+export function sameSession(one, other) {
+  return typeof one === 'string' && typeof other === 'string' && (isSelf(one, other) || isSelf(other, one));
+}
+
 /** How a board says context sizes: `of(tokens)` is `342k tokens (68%)`, `pause` is `85% of the window
  * (425k)`. The percentage is the share of the board's context window, the number the desktop app shows;
  * the pause leads with it because that is how the rule is said and how it is set. */
@@ -1319,7 +1386,11 @@ function sessionChanges(before, after, self) {
   const lines = [];
   const earlier = byKey(before.sessions, 'id');
   const sizes = contextSizes(after);
-  const ended = endedSessions(after);
+  // A look that could not read the record has a roster that knows of no session that ended. The last
+  // record read is then what says it (`watchBaseline` keeps its roster): a session that said `closed`
+  // has not taken it back because a file was busy. Should it have opened again meanwhile, its notice
+  // wakes the watch at the first look that reads the record.
+  const ended = endedSessions(after.channel?.unavailable !== undefined ? before : after);
   for (const session of after.sessions) {
     const listed = earlier.get(session.id);
     // A transcript that cannot be read says nothing about what the session did.
@@ -1449,7 +1520,7 @@ function channelChanges(before, after, self) {
   const held = is.forOrchestrator.notices;
   const fresh = held.slice(held.length - Math.min(gained, held.length));
   const lines = fresh
-    .filter((notice) => typeof notice.from?.id !== 'string' || !isSelf(notice.from.id, self))
+    .filter((notice) => !sameSession(notice.from?.id, self))
     .map((notice) => `notice for the orchestrator, ${notice.kind} from ${senderWords(notice.from, { quoted: true })}: ${clipped(notice.text)}`);
   const rest = gained - fresh.length;
   if (rest > 0) lines.push(`${rest} earlier notice${rest === 1 ? '' : 's'} for the orchestrator ${rest === 1 ? 'is' : 'are'} in the record: ${is.path}`);
@@ -1586,6 +1657,8 @@ export function watchBaseline(older, newer) {
     pullRequests: kept(newer.pullRequests, older.pullRequests),
     // A record that could not be read at one look has gained nothing: the count to compare with is the last one read.
     ...(newer.channel && { channel: newer.channel.unavailable !== undefined && older.channel ? older.channel : newer.channel }),
+    // Nor does its roster know which sessions ended: the one made with the last record read does (`sessionChanges`).
+    ...(newer.roster && { roster: newer.channel?.unavailable !== undefined && older.roster ? older.roster : newer.roster }),
     worktrees: newer.worktrees.available ? { ...newer.worktrees, items: newer.worktrees.items.map((tree) => (tree.plans === undefined ? tree : { ...tree, plans: plansOf(tree) })) } : older.worktrees,
   };
 }
@@ -1836,9 +1909,11 @@ function channelLines(channel, now) {
 /** The session a gate hangs from, as its line in `Gates` says it after what the gate does, or nothing
  * for a board with no roster. A gate is a process, and nothing a process carries names a session: what
  * ties the two is the folder. So it is the row of the roster whose notices were written from the folder
- * the gate checks (`record.worktree`, where the session really works), and failing that the row whose
- * transcript records that folder and whose notices place it nowhere else. Several such rows are all
- * named, as one of them; none is said as not known, never left out. This is what lets a gate that waits
+ * the gate checks (`record.worktree`, where the session really works), or the row whose transcript
+ * records that folder and whose notices place it nowhere else. Several such rows are all named, as one
+ * of them, and when they are of both kinds each is named with what places it (Codex review of 7a19710:
+ * the first kind alone was named, as if a notice made the folder's processes that session's); none is
+ * said as not known, never left out. This is what lets a gate that waits
  * for the machine be told from a leftover of another session (failure 7 of 2026-10-10: the board
  * printed neither a wait's owner nor its pid). */
 function gateSession(gate, roster) {
@@ -1848,7 +1923,16 @@ function gateSession(gate, roster) {
   const name = (row) => row.title ?? `transcript ${row.transcripts[0].id.slice(0, 8)}`;
   const byNotices = roster.rows.filter((row) => typeof row.record?.worktree === 'string' && comparable(row.record.worktree) === folder);
   const byFolder = roster.rows.filter((row) => typeof row.record?.worktree !== 'string' && typeof row.cwd === 'string' && comparable(row.cwd) === folder);
-  const [rows, how, shared] = byNotices.length > 0 ? [byNotices, 'its notices were written from this folder', 'whose notices were written from this folder'] : [byFolder, 'its transcript records this folder', 'whose transcripts record this folder'];
+  const NOTICES = ['its notices were written from this folder', 'whose notices were written from this folder'];
+  const FOLDER = ['its transcript records this folder', 'whose transcripts record this folder'];
+  // A notice says where a session works, not that the processes of that folder are its own: a session
+  // opened in the folder could have started the gate too, so both kinds are candidates, each with what
+  // places it.
+  if (byNotices.length > 0 && byFolder.length > 0) {
+    const placed = [...byNotices.map((row) => `${name(row)} (${NOTICES[0]})`), ...byFolder.map((row) => `${name(row)} (${FOLDER[0]})`)];
+    return [`one of ${placed.length} sessions in this folder: ${placed.join(', ')}`];
+  }
+  const [rows, [how, shared]] = byNotices.length > 0 ? [byNotices, NOTICES] : [byFolder, FOLDER];
   if (rows.length === 0) return ['session not known: no row of the roster is in this folder'];
   return [rows.length === 1 ? `session ${name(rows[0])} (${how})` : `one of ${rows.length} sessions ${shared}: ${rows.map(name).join(', ')}`];
 }

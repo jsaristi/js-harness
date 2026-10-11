@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm } from './lib.mjs';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
-  contentHash, compareSnapshots, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, HARNESS_HOOKS, hostHooksProblem,
+  contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, HARNESS_HOOKS, hostHooksProblem,
 } from './practice-lib.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
@@ -364,15 +364,20 @@ const STEPS = {
   'global-uninstall': (ctx) => {
     const { home } = ctx.layout;
     const { manifest, skills } = installedFiles(home);
+    // The two commits of this run went through the hook, and a gate writes its log under the home it is
+    // given. Nothing records that folder and no gate removes it, so it is looked for first: "it is gone"
+    // below is then said of something that was there, written by a real gate of the installed candidate.
+    const gateLog = gateLogFolder(home);
+    assertThat(isFolder(gateLog), `the gates of this run's commits left no log at ${gateLog}, so the run cannot show that uninstall removes it`);
     expectOk(harness(ctx, 'uninstall', '--global', '--home', home), 'js-harness uninstall --global');
-    for (const file of [manifest, ...skills]) assertThat(!fs.existsSync(file), `${file} is still there after js-harness uninstall --global`);
+    for (const file of [manifest, ...skills, gateLog]) assertThat(!fs.existsSync(file), `${file} is still there after js-harness uninstall --global`);
     for (const seed of hostSeeds(home)) {
       assertThat(readIfThere(seed.path)?.equals(Buffer.from(seed.content)) === true, `${seed.path} is not byte for byte what setup seeded`);
     }
     // Installed again, so the folder is left ready: the hook of the project and a later look both find it.
     expectOk(harness(ctx, 'install', '--home', home), 'js-harness install, again');
     assertThat(fs.existsSync(manifest), `the second js-harness install left no ${manifest}`);
-    return `uninstall --global left no manifest and no skill in ${home}, and both host files byte for byte as seeded; installed again`;
+    return `uninstall --global left no manifest, no skill and no gate log in ${home}, and both host files byte for byte as seeded; installed again`;
   },
 
   'real-home-after': (ctx) => {

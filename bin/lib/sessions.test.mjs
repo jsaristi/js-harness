@@ -2266,7 +2266,7 @@ test('channelOf counts once a message with no id that a restarted session wrote 
   assert.equal(count(first, restarted([{ ...again }]), member(D, 'JH 2 · the board', 100, { sent: [{ ...again }] })), 2, 'and so is the copy of a second restart');
   // What is not the same message stays two: another summary, another address, a send that did not fail,
   // another moment, a session of another title, and a send with no time.
-  for (const other of [{ summary: 'again, differently' }, { to: 'JH 9 · other' }, { failed: false }, { at: before(91) }]) {
+  for (const other of [{ summary: 'again, differently' }, { to: 'JH 9 · other' }, { at: before(91) }]) {
     assert.equal(count(first, restarted([{ ...again, ...other }])), 3, JSON.stringify(other));
   }
   assert.equal(count(first, member(C, 'JH 3 · the lock', 110, { sent: [{ ...again }] })), 3, 'a session of another title sent its own');
@@ -2275,6 +2275,127 @@ test('channelOf counts once a message with no id that a restarted session wrote 
   // Two calls of one transcript are two messages, whatever they share: one reply can make both.
   assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] })), 2);
   assert.equal(count(member(B, 'JH 2 · the board', 120, { sent: [again, { ...again }] }), restarted([{ ...again }, { ...again }])), 2, 'and their two copies are those two');
+});
+
+// Codex review of 7a19710, finding 1: the result of a send can be in one transcript only (the session was
+// restarted between the call and its result), so one copy has no id and the other the id the result gave.
+// The two were told apart by that, counted twice, and the stale one printed as never seen to arrive.
+test('channelOf counts once a send whose copies differ in what is known of its outcome, and keeps the copy that knows more', () => {
+  const channel = (...sessions) => lib.channelOf(recordOf(), sessions, { count: 10 });
+  const shown = (...sessions) => channel(...sessions).messages.map((message) => [message.id, message.state, message.from.session]);
+  const unresolved = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const orq = member(A, 'JH ORQ · proj', 60, { received: [RECEIVED(200, 'JH 2 · the board', 'm2')] });
+  const old = member(B, 'JH 2 · the board', 120, { sent: [unresolved] });
+  const restarted = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  // Whichever transcript the board reads first.
+  assert.deepEqual(shown(orq, old, restarted({ ...unresolved, id: 'm2' })), [['m2', 'arrived', C]]);
+  assert.deepEqual(shown(orq, restarted({ ...unresolved, id: 'm2' }), old), [['m2', 'arrived', C]]);
+  // A failure is an outcome too, and an id says more than a failure.
+  assert.deepEqual(shown(old, restarted({ ...unresolved, failed: true })), [[null, 'failed', C]]);
+  assert.deepEqual(shown(restarted({ ...unresolved, failed: true }), old), [[null, 'failed', C]]);
+  assert.deepEqual(shown(member(B, 'JH 2 · the board', 120, { sent: [{ ...unresolved, failed: true }] }), restarted({ ...unresolved, id: 'm2' })), [['m2', 'not-seen', C]]);
+  // Two calls of one reply and their two copies are two messages, each with the id of its own copy.
+  const twice = member(B, 'JH 2 · the board', 120, { sent: [unresolved, { ...unresolved }] });
+  assert.deepEqual(shown(twice, restarted({ ...unresolved, id: 'm2' }, { ...unresolved, id: 'm3' })).map(([id]) => id), ['m2', 'm3']);
+  assert.deepEqual(shown(twice, restarted({ ...unresolved, id: 'm2' })).map(([id]) => id), ['m2', null], 'and the one that has no copy stays');
+  // What is not the same send stays two: other words, and two calls of one transcript, which are never one.
+  assert.equal(channel(old, restarted({ ...unresolved, id: 'm2', summary: 'another' })).messageCount, 2);
+  assert.equal(channel(member(B, 'JH 2 · the board', 120, { sent: [unresolved, { ...unresolved, id: 'm2' }] })).messageCount, 2);
+  // An id written in two transcripts under two titles (the session was renamed between) is still one.
+  assert.equal(channel(old, member(C, 'JH 2 · renamed', 110, { sent: [{ ...unresolved, id: 'm2' }] }), member(D, 'JH 2 · the board', 100, { sent: [{ ...unresolved, id: 'm2' }] })).messageCount, 1);
+});
+
+// Codex review of 25cf031: copies were matched by their place alone, the n-th send of a key in one
+// transcript with the n-th in another. A transcript that holds only some of the sends of a key (a session
+// resumed part way) put a send with one id in the place of a send with another, and the second was lost
+// when the shorter transcript was read first.
+test('channelOf never takes two sends with two ids for one, whichever transcript is read first', () => {
+  const ids = (...sessions) => lib.channelOf(recordOf(), sessions, { count: 10 }).messages.map((message) => message.id).sort();
+  const same = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const whole = member(B, 'JH 2 · the board', 120, { sent: [{ ...same, id: 'm1' }, { ...same, id: 'm2' }] });
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(ids(resumed({ ...same, id: 'm2' }), whole), ['m1', 'm2'], 'the shorter transcript first');
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' })), ['m1', 'm2'], 'and last');
+  // A copy with no id is a copy of the send it can still be: the one no copy of its transcript is yet.
+  assert.deepEqual(ids(resumed({ ...same }, { ...same, id: 'm2' }), whole), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm2' }, { ...same })), ['m1', 'm2']);
+  // And a send with an id takes the place of a copy with none, never of one with another id.
+  const unresolved = member(B, 'JH 2 · the board', 120, { sent: [{ ...same }, { ...same, id: 'm2' }] });
+  assert.deepEqual(ids(unresolved, resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' })), ['m1', 'm2']);
+  assert.deepEqual(ids(resumed({ ...same, id: 'm1' }, { ...same, id: 'm2' }), unresolved), ['m1', 'm2']);
+  assert.deepEqual(ids(whole, resumed({ ...same, id: 'm3' })), ['m1', 'm2', 'm3'], 'a third id is a third send');
+});
+
+// Codex review of 0543030, and gentle-ai's of the same change: the calls of a transcript were taken key by
+// key, so three sends of one reply (one moment) with the keys K, L, K came out as the first, the third,
+// the second, and the last message of the board was not the last one sent.
+test('channelOf keeps the sends of one moment in the order their transcript has them, whatever their keys and whichever transcript is read first', () => {
+  const order = (sessions, options = { count: 10 }) => lib.channelOf(recordOf(), sessions, options).messages.map((message) => message.id ?? message.summary);
+  const one = SENT(201, 'JH ORQ · proj', null, { summary: 'T4b gated' });
+  const other = { ...one, summary: 'and pushed' };
+  const reply = member(B, 'JH 2 · the board', 120, { sent: [{ ...one, id: 'm1' }, { ...other, id: 'm2' }, { ...one, id: 'm3' }] });
+  assert.deepEqual(order([reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply], { count: 1 }), ['m3'], 'the last one shown is the last one sent');
+  // A transcript that holds only some of them, read first, does not put its own before the rest.
+  const resumed = (...sent) => member(C, 'JH 2 · the board', 110, { sent });
+  assert.deepEqual(order([resumed({ ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...other, id: 'm2' }, { ...one, id: 'm3' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([resumed({ ...one, id: 'm1' }), reply]), ['m1', 'm2', 'm3']);
+  assert.deepEqual(order([reply, resumed({ ...one, id: 'm3' }, { ...other, id: 'm4' })]), ['m1', 'm2', 'm3', 'm4']);
+  // Sends with no time have no key; they stay in the order of their transcript among themselves.
+  const untimed = (summary) => ({ ...one, at: null, summary });
+  assert.deepEqual(order([member(B, 'JH 2 · the board', 120, { sent: [untimed('first'), { ...one, id: 'm1' }, untimed('second'), { ...other, id: 'm2' }, untimed('third')] })]), ['first', 'second', 'third', 'm1', 'm2']);
+});
+
+// Codex review of 7a19710, finding 4: the session whose notices were written from a gate's folder was
+// named as the gate's, and a session opened in that folder, which could have started it, was left out.
+test('renderBoard: a gate in a folder one session wrote its notices from and another was opened in hangs from one of them, each named with what places it', () => {
+  const beside = { cwd: 'D:\\proj-worktrees\\board', gitBranch: 'feat/board' };
+  const sessions = [member(B, 'JH 2 · the board', 120), member(C, 'JH 5 · beside', 180, beside), member(D, 'JH 6 · also', 200, beside)];
+  const notices = [noticeOf(900, { id: B }, 'orchestrator', 'opened', 'session board', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' })];
+  const lock = { gateLock: { available: true, holder: holds(4242, 'D:\\proj-worktrees\\board'), waiters: [] } };
+  const said = (list) => {
+    const lines = lib.renderBoard({ ...BOARD, sessions: list, roster: lib.rosterOf(list, { record: recordOf(notices) }), gates: { available: true, items: [] }, ...lock }, { now: NOW });
+    return lines.find((line) => line.startsWith('  pid 4242  ')).split('  ')[4];
+  };
+  assert.equal(said(sessions.slice(0, 2)), 'one of 2 sessions in this folder: JH 2 · the board (its notices were written from this folder), JH 5 · beside (its transcript records this folder)');
+  assert.equal(said(sessions), 'one of 3 sessions in this folder: JH 2 · the board (its notices were written from this folder), JH 5 · beside (its transcript records this folder), JH 6 · also (its transcript records this folder)');
+  // One session alone is the gate's, by whichever places it, and several placed the same way are said as before.
+  assert.equal(said(sessions.slice(0, 1)), 'session JH 2 · the board (its notices were written from this folder)');
+  assert.equal(said(sessions.slice(1, 2)), 'session JH 5 · beside (its transcript records this folder)');
+  assert.equal(said(sessions.slice(1)), 'one of 2 sessions whose transcripts record this folder: JH 5 · beside, JH 6 · also');
+});
+
+// Codex review of 7a19710, finding 3: at a look that could not read the record the roster knows of no
+// session that ended, so one that had said `closed` and ended a turn was said to wait, and woke the watch.
+test('boardChanges: a session known as closed is not said to wait at a look that could not read the record, and the look after it still knows', () => {
+  const title = (id) => (id === A ? 'JH ORQ · proj' : 'JH 2 · the board');
+  const titled = (id, state, more = {}) => member(id, title(id), 60, { ...seen(id, state), title: title(id), ...more });
+  const from = { id: B, title: 'JH 2 · the board' };
+  const look = (two, notices, more = {}) => {
+    const sessions = [titled(A, 'waiting'), two];
+    return boardOf({ sessions, roster: lib.rosterOf(sessions, { record: recordOf(notices, more) }), ...channelWith(notices, more) });
+  };
+  const blind = (two) => look(two, [], { unavailable: 'EBUSY' });
+  const opened = noticeOf(900, from, 'orchestrator', 'opened', 'the board');
+  const closed = noticeOf(300, from, 'orchestrator', 'closed', 'delivered');
+  const waits = 'session bbbbbbbb "JH 2 · the board" is waiting (was working)';
+  const read = look(titled(B, 'working'), [opened, closed]);
+  assert.deepEqual(lib.boardChanges(read, blind(titled(B, 'waiting'))), []);
+  // A second look that cannot read it is compared with the first, which must still hold what was read.
+  const kept = lib.watchBaseline(read, blind(titled(B, 'working')));
+  assert.deepEqual(lib.boardChanges(kept, blind(titled(B, 'waiting'))), []);
+  const twice = lib.watchBaseline(kept, blind(titled(B, 'waiting')));
+  assert.deepEqual(lib.boardChanges(twice, blind(titled(B, 'waiting', { turnEndedAt: before(40) }))), []);
+  // Read again, the record is what counts: still closed, nothing; opened again, its notice and its waiting are said.
+  assert.deepEqual(lib.boardChanges(twice, look(titled(B, 'waiting', { turnEndedAt: before(40) }), [opened, closed])), []);
+  const again = noticeOf(20, from, 'orchestrator', 'opened', 'the board, again');
+  assert.deepEqual(lib.boardChanges(twice, look(titled(B, 'waiting', { turnEndedAt: before(40) }), [opened, closed, again])), ['session bbbbbbbb "JH 2 · the board" finished another turn and is waiting', 'notice for the orchestrator, opened from "JH 2 · the board": the board, again']);
+  // A session the record did not say had ended wakes at such a look, as at any other.
+  assert.deepEqual(lib.boardChanges(look(titled(B, 'working'), [opened]), blind(titled(B, 'waiting'))), [waits]);
+  assert.deepEqual(lib.boardChanges(lib.watchBaseline(look(titled(B, 'working'), [opened]), blind(titled(B, 'working'))), blind(titled(B, 'waiting'))), [waits]);
+  // And a look that reads a record with nothing of the session is believed: it is not a look that could not read.
+  assert.deepEqual(lib.boardChanges(read, look(titled(B, 'waiting'), [])), [waits]);
 });
 
 // Review of ce8bdf7, finding 4: a board from before the tasks were kept read as a plan with no task, so
@@ -2345,6 +2466,14 @@ test('boardChanges: a notice for another role, one the watching session wrote it
   assert.deepEqual(changes(channelWith([first]), channelWith(own), { self: A }), []);
   assert.deepEqual(changes(channelWith([first]), channelWith(own), { self: 'aaaaaaaa' }), []);
   assert.equal(changes(channelWith([first]), channelWith(own), { self: B }).length, 1);
+  // Codex review of 7a19710, finding 2: its own notice written under the start of its id (`notify --self`,
+  // with no transcript to complete it) is its own too when it watches under its whole id.
+  const short = [first, noticeOf(20, { id: A.slice(0, 8), source: 'flag' }, 'orchestrator', 'note', 'written with --self')];
+  assert.deepEqual(changes(channelWith([first]), channelWith(short), { self: A }), []);
+  assert.deepEqual(changes(channelWith([first]), channelWith(short), { self: A.slice(0, 8) }), []);
+  assert.equal(changes(channelWith([first]), channelWith(short), { self: B }).length, 1, 'and nobody else\'s');
+  const tooShort = [first, noticeOf(20, { id: A.slice(0, 7), source: 'flag' }, 'orchestrator', 'note', 'seven characters name nobody')];
+  assert.equal(changes(channelWith([first]), channelWith(tooShort), { self: A }).length, 1);
   // Nothing new, a record that shrank (an uninstall removes it), a look that could not read it, a board without one.
   assert.deepEqual(changes(channelWith([first]), channelWith([first])), []);
   assert.deepEqual(changes(channelWith([first, first]), channelWith([first])), []);

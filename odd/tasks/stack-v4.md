@@ -248,12 +248,13 @@ undo steps). Nothing was deleted. Not touched: the eleven `sdd-*` skills under
   times the size of 3.7's. Filing either is Sebastián's call (Ask me before).
 - The pre-commit gate takes about four and a half minutes on this branch; worth a look at which
   tests carry it.
-- Two full gates at once are not safe on this host (2026-10-03): a `contract run` overlapping a
-  second `check` printed `not met`, and one of the two left
+- Two full gates at once (2026-10-03), closed on 2026-10-11 by the gate lock
+  (`odd/tasks/gate-lock.md`, #56), under which a second gate waits for the first. What was
+  seen: a `contract run` overlapping a second `check` printed `not met`, and one of the two left
   `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in the repository root at 12:23:46 local,
   which looks like PowerShell's module cache written with an empty `LOCALAPPDATA` (inferred from
   the path, not tested). Neither happened in three runs alone (one `npm run check`, one
-  pre-commit, one `contract run`). Not reproduced; the stray directory was removed. Worth
+  pre-commit, one `contract run`). Not reproduced; the stray directory was removed. Still open:
   finding which child starts PowerShell without `LOCALAPPDATA`.
 
 ## Next step
@@ -263,5 +264,5 @@ and 596 tests) was merged on 2026-10-03 with a merge commit, `d794c0c`, on his g
 boundary: `b58b5c2` for code; everything after it is `main`'s own reviewed history,
 documentation, and two changes to one rule of `AGENTS.md` (`7468163`, `0ea934b`: the closing
 prompt of a reply comes labeled, in a fenced code block; gentle-ai assessed each medium, under
-budget, review not due). The Follow-ups above stay open until one earns a slice; the roadmap's
-Next names what comes after.
+budget, review not due). The Follow-ups above that are not marked closed stay open until one
+earns a slice; the roadmap's Next names what comes after.

@@ -137,6 +137,26 @@ test("a linked worktree shares the clone's one run log", () => {
   assert.deepEqual(readCodexReviewRuns(worktree), [run]);
 });
 
+test('a caller that knows where the git folder is says so, and the run log is found, appended to and read with no git process', () => {
+  const root = makeRepo();
+  const file = codexReviewRunsPath(root);
+  const none = () => {
+    throw new Error('no git process is started');
+  };
+  const where = { commonGitDir: path.dirname(path.dirname(file)) };
+  assert.equal(codexReviewRunsPath(root, { spawn: none, where }), file);
+  assert.equal(appendCodexReviewRun(root, run, { spawn: none, where }), file);
+  assert.deepEqual(readCodexReviewRuns(root, { spawn: none, where }), [run]);
+  // Not said, git is asked as before: one process a call.
+  let started = 0;
+  const spawn = (cmd, args, opts) => {
+    started += 1;
+    return spawnSync(cmd, args, opts);
+  };
+  assert.deepEqual(readCodexReviewRuns(root, { spawn }), [run]);
+  assert.equal(started, 1);
+});
+
 test('a run line is never evidence of a review: it is not a valid record, and the record file does not hold it', () => {
   const root = makeRepo();
   appendCodexReviewRun(root, run);

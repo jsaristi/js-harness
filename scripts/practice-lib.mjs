@@ -269,7 +269,8 @@ function recordedPaths(manifestText) {
  * The practice never writes to this home, and the run proves it: these files are hashed before the first
  * step and after the last, and any difference fails the run. The doctor cache (`.js-harness/doctor.json`) is
  * left out on purpose: every session start of the user's rewrites it, so it would fail a run that did
- * nothing wrong. */
+ * nothing wrong. So is the gate log (`.js-harness/gate-log`): every gate of the user's own sessions appends
+ * to it. The gates of the run itself write the one of the practice home (`gateLogFolder`). */
 export function realHomeFiles(home, manifestText, platform = process.platform) {
   const p = pathFor(platform);
   const fixed = [
@@ -355,6 +356,19 @@ export function hostHooksProblem(text, seededCommand) {
   };
   const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
   return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(shown).join(' | ')}`;
+}
+
+// ---- the gate log of the practice home -------------------------------------------------------------------------------
+
+/** Where the gates of the home `home` keep their log (`gateLogDir` of `bin/lib/gate-log.mjs`). It is spelled
+ * here, as the manifest's path is above, because the practice looks at the candidate from outside and
+ * imports nothing of it; a test holds the two spellings together.
+ *
+ * The commits of the journey go through the hook, and the `check` it runs is a gate whose home is
+ * `JS_HARNESS_HOME` (`childEnv`): so they write this folder in the practice home, and never the user's.
+ * Nothing but `uninstall --global` removes it, which is what the step `global-uninstall` looks at. */
+export function gateLogFolder(home, platform = process.platform) {
+  return pathFor(platform).join(home, '.js-harness', 'gate-log');
 }
 
 // ---- the journey -----------------------------------------------------------------------------------------------------

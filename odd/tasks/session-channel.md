@@ -831,6 +831,123 @@ reader, and that table names this feature as their owner.
   `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, `bin/js-harness.test.mjs` 27,
   `bin/lib/manifest.test.mjs` 90, `bin/install.test.mjs` 58, none failing; `sessions --quote`
   on a log file outside the sessions folder: exit 2, "not quoted".
+- 2026-10-11, the Codex cap of this feature is 7 million input tokens, not 3. His words, "Sí, 7
+  millones para cada una" (this feature and the gate log), read with `sessions --quote` in the
+  lead's transcript `a5471f0a-66fb-4c5b-8495-6e5fb17af777.jsonl`, line 1540.
+- 2026-10-11, Codex on `8654c79..82cd2c2`, recorded: 2,293,449 input tokens, six findings, all
+  P2, all of one kind: a session told apart by an exact id or by the first candidate met. Fixed
+  test first in `25cf031`: a send replayed by a restarted session is one message whatever each
+  copy knows of its outcome; a notice written under the start of a session id is that session's
+  own and wakes no watch of its; a session known as closed stays closed while the record cannot
+  be read; a gate in a folder two sessions share names both; an opening read with a prefix that
+  could not be checked records no reading; the author of an opening is left out by the same
+  prefix-aware match.
+- 2026-10-11, `16daf2c`: `origin/main` at `51a24db` (the gate log, pull request 60) merged into
+  this branch, since the lead merges this one second. The merge touched none of this slice's
+  files.
+- 2026-10-11 13:33 local, commit `25cf031`. Its gate: `INFO gate waited 2 min 25 s`, then `PASS
+  tests npm run test passed`. The app was restarted while the command waited (13:14 by the
+  lead's account), which left it with no session to report to; it finished on its own and was
+  found by its process. A mistake of the parent in that command: the Codex review was chained
+  after `git commit` with `;`, so it would have run whatever the commit did. It ran after a
+  commit that passed, which is luck and not the condition it should have had.
+- 2026-10-11 13:59 local, Codex on `16daf2c..25cf031`, recorded: 657,782 input tokens, one
+  finding (P2), a defect that `25cf031` brought in: copies of a send were matched by their
+  place, the n-th of a key in one transcript with the n-th in another, so a transcript that
+  holds only some of the sends of a key (a session resumed part way) put a send with one id in
+  the place of another and the board lost a real message when the shorter transcript was read
+  first. Fixed test first in the commit this entry is in: red `actual: ['m2']`, `expected:
+  ['m1', 'm2']`; green, `bin/lib/sessions.test.mjs` 184 pass. A call with an id is now the held
+  send with that id, or the first of its key with no id, never one with another id.
+  Codex for the feature: 812,689 + 257,052 + 1,710,534 + 2,293,449 + 657,782 = 5,731,506 of
+  7,000,000 input tokens; 1,268,494 left.
+- 2026-10-11 14:35 local, the first try at that commit did not land: its gate (`INFO gate waited
+  12 min 59 s`, `INFO load 4.7 of 8 logical processors busy before the sensors (59%), right
+  after another gate`) failed on one test of 3,281, in a file this change does not touch:
+  `evals/suite.test.mjs:748`, "an interrupt during a real trial against a hanging fake agent
+  leaves nothing of it", one process still alive after the interrupt (`alive: [false, true]`
+  against `[false, false]`). During that run, at 14:26, an untracked folder appeared in the
+  working tree, `Microsoft\Windows\PowerShell\ModuleAnalysisCache`: what PowerShell writes when
+  it is started with no `LOCALAPPDATA`; which test starts it so was not looked for. Removed, and
+  both told to the lead for the gate's session. The same tree was committed again without a
+  change.
+- 2026-10-11 15:23 local, commit `0543030`, the second try: `INFO gate waited 30 min 55 s`,
+  `INFO load 6.3 of 8 logical processors busy (79%)`, `PASS tests npm run test passed`; no
+  folder appeared this time.
+- 2026-10-11 16:06 to 16:47 local, the two reviews of the fixes, each inside the gate lock.
+  gentle-ai on `5d150ae..0543030` (645 lines, medium, one lens, lineage
+  `review-0ce42d85c88b57de`): the bound STATUS answered this time, the capture closed approved
+  in 93 s and was acknowledged (`authority burned`); one suggestion,
+  `R3-send-order-unproved`. Codex on `25cf031..0543030`, recorded: 233,435 input tokens, one
+  finding (P2), the same thing proved: taking the calls of a transcript key by key changed the
+  order of sends of one moment (three sends of one reply with the keys K, L, K came out first,
+  third, second), and the sort by time keeps that order, so the last message shown was not the
+  last sent. A defect `0543030` brought in, the second fix in a row to bring one: each was
+  tested for what it fixed and not for what it moved. Fixed test first in the commit this
+  entry is in: red `actual: ['m1', 'm3', 'm2']`; green, `bin/lib/sessions.test.mjs` 185 pass.
+  The sends are kept in the order of the calls, and a send a transcript adds goes before the
+  send its next call is; the test reads the order of the board in both orders of reading, with
+  a transcript that holds the first, the last and the last two, and with sends that have no
+  time. Codex for the feature: 5,964,941 of 7,000,000 input tokens; 1,035,059 left.
+  For the wait: no wait of this session ran out its 60 minutes, but four other gates took the
+  lock while this session's review waited 43 minutes, so the lock is not
+  taken in the order of arrival; every wait is now started with `--wait 180` (the lead's
+  request), and what follows a review (its capture, then Codex only if it approved) runs in
+  one turn (`after-chain.mjs` in the session's scratchpad).
+- 2026-10-11 17:43 local, commit `22fc9a1` (the order of the sends). Its gate: `INFO gate
+  waited 39 min 11 s`, `PASS tests npm run test passed`, one try. Codex on `0543030..22fc9a1`,
+  recorded at 17:49: "the patch is correct (confidence 0.93)", no finding, 232,141 input
+  tokens. gentle-ai: `review not due (under_budget)`, 144 lines since the boundary `0543030`.
+  Every code commit of the branch is covered by a Codex record, and `git merge-tree` of the
+  branch with `origin/main` at `906fc28` (pull request 64) exits 0. Codex for the feature:
+  6,197,082 of 7,000,000 input tokens; 802,918 left. The third slice alone took 3,416,807 of
+  them in four runs, three of them on fixes of its own fixes.
+- 2026-10-11, a defect of `sessions --quote`, found and not fixed in this slice: a message he
+  sends while a session works is written by the host as an entry of `type: "attachment"` whose
+  `attachment` is `{ type: "queued_command", prompt, origin: { kind: "human" }, humanTurn: true
+  }`, and `--quote` exits 1 for it ("not the user's words: … an entry of type attachment").
+  Seen on the lead's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470. Told to
+  the lead; fixed test first in the fourth slice, by the origin's kind and not by the type of
+  the attachment alone.
+- 2026-10-11, what the fourth slice takes besides T5 and T6, each by his words read at their
+  line or as a claim of the lead that is named so. (1) The context pause is 88%, the
+  compaction stays at 93%: "ejemos entonces la regla del 88% y la compactacion al queda en el
+  93% con eso le deja 5%", and in the same entry that old rules beside new ones are "super
+  prohibido" (the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1745,
+  read with `sessions --quote`; line 1666 of it, 90%, is replaced by it). So the number lives
+  in one constant that everything reads, the 85 and the 73 leave every text of this feature,
+  and a test fails if they return. The lead merges that slice only when the constant reads 88.
+  (2) `AGENTS.md` is not edited by this feature: its text is built in `docs/agents-build.md`
+  and he approves it (his words in the entry of line 470 above: "Sí, aprobado el protocolo
+  revisado."); the two sentences of this plan about the resume prompt stay in this document as
+  proposed text. (3) The sweep of JH 7, `docs/sweep-2026-10-11.md` on `main`: 42 items under
+  "JH 5", each a reader's claim, read at its place before it is corrected and checked off
+  there. (4) A fact for T6, the lead's: the host has a `PreCompact` hook (matchers `manual` and
+  `auto`; exit 2 blocks; its output does not enter the context).
+  `main` moved to `859b9a1` meanwhile (pull requests 61, 62 and 63); by the lead's `git
+  merge-tree` both branches of this feature merge clean with it.
+- 2026-10-11, the failure of gentle-ai (the bound STATUS of the fourth slice's review, on the
+  branch `feat/session-context`, whose copy of this document has the entry): his choice, read
+  with `sessions --quote` in the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
+  line 1250: "reporta la falla y dime que es lo que tengo que autorizar para que sigamos y
+  ademas para ver si realmente es necesaria mi intervencion". Looked up over open and closed
+  issues of `Gentleman-Programming/gentle-ai`: issue 5422 is open and is this defect on this
+  build (4.0.0 stable, Windows, Claude Code), with nine other occurrences and no published fix
+  (4.0.0 is the latest release). One comment added, observed evidence only, no label:
+  `https://github.com/Gentleman-Programming/gentle-ai/issues/5422#issuecomment-6112348939`.
+  The lineage `review-506a7846ef824265` stays open and is not touched; no substitute for the
+  `declined` invocation was run. Told to him: nothing is his to authorize; the fourth slice is
+  reviewed again as smaller candidates inside the gate lock, and if gentle-ai fails again the
+  slice goes with its gate and its Codex review, and its pull request says so.
+  The session's script now keeps the consent envelope of every START in a file.
+- 2026-10-11, two claims of the lead, neither his word. A standing instruction: a Codex review
+  that fails because the weekly use of his Codex plan is spent is told to the lead in one line
+  with the error's text, is not recorded as `--unavailable`, and work that needs no Codex goes
+  on (relief line 240). A proposal of JH 7, not built and not placed: a notice of kind
+  `failure`, so what the orchestrator sees reaches the failures register
+  (`odd/tasks/rule-hierarchy.md` on `feat/failures-register`) without a session reading the
+  relief file (relief line 242). It adds a kind to the record and a task to this plan, so it is
+  his to accept; it fits after the register is on `main`, before T12.
 
 ## State for a resume (written 2026-10-11, before the session's context is compacted)
 Read this document's "Next step" and this section; the summary of a compaction is not the
@@ -839,11 +956,13 @@ record. What exists, all local to this machine:
   `feat/session-board-channel` at `ce8bdf7` plus what the entries after this one name; not
   pushed, because its code has no Codex record and the cap forbids one (below).
 - On `origin/main` (`8654c79`): pull requests 58 (T3, T4a) and 59 (T1), merged by the lead.
-- Waiting for Sebastián: (1) the Codex cap, 2,780,275 of 3 million input tokens spent, 219,725
-  left; the lead asks him first thing on his return. On his answer: `node bin/js-harness.mjs
-  codex-review --base origin/main --plan`, then the run under the stop script below, then the
-  push and the pull request, then the notice to the lead. (2) Tests owed 1, 2, 3 and 6, asked
-  one at a time, each before it is run, never while work runs.
+- Waiting for Sebastián: (1) whether the 7 million of Codex are enough for the rest (the
+  figures are in Progress); put to him when the third slice is delivered. (2) Tests owed 1, 2,
+  3 and 6, asked one at a time, each before it is run, never while work runs. (3) Whether the
+  resume hook is installed on this machine, and the yardstick of "the last task" (fourth slice).
+- This copy of the document is the third slice's. The fourth slice's copy, on
+  `feat/session-context`, has the entries of T5 and T6 and of the gentle-ai time-out; the two
+  are joined when this branch is merged into that one.
 - Scripts of this session, in its scratchpad
   `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\e5376fe9-d1cc-4288-b9e9-cf533ba35a5a\scratchpad\`:
   `review-chain.mjs <repo> <base>` (assess, status, start with the granted choice, bound
@@ -949,20 +1068,21 @@ record. What exists, all local to this machine:
   repository and go on, go on without reporting, or stop here.
 
 ## Next step
-Two ranges still owe their gentle-ai review, each small enough for one candidate: the fix
-commit `ce8bdf7..82cd2c2` (313 lines; check out `82cd2c2` detached to review it, then return
-to `feat/session-context`) and the fourth slice `82cd2c2..9dd1622` (1,622 lines, lineage
-`review-506a7846ef824265` open and stuck on its STATUS). Do not start either before his
-answer on the failure above. Then their findings, in a commit on `feat/session-context`.
-
-The third slice is whole on `feat/session-board-channel` at `7a19710`: T1b, T4b and T4c,
-gated; `ce8bdf7` reviewed by gentle-ai in two halves, `7a19710` not due. It is not pushed. On
-his answer about the cap: the Codex review of `8654c79..7a19710` (five parts, at least
-1,370,000 input tokens by its plan), its findings, the push, the third pull request, the
-notice to the lead. Until then, on a branch stacked on it (`feat/session-context`): T5 (the
-context figure as room left against the last task's cost; the 73% mark removed) and T6 (the
-resume hook, built and tested; installed only on his word, and `AGENTS.md` is not touched
-until it is installed). Waiting for him as well, none blocking the
-build: tests owed 1, 2, 3 and 6, each asked before it is run. For the gate's session, through
+The third slice is on `main` (pull request 65, merged as `5af56c1`). This branch, the fourth
+slice, has `main` merged in at that commit, with T5 and T6 built and gated at `9dd1622`. Owed
+on this branch, in this order:
+1. T5b: the pause at the value of his latest words, from one constant, and no older value left
+   in a text of this feature.
+2. T4d: `sessions --quote` takes a message he sent while a session worked.
+3. The 42 items of the sweep under "JH 5" (`docs/sweep-2026-10-11.md`), each read at its place
+   first; those of the orchestrator skill wait for T8.
+4. The gate; the gentle-ai review as smaller candidates, inside the gate lock (the lineage
+   `review-506a7846ef824265` stays open and is not touched); the Codex review within the rate
+   of the Codex budget, its plan's figure sent to the lead before it runs.
+5. The fourth pull request and the notice to the lead, who merges it only when the constant of
+   the pause reads the value of his latest words.
+The resume hook is installed only on his word, and `AGENTS.md` is not edited by this feature.
+Waiting for him, none blocking the build: tests owed 1, 2, 3 and 6, each asked before it is
+run; the yardstick of "the last task". For the gate's session, through
 the lead: the lock should record the session id that holds it, so `Gates` names the session
 exactly (point 4, "As built").
