@@ -764,12 +764,26 @@ podamos implementar todo"), each a feature of its own with its own document and 
      process for the two folders it asked for in two. Running that file in three shards,
      approved by him on 2026-10-10, was built and measured and gave nothing inside a whole
      run (747 s and 833 s), so it was taken out again: on this machine of four cores the
-     bound is the work, some fifty thousand git processes that slow each other down, and
-     not how the files are arranged. What shortens the gate is fewer of them, which is
-     for the next slice. And, approved by him the same day, a commit of documents alone
+     bound is the work, thousands of git processes that slow each other down (written here
+     first as "some fifty thousand", an estimate nobody had counted: the count is below),
+     and not how the files are arranged. What shortens the gate is fewer of them. And,
+     approved by him the same day, a commit of documents alone
      runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
      only Markdown, each paying a gate of 13 minutes that no document could fail, since no
      test reads `docs/` or `odd/tasks/`.
+   - Fewer git processes, counted and not timed (2026-10-11, `odd/tasks/gate-log.md`): a
+     time on this machine depends on what else runs, a count does not.
+     `node scripts/count-git.mjs [--frames <n>] <test files>` runs test files and says how
+     many processes they started, by git subcommand, by the line that asked and by test
+     file. The whole suite starts 15,467 git processes, and the two long files,
+     `bin/codex-review.test.mjs` and `bin/check-codex-reviews.test.mjs`, 11,735 of them
+     (76%). Two cuts chosen from that profile took the two files to 8,213 (30% fewer), with
+     no assertion changed: a `codex-review` run asks where the repository is once and
+     hands it on, where each of its steps asked again (11,735 to 9,986); and the tests ask
+     for the git folder once per repository they build, and build five repositories of
+     the second file once (9,986 to 8,213). What is left is mostly what a run must ask:
+     `rev-parse` 2,952, `diff` 1,667. Two more cuts were weighed and left: under one
+     percent each, one against an assertion and one through 45 test bodies.
    - What the time of a gate depends on that no session saw (2026-10-11): on main with this
      slice merged in, the whole suite took 867 s and the gate 832 s, and what pull requests
      53 and 54 added costs 3.4 s of it. The same hour a gate on main without this slice
