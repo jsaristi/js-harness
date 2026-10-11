@@ -789,8 +789,22 @@ podamos implementar todo"), each a feature of its own with its own document and 
      timed out at 1,200 s and one of this slice took 1,069 s, beside a video playing in a
      browser and a TypeScript language server of a session spinning at about 1.5 logical
      processors with nothing to do. The process look counts neither. The bound stays at
-     1,200 s; a gate that says the load on the machine when it starts is for the next
-     slice, with the gate log.
+     1,200 s; a gate that says the load on the machine when it starts is built (below),
+     and the gate log comes in the slice after it.
+   - The load a gate starts under (2026-10-11, `odd/tasks/gate-log.md`): every gate that
+     runs sensors, and every `js-harness gate -- <command>`, reads the machine's processors
+     twice, a second apart, after it took the lock and before its first sensor, and says
+     what it read in a row `load` of its report: how many of the logical processors were
+     busy, and whether it started right after another gate. From one busy processor on it
+     looks two seconds more and names the three processes that spent most, by program,
+     script and pid, which is how a language server spinning in a session of this
+     repository was found the day it was built. A script is named only when its argument is
+     the whole path of a file that exists, asked of the disk by a process of its own that a
+     silent server cannot hold: a command line can carry a secret, and no spelling tells
+     one from a file name. Nothing a gate proves depends on the row;
+     `JS_HARNESS_GATE_LOAD=off` takes no sample. What it does not do: it does not wait for
+     a quiet machine, it does not say whose session a busy process belongs to, and it
+     changes no bound.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top.

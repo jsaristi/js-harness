@@ -358,6 +358,12 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       `kept ${gate.path}: a gate holds the machine's gate lock or waits for it right now (${whose}); it removes its own files when it ends, and running js-harness uninstall --global again removes whatever is left`,
     );
   }
+  // The folder of the session channel, which `notify` writes under the home. No process lives in it, so
+  // it is removed (said above with the rest) or it could not be looked at or removed, and that goes to
+  // stderr like the gate lock's folder: nothing records it, so nothing else will remove it.
+  for (const channel of result.channelKept) {
+    console.error(`could not remove ${channel.path} (${channel.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
@@ -365,10 +371,11 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     result.entriesKept.length === 0 &&
     result.tasksRemoved.length === 0 &&
     result.tasksKept.length === 0 &&
-    result.gateKept.length === 0
+    result.gateKept.length === 0 &&
+    result.channelKept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
-  // A file left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 ? 1 : 0;
+  // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
+  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 ? 1 : 0;
 }

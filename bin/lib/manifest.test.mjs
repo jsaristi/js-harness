@@ -25,6 +25,7 @@ import {
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
+import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -164,7 +165,7 @@ test('uninstall on a home with no manifest is a no-op', () => {
   const home = makeTmpHome();
   try {
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
+    assert.deepEqual(result, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [] });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -219,7 +220,7 @@ test('uninstall removes what a killed gate left under a home that has no manifes
   try {
     leftByKilledGates(home);
     const result = uninstall(home);
-    assert.deepEqual(result, { removed: [gateDir(home)], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
+    assert.deepEqual(result, { removed: [gateDir(home)], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [] });
     assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -308,7 +309,7 @@ test('uninstall keeps a folder of the gate lock it could not look at and reports
     assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is removed all the same');
 
     const bare = uninstall(home, { statFile });
-    assert.deepEqual(bare, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: notLookedAt });
+    assert.deepEqual(bare, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: notLookedAt, channelKept: [] });
     assert.equal(fs.existsSync(gateLockDir(home)), true, 'nothing of it was removed on a guess');
 
     // "Not there" is what the system says of the folder itself, or of a parent that is a file.
@@ -329,7 +330,7 @@ test('uninstall leaves a folder it cannot list where it is, and still returns wh
   try {
     const own = path.join(home, '.js-harness');
     const listDir = refusedAt(own, fs.readdirSync);
-    const none = { kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] };
+    const none = { kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [] };
 
     leftByKilledGates(home);
     assert.deepEqual(uninstall(home, { listDir }), { removed: [gateDir(home)], ...none });
@@ -348,6 +349,93 @@ test('uninstall leaves a folder it cannot list where it is, and still returns wh
     // Nothing fails: the folder goes, as it always did.
     assert.deepEqual(uninstall(home), { removed: [], ...none });
     assert.equal(fs.existsSync(own), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- the session channel: what `notify` writes under the home, outside any manifest ---
+// The record of each project and the openings of its sessions are one folder, written by `notify` in a
+// project with or without a machine install. Like the gate lock's folder nothing records it, and
+// `uninstall` is how it goes. The relief file is not the channel's: it is the orchestrator's own log,
+// which `notify --relief` only adds a line to, and it is left where it is.
+
+/** What `notify` leaves under `home` for one project: a record with one notice and one opening. */
+function leftByNotify(home, slug = 'C--proj') {
+  const notice = newNotice({ at: '2026-01-01T12:00:00.000Z', from: null, to: 'orchestrator', kind: 'note', text: 'made up' });
+  appendNotice(home, slug, notice);
+  writeOpening(home, slug, { title: 'JH 5 · canal entre sesiones', text: 'made up', at: notice.at, from: null });
+}
+
+test('uninstall removes the folder of the session channel, with its records and openings, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    leftByNotify(home);
+    leftByNotify(home, 'C--other');
+    const installed = uninstall(home);
+    assert.ok(installed.removed.includes(channelDir(home)), installed.removed.join('\n'));
+    assert.deepEqual(installed.channelKept, []);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the now-empty .js-harness goes too');
+
+    // `notify` runs in a project with no machine install, so a home with no manifest can hold the folder.
+    leftByNotify(home);
+    leftByKilledGates(home);
+    assert.deepEqual(uninstall(home), { removed: [gateDir(home), channelDir(home)], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+
+    // And nothing is said of a folder that is not there.
+    install(home, '0.1.0');
+    assert.equal(uninstall(home).removed.includes(channelDir(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall leaves the orchestrator\'s relief file where it is: it is a log, not something install or notify made up', () => {
+  const home = makeTmpHome();
+  try {
+    leftByNotify(home);
+    const relief = appendRelief(home, 'C--proj', 'made up', Date.now()).path;
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      leftByNotify(home);
+      const result = uninstall(home);
+      assert.ok(result.removed.includes(channelDir(home)), String(withManifest));
+      assert.equal(result.removed.includes(relief), false);
+      assert.equal(fs.existsSync(relief), true, `with a manifest: ${withManifest}`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall keeps a folder of the session channel it cannot look at or remove, reports it with the error code, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    const kept = (code) => [{ path: channelDir(home), reason: 'unremovable', code }];
+    const removeFile = (target, options) => {
+      if (target === channelDir(home)) throw Object.assign(new Error('EPERM: operation not permitted, rmdir'), { code: 'EPERM' });
+      return fs.rmSync(target, options);
+    };
+
+    install(home, '0.1.0');
+    leftByNotify(home);
+    const installed = uninstall(home, { removeFile });
+    assert.deepEqual(installed.channelKept, kept('EPERM'));
+    assert.equal(installed.removed.includes(channelDir(home)), false);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is removed all the same');
+
+    const bare = uninstall(home, { statFile: refusedAt(channelDir(home), fs.statSync) });
+    assert.deepEqual(bare, { removed: [], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: kept('EACCES') });
+    assert.equal(fs.existsSync(recordPath(home, 'C--proj')), true, 'nothing of it was removed on a guess');
+
+    // "Not there" is what the system says of the folder itself, or of a parent that is a file.
+    for (const code of ['ENOENT', 'ENOTDIR']) {
+      const result = uninstall(home, { statFile: refusedAt(channelDir(home), fs.statSync, code) });
+      assert.deepEqual([result.removed, result.channelKept], [[], []], code);
+    }
+    assert.deepEqual(uninstall(home).removed, [channelDir(home)]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1320,7 +1408,7 @@ test('uninstall over a manifest that only records optional files removes them an
     fs.mkdirSync(path.dirname(others), { recursive: true });
     fs.writeFileSync(others, '{"hooks":{}}');
 
-    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [] });
+    assert.deepEqual(uninstall(home), { removed: [file], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [], channelKept: [] });
     assert.equal(fs.existsSync(manifestPath(home)), false);
     assert.equal(fs.readFileSync(others, 'utf8'), '{"hooks":{}}', 'no component or hook entry was recorded, so none is looked for');
   } finally {
