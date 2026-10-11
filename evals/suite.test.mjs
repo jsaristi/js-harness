@@ -699,21 +699,16 @@ test('a second interrupt while the first is still being served removes the templ
   assert.deepEqual(exits, [{ code: 130, templates: [] }]);
 });
 
-const isAlive = (pid) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Whether the processes a test recorded with `reaper.pids` still run is asked of the reaper (`look`), which knows each
+// by its pid AND its creation time. A number alone cannot say: Windows gives a dead process's pid to the next process
+// at once, and the runner starts PowerShell processes right after its kill, so a number that answers may be theirs.
 const waitUntil = async (predicate, ms = 15000) => {
   const deadline = Date.now() + ms;
   while (!predicate() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
   return predicate();
 };
 
-test('an interrupt during a real trial against a hanging fake agent leaves nothing of it: no process, no directory, no template, no record, and the exit comes last', async () => {
+test('an interrupt during a real trial against a hanging fake agent leaves nothing of it: no process, no directory, no template, no record, and the exit comes last', async (t) => {
   const m = machine();
   const events = [];
   const report = path.join(tmp('hang-report'), 'report.json');
@@ -734,21 +729,27 @@ test('an interrupt during a real trial against a hanging fake agent leaves nothi
   });
   const { deps, proc, io } = depsFor(m, { runTrial: hanging });
   let pids = [];
-  const exits = recordExits(proc, () => ({
-    events: [...events], templates: templatesIn(m.workRoot), entries: fs.readdirSync(m.workRoot), alive: pids.map(isAlive),
-  }));
+  // What answered to the two numbers at the exit: the recorded process still running (a failure, which then says what
+  // it is) or another process that was given the number (no failure, and written down all the same).
+  const answered = [];
+  const exits = recordExits(proc, () => {
+    const looks = reaper.look(pids);
+    answered.push(...looks.filter(({ found }) => found !== null).map(({ found }) => found));
+    return { events: [...events], templates: templatesIn(m.workRoot), entries: fs.readdirSync(m.workRoot), alive: looks.map(({ alive }) => alive) };
+  });
   const pending = suiteMain(runArgv(m), ENV, deps);
   const reported = () => { try { return JSON.parse(fs.readFileSync(report, 'utf8')); } catch { return null; } };
   assert.ok(await waitUntil(() => reported() !== null), `the agent started: ${io.err}`);
   pids = [reported().pid, reported().grandchildPid];
-  reaper.pids(pids, { since: startedAt });
-  assert.ok(pids.every(isAlive), 'the agent and its grandchild run');
+  reaper.pids(pids, { since: startedAt }); // each pid with its creation time, which is what `look` compares from here on
+  assert.ok(reaper.look(pids).every(({ alive }) => alive), 'the agent and its grandchild run');
   proc.emit('SIGINT', 'SIGINT');
   assert.equal(await pending, 130);
-  assert.deepEqual(exits, [{ code: 130, events: ['sweep', 'cleanup'], templates: [], entries: [], alive: [false, false] }], io.err);
+  for (const line of answered) t.diagnostic(`at the exit, ${line}`);
+  assert.deepEqual(exits, [{ code: 130, events: ['sweep', 'cleanup'], templates: [], entries: [], alive: [false, false] }], [io.err, ...answered].join('\n'));
   assert.equal(fs.existsSync(resultsFile(m)), false, 'no record of the trial');
   assert.equal(fs.existsSync(path.join(m.runsDir, 'screen')), false, 'no log of it either');
-  assert.ok(await waitUntil(() => pids.every((pid) => !isAlive(pid)), 5000), 'and they stay dead');
+  assert.ok(await waitUntil(() => reaper.look(pids).every(({ alive }) => !alive), 5000), 'and they stay dead');
 });
 
 // ---- the same suite on the Codex CLI ----------------------------------------------------------------------------------

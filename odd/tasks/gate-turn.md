@@ -293,9 +293,10 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
 ## Tasks
 - [x] T1 · Design read by a reader that did not write it. Route: one read-only reader.
       Evidence: "What the reader changed".
-- [ ] T2 · The test that fails on a busy machine: which of the two causes, shown by a test
+- [x] T2 · The test that fails on a busy machine: which of the two causes, shown by a test
       that needs no load, then the fix where the cause is. Route: one writer. Free today;
       `feat/codex-parity` changes `evals/suite.test.mjs` from its line 844 on, not here.
+      Evidence: Progress, "T2 done".
 - [ ] T3 · Blocked on the two branches of "JH 6": the line in `bin/lib/gate-lock.mjs`, the
       mark, the session, the words of `check` and `gate`, the test at
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
@@ -310,6 +311,10 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       describe a wait; the pointer in "Next" of `odd/tasks/gate-lock.md`.
 - [ ] T8 · Close: both reviews of each slice with code, push, pull requests, the closing
       notice.
+- [ ] T9 · Placed here by the orchestrator, last in order (2026-10-11): two findings of
+      Codex left open on `scripts/count-git.mjs`, which says "missing" where nothing is
+      missing (a child started through a shell by a synchronous call; two launches whose
+      shell got the same pid). Their text is in pull request 63. Not read yet.
 
 Slices: S1 is T2, now. S2 is T3 and S3 is T4 with T5, after the merges of "JH 6". S4 is T6.
 
@@ -332,7 +337,44 @@ Slices: S1 is T2, now. S2 is T3 and S3 is T4 with T5, after the merges of "JH 6"
   so rounds of readers stay few until that hour (read here at 15:48: 64 percent used). T2's
   writer runs. Spent so far on sub-agents: 448,533 tokens (explorer 168,928, reader
   279,605).
+- 2026-10-11 · From the orchestrator, by message (claims): a fourth sighting, the commit of
+  "JH 7" launched at 14:55 waited 60 min 1 s and gave up with no sensor run, after that of
+  "JH 6" at 13:42: two hours of waits lost in one day. Until the line exists it orders the
+  turns by hand: no full gate of this session before the gate of "JH 5" (waiting since
+  15:23) has started, and `--wait 180` on every wait. The commit hook passes no `--wait`
+  (`.githooks/pre-commit`), so a commit with code here is run as
+  `node bin/js-harness.mjs gate --wait 180 -- git commit …`. Its question for T3: whether
+  sixty minutes as the default bound survives the line.
+- 2026-10-11 · From the orchestrator (claim): pull request 63, `feat/gate-git-processes`, is
+  on `main` as `859b9a1` and this branch merges clean with it. `feat/gate-log-file` is not:
+  the hold on `bin/check.mjs` and the gate's files stands. The brief of "JH 6" on that
+  branch now starts at line 897 of its `odd/tasks/gate-log.md`. `main` is merged here after
+  T2's writer ends, not under it.
+- 2026-10-11 · T2 done, route one writer (183,634 tokens), its diff read back here. The
+  cause is the test's, the first of the two: it asked whether a process was alive by its
+  number alone. The second cause is contradicted by reading: the sweep by path kills through
+  the same `killProcesses` as the tree kill, which waits and reports a survivor
+  (`evals/runner.mjs:253`, `:257`; `bin/lib/process-tree.mjs:153`); the grandchild's command
+  line holds no trial path, so that sweep never matches it
+  (`evals/fixtures/fake-agent.mjs:140`); and it is proved a descendant, since in `hang` mode
+  the agent lives when the snapshot is taken (`evals/runner.mjs:329-332`). At least two
+  PowerShell processes start between the kill and the exit. Why the grandchild both times
+  (this session's inference): the runner still holds the agent's process open, so its number
+  cannot be given away, while nobody holds the grandchild's. Not observed: the reuse itself;
+  one other cause is not excluded by reading (a snapshot row with no creation time is
+  skipped, `bin/lib/process-tree.mjs:47`), and the new message would name it.
+  Changed: `reaper.look(pids)` in `bin/lib/process-tree.testkit.mjs` counts a pid as alive
+  only when it has the creation time recorded for it, and says what answered to the number;
+  three tests of it in `bin/lib/process-tree.test.mjs`; `evals/suite.test.mjs` (its lines
+  700 to 752) asks the reaper, and a failure at the exit now carries what answered. No
+  product change, no wait added at the exit. Red, through the lock: the three tests of the
+  look failed 3 of 3 with the look still by number (`[300, true]` against `[300, false]`).
+  Green, through the lock with `--wait 180`: 8 of 8, the real interrupt test among them
+  (6.4 s). The two runs waited about 20 and 35 minutes for their turn. Left: a recorded
+  process that answers at the exit and is gone when the snapshot is taken a second later
+  passes, and the test's diagnostic says that it answered.
 
 ## Next
-T2, through the lock for every test run. T3 to T5 wait for the orchestrator's word that the
-two branches of "JH 6" are on `main`.
+The commit of T2 through the lock (`gate --wait 180 -- git commit`), on `main` merged at
+`859b9a1`; then its two reviews, each in its turn. T3 to T5 wait for the orchestrator's word
+that `feat/gate-log-file` is on `main`.
