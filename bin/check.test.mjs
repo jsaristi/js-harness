@@ -1,11 +1,11 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
+import { estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, checkSensor, checkSensors, checkReview, runSensor, main } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 
@@ -310,11 +310,25 @@ test('checkSensor drops the variables that bind git to one repository, and keeps
   assert.equal(env.GIT_AUTHOR_NAME, 'Someone');
 });
 
-/** Runs git in `cwd` with none of git's own variables, so building a fixture never acts on the
- * repository a hook exported. */
+let gitConfigDir;
+after(() => {
+  if (gitConfigDir) fs.rmSync(gitConfigDir, { recursive: true, force: true });
+});
+
+/** The environment of a git that builds a fixture: none of git's own variables, so it never acts on the
+ * repository a hook exported, and none of the host's configuration (a `core.hooksPath`, a signing key). */
+function gitEnv() {
+  if (!gitConfigDir) {
+    gitConfigDir = makeTmpDir();
+    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '');
+  }
+  const inherited = Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key));
+  return { ...Object.fromEntries(inherited), GIT_CONFIG_GLOBAL: path.join(gitConfigDir, 'empty.gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
+}
+
+/** Runs git in `cwd` as `gitEnv` says, and answers what it printed. */
 function git(cwd, ...args) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key)));
-  const result = spawnSync('git', args, { cwd, env, encoding: 'utf8' });
+  const result = spawnSync('git', args, { cwd, env: gitEnv(), encoding: 'utf8' });
   assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
   return result.stdout.trim();
 }
@@ -1815,5 +1829,486 @@ test('two check processes that share a home run their sensors one after the othe
         // a sensor of a failed run may still hold it for a moment
       }
     }
+  }
+});
+
+// --- documents: a commit whose every staged path is a declared document runs no sensor ---
+// Half of this repository's commits change documents only, and each paid a whole run of the tests that it
+// could not turn red. A project declares its documents in harness.json `documents`; without the key
+// nothing changes, and the static rows (budget, contracts) run either way.
+
+test('discoverDocuments reads harness.json documents, and a project without the key declares none', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(discoverDocuments(dir), { documents: [], source: null });
+    writeJson(dir, 'harness.json', { sensors: { tests: 'pytest' } });
+    assert.deepEqual(discoverDocuments(dir), { documents: [], source: null });
+    const documents = ['docs/', 'odd/tasks/', 'README.md', 'notes/2026 plan.md', '.github/'];
+    writeJson(dir, 'harness.json', { documents });
+    assert.deepEqual(discoverDocuments(dir), { documents, source: 'harness.json' });
+    writeJson(dir, 'harness.json', { documents: [] });
+    assert.deepEqual(discoverDocuments(dir), { documents: [], source: 'harness.json' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('discoverDocuments reports a documents value of the wrong shape, and each path it does not take, instead of skipping it', () => {
+  const dir = makeTmpDir();
+  const refused = [
+    ['it is not an array', 'docs/', { docs: true }, null],
+    ['is not a non-empty string', [3], [''], [['docs/']], [null]],
+    ['is an absolute path', ['/'], ['/docs/'], ['C:/docs/'], ['c:docs/']],
+    ['is written with a backslash', ['docs\\'], ['docs\\guide.md'], ['C:\\docs']],
+    ['has an empty, "." or ".." segment', ['.'], ['./'], ['./docs/'], ['docs/./guide.md'], ['..'], ['../docs/'], ['docs/../src/'], ['docs//guide.md'], ['docs//']],
+    ['is a pattern, and none is taken', ['*'], ['docs/*.md'], ['**/']],
+    // One entry that is not taken among others that are: the whole declaration is refused.
+    ['is a pattern, and none is taken', ['docs/', '*.md', 'odd/tasks/']],
+  ];
+  try {
+    for (const [why, ...values] of refused) {
+      for (const documents of values) {
+        writeJson(dir, 'harness.json', { documents, sensors: { tests: 'pytest' } });
+        const found = discoverDocuments(dir);
+        assert.match(found.error ?? '', /^harness\.json "documents" must be an array of paths /, JSON.stringify(documents));
+        assert.ok(found.error.endsWith(why), `${JSON.stringify(documents)}: ${found.error}`);
+        assert.deepEqual([found.documents, found.source], [[], null], JSON.stringify(documents));
+      }
+    }
+    // The entry is named as JSON, so what a file holds reaches the report escaped.
+    writeJson(dir, 'harness.json', { documents: ['docs/', 'a\u001b[2J*'] });
+    assert.ok(discoverDocuments(dir).error.includes('; "a\\u001b[2J*" is a pattern'), discoverDocuments(dir).error);
+
+    fs.writeFileSync(path.join(dir, 'harness.json'), '{ nope');
+    assert.match(discoverDocuments(dir).error, /harness\.json is not valid JSON/);
+    writeJson(dir, 'harness.json', [{ documents: ['docs/'] }]);
+    assert.equal(discoverDocuments(dir).error, 'harness.json must be a JSON object');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A harness.json may hold `documents` and nothing else: the sensors stay the scripts of package.json, in
+// the shape `discoverSensors` always answered.
+test('discoverSensors is as it was beside a documents key: package.json still declares the sensors', () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { documents: ['docs/', 'odd/tasks/'] });
+    writeJson(dir, 'package.json', { scripts: { test: 'node --test' } });
+    assert.deepEqual(discoverSensors(dir), { sensors: [{ name: 'tests', command: 'npm run test' }], source: 'package.json' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** A stand-in for the git a gate asks what is staged: `paths` staged, in a folder that is `prefix` below
+ * the top of its repository. It keeps what it was asked. */
+function stagedGit(paths, prefix = '') {
+  const spawn = (program, args) => {
+    spawn.asked.push(`${program} ${args.join(' ')}`);
+    return ok(args[0] === 'rev-parse' ? `${prefix}\n` : paths.map((file) => `${file}\0`).join(''));
+  };
+  spawn.asked = [];
+  return spawn;
+}
+
+/** A stand-in for `runSensor` that passes and counts the sensors it was asked to run. */
+function countedSensors() {
+  const spawn = () => {
+    spawn.ran += 1;
+    return sensorRan();
+  };
+  spawn.ran = 0;
+  return spawn;
+}
+
+test('checkSensors turns a documents value it does not take into one FAIL row named sensors, runs no sensor and asks git nothing', async () => {
+  const dir = makeTmpDir();
+  try {
+    // With sensors, with a declared absence of them, and with none declared anywhere.
+    for (const sensors of [{ tests: 'run-tests' }, {}, undefined]) {
+      writeJson(dir, 'harness.json', { documents: ['docs/*'], ...(sensors && { sensors }) });
+      const spawn = countedSensors();
+      const git = stagedGit(['docs/guide.md']);
+      const rows = await checkSensors(dir, { spawn, git });
+      assert.deepEqual(rows.map((row) => [row.name, row.pass, row.info]), [['sensors', false, undefined]], JSON.stringify(sensors));
+      assert.match(rows[0].detail, /^harness\.json "documents" must be .*; "docs\/\*" is a pattern, and none is taken$/);
+      assert.deepEqual([spawn.ran, git.asked], [0, []]);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensors asks git what is staged only where documents are declared and there is a sensor to skip', async () => {
+  const dir = makeTmpDir();
+  try {
+    const asked = async (harness) => {
+      writeJson(dir, 'harness.json', harness);
+      const git = stagedGit(['docs/guide.md']);
+      await checkSensors(dir, { spawn: countedSensors(), git });
+      return git.asked;
+    };
+    assert.deepEqual(await asked({ sensors: { tests: 'run-tests' } }), []);
+    assert.deepEqual(await asked({ sensors: { tests: 'run-tests' }, documents: [] }), []);
+    assert.deepEqual(await asked({ sensors: {}, documents: ['docs/'] }), []);
+    // Renames off, so a file moved out of the documents or into them is listed on both sides; paths from
+    // the top of the repository whatever `diff.relative` says, and ended by a NUL, so none is quoted.
+    assert.deepEqual(await asked({ sensors: { tests: 'run-tests' }, documents: ['docs/'] }), [
+      'git rev-parse --show-prefix',
+      'git diff --cached --name-only --no-renames --no-relative -z',
+    ]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensors runs the sensors when git cannot say what is staged, and adds no row for it', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const enoent = () => Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT' });
+    const gits = {
+      'no repository': notARepository,
+      'no git': () => ({ status: null, stdout: '', stderr: '', error: enoent() }),
+      'a git that throws': () => {
+        throw enoent();
+      },
+      'no answer': () => undefined,
+      'a listing that fails': (_program, args) => (args[0] === 'rev-parse' ? ok('\n') : { status: 129, stdout: 'docs/guide.md\0', stderr: 'usage: git diff' }),
+      'nothing staged': stagedGit([]),
+      // Documents are named from the top of the repository, and this gate checks a folder below it.
+      'a folder below the top': stagedGit(['docs/guide.md'], 'packages/app/'),
+    };
+    for (const [name, git] of Object.entries(gits)) {
+      const spawn = countedSensors();
+      const rows = await checkSensors(dir, { spawn, git });
+      assert.deepEqual(rows.map((row) => [row.name, row.pass]), [['tests', true]], name);
+      assert.equal(spawn.ran, 1, name);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensors takes a staged path as a document only when an entry names it whole, or a folder above it', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests', lint: 'run-lint' }, documents: ['docs/', 'notes.md', 'odd/tasks/'] });
+    const ran = async (...paths) => {
+      const spawn = countedSensors();
+      const rows = await checkSensors(dir, { spawn, git: stagedGit(paths) });
+      assert.equal(rows.length, spawn.ran === 0 ? 1 : 2, JSON.stringify(rows));
+      return spawn.ran;
+    };
+    for (const document of ['docs/guide.md', 'docs/deep/er/x.png', 'notes.md', 'odd/tasks/gate-lock.md', 'docs/ notes.md']) {
+      assert.equal(await ran(document), 0, document);
+    }
+    const others = [
+      'docs', 'docs-internal/x.md', 'docsx', 'Docs/guide.md', 'src/docs/guide.md', ' docs/guide.md',
+      'notes.md.bak', 'notes.md/x', 'old/notes.md', 'odd/tasks.md', 'odd/task/x.md', 'harness.json', 'AGENTS.md',
+    ];
+    for (const other of others) {
+      assert.equal(await ran(other), 2, JSON.stringify(other));
+      assert.equal(await ran('docs/guide.md', other, 'notes.md'), 2, `${JSON.stringify(other)} among documents`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkSensors says in one INFO row which sensors did not run and for which staged documents, the first ten of many', async () => {
+  const dir = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests', lint: 'run-lint' }, documents: ['docs/'] });
+    const row = async (paths) => {
+      const rows = await checkSensors(dir, { spawn: countedSensors(), git: stagedGit(paths) });
+      assert.equal(rows.length, 1);
+      return rows[0];
+    };
+    assert.deepEqual(await row(['docs/guide.md']), {
+      name: 'sensors',
+      pass: true,
+      info: true,
+      detail: 'no sensor ran (tests, lint): the one staged path is a document declared in harness.json "documents"',
+      lines: ['docs/guide.md'],
+    });
+    const many = Array.from({ length: 13 }, (_, at) => `docs/${String(at + 1).padStart(2, '0')}.md`);
+    const said = await row(many);
+    assert.equal(said.detail, 'no sensor ran (tests, lint): all 13 staged paths are documents declared in harness.json "documents"');
+    assert.deepEqual(said.lines, [...many.slice(0, 10), 'and 3 more']);
+    assert.deepEqual((await row(many.slice(0, 11))).lines, [...many.slice(0, 10), 'and 1 more']);
+    assert.deepEqual((await row(many.slice(0, 10))).lines, many.slice(0, 10));
+    // A name that would break the report's lines, or drive the terminal, is shown as JSON.
+    assert.deepEqual((await row(['docs/a\nFAIL  tests  x', 'docs/b\u001b[2J.md', 'docs/ñ ok.md'])).lines, ['"docs/a\\nFAIL  tests  x"', '"docs/b\\u001b[2J.md"', 'docs/ñ ok.md']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a gate that runs no sensor for staged documents takes no gate lock, with the mark of a held one or without, and the inner run is as it was', async () => {
+  const dir = sensorProject({ tests: 'run-tests' });
+  const home = makeTmpDir();
+  try {
+    writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, documents: ['docs/'] });
+    const take = lockTakenAtOnce();
+    const spawn = countedSensors();
+    const run = (env, git = stagedGit(['docs/guide.md'])) => runCheck(['--cwd', dir, '--home', home], env, gateDeps({ spawn, git, takeGateLock: take }));
+    for (const env of [{}, { JS_HARNESS_GATE_HELD: '1' }]) {
+      const { code, output } = await run(env);
+      assert.equal(code, 0, output);
+      assert.match(output, /^INFO {2}sensors {2}no sensor ran \(tests\): the one staged path is a document declared in harness\.json "documents"\n {6}docs\/guide\.md$/m);
+      assert.deepEqual(gateRows(output), []);
+      assert.doesNotMatch(output, /^\w+ {2}tests /m);
+    }
+    assert.deepEqual([spawn.ran, take.asked.length], [0, 0]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of the lock was written');
+
+    // A gate's sensor runs the inner check, which never ran a sensor and so has none to skip.
+    const git = stagedGit(['docs/guide.md']);
+    const inner = await run({ JS_HARNESS_CHECK_INNER: '1' }, git);
+    assert.doesNotMatch(inner.output, /^\w+ {2}(sensors|tests) /m);
+    assert.deepEqual(git.asked.filter((line) => line.startsWith('git diff ')), []);
+
+    // The same stand-ins run the sensor once a path that is no document is staged.
+    const code = await run({}, stagedGit(['docs/guide.md', 'src/app.js']));
+    assert.match(code.output, /^PASS {2}tests /m);
+    assert.deepEqual([spawn.ran, take.asked.length], [1, 1]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// From here on, real git in real repositories: what `git diff --cached` lists is the fact the rule stands on.
+
+/** A sensor that fails: a gate that ran it is red with a `tests` row, one that ran none is green without. */
+const FAILING_SENSOR = { tests: exits(7) };
+
+function writeFile(root, file, text = 'two\n') {
+  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  fs.writeFileSync(path.join(root, file), text);
+}
+
+const commitAs = ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '--quiet'];
+
+let documentsBase;
+after(() => {
+  if (documentsBase) fs.rmSync(documentsBase, { recursive: true, force: true });
+});
+
+/** A repository of one commit whose `docs/` and `notes.md` are declared documents and whose one sensor
+ * fails. Built once and copied for each test, as the fixtures of codex-review.test.mjs are. */
+function documentsRepo() {
+  if (!documentsBase) {
+    documentsBase = makeTmpDir();
+    writeFile(documentsBase, 'AGENTS.md', 'a'.repeat(400));
+    writeJson(documentsBase, 'harness.json', { sensors: FAILING_SENSOR, documents: ['docs/', 'notes.md'] });
+    for (const file of ['docs/guide.md', 'docs/old.md', 'notes.md', 'docs-internal/x.md', 'src/app.js']) writeFile(documentsBase, file, 'one\n');
+    git(documentsBase, 'init', '--quiet');
+    git(documentsBase, 'add', '.');
+    git(documentsBase, ...commitAs, '-m', 'root');
+  }
+  const repo = makeTmpDir();
+  fs.cpSync(documentsBase, repo, { recursive: true });
+  return repo;
+}
+
+/** The `sensors` row of a report with the lines under it, as printed. */
+function sensorsRow(output) {
+  const lines = output.split('\n');
+  const at = lines.findIndex((line) => /^\w+ {2}sensors {2}/.test(line));
+  if (at === -1) return [];
+  const under = lines.slice(at + 1);
+  const end = under.findIndex((line) => !line.startsWith('      '));
+  return [lines[at], ...under.slice(0, end === -1 ? under.length : end).map((line) => line.trim())];
+}
+
+/** What the `sensors` row of a gate that ran no sensor for the staged documents `paths` says. */
+const noSensorRan = (paths) => [
+  `INFO  sensors  no sensor ran (tests): ${paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`} declared in harness.json "documents"`,
+  ...paths,
+];
+
+/** Runs the gate of `repo` with real git and its real sensor, and says whether the sensor ran: a gate that
+ * skipped it is green and names `documents`, one that ran it is red on its `tests` row alone. */
+async function gateOfStaged(repo, documents) {
+  const { code, output } = await runCheck(['--cwd', repo], {});
+  if (documents) {
+    assert.equal(code, 0, output);
+    assert.deepEqual(sensorsRow(output), noSensorRan(documents));
+    assert.doesNotMatch(output, /^\w+ {2}tests /m);
+  } else {
+    assert.equal(code, 1, output);
+    assert.match(output, /^FAIL {2}tests {2}node -e "process\.exit\(7\)" exited 7$/m);
+    assert.deepEqual(sensorsRow(output), []);
+  }
+  assert.deepEqual(rowsOf(output).filter((line) => line.startsWith('FAIL') && !/^FAIL {2}tests /.test(line)), []);
+}
+
+const STAGED = [
+  {
+    name: 'documents alone, changed and new',
+    stage: (repo) => {
+      for (const file of ['docs/guide.md', 'notes.md', 'docs/deep/new.md']) writeFile(repo, file);
+      git(repo, 'add', '.');
+    },
+    documents: ['docs/deep/new.md', 'docs/guide.md', 'notes.md'],
+  },
+  {
+    name: 'a document and a code file',
+    stage: (repo) => {
+      for (const file of ['docs/guide.md', 'src/app.js']) writeFile(repo, file);
+      git(repo, 'add', '.');
+    },
+  },
+  {
+    name: 'a code file alone',
+    stage: (repo) => {
+      writeFile(repo, 'src/app.js');
+      git(repo, 'add', '.');
+    },
+  },
+  // A check run by hand, or a commit of nothing: there is no change to call a change of documents.
+  { name: 'nothing, with a document changed in the working tree', stage: (repo) => writeFile(repo, 'docs/guide.md') },
+  { name: 'a document renamed out of the documents', stage: (repo) => git(repo, 'mv', 'docs/old.md', 'src/old.md') },
+  // Without `--no-renames` git lists a rename by its new path alone, and this one would read as a document.
+  { name: 'a code file renamed into the documents', stage: (repo) => git(repo, 'mv', 'src/app.js', 'docs/app.js') },
+  { name: 'a document renamed among the documents', stage: (repo) => git(repo, 'mv', 'docs/old.md', 'docs/older.md'), documents: ['docs/old.md', 'docs/older.md'] },
+  // The commit holds what is staged; what else changed in the working tree is not part of it.
+  {
+    name: 'a document, with a code file changed and not staged',
+    stage: (repo) => {
+      for (const file of ['docs/guide.md', 'src/app.js']) writeFile(repo, file);
+      git(repo, 'add', 'docs/guide.md');
+    },
+    documents: ['docs/guide.md'],
+  },
+  { name: 'the removal of a document', stage: (repo) => git(repo, 'rm', '--quiet', 'docs/old.md'), documents: ['docs/old.md'] },
+  {
+    name: 'a path that only starts with the letters of a declared folder',
+    stage: (repo) => {
+      writeFile(repo, 'docs-internal/x.md');
+      git(repo, 'add', '.');
+    },
+  },
+  {
+    name: 'Markdown alone in a project that declares no documents',
+    stage: (repo) => {
+      writeJson(repo, 'harness.json', { sensors: FAILING_SENSOR });
+      writeFile(repo, 'docs/guide.md');
+      git(repo, 'add', 'docs/guide.md');
+    },
+  },
+];
+
+for (const { name, stage, documents } of STAGED) {
+  test(`a gate with ${name} staged ${documents ? 'runs no sensor, and says so' : 'runs its sensors'}`, async () => {
+    const repo = documentsRepo();
+    try {
+      stage(repo);
+      await gateOfStaged(repo, documents);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+}
+
+test('a contract broken by a commit of documents alone still fails the gate, which runs no sensor', async () => {
+  const repo = documentsRepo();
+  try {
+    writeJson(repo, 'harness.json', { sensors: FAILING_SENSOR, documents: ['odd/tasks/'] });
+    writeTask(repo, 'broken.md', BAD_CONTRACT);
+    git(repo, 'add', 'odd/tasks/broken.md');
+    const { code, output } = await runCheck(['--cwd', repo], {});
+    assert.equal(code, 1, output);
+    assert.deepEqual(rowsOf(output).filter((line) => line.startsWith('FAIL')), ['FAIL  contracts  1 of 1 contract fail']);
+    assert.match(output, /^ {6}odd\/tasks\/broken\.md$/m);
+    assert.deepEqual(sensorsRow(output), noSensorRan(['odd/tasks/broken.md']));
+    assert.doesNotMatch(output, /^\w+ {2}tests /m);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// With no commit yet there is no HEAD to compare with, and git lists everything staged as added.
+test('a first commit of documents alone runs no sensor, and one that holds harness.json runs them', async () => {
+  const repo = makeTmpDir();
+  try {
+    git(repo, 'init', '--quiet');
+    writeFile(repo, 'AGENTS.md', 'a'.repeat(400));
+    writeJson(repo, 'harness.json', { sensors: FAILING_SENSOR, documents: ['docs/'] });
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    await gateOfStaged(repo, ['docs/guide.md']);
+    git(repo, 'add', 'harness.json');
+    await gateOfStaged(repo, null);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('a gate that checks a folder below the top of its repository runs its sensors, and so does one of a folder that is no repository', async () => {
+  const repo = documentsRepo();
+  const plain = makeTmpDir();
+  try {
+    const below = path.join(repo, 'packages', 'app');
+    for (const dir of [below, plain]) {
+      writeFile(dir, 'AGENTS.md', 'a'.repeat(400));
+      writeJson(dir, 'harness.json', { sensors: FAILING_SENSOR, documents: ['docs/'] });
+    }
+    // Staged at the top of the repository, where `docs/` is not the `docs/` this folder declares.
+    writeFile(repo, 'docs/guide.md');
+    git(repo, 'add', 'docs/guide.md');
+    await gateOfStaged(below, null);
+    await gateOfStaged(plain, null);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(plain, { recursive: true, force: true });
+  }
+});
+
+// `git commit <path>` and `git commit -a` commit from an index of their own, which git names to the hook in
+// GIT_INDEX_FILE: the commit holds that index, not the one `git add` wrote. Proved with a real commit and a
+// real hook, since the variable is git's to set. The gate is a copy of `bin/`, as for the two processes above.
+test('a commit of one named path is judged by what it holds, not by what else is staged', async () => {
+  const repo = documentsRepo();
+  const home = makeTmpDir();
+  const checkout = makeTmpDir();
+  try {
+    const slashes = (file) => file.replace(/\\/g, '/');
+    fs.cpSync(path.dirname(fileURLToPath(import.meta.url)), path.join(checkout, 'bin'), { recursive: true, filter: (source) => !source.endsWith('.test.mjs') });
+    const marker = slashes(path.join(home, 'sensor-ran'));
+    const sensor = `"${process.execPath}" -e "require('fs').writeFileSync('${marker}', '')"`;
+    writeJson(repo, 'harness.json', { sensors: { tests: sensor }, documents: ['docs/', 'notes.md'] });
+    // The hook leaves on PATH the folder of git and nothing else: the gate finds git, and no gentle-ai.
+    const hooks = path.join(home, 'hooks');
+    writeFile(hooks, 'pre-commit', `#!/bin/sh\ngit=$(command -v git)\nPATH="\${git%/*}"\nexec "${slashes(process.execPath)}" "${slashes(path.join(checkout, 'bin', 'check.mjs'))}"\n`);
+    fs.chmodSync(path.join(hooks, 'pre-commit'), 0o755);
+    git(repo, 'config', 'core.hooksPath', slashes(hooks));
+
+    for (const file of ['docs/guide.md', 'src/app.js']) writeFile(repo, file);
+    git(repo, 'add', 'docs/guide.md', 'src/app.js');
+    // The marks of a gate that runs this file would make the hook's gate an inner check, or one that takes no lock.
+    const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'node_test_context'];
+    const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home };
+    const commit = (file) => {
+      const result = spawnSync('git', [...commitAs, '-m', `change ${file}`, '--', file], { cwd: repo, env, encoding: 'utf8' });
+      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+    };
+
+    const document = commit('docs/guide.md');
+    assert.equal(document.status, 0, document.said);
+    assert.deepEqual(sensorsRow(document.said), noSensorRan(['docs/guide.md']));
+    assert.equal(fs.existsSync(marker), false, 'the sensor ran for a commit that holds a document alone');
+    assert.match(document.said, /^INFO {2}review {2}gentle-ai was not found/m);
+
+    const code = commit('src/app.js');
+    assert.equal(code.status, 0, code.said);
+    assert.match(code.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
+    assert.equal(git(repo, 'status', '--porcelain', '--untracked-files=no'), 'M harness.json');
+  } finally {
+    for (const dir of [repo, home, checkout]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });

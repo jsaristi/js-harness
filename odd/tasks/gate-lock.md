@@ -230,7 +230,7 @@ and its test); T2, T3, T4, T6, T7 one writer each (two or more non-trivial files
       code moved, and `gitDirs` asking git once for what it asked twice. Both built
       (`b65ea95`); measured inside a whole run the shards gave nothing, and they are taken
       out again (Progress, "What the shards gave"). `gitDirs` stays.
-- [ ] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
+- [x] T7 · Document-only commits skip the sensors, declared in `harness.json` (asked first;
       approved by Sebastián on 2026-10-10 with the list in hand). Route: one writer.
 - [ ] T8 · Close: `docs/ROADMAP.md` (what the lock covers, what waits for the later slice),
       gentle-ai and Codex reviews of each slice with code, pull request. Merge is his.
@@ -1130,26 +1130,68 @@ allows a feature. No spend outside the plan.
   it wants a bound on its size and its removal by `uninstall`, and that it writes a
   lasting file outside the repository is put to Sebastián when that slice is planned.
 
+- 2026-10-11 · The shards are out in commit `0fa99cf`: gate green in 817 s (00:04:13 to 00:17:50),
+  one try, after waiting on another session's gate. Without the shards the gates read 728,
+  872, 724 and 817 s; with them 833 and 747 s: no difference beyond the noise of this
+  machine, some 75 s either way.
+
+- 2026-10-11 · T7, one writer (route: delegated), in a worktree of its own
+  (`js-harness-worktrees/gate-lock-t7`, removed afterwards) so that nothing was written
+  under a running gate; its patch, two files, was applied here. Test first: of 24 new
+  tests 14 failed before the code (the 10 that passed are the cases where the sensors run,
+  true by construction), 117 of 117 pass after it.
+  - The declaration: `harness.json` may hold `"documents"`, an array of paths from the top
+    of the repository with forward slashes; one that ends in `/` is a folder, any other is
+    one file; no patterns. A wrong shape (not an array, an absolute path, a backslash, a
+    `*`, a `.` or `..` or empty segment, so nobody declares the whole repository) is a
+    FAIL row `sensors` and no sensor runs. A project without the key is as before.
+  - The rule, in `checkSensors`: `check` asks git for the paths of the staged change
+    (`git diff --cached --name-only --no-renames --no-relative -z`, in the environment as
+    given, so the index git hands a hook for `git commit <path>` or `-a` is the one read;
+    with renames off a file moved into or out of the documents counts on both sides). With
+    at least one staged path and every one of them a declared document, no sensor runs, no
+    gate lock is taken, and the report says so:
+    `INFO  sensors  no sensor ran (tests): all 2 staged paths are documents declared in
+    harness.json "documents"`, with the paths under it (ten at most, then a count).
+    In every other case the sensors run as before: nothing staged (a `check` by hand), any
+    path outside the list, no key, no repository, git missing or failing, a `check` run
+    from a folder below the top. The static rows run either way: a contract broken by a
+    commit of documents still fails it (tested).
+  - This repository opts in: `harness.json` at its top with `docs/` and `odd/tasks/`.
+    Decided here, on what the writer found and would not decide: any `harness.json` makes
+    `status`, `sync`, `init`, `uninstall` and the TUI read the repository as a project
+    with a file and no pin, where today they say "not an initialized project"; all five are
+    run by hand and none of them here, where the harness is built and not installed.
+    `doctor`, its session-start hook, the board and `check` do not read the pin, and
+    `check` still finds the `tests` sensor in `package.json`. The other ways (a pin, which
+    would make this repository an installed project; `init` taught to keep the keys of a
+    file without a pin; a second place for the declaration in `package.json`) each cost
+    more than those five messages. Deleting the file undoes it.
+  - Known and left: the gate reads `harness.json` from the working tree, as it does for
+    `sensors`, so an unstaged edit of `documents` changes what a commit's gate skips; a
+    `git commit --amend` with only documents staged skips, the commit it amends having
+    paid its own gate.
+  620 lines added and 13 removed in `bin/check.mjs` (126) and `bin/check.test.mjs` (507).
+
 ## Next
-1. The commit that takes the shards out, with this entry, and its gate.
-2. T7, one writer: `harness.json` of this repository declares `docs/` and `odd/tasks/`;
-   a commit whose every staged path is under them runs no test sensor and says so in a
-   row; the static rows still run; off by default elsewhere. Its commit, gate, and the
-   gentle-ai review of `c2485cd..HEAD`.
-3. Codex on `c2485cd..HEAD`, if its plan fits the 1,309,386 left; if it does not, that is
-   a question of spend, his.
-4. The close: `origin/main` (at `e8a0b6a` on 2026-10-10, pull requests 51 to 54 merged)
-   merged in before the pull request, which is one more gate; this document's last entries
-   committed; push and pull request; the closing notice to the orchestrator, which merges.
+1. The commit of T7 and its gate (it changes code, so its sensors run). The commit after
+   it, of documents alone, is the first to skip them: what its report says goes here.
+2. gentle-ai on `c2485cd..HEAD` (`review assess --base-ref c2485cd --committed-only`), then
+   Codex on the same range if its plan fits the 1,309,386 left; if it does not, that is a
+   question of spend, his.
+3. The close: `origin/main` (`1d0a732` on 2026-10-11; it merges with no conflict) merged in
+   and one gate run on the result by hand, since a merge runs no pre-commit hook; push and
+   pull request; the closing notice to the orchestrator, which merges. The session channel
+   waits for that merge (both change the board's files).
 For the next slice of the gate, in this order: the gate log; fewer git processes in the
 two long test files; the gate on GitHub. A run that needs the machine quiet, and not only
 its turn (an evals batch that compares durations), is a need the lock does not serve.
-Rules learnt today, to keep: a commit that will be reviewed stays under about 1,200
-changed lines; nothing untracked when a review is assessed; a Codex review wants a clean
-tree (set this document aside with `git stash`, one stash, popped by the same command);
-no review step beside a running gate; a timing is one only with the process list empty
+Rules learnt, to keep: a commit that will be reviewed stays under about 1,200 changed
+lines; nothing untracked when a review is assessed; a Codex review wants a clean tree
+(set this document aside with `git stash`, one stash, popped by the same command); no
+review step beside a running gate; a timing is one only with the process list empty
 before and after it; the look finds `evals/suite.mjs` too; a gate's time is estimated
-from whole runs.
+from whole runs; a writer works in a worktree of its own while a gate runs here.
 
 Standing rule, before any test or commit: no private wait script. One look at the process list for
    `check.mjs`, `node --test` or `evals/suite.mjs`; if one is alive, wait on that process itself and look again,

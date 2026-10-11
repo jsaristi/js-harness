@@ -112,16 +112,23 @@ function readJson(cwd, file) {
   }
 }
 
+/** `harness.json` of `cwd` as `{ declared }`, the object it holds, or `undefined` where there is no such
+ * file; `{ error }` when it is not JSON or holds no object. */
+function readHarness(cwd) {
+  const harness = readJson(cwd, 'harness.json');
+  if (harness?.error) return { error: harness.error };
+  if (harness && !isObject(harness.value)) return { error: 'harness.json must be a JSON object' };
+  return { declared: harness?.value };
+}
+
 /** The project's sensors: named commands that must exit 0. `harness.json` `sensors` wins, which serves
  * any language; else the `test`, `lint` and `typecheck` scripts of `package.json`, run through npm so
  * `node_modules/.bin` is on the path. A file that is unreadable or of the wrong shape is an `error`,
  * never a silent skip: a gate that quietly ran nothing would look green. */
 export function discoverSensors(cwd) {
   const none = { sensors: [], source: null };
-  const harness = readJson(cwd, 'harness.json');
-  if (harness?.error) return { ...none, error: harness.error };
-  const declared = harness?.value;
-  if (harness && !isObject(declared)) return { ...none, error: 'harness.json must be a JSON object' };
+  const { declared, error } = readHarness(cwd);
+  if (error) return { ...none, error };
   if (declared && 'sensors' in declared) {
     // An empty map is a deliberate opt-out: it declares no sensor and does not fall back to package.json.
     const { sensors } = declared;
@@ -141,6 +148,94 @@ export function discoverSensors(cwd) {
     .filter(([, script]) => isCommand(scriptOf(script)) && !(script === 'test' && scriptOf(script) === NPM_PLACEHOLDER_TEST))
     .map(([name, script]) => ({ name, command: `npm run ${script}` }));
   return { sensors, source: 'package.json' };
+}
+
+const DOCUMENTS_SHAPE = 'harness.json "documents" must be an array of paths from the top of the repository, with forward slashes and a final "/" for a folder';
+
+/** What keeps `entry` out of the `documents` of harness.json, as the end of a sentence about it, or
+ * `null` when it is taken. */
+function documentFault(entry) {
+  if (typeof entry !== 'string' || entry === '') return 'is not a non-empty string';
+  if (entry.includes('\\')) return 'is written with a backslash';
+  if (entry.includes('*')) return 'is a pattern, and none is taken';
+  if (entry.startsWith('/') || /^[A-Za-z]:/.test(entry)) return 'is an absolute path';
+  // One final `/` is the mark of a folder. What is left must be whole segments, so that no entry is
+  // the repository itself (`.`, `./`) or leaves it (`..`).
+  const segments = entry.replace(/\/$/, '').split('/');
+  return segments.some((segment) => ['', '.', '..'].includes(segment)) ? 'has an empty, "." or ".." segment' : null;
+}
+
+/** The paths the project declares as documents, for the one rule that reads them: a commit that holds
+ * documents alone runs no sensor (`stagedDocuments`). They are `harness.json` `documents`, an array of
+ * paths from the top of the repository with forward slashes: an entry that ends in `/` is a folder and
+ * covers every path under it, any other is one file by its whole path. No pattern is taken, and no path
+ * that could name the repository itself or leave it.
+ *
+ * Declared, never assumed: a project without the key declares none and runs its sensors at every commit
+ * as it always did, since in another project a document is the product. A value of the wrong shape is
+ * an `error`, as for the sensors, and never a list quietly read as empty or as everything. */
+export function discoverDocuments(cwd) {
+  const none = { documents: [], source: null };
+  const { declared, error } = readHarness(cwd);
+  if (error) return { ...none, error };
+  if (!declared || !('documents' in declared)) return none;
+  const { documents } = declared;
+  if (!Array.isArray(documents)) return { ...none, error: `${DOCUMENTS_SHAPE}; it is not an array` };
+  for (const entry of documents) {
+    const fault = documentFault(entry);
+    // The entry as JSON: what the file holds reaches the report escaped.
+    if (fault) return { ...none, error: `${DOCUMENTS_SHAPE}; ${JSON.stringify(entry)} ${fault}` };
+  }
+  return { documents, source: 'harness.json' };
+}
+
+/** The paths of the staged change, which is what the commit a gate guards will hold, when every one of
+ * them is among `documents` (`discoverDocuments`). `null` when one is not, when nothing is staged (a
+ * check run by hand guards no commit), and whenever git does not say: no git, no repository, a command
+ * that fails. `null` is "run the sensors", so every doubt ends in a gate that runs what it always ran.
+ *
+ * Git is asked in the environment this process was given, as every git call of this file is. A hook is
+ * given `GIT_INDEX_FILE` by `git commit <path>` and `git commit -a`, which commit from an index of their
+ * own: that index is the commit, not the one `git add` wrote. (A sensor is given none of those
+ * variables: `checkSensor`.)
+ *
+ * Renames are off, so a file moved into the documents or out of them is listed at both its paths. The
+ * names are ended by a NUL and read as they come, since a path may begin with a space. `documents` are
+ * named from the top of the repository, so a gate that checks a folder below it skips nothing. With no
+ * commit yet git compares the index with nothing, and lists all that is staged.
+ * `spawn` stands in for `spawnSync`. */
+function stagedDocuments(cwd, documents, spawn = spawnSync) {
+  const git = (...args) => {
+    try {
+      const result = spawn('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      return result && !result.error && result.status === 0 ? result.stdout : null;
+    } catch {
+      return null; // no git on PATH
+    }
+  };
+  if (git('rev-parse', '--show-prefix')?.trim() !== '') return null;
+  const paths = git('diff', '--cached', '--name-only', '--no-renames', '--no-relative', '-z')?.split('\0').filter(Boolean) ?? [];
+  const isDocument = (file) => documents.some((entry) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry));
+  return paths.length > 0 && paths.every(isDocument) ? paths : null;
+}
+
+// How many staged documents the row of a gate that ran no sensor names; the rest are counted.
+const DOCUMENTS_NAMED = 10;
+
+/** The one row of a gate that ran no sensor because the commit holds documents alone: which `sensors`
+ * did not run, and for which staged `paths`. A name with a control character in it is shown as JSON:
+ * it comes from the repository, and a line break in it would read as another row of the report. */
+function documentsRow(sensors, paths) {
+  const staged = paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`;
+  const named = paths.slice(0, DOCUMENTS_NAMED).map((file) => (/\p{Cc}/u.test(file) ? JSON.stringify(file) : file));
+  const more = paths.length - named.length;
+  return {
+    name: 'sensors',
+    pass: true,
+    info: true,
+    detail: `no sensor ran (${sensors.map((sensor) => sensor.name).join(', ')}): ${staged} declared in harness.json "documents"`,
+    lines: [...named, ...(more > 0 ? [`and ${more} more`] : [])],
+  };
 }
 
 // Once the shell has exited, the pipes should close at once; a grandchild that kept them open (a
@@ -416,8 +511,15 @@ async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: t
  * and fails nothing, but for a gate that ran no sensor (`pass` false). */
 const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { info: true }), detail });
 
-/** One row per sensor, run one after another; a broken declaration is one FAIL row and no sensor at all
- * is one INFO row. With `lock` (`{ home, wait, waitMinutes }`, which is what a gate passes) the sensors
+/** One row per sensor, run one after another; a broken declaration, of the sensors or of the documents,
+ * is one FAIL row and no sensor at all is one INFO row.
+ *
+ * A commit that holds documents alone runs no sensor: where the project declares its documents
+ * (`discoverDocuments`) and every staged path is one of them (`stagedDocuments`), the one row is an INFO
+ * that says which sensors did not run and for which paths, and no lock is taken, there being nothing to
+ * run under it. `deps.git` stands in for the `spawnSync` that asks git what is staged.
+ *
+ * With `lock` (`{ home, wait, waitMinutes }`, which is what a gate passes) the sensors
  * run under the machine's gate lock in that home, and only when there is a sensor to run: see
  * `underGateLock`, which may add a row named `gate`. With `{ held: true }` for `lock`, which is what a
  * gate passes when it was started with the mark of a held lock (`GATE_HELD_ENV`), no lock is taken: the
@@ -427,12 +529,19 @@ const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { in
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
+  // Read before anything runs or is skipped: a declaration that cannot be taken fails the gate even
+  // where there is no sensor for it to skip.
+  const declared = discoverDocuments(cwd);
+  if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error }];
   if (sensors.length === 0) {
     const detail = source === 'harness.json'
       ? 'harness.json declares no sensors, so none ran'
       : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
+  // Git is asked only by a project that declares documents: without them nothing here changed.
+  const staged = declared.documents.length > 0 ? stagedDocuments(cwd, declared.documents, deps.git) : null;
+  if (staged) return [documentsRow(sensors, staged)];
   const run = async (gateHeld = false) => {
     const rows = [];
     for (const sensor of sensors) rows.push(await checkSensor(cwd, sensor, { ...deps, gateHeld }));
@@ -795,6 +904,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // together. The inner check and a push run no sensor and so take no lock: the inner one could only
   // wait for the gate that runs it. Nor does a gate started by a process that holds the lock, which
   // says so with the mark of a held lock (`GATE_HELD_ENV`): it runs its sensors in that turn.
+  // The gate of a commit that holds declared documents alone runs no sensor, and takes no lock either
+  // (`checkSensors`); the rows above ran all the same, so a contract it breaks still fails it.
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true } : { home, wait: !noWait, waitMinutes };
     rows.push(...(await checkSensors(cwd, deps, lock)));
@@ -803,7 +914,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   }
   // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
   // push's. It reads commits and records, never the working tree, so the inner run prints it as well.
-  // `deps.git` stands in for `spawnSync` here only, since `deps.spawn` is what runs a sensor.
+  // `deps.git` stands in for `spawnSync` here and where a gate asks git what is staged (`checkSensors`),
+  // since `deps.spawn` is what runs a sensor.
   if (!push) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
 
   for (const row of rows) {
