@@ -894,6 +894,14 @@ reader, and that table names this feature as their owner.
   taken in the order of arrival; every wait is now started with `--wait 180` (the lead's
   request), and what follows a review (its capture, then Codex only if it approved) runs in
   one turn (`after-chain.mjs` in the session's scratchpad).
+- 2026-10-11 17:43 local, commit `22fc9a1` (the order of the sends). Its gate: `INFO gate
+  waited 39 min 11 s`, `PASS tests npm run test passed`, one try. Codex on `0543030..22fc9a1`,
+  recorded at 17:49: "the patch is correct (confidence 0.93)", no finding, 232,141 input
+  tokens. gentle-ai: `review not due (under_budget)`, 144 lines since the boundary `0543030`.
+  Every code commit of the branch is covered by a Codex record, and `git merge-tree` of the
+  branch with `origin/main` at `906fc28` (pull request 64) exits 0. Codex for the feature:
+  6,197,082 of 7,000,000 input tokens; 802,918 left. The third slice alone took 3,416,807 of
+  them in four runs, three of them on fixes of its own fixes.
 - 2026-10-11, a defect of `sessions --quote`, found and not fixed in this slice: a message he
   sends while a session works is written by the host as an entry of `type: "attachment"` whose
   `attachment` is `{ type: "queued_command", prompt, origin: { kind: "human" }, humanTurn: true
@@ -978,12 +986,9 @@ record. What exists, all local to this machine:
 
 ## Next step
 The third slice, `feat/session-board-channel`: T1b, T4b and T4c with the fixes of both
-reviews. gentle-ai has reviewed the fixes up to `0543030` as one candidate (against the
-unreferenced boundary `5d150ae`, which is the tree of `25cf031` with the seven files of those
-commits as `ce8bdf7` has them, so the range leaves out what the merge of `main` brought). Owed
-before it is delivered: the Codex review of the one commit after `0543030`, which no record
-covers, inside the gate lock; its gentle-ai assessment; then the push, the third pull request
-(its text is drafted in the session's scratchpad, `pr-board.md`) and the notice to the lead.
+reviews, whole at `22fc9a1` plus the commit of this entry: gated, reviewed by gentle-ai up to
+`0543030` (the last commit is under the budget and pending in the slice) and by Codex to its
+head. It is pushed and is the third pull request; the lead merges it.
 Then the fourth slice on `feat/session-context` (T5 and T6, built and gated at `9dd1622`):
 merge this branch in, join the two copies of this document, gate, its gentle-ai review as
 smaller candidates, its Codex review within what the cap leaves, the fourth pull request. The
