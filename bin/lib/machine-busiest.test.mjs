@@ -6,7 +6,6 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { spawn as spawnChild } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createReaper } from './process-tree.testkit.mjs';
 import { ASKED_FILE_ENV, BUSIEST_ASK_BOUND_MS, BUSIEST_BOUND_MS, BUSIEST_LOOK_MS, busiestBetween, busiestLines, busiestProcesses, isFileOnDisk, parseProcStat, parseProcessReadings, scriptOf, splitCommandLine } from './machine-busiest.mjs';
 
 // What loads a loaded machine: every process's CPU time read twice, the difference taken, and the three
@@ -689,31 +688,35 @@ test('a question that is given up is answered no at once, and the process that w
     fired += 1;
   }, 5);
   setTimeout(() => asking.abort(), 60);
+  // The timer goes on until the process is seen to end: the question let go of it, so nothing else of this
+  // test would keep the event loop for the news of its end.
   try {
     assert.equal(await answer, false);
+    // The question held no timer of this process while it was open.
+    assert.ok(fired >= 1, `the timer fired ${fired} times`);
+    assert.equal(child.killed, true);
+    assert.equal(child.stdout.destroyed, true);
+    // It did end: nothing is left behind where the system lets a process be killed.
+    const { code } = await ended;
+    assert.notEqual(code, 0);
   } finally {
     clearInterval(beat);
   }
-  // The question held no timer of this process while it was open.
-  assert.ok(fired >= 1, `the timer fired ${fired} times`);
-  assert.equal(child.killed, true);
-  assert.equal(child.stdout.destroyed, true);
-  // It did end: nothing is left behind where the system lets a process be killed.
-  const { code } = await ended;
-  assert.notEqual(code, 0);
 });
 
 test('a question that is given up keeps its process neither running nor from ending, even where the process asked will not die', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-ask-'));
   // A process of its own, which asks, gives up after 50 ms and has then nothing left to do: what ends it
   // is that nothing holds its event loop. The process it asks never answers, cannot be killed by it, and
-  // lives for twenty seconds unless this test ends it first.
+  // lives for fifteen seconds. Nothing here ends it: this test knows it by its number alone, and by the time
+  // the process that asked has ended that number may be another process's. Windows ends it with the one that
+  // started it; elsewhere it sleeps out its time, holding nothing of this test.
   const script = path.join(dir, 'asks and ends.mjs');
   fs.writeFileSync(script, [
     "import { spawn } from 'node:child_process';",
     `import { isFileOnDisk } from ${JSON.stringify(new URL('./machine-busiest.mjs', import.meta.url).href)};`,
     'const stubborn = (command, args, options) => {',
-    "  const child = spawn(command, ['-e', 'setTimeout(() => {}, 20000)'], options);",
+    "  const child = spawn(command, ['-e', 'setTimeout(() => {}, 15000)'], options);",
     '  child.kill = () => false;',
     '  console.log(child.pid);',
     '  return child;',
@@ -747,9 +750,6 @@ test('a question that is given up keeps its process neither running nor from end
     // By the clock and not by whether that process still runs: Windows ends it with the one that started it.
     assert.ok(took < 10_000, `the process that asked ended after ${took} ms`);
   } finally {
-    // The process that was asked is known here by its number alone, which Windows may have given to another
-    // since: the shared teardown stops it only if it started after this test did.
-    if (/^\d+$/.test(pid ?? '')) createReaper().reap([Number(pid)], { since: startedAt });
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
