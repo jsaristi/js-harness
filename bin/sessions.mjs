@@ -33,7 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, reliefPath, senderOf } from './lib/channel.mjs';
-import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_LIMIT_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, hasTitle, isSelf, mainCheckout, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, readGateLock, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -485,27 +485,33 @@ export async function sessionsMain(
     stdout(opening.text.replace(/(\r\n|\n|\r)$/, ''));
     if (found.unreadable > 0) stderr(`js-harness sessions: ${unreadable} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`);
     const reader = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile, readFacts });
+    // The session that stored the opening reads it back to check it: it is not the session it is for,
+    // and a reading of its own would give it that title on the board if its transcript carried none. It
+    // is the same session when either id is the start of the other: `notify --opening --self` keeps the
+    // start it was given when no transcript completed it, and so does this command (`sameSession`).
+    if (reader.id === null || sameSession(reader.id, opening.from?.id)) return 0;
     // An id no transcript completes is recorded as given, as a notice written with it is (`senderOf`). One
     // that several transcripts start with is not: the reading would give each of them the title
-    // (`titleRead`), and nothing says which of them read. A folder that cannot be listed names none.
+    // (`titleRead`), and nothing says which of them read. Nor is one given with `--self` when the folder
+    // cannot be listed: it may be the start of several ids, and that could not be checked. The id the
+    // host gives is whole, and a folder that is not there has no transcript to share a start with.
     let named = [];
     try {
-      if (reader.id !== null) named = readdir(projectDir).filter((name) => name.endsWith('.jsonl') && isSelf(name.slice(0, -'.jsonl'.length), reader.id));
-    } catch {
-      named = [];
+      named = readdir(projectDir).filter((name) => name.endsWith('.jsonl') && isSelf(name.slice(0, -'.jsonl'.length), reader.id));
+    } catch (err) {
+      if (reader.source === 'flag' && err.code !== 'ENOENT') {
+        stderr(`js-harness sessions: the opening was read, and no reading was recorded: the sessions folder ${projectDir} could not be listed (${err.code ?? err.message}), so it is not known whether ${JSON.stringify(reader.id)} names one transcript`);
+        return 0;
+      }
     }
     if (named.length > 1) {
       stderr(`js-harness sessions: the opening was read, and no reading was recorded: ${named.length} transcripts of this project are named by ${JSON.stringify(reader.id)}, and a reading under it would give each of them the title. Give more of the id`);
       return 0;
     }
-    // The session that stored the opening reads it back to check it: it is not the session it is for,
-    // and a reading of its own would give it that title on the board if its transcript carried none.
-    if (reader.id !== null && reader.id !== opening.from?.id) {
-      try {
-        appendReading(harnessHome, slug, newReading({ at: new Date(now()).toISOString(), reader, title: opening.title }));
-      } catch (err) {
-        stderr(`js-harness sessions: the opening was read, and that could not be recorded in ${recordPath(harnessHome, slug)} (${err.code ?? err.message})`);
-      }
+    try {
+      appendReading(harnessHome, slug, newReading({ at: new Date(now()).toISOString(), reader, title: opening.title }));
+    } catch (err) {
+      stderr(`js-harness sessions: the opening was read, and that could not be recorded in ${recordPath(harnessHome, slug)} (${err.code ?? err.message})`);
     }
     return 0;
   }

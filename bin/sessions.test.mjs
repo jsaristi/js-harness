@@ -1505,6 +1505,52 @@ test('--opening records a reading under the start of an id as given when no tran
   assert.deepEqual(recordOf(machine).readings.map((reading) => reading.reader.id), ['zzzzzzzz', SESSION_D]);
 }));
 
+// Codex review of 7a19710, finding 5: a folder that could not be listed read as a folder with no transcript
+// of that start, so the reading was recorded under a start nobody had checked, and could title two sessions.
+test('--opening records no reading under --self when the sessions folder cannot be listed, since the id could not be checked, and still prints the opening', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  const refused = (code) => (absolute) => {
+    if (absolute === machine.projectDir) throw Object.assign(new Error(`${code}: made up`), { code });
+    return fs.readdirSync(absolute);
+  };
+  for (const code of ['EBUSY', 'EACCES']) {
+    const blind = await runSessions(machine, ['--opening', 'JH 6', '--self', 'dddddddd'], { readdir: refused(code) });
+    assert.deepEqual([blind.code, blind.stdout], [0, OPENING_TEXT.trimEnd()], code);
+    assert.equal(blind.stderr, `js-harness sessions: the opening was read, and no reading was recorded: the sessions folder ${machine.projectDir} could not be listed (${code}), so it is not known whether "dddddddd" names one transcript`);
+  }
+  assert.equal(fs.existsSync(recordOf(machine).path), false);
+  // The id the host gives is whole, whatever the folder: it is recorded.
+  const host = await runSessions(machine, ['--opening', 'JH 6'], { readdir: refused('EBUSY'), env: { CLAUDE_CODE_SESSION_ID: SESSION_D } });
+  assert.deepEqual([host.code, host.stderr, recordOf(machine).readings.map((reading) => [reading.reader.id, reading.reader.source])], [0, '', [[SESSION_D, 'environment']]]);
+  // A folder that is not there was listed, in effect: it has no transcript, and the start is recorded as given.
+  fs.rmSync(machine.projectDir, { recursive: true });
+  const none = await runSessions(machine, ['--opening', 'JH 6', '--self', 'zzzzzzzz']);
+  assert.deepEqual([none.code, none.stderr, recordOf(machine).readings.map((reading) => reading.reader.id)], [0, '', [SESSION_D, 'zzzzzzzz']]);
+}));
+
+// Codex review of 7a19710, finding 6: the opening's writer was told from its reader by the whole id, so a
+// writer stored under the start of its id (`notify --opening --self`) was recorded as the session it is for.
+test('--opening records no reading for the session that wrote the opening, whichever of the two ids is the start of the other', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_A, 30);
+  writeUntitled(machine, SESSION_D, 20);
+  const from = (id) => ({ host: 'unknown', id, source: 'flag', title: null, permissionMode: null });
+  const store = (id) => writeOpening(machine.userHome, machine.slug, { title: OPENING_TITLE, text: OPENING_TEXT, at: before(300).toISOString(), from: from(id) });
+  // Stored under the start of its id, read back under the whole one.
+  store(SESSION_A.slice(0, 8));
+  const whole = await runSessions(machine, ['--opening', 'JH 6'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_A } });
+  assert.deepEqual([whole.code, whole.stdout, whole.stderr, fs.existsSync(recordOf(machine).path)], [0, OPENING_TEXT.trimEnd(), '', false]);
+  // Stored under the whole id, read back under its start, which no transcript completes any more.
+  store(SESSION_A);
+  fs.rmSync(transcriptOf(machine, SESSION_A));
+  const short = await runSessions(machine, ['--opening', 'JH 6', '--self', SESSION_A.slice(0, 8)]);
+  assert.deepEqual([short.code, short.stderr, fs.existsSync(recordOf(machine).path)], [0, '', false]);
+  // Seven characters are the start of nothing, and any other session is the reader it is for.
+  store(SESSION_D.slice(0, 7));
+  assert.equal((await runSessions(machine, ['--opening', 'JH 6'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } })).code, 0);
+  assert.deepEqual(recordOf(machine).readings.map((reading) => reading.reader.id), [SESSION_D]);
+}));
+
 // Review of ce8bdf7, finding 9: what the readings of one session, and of two, make of the roster.
 test('an untitled session that reads two openings has the title of the last one it read', withMachine(async (machine) => {
   writeRoster(machine);
