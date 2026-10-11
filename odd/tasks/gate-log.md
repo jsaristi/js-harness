@@ -847,52 +847,49 @@ Progress.
   transcript, line 1745): at 88 the state is written and committed. This session wrote
   this at 84%.
 
-## Resume here (state at 2026-10-11 16:00, for a session that lost its conversation)
-- S1 is merged in `main` (`51a24db`).
-- S3, `D:\js-harness-worktrees\gate-git-processes`, `feat/gate-git-processes` at
-  `9250f45`, not pushed, tree proven by the gate. Running or queued in the background
-  (`rv-s3d.log` then `codex-s3b.log` in the scratchpad): gentle-ai on `f68a752..9250f45`,
-  then Codex on `fc9877d^`. When both are clean: `git fetch`, merge `origin/main` if it
-  moved (`git merge --no-commit --no-ff origin/main`, then `git commit`; documents only
-  run no sensor), `node bin/check.mjs --push` must say every code commit has a record,
-  `git push -u origin feat/gate-git-processes`, `gh pr create --base main` with the text
-  in `pr-s3.md` (replace its `REVIEWS_PLACEHOLDER` line with what the two reviews said),
-  one line to the orchestrator. A finding of either review is fixed test first, committed
-  inside a turn (`gate --wait 180 -- sh <script>`), and Codex runs on that commit.
-- S2, `D:\js-harness-worktrees\gate-log-file`, `feat/gate-log-file` at `5daf468` plus the
-  commit of this document, not pushed. Running: Codex on the slice (`codex-s2.log`).
-  Then one commit, test first, inside a turn: what Codex found, and the reader's silence
-  for a kind of event it does not know (above; `isEvent` and `readGateLog` in
-  `bin/lib/gate-log.mjs`, its test beside the test of malformed bodies in
-  `bin/lib/gate-log.test.mjs`). Then Codex on that commit (`codex-review --base
-  origin/main` starts where the records end; if it lists the whole slice, use the base
-  the pre-push check prints), `git fetch` and the merge of `origin/main`, the push, the
-  pull request to `main` (write its text as `pr-s1.md` and `pr-s3.md` are written: what
-  this is, what it adds, what it does not do, how it was checked, not checked), one line
-  to the orchestrator, and one line for "JH 8" with the commit of the reader's change.
-- Every command of this session in `gate-log-file` runs with `JS_HARNESS_GATE_LOG=off`
-  until S2 is merged and the machine's command updated; `C:\Users\Oficina\.js-harness`
-  must show no `gate-log` after each (a folder `channel` there is another session's).
-- Before each gate of this session: `powershell -NoProfile -ExecutionPolicy Bypass -File
-  <scratchpad>/stop-own-ls.ps1`. Before a commit that adds or changes a test: `node --test
-  --test-name-pattern="signals a process by its number" bin/lib/process-tree.test.mjs`. A
-  commit names its paths, never `git add -A` (a test leaves a stray `Microsoft/` folder).
-- A background command of this session dies as a notification when the app restarts, and
-  may live on as a process: read each command's output file and the process list before
-  starting anything again.
-- Scripts and records, in the scratchpad
-  (`C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\27a0677f-bc17-4331-a050-5cb169a310fb\scratchpad`):
-  `rv-run.cjs` (`node rv-run.cjs <repo> <base> <tag>`: one gentle-ai review from assess to
-  acknowledge), `stop-own-ls.ps1`, `splice-doc.cjs` and `mirror.mjs` (this document's tail
-  and its copy in Engram), `his-words.cjs`, `s3-turn.sh` and `s2-turn.sh` (the shape of a
-  turn that commits), `pr-s1.md`, `pr-s3.md`, the logs named above.
-- The Codex spend: 3,110,848 input tokens before the two runs above (S1 1,772,493; S3
-  1,338,355); the cap is 7,000,000, and by the orchestrator's reading of his later words
-  a rate of 1,200 a changed line by plan. If a Codex run fails because his plan's weekly
-  use is spent: one line to the orchestrator with the error's text, no `--unavailable`.
-- Nothing is open that is his. When S3 and S2 are merged this session is finished: the
-  closing notice to the orchestrator, `mem_session_summary`, and the session "JH 8"
-  takes the slice added by the lead.
+- 2026-10-11 · **S3 is merged**: pull request 63, `main` at `859b9a1` (the orchestrator
+  merged it). gentle-ai approved the slice against `main` (`f68a752..9250f45`), two
+  findings, none blocking: one answered with evidence (the run's root is `git rev-parse
+  --show-toplevel`, `bin/codex-review.mjs:1043`, so it is always the top), one left (an
+  out file the count tool cannot read throws). Codex on the fix alone, from a throwaway
+  worktree at `fc9877d` since the command reviews up to the head and the head held the
+  merge of `main`: 213,803 input tokens, two P2 on the line that says how many Node
+  children never reported, both making it say "missing" where nothing is (a child behind
+  a shell started by a synchronous call; two launches whose shells got the same pid).
+  Left on purpose and said in the pull request; the orchestrator accepted them as not
+  blocking, for a task of the gate's next session.
+- 2026-10-11 · Codex on S2, `b016699..5daf468`: 7 parts, 1,952,667 input tokens, four P2,
+  all right but one part of one: a waited-for gate that stays unnamed when its holder's
+  file was busy at first; an event joined to the fragment of a write that was cut short;
+  a printable field that cannot be printed making `gate log` throw (not so for a
+  sensor's fields, which are never printed); `uninstall` removing the log when the
+  lock's folder could not be looked at, which the writer of T5 had raised as a doubt and
+  this session had let pass. Fixed with one writer, test first (route: delegated), with
+  the reader's silence for a kind of event it does not know, in commit `88165ec` (gate
+  passed inside a turn). gentle-ai on `5daf468..88165ec`: approved and acknowledged, two
+  findings left for the next slice, which works in the same files: the reader refuses a
+  start whose `load` holds a figure that is no finite number or a busiest name that is no
+  text, and the writer does not filter `load` as it filters `waitedFor` (the sampler
+  hands neither today); and holders with no token share one entry in `takeGateTurn`.
+  Codex on `88165ec`: 2 parts, both correct, 423,298 input tokens.
+- 2026-10-11 · The Codex spend of the feature: **5,700,616** input tokens of 7,000,000
+  (S1 1,772,493; S3 1,552,158; S2 2,375,965).
+
+## Resume here (state at 2026-10-11 16:45, for a session that lost its conversation)
+- S1 and S3 are merged in `main`. S2 is at `88165ec` plus this document: every code commit
+  has a Codex record and gentle-ai approved each range. What is left, in this order: the
+  merge of `origin/main` inside a turn (`gate --wait 180 -- sh <script>` with `git merge
+  --no-commit --no-ff origin/main` and then `git commit`: it brings S3's code, so the
+  hook runs the gate), `node bin/check.mjs --push`, `git push -u origin
+  feat/gate-log-file`, the pull request with the text in `pr-s2.md` of the scratchpad,
+  one line to the orchestrator (the pull request, and for "JH 8" that the reader's
+  change is commit `88165ec`), `mem_session_summary`, the closing notice. Every command
+  of this session in `gate-log-file` runs with `JS_HARNESS_GATE_LOG=off` until S2 is
+  merged and the machine's command updated; a commit names its paths; a script run
+  inside a turn uses `grep`, never `rg`. The scripts and logs are in the scratchpad
+  (`C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\27a0677f-bc17-4331-a050-5cb169a310fb\scratchpad`).
+- When S2 is merged this feature is finished here; the slice added by the lead (below)
+  is the session "JH 8"'s.
 
 ## A slice added by the lead, for a new session (2026-10-11)
 - What: a gate that stops before its sensors when a static row already fails (`budget`,
