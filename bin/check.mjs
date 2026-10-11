@@ -494,7 +494,8 @@ export const GATE_WAIT_SAID_MS = 1000;
  * Every outcome also says whom this gate waited for and for how long, which is what the gate log keeps
  * (`./lib/gate-log.mjs`): `waitedMs`, and `waitedFor`, the gates the lock told of while it waited, as
  * `[{ cwd, pid, command }]`. Each is there once, by the token of its holder's file, since the lock tells of
- * a gate again when its beat stops being readable; a gate of which nothing is known is there once, with
+ * a gate again when its beat stops being readable, and with all that any telling of it read: a file that
+ * was busy at first names its gate once it reads. A gate of which nothing is known is there once, with
  * nothing said of it. The gate a refusal names is among them: told not to wait, a gate is told of nobody.
  * The lock says how long a wait was that ended in a lock or a refusal; one that ended in no lock at all
  * is timed here.
@@ -503,8 +504,12 @@ export const GATE_WAIT_SAID_MS = 1000;
 export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes }, take = takeGateLock) {
   const waitMs = waitMinutes * 60_000;
   const met = new Map();
+  // One entry for each token, to which a later telling adds what the entry does not have yet: a holder's
+  // file that is busy at the first look is told of by its token alone, and with its folder and command once
+  // it reads. What is known is never taken back by a look that read less.
   const meet = (holder) => {
-    if (!met.has(holder.token)) met.set(holder.token, { cwd: holder.cwd, pid: holder.pid, command: holder.command });
+    const known = met.get(holder.token) ?? { cwd: null, pid: null, command: null };
+    met.set(holder.token, { cwd: known.cwd ?? holder.cwd, pid: known.pid ?? holder.pid, command: known.command ?? holder.command });
   };
   const waitedFor = () => [...met.values()];
   const onWait = (holder, leftMs = waitMs) => {

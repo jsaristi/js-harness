@@ -513,6 +513,49 @@ test('uninstall keeps a folder of the gate log it cannot look at or remove, repo
   }
 });
 
+// Found in review (Codex), 2026-10-11: a folder of the lock that could not be looked at was kept as one that
+// could not be removed, and the log went as beside a folder that holds no live gate. Nobody had looked: a
+// gate that was alive then wrote its end into a folder made again, without its start, after `uninstall`
+// said the log was removed.
+test('uninstall keeps the gate log when the folder of the lock could not be looked at, since nobody knows whether a gate is alive, and names it in that entry', async () => {
+  for (const withManifest of [true, false]) {
+    const home = makeTmpHome();
+    try {
+      if (withManifest) install(home, '0.1.0');
+      const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+      const gate = gateRecord({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321 });
+      gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+
+      const statFile = refusedAt(gateDir(home), fs.statSync);
+      const unseen = uninstall(home, { statFile });
+      assert.deepEqual(unseen.gateKept, [{ path: gateDir(home), reason: 'unremovable', code: 'EACCES', log: gateLogDir(home) }], String(withManifest));
+      assert.deepEqual(unseen.removed.filter((removed) => [gateDir(home), gateLogDir(home)].includes(removed)), []);
+      assert.equal(fs.existsSync(manifestPath(home)), false, 'the rest of the install is undone all the same');
+
+      // The gate was alive: its end lands beside its start, in the folder that was left for it.
+      gate.end({ result: 'pass' });
+      assert.equal(gate.failure(), undefined);
+      assert.deepEqual(readGateLog(home).events.map((event) => event.event), ['start', 'end']);
+
+      // A log that could not be looked at either is the failure it is, in an entry of its own, and is not
+      // said to be kept for a gate.
+      assert.deepEqual(uninstall(home, { statFile: refusedAt(gateLogDir(home), statFile, 'EPERM') }).gateKept, [
+        { path: gateDir(home), reason: 'unremovable', code: 'EACCES' },
+        { path: gateLogDir(home), reason: 'unremovable', code: 'EPERM' },
+      ]);
+
+      // The gate has ended and removed the folder of its lock. Where that still cannot be looked at the log
+      // is still kept, and where it can, nothing is there and the log goes, as it does after any gate.
+      lock.release();
+      assert.deepEqual(uninstall(home, { statFile }), { ...NOTHING_ELSE, removed: [], gateKept: [{ path: gateDir(home), reason: 'unremovable', code: 'EACCES', log: gateLogDir(home) }] });
+      assert.deepEqual(uninstall(home), { ...NOTHING_ELSE, removed: [gateLogDir(home)] });
+      assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
 // --- the session channel: what `notify` writes under the home, outside any manifest ---
 // The record of each project and the openings of its sessions are one folder, written by `notify` in a
 // project with or without a machine install. Like the gate lock's folder nothing records it, and

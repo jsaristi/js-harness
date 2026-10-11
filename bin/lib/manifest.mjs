@@ -714,8 +714,10 @@ export function sync(home, version, deps = {}) {
  * with a manifest and without, removed whole through the same seams and named in `removed`
  * (`removeGateLogFolder`). It goes or stays with the lock's folder. While that one is kept `in-use` the log
  * is kept too, since the gate that is alive has yet to write its end in it, and the same entry of `gateKept`
- * names it, as `log`: one thing is kept, for one reason, and is said once. A log that could not be looked at
- * or removed is an entry of `gateKept` of its own, `{ path, reason: 'unremovable', code }`.
+ * names it, as `log`: one thing is kept, for one reason, and is said once. It is kept the same way, in the
+ * `unremovable` entry of a lock's folder that could not be looked at, since nobody then knows whether a gate
+ * is alive; beside one that was looked at and could not be removed, it goes. A log that could not be looked
+ * at or removed is an entry of `gateKept` of its own, `{ path, reason: 'unremovable', code }`.
  *
  * The folder of the session channel is the same case: `notify` writes it, not `install`, so it is looked
  * for with a manifest and without, removed with what it holds through the same seams, named in `removed`,
@@ -750,7 +752,7 @@ export function uninstall(home, deps = {}) {
     // component, and neither is the log of the gates, so they are looked for all the same, and the folder
     // they leave empty goes with them.
     const gate = removeGateFolder(home, removeFile, statFile);
-    const log = removeGateLogFolder(home, removeFile, statFile, gate.kept);
+    const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
     const channel = removeChannelFolder(home, removeFile, statFile);
     removeEmptyDirsUpTo(path.dirname(gateDir(home)), home, listDir);
     return { removed: [...gate.removed, ...log.removed, ...channel.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: log.gateKept, channelKept: channel.kept };
@@ -807,7 +809,7 @@ export function uninstall(home, deps = {}) {
 
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
-  const log = removeGateLogFolder(home, removeFile, statFile, gate.kept);
+  const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const channel = removeChannelFolder(home, removeFile, statFile);
   removed.push(...gate.removed, ...log.removed, ...channel.removed);
   if (stillRecorded.length > 0) {
@@ -833,20 +835,29 @@ export function uninstall(home, deps = {}) {
  * instant between this look and the removal loses its lock, and its own report says so.
  *
  * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
- * `code`. `removeFile` and `statFile` are `uninstall`'s own seams. */
+ * `code`. The two are one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a
+ * folder that was looked at and then not removed holds no live gate, and of one that could not be looked
+ * at nobody knows. So the answer also has `unseen: true` for that second one, the folder itself or the
+ * gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
 function removeGateFolder(home, removeFile, statFile) {
   const dir = gateDir(home);
+  const unremovable = (err) => ({ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  let alive;
   try {
     if (!isThere(dir, statFile)) return { removed: [], kept: [] };
     // The waiters first, as the session board reads them: a gate that takes the lock between the two
     // reads is then in one of them.
     const [waiting] = readGateWaiters(home);
     const holder = readGateHolder(home);
-    const alive = holder && !holder.stale ? holder : waiting;
-    if (alive) return { removed: [], kept: [{ path: dir, reason: 'in-use', pid: alive.pid, cwd: alive.cwd }] };
+    alive = holder && !holder.stale ? holder : waiting;
+  } catch (err) {
+    return { removed: [], kept: [unremovable(err)], unseen: true };
+  }
+  if (alive) return { removed: [], kept: [{ path: dir, reason: 'in-use', pid: alive.pid, cwd: alive.cwd }] };
+  try {
     removeFile(dir, { recursive: true, force: true });
   } catch (err) {
-    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+    return { removed: [], kept: [unremovable(err)] };
   }
   return { removed: [dir], kept: [] };
 }
@@ -858,7 +869,7 @@ function removeGateFolder(home, removeFile, statFile) {
  *
  * Nothing records that folder: `check` and `js-harness gate` append to it under the home, in a project
  * with a machine install or without one, and unlike the lock's files no gate removes what it wrote there.
- * It is kept for a gate that is alive and for nothing else. Such a gate has yet to write its end, and the
+ * It is kept for a gate that is alive, or that may be, and for nothing else. Such a gate has yet to write its end, and the
  * writer makes the folder again: a log removed under it would be back when it ends, holding half a gate,
  * after `uninstall` said it was gone. So when the lock's folder was kept `in-use`, the log stays and that
  * entry names it as `log`; the next `uninstall` removes it. The lock's folder says whether a gate is alive,
@@ -866,15 +877,23 @@ function removeGateFolder(home, removeFile, statFile) {
  * lock is not seen there: its end makes the folder again, as a notice does to the channel's, and the next
  * `uninstall` removes it.
  *
+ * `lockUnseen` says that the lock's folder could not be looked at (`unseen` of `removeGateFolder`). Nobody
+ * then knows whether a gate is alive, and the log is kept as for one that is, named as `log` in the entry
+ * of the lock's folder, which is `unremovable`: a first version removed it, and a gate that was alive wrote
+ * its end into a folder made again, without its start (found in review, 2026-10-11). A lock's folder that
+ * was looked at, holds no live gate and then could not be removed is `unremovable` too and keeps no log.
+ *
  * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
  * `code`, in an entry of its own, beside a live gate as well: it is not said to be kept for that gate on a
  * guess. `removeFile` and `statFile` are `uninstall`'s own seams. */
-function removeGateLogFolder(home, removeFile, statFile, gateKept) {
+function removeGateLogFolder(home, removeFile, statFile, gateKept, lockUnseen = false) {
   const dir = gateLogDir(home);
   try {
     if (!isThere(dir, statFile)) return { removed: [], gateKept };
-    if (gateKept.some((kept) => kept.reason === 'in-use')) {
-      return { removed: [], gateKept: gateKept.map((kept) => (kept.reason === 'in-use' ? { ...kept, log: dir } : kept)) };
+    // The entry of the lock's folder the log is kept with: there is one at most.
+    const keepsLog = (kept) => kept.reason === 'in-use' || lockUnseen;
+    if (gateKept.some(keepsLog)) {
+      return { removed: [], gateKept: gateKept.map((kept) => (keepsLog(kept) ? { ...kept, log: dir } : kept)) };
     }
     removeFile(dir, { recursive: true, force: true });
   } catch (err) {

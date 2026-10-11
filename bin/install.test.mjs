@@ -485,6 +485,36 @@ test('uninstallMain says a gate log it could not remove was left, with the error
   }
 });
 
+// Found in review (Codex), 2026-10-11: beside a folder of the lock that could not be looked at, the log was
+// removed as if no gate were alive. Nobody had looked, so the log is kept, and the one line says both.
+test('uninstallMain leaves the gate log beside a folder of the gate lock it could not look at, says why in the line of that folder, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+    const gate = startedGate(home);
+    const statFile = (target) => {
+      if (target === gateDir(home)) throw Object.assign(new Error('EACCES: permission denied, stat'), { code: 'EACCES' });
+      return fs.statSync(target);
+    };
+    try {
+      const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
+      assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
+      assert.deepEqual(unseen.errLines, [
+        `could not remove ${gateDir(home)} (EACCES), and kept ${gateLogDir(home)} with it: the folder of the gate lock could not be looked at, so a gate may be alive that has yet to write its end in the gate log; both are still there and nothing records them; run js-harness uninstall --global again, or remove them by hand once no gate runs`,
+      ]);
+      assert.equal(fs.existsSync(path.join(gateLogDir(home), 'log.jsonl')), true);
+      gate.end({ result: 'pass' });
+    } finally {
+      lock.release();
+    }
+    // Looked at again, there is no gate: the log is all that is left, and it goes.
+    const after = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([after.code, after.outLines, after.errLines], [0, [`removed ${gateLogDir(home)}`], []]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // The folder of the session channel is written by `notify`, outside any manifest, like the gate lock's.
 // No process lives in it, so it is removed, or it could not be: there is no "kept for now".
 test('uninstallMain removes the folder of the session channel, with or without an install, and says so', async () => {

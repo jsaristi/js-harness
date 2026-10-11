@@ -46,12 +46,41 @@ export function gateLogDir(home) {
 const CURRENT = 'log.jsonl';
 const OLDER = 'log.1.jsonl';
 
+/** Whether `file` is there, is not empty and does not end with a line break: what a write that was cut
+ * short leaves. `false` for a file that cannot be looked at, since the line is appended all the same.
+ * The channel's writer asks the same of its file (`endsUnterminated` of `./channel.mjs`). */
+function endsUnterminated(io, file) {
+  let fd;
+  try {
+    fd = io.openSync(file, 'r');
+    const { size } = io.fstatSync(fd);
+    if (size === 0) return false;
+    const last = Buffer.alloc(1);
+    io.readSync(fd, last, 0, 1, size - 1);
+    return last[0] !== 0x0a;
+  } catch {
+    return false;
+  } finally {
+    try {
+      if (fd !== undefined) io.closeSync(fd);
+    } catch {
+      // the look is over either way, and it must not cost the gate its line
+    }
+  }
+}
+
 /** Appends `event` to the log of `home` as a line of its own, making the folder: `{ ok: true }`, or
  * `{ error }` with what the system answered, in one sentence. It never throws.
  *
  * Gates that run without the lock append side by side. What this relies on: the file is opened for
  * appending and the line goes out in one write, which the system puts at the end of the file whole; a line
  * is a few hundred bytes. The test of this file has several processes do it together.
+ *
+ * A tail with no line break is what a write that was cut short left. The line then starts on a fresh one,
+ * with the line break that ends the tail in the same write: appended to the tail, the two were one bad
+ * line to the reader, and a start lost that way took its gate's end with it. Nothing is written again to
+ * put the tail right. Two gates that find the same tail in the same instant each end it, and the empty
+ * line between them is none to the reader.
  *
  * A file past `maxBytes` is renamed first. A rename the system refuses (the file is busy) is skipped, the
  * line goes to the file as it is, and the next append tries again. Two gates that rotate in the same
@@ -68,7 +97,7 @@ export function appendGateEvent(home, event, { maxBytes = GATE_LOG_MAX_BYTES, fi
     } catch {
       // no file yet, or a rename refused: the line is appended all the same
     }
-    io.appendFileSync(file, `${JSON.stringify(event)}\n`, 'utf8');
+    io.appendFileSync(file, `${endsUnterminated(io, file) ? '\n' : ''}${JSON.stringify(event)}\n`, 'utf8');
     return { ok: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
@@ -77,41 +106,80 @@ export function appendGateEvent(home, event, { maxBytes = GATE_LOG_MAX_BYTES, fi
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const isListOfObjects = (value) => Array.isArray(value) && value.every(isObject);
+const isText = (value) => typeof value === 'string';
 
-/** What a field of a line is when it is there, for the fields a reader takes apart or counts with: the
- * gates it waited for and the sensors, each a list of objects, the load with those it names, and the
- * seconds. A field that is not there is no fault, since a gate leaves out what it does not have; one that
- * is there as something else (a `null` among the gates it waited for, a text where the seconds go) is.
- * What is only printed (the folder, the result) is left as it is: the worst it does is read oddly. */
+/** `holds`, or `null`: for a field the writer writes as `null` where it has nothing to say. */
+const orNull = (holds) => (value) => value === null || holds(value);
+
+const listOf = (holds) => (value) => Array.isArray(value) && value.every(holds);
+
+/** An object whose fields are what `fields` says of each, where they are there. A field that is not there
+ * is no fault, since a gate leaves out what it does not have. */
+const shaped = (fields) => (value) => isObject(value) && Object.entries(fields).every(([field, holds]) => value[field] === undefined || holds(value[field]));
+
+/** A gate another one waited for, as far as a reader prints it: its folder and its pid, each `null` where
+ * the lock could not read it. Its command is printed nowhere. */
+const isGateWaitedFor = shaped({ cwd: orNull(isText), pid: orNull(Number.isFinite) });
+
+/** What a field of a line is when it is there, for every field a reader takes apart, counts with or
+ * prints: the folder, the lock, the reason and the result, which are texts, the seconds, the gates it
+ * waited for, the load with the processes it names, and the sensors, a list of objects of which nothing is
+ * printed. One that is there as something else (a `null` among the gates it waited for, a text where the
+ * seconds go, an object where the folder goes) is a fault, and the line is no event.
+ *
+ * What is printed is asked as well as what is taken apart: `{"cwd":{"toString":null}}` is an object no
+ * text can be made of, and it made `formatGates` throw as a `null` in a list did (found in review,
+ * 2026-10-11). `null` is allowed where the writer writes it and nowhere else. What no reader of this
+ * version looks at (the command, the pid of the gate itself, what a sensor says) is left as it is. */
 const BODY = {
-  waitedFor: isListOfObjects,
-  sensors: isListOfObjects,
-  load: (load) => isObject(load) && (load.busiest === undefined || isListOfObjects(load.busiest)),
+  cwd: isText,
+  lock: isText,
+  reason: isText,
+  result: isText,
   seconds: Number.isFinite,
   waitedSeconds: Number.isFinite,
+  waitedFor: listOf(isGateWaitedFor),
+  sensors: listOf(isObject),
+  load: shaped({
+    notRead: isText,
+    busy: Number.isFinite,
+    processors: Number.isFinite,
+    busiest: listOf(shaped({ name: isText, script: orNull(isText) })),
+  }),
 };
 
-/** Whether `value` is a line of this log: its head, enough to be paired (the version, the event, the id
- * and when), and a body a reader can take apart (`BODY`). Both are asked here, once, and not by each
- * reader: a line that is an event by its head alone made `formatGates` throw on its body, and with it
- * every `gate log` until the file rotated. */
-function isEvent(value) {
+/** Whether `value` has the body of an event: each field of `BODY` that is there is what it says. */
+const hasBody = shaped(BODY);
+
+/** The kinds of event this version writes and reads. */
+const KINDS = ['start', 'end', 'refused'];
+
+/** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
+ * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
+function hasHead(value) {
   return (
     isObject(value) &&
     value.v === GATE_LOG_VERSION &&
-    ['start', 'end', 'refused'].includes(value.event) &&
+    typeof value.event === 'string' &&
     typeof value.id === 'string' &&
     typeof value.at === 'string' &&
-    Number.isFinite(Date.parse(value.at)) &&
-    Object.entries(BODY).every(([field, holds]) => value[field] === undefined || holds(value[field]))
+    Number.isFinite(Date.parse(value.at))
   );
 }
 
 /** The log of `home`: `{ dir, events, skipped }`, the events of both files, the older first. A home with
  * no log has none. A line that is torn, that is not JSON or that is no event of this version, by its head
- * or by its body (`isEvent`), is counted in `skipped` and left out, never fatal. A file that is there and cannot be read is named in
+ * (`hasHead`) or, for a kind this version knows, by its body (`hasBody`), is counted in `skipped` and left
+ * out, never fatal. Head and body are asked here, once, and not by each reader: a line that was an event
+ * by its head alone made `formatGates` throw on its body, and with it every `gate log` until the file
+ * rotated. A file that is there and cannot be read is named in
  * `unavailable`, so that "could not look" is not read as "no gates".
+ *
+ * A line with a sound head and a kind of event this version does not know is left out and not counted, and
+ * no reader sees it. Gates of several versions of the harness write the one file of a machine, since each
+ * project runs the harness it has: such a line is what a newer gate wrote, whole, and not a damaged one. A
+ * count of unreadable lines that grew with every gate of the newer version would say the log is broken
+ * when nothing is. Its body is not asked, which is that version's to know.
  *
  * The newer file is read first, since a gate may rotate between the two readings: the worst a reader then
  * sees is the same lines in both files, which are kept once. Read the other way round, it would miss the
@@ -139,7 +207,9 @@ export function readGateLog(home, { fileSystem: io = fs } = {}) {
     } catch {
       parsed = null;
     }
-    if (!isEvent(parsed)) skipped += 1;
+    if (!hasHead(parsed)) skipped += 1;
+    else if (!KINDS.includes(parsed.event)) continue;
+    else if (!hasBody(parsed)) skipped += 1;
     else if (!seen.has(`${parsed.id}|${parsed.event}`)) {
       seen.add(`${parsed.id}|${parsed.event}`);
       events.push(parsed);
@@ -249,9 +319,11 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
   // The lock keeps its holder's command whole, so the command of a gate this one waited for is cut here as
   // this gate's own is: it can hold the same secret, and a line has to stay short enough to be one write.
   const cut = (holder) => (typeof holder.command === 'string' ? { ...holder, command: holder.command.slice(0, GATE_COMMAND_MAX) } : holder);
-  // A member that is no gate is left out: the reader refuses a whole line for one (`BODY`), and a start it
-  // refuses takes the gate's end with it, so writing such a member would cost the gate its place in the log.
-  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).filter(isObject).map(cut) });
+  // A member that is no gate is left out, and so is one whose folder or pid is not what the lock tells
+  // (`isGateWaitedFor`, which is what the reader asks): the reader refuses a whole line for one (`BODY`),
+  // and a start it refuses takes the gate's end with it, so writing such a member would cost the gate its
+  // place in the log.
+  const waited = ({ waitedMs, waitedFor }) => ({ waitedSeconds: seconds(waitedMs), waitedFor: (Array.isArray(waitedFor) ? waitedFor : []).filter(isGateWaitedFor).map(cut) });
   return {
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();

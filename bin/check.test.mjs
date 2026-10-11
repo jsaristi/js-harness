@@ -2467,6 +2467,37 @@ test('takeGateTurn says whom the gate waited for and for how long, in every outc
   assert.ok(Number.isFinite(without.waitedMs) && without.waitedMs >= 0 && without.waitedMs < 60_000, String(without.waitedMs));
 });
 
+// Found in review (Codex), 2026-10-11: a holder's file that is busy at the first look (Windows) is told of by
+// its token alone, and again with its folder and command once it reads. One entry for each token kept the
+// first telling, so `check` and `gate` wrote an unknown gate in their log although they had learnt whose it was.
+test('takeGateTurn adds to a gate it already met what the lock reads of it later, in the one entry of its token, and never unlearns it', async () => {
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 6000 };
+  const read = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false };
+  // Its file is busy: the token is in its name, the pid in its token, and nothing else is read.
+  const busy = { ...read, cwd: null, command: null, startedAt: null, beatAt: null };
+  const two = { ...read, token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'gate -- node --test' };
+
+  const taken = await turnWith(async ({ onWait }) => {
+    for (const told of [busy, two, read, busy]) onWait(told, 60_000);
+    return lock;
+  });
+  // In the order they were first met, the first of them with what was read of it afterwards.
+  assert.deepEqual(taken.waitedFor, [OTHER_GATE, { cwd: 'C:\\work\\two', pid: 77, command: 'gate -- node --test' }]);
+
+  // A field at a time, as a file that is half written reads; and the gate a refusal names is added to as well.
+  const late = await turnWith(async ({ onWait }) => {
+    for (const told of [busy, { ...busy, cwd: read.cwd }]) onWait(told, 60_000);
+    return { refused: 'timeout', holder: read, waitedMs: 60_000 };
+  });
+  assert.deepEqual(late.waitedFor, [OTHER_GATE]);
+  // A pid the first look did not have (a file that is not ours, named by no pid) is learnt the same way.
+  const named = await turnWith(async ({ onWait }) => {
+    for (const told of [{ ...busy, pid: null }, read]) onWait(told, 60_000);
+    return lock;
+  });
+  assert.deepEqual(named.waitedFor, [OTHER_GATE]);
+});
+
 const LOCK_NAMES = ['own', 'parent', 'none'];
 
 test('a gate writes its start after the sample and before its first sensor, and its end after the last, in each of the three states of the lock', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {

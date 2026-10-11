@@ -124,10 +124,144 @@ test('a log that cannot be written is an error in one sentence, never a throw', 
 
 test('readGateLog skips what is no event of this log: a torn line, text, JSON of another shape or version', withHome(async (home) => {
   appendGateEvent(home, start('a'));
-  const garbage = ['not json', '{"v":1,"event":"start","id":"torn', '[]', 'null', JSON.stringify({ ...start('b'), v: 2 }), JSON.stringify({ ...end('b'), event: 'ended' }), JSON.stringify({ ...start('c'), id: 7 }), JSON.stringify({ ...start('d'), at: 'yesterday' })];
+  // An event that is no text is no kind of event at all. One that is a text this version does not know is
+  // another matter, and has a test of its own below.
+  const garbage = ['not json', '{"v":1,"event":"start","id":"torn', '[]', 'null', JSON.stringify({ ...start('b'), v: 2 }), JSON.stringify({ ...end('b'), event: 7 }), JSON.stringify({ ...start('c'), id: 7 }), JSON.stringify({ ...start('d'), at: 'yesterday' })];
   fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${garbage.join('\n')}\n\n   \n`);
   appendGateEvent(home, end('a'));
   assert.deepEqual(readGateLog(home), { dir: gateLogDir(home), events: [start('a'), end('a')], skipped: garbage.length });
+}));
+
+// Gates of several versions of the harness write the one file of a machine: a project that pins an older
+// harness reads what a newer one wrote. A kind of event it does not know is not a damaged line, and a count
+// of "unreadable lines" that grows with every gate of the newer version would say that the log is broken.
+test('readGateLog leaves out in silence a line with a sound head whose kind this version does not know, and still counts what is damaged', withHome(async (home) => {
+  appendGateEvent(home, start('a'));
+  const unknown = [
+    { v: 1, event: 'stopped', id: 'a', at: AT, seconds: 3.2, reason: 'no sensor declared' },
+    // Its body is its version's own business: nothing here takes it apart.
+    { v: 1, event: 'stopped', id: 'b', at: AT, cwd: { toString: null }, waitedFor: [null], load: 'busy', seconds: 'three' },
+    { v: 1, event: '', id: 'c', at: AT },
+    { v: 1, event: 'START', id: 'd', at: AT },
+  ];
+  for (const line of unknown) fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${JSON.stringify(line)}\n`);
+  appendGateEvent(home, end('a'));
+  const quiet = readGateLog(home);
+  assert.deepEqual(quiet, { dir: gateLogDir(home), events: [start('a'), end('a')], skipped: 0 });
+  assert.deepEqual(gatesOf(quiet.events), [{ start: start('a'), end: end('a') }]);
+  assert.equal(formatGates(gatesOf(quiet.events)).length, 1);
+
+  // What is still counted: a torn line, a head that is wrong (of an unknown kind as of a known one), an
+  // event that is no text, and a known kind with a body that is not one.
+  const damaged = [
+    '{"v":1,"event":"stopped","id":"torn',
+    JSON.stringify({ v: 2, event: 'stopped', id: 'e', at: AT }),
+    JSON.stringify({ v: 1, event: 'stopped', id: 7, at: AT }),
+    JSON.stringify({ v: 1, event: 'stopped', id: 'f', at: 'yesterday' }),
+    JSON.stringify({ v: 1, event: 'stopped', id: 'g' }),
+    JSON.stringify({ v: 1, event: null, id: 'h', at: AT }),
+    JSON.stringify({ v: 1, event: ['start'], id: 'i', at: AT }),
+    JSON.stringify({ v: 1, id: 'j', at: AT }),
+    JSON.stringify(end('k', { seconds: 'three' })),
+  ];
+  fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${damaged.join('\n')}\n`);
+  assert.deepEqual(readGateLog(home), { dir: gateLogDir(home), events: [start('a'), end('a')], skipped: damaged.length });
+}));
+
+// Found in review (Codex), 2026-10-11: a write that was cut short leaves a tail with no line break, and the
+// next event was appended to that tail. The reader then left both out as one bad line, and where the event
+// that was lost was a start, its end went with it: a gate that ran well was not in the log, and nothing said so.
+test('appendGateEvent starts its line on a fresh one after a tail that has no line break, in one append, and never rewrites the file', withHome(async (home) => {
+  const file = path.join(gateLogDir(home), 'log.jsonl');
+  const appended = [];
+  const fileSystem = {
+    ...fs,
+    appendFileSync: (target, text, ...rest) => {
+      appended.push(text);
+      return fs.appendFileSync(target, text, ...rest);
+    },
+    writeFileSync: () => {
+      throw new Error('the log is appended to, never written again');
+    },
+  };
+  const append = (event) => appendGateEvent(home, event, { fileSystem });
+
+  assert.deepEqual(append(start('a')), { ok: true });
+  // What a write that was cut short leaves: half a line, and no line break after it.
+  const torn = '{"v":1,"event":"end","id":"a","at":"2026';
+  fs.appendFileSync(file, torn);
+  assert.deepEqual(append(start('b')), { ok: true });
+  assert.deepEqual(append(end('b')), { ok: true });
+
+  assert.deepEqual(linesOf(home), [JSON.stringify(start('a')), torn, JSON.stringify(start('b')), JSON.stringify(end('b')), '']);
+  // One append for each event, the line break that ends the tail in the same write as the line.
+  assert.deepEqual(appended, [`${JSON.stringify(start('a'))}\n`, `\n${JSON.stringify(start('b'))}\n`, `${JSON.stringify(end('b'))}\n`]);
+  const read = readGateLog(home);
+  assert.deepEqual([read.events, read.skipped], [[start('a'), start('b'), end('b')], 1]);
+  assert.deepEqual(gatesOf(read.events), [{ start: start('a') }, { start: start('b'), end: end('b') }]);
+
+  // A file that is there and empty has no tail, and a tail that cannot be looked at is appended to as it is:
+  // the line lands, which is worth more than where it lands.
+  fs.writeFileSync(file, '');
+  assert.deepEqual(append(start('c')), { ok: true });
+  assert.deepEqual(linesOf(home), [JSON.stringify(start('c')), '']);
+  fs.appendFileSync(file, torn);
+  const blind = { ...fs, openSync: () => { throw Object.assign(new Error('EBUSY: resource busy or locked, open'), { code: 'EBUSY' }); } };
+  assert.deepEqual(appendGateEvent(home, start('d'), { fileSystem: blind }), { ok: true });
+  assert.deepEqual(linesOf(home), [JSON.stringify(start('c')), `${torn}${JSON.stringify(start('d'))}`, '']);
+}));
+
+// Found in the same review: the reader asked what kind of thing a list or a load is, and not what is in the
+// fields a line is printed from. `{"cwd":{"toString":null}}` is an object no text can be made of, so
+// `formatGates` threw (`Cannot convert object to primitive value`), and with it every `gate log`.
+test('readGateLog leaves out and counts a line with a field that is printed or counted with and is not what a gate writes there', withHome(async (home) => {
+  const odd = { toString: null };
+  const load = { busy: 1.4, processors: 8, sampleMs: 1000 };
+  const busiest = { name: 'node', script: 'tsserver.js', pid: 41012, cpuSeconds: 1.1 };
+  const gate = { cwd: 'C:\\work\\two', pid: 7, command: 'check' };
+  appendGateEvent(home, start('a'));
+  appendGateEvent(home, start('z'));
+  const malformed = [
+    start('b', { cwd: odd }),
+    start('c', { lock: odd }),
+    start('d', { waitedFor: [gate, { ...gate, cwd: odd }] }),
+    start('e', { waitedFor: [{ cwd: null, pid: odd, command: null }] }),
+    start('f', { load: { ...load, busy: odd } }),
+    start('g', { load: { ...load, processors: odd } }),
+    start('h', { load: { notRead: odd, sampleMs: 1000 } }),
+    start('i', { load: { ...load, busiest: [busiest, { ...busiest, name: odd }] } }),
+    start('j', { load: { ...load, busiest: [{ ...busiest, script: odd }] } }),
+    end('z', { result: odd }),
+    refused('k', { reason: odd }),
+    refused('l', { cwd: odd }),
+    refused('m', { waitedFor: [{ ...gate, cwd: odd }] }),
+    refused('n', { waitedFor: [{ ...gate, pid: odd }] }),
+    // And what is a value of another kind, which would only read oddly.
+    start('o', { cwd: 7 }),
+    start('p', { cwd: null }),
+    start('q', { lock: null }),
+    start('r', { waitedFor: [{ ...gate, pid: '7' }] }),
+    start('s', { load: { ...load, busiest: [{ ...busiest, name: null }] } }),
+    end('z', { result: 0 }),
+    refused('t', { reason: null }),
+  ];
+  for (const [index, line] of malformed.entries()) {
+    fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${JSON.stringify(line)}\n`);
+    assert.equal(readGateLog(home).skipped, index + 1, `${line.event} ${line.id}`);
+  }
+  // What the writer writes as `null`, and what a gate does not have, is still no fault.
+  const sound = [
+    start('u', { waitedFor: [{ cwd: null, pid: null, command: null }, {}], load: { ...load, busiest: [{ ...busiest, script: null }, {}] } }),
+    { v: 1, event: 'start', id: 'v', at: AT },
+    { v: 1, event: 'refused', id: 'w', at: AT },
+    end('a'),
+  ];
+  for (const event of sound) appendGateEvent(home, event);
+
+  const read = readGateLog(home);
+  assert.deepEqual(read, { dir: gateLogDir(home), events: [start('a'), start('z'), ...sound], skipped: malformed.length });
+  // No line that is read makes the formatter throw: a line for each gate.
+  assert.equal(formatGates(gatesOf(read.events)).length, 5);
 }));
 
 // Found in review, 2026-10-11: the head of a line was all the reader looked at, and `formatGates` takes the
@@ -335,6 +469,23 @@ test('gateRecord writes no member of the gates it waited for that the reader wou
   assert.deepEqual(read.events.map(({ event, waitedFor: waited }) => [event, waited]), [['start', [holder]], ['end', undefined], ['refused', [holder]]]);
   const [gate] = gatesOf(read.events);
   assert.equal(gate.end.id, gate.start.id);
+}));
+
+// The reader asks what the folder and the pid of such a gate are, since they are printed (2026-10-11). So the
+// writer leaves out a member the reader would refuse for those as well: one member must not cost a gate its line.
+test('gateRecord writes no gate it waited for whose folder or pid the reader would refuse, and what it writes is read back', withHome(async (home) => {
+  const holder = { cwd: 'C:\\work\\other', pid: 4321, command: 'check' };
+  const unknown = { cwd: null, pid: null, command: null };
+  const waitedFor = [holder, { ...holder, cwd: 7 }, { ...holder, pid: '4321' }, { ...unknown, cwd: { toString: null } }, unknown];
+  const record = gateRecord({ home, cwd: 'C:\\work\\one', command: 'check' });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor });
+  record.end({ result: 'pass', sensors: [] });
+  gateRecord({ home, cwd: 'C:\\work\\two', command: 'check' }).refused({ reason: 'timeout', waitedMs: 0, waitedFor });
+
+  const read = readGateLog(home);
+  assert.equal(read.skipped, 0);
+  assert.deepEqual(read.events.map(({ event, waitedFor: waited }) => [event, waited]), [['start', [holder, unknown]], ['end', undefined], ['refused', [holder, unknown]]]);
+  assert.equal(formatGates(gatesOf(read.events)).length, 2);
 }));
 
 test('gateRecord never throws to its gate: a write that fails is kept as one sentence, said once, and a gate whose start is not in the log writes no end', () => {

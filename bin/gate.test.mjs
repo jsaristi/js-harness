@@ -911,6 +911,45 @@ test('gate log leaves out a line whose body is not that of an event, counts it o
   });
 }));
 
+// Found in review (Codex), 2026-10-11: what a line is printed from was not asked, and a folder that is an
+// object no text can be made of (`{"toString":null}`) made the command end with a TypeError and no gate.
+test('gate log leaves out a line with a field it cannot print, counts it on stderr, and prints the rest', withHome(async (home) => {
+  const began = (id, more = {}) => ({ v: 1, event: 'start', id, at: '2026-10-11T07:01:00.000Z', cwd: `C:\\work\\${id}`, command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
+  const odd = { toString: null };
+  const lines = [
+    began('one'),
+    began('two', { cwd: odd }),
+    began('three', { waitedFor: [{ cwd: odd, pid: 7, command: 'check' }] }),
+    began('four', { load: { busy: 1.4, processors: 8, busiest: [{ name: odd, script: null, pid: 7, cpuSeconds: 1 }] } }),
+    { v: 1, event: 'end', id: 'one', at: '2026-10-11T07:01:00.000Z', seconds: 2, result: odd },
+    began('five'),
+  ];
+  fs.mkdirSync(gateLogDir(home), { recursive: true });
+  fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  const at = when('2026-10-11T07:01:00.000Z');
+  assert.deepEqual(await runGateLog(['log', '--home', home]), {
+    code: 0,
+    printed: [`${at}  no end (killed, or still running)  C:\\work\\one`, `${at}  no end (killed, or still running)  C:\\work\\five`],
+    said: [`gate log: 4 unreadable lines left out (${gateLogDir(home)})`],
+  });
+}));
+
+// A gate of a newer harness writes into the same file of the machine. What it writes that this version does
+// not know is no damaged line: nothing is printed for it and nothing is said of it.
+test('gate log prints nothing and says nothing for a line of a kind of event this version does not know', withHome(async (home) => {
+  const at = '2026-10-11T07:01:00.000Z';
+  const began = { v: 1, event: 'start', id: 'one', at, cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] };
+  const stopped = (id) => ({ v: 1, event: 'stopped', id, at, cwd: `C:\\work\\${id}`, command: 'check', pid: 100, reason: 'no sensor declared' });
+  fs.mkdirSync(gateLogDir(home), { recursive: true });
+  const write = (lines) => fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+
+  write([stopped('two'), began, stopped('one'), stopped('three')]);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`${when(at)}  no end (killed, or still running)  C:\\work\\one`], said: [] });
+  // A log that holds nothing else holds no gate this version can say.
+  write([stopped('two')]);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+}));
+
 test('gate log errors with usage on stderr and exits 2 for arguments it cannot take, and reads nothing', withHome(async (home) => {
   const refusals = [
     [['log', '--last'], '--last requires a value'],

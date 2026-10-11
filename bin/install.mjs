@@ -351,10 +351,16 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   // gate that is alive, which has yet to write its end in it, and that entry names it (`log`): the two are
   // kept for one reason, so they are said in one line. No gate removes its log, so the line says what does.
   // A log that could not be looked at or removed is an entry of its own, and goes to stderr like the lock's.
+  // A lock's folder that could not be looked at names the log as well: nobody knows whether a gate is alive
+  // in it, so the log was kept, and the line of that folder says so and when to remove the two by hand.
   const gateNotUndone = result.gateKept.filter((gate) => gate.reason !== 'in-use');
   for (const gate of result.gateKept) {
     if (gate.reason !== 'in-use') {
-      console.error(`could not remove ${gate.path} (${gate.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+      console.error(
+        gate.log
+          ? `could not remove ${gate.path} (${gate.code}), and kept ${gate.log} with it: the folder of the gate lock could not be looked at, so a gate may be alive that has yet to write its end in the gate log; both are still there and nothing records them; run js-harness uninstall --global again, or remove them by hand once no gate runs`
+          : `could not remove ${gate.path} (${gate.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`,
+      );
       continue;
     }
     const whose = [gate.pid !== null && `pid ${gate.pid}`, gate.cwd !== null && `in ${gate.cwd}`].filter(Boolean).join(', ') || 'nothing more of it could be read';
