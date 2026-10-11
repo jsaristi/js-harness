@@ -163,8 +163,18 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   evidence, RED then GREEN: `agent-output` 22 pass, `prices` 8, `transcript-usage` 16,
   `configs` 79, `suite` 79, `runner` 162 pass and 1 skipped (POSIX only), `report` 55, 0 fail.
   The probe session is reproduced exactly: $0.3413604 for Opus 5.5, $0.004097825 for Haiku 5.5
-- [ ] T3 `evals/subagents-report.mjs`: the two arms side by side per mode and task, trials
-  without delegation apart, `--require-complete` (route: delegated writer)
+- [x] T3 `evals/subagents-report.mjs`: the two arms side by side per mode and task, trials
+  without delegation apart, `--require-complete` (route: delegated writer), and the two fixes
+  the reviews of T2 asked for. The report reads the results documents alone; a cell holds the
+  counted trials, score, pass rate, list cost split between orchestrator and subagents, wall time
+  and turns, and a row of the Haiku arm against the Opus arm; an estimated cost is marked and
+  enters no mean; `--require-complete` asks 3 counted trials in every cell. Fixes: an earlier
+  attempt's transcripts that cannot be removed are never summarized (nothing is kept, the cost
+  falls to the estimate and the record says why), and kept transcripts with no readable request
+  record `transcriptsWithoutRequests`. Writer's evidence, RED then GREEN for the two fixes:
+  `runner` 163 pass and 1 skipped (POSIX only), `transcript-usage` 18, `subagents-report` 17,
+  `report` 55, `suite` 79, `configs` 79, 0 fail; with no run recorded the report exits 0 and
+  `--require-complete` exits 1. Parent spot check: `subagents-report` 17 pass
 - [ ] T4 Smoke: 2 trials, one per arm, `house-rules` in `write` mode
 - [ ] T5 The rest of the first repeat: 16 trials, 18 with the smoke
 - [ ] T6 The other two repeats: 36 trials, after Sebastián's go-ahead
@@ -249,3 +259,107 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   `bin/lib/manifest.mjs`). Pending his decision: which session and delivery cements the two
   rules of today there, since `feat/codex-review-cost` already rewrote that section of
   `AGENTS.md` up to the budget.
+- 2026-10-09 — T2 committed as `c96eda7` (gate passed alone). Reviews of `f0df385..c96eda7`:
+  gentle-ai approved and acknowledged (lineage `review-4fb1aa1d60984563`, authority burned), with
+  two informational findings; Codex found no actionable regression and the review is recorded
+  (`js-harness codex-review --base f0df385`). The two findings are accepted and are fixed before
+  any trial runs, in T3's slice, because both let a wrong cost pass as measured: when removing an
+  earlier attempt's transcripts fails (EBUSY or EPERM on Windows) the earlier session is
+  summarized as this trial's (`evals/runner.mjs`, `keepTranscripts`); and a kept transcript with
+  no readable request falls back to the `modelUsage` estimate without saying a transcript was
+  there (`evals/transcript-usage.mjs`, `trialListCost`).
+- 2026-10-09 — Where the feature stands, for whoever resumes it. Done and reviewed: T0, T1, T2.
+  Next, in order: (1) ask Sebastián to deliver slice 1 (T1 and T2, the commits up to `c96eda7`; `main` moved to
+  `ee74d18` since the branch was cut, so bring `main` into the branch first) as a pull request;
+  (2) T3 by one delegated writer: the two fixes above, then `evals/subagents-report.mjs`, which
+  reads `record.listCost` and branches on its `source`, counts a trial only when
+  `subagentStats.spawned >= 1`, and shows `modelUsageCheck.matches === false`, `unpricedModels`,
+  `longPromptRequests`, `transcripts.errors` and `unreadableLines` as flags; (3) its gate, the
+  gentle-ai review and the Codex review; (4) T4, the 2 smoke trials, only after their count and
+  cost are put to him, with `JS_HARNESS_EVAL_OAUTH_TOKEN` checked first and nothing else running.
+  How the gates are run here: one at a time, in the background, after the idle check, and never
+  while a writer runs its tests (that overlap cost one gate on 2026-10-08).
+- 2026-10-09 — Slice 1 delivered on Sebastián's go-ahead: `main` (`ee74d18`) merged into the
+  branch as `bb16a44` (a clean merge, `docs/ROADMAP.md` only, so no pre-commit gate ran), the
+  branch pushed (the pre-push row passed: 2 code commits, both covered by a Codex review record),
+  pull request `jsaristi/js-harness#42`, merged as `653f5eb`. The repository has no workflow on
+  GitHub, so no check ran there; he had been told one would, and was told it did not. The gates
+  that stand for this slice are the pre-commit ones on `f0df385` and `c96eda7`. Slice 2 (T3)
+  goes on in this branch, and its review boundary is `c96eda7`.
+- 2026-10-09 — T3 written: about 1,060 authored lines (the report 557, its tests 404, the two
+  fixes 100) and a 375-line results fixture; over the planning figure because the report and its
+  tests are one unit. Choices to know. When an earlier attempt's transcripts cannot be removed,
+  this attempt keeps nothing, so its measured cost is lost and the estimate stands in, flagged;
+  keeping them in a second directory would need a fallback of its own. `--require-complete`
+  asks 3 counted trials per cell whatever a run's `--repeats` was, so the first repeat alone (18
+  trials) does not pass it, and a trial that did not delegate leaves its cell short. Flags do
+  not fail the gate. The report also refuses runs whose pinned subagent model is not their
+  arm's, or that pin different delegation texts. The writer saw no RED for the report's own
+  tests: other sessions' gates held the machine for about 25 minutes, and its first run was 15
+  pass and 2 fail, both mistakes in the tests. Gaps against the Design table: work redone after
+  a subagent is not in the record, so it is not shown and would be read by hand from the kept
+  transcripts; tokens per model and the per-subagent rows are recorded but not printed; the
+  report gives no verdict between the arms, which is T7's. Left as follow-ups, outside T3:
+  `SUBAGENTS_DIR` is not exported from `evals/suite.mjs`, so the report retypes `subagents`; the
+  three task ids are a constant in the report; `table` and the text helpers of
+  `evals/report.mjs` are private and copied; the comment on the transcripts hook in
+  `evals/configs.mjs` does not say its directory may be `null`.
+- 2026-10-09 — T3 committed as `779bb4a` (gate 6 passed alone). Reviews of `c96eda7..779bb4a`.
+  gentle-ai: medium risk, review due (`slice_budget_reached`), approved and acknowledged (lineage
+  `review-e43f994da38f38b7`, authority burned), three informational findings, all in
+  `evals/subagents-report.mjs`: the comparison row subtracts counts of passed trials, not pass
+  rates, so 2 of 2 against 3 of 3 reads as -1 (`R3-passdiff-unequal-counts`, a warning); a
+  missing delegation digest is accepted where a missing model is refused
+  (`R3-missing-digest-accepted`); and a star can be printed with no footnote
+  (`R3-star-without-footnote`). Its first bound STATUS failed with `operation_timeout` while
+  another session's gate loaded the machine (nothing had been mutated); the same STATUS, asked
+  again, answered. Codex: one P2, recorded (`js-harness codex-review --base c96eda7`): the
+  delegation digests are compared per config and never across the two arms of a mode, so arms
+  collected before and after an edit of a delegation text would be compared as if they had been
+  given the same prompt. The four are accepted and fixed in one follow-up commit of this slice,
+  by the same writer, before any trial runs.
+- 2026-10-09 — The four fixed, each with its failing test seen first (`subagents-report` 21
+  pass, 0 fail; 115 lines added, 20 deleted). The report now compares the delegation digests by
+  mode across both arms and every run, also inside one run, and refuses a config that has
+  trials and no digest; the comparison row gives the difference of pass rates in percentage
+  points, each rate over its own cell (2 of 2 against 3 of 3 reads `0pp`); and one predicate
+  decides both the star and its footnote. Noted by the writer: a continued run that gains an arm
+  keeps the first arm's pin, so one results document can hold two digests for one mode, which
+  the report now refuses.
+- 2026-10-09 — The fixes committed as `8cb6ec0` (gate 7 passed alone). gentle-ai assessed
+  `779bb4a..8cb6ec0` as medium risk, 157 lines, review not due (`under_budget`): it stays pending
+  in the slice until a later commit reaches the budget. Codex found no actionable regression
+  and the review is recorded (`js-harness codex-review --base 779bb4a`). T3 is closed and slice
+  2 is `779bb4a` and `8cb6ec0`. Next, one decision at a time: Sebastián's go-ahead to deliver
+  slice 2 as a pull request, then the count and cost of the 2 smoke trials (T4);
+  `JS_HARNESS_EVAL_OAUTH_TOKEN` is set in this environment.
+- 2026-10-09 — Harness candidate, from his answer to the request to deliver slice 2. He said yes
+  on a condition: a session about to do something shared asks the orchestrator first whether it
+  breaks the flow, since several sessions will run at once and can collide, or he is told a
+  better way before his yes counts. Meanwhile `origin/main` had moved to `d6cf6be` (pull
+  requests 43 to 45 of other sessions), which this session learned only by fetching. Proposed in
+  answer, pending his word: facts before questions. `js-harness sessions` (the board of
+  `feat/session-board`, not yet on `main`) already prints from disk what each session is doing,
+  the running gates and the open pull requests; run from this session it showed no gate, no
+  open pull request and the orchestrator waiting for his answer on its own delivery. So a
+  session reads the board before any shared action (a gate, an eval batch, a push or merge to
+  `main`) and reports what it saw in its request to him. A message to the orchestrator is a
+  notice, not a question to wait on: a message starts a turn there and buries the question it
+  has open with him. Two gaps the board names or cannot close, proposed for the orchestrator's
+  feature and not built here: `check` takes a machine-wide lock in the git common directory, so
+  two gates cannot overlap even when both sessions saw an idle machine in the same minute; and a
+  line of intent a session appends before a shared action and the board prints, since "what a
+  session plans to do next" is what the board says it cannot see.
+- 2026-10-10 — That proposal is superseded by what he decided the same day with the orchestrator,
+  read in `docs/ROADMAP.md` on `origin/main` ("Session channel (planned)") and in the relief
+  file `C:\Users\Oficina\.js-harness\relief\D--js-harness.md` (line 4, the charter): one
+  orchestrator per project, the session titled "JH ORQ · js-harness", is the lead; a work
+  session asks it for a turn by `SendMessage` before a gate, a test run, a trial batch or a
+  board read, and waits for its "go"; a push and a pull request need no yes of his once the gate
+  and both reviews are green; merging code, spend outside the plan and product choices stay
+  his. The machine lock this document proposed is being built by another session
+  (`feat/gate-lock`, unmerged). The question left open with him about slice 2 is withdrawn: its
+  gate, push and pull request go under the charter, and only the merge is asked of him. Context
+  rule of the same day: nothing stops for a percentage; at 85 percent a session writes its
+  state here, then finishes if little is left or asks for the compaction. `origin/main` is at
+  `d3bc399`, 85 commits ahead of this branch, with no file in common with slice 2.
