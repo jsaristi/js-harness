@@ -764,10 +764,9 @@ podamos implementar todo"), each a feature of its own with its own document and 
      process for the two folders it asked for in two. Running that file in three shards,
      approved by him on 2026-10-10, was built and measured and gave nothing inside a whole
      run (747 s and 833 s), so it was taken out again: on this machine of four cores the
-     bound is the work, thousands of git processes that slow each other down (written here
-     first as "some fifty thousand", an estimate nobody had counted: the count is below),
-     and not how the files are arranged. What shortens the gate is fewer of them. And,
-     approved by him the same day, a commit of documents alone
+     bound is the work, 15,467 git processes in a whole run that slow each other down
+     (counted 2026-10-11, below), and not how the files are arranged. What shortens the
+     gate is fewer of them. And, approved by him the same day, a commit of documents alone
      runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
      only Markdown, each paying a gate of 13 minutes that no document could fail, since no
      test reads `docs/` or `odd/tasks/`.
