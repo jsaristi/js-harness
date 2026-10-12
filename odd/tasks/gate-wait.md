@@ -1565,7 +1565,7 @@ words read by me in its transcript `65318fd5`, by type and origin, at the lines 
   folder of the gate under an excluded place would be the harness's half) and the
   TypeScript language server of the sessions (the orchestrator's).
 
-The order as it stands at 16:00 on 2026-10-12 (the orchestrator's, from its messages of
+The order as it stands at 15:58 on 2026-10-12 (the orchestrator's, from its messages of
 15:31, 15:47 and 15:56; each is a claim of its own, inside his option 3 and with no
 question to him): T13's reviews and pull request; pull request 75 with `main` in it;
 road 1's first slice, written now and gated in a lock turn; then S1's Codex record, T8
@@ -1588,7 +1588,7 @@ uncommitted).
    tree failed the suite and the merge is left unfinished. When it ended with 0: push,
    and the head to the orchestrator.
 3. **Road 1's first slice (T14)** (`feat/gate-wait-eval-sweep`, worktree
-   `gate-wait-eval-sweep`, off `main` `e60cbda`). Two writers work in it since 16:00,
+   `gate-wait-eval-sweep`, off `main` `e60cbda`). Two writers work in it since 15:57,
    with disjoint files and no test run: one on `evals/runner.mjs`, `evals/task-proof.mjs`,
    `evals/isolation-probe.mjs`, `bin/lib/process-tree.testkit.mjs` and
    `bin/lib/process-tree.test.mjs` (the run as a parameter of the four entries;
