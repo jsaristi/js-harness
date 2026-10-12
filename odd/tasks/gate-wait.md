@@ -1191,6 +1191,30 @@ session's transcript.
   (`gh repo view`); the gate log's line of 2026-10-12 to 14:50 (53 gates of 300 s or more,
   50,925 s; 131,289 s waited, summed); his machine is 8 threads and 20 GB; `wsl.exe` lists
   no distribution. Told to the orchestrator, which brings the readers.
+- 2026-10-12 · **T13 built, in the line** (15:02 by `date`): a sixth worktree,
+  `D:\js-harness-worktrees\gate-doc-checks`, branch `feat/gate-doc-checks` off `main`
+  3088960. The design, as built: `harness.json` `documentSensors`, named commands of the
+  shape of `sensors`; a commit of documents alone runs those, a row each after the INFO
+  row, two minutes each at most, **with no gate lock and no line in the gate log** (a
+  check of seconds beside a running gate costs less than an hour in the line; one that
+  needs longer is told it belongs in `sensors`); any other commit runs `sensors` as before
+  and none of these; they run even where a static row already failed, since there is no
+  wait and no suite for the stop to save; declared with no `documents` they fail the gate.
+  This repository declares `node bin/js-harness.mjs rules check` and `node --test
+  bin/rules.test.mjs bin/sessions.test.mjs`. Which tests read the repository's own
+  documents was searched again by me (`rg` over every `*.test.mjs` of `bin`, `evals` and
+  `scripts` for `docs`, `odd/tasks`, `ROADMAP`, `FAILURES` beside a read of the
+  repository's root): those two files, `bin/rules.test.mjs:18` (`docs/rule-sources.json`)
+  among them; the search could have found any other, since it found these.
+  **With it, the orchestrator's ask of 13:20:** `check` refuses an argument it does not
+  know, exit 2 with the usage and no row computed; `gate` already did
+  (`bin/gate.mjs:109`), so only `check` changed. The roadmap's Sensors row and its
+  sentence "no test reads `docs/` or `odd/tasks/`" are corrected in the same commit.
+  The turn is `t13b-turn.sh` (`t13-apply.cjs` writes the tests, then the sources; logs
+  `t13-red.log`, `t13-green.log`, `t13-commit.log`): RED, GREEN, the two declared commands
+  for real and timed, then the commit, whose hook runs the whole gate. Applied dry and
+  restored before it was asked: 321 lines added, 22 removed, in four files. Then both
+  reviews, its push and its pull request.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
@@ -1273,7 +1297,8 @@ on a documents-only commit; the reviews outside the lock's turn.
 ## Resume here
 - Read the logs before anything is asked again: a turn started before a restart of the
   desktop app sends no notice. `js-harness gate log --last 6` says which turns ended.
-- Five worktrees, none pushed. `feat/gate-wait` (this document; S1, head the commit that
+- Six worktrees; `trial/gate-on-github` alone is pushed. `feat/gate-doc-checks` (T13,
+  committed by `t13b-turn.sh` when green; `D:\js-harness-worktrees\gate-doc-checks`). `feat/gate-wait` (this document; S1, head the commit that
   holds this entry, on `f04efca`). `feat/gate-wait-count` (`fc70dc3`: the count scripts and
   the first cut). `trial/gate-on-github` (`14a6026`). `feat/gate-merge-hook` (the hook,
   committed by `hook-turn.sh` when green). `feat/gate-wait-same-tree` (uncommitted).
