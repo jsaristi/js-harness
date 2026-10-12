@@ -728,6 +728,43 @@ session's transcript.
   lines, under the budget. Sub-agents so far: 2,389,643 tokens.
 
 ## Next
+**His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
+words read by me in its transcript `65318fd5`, by type and origin, at the lines named):**
+- Line 3800, 12:20, "listo la A…": a Codex plan up to 5% over the rate counts as inside
+  it. A review runs without asking when `--plan` is at most 1.05 times the larger of
+  300,000 input tokens and 1,200 a changed line; over that, or a second run after a fall
+  midway, is his; no automatic retry. S1's plan on `fb7cc5c`: 1,074 lines, about 1,210,000
+  against 1,288,800, under the rate itself. **Asked at about 12:30**, once, in a turn of
+  the lock, measured (`s1-codex-turn.sh`, `s1-codex-turn.log`, `s1-codex-out.log` in the
+  scratchpad): read its tail first; if it fell midway, the second run is his.
+- Line 3913, 12:26, "Entonces hagamos esto y apliquemoslo de una vez…": his yes to the
+  orchestrator's list (its line 3860). What is this feature's, in the order of gain:
+  1. **The trial on GitHub now** (T9), inside the minutes his account includes, no spend,
+     no setting of his account changed. First fact wanted: does the suite pass there, on
+     Windows and on Linux, and how long. Tell the orchestrator before the branch is pushed.
+     The monthly figure, GitHub against Cloudflare, goes back to him before anything is
+     paid. Cloudflare (his question of about 12:30, not read by me) is a candidate beside
+     GitHub and nothing is built for it: the orchestrator's reading, unverified, is
+     Containers on the Workers Paid plan, 4 vCPU an instance at most, probably Linux only,
+     no CI product (the runner would be ours), near 0.11 dollars a run by processor against
+     0.50 on GitHub. Either road needs the trial's fact first.
+  2. **No repeated control, now decided** (it was in "Brought to him, not built"): a tree
+     identical to one that already passed runs no suite again; a clean merge of `main` that
+     brings only documents runs no suite. To build here with its tests and both reviews.
+     The design must say exactly how "already passed" is proven (the gate log's record of
+     that tree) and that a merge that brings any code still runs the whole suite. His
+     list's condition: no verification is lost.
+  3. **Less work in the suite**: go on with cut 2 (`c2-turn.sh` was asked: the git callers
+     of `bin/codex-review.test.mjs` three frames deep, table `c2-frames.json`).
+  5. **The reviews outside the lock's turn** (T8 and more): build it. gentle-ai is measured
+     (2.3 s and 12 s against the bound of 30 s); Codex's is measured on its first run, the
+     bound stays the one fixed before.
+  Not this feature's: the antivirus (his own hand; when he says the exclusion is on, the
+  orchestrator asks for an M1 again. A candidate to design, not to build before its turn:
+  the tests make their repositories under the user's Temp, outside any exclusion; a temp
+  folder of the gate under an excluded place would be the harness's half) and the
+  TypeScript language server of the sessions (the orchestrator's).
+
 1. (Done: the first cut is `fc70dc3` and M1 again is in Progress.) Was: read its log
    (`t4-turn.log`), then the second run's tables (`m1b-count.json`, `m1b-machine.json`,
    `m1b-machine.txt` in the scratchpad) against the first: where the last file ends, the
