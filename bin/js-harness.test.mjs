@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run as dispatch } from './js-harness.mjs';
+import * as harness from './js-harness.mjs';
 
 const dispatcher = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
 
@@ -307,7 +308,7 @@ test('--help lists resume; without --hook it exits 2 with its usage, and the hoo
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-resume-'));
   try {
     const started = (args, input = '') => spawnSync(process.execPath, [dispatcher, ...args], { encoding: 'utf8', input, timeout: 60000, env: { ...process.env, JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: home } });
-    assert.match(started(['--help']).stdout, /^ {2}resume\s+The SessionStart hook that runs after a compaction.*js-harness resume --hook.*harness\.json.*always exits 0/m);
+    assert.match(started(['--help']).stdout, /^ {2}resume\s+The SessionStart hook that runs after a compaction.*js-harness resume --hook.*harness\.json.*always exits 0\. js-harness resume --pause is the PostToolUse hook of the context pause/m);
     const usage = started(['resume']);
     assert.deepEqual([usage.status, usage.stdout], [2, '']);
     assert.match(usage.stderr, /^Usage: js-harness resume --hook/);
@@ -438,4 +439,65 @@ test('--help describes sync\'s two scopes (project vs. machine/--global)', () =>
 test('--help describes status\'s two scopes (project vs. machine/--global)', () => {
   const result = run(['--help']);
   assert.match(result.stdout, /status\s+.*project.*pin.*machine.*versions.*--global.*outside a git repository/);
+});
+
+// The dispatcher imports no command module at its top: each command's loader imports its module when the command
+// runs. These tests hand `run` a table of spies in place of the real loaders, so they run no command and import
+// no command module, and they read nothing of this machine.
+function spyTable(loaded, ran) {
+  assert.ok(harness.COMMANDS, 'the dispatcher exports its table of loaders');
+  return Object.fromEntries(
+    Object.keys(harness.COMMANDS).map((name) => [
+      name,
+      async () => {
+        loaded.push(name);
+        return (rest) => {
+          ran.push([name, rest]);
+          return 0;
+        };
+      },
+    ]),
+  );
+}
+
+test('the table of loaders names exactly the commands of the usage text, and each loader resolves to a command function', async (t) => {
+  assert.ok(harness.COMMANDS, 'the dispatcher exports its table of loaders');
+  const printed = [];
+  t.mock.method(console, 'log', (text) => printed.push(text));
+  assert.equal(await dispatch(['--help']), 0);
+  const named = printed
+    .join('\n')
+    .split('\n')
+    .map((line) => line.match(/^ {2}(\S+)\s/))
+    .filter(Boolean)
+    .map((match) => match[1]);
+  assert.deepEqual(Object.keys(harness.COMMANDS).sort(), named.sort());
+  for (const name of named) {
+    assert.equal(typeof (await harness.COMMANDS[name]()), 'function', `the loader of ${name} resolves to its command function`);
+  }
+});
+
+test('--help, no command on a pipe, and an unknown command load no command module', async (t) => {
+  const loaded = [];
+  const ran = [];
+  const commands = spyTable(loaded, ran);
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  const pipe = { isTTY: false };
+  assert.equal(await dispatch(['--help'], { commands }), 0);
+  assert.equal(await dispatch([], { stdin: pipe, stdout: pipe, commands }), 0);
+  assert.equal(await dispatch(['no-such-command'], { commands }), 2);
+  // A name every object inherits is no command: read with `in`, `toString` was found and then called as one.
+  assert.equal(await dispatch(['toString'], { commands }), 2);
+  assert.equal(await dispatch(['constructor'], { commands }), 2);
+  assert.deepEqual([loaded, ran], [[], []]);
+});
+
+test('resume --pause loads the loader of resume and runs it with its arguments, and no other loader', async () => {
+  const loaded = [];
+  const ran = [];
+  const code = await dispatch(['resume', '--pause'], { commands: spyTable(loaded, ran) });
+  assert.equal(code, 0);
+  assert.deepEqual(loaded, ['resume']);
+  assert.deepEqual(ran, [['resume', ['--pause']]]);
 });
