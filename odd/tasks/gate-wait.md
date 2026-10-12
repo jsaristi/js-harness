@@ -1014,6 +1014,32 @@ session's transcript.
   would have to run for a Linux gate to be trusted (each commit, each push, each pull
   request). A design that reaches him gets the double review first: tell the orchestrator
   when the comparison is written and it brings the readers.
+- 2026-10-12 · **T9, what a Linux run leaves unproven** (one reader on `t9-ubuntu.log` and
+  the sources at `14a6026`, 140,185 tokens; one thing checked by me,
+  `bin/remote.test.mjs:54`). **The 132 skipped** are all skipped by design off Windows,
+  by `process.platform`, but one that is skipped everywhere; none for a missing program:
+  97 in `bin/remote.test.mjs` (`WINDOWS_ONLY`, `:54`), the whole `js-harness remote`
+  command; 14 in `evals/runner.test.mjs` (`:1459`), the sweep of trial processes by path;
+  5 in `bin/lib/process-tree.test.mjs` (`:561`), the real `killTree` and `killSurvivors`;
+  4 in `bin/gate.test.mjs` (`:1136`), the gate's arguments through `cmd.exe`; 3 in
+  `evals/isolation-probe.test.mjs` (`:1132`), a held folder and the orphan sweep; 2 in
+  `bin/lib/project.test.mjs` (`:1435`, `:1470`), paths that differ by case alone; 6 more
+  inline (`bin/tui.test.mjs:965`, `bin/lib/remote.test.mjs:546` and `:1035`,
+  `evals/ports.test.mjs:120`, `evals/codex-isolation-probe.test.mjs:255`,
+  `evals/home.test.mjs:230`); and `bin/lib/project.test.mjs:1509`, skipped on Windows too.
+  In exchange Linux runs the seven symlink tests his machine skips for want of the right
+  to make a link. **The 7 that fail:** four are the test's own (two of
+  `bin/lib/payload.test.mjs`, `:197` and `:212`, feed a Windows absolute path, which
+  `path.isAbsolute` rightly calls relative there; `evals/codex-isolation-probe.test.mjs:301`
+  asks for `HOMEDRIVE`, set on Windows alone, `evals/configs.mjs:144`;
+  `bin/lib/project.test.mjs:1919` expects a reason that went stale at `ae471e7`, unseen
+  because Windows skips that test); two share one possible defect of the harness on Linux
+  (`evals/ports.mjs:168-169` names a process by `ps -o comm=`, which answered `MainThread`
+  for a Node child, so nothing matches `node`; whether it touches the real `engram` binary
+  is not known without running it there); one is a small defect (`exists` of
+  `evals/paths.mjs:6` lets `ENOTDIR` through, so a raw directory below a file is refused
+  with the system's words and not the command's; the run is still refused). So of seven,
+  one confirmed and cosmetic, one possible, four of the tests. Nothing fixed.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
