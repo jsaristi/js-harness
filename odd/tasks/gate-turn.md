@@ -94,7 +94,14 @@ PowerShell cache written into the working tree) are gone.
 high
 
 ## Ask me before
-- Open, his (judged so by the orchestrator, 2026-10-11): what `--wait` means by default in
+- Answered by him on 2026-10-11 at 22:35 (the orchestrator's transcript
+  `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 3092, a user entry of human origin:
+  "La opción B"; what B is stands in the orchestrator's question, line 3081: "Me quedo
+  mientras la fila se mueva. Me voy solo si la ventanilla lleva una hora sin atender a
+  nadie", with its cost said to him, "una sesión puede esperar más de una hora en total
+  cuando hay muchas adelante"; option A was sixty minutes in all). So the bound as built
+  stands and this branch is no longer held for it. What was asked, kept as it was written:
+  his (judged so by the orchestrator, 2026-10-11): what `--wait` means by default in
   the installed gate. It is built as "minutes without the lock changing hands" (Design, 1,
   "The bound of a wait"), which neither he nor his words chose. The orchestrator puts it to
   him as one question when he returns and does not merge the slice of the line before his
@@ -661,6 +668,36 @@ S2 is T4 with T5. S3 is T6.
   T7 is committed with this entry. The writer of T9 returned (`haiku`, 162,727 tokens,
   nothing run); its diff was read back here whole and follows the design; its tests, red
   and green, and its commit are a turn of the lock (`t9-turn.sh`).
+- 2026-10-11 22:36 · Three things from the orchestrator, each read in its transcript before
+  it was built on. His answer on `--wait` ("Ask me before"): the bound as built stands, and
+  the orchestrator merges this branch's pull request when `main` is merged in and gated
+  and both reviews are recorded with nothing blocking. The rate of a Codex review (line
+  2963, "Sí, quedan los tres números y el piso", the values in the question at line 2958):
+  up to 300,000 input tokens or 1,200 a changed line of its slice, whichever is larger;
+  over that the orchestrator asks him. So each review here runs its `--plan` first. And
+  the first gate taken with this branch's own lock, the turn of the merge commit, asked
+  at 22:29:55: its file under `~/.js-harness/gate` reads `"line":1` and
+  `"session":"d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86"`, so a `gate` started from a session's
+  shell does carry the session. Beside it four gates of older versions waited, none with
+  the mark, one of them (`rules-list`) since 21:49:25 while gates that asked later ran,
+  two of them this session's: until every worktree's gate keeps the line, the order is
+  kept by nobody.
+- 2026-10-11 22:29 · T9 in its turn: 3 of its tests fail against the code before it, 13 of
+  13 pass with it (`t9-red.log`, `t9-green.log`); its commit's gate follows in that turn.
+- 2026-10-11 22:43 · T9 committed, `9cce6c3` on `fix/count-git-launch`; the whole gate
+  passed (`t9-gate.log`, turn ended 22:43:44). gentle-ai: medium risk, 148 lines, not due
+  (under budget). Codex: its plan says about 170,000 input tokens, inside the floor; asked
+  in a turn of the lock (`t9-codex.log`).
+- 2026-10-11 22:57 · `feat/gate-stop`: `main` merged, `9dc7811`, and the roadmap, `51bb685`,
+  in one turn asked about 22:07 and taken at 22:43:44 (`stopm-turn.log`). Red: the two
+  tests of the order fail against `failures` after `contracts`; then the whole gate,
+  `PASS tests`, with `failures` the first row of its report. The tree is clean after it,
+  with no `Microsoft` folder, a second time. gentle-ai for `main..HEAD`: medium risk, 956
+  lines, due (`slice_budget_reached`); started with consent granted, lineage
+  `review-444058d968e7db2b`, one lens (`review-reliability`). Its capture is a turn of the
+  lock (`stop-review-turn.sh`), and in that turn Codex reviews the same range only if the
+  capture says approved with no finding: its plan is 3 parts, 937 lines, about 720,000
+  input tokens, under 1,200 a line.
 
 ## Next
 The commit of T3c in a turn of the lock (red of its new tests against the old code, then the

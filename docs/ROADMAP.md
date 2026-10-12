@@ -753,9 +753,10 @@ podamos implementar todo"), each a feature of its own with its own document and 
      that keep it. A wait says how many gates are ahead and which is first, `--no-wait`
      refuses behind a gate that waits as it does behind one that runs, and a gate's file
      records the session it runs for, which the board can then show.
-     What `--wait` bounds changed with the line, and that default waits for his word: it
-     is no longer the minutes since the gate arrived but the minutes the lock may go
-     without changing hands, sixty when not given. With gates of about fourteen minutes a
+     What `--wait` bounds changed with the line, and he chose that default on 2026-10-11
+     ("La opción B", of two put to him: stay while the line moves, and leave only when the
+     lock has served nobody for an hour): it is no longer the minutes since the gate
+     arrived but the minutes the lock may go without changing hands, sixty when not given. With gates of about fourteen minutes a
      gate with four ahead reached an hour while the line moved, was refused and came back
      last; two commits lost an hour each that way on 2026-10-11. The bound exists to give
      up on a lock that does not move. What a user of the installed gate sees by default is
