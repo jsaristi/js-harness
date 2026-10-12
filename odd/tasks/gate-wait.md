@@ -987,6 +987,33 @@ session's transcript.
   processors 93% busy, and it changes the arguments most fakes of
   `bin/codex-review.test.mjs` match. Small against the trial's fact. To say to the
   orchestrator with the trial's Windows half; not built.
+- 2026-10-12 · **T9, the trial ended: red on both, and the pair of numbers it was for.**
+  Run 38296748258, completed, failure, read at 14:40:25 from its jobs and their logs
+  (`t9-ubuntu.log`, `t9-windows.log` in the scratchpad). **Windows** (job 114969540380,
+  `windows-latest`, win32 10.0.26100, 2 logical processors, 8 GB, Node v24.21.0): 3,847
+  tests, 3,721 pass, 124 fail, 2 skipped; the suite 1,258.2 s, the job 21 min 24 s.
+  **Linux** (job 114969540949, 2 logical processors): 3,846 tests, 3,707 pass, 7 fail, 132
+  skipped; the suite 183.7 s, the job 3 min 24 s. On machines of one size the suite takes
+  6.8 times longer on Windows than on Linux, and his own machine does it in 735.6 s on
+  eight threads: it is Windows that is slow for this suite, not his machine. **Billed:**
+  `gh api repos/jsaristi/js-harness/actions/runs/38296748258/timing` gives
+  `billable.WINDOWS.total_ms` 0 and `billable.UBUNTU.total_ms` 0, `run_duration_ms`
+  1,288,000: not settled (inside the included minutes shown as zero, or not posted yet);
+  the figure is on his billing page, which the orchestrator asks him to open only if a
+  road with spend is proposed. Whether a Windows minute counts double is not settled
+  either. No second push. Told to the orchestrator at 14:41 (by `date`, 14:40:25 just
+  before). Its asks of 14:35 and 14:43, to answer in this document before any design and
+  with nothing built: (1) the 132 skipped and the 7 failed of Linux by cause (a reader is
+  on it), and the 124 of Windows by cause, in one sentence: the suite assumes his machine,
+  or the harness fails on a clean Windows (the second is a defect for the register); (2)
+  two roads side by side, each with what it needs from him and what it leaves unproven:
+  the gate on Linux on his own machine (WSL: `wsl.exe` is there with no distribution, no
+  docker; turning it on changes his machine, which is his) and the gate on GitHub's Linux
+  runner (about 3.4 minutes a run); and said plainly: whether the Windows half can only
+  stay on his machine, since GitHub's Windows is slower than his and red, and how often it
+  would have to run for a Linux gate to be trusted (each commit, each push, each pull
+  request). A design that reaches him gets the double review first: tell the orchestrator
+  when the comparison is written and it brings the readers.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
