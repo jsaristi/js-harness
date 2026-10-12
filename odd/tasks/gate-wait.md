@@ -1864,6 +1864,29 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   Splitting `bin/codex-review.test.mjs` in two is the other way to shorten its chain; it
   takes no work out, so the work's bound (565 s) holds it to about 30 to 50 s, and its
   helpers would have to move to a shared module.
+- 2026-10-12 · **Cut 2 of git, the command's own questions, read from the three-frame
+  table** (`c2-frames.json`, the count of 12:26 on `bin/codex-review.test.mjs` alone;
+  lines are `fc70dc3`'s; nothing built, the design reads them again on `main`). Of the
+  6,067 starts, by the place in the command that asks:
+
+  | asked at | what | starts | a run of the command |
+  |---|---|---|---|
+  | `bin/codex-review.mjs:1048`, `:1075`, `:1080` and `bin/lib/project.mjs:230` (from `:1068`) | `rev-parse`: the root, the base, the head, the git folder | about 1,820 | four |
+  | `:1201`, `:904`, `:893` | `diff`: the patch, the whole range, a part | about 1,130 | nearly three |
+  | `:1130`, `:1192`, `:1627` | `merge-base` | about 450 | one |
+  | `:1177` | `status` | about 400 | one |
+  | `bin/lib/codex-review-coverage.mjs:163`, `:196` | `rev-list`, `log` | about 570 | one each |
+  | `bin/lib/codex-review-scope.mjs:125` (from coverage `:204` and `:828`) | `check-attr` | about 430 | one or more |
+  | the tests' own `git` helper (`bin/codex-review.test.mjs:45`) | fixtures: `diff` 442, the rest setting up repositories | 752 | none: the test's |
+
+  What can go without a test's proof changing, to be proven in the design: the four
+  `rev-parse` as one process in the path where all four answer (about 1,200 starts); the
+  range's diff asked once where it is asked twice with other flags (to read: up to about
+  700); `rev-list` and `log` of the coverage as one `log` (about 250). Together about
+  1,850 to 2,150 of that file's starts, which is what takes it under the next file's
+  449 s. Each is a change of the shipping command, so each needs the test that the
+  command still refuses what it refused: a base that is no commit, a repository with no
+  commit, no git on the path.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
