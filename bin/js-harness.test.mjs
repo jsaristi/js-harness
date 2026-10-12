@@ -251,7 +251,10 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
   assert.match(run(['--help']).stdout, /^ {2}gate\s+Run a command under the machine's gate lock.*js-harness gate \[--wait <minutes> \| --no-wait\] -- <command>.*exit code is the command's/m);
   const refused = run(['gate', '--no-wait']);
   assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n$/);
+  // The last line of the usage says what the two flags of a wait mean, since 2026-10-11: the bound counts from
+  // the last time the lock changed hands, which "--wait <minutes>" does not say by itself.
+  assert.match(refused.stderr, /^the command to run goes after --\n\nUsage: js-harness gate \[--wait <minutes> \| --no-wait\] \[--home <path>\] \[--cwd <path>\] -- <command> \[args\.\.\.\]\n {7}js-harness gate log \[--last <n>\] \[--home <path>\]\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
+  assert.match(run(['--help']).stdout, /^ {2}gate\s+.*It waits for its turn in the order the gates arrived; --wait is how many minutes the lock may go without changing hands before it gives up \(60 when not given\), and --no-wait refuses at once\./m);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-gate-home-'));
   try {
     const ran = run(['gate', '--home', home, '--', 'node', '-e', "console.log('through the gate'); process.exit(3)"]);
@@ -269,7 +272,7 @@ test('--help lists gate, gate without a command exits 2 with its usage, and gate
 });
 
 test('--help lists sessions, and sessions with a flag it does not know exits 2 with its usage through the dispatcher', () => {
-  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*roster.*worktrees.*feature plan.*gates.*pull requests.*relief file.*channel.*--watch waits.*notice for the orchestrator.*--address <role>.*exit 0 for one, 1 for none.*2 for several or when it cannot tell.*--opening "<title>" prints the opening stored for a session.*records in the channel which session read it.*--quote <transcript> <line> prints the entry at that line of a transcript only when the user sent it.*exit 1 otherwise/m);
+  assert.match(run(['--help']).stdout, /^ {2}sessions\s+.*recent Claude Code sessions.*context size.*background work.*roster.*worktrees.*feature plan.*gates.*pull requests.*relief file.*channel.*--watch waits.*notice for the orchestrator.*--address <role>.*exit 0 for one, 1 for none.*2 for several or when it cannot tell.*--opening "<title>" prints the opening stored for a session.*records in the channel which session read it.*--quote <transcript> <line> prints the entry at that line of a transcript only when the user sent it.*a message sent while the session worked.*exit 1 otherwise/m);
   const result = run(['sessions', '--bogus']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown argument: --bogus/);
@@ -293,6 +296,25 @@ test('sessions dispatches to a temp cwd and Claude home and exits 1 for a projec
     assert.equal(result.stderr.trim().split('\n').length, 1, 'one line, and no board');
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Session channel, T6: the hook a session runs after a compaction is a command of the dispatcher, since a
+// host starts it by name. With a home of its own and a time limit: the folder it is given has no
+// `harness.json`, so the hook stops at its first question and reads nothing of this machine.
+test('--help lists resume; without --hook it exits 2 with its usage, and the hook prints nothing outside an opted-in project', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-dispatch-resume-'));
+  try {
+    const started = (args, input = '') => spawnSync(process.execPath, [dispatcher, ...args], { encoding: 'utf8', input, timeout: 60000, env: { ...process.env, JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: home } });
+    assert.match(started(['--help']).stdout, /^ {2}resume\s+The SessionStart hook that runs after a compaction.*js-harness resume --hook.*harness\.json.*always exits 0/m);
+    const usage = started(['resume']);
+    assert.deepEqual([usage.status, usage.stdout], [2, '']);
+    assert.match(usage.stderr, /^Usage: js-harness resume --hook/);
+    const hook = started(['resume', '--hook'], JSON.stringify({ session_id: 'aaaaaaaa-1111-4111-8111-111111111111', cwd: home, hook_event_name: 'SessionStart', source: 'compact' }));
+    assert.deepEqual([hook.status, hook.stdout, hook.stderr], [0, '', '']);
+    assert.deepEqual(fs.readdirSync(home), [], 'nothing written under the home');
+  } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });

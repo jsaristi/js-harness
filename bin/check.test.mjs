@@ -1581,8 +1581,10 @@ test('main gives up when its wait is over: a FAIL gate row, no sensor run, and t
   assert.equal(ran, 0);
   const holder = `the gate of C:\\work\\other (pid 4321, started ${startedAt})`;
   assert.equal(errOutput, `check: waiting for ${holder} to finish, for 0.5 minutes at most\n`);
+  // What `--wait` means is said as it is since 2026-10-11: how long the lock may go without changing hands,
+  // which for a holder that was there from the arrival is the whole of the wait, as before.
   assert.deepEqual(gateRows(output), [
-    `FAIL  gate  no sensor ran: ${holder} still held the machine's gate lock after 30 s (--wait bounds the wait at 0.5 minutes)`,
+    `FAIL  gate  no sensor ran: ${holder} still held the machine's gate lock after 30 s (--wait gives up after 0.5 minutes without the lock changing hands)`,
   ]);
   assert.equal(other.lost(), false);
   assert.equal(readGateHolder(home, { now: clock.now }).pid, 4321);
@@ -1604,7 +1606,8 @@ test('main calls a holder of whom nothing is known another gate, and says when t
     'check: waiting for another gate (pid 77) to finish, for 1 minute at most; it has been silent for over a minute, and its lock is taken over if it stays so',
     '',
   ]);
-  assert.deepEqual(gateRows(output), ["FAIL  gate  no sensor ran: another gate still held the machine's gate lock after 1 min 30 s (--wait bounds the wait at 1 minute)"]);
+  // The words of the bound are those of what `--wait` means since 2026-10-11 (the test above).
+  assert.deepEqual(gateRows(output), ["FAIL  gate  no sensor ran: another gate still held the machine's gate lock after 1 min 30 s (--wait gives up after 1 minute without the lock changing hands)"]);
 }));
 
 test('main runs the sensors without the gate lock when it cannot be taken at all, and says so in a row', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
@@ -1776,26 +1779,39 @@ test('main with a wait shorter than a minute still runs the sensors without a lo
   other.release();
 }));
 
-// Found in review, 2026-10-10: each line said the whole bound, with most of it spent by the second.
-test('main says what is left of its wait with each gate it waits for, not the whole bound again', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+// Found in review, 2026-10-10: each line said the whole bound, with most of it spent by the second, so each
+// came to say what was left: "for 54 s at most" with the second gate here. Since 2026-10-11 the bound counts
+// from the last time the lock changed hands, and with a new holder what is left is the whole of it: that is
+// what a line says now, and what this test pins. The second gate is one that stood in the line before this
+// one. When the test was written it arrived last and took a free lock from under the gate that waited, which
+// is what the line ends; so the first line now also counts it among the gates ahead.
+test('main says the whole of its bound again with each gate it waits for, and how many gates are ahead of it when the holder is not the only one', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const clock = gateClock();
   const first = await clock.take({ home, cwd: 'C:\\work\\one', command: 'check', pid: 11 });
+  // The gate of another process, in the line before this one: it stands still at its poll until the test
+  // wakes it, a second before this gate arrives.
+  const asleep = [];
   let next;
+  takeGateLock({ home, cwd: 'C:\\work\\two', command: 'check', pid: 22, now: clock.now, sleep: () => new Promise((resolve) => asleep.push(resolve)), beatMs: 0 }).then((lock) => {
+    next = lock;
+  });
+  await clock.sleep(1000);
   let sleeps = 0;
   clock.onSleep = async () => {
     sleeps += 1;
     first.beat();
     if (sleeps === 3) {
       first.release();
-      next = await clock.take({ home, cwd: 'C:\\work\\two', command: 'check', pid: 22 });
+      asleep.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
     }
     if (sleeps === 5) next.release();
   };
   const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--wait', '1'], {}, gateDeps({ takeGateLock: clock.take }));
   assert.equal(code, 0, output);
   const said = errOutput.split('\n');
-  assert.match(said[0], /^check: waiting for the gate of C:\\work\\one \(pid 11, started [^)]+\) to finish, for 1 minute at most$/);
-  assert.match(said[1], /^check: waiting for the gate of C:\\work\\two \(pid 22, started [^)]+\) to finish, for 54 s at most$/);
+  assert.match(said[0], /^check: waiting for the gate of C:\\work\\one \(pid 11, started [^)]+\) to finish, for 1 minute at most; 2 gates are ahead of this one, that one included$/);
+  assert.match(said[1], /^check: waiting for the gate of C:\\work\\two \(pid 22, started [^)]+\) to finish, for 1 minute at most$/);
   assert.deepEqual(said.slice(2), ['']);
   assert.deepEqual(gateRows(output), ["INFO  gate  waited 10 s for the machine's gate lock before the sensors ran"]);
 }));
@@ -1816,6 +1832,9 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.equal(output, '', argv.join(' '));
     assert.equal(errOutput.split('\n')[0], said);
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
+    // And what the two flags mean, since a bound that counts from the last change of hands is not what
+    // "--wait <minutes>" says by itself.
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n$/);
   }
 });
 
@@ -2563,6 +2582,218 @@ test('takeGateTurn adds to a gate it already met what the lock reads of it later
   });
   assert.deepEqual(named.waitedFor, [OTHER_GATE]);
 });
+
+// Left for this slice by the review of the gate log (gentle-ai, 2026-10-11): every holder that gave no token
+// went into the one entry of "no token", so what was read of one was said of another, and two of them were
+// counted as one gate.
+test('takeGateTurn keeps holders that gave no token apart by what was read of them: each is there once, and nothing read of one is said of another', async () => {
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 6000 };
+  const unnamed = (pid, cwd) => ({ token: null, pid, cwd, command: 'check', startedAt: null, beatAt: null, stale: false });
+  const nobody = { token: null, pid: null, cwd: null, command: null, startedAt: null, beatAt: null, stale: false };
+  const { waitedFor } = await turnWith(async ({ onWait }) => {
+    for (const told of [unnamed(5, 'C:\\work\\a'), nobody, unnamed(6, null), unnamed(5, 'C:\\work\\a'), nobody]) onWait(told, 60_000);
+    return lock;
+  });
+  assert.deepEqual(waitedFor, [{ cwd: 'C:\\work\\a', pid: 5, command: 'check' }, { cwd: null, pid: null, command: null }, { cwd: null, pid: 6, command: 'check' }]);
+});
+
+// --- the line: what a gate says of a gate that waits ahead of it, which holds nothing ---
+// The lock tells of the holder when there is one, and of the line: how many gates are before this one and
+// which waits first (`takeGateLock`). A gate that only waits is never said to hold the lock, on stderr, in a
+// refusal or in the log.
+
+/** Runs `take` as `takeGateTurn` is run by `check`: what it came to, and what it said on stderr. */
+async function turnSaid(take, { wait = true, waitMinutes = 1 } = {}) {
+  const said = [];
+  const originalError = console.error;
+  console.error = (line) => said.push(String(line));
+  try {
+    const turn = await takeGateTurn({ name: 'check', home: 'C:\\home', cwd: 'C:\\work\\mine', command: 'check', wait, waitMinutes }, take);
+    return { turn, said };
+  } finally {
+    console.error = originalError;
+  }
+}
+
+test('takeGateTurn says of each gate what is true of it: one that holds the lock is waited for to finish, one that waits ahead is stood behind, and a refusal says which of the two it was', async () => {
+  const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false };
+  const waiter = { token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'gate -- node --test', waitingSince: '2026-10-11T06:59:00.000Z', session: null };
+  const unread = { token: '78-cc', pid: null, cwd: null, command: null, waitingSince: null, session: null };
+  const lock = { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 6000 };
+  const HOLDER = 'the gate of C:\\work\\other (pid 4321, started 2026-10-11T07:00:00.000Z)';
+  const WAITER = 'the gate of C:\\work\\two (pid 77, waiting since 2026-10-11T06:59:00.000Z)';
+  const BEHIND = "which waits for its turn at the machine's gate lock";
+  const BOUND = '(--wait gives up after 1 minute without the lock changing hands)';
+
+  const taken = await turnSaid(async ({ onWait }) => {
+    onWait(holder, 60_000, { ahead: 3, head: waiter });
+    onWait(null, 46_000, { ahead: 2, head: waiter });
+    onWait(null, 60_000, { ahead: 1, head: waiter });
+    onWait(null, 60_000, { ahead: 1, head: unread });
+    return lock;
+  });
+  assert.deepEqual(taken.said, [
+    `check: waiting for ${HOLDER} to finish, for 1 minute at most; 3 gates are ahead of this one, that one included`,
+    `check: waiting behind ${WAITER}, ${BEHIND}, for 46 s at most; 2 gates are ahead of this one, that one included`,
+    `check: waiting behind ${WAITER}, ${BEHIND}, for 1 minute at most`,
+    `check: waiting behind another gate, ${BEHIND}, for 1 minute at most`,
+  ]);
+  // Only the gate that held the lock is one this gate waited for, which is what its log keeps.
+  assert.deepEqual(taken.turn.waitedFor, [OTHER_GATE]);
+
+  const refusals = [
+    [{ refused: 'held', holder, line: { ahead: 2, head: waiter }, waitedMs: 0, stillMs: 0 }, `${HOLDER} holds the machine's gate lock, and --no-wait was given`],
+    [
+      { refused: 'ahead', holder: null, line: { ahead: 1, head: waiter }, waitedMs: 0, stillMs: 0 },
+      `${WAITER} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`,
+    ],
+    [{ refused: 'timeout', holder, line: { ahead: 1, head: null }, waitedMs: 60_000, stillMs: 60_000 }, `${HOLDER} still held the machine's gate lock after 1 min 0 s ${BOUND}`],
+    [
+      { refused: 'timeout', holder, line: { ahead: 1, head: null }, waitedMs: 900_000, stillMs: 60_000 },
+      `${HOLDER} still held the machine's gate lock 1 min 0 s after it took it, and this gate had waited 15 min 0 s in all ${BOUND}`,
+    ],
+    [
+      { refused: 'timeout', holder: null, line: { ahead: 1, head: waiter }, waitedMs: 900_000, stillMs: 60_000 },
+      `${WAITER} waited ahead of this one and did not take the machine's gate lock, which no gate held: the lock had not changed hands for 1 min 0 s, and this gate had waited 15 min 0 s in all ${BOUND}`,
+    ],
+  ];
+  for (const [answer, sentence] of refusals) {
+    const { turn, said } = await turnSaid(async () => answer, { wait: answer.refused === 'timeout' });
+    assert.deepEqual([turn.refused, turn.reason, turn.waitedMs, said], [sentence, answer.refused, answer.waitedMs, []]);
+    // The gate a refusal names is one this gate waited for when it held the lock, and none when it only waited.
+    assert.deepEqual(turn.waitedFor, answer.holder ? [OTHER_GATE] : [], sentence);
+  }
+});
+
+// Found in review, 2026-10-11: a wait that ran out beside a gate of an older version (which keeps no line) was
+// worded as one that ended "without the lock changing hands", which is not what the bound counted there.
+test('takeGateTurn words a timeout beside a gate of an older version without "without the lock changing hands", and says that older gate waited beside it', async () => {
+  const HOLDER = 'the gate of C:\\work\\other (pid 4321, started 2026-10-11T07:00:00.000Z)';
+  const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false };
+  const answer = { refused: 'timeout', holder, line: { ahead: 1, head: null }, waitedMs: 3_700_000, stillMs: 3_700_000, besideOlder: true };
+  const { turn, said } = await turnSaid(async () => answer);
+  assert.equal(
+    turn.refused,
+    `${HOLDER} holds the machine's gate lock now; this gate had waited 61 min 40 s in all, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after 1 minute)`,
+  );
+  assert.match(turn.refused, /older version/);
+  assert.doesNotMatch(turn.refused, /without the lock changing hands/);
+  assert.deepEqual([turn.reason, said], ['timeout', []]);
+
+  // The other arm of the same sentence: the lock is free, and the gate ahead that was to take it is the one
+  // named, as a gate that waits and holds nothing. The older gate is still said to have waited beside it.
+  const WAITER = 'the gate of C:\\work\\two (pid 77, waiting since 2026-10-11T06:59:00.000Z)';
+  const waiter = { token: '77-bb', pid: 77, cwd: 'C:\\work\\two', command: 'gate -- node --test', waitingSince: '2026-10-11T06:59:00.000Z', session: null };
+  const free = await turnSaid(async () => ({ refused: 'timeout', holder: null, line: { ahead: 1, head: waiter }, waitedMs: 3_700_000, stillMs: 3_700_000, besideOlder: true }));
+  assert.equal(
+    free.turn.refused,
+    `${WAITER} waits ahead of this one for the machine's gate lock, which no gate holds; this gate had waited 61 min 40 s in all, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after 1 minute)`,
+  );
+  assert.match(free.turn.refused, /a gate of an older version of js-harness waited beside it/);
+  assert.doesNotMatch(free.turn.refused, /without the lock changing hands/);
+  assert.deepEqual([free.turn.reason, free.said], ['timeout', []]);
+});
+
+test('main stands behind a gate that arrived before it when the lock is free, says that this gate waits and holds nothing, and keeps it in its log as a gate it waited for from the moment it held the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const clock = gateClock();
+  const first = await clock.take({ home, ...OTHER_GATE });
+  // The gate of another process, in the line since before this one: it stands still at its poll until the
+  // test wakes it.
+  const asleep = [];
+  let two;
+  takeGateLock({ home, cwd: 'C:\\work\\two', command: 'gate -- node --test', pid: 22, now: clock.now, sleep: () => new Promise((resolve) => asleep.push(resolve)), beatMs: 0 }).then((lock) => {
+    two = lock;
+  });
+  const since = new Date(clock.now()).toISOString();
+  await clock.sleep(1000);
+  // The holder ends between two polls of the gate that waits: the lock is free when this gate arrives.
+  first.release();
+  let sleeps = 0;
+  const held = [];
+  clock.onSleep = async () => {
+    sleeps += 1;
+    held.push(readGateHolder(home, { now: clock.now })?.pid ?? null);
+    if (sleeps === 1) {
+      asleep.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    if (sleeps === 3) two.release();
+  };
+  const log = capturedLog();
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ takeGateLock: clock.take, ...log.deps }));
+  assert.equal(code, 0, output);
+  // Free at its first look, and left to the gate ahead.
+  assert.deepEqual(held, [null, 22, 22]);
+  const said = errOutput.split('\n');
+  assert.equal(said[0], `check: waiting behind the gate of C:\\work\\two (pid 22, waiting since ${since}), which waits for its turn at the machine's gate lock, for 60 minutes at most`);
+  assert.match(said[1], /^check: waiting for the gate of C:\\work\\two \(pid 22, started [^)]+\) to finish, for 60 minutes at most$/);
+  assert.deepEqual(said.slice(2), ['']);
+  assert.deepEqual(gateRows(output), ["INFO  gate  waited 6 s for the machine's gate lock before the sensors ran"]);
+  assert.deepEqual([log.events[0].event, log.events[0].waitedFor], ['start', [{ cwd: 'C:\\work\\two', pid: 22, command: 'gate -- node --test' }]]);
+}));
+
+test('main --no-wait is refused for a gate that waits ahead of it when the lock is free, in words that say it waits and holds nothing, and its log names no gate it waited for', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  // The folder of a gate in the line, as a gate that keeps the line writes it, touched a moment ago.
+  const since = new Date(Date.now() - 5000).toISOString();
+  const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'holder-22-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '22-aaaaaaaaaaaa', pid: 22, cwd: 'C:\\work\\two', command: 'check', startedAt: since, waitingSince: since, line: 1, session: null })}\n`);
+  let ran = 0;
+  const spawn = () => {
+    ran += 1;
+    return sensorRan();
+  };
+  const log = capturedLog();
+  const { code, output, errOutput } = await runCheck(['--cwd', dir, '--home', home, '--no-wait'], {}, gateDeps({ spawn, ...log.deps }));
+  assert.equal(code, 1);
+  assert.equal(ran, 0);
+  assert.deepEqual(gateRows(output), [
+    `FAIL  gate  no sensor ran: the gate of C:\\work\\two (pid 22, waiting since ${since}) waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`,
+  ]);
+  assert.equal(errOutput, '');
+  assert.deepEqual(log.events.map(({ event, reason, waitedFor }) => ({ event, reason, waitedFor })), [{ event: 'refused', reason: 'ahead', waitedFor: [] }]);
+  // It took nothing, and left nothing of its own in the line.
+  assert.equal(readGateHolder(home), null);
+  assert.deepEqual(fs.readdirSync(gateDir(home)), ['wait-22-aaaaaaaaaaaa']);
+}));
+
+// Found in review, 2026-10-11: the reason `ahead` came with the line, and the test above reads it from a
+// stand-in for the writer of the log. Nothing showed that the line the real writer makes of it is one the
+// real reader takes: a reader that knew only `held` and `timeout` would count every such refusal among the
+// lines it could not read.
+test('a gate refused with --no-wait behind a gate that waits ahead is in the real gate log of its home as one refusal whose reason is ahead: its reader takes the line and counts none unreadable', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'holder-22-aaaaaaaaaaaa.json'), `${JSON.stringify({ token: '22-aaaaaaaaaaaa', pid: 22, cwd: 'C:\\work\\two', command: 'check', startedAt: since, waitingSince: since, line: 1, session: null })}\n`);
+  // Handed no writer, the gate writes the log of its home, as it does outside a test.
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home, '--no-wait'], {}, gateDeps());
+  assert.equal(code, 1);
+  assert.match(gateRows(output).join('\n'), /^FAIL {2}gate {2}no sensor ran: .* waits ahead of this one for the machine's gate lock/);
+  assert.doesNotMatch(output, /gate log/);
+  assert.deepEqual(fs.readdirSync(gateLogDir(home)), ['log.jsonl']);
+  const { events, skipped } = readGateLog(home);
+  assert.deepEqual([events.length, skipped], [1, 0]);
+  assert.deepEqual(
+    gatesOf(events).map(({ start, refused }) => [start, refused?.event, refused?.reason, refused?.cwd, refused?.command, refused?.pid, refused?.waitedFor]),
+    [[undefined, 'refused', 'ahead', path.resolve(dir), 'check', process.pid, []]],
+  );
+}));
+
+test('main tells the lock which session started the gate, from the environment it was given, and none where the host says none', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
+  const take = lockTakenAtOnce();
+  const argv = ['--cwd', dir, '--home', home];
+  for (const env of [{ CLAUDE_CODE_SESSION_ID: 'a-session' }, {}, { CLAUDE_CODE_SESSION_ID: '' }]) await runCheck(argv, env, gateDeps({ takeGateLock: take }));
+  assert.deepEqual(take.asked.map(({ session }) => session), ['a-session', null, null]);
+  // And the real lock writes it in the gate's file, where the session board reads it.
+  let during;
+  const spawn = () => {
+    during = readGateHolder(home);
+    return sensorRan();
+  };
+  await runCheck(argv, { CLAUDE_CODE_SESSION_ID: 'a-session' }, gateDeps({ spawn }));
+  assert.deepEqual([during?.pid, during?.session], [process.pid, 'a-session']);
+}));
 
 const LOCK_NAMES = ['own', 'parent', 'none'];
 

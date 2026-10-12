@@ -723,9 +723,9 @@ podamos implementar todo"), each a feature of its own with its own document and 
    - What the lock covers: every `check` that runs sensors, and any command run through
      `js-harness gate -- <command>` (a batch of evals, a whole test run by hand), for one
      user on one machine, across projects and worktrees, since the lock is a folder under
-     the home (`~/.js-harness/gate`). A second gate waits for its turn, an hour unless
-     `--wait` says otherwise, and says whose gate it waits for; `--no-wait` refuses
-     instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
+     the home (`~/.js-harness/gate`). A second gate waits for its turn, in the order the
+     gates arrived (the line, below), and says whose gate it waits for; `--wait` bounds
+     that wait and `--no-wait` refuses instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
      watch no longer raises an alarm for a gate that only waits. A gate that is killed
      leaves a holder that the next one takes over a minute after its last beat. A gate that
      ends leaves nothing of the lock on disk (its two lines in the gate log, below, are all
@@ -738,6 +738,31 @@ podamos implementar todo"), each a feature of its own with its own document and 
      no sensor. On Windows `gate` refuses, among several arguments, one that `cmd.exe`
      cannot be handed whole (a double quote, a percent sign, a line break): such a command
      goes as one argument.
+   - The line (2026-10-11, `odd/tasks/gate-turn.md`): the lock gave no turns. Whichever
+     gate looked first when it came free took it, and on 2026-10-11 one commit waited 53
+     minutes while two gates that asked after it ran; the feature document counts five
+     such sightings that day. Every gate that waits already left a file that says since
+     when; now a gate tries to take the lock only while no live gate that arrived before
+     it waits, and two gates of the same instant are ordered by their token. Taking the
+     lock is still the one rename, so the line adds no way for two gates to run at once,
+     and an error while the line is read counts as nobody ahead, so it never makes a gate
+     run without the lock either. A gate ahead that dies stops touching its file and is
+     passed over after a minute. A gate from a version before the line keeps none and
+     would pass at every look, so beside a live one a gate behaves as it did before: on a
+     machine where each worktree has the version it has, the line holds among the gates
+     that keep it. A wait says how many gates are ahead and which is first, `--no-wait`
+     refuses behind a gate that waits as it does behind one that runs, and a gate's file
+     records the session it runs for, which the board can then show.
+     What `--wait` bounds changed with the line, and he chose that default on 2026-10-11
+     ("La opción B", of two put to him: stay while the line moves, and leave only when the
+     lock has served nobody for an hour): it is no longer the minutes since the gate
+     arrived but the minutes the lock may go without changing hands, sixty when not given. With gates of about fourteen minutes a
+     gate with four ahead reached an hour while the line moved, was refused and came back
+     last; two commits lost an hour each that way on 2026-10-11. The bound exists to give
+     up on a lock that does not move. What a user of the installed gate sees by default is
+     therefore a commit that may wait more than an hour in a line that moves, and there is
+     no bound on the whole wait. Counting from the arrival again is one line of
+     `bin/lib/gate-lock.mjs`.
    - The shorter run: measured file by file, the suite is as long as one file,
      `bin/codex-review.test.mjs` (909.7 of 910 s, every other file done by 458 s). Its
      test repositories built once and copied took that file from 640 s to 490 s alone and
@@ -946,12 +971,12 @@ with the session channel and tried first by hand:
 - No session stops, slows or proposes a cut for a percentage. Near the end of its window
   it pauses, writes its state in its feature document, and judges: little left, it
   finishes well; much left, the compaction is done there and the same task continues after
-  it. This is the context pause, his rule of 2026-10-10, in his words of that day:
-  "al 85% pausamos no detenemos y miramos si falta poco para poder terminar bien o sino para
-  compactar y continuar post-compactacion". Its design is in `odd/tasks/session-channel.md`
-  ("Context"), and the share of the window it acts at, which he changed on 2026-10-11, is
-  recorded in the orchestrator's relief file until the code holds it in one place (T5 of
-  that document).
+  it. This is the context pause, his rule of 2026-10-10. The share of the window it acts
+  at has one home, the constant `DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`,
+  with the share where the host compacts beside it (`DEFAULT_CONTEXT_COMPACTION_PERCENT`):
+  a text names the rule or reads the constant and never writes the value, and a test of
+  `bin/sessions.test.mjs` fails when one does. Its design is in
+  `odd/tasks/session-channel.md` ("Context").
 - A task ends with its commit and with the feature document saying what is next, so at
   that point the files hold everything and the conversation can go.
 - Two ways to cut, to be compared: the host's compaction with a `SessionStart` hook that

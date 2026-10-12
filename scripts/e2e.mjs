@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from './lib.mjs';
+import { HARNESS_HOOKS, hostHooksProblem } from './practice-lib.mjs';
 
 // The skills `install` writes for each host, one folder each under `<home>/.<host>/skills/`.
 const SKILLS = ['js-harness', 'js-harness-orchestrator'];
@@ -36,9 +37,21 @@ async function main() {
   let seededClaudeSettings = '';
   let seededCodexHooks = '';
 
-  function sessionStartCount(filePath) {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    return data.hooks.SessionStart.length;
+  // The command of the entry each host file is seeded with, the user's, which install must leave first.
+  const seededCommands = [
+    [claudeSettingsPath, 'echo unrelated-claude-hook'],
+    [codexHooksPath, 'echo unrelated-codex-hook'],
+  ];
+
+  /** What is wrong with the hook entries of the two host files, or `null`: each must hold its seeded entry
+   * and then every entry `install` writes (`HARNESS_HOOKS`: the doctor's for `startup|resume`, the resume
+   * hook's for `compact`) once, by its matcher and its command (`hostHooksProblem`). */
+  function hostFilesProblem() {
+    for (const [filePath, seededCommand] of seededCommands) {
+      const problem = hostHooksProblem(fs.readFileSync(filePath, 'utf8'), seededCommand);
+      if (problem !== null) return `${filePath}: ${problem}`;
+    }
+    return null;
   }
 
   let failed = false;
@@ -128,25 +141,9 @@ async function main() {
       }
     });
 
-    step('install added exactly one SessionStart entry to each seeded host file', () => {
-      assertThat(
-        sessionStartCount(claudeSettingsPath) === 2,
-        `expected 2 Claude SessionStart entries (1 seeded + 1 ours), got ${sessionStartCount(claudeSettingsPath)}`,
-      );
-      assertThat(
-        sessionStartCount(codexHooksPath) === 2,
-        `expected 2 Codex SessionStart entries (1 seeded + 1 ours), got ${sessionStartCount(codexHooksPath)}`,
-      );
-      const claudeData = JSON.parse(fs.readFileSync(claudeSettingsPath, 'utf8'));
-      assertThat(
-        claudeData.hooks.SessionStart[0].hooks[0].command === 'echo unrelated-claude-hook',
-        'expected the seeded Claude entry to still be first and untouched',
-      );
-      const codexData = JSON.parse(fs.readFileSync(codexHooksPath, 'utf8'));
-      assertThat(
-        codexData.hooks.SessionStart[0].hooks[0].command === 'echo unrelated-codex-hook',
-        'expected the seeded Codex entry to still be first and untouched',
-      );
+    step(`install added its ${HARNESS_HOOKS.length} SessionStart entries to each seeded host file, after the seeded one: ${HARNESS_HOOKS.map((hook) => `${hook.matcher} -> ${hook.command}`).join('; ')}`, () => {
+      const problem = hostFilesProblem();
+      assertThat(problem === null, `after install, ${problem}`);
     });
 
     step('install preserved each seeded file\'s own indentation (4-space Claude, tab Codex)', () => {
@@ -159,14 +156,8 @@ async function main() {
     step('a second `install --home` adds no duplicate SessionStart entries', () => {
       const result = run(process.execPath, [binPath, 'install', '--home', home]);
       assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
-      assertThat(
-        sessionStartCount(claudeSettingsPath) === 2,
-        `expected still 2 Claude SessionStart entries after a repeat install, got ${sessionStartCount(claudeSettingsPath)}`,
-      );
-      assertThat(
-        sessionStartCount(codexHooksPath) === 2,
-        `expected still 2 Codex SessionStart entries after a repeat install, got ${sessionStartCount(codexHooksPath)}`,
-      );
+      const problem = hostFilesProblem();
+      assertThat(problem === null, `after a repeat install, ${problem}`);
     });
 
     step('bump the staged copy to 0.2.0 and pack it into the release directory', () => {
@@ -220,14 +211,8 @@ async function main() {
     });
 
     step('the `sync` run inside upgrade also added no duplicate SessionStart entries', () => {
-      assertThat(
-        sessionStartCount(claudeSettingsPath) === 2,
-        `expected still 2 Claude SessionStart entries after upgrade's sync, got ${sessionStartCount(claudeSettingsPath)}`,
-      );
-      assertThat(
-        sessionStartCount(codexHooksPath) === 2,
-        `expected still 2 Codex SessionStart entries after upgrade's sync, got ${sessionStartCount(codexHooksPath)}`,
-      );
+      const problem = hostFilesProblem();
+      assertThat(problem === null, `after upgrade's sync, ${problem}`);
     });
 
     step('`js-harness uninstall` removes what it wrote and restores both hook files byte-for-byte', () => {
