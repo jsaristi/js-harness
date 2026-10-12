@@ -2103,10 +2103,25 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     answered by Opus 5.5, 8 claude-code-guide by Haiku 5.5). NEXT: the last commit through the
     gate, then gentle-ai from `528bf56` on the three commits; Codex by its plan, and over the
     rate it waits for him.
+  - The last commit is `c8ef7b5` (the gate passed at 07:12): the reader, the form `applied`,
+    the head line of the list and the three notes. The branch is four code commits on
+    `47484bd`, not pushed. gentle-ai goes slice by slice from the detached worktree:
+    `528bf56..34c2dfc` (1,288 lines, medium, one lens, `review-bf548f33bb522cc9`) started at
+    07:15; `34c2dfc..c8ef7b5` after it.
+    **Codex is one review of the whole range, inside the rate.** `codex-review --base 47484bd
+    --plan` on `c8ef7b5`: 7 parts, 2,616 changed lines in 18 files, about 2,530,000 input
+    tokens, against an allowance of 1,200 x 2,616 = 3,139,200; it needs `--max-parts 7`. The
+    range was not shaped to move the figure: it is the branch as it stands, the commits were
+    cut by the size a commit is reviewed at before any plan was asked for, and piece A alone
+    had planned over (570,000 against 559,200) only because the estimator's median stands a
+    little above the rate today. The lead saw no reason against it (its message of 07:20, a
+    peer's and not his words). It runs once gentle-ai has approved the slices. If it falls
+    midway it is not rerun: the lead is told the tokens read and the part. If the first part
+    answers at capacity at once, one more try after ten minutes, then stop.
 
 ## Next step
 In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:
-gentle-ai from `528bf56`, Codex by its plan (over the rate it waits for him), then push and
+gentle-ai slice by slice, then Codex once on the whole range, inside the rate; then push and
 the pull request, which the push hook allows only with Codex's records. (2) The check of
 launches (T13 with the checking half of B3): it reads the list `readRecords` gives and holds
 the session rows and the sub-agents' effort, and says what each launch without a model ran
