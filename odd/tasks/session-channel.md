@@ -550,13 +550,17 @@ decided today would use them.
 Each is run once by the build, with its result recorded in Progress.
 1. A one-line opening pasted on the phone and on the desktop: typed text or pasted content?
 2. A session opened by the orchestrator through a scheduled task: can he type in it; can it
-   commit in a folder of its own (one gate turn)?
+   commit in a folder of its own (one gate turn)? His rule of 2026-10-12 is that no session
+   opens where he does not see it (T16), and the app files such a session under its routines,
+   collapsed in his sidebar, at the default effort: the question that asks him for this test
+   says both, and without his yes it is not run.
 3. `claude --name` with an initial prompt, from a command: does the session appear in the app?
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
 5. After a rename, does the old title stop resolving as an address?
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
+
 ### 14. A compaction that loses nothing (T6b; design, version 2, after its two readers)
 
 The problem behind his words. On 2026-10-11 the orchestrator went from the pause to the host's
@@ -666,6 +670,31 @@ Three parts.
    read it says as not known. A `PreCompact` entry is left out: the event exists on both
    hosts by their pages, no transcript sampled here records one run, and nothing above needs
    it.
+
+4. The lead is told that a compaction happened (added on 2026-10-12 after version 2, on his
+   request, and not yet read by the two readers). His words, in the lead's chat (its
+   transcript `65318fd5`, line 2008, read with `sessions --quote`, exit 0): "si pero compacte
+   y le envie el bloque, tengamos alguna mecanismo que cuando lo haga te informe para que no
+   nos pase esto de que crees algo que la sesion no esta haciendo". What had happened, by the
+   lead's account: a session told it that it had given him the two blocks, he sent both, and
+   the lead told him four times more that the cut was pending, from the notice and not from
+   the session. Three things, the lead's reading and this feature's to design. (a) The resume
+   hook is what knows a compaction happened: it records the fact in the channel's record,
+   where the board reads it, with no model in it; and it tells the resumed session, in the
+   lines it prints, to send the lead one line, which is the half a hook cannot do and stays a
+   rule. (b) The board and the recap line of T8 say what waits for him in a session from that
+   session's record at that moment (its share of the context, its last entry of human origin,
+   whether a compaction came after the blocks), never from a message. (c) A measure: the
+   replies of a lead that name a cut as pending after the compaction happened. Until it is
+   built, the lead's working rule holds: the first act of a session after a compaction is one
+   line to the lead (title, hour by date, share of the context, what it resumes).
+
+A fact of 2026-10-12 03:25 that part 1's guard and part 3 answer to (the lead's account): the
+entry of the resume hook is registered on this machine and the command on the path is an
+older copy with no `resume`, so the hook prints "Unknown command" and exits 2 after each
+compaction. `install` writes an entry for a command the installed copy may not have, and
+nothing says so: `doctor` gets a row that runs each entry's command with an empty input and
+names the one that does not answer.
 
 The measure, the proof he is owed. For each automatic compaction, judged once and in the file
 that holds the stretch before it, three facts: told (the mark of part 1 is older than the
@@ -806,7 +835,11 @@ reader, and that table names this feature as their owner.
   rules of his of 2026-10-12 (Progress, 01:20): each recap names by title the sessions to
   archive and the ones that are stopped, a session a scheduled task opened being named as a
   routine; and while he is away, a block that waits for him is given once and held until he
-  says he is back or is seen to have written
+  says he is back or is seen to have written. And four rules the lead found on 2026-10-12
+  with no task anywhere, each a memory note today: before he leaves he is asked for
+  everything the stretch will need; the Codex meter is read and told in every recap; the
+  lead reads a session at that moment before it says what waits for him there; a notice
+  when a stretch ends
 - [ ] T9 `--measures`
 - [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
@@ -830,7 +863,9 @@ reader, and that table names this feature as their owner.
   and effort of its sub-agents, with the table, read from the sessions' records. For the
   design, found by the lead's reader and not for this feature to change: `js-harness remote`
   starts a session with no model or effort (`bin/lib/remote.mjs:88`), so one opened from the
-  phone takes the default of his settings
+  phone takes the default of his settings. Before a session's mode is changed, the state of
+  its task is read (the lead's rule, a note of its relief file today). The check is JH 7's,
+  one with task 13 of the rule hierarchy; this feature keeps the applying half
 - [ ] T15 A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
   and tokens, read from their records (C1): it costs nothing to run, and it decides what is
   measured next and the working rule on fewer launches
