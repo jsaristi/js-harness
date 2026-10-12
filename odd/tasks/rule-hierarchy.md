@@ -2145,15 +2145,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `fenceWalk` took a line that starts with a code span in three backticks for the opening
     of a fence, so `rules check` reported a fence that was not there and `rules render`
     refused a valid document. A line of backticks whose words hold another backtick opens
-    nothing now, as in Markdown. NEXT: that correction through the gate, Codex on it alone
-    (`--base 878e2e8`, by its plan, under the floor), then push and the pull request.
+    nothing now, as in Markdown. The correction is commit `88cde75` (the gate passed at
+    10:16). NEXT: Codex on it alone (`--base 878e2e8`, by its plan, under the floor), then
+    push and the pull request.
   - This session's own language server (`node tsserver.js`, pid 59656) spun one logical
     processor from 01:48 to 08:53 and slowed every gate of the machine (the lead's figures:
     842 s to about 945 s). The gate printed it at 07:50 and this session reported it as a
     process whose owner it did not know, when one look at its parents would have said it was
     its own: the lead said so at 08:51, the chain was checked in the process list
     (59656, 39296, 59764, 54748, the ancestor of this session's own shell) and the process
-    stopped. It is the register's `hidden-load-slows-gates` again; what would stop it is the
+    stopped. It is the register's `language-server-load` again, with a sighting added; what would stop it is the
     gate's load line naming the session a spinning process belongs to, which is the lead's to
     place.
 
