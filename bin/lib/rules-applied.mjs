@@ -290,10 +290,8 @@ export function appliedOf(rules, launches, sessions, { today, days = 7, held = [
     .filter(({ rule }) => rule !== null)
     .map(({ item, rule }) => heldCompare(item, rule, item.of === 'sessions' ? keptSessions : keptLaunches));
   const heldItems = heldFound.map(({ item }) => item);
-  const heldOther = heldItems.reduce(
-    (sum, item) => sum + item.others.reduce((count, other) => count + other.count, 0),
-    0,
-  );
+  // A record that differs from two rules, a session's model and its effort, is one record.
+  const heldOther = new Set(heldFound.flatMap(({ differing }) => differing)).size;
   // A launch that passed a declared short name is this repository's own: the lead is told how many ran at another effort.
   const forLead = heldFound
     .filter(({ item }) => item.of === 'launches' && item.field === 'effort')

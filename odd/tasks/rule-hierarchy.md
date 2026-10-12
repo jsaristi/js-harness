@@ -2344,6 +2344,26 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     NEXT: this commit through the gate; gentle-ai assessed from `8a73dde`; Codex with
     `--base 3088960`, plan first, run when the plan is at most 1.05 times the allowance; push
     and a pull request on `main`.
+  - That commit is `f7649b8` (the gate passed at 14:16, after an hour in its line). gentle-ai
+    assessed `8a73dde..f7649b8` as medium and not due (`under_budget`). Codex reviewed
+    `3088960..f7649b8` in 3 parts and the review is recorded: 848,242 input tokens (678,912
+    cached), 206 s, against a plan of about 750,000 and an allowance of 1,125,600 for 938
+    changed lines. Two parts with no defect and one finding of the second priority, taken:
+    `heldOther` summed the other values of every held item, so a session that differs in its
+    model and in its effort was said as "2 records". It now counts each differing record
+    once, test first (2 for 1 before the change); 82 and 33 tests pass.
+    The register also gets, from the first run of the suite on GitHub's Linux (run
+    38296748258, relief file line 425, classified by JH 8): `test-skipped-here-never-run`,
+    `linux-probe-misnames-process`, `refusal-in-system-words`; and two more sightings of
+    `command-run-for-help` (`install --help` at 03:25 and `check --help` at 13:16, both on
+    2026-10-12), four in all with its control still owed.
+    Taken from the lead (14:48, a claim): after this pull request, one small branch off `main`
+    corrects the stale expectation (`bin/lib/project.test.mjs:1936`, by reading ae471e7; no
+    run can show it green here, since this machine skips the test) and the `ENOTDIR` of
+    `evals/paths.mjs:6`, test first. The probe of `evals/ports.mjs:168-169` waits as its
+    register entry: it is reproduced only on Linux.
+    NEXT: this correction through the gate; Codex on that one commit, plan first; push and
+    the pull request on `main`.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`

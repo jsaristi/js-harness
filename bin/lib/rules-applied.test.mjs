@@ -1072,7 +1072,22 @@ test('held: an id with no rule, a rule with no text value, and a malformed item 
   assert.deepEqual(out.held.map((item) => item.id), ['session-model']);
 });
 
-test('held: heldOther is the sum of the counts of every other value of every item', () => {
+test('held: a record that differs from two held rules is counted once in heldOther', () => {
+  const out = run([
+    rule({ id: 'session-model' }),
+    { id: 'session-effort', value: 'high', since: '2026-10-01' },
+  ], [], [
+    session({ model: 'claude-sonnet-5-5', effort: 'medium' }),
+    session({ effort: 'high' }),
+  ], { held: [
+    { id: 'session-model', of: 'sessions', field: 'model' },
+    { id: 'session-effort', of: 'sessions', field: 'effort' },
+  ] });
+  assert.deepEqual(out.held.map((item) => item.others.map((other) => other.count)), [[1], [1]]);
+  assert.equal(out.heldOther, 1);
+});
+
+test('held: heldOther counts every record that differs from an item, whatever its other value', () => {
   const out = run([
     rule({ id: 'session-model' }),
     { id: 'subagent-effort', value: 'high', since: '2026-10-01' },

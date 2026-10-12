@@ -188,6 +188,10 @@ A session ran a command it did not know, to read its help, and the command acted
 - Seen: 2026-10-10 — relief file, line 54 — `claude remote-control --help` printed nothing and hung
   120 s; odd/tasks/session-board.md:1335-1339 calls it the same mistake, a day after the rule was
   written
+- Seen: 2026-10-12 — relief file, line 349 — the lead ran `install --help` to read the help and it
+  installed four files and a hook entry on his machine
+- Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
+  went to wait and was stopped before it ran anything (claimed)
 - Control: owed — odd/tasks/rule-hierarchy.md — "Every command that writes outside the repository
   refuses a flag it does not know"
 
@@ -413,6 +417,16 @@ loads it in lines under the load row"); that row tells of it and stops nothing.
   T16b — pid 59656 of the session of this feature spun one processor from 01:48 to 08:53; the gate
   of 07:50 named it and the session reported it without looking at whose it was
 
+### linux-probe-misnames-process
+On Linux the probe of a port named the process that listened by `ps -o comm=`, which answered the
+thread's name, so a listener was left alone as "not engram".
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — run 38296748258 of the suite on GitHub's Linux
+  (claimed; classified in odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, lines 1037-1039):
+  `evals/ports.mjs:168-169` got `MainThread` for a Node child; whether the real engram binary is
+  named right is not known. It can be reproduced only on Linux: a run there in which the probe
+  names a Node listener and the engram binary by what they are would prove a fix
+
 ### lock-folder-left
 The gate lock left an empty folder under his home after every run, and `uninstall` did not remove
 it.
@@ -542,6 +556,14 @@ stood.
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
 
+### refusal-in-system-words
+A path helper let a system error through, so a run was refused in the system's words and not in
+the harness's.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — `evals/paths.mjs:6` lets `ENOTDIR` through for a
+  path below a file (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, line 1040);
+  the run is still refused
+
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
 without that review, and the choice went to him.
@@ -661,6 +683,14 @@ disk.
 - Aka: failure 13 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 101 — 2,357 `js-harness-*` folders dated 10-01 to 10-10,
   counted by the orchestrator; 2,358 at line 105; also odd/tasks/gate-lock.md:316-317
+
+### test-skipped-here-never-run
+A test that this machine skips is run by no gate, so its expectation went stale and stood red with
+nothing to say so.
+- Class: unseen-state
+- Seen: 2026-10-12 — relief file, line 425 — `bin/lib/project.test.mjs:1936` expects a reason that
+  changed at ae471e7; Windows skips the test, and the first run on Linux (run 38296748258) showed
+  it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144)
 
 ### test-wrote-real-home
 A test that forgot `--home` wrote into the real home.
