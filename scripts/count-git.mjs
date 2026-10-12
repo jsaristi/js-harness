@@ -82,28 +82,21 @@ function readCounts(file) {
   return { lines, unreadable };
 }
 
-/** How many `node` launches no report answers, from the lines of the processes that reported. A report
- * answers a launch of the process that started it and of no other: of its parent when that one reported, or
- * of the process that started its parent, where the launch was a shell string that begins with `node` and
- * the process it started is the shell. A report with neither answers nothing: a test file's own process,
- * started by the runner, and the test file of a `node --test` that a test started, whose runner is no `node`
- * a report is due from. Counted against all launches of the run, each of those would hide one process that
- * never reported. Processes are told apart by pid, and a long run uses a pid again: two that had the same
- * one are summed, their launches and the reports below them. */
+/** How many `node` launches no report answers, from the lines of the processes that reported. Each `node` launch
+ * carries a token of its own: the process it starts gets the token in its environment and reports it back in
+ * `launch`. A report answers the launch whose token it carries, and nothing else: two reports with one token
+ * answer it once, and a report whose token no reporting process launched answers nothing. A report with no token
+ * answers nothing either: a test file's own process, started by the runner, and the test file of a `node --test`
+ * that a test started, whose runner is no `node` a report is due from. Processes are no longer told apart by pid
+ * here, since a long run uses a pid again, and a shell gives the pid of the shell, not of the `node` below it. */
 function missingReports(lines) {
-  const launches = new Map(); // the pid of a process that reported → the `node` launches it counted
-  const starterOf = new Map(); // the pid a launch was given → the pid of the process that started it
-  for (const line of lines) {
-    launches.set(line.pid, (launches.get(line.pid) ?? 0) + line.nodes);
-    for (const pid of line.nodePids ?? []) starterOf.set(pid, line.pid);
-  }
-  const answered = new Map();
-  for (const line of lines) {
-    const starter = launches.has(line.ppid) ? line.ppid : starterOf.get(line.ppid);
-    if (starter !== undefined) answered.set(starter, (answered.get(starter) ?? 0) + 1);
-  }
+  const reported = new Set(lines.map((line) => line.launch));
   let missing = 0;
-  for (const [pid, count] of launches) missing += Math.max(0, count - (answered.get(pid) ?? 0));
+  for (const line of lines) {
+    for (const token of line.nodeLaunches ?? []) {
+      if (!reported.has(token)) missing += 1;
+    }
+  }
   return missing;
 }
 
