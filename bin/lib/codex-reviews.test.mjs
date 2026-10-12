@@ -1,9 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { appendCodexReview, codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -99,6 +100,66 @@ test('an append to a well-formed file adds no blank line', () => {
   const file = appendCodexReview(root, record);
   appendCodexReview(root, record);
   assert.equal(fs.readFileSync(file, 'utf8').split('\n').filter((l) => !l.trim()).length, 1);
+});
+
+/** A script that appends `count` records to the record of the repository at `root`, each of some thousands
+ * of bytes and each saying which `writer` made it and in which place. It says it is ready with a file and
+ * starts when the file `go` exists, so that several of them append in the same moment. */
+const WRITER = `
+import fs from 'node:fs';
+const [lib, root, commonGitDir, dir, writer, count, base] = process.argv.slice(2);
+const { appendCodexReview } = await import(lib);
+const wait = new Int32Array(new SharedArrayBuffer(4));
+fs.writeFileSync(dir + '/ready-' + writer, '');
+while (!fs.existsSync(dir + '/go')) Atomics.wait(wait, 0, 0, 5);
+for (let place = 0; place < Number(count); place += 1) {
+  appendCodexReview(root, { ...JSON.parse(base), writer: Number(writer), place, pad: 'x'.repeat(4000) }, { where: { commonGitDir } });
+}
+`;
+
+test('records appended in the same moment by several processes each stay one whole line, in the order each process wrote them', async () => {
+  const root = makeRepo();
+  const file = appendCodexReview(root, record);
+  const commonGitDir = path.resolve(file, '..', '..');
+  const dir = tmp('js-harness-codex-reviews-at-once-');
+  const script = path.join(dir, 'writer.mjs');
+  fs.writeFileSync(script, WRITER, 'utf8');
+  const lib = pathToFileURL(path.join(import.meta.dirname, 'codex-reviews.mjs')).href;
+  const writers = 4;
+  const count = 100;
+  const ended = [];
+  for (let writer = 0; writer < writers; writer += 1) {
+    const child = spawn(process.execPath, [script, lib, root, commonGitDir, dir, String(writer), String(count), JSON.stringify(record)], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    child.stderr.on('data', (chunk) => (err += chunk));
+    ended.push(new Promise((resolve) => child.on('close', (code) => resolve({ writer, code, err }))));
+  }
+  // Every writer is up before any of them appends: a process that starts late would append alone.
+  const allReady = () => Array.from({ length: writers }, (_, writer) => fs.existsSync(path.join(dir, `ready-${writer}`))).every(Boolean);
+  for (let waited = 0; !allReady() && waited < 60_000; waited += 20) await new Promise((resolve) => setTimeout(resolve, 20));
+  // Let go of them whether or not all are up, so none is left waiting when the test fails.
+  const ready = allReady();
+  fs.writeFileSync(path.join(dir, 'go'), '');
+  for (const { writer, code, err } of await Promise.all(ended)) assert.equal(code, 0, `writer ${writer}: ${err}`);
+  assert.ok(ready, 'the writers were not all up before the first of them appended');
+
+  // Read as text and parsed line by line: the reader of the record passes over a line it cannot read, and
+  // a torn line is what this looks for.
+  const text = fs.readFileSync(file, 'utf8');
+  assert.ok(text.endsWith('\n'));
+  const lines = text.slice(0, -1).split('\n');
+  assert.equal(lines.length, 1 + writers * count);
+  const records = lines.map((line, at) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return assert.fail(`line ${at + 1} of ${lines.length} is not one whole record: ${line.slice(0, 80)}`);
+    }
+  });
+  for (let writer = 0; writer < writers; writer += 1) {
+    const places = records.filter((one) => one.writer === writer).map((one) => one.place);
+    assert.deepEqual(places, Array.from({ length: count }, (_, place) => place), `writer ${writer}`);
+  }
 });
 
 test('append outside a git repository throws instead of writing somewhere else', () => {
