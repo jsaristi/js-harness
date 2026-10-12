@@ -5132,7 +5132,8 @@ test('the row of the plain check and the plan of the command size the same revie
       assert.equal(plan.code, 0, `${which}, --base ${asked}: ${plan.err}`);
       const header = plan.out.split('\n').find((line) => line.startsWith('Plan of the Codex review of '));
       assert.ok(header.endsWith(`: gpt-6.1-sol at high effort, ${parts}, ${size}.`), `${which}, --base ${asked}: the row says ${parts}, ${size}; the plan: ${header}`);
-      assert.deepEqual(row.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${base} --plan`], which);
+      // The row closes with the two commands of that one review, after the commits it names.
+      assert.deepEqual(row.lines.slice(-2), [`make the record with: js-harness codex-review --base ${base}`, `what it would cost, with nothing spent: js-harness codex-review --base ${base} --plan`], which);
     }
   }
 });

@@ -1026,6 +1026,11 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   return { tip, baseRef, base, codeCommits, covers, uncovered, note };
 }
 
+/** The lines that both rows print for the code commits no Codex review record covers: one per commit, with its
+ * short id and subject, newest first as `git log` lists them. Each row closes them with the command that
+ * makes the record, from the base that row names. */
+const uncoveredNames = (uncovered) => uncovered.map((commit) => `${commit.shortId} ${commit.subject}`);
+
 /** What both rows say of a coverage that leaves no code commit uncovered, before its `note`. */
 function coveredDetail({ codeCommits, base }) {
   return codeCommits.length
@@ -1058,7 +1063,7 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
       : `make the record with: js-harness codex-review --base ${oldest.shortId}^`;
-    const lines = [...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`), hint];
+    const lines = [...uncoveredNames(uncovered), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
@@ -1100,7 +1105,8 @@ function reviewSize(spawn, cwd, from, tip) {
  *
  * Informational: it reads what the `--push` row reads (`codexReviewCoverage`, from the remote's default
  * branch to `HEAD`) and fails nothing, a state it cannot tell included. For the code commits no record
- * covers it says how many they are and how large the review that covers them is today: the review
+ * covers it says how many they are, names each one as the `--push` row does, with the command that makes
+ * the record, and says how large the review that covers them is today: the review
  * `js-harness codex-review` would run, which starts where the records end (`reviewStart`, the one rule the
  * two share) and leaves out the files a review leaves out; and it names the command that prints the plan of
  * that review and starts nothing.
@@ -1153,6 +1159,9 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
       (over ? `, already more parts than ${partsBound({ maxParts: MAX_PARTS_WITHOUT_FLAG, maxPartsGiven: false })}` : '');
   }
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
+    // The base is the one the size above was read from, so the row names one review, not two.
+    ...uncoveredNames(uncovered),
+    `make the record with: js-harness codex-review --base ${baseArg}`,
     ...(over ? ['the cheaper way is to review now: every commit added to this range makes its review larger'] : []),
     `what it would cost, with nothing spent: js-harness codex-review --base ${baseArg} --plan`,
   ]);

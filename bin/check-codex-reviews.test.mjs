@@ -239,7 +239,11 @@ test('a merge commit somebody wrote code in needs a record, as the commit it is'
   // with what the merge brought in beside it.
   const debt = checkCodexReviewDebt(root);
   assert.equal(debt.detail, `no Codex review record for 1 of 3 code commits since origin/main: the review of ${from}..HEAD is 1 part today, 3 changed lines in 2 files`);
-  assert.deepEqual(debt.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${from} --plan`]);
+  assert.deepEqual(debt.lines, [
+    `${short(root, merged)} merge side, with an edit of its own`,
+    `make the record with: js-harness codex-review --base ${from}`,
+    `what it would cost, with nothing spent: js-harness codex-review --base ${from} --plan`,
+  ]);
   // The record that command makes from that base covers it, as it covers any commit.
   record(root, own, merged);
   const covered = checkCodexReviews(root, 'HEAD');
@@ -999,14 +1003,61 @@ test('the plain row counts the code commits with no record and sizes the review 
   const reviewed = commit(root, 'b.js', lines(4), 'feat: two');
   record(root, base, reviewed);
   const oldest = commit(root, 'c.js', lines(3), 'feat: three, not reviewed');
-  commit(root, 'd.js', lines(5), 'feat: four, not reviewed');
+  const newest = commit(root, 'd.js', lines(5), 'feat: four, not reviewed');
   const row = checkCodexReviewDebt(root);
   assert.ok(isInformation(row), JSON.stringify(row));
   assert.match(row.detail, /no Codex review record for 2 of 3 code commits since origin\/main/);
   // The review that would cover them is of the range from the parent of the oldest one to HEAD, as
   // `js-harness codex-review --base <oldest>^` would size it today.
   assert.ok(row.detail.includes(`the review of ${short(root, oldest)}^..HEAD is 1 part today, 8 changed lines in 2 files`), row.detail);
-  assert.deepEqual(row.lines, [`what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`]);
+  assert.deepEqual(row.lines, [
+    `${short(root, newest)} feat: four, not reviewed`,
+    `${short(root, oldest)} feat: three, not reviewed`,
+    `make the record with: js-harness codex-review --base ${short(root, oldest)}^`,
+    `what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`,
+  ]);
+});
+
+test('the plain row names each code commit no record covers, as the push check does, and the command that records them', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  const second = commit(root, 'c.js', 'three', 'feat: three, never reviewed');
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.match(row.detail, /^no Codex review record for 2 of 2 code commits since origin\/main/);
+  const said = row.lines.join('\n');
+  assert.ok(row.lines.includes(`${short(root, first)} feat: two`), said);
+  assert.ok(row.lines.includes(`${short(root, second)} feat: three, never reviewed`), said);
+  // The record starts at the parent of the oldest of them.
+  assert.ok(row.lines.includes(`make the record with: js-harness codex-review --base ${short(root, first)}^`), said);
+});
+
+test('with a record that covers one of them, the plain row names only the commit no record covers', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  const second = commit(root, 'c.js', 'three', 'feat: three, never reviewed');
+  record(root, base, first);
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.match(row.detail, /^no Codex review record for 1 of 2 code commits since origin\/main/);
+  const said = row.lines.join('\n');
+  assert.ok(row.lines.includes(`${short(root, second)} feat: three, never reviewed`), said);
+  assert.ok(!row.lines.some((line) => line.startsWith(short(root, first))), said);
+  assert.ok(row.lines.includes(`make the record with: js-harness codex-review --base ${short(root, second)}^`), said);
+});
+
+test('with every code commit covered, the plain row is what it was and names no commit', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const head = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, base, head);
+  const row = checkCodexReviewDebt(root);
+  assert.ok(isInformation(row), JSON.stringify(row));
+  assert.equal(row.detail, '2 code commits since origin/main, all covered by a Codex review record');
+  assert.equal(row.lines, undefined);
 });
 
 test('the plain row sizes a review in thousands of changed lines and in parts', () => {
@@ -1017,7 +1068,11 @@ test('the plain row sizes a review in thousands of changed lines and in parts', 
   assert.ok(isInformation(row), JSON.stringify(row));
   assert.ok(row.detail.includes(`the review of ${short(root, oldest)}^..HEAD is 3 parts today, 1,050 changed lines in 3 files`), row.detail);
   assert.doesNotMatch(row.detail, /max-parts/);
-  assert.equal(row.lines.length, 1);
+  assert.deepEqual(row.lines, [
+    `${short(root, oldest)} feat: three files`,
+    `make the record with: js-harness codex-review --base ${short(root, oldest)}^`,
+    `what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`,
+  ]);
 });
 
 test('the plain row names a base that exists for a root commit, as the push check does', () => {
@@ -1031,7 +1086,11 @@ test('the plain row names a base that exists for a root commit, as the push chec
   // cannot be run.
   assert.equal(row.detail, 'no Codex review record for 1 of 1 code commit since origin/main: how large the review of origin/main..HEAD is today could not be told');
   const said = [row.detail, ...row.lines].join('\n');
+  // The commit is named, and no line names its `^`, which does not exist: both commands start from the
+  // default branch.
+  assert.ok(row.lines.includes(`${short(root, rootCommit)} feat: a root commit`), said);
   assert.ok(!said.includes(`${short(root, rootCommit)}^`), said);
+  assert.ok(row.lines.includes('make the record with: js-harness codex-review --base origin/main'), said);
   assert.ok(said.includes('js-harness codex-review --base origin/main --plan'), said);
 });
 
@@ -1054,12 +1113,18 @@ function repoWithWorkForkedEarlier() {
 }
 
 test('the plain row sizes the review from where `js-harness codex-review` would start it, which is not always the parent of the oldest commit', () => {
-  const row = checkCodexReviewDebt(repoWithWorkForkedEarlier());
+  const root = repoWithWorkForkedEarlier();
+  const row = checkCodexReviewDebt(root);
   assert.ok(isInformation(row), JSON.stringify(row));
   // From the parent of the side commit the review would read the 40 lines the default branch already
   // holds. That command starts such a review at the default branch, and so does the size said here.
   assert.equal(row.detail, 'no Codex review record for 1 of 2 code commits since origin/main: the review of origin/main..HEAD is 1 part today, 7 changed lines in 2 files');
-  assert.deepEqual(row.lines, ['what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan']);
+  // The command that makes the record is given the base the size was read from: the row names one review.
+  assert.deepEqual(row.lines, [
+    `${short(root, 'side')} feat: side work, forked before the default branch moved`,
+    'make the record with: js-harness codex-review --base origin/main',
+    'what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan',
+  ]);
 });
 
 test('the plain row sizes no review when git does not say where the range starts: a `merge-base` that failed is not two histories that share no commit', () => {
@@ -1073,7 +1138,11 @@ test('the plain row sizes no review when git does not say where the range starts
   // Taken for no shared history, that failure would leave the start held to no commit: the review would be
   // sized from the parent of the side commit, 47 changed lines in 3 files, 40 of them the default branch's.
   assert.equal(row.detail, 'no Codex review record for 1 of 2 code commits since origin/main: how large the review of origin/main..HEAD is today could not be told');
-  assert.deepEqual(row.lines, ['what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan']);
+  assert.deepEqual(row.lines, [
+    `${short(root, 'side')} feat: side work, forked before the default branch moved`,
+    'make the record with: js-harness codex-review --base origin/main',
+    'what it would cost, with nothing spent: js-harness codex-review --base origin/main --plan',
+  ]);
 });
 
 /** A branch whose one code commit, never reviewed, changes `count` files that are each a part of their own. */
@@ -1091,6 +1160,8 @@ test('the plain row says a review is already more parts than a run starts, and t
   assert.ok(row.detail.includes(`is ${MAX_PARTS_WITHOUT_FLAG + 1} parts today`), row.detail);
   assert.ok(row.detail.endsWith(`already more parts than the ${MAX_PARTS_WITHOUT_FLAG} a run starts without \`--max-parts\``), row.detail);
   assert.deepEqual(row.lines, [
+    `${short(root, oldest)} feat: a branch nobody reviewed slice by slice`,
+    `make the record with: js-harness codex-review --base ${short(root, oldest)}^`,
     'the cheaper way is to review now: every commit added to this range makes its review larger',
     `what it would cost, with nothing spent: js-harness codex-review --base ${short(root, oldest)}^ --plan`,
   ]);
@@ -1232,7 +1303,11 @@ test('the plain row says the size could not be told when git cannot size the ran
     row.detail,
     `no Codex review record for 1 of 1 code commit since origin/main: how large the review of ${short(root, head)}^..HEAD is today could not be told`,
   );
-  assert.equal(row.lines.length, 1);
+  assert.deepEqual(row.lines, [
+    `${short(root, head)} feat: two`,
+    `make the record with: js-harness codex-review --base ${short(root, head)}^`,
+    `what it would cost, with nothing spent: js-harness codex-review --base ${short(root, head)}^ --plan`,
+  ]);
 });
 
 test('the plain row is measured against the remote it is given', () => {
