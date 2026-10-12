@@ -1802,6 +1802,68 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   branch holds `main` `e90e0a4` (behind 0 at 18:21).
   **The whole suite in the three gates of this branch: 554 s, 605 s, 535 s**, against 705
   to 830 s before it. Spent on Codex in the feature: 3,246,895 input tokens.
+- 2026-10-12 · **M1e, the whole suite by file on `main` after road 1's first slice: 625 s,
+  and the wall is `bin/codex-review.test.mjs`** (`m1e-turn.log`, 18:24:23 to 18:34:52; tree
+  `964aafc`, which is `main` `d7ae654`'s; the user's own temp folder; tables
+  `m1e-count.json`, `m1e-machine.json`). 4,065 tests, 4,050 pass, 5 fail: the five that
+  read a child's environment and fail under the counting tool's preload in every such
+  run. Beside the run before the slice (`m1d`, 705.2 s, its temp folder in the excluded
+  place; the two runs with the user's temp folder were 735.6 s and 830.2 s) and the three
+  gates of T14's branch, which carry no counting tool (554, 605, 535 s):
+
+  | | before (`m1d`) | after (`m1e`) |
+  |---|---|---|
+  | wall | 705.2 s | 625.0 s |
+  | busy processor-seconds | 5,152 of 5,641 (91%) | 4,518 of 5,000 (90%) |
+  | test files' seconds, summed | 4,216 | 3,621 |
+  | children that are not git | 1,682, 4,583 s of life | 1,224, 2,701 s of life |
+  | git processes | 12,041, 1,455 s of life | 12,107, 1,557 s of life |
+  | `MsMpEng` | 655 s | 886 s |
+
+  | the longest files | before | after | starts after |
+  |---|---|---|---|
+  | `bin/codex-review.test.mjs` | 648 s | **624 s** | 6,067 git |
+  | `evals/runner.test.mjs` | 704 s | 449 s | 331 not git |
+  | `bin/check-codex-reviews.test.mjs` | 256 s | 310 s | 2,146 git |
+  | `evals/isolation-probe.test.mjs` | 525 s | 297 s | 123 not git, 273 git |
+  | `evals/configs.test.mjs` | 223 s | 276 s | 70 not git, 123 git |
+  | `evals/suite.test.mjs` | 174 s | 216 s | 82 not git |
+  | `evals/task-proof.test.mjs` | 606 s | 84 s | 176 not git |
+
+  **Reading.** The file that ends the run is `bin/codex-review.test.mjs`: it starts at
+  0.2 s and ends at 624.5 s of 625. Its time is its own git processes one after another:
+  577 s of process life in 6,067 starts, about 95 ms a start inside the run (65 ms on the
+  quiet machine just before it, 261 ms for a probe at the run's 300th second). **Two
+  bounds now sit together:** the longest file, 624 s, and the work over the machine,
+  4,518 busy processor-seconds on eight, 565 s at full use. A cut that moves one alone
+  meets the other within about a minute. The eval files gave what the first slice was
+  for: runner 704 to 449 s, task-proof out of the list, the work down by 634
+  processor-seconds.
+  **Cut 2 of git, judged again.** It was put at about 20 s of 736 as a share of the work,
+  when the evals were the wall. What changed: that file is the wall, and its starts are in
+  one chain. By caller (from `m1d-count.json`; the run from another worktree names no
+  caller): **4,618 of its 6,067 git starts come from one line, the fake Codex's `spawn`
+  handing `git` to the real one (`bin/codex-review.test.mjs:277`)**, which is the review
+  command's own questions to git, about 11.6 a run over the 397 runs the count of 12:26
+  found; 752 more are the tests' own `git` helper (`:45`) and 558 the helper at `:3857`.
+  So a question the command stops asking comes off the wall file at about 0.1 s a start,
+  and off every real review too: it is the command that asks `rev-parse` four times where
+  one process answers (`bin/codex-review.mjs:1124`, `:1129`, `bin/lib/project.mjs:230`,
+  and where the git folder is; the lines are `fc70dc3`'s). One `rev-parse` for four is
+  about 1,190 starts, so about 113 s of that file's chain: the file near 510 s, still the
+  longest (runner 449 s), with the work's own bound near 545 s. **About 60 to 110 s of
+  wall for that cut, not 20**, and no test's proof changes: the starts go because the
+  shipping command asks less. Under 449 s the file needs about 1,850 starts out, which
+  means more of the command's questions (`diff` 1,775 in the suite, `rev-list` 664,
+  `merge-base` 581, `status` 508, `log` 495) or the file in two. Not read yet: which of
+  those questions the command can join or keep from one run to the next.
+  **What I would do next, and what is left out:** cut 2 of git, scoped as "the review
+  command asks git less", read first (the command's own call sites, six files), then
+  designed with one reader's attack. Slice 2 of road 1 after it: it lowers the work and
+  the second-longest file, which is what the suite meets as soon as the git file falls.
+  Splitting `bin/codex-review.test.mjs` in two is the other way to shorten its chain; it
+  takes no work out, so the work's bound (565 s) holds it to about 30 to 50 s, and its
+  helpers would have to move to a shared module.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
