@@ -890,10 +890,11 @@ S2 is T4 with T5. S3 is T6.
   share by `get_usage` and what it resumes. His words (the orchestrator's transcript
   `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 2008, read here): "tengamos alguna
   mecanismo que cuando lo haga te informe". It is in this session's memory.
+- 2026-10-12 03:28 · `feat/gate-turn` is pushed and pull request 71 is open on the commit
+  before this one; its head contains `main` (`78bbc80`).
 
 ## Next
-For `feat/gate-turn`: the push and the pull request (its text is `pr-turn.md` in the
-scratchpad), then the notice to the orchestrator, which merges it. For
+For `feat/gate-turn`: pull request 71 is open; the orchestrator merges it. For
 `fix/count-git-launch` (pull request 69): once that merge is on `main`, `main` merged in
 again and one turn of the lock for the gate on the merged tree, then the push and a line
 to the orchestrator. Then T8, the closing notice, and the cut. After the cut, the new
