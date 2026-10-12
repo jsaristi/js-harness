@@ -19,20 +19,24 @@
 // what `cmd.exe` cannot be handed whole, and such a command goes as one argument.
 import os from 'node:os';
 import path from 'node:path';
-import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
+import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, parseGateWait, runSensor, takeGateTurn } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateLog } from './lib/gate-log.mjs';
 
+// The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
+// `--wait` is not a bound on the whole of a wait.
 const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
+  GATE_WAIT_USAGE,
 ].join('\n');
 
 /** How many gates `gate log` prints when `--last` does not say. */
 const GATE_LOG_LAST = 20;
 
-/** The exit code of a `gate` that ran nothing because the lock was held: with `--no-wait`, or past its
- * wait. It is the "try again later" of sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
+/** The exit code of a `gate` that ran nothing because the lock was not its to take: with `--no-wait`, held
+ * or with a gate ahead of it in the line, or past the bound of its wait. It is the "try again later" of
+ * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
  * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
 export const GATE_NOT_RUN = 75;
 
@@ -163,11 +167,16 @@ function gateLogMain(argv, env) {
 /** Runs the command of `argv` while this process holds the machine's gate lock, and returns the exit code:
  * the command's own, 2 for a usage error, `GATE_NOT_RUN` when the lock was held and nothing ran.
  *
- * The lock is taken as a gate takes it (`takeGateTurn` of `check`): held by another, it is waited for, an
- * hour at most or as `--wait` says, and the wait is said on stderr; `--no-wait` refuses at once. A lock
- * that cannot be taken at all does not stop the command: it runs without it, and stderr says so. The
- * holder's file says `gate -- <command line>` and the folder the command runs in, which is what `Gates`
- * of `js-harness sessions` shows for it.
+ * The lock is taken as a gate takes it (`takeGateTurn` of `check`), in its turn: the lock is a line, and
+ * this gate takes it after the gates that arrived before it. Held by another, it is waited for, and the
+ * wait is said on stderr, as is a wait behind a gate that only waits ahead. The wait is given up once the
+ * lock has gone an hour without changing hands, or as many minutes as `--wait` says: that is no bound on
+ * the whole of a wait, which behind a line that moves is as long as the line. `--no-wait` refuses at once,
+ * for a lock that is held and for a gate that waits ahead of this one. A lock that cannot be taken at all
+ * does not stop the command: it runs without it, and stderr says so. The holder's file says
+ * `gate -- <command line>`, the folder the command runs in, which is what `Gates` of `js-harness sessions`
+ * shows for it, and the session of the host that started this gate, where the environment names one
+ * (`CLAUDE_CODE_SESSION_ID`).
  *
  * The command runs through the shell in `cwd`, in the environment this process was given and with its
  * input and output, with no time bound. It is run by what runs a sensor (`runSensor`, with `inherit`), so
@@ -291,7 +300,7 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return logged({ lock: 'parent', waitedMs: 0, waitedFor: [] }, env);
   }
 
-  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes }, deps.takeGateLock);
+  const turn = await takeGateTurn({ name: 'gate', home, cwd, command, wait: !noWait, waitMinutes, session: env.CLAUDE_CODE_SESSION_ID || null }, deps.takeGateLock);
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
     console.error(`gate: nothing ran: ${turn.refused}`);
