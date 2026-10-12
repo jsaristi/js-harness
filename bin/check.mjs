@@ -77,6 +77,7 @@ export function checkPayload(cwd, home) {
 // eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
 // commits whose tests were green.
 const SENSOR_TIMEOUT_MS = 20 * 60 * 1000;
+const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
 // them. Git exports some to a hook: from a linked worktree, `GIT_DIR` and an absolute `GIT_INDEX_FILE`.
@@ -301,12 +302,17 @@ function documentsRow(sensors, paths) {
  *
  * The entries are ended by a NUL and read as they come (`-z`). A rename or a copy is two of them, the
  * second the name the path had, with no status before it, so it is passed over and never read as an entry.
+ *
+ * The question is bounded (`TREE_TIMEOUT_MS`): it is asked twice inside the gate's turn, so while the
+ * machine's gate lock is held, and a git that does not return (a file system monitor that hangs, a tree of
+ * untracked files too large to walk) would hold that gate and every gate behind it with no row to say why.
+ * Past the bound git is ended and did not say, like a git that failed: the row only informs.
  * `spawn` stands in for `spawnSync`. */
 function untrackedPaths(cwd, spawn = spawnSync) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !GIT_LOCAL_ENV.includes(key.toUpperCase())));
   let result;
   try {
-    result = spawn('git', ['--no-optional-locks', 'status', '--porcelain', '-z', '--untracked-files=all'], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    result = spawn('git', ['--no-optional-locks', 'status', '--porcelain', '-z', '--untracked-files=all'], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: TREE_TIMEOUT_MS });
   } catch {
     return null; // no git on PATH
   }

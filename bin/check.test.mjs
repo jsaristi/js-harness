@@ -3048,6 +3048,9 @@ test('the line of a gate that stopped honors the switches of the log, is read ba
 // after its sensors and names the ones that appeared; a gate that names none is the proof that none did.
 
 const TREE_ASKED = 'git --no-optional-locks status --porcelain -z --untracked-files=all';
+/** One question about the working tree of `dir`, as `treeGit` keeps it: bounded at twenty seconds, since it
+ * is asked inside the gate's turn and a git that hangs would hold the lock, and bound to no index. */
+const treeAsked = (dir) => ({ line: TREE_ASKED, cwd: dir, timeout: 20_000, bound: [] });
 
 /** A stand-in for the git a gate asks about its working tree: each of `listings` is what one `git status`
  * answers, the entries of `--porcelain -z` or a function that answers in their place. It keeps how it was
@@ -3056,7 +3059,7 @@ function treeGit(listings, during = () => {}) {
   const left = [...listings];
   const spawn = (program, args, options) => {
     if (!args.includes('status')) return notARepository();
-    spawn.asked.push({ line: `${program} ${args.join(' ')}`, cwd: options.cwd, bound: Object.keys(options.env ?? process.env).filter((key) => /^git_(dir|index_file|work_tree|common_dir|prefix)$/i.test(key)) });
+    spawn.asked.push({ line: `${program} ${args.join(' ')}`, cwd: options.cwd, timeout: options.timeout, bound: Object.keys(options.env ?? process.env).filter((key) => /^git_(dir|index_file|work_tree|common_dir|prefix)$/i.test(key)) });
     during();
     const listing = left.shift();
     return typeof listing === 'function' ? listing() : ok((listing ?? []).map((entry) => `${entry}\0`).join(''));
@@ -3088,7 +3091,7 @@ test('a gate lists the untracked paths of its working tree before its first sens
     assert.equal(code, 0, `${state}: ${output}`);
     // Before the start of the gate is written and after its end, so the seconds of the log are the sensors'.
     assert.deepEqual(events, [['sample', holder], ['tree', holder], 'start', 'run-tests', 'run-lint', 'end', ['tree', holder]], state);
-    assert.deepEqual(git.asked, [{ line: TREE_ASKED, cwd: dir, bound: [] }, { line: TREE_ASKED, cwd: dir, bound: [] }], state);
+    assert.deepEqual(git.asked, [treeAsked(dir), treeAsked(dir)], state);
     assert.deepEqual(treeRow(output), ['INFO  tree  2 untracked paths appeared in the working tree while the sensors ran (a test may have written them)', CACHE, 'out put.txt'], state);
     assert.deepEqual(namesOf(output), [...STATIC_ROWS, ...gate, 'load', 'tests', 'lint', 'tree', 'review', 'codex-review'], state);
   }
@@ -3125,6 +3128,8 @@ test('no tree row, and no failure, when nothing appeared, when the folder is no 
     'a git that throws': () => {
       throw enoent();
     },
+    // What `spawnSync` answers for a git it ended at its timeout.
+    'a git that does not return': () => ({ status: null, signal: 'SIGTERM', stdout: '', stderr: '', error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) }),
     'no answer': () => undefined,
     'an answer that is no text': () => ({ status: 0, stdout: null, stderr: '' }),
   };
@@ -3153,7 +3158,7 @@ test('a gate asks git about its working tree with none of the variables that bin
   const { code, output } = await withEnv({ GIT_DIR: path.join(home, 'other', '.git'), GIT_INDEX_FILE: path.join(home, 'other', '.git', 'index.lock'), Git_Work_Tree: home, GIT_PREFIX: 'docs/' }, () =>
     runCheck(['--cwd', dir, '--home', home], {}, gateDeps({ git })));
   assert.equal(code, 0, output);
-  assert.deepEqual(git.asked, [{ line: TREE_ASKED, cwd: dir, bound: [] }, { line: TREE_ASKED, cwd: dir, bound: [] }]);
+  assert.deepEqual(git.asked, [treeAsked(dir), treeAsked(dir)]);
   assert.equal(treeRows(output).length, 1);
 }));
 

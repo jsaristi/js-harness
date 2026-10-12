@@ -823,8 +823,10 @@ podamos implementar todo"), each a feature of its own with its own document and 
      current directory, and that untracked folder made gentle-ai refuse to assess the
      change; the sensors now get `PSModuleAnalysisCachePath` under their temporary home.
      And a gate that ran its sensors names, in an INFO row `tree`, the untracked paths that
-     appeared while they ran, so what a sensor leaves behind is seen in the gate that left
-     it.
+     appeared in the working tree while they ran. It compares two listings of the whole
+     tree, so it says when a path appeared and not who wrote it: a file an editor or
+     another process made meanwhile is named too. Each listing is bounded at twenty
+     seconds, since it is asked while the lock is held.
 3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
 4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
    at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
