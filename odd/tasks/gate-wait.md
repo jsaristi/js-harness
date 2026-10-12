@@ -1451,7 +1451,7 @@ by me against the log or table named in the section).
   moved:** 705 s against 736 s, 30 s, inside the 95 s two runs of one tree already
   differed by. What is left, 655 processor-seconds, the exclusion of a folder does not
   reach: the antivirus still looks at each of some 13,700 processes as it starts, and the
-  programs are not excluded (his choice, the orchestrator's record). So a temp root of the
+  programs are not excluded (the orchestrator's advice to him at 12:16, by its own word; not a choice he made). So a temp root of the
   gate under an excluded place is worth about half a minute of twelve on his machine, and
   nothing on a machine with no exclusion; it would be a small thing to build and it is
   not what makes the gate shorter. Fewer process starts is. Beside the measure: the eval
