@@ -1310,6 +1310,58 @@ by me against the log or table named in the section).
   longest files are `evals/`. Not read: whether those tests need a real process for what
   they prove (a process tree that is killed does; a trial's outcome read back may not).
   That reading is road 1's next step, and it is a reading, not a cut.
+- 2026-10-12 · **T11 has both reviews and its pull request, 75** (`hook-review-turn.log`,
+  15:22:06 to 15:23:44): gentle-ai approved and acknowledged (two captures, 40.9 s
+  together); Codex "the patch is correct", 180,267 input tokens (140,928 cached) against a
+  plan of 71,000, recorded for `3088960..97703f9`. Pushed and opened at 15:24:
+  https://github.com/jsaristi/js-harness/pull/75. **Two findings of gentle-ai's
+  reliability lens, not blocking, left for later:** no test shows that a failing gate
+  makes `git merge` exit non-zero and leave no merge commit (the two that exist prove the
+  passing paths); and the test with real git installs its own copy of the hook, so the
+  shipped file is tied to it only by a comparison of its `exec` line.
+- 2026-10-12 · **Road 1 read: which process starts of the eval tests are the proof** (one
+  read-only reader at high, no test run, 285,336 tokens, 15:13 to 15:25; its full table is
+  `eval-children-reading.md` in the scratchpad; asked by the orchestrator before any
+  question reaches him). Its figure: **between about 630 and 840 of the 1,395 starts, and
+  about 1,800 to 2,300 of the 4,096 child-seconds, could go without losing a proof, and
+  only about 50 of those starts are reachable through a seam that exists today.** Every
+  count is inferred from the code, since the counting tool does not say which test
+  started which child; two file totals agree with it (346 inferred against 346 measured
+  for `evals/task-proof`, 500 against 501 for `evals/runner`). By kind:
+  - **The largest kind is not a test's choice: about 490 PowerShell process snapshots.**
+    Checked by me: `runProcess` ends every run with `stop(sweep)` (`evals/runner.mjs:345`,
+    the default `killSurvivors` at `:278`), which on Windows takes a snapshot of every
+    process through PowerShell (`bin/lib/process-tree.mjs:259`, `:191`), whether or not
+    the child left anything; and no caller of `runProcess` in `evals/` passes another
+    `killSurvivors` (`rg killSurvivors evals/*.mjs` outside the tests: `runner.mjs` alone).
+    About 30 of them are the proof (survivor, timeout and interrupt tests); about 460 find
+    nothing. By the reader's inference from two tests' times, one costs near 5 s under
+    load against 0.3 s for a Node start; `WmiPrvSE` at 148 to 162 processor-seconds in
+    both whole runs agrees with it. This is the eval runner's own behaviour in a real
+    trial too, where the sweep is the protection, so what a test may skip is a design.
+  - The hidden grader and the visible suite (`node --test` through
+    `evals/runner.mjs:289`): about 282 starts, mixed; `proveTask` runs five real
+    processes and five snapshots at each call, the tests that only check the shape of a
+    file included, and exports no smaller piece. The fake agent: about 108, mixed, no
+    seam in `runTrial`. The isolation probe's fake Claude: about 95, mostly fixture, no
+    seam. Sleepers, holders and grandchildren (about 67), the real tasks' own tests (49)
+    and the few probes: proof.
+  - What a real process proves, by the reader: stdin, folder and environment as a real
+    child received them, a real exit code, a timeout that fires, a tree that dies, a real
+    `node --test` in an emptied workspace, a listener on a port. What the fixture tests
+    assert in its place: rules on the shape of files, and the runner's own bookkeeping.
+  **What it means for road 1:** the gain is real and it is not free. The tests of the
+  fixture class take 1,101 s of the 1,937 s the named tests of those four files take, so
+  about a quarter of the suite's 4,519 s; but all except some 50 starts sit behind
+  `runTrial`, `gradeWorkspace`, `proveTask` and the probe's arm, which start their
+  processes themselves: taking them out means seams in the eval machinery's own code,
+  which is a design with its reviews, not a cut. And the wall would then be
+  `bin/codex-review` (691 s, all git), so the git cuts are needed with it for the run to
+  get shorter by much. Not determined: seconds by kind, the eight smaller eval files
+  (239 starts, 550 s), and how much of the 12 minutes would go, since files run together.
+  The orchestrator's sentence, with reader 1's count: 25 of the day's 53 gates came from
+  this feature's own worktrees, so part of today's line is the cost of measuring the
+  line.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
