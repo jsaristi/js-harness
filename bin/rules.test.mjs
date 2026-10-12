@@ -1,0 +1,262 @@
+// The tests of `js-harness rules` (bin/rules.mjs). Each builds a small project in a temporary folder, with the
+// declarations written from RULES and the repository's own sources file, and runs the command in it with its
+// output collected. One test runs the command on the real package, which holds the real list, and one runs the
+// real dispatcher.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { rulesMain } from './rules.mjs';
+import { RULES } from './lib/rules-data.mjs';
+import { rulesHash, writeRules } from './lib/rules.mjs';
+
+const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.json'), 'utf8');
+const SOURCES = JSON.parse(SOURCES_TEXT);
+const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
+const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
+const USAGE = 'Usage: js-harness rules [<id> | check | render]';
+const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
+
+/** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, and the sources. */
+const BASE = () => ({ 'bin/lib/rules-data.mjs': writeRules(RULES), 'docs/rule-sources.json': SOURCES_TEXT });
+
+/** Writes `files` (path from the top of a project -> content) under `dir`. */
+function write(dir, files) {
+  for (const [file, content] of Object.entries(files)) {
+    const absolute = path.join(dir, ...file.split('/'));
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, content, 'utf8');
+  }
+}
+
+/** Runs `body` in a temporary project that holds `files`, then removes it. */
+async function inProject(files, body) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rules-'));
+  try {
+    write(dir, files);
+    return await body(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Runs `rules` with `argv` under `root`, collecting each line written to stdout and to stderr. */
+async function run(argv, root) {
+  const out = [];
+  const err = [];
+  const code = await rulesMain(argv, { root, stdout: (line) => out.push(line), stderr: (line) => err.push(line) });
+  return { code, out, err };
+}
+
+// ── render and check ────────────────────────────────────────────────────────────────────────────
+
+test('render writes docs/RULES.md, and check then passes with its PASS line', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.deepEqual(await run(['render'], dir), { code: 0, out: [`docs/RULES.md written: ${COUNT_LINE}`], err: [] });
+    assert.ok(fs.existsSync(path.join(dir, 'docs', 'RULES.md')));
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+  });
+});
+
+test('check fails when docs/RULES.md is edited by hand, and says so in one finding', async () => {
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    fs.appendFileSync(path.join(dir, 'docs', 'RULES.md'), 'A line that no declaration gives.\n');
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      docs/RULES.md is not what the declarations render: run js-harness rules render'],
+      err: [],
+    });
+  });
+});
+
+test('with no docs/ at all check passes, and its two notes say what it did not read', async () => {
+  await inProject({ 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
+    assert.deepEqual(await run(['check'], dir), {
+      code: 0,
+      out: [
+        PASS_LINE,
+        'note: no docs/rule-sources.json here: the sources were not checked',
+        'note: no docs/RULES.md here: js-harness rules prints the list',
+      ],
+      err: [],
+    });
+  });
+});
+
+test('render refuses without docs/rule-sources.json, names the root, and writes nothing', async () => {
+  await inProject({ 'bin/lib/rules-data.mjs': writeRules(RULES) }, async (dir) => {
+    assert.deepEqual(await run(['render'], dir), {
+      code: 1,
+      out: [],
+      err: [`not rendered: there is no docs/rule-sources.json under ${dir}`],
+    });
+    assert.equal(fs.existsSync(path.join(dir, 'docs')), false);
+  });
+});
+
+test('a docs/rule-sources.json that is not JSON fails check and render alike, with its message', async () => {
+  await inProject({ ...BASE(), 'docs/rule-sources.json': '{ "control-phrase-min": ' }, async (dir) => {
+    for (const argv of [['check'], ['render']]) {
+      const { code, out, err } = await run(argv, dir);
+      assert.equal(code, 1, argv.join(' '));
+      assert.deepEqual(out, [], argv.join(' '));
+      assert.equal(err.length, 1, argv.join(' '));
+      assert.match(err[0], /^docs\/rule-sources\.json is not JSON: \S/, argv.join(' '));
+    }
+  });
+});
+
+test('a docs/rule-sources.json that is JSON but not an object keyed by id fails check with its message', async () => {
+  const message = 'docs/rule-sources.json is not an object keyed by rule id';
+  for (const text of ['null', '[]', '7', '"a text"']) {
+    await inProject({ ...BASE(), 'docs/rule-sources.json': text }, async (dir) => {
+      assert.deepEqual(await run(['check'], dir), { code: 1, out: [], err: [message] }, text);
+    });
+  }
+});
+
+test('a file that is there and cannot be read is an error: a roadmap that is a directory fails check with its reason', async () => {
+  await inProject(BASE(), async (dir) => {
+    fs.mkdirSync(path.join(dir, 'docs', 'ROADMAP.md'));
+    const { code, out, err } = await run(['check'], dir);
+    assert.equal(code, 1);
+    assert.deepEqual(out, []);
+    assert.equal(err.length, 1);
+    assert.match(err[0], /^cannot read docs\/ROADMAP\.md/);
+  });
+});
+
+test('a code file that reads an undeclared rule fails check, and render refuses', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.equal((await run(['render'], dir)).code, 0);
+    write(dir, { 'bin/x.mjs': READS_UNDECLARED });
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      bin/x.mjs: reads rule "no-such-rule", which is declared nowhere'],
+      err: [],
+    });
+    assert.deepEqual(await run(['render'], dir), {
+      code: 1,
+      out: [],
+      err: ['not rendered: the declarations have findings; run js-harness rules check'],
+    });
+  });
+});
+
+test('a test file that reads an undeclared rule is not read', async () => {
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'bin/x.test.mjs': READS_UNDECLARED });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+  });
+});
+
+test('the plain listing reads no file, so a sources file that is not JSON does not stop it, while check still fails', async () => {
+  await inProject({ ...BASE(), 'docs/rule-sources.json': '{ "control-phrase-min": ' }, async (dir) => {
+    const listing = await run([], dir);
+    assert.deepEqual([listing.code, listing.err], [0, []]);
+    assert.equal(listing.out.length, RULES.length + 1);
+    assert.equal(listing.out.at(-1), COUNT_LINE);
+    assert.equal((await run(['check'], dir)).code, 1);
+  });
+});
+
+test('a feature document that names an undeclared rule fails check above its Progress line, and not below it', async () => {
+  const above = '# Feature\n\nThe limit is `rule:no-such-rule`.\n\n## Progress\n\n- [x] T1 done\n';
+  const below = '# Feature\n\nThe limit is one of the rules.\n\n## Progress\n\nThe limit is `rule:no-such-rule`.\n';
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'odd/tasks/feature.md': above });
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      odd/tasks/feature.md: names rule "no-such-rule", which is declared nowhere'],
+      err: [],
+    });
+    write(dir, { 'odd/tasks/feature.md': below });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+  });
+});
+
+test('a feature document whose fenced example holds a Progress line is cut at the real one, so a mark after the fence is checked', async () => {
+  const feature = [
+    '# Feature',
+    '',
+    '```markdown',
+    '## Progress',
+    '```',
+    '',
+    'The limit is `rule:no-such-rule`.',
+    '',
+    '## Progress',
+    '',
+    '- [x] T1 done',
+    '',
+  ].join('\n');
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'odd/tasks/feature.md': feature });
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      odd/tasks/feature.md: names rule "no-such-rule", which is declared nowhere'],
+      err: [],
+    });
+  });
+});
+
+// ── the listing and one rule ────────────────────────────────────────────────────────────────────
+
+test('rules prints one line per rule, with its value and unit, then the count line', async () => {
+  await inProject(BASE(), async (dir) => {
+    const { code, out, err } = await run([], dir);
+    assert.deepEqual([code, err], [0, []]);
+    assert.equal(out.length, RULES.length + 1);
+    // In list order, whatever rules are declared: a line is the id, what the rule is, and its owner.
+    assert.deepEqual(out.slice(0, -1).map((line) => line.split('  ')[0]), RULES.map((rule) => rule.id));
+    assert.ok(out.includes('control-phrase-min  12 characters  project'));
+    assert.ok(out.includes('gate-wait  60 minutes  project'));
+    assert.ok(out.includes('review-effort  high  sebastian'));
+    assert.equal(out.at(-1), COUNT_LINE);
+  });
+});
+
+test('rules <id> prints the declaration, the code that reads it and its source; an unknown id exits 1', async () => {
+  const reader = "import { ruleValue } from './lib/rules.mjs';\n\nexport const wait = ruleValue('gate-wait', 'minutes');\n";
+  await inProject({ ...BASE(), 'bin/cmd.mjs': reader }, async (dir) => {
+    const rule = RULES.find((item) => item.id === 'gate-wait');
+    assert.deepEqual(await run(['gate-wait'], dir), {
+      code: 0,
+      out: [JSON.stringify(rule, null, 2), 'Read by: bin/cmd.mjs', `Source: ${JSON.stringify(SOURCES['gate-wait'], null, 2)}`],
+      err: [],
+    });
+    assert.deepEqual(await run(['no-such-rule'], dir), { code: 1, out: [], err: ['no rule "no-such-rule" is declared'] });
+  });
+});
+
+// ── usage ───────────────────────────────────────────────────────────────────────────────────────
+
+test('a flag, or a second word, is a usage error: exit 2, with the message and the usage line', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.deepEqual(await run(['--x'], dir), { code: 2, out: [], err: [`unknown argument: --x\n\n${USAGE}`] });
+    assert.deepEqual(await run(['check', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
+  });
+});
+
+// ── the real package and the dispatcher ─────────────────────────────────────────────────────────
+
+test('the real package passes rules check with the default root', async () => {
+  const out = [];
+  const err = [];
+  const code = await rulesMain(['check'], { stdout: (line) => out.push(line), stderr: (line) => err.push(line) });
+  assert.equal(code, 0, [...out, ...err].join('\n'));
+});
+
+test('the dispatcher runs rules: js-harness rules exits 0 and its last line is the count line', () => {
+  const result = spawnSync(process.execPath, [path.join(PACKAGE, 'bin', 'js-harness.mjs'), 'rules'], { cwd: PACKAGE, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trimEnd().split(/\r?\n/).at(-1), COUNT_LINE);
+});
