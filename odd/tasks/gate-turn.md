@@ -334,7 +334,7 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       three states of the lock. Test first. Route: one writer.
 - [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
       the row that lists what the sensors left in the tree.
-- [x] T6 · Notice sent to the orchestrator for "JH 5" on 2026-10-11 19:35, after `d133965`.
+- [x] T6 · Notice sent to the orchestrator for "JH 5" on 2026-10-11, after `d133965`.
       The session's title beside each gate that waits, on the board. Not built here
       (the orchestrator, 2026-10-11): `bin/lib/sessions.mjs` is "JH 5"'s and its fourth slice
       is open, so what the board needs goes to "JH 5" through the orchestrator once T3 is
@@ -511,7 +511,7 @@ S2 is T4 with T5. S3 is T6.
   and was idle when sampled ten minutes later (0.2 s in 4 s). So a session's writers load
   the machine through its language server while another session's gate runs: one more
   case of `odd/tasks/gate-lock.md`, "Rules learnt" (a `tsserver.js` of its own).
-- 2026-10-11 20:10 · Two working rules from the orchestrator, on his words (relief file, line
+- 2026-10-11, before 19:58 · Two working rules from the orchestrator, on his words (relief file, line
   282, read here: "me gusta mucho que apliquemos lo de los ahorros"): a writer sub-agent
   never waits for the gate, it returns its work and this session runs the tests and commits
   through the lock (a sub-agent pays its whole context again after a wait of over five
@@ -519,7 +519,7 @@ S2 is T4 with T5. S3 is T6.
   the writer of T4 and T5 was told to return without waiting; T3b's writer had its one run
   already queued and is left to end. The writers of T2, T3 and T3b waited inside their
   sub-agents before this rule (about 20, 30 and 35 minutes a run).
-- 2026-10-11 20:35 · T3b built, route one writer (214,958 tokens; its one run waited behind
+- 2026-10-11, before 19:59 · T3b built, route one writer (214,958 tokens; its one run waited behind
   three gates inside the sub-agent, before the rule above). (1) `gatesAhead` answers `null`
   beside a live gate of an older version, and `handsRead` does not move the anchor at such
   a look; two tests. (2) A test with the real gate log: a refusal with reason `ahead` is
@@ -531,7 +531,7 @@ S2 is T4 with T5. S3 is T6.
   and three passed. Green: the three files, 271 of 271. Left: T3c; an older gate that
   takes the lock with no other older gate waiting still starts the count again, as the
   design says; `bin/lib/gate-log.mjs:293`, changed in `feat/gate-stop`.
-- 2026-10-11 20:40 · From `feat/gate-stop`, the writer of T4 and T5 returned without waiting
+- 2026-10-11, before 19:58 · From `feat/gate-stop`, the writer of T4 and T5 returned without waiting
   (343,499 tokens), nothing run but its red and the reproduction: 854 lines added and 57
   removed in six files. Red, on a snapshot with the new tests and the old code: 232 tests,
   21 fail, all new. The reproduction, in the lock's turn: with `USERPROFILE` at an empty
@@ -541,9 +541,33 @@ S2 is T4 with T5. S3 is T6.
   analysis; with `PSModuleAnalysisCachePath` set the folder stayed empty and the cache was
   in the home. So the inference of Design, 3 is a fact, and the folder only appears when a
   PowerShell lives that long, which is why no single test file left it. Its diff of
-  `bin/check.mjs` read back here. Green is run by this session, queued at 20:38.
+  `bin/check.mjs` read back here. Green is run by this session, queued at 19:58:23.
+- 2026-10-11 20:36 · T3b committed: `9b90797`, through the lock (launched 19:59:54, behind
+  two gates); the whole gate passed, the first on the tree with `main` `5af56c1` merged.
+  Assessed against the reviewed tree (`15f06b2`): medium risk, 4 paths, 310 lines, review
+  not due (under budget), so it stays pending in the slice.
+- 2026-10-11 20:23 · A sighting of the second finding, in this worktree: that gate left
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` (15 k, written 20:23, three minutes
+  into its tests) untracked here. Its cost, which nobody had seen: the gate's own `review`
+  row then read "gentle-ai could not assess the pending change", because an untracked
+  path makes the assessment refuse ("untracked files require an explicit declaration"),
+  and an assessment that fails counts as high risk. So the folder does not only dirty a
+  tree: it hides whether a review is due. Removed by hand; the fix is T5, on
+  `feat/gate-stop`.
+- 2026-10-11 20:19 · Green of `feat/gate-stop`, run by this session in a turn of the lock
+  (queued 19:58:23): 232 tests, 231 pass, one fail, and the fault was the test's. It
+  expected a push to ask git through `deps.git`; a push asks through `deps.spawn`
+  (`checkCodexReviews`), which the test's stand-in counts with the sensors. The assertion
+  now checks what a push never asks for (the lock, the load, gentle-ai); changed inline,
+  one file. The commit of the slice is queued behind the lock since 20:21 and runs every
+  test again. At the start of that green run 7.1 of 8 processors were busy (the antivirus,
+  a `codegraph.js` indexer, a browser).
+- 2026-10-11 · A mistake of this session, corrected in this same edit: four entries above
+  carried hours it had not read (20:10, 20:35, 20:40, and 19:35 for the notice of T6); the
+  real hour when they were written was before 20:00. They now carry the hours read from
+  the logs of the runs, or none.
 
 ## Next
-The commit of T3b through the lock, then Codex on `main..HEAD` in its turn,
+Codex on `main..HEAD` in its turn,
 the notice of T6, a real gate with this branch's own lock. In `feat/gate-stop`: the writer's
 report, its diff read back, its commit through the lock, its two reviews.
