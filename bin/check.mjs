@@ -77,6 +77,7 @@ export function checkPayload(cwd, home) {
 // eight on a quiet machine and passed ten once other programs held two of eight cores, which refused
 // commits whose tests were green.
 const SENSOR_TIMEOUT_MS = 20 * 60 * 1000;
+const TREE_TIMEOUT_MS = 20_000; // one listing of the working tree's untracked paths (`untrackedPaths`)
 
 // The variables that bind a git command to one repository, as `git rev-parse --local-env-vars` lists
 // them. Git exports some to a hook: from a linked worktree, `GIT_DIR` and an absolute `GIT_INDEX_FILE`.
@@ -262,23 +263,85 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
   return paths.length > 0 && paths.every(isDocument) ? paths : null;
 }
 
-// How many staged documents the row of a gate that ran no sensor names; the rest are counted.
-const DOCUMENTS_NAMED = 10;
+// How many paths a row that lists paths of the repository names (the staged documents of a gate that ran
+// no sensor, the untracked paths that appeared while the sensors ran); the rest are counted.
+const PATHS_NAMED = 10;
+
+/** `paths` as the lines under a row: the first `PATHS_NAMED` of them, and how many more there are. A name
+ * with a control character in it is shown as JSON: it comes from the repository, and a line break in it
+ * would read as another row of the report. */
+function namedPaths(paths) {
+  const named = paths.slice(0, PATHS_NAMED).map((file) => (/\p{Cc}/u.test(file) ? JSON.stringify(file) : file));
+  const more = paths.length - named.length;
+  return [...named, ...(more > 0 ? [`and ${more} more`] : [])];
+}
 
 /** The one row of a gate that ran no sensor because the commit holds documents alone: which `sensors`
- * did not run, and for which staged `paths`. A name with a control character in it is shown as JSON:
- * it comes from the repository, and a line break in it would read as another row of the report. */
+ * did not run, and for which staged `paths` (`namedPaths`). */
 function documentsRow(sensors, paths) {
   const staged = paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`;
-  const named = paths.slice(0, DOCUMENTS_NAMED).map((file) => (/\p{Cc}/u.test(file) ? JSON.stringify(file) : file));
-  const more = paths.length - named.length;
   return {
     name: 'sensors',
     pass: true,
     info: true,
     detail: `no sensor ran (${sensors.map((sensor) => sensor.name).join(', ')}): ${staged} declared in harness.json "documents"`,
-    lines: [...named, ...(more > 0 ? [`and ${more} more`] : [])],
+    lines: namedPaths(paths),
   };
+}
+
+/** The untracked paths of the repository `cwd` is in, as git lists them from its top and one for each file
+ * (`--untracked-files=all`: a folder that appears is named by what is in it), or `null` whenever git does
+ * not say: no git, no work tree, a command that fails. What the project ignores is not listed.
+ *
+ * Asked with none of the variables that bind git to one repository (`GIT_LOCAL_ENV`), unlike what is
+ * staged (`stagedDocuments`): that question is about the commit, whose index a hook is handed, and this one
+ * about the folder the sensors run in, which are given none of those variables either (`checkSensor`). With
+ * them, a `check --cwd <another project>` started by a hook would hold that project's files against the
+ * index of the hook's repository. And with `--no-optional-locks`: `git status` writes the index it has
+ * refreshed when it can, and this runs beside the commit that holds that index.
+ *
+ * The entries are ended by a NUL and read as they come (`-z`). A rename or a copy is two of them, the
+ * second the name the path had, with no status before it, so it is passed over and never read as an entry.
+ *
+ * The question is bounded (`TREE_TIMEOUT_MS`): it is asked twice inside the gate's turn, so while the
+ * machine's gate lock is held, and a git that does not return (a file system monitor that hangs, a tree of
+ * untracked files too large to walk) would hold that gate and every gate behind it with no row to say why.
+ * Past the bound git is ended and did not say, like a git that failed: the row only informs.
+ * `spawn` stands in for `spawnSync`. */
+function untrackedPaths(cwd, spawn = spawnSync) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !GIT_LOCAL_ENV.includes(key.toUpperCase())));
+  let result;
+  try {
+    result = spawn('git', ['--no-optional-locks', 'status', '--porcelain', '-z', '--untracked-files=all'], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: TREE_TIMEOUT_MS });
+  } catch {
+    return null; // no git on PATH
+  }
+  if (!result || result.error || result.status !== 0 || typeof result.stdout !== 'string') return null;
+  const paths = new Set();
+  const entries = result.stdout.split('\0');
+  for (let at = 0; at < entries.length; at += 1) {
+    const entry = entries[at];
+    if (entry.startsWith('?? ')) paths.add(entry.slice(3));
+    else if (/^(?:[RC].|.[RC]) /.test(entry)) at += 1;
+  }
+  return paths;
+}
+
+/** The row named `tree` of a gate whose sensors left something in the working tree: the untracked paths
+ * that are in `after` and were not in `before` (`untrackedPaths`, asked before the first sensor and after
+ * the last). No row when none appeared, or when git did not say either time: a tree that could not be
+ * looked at is not one that is clean, and is not said to be.
+ *
+ * It informs and fails nothing. A test that writes into the folder it runs in leaves a file the next
+ * commit finds untracked, with nothing to say where it came from: a gate once left
+ * `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in its tree. A gate that prints no such row is the
+ * proof that its sensors left nothing. */
+function treeRows(before, after) {
+  if (!before || !after) return [];
+  const appeared = [...after].filter((file) => !before.has(file));
+  if (appeared.length === 0) return [];
+  const [paths, them] = appeared.length === 1 ? ['1 untracked path', 'it'] : [`${appeared.length} untracked paths`, 'them'];
+  return [{ name: 'tree', pass: true, info: true, detail: `${paths} appeared in the working tree while the sensors ran (a test may have written ${them})`, lines: namedPaths(appeared) }];
 }
 
 // Once the shell has exited, the pipes should close at once; a grandchild that kept them open (a
@@ -406,14 +469,28 @@ export const GATE_HELD_ENV = 'JS_HARNESS_GATE_HELD';
  * otherwise never has it, whatever this process was given.
  *
  * Beside what a row prints, the result says how long the command took (`seconds`, to a tenth) and
- * whether its time ran out (`timedOut`), which is what the gate log keeps of a sensor. */
-export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false } = {}) {
+ * whether its time ran out (`timedOut`), which is what the gate log keeps of a sensor.
+ * `platform` stands in for the system this runs on, for the one variable that is set on Windows alone. */
+export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeout = SENSOR_TIMEOUT_MS, gateHeld = false, platform = process.platform } = {}) {
   // The command runs against a throwaway home, so a test that forgets `--home` cannot write into
   // the real one — that happened once, and a rule in prose would not have stopped it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-test-home-'));
+  // Windows PowerShell keeps its cache of analysed modules under the local application data folder of the
+  // profile, and with `USERPROFILE` moved to a home that holds no such folder it has none to name: the
+  // cache then goes to `Microsoft/Windows/PowerShell/ModuleAnalysisCache` under the folder PowerShell runs
+  // in, which is the working tree the gate checks. Seen on 2026-10-11 with Windows PowerShell 5.1 in an
+  // empty folder: `[Environment]::GetFolderPath("LocalApplicationData")` answered an empty text, whatever
+  // `LOCALAPPDATA` said, and the cache was in that folder once PowerShell had lived some thirteen seconds
+  // past a command that made it analyse modules, which is why no short test ever left it; with this
+  // variable set the folder stayed empty and the cache was the file it names.
+  // So the cache is given a path of its own, a file of the
+  // throwaway home, which is there while the sensor runs and goes with it. On Windows alone: elsewhere
+  // PowerShell keeps that cache under `HOME`, which is the throwaway one already, and a variable set on
+  // every system would be one more thing a sensor's environment differs by for nothing.
+  const powershellCache = platform === 'win32' && { PSModuleAnalysisCachePath: path.join(home, 'PSModuleAnalysisCache') };
   // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, not under HOME, so `npm run` is
   // pointed into the throwaway home as well.
-  const overrides = { JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: path.join(home, '.npm-cache'), ...(gateHeld && { [GATE_HELD_ENV]: '1' }) };
+  const overrides = { JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: path.join(home, '.npm-cache'), ...powershellCache, ...(gateHeld && { [GATE_HELD_ENV]: '1' }) };
   // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act
   // as a child and skip files. Every case variant of an override goes too: Windows keeps the
   // uppercase one of two keys that differ only in case, and npm reads either.
@@ -593,6 +670,20 @@ async function underGateLock(cwd, { home, wait, waitMinutes }, { takeGateLock: t
  * and fails nothing, but for a gate that ran no sensor (`pass` false). */
 const gateRow = (detail, pass = true) => ({ name: 'gate', pass, ...(pass && { info: true }), detail });
 
+/** The one row of a gate that stopped before its sensors because `rows`, the rows it knew before them,
+ * had already failed (`checkSensors`). A FAIL named `gate`, as for a gate that was refused its turn, and
+ * for the same reason: a report that ends without a `tests` row must not read as one whose tests passed. So
+ * it says that no sensor ran, which rows stopped the gate, and what became of the machine's gate lock: not
+ * taken, or, with `held`, left to the process that started this gate. `stopped` is for the caller, which
+ * prints no row after this one. */
+function stoppedRow(rows, held) {
+  const failed = rows.length === 1 ? `the row ${rows[0]} fails` : `the rows ${rows.join(', ')} fail`;
+  const lock = held
+    ? `the machine's gate lock was left to the process that started this gate, which holds it (${GATE_HELD_ENV}=1)`
+    : "the machine's gate lock was not taken";
+  return { ...gateRow(`no sensor ran: this gate stopped before its sensors, since ${failed}, so no test ran and nothing here says that the tests pass; ${lock}`, false), stopped: true };
+}
+
 /** The row named `gate log` of a gate whose record could not be written, saying why and what is missing
  * from the log; no row for a gate that wrote its lines, or that has no record. It informs: nothing a gate
  * proves is in its log. */
@@ -642,7 +733,27 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * turn writes one line. A line that could not be written is said once in an INFO row named `gate log`,
  * and changes nothing else. Nothing is written where no sensor runs, for a caller that is no gate, or with
  * `log: false` in `lock`, which is how a gate passes on the switch of its environment (`GATE_LOG_ENV`).
- * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional. */
+ * `deps.gateLog` stands in for what the record is written with: `{ append, now, id }`, each optional.
+ *
+ * A gate stops before its sensors when a row it knew before them has already failed, which it says with
+ * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, an hour
+ * at most, and the run of the sensors would be paid before anyone read a failure that was known in a
+ * second. Nothing after the stop happens: no lock is asked for or waited for and no folder made for one,
+ * no load is sampled, no sensor runs. The one row (`stoppedRow`) is a FAIL named `gate` that says so and
+ * names the rows, and carries `stopped: true` for the caller, which prints no row after it. With
+ * `{ held: true }` the lock stays with the process that started this gate, which waited its turn before
+ * this one computed anything: there the stop saves the sensors, not the wait.
+ * It is decided here and not by the caller, after both declarations are read and after the two ways out
+ * above it: a faulty declaration is named in the same run as the row that failed, and a gate that would
+ * have run no sensor (none declared, a commit of documents alone) ends as it always did, with nothing to
+ * stop. The gate log has one line of a kind of its own for a gate that stopped, with the rows, and no
+ * start, which would read as a gate that was killed; the same switches silence it.
+ *
+ * A gate that runs its sensors also asks git for the untracked paths of its working tree, before the first
+ * sensor and after the last, and names in an INFO row named `tree` the ones that appeared meanwhile
+ * (`treeRows`). It fails nothing, and there is no row when none appeared or git did not say. Asked through
+ * `deps.git`, outside the two lines of the gate's record so that the seconds of the log stay the sensors',
+ * and not at all where no sensor runs or for a caller that is no gate. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
   if (error) return [{ name: 'sensors', pass: false, detail: error }];
@@ -662,6 +773,11 @@ export async function checkSensors(cwd, deps = {}, lock) {
   const record = lock && lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
     : null;
+  // The stop, here and not sooner: both declarations are read and this gate would now run its sensors.
+  if (lock?.stoppedBy?.length) {
+    record?.stopped({ rows: lock.stoppedBy });
+    return [stoppedRow(lock.stoppedBy, lock.held === true), ...gateLogRows(record)];
+  }
   // `turn` is how a gate came to its sensors: the state of the lock, and whom it waited for. A caller that
   // is no gate has none.
   const run = async (turn) => {
@@ -678,6 +794,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       const afterGate = turn.lock === 'own' && turn.waitedMs >= GATE_WAIT_SAID_MS;
       rows.push({ name: 'load', pass: true, info: true, detail: loadDetail(load, { afterGate }), ...(lines.length ? { lines } : {}) });
     }
+    // What is untracked in the working tree before the sensors, for a gate alone. Asked before the start is
+    // written and again after the end, so neither look is in the seconds the log says the sensors took.
+    const before = lock ? untrackedPaths(cwd, deps.git) : null;
     record?.start({ ...turn, load });
     const ran = [];
     let result = 'error';
@@ -688,7 +807,9 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       record?.end({ result, sensors: ran.map(({ name, seconds, pass, timedOut }) => ({ name, seconds, pass, timedOut })) });
     }
-    return [...rows, ...ran, ...gateLogRows(record)];
+    // Not asked again where git did not answer before the sensors: there is nothing to compare with.
+    const after = before && untrackedPaths(cwd, deps.git);
+    return [...rows, ...ran, ...treeRows(before, after), ...gateLogRows(record)];
   };
   if (!lock) return run();
   if (lock.held) {
@@ -1025,7 +1146,8 @@ function formatRow(row) {
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
  * stderr and running no row, when a flag that takes a value is given without one or `--wait` is given
- * a value it cannot take (`parseArgs`). */
+ * a value it cannot take (`parseArgs`). A gate whose static row fails stops before its sensors: it prints
+ * the rows it has and one that says it stopped, and exits 1 as that failure always made it. */
 export async function main(argv = process.argv.slice(2), env = process.env, deps = {}) {
   let parsed;
   try {
@@ -1037,9 +1159,16 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   const { cwd, home, push, head, remote, noWait, waitMinutes } = parsed;
   // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
+  //
+  // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
+  // second or less. One of them that fails stops the gate before its sensors (below), whichever it is: the
+  // rule names no row, so a row added to this list stops the gate by being in it. A row that states a rule
+  // of the project (`rules`, `failures`) goes first in the list, before `budget`: it is the first thing a
+  // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
+  // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [checkBudget(cwd), checkContracts(cwd), ...checkFailures(cwd), ...checkPayload(cwd, home)];
+    : [...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.
@@ -1052,17 +1181,27 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // A gate that runs sensors reads the machine's load before them, unless its environment switches that
   // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own), and leaves its record in the
   // gate log of `home`, whatever the lock did, unless its environment switches that off (`GATE_LOG_ENV`).
+  //
+  // A gate whose static row has failed stops before its sensors: it hands `checkSensors` the names of the
+  // rows that failed so far, and where that gate would have run its sensors it runs none, takes no lock and
+  // answers one row that says so (`stoppedRow`). That row is then the last of the report: the `review` row
+  // and the Codex debt inform about a change that is not going to be committed as it is, and are not
+  // computed. The inner check and a push are outside this branch, and as they were.
+  let stopped = false;
   if (!push && env.JS_HARNESS_CHECK_INNER !== '1') {
     const lock = env[GATE_HELD_ENV] === '1' ? { held: true, home } : { home, wait: !noWait, waitMinutes };
-    rows.push(...(await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env) })));
+    const stoppedBy = rows.filter((row) => row.pass === false).map((row) => row.name);
+    const sensed = await checkSensors(cwd, deps, { ...lock, load: !loadSwitchedOff(env), log: !gateLogSwitchedOff(env), stoppedBy });
+    rows.push(...sensed);
+    stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
-    rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
+    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi }));
   }
   // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
   // push's. It reads commits and records, never the working tree, so the inner run prints it as well.
-  // `deps.git` stands in for `spawnSync` here and where a gate asks git what is staged (`checkSensors`),
-  // since `deps.spawn` is what runs a sensor.
-  if (!push) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
+  // `deps.git` stands in for `spawnSync` here and where a gate asks git what is staged or what is untracked
+  // in its working tree (`checkSensors`), since `deps.spawn` is what runs a sensor.
+  if (!push && !stopped) rows.push(checkCodexReviewDebt(cwd, { spawn: deps.git, remote }));
 
   for (const row of rows) {
     console.log(formatRow(row));
