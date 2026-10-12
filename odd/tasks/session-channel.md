@@ -1693,6 +1693,20 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   there. Measured here for it: a node start that reads the end of an 11 MB transcript takes
   130 ms, 210 ms through the dispatcher. Nothing is built: six decisions are his, asked one
   at a time, and three tries are tests owed.
+- 2026-10-12 03:38 to 04:50 local, T6b, the build starts while he is away. `main` at `5f011cc`
+  merged as `8f4e010` and gated (PASS, 04:13). The pause library is commit `575ab94`: asked of
+  the gate at 04:31, which now keeps the order of arrival (two turns ahead), held from
+  04:34, `PASS tests npm run test passed`, committed 04:47. gentle-ai on that commit (419
+  lines, medium, one lens): approved and acknowledged, with three warnings and three
+  suggestions, all on `bin/lib/pause.mjs`: a state that cannot be written makes the notice
+  come back after every tool call; a compaction point is believed whatever its value; an
+  end of file with no reply in it misses the crossing; the temp file of a failed rename
+  stays; the comparison is not tested at its edge; a room that is not a whole number is
+  formatted wrong. One writer has all six, test first (the brief is `brief-pause-fixes.md`
+  in this session's scratchpad). Codex did not run on `575ab94`: its plan is about 490,000
+  input tokens and the rate gives a commit of 400 changed lines 480,000. It is not asked of
+  him: Codex reviews the slice once, from `8f4e010`, when the fixes and the command are in,
+  where the rate covers the plan; told to the lead.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1770,8 +1784,14 @@ summary.
       pass, and on this session's own transcript it read 414,207 tokens in 8.6 ms, answered
       nothing under the pause and wrote no file. A stretch is told by the context falling
       under the pause again, not by a boundary's `uuid`, which may be megabytes before the
-      end; the state file of a session keeps when it was told. Owed for that commit: what
-      its gate, gentle-ai and Codex said. Next: `js-harness resume --pause` for a
+      end; the state file of a session keeps when it was told. That commit is `575ab94`,
+      gated; gentle-ai approved it with six findings (Progress, 2026-10-12 03:38 to 04:50).
+      In flight when this was written (04:55): one writer on the six, brief
+      `brief-pause-fixes.md` in this session's scratchpad; its work is read by the parent
+      (`node --test bin/lib/pause.test.mjs`), then committed through the gate with
+      `turn-commit-review.sh` of the same scratchpad. Codex is owed for the slice, once, from
+      `8f4e010`, after the command is in. Next, its brief ready as `brief-pause-command.md`:
+      `js-harness resume --pause` for a
       `PostToolUse` input (it reads the hook's JSON, finds the project's `harness.json` by
       walking up from `cwd` with no git call, ignores an input with `agent_id`, prints the
       host's JSON with `additionalContext`, never an exit but 0), and the dispatcher loading
