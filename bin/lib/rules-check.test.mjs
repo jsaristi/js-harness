@@ -255,6 +255,19 @@ test('a ruleValue call on a rule of scope repository is a finding, and a ruleHer
   assert.deepEqual(findingsOf("ruleOf('gate-wait')"), []);
 });
 
+test('a ruleOf read of a retired rule is a finding, and a ruleValue read of a retired rule of scope repository gives only the has no value finding', () => {
+  const findingsOf = (rules, call) => checkRules(build({ rules, readers: {}, codeFiles: [{ path: 'bin/x.mjs', text: call }] })).findings;
+  const rules = [declared()[0], OLD, declared()[1]];
+  assert.deepEqual(findingsOf(rules, "ruleOf('old-wait')"), [
+    'bin/x.mjs: reads rule "old-wait" with ruleOf, and it is retired',
+  ]);
+  assert.deepEqual(findingsOf(rules, "ruleOf('review-note')"), []);
+  const scoped = [declared()[0], { ...OLD, scope: 'repository' }, declared()[1]];
+  assert.deepEqual(findingsOf(scoped, "ruleValue('old-wait')"), [
+    'bin/x.mjs: reads rule "old-wait", which has no value',
+  ]);
+});
+
 test('Read by lists a file that reads a rule only with ruleHere, and the check finds no fault in it', () => {
   const codeFiles = [{ path: 'bin/lib/gate.mjs', text: "ruleHere('gate-wait', 'minutes', null)" }];
   const result = checkRules(build({ codeFiles, readers: { 'gate-wait': ['bin/lib/gate.mjs'] } }));
@@ -387,11 +400,13 @@ test('a retired rule whose source is malformed is a finding, and a retired rule 
 });
 
 /** The module specifiers that a source imports, read over its whole text, so that an import written over several lines is read. */
-const importsOf = (source) => [...source.matchAll(/\bimport\b[^;'"]*?'([^']+)'/g)].map((match) => match[1]);
+const importsOf = (source) => [...source.matchAll(/\bimport\b[^;'"]*?(['"])([^'"]+)\1/g)].map((match) => match[2]);
 
-test('importsOf reads a multi-line import and an import with no from', () => {
+test('importsOf reads a multi-line import, an import with no from, and a specifier in double quotes', () => {
   const source = "import {\n  one,\n  two\n} from './one.mjs';\nimport './two.mjs';\n";
   assert.deepEqual(importsOf(source), ['./one.mjs', './two.mjs']);
+  const mixed = 'import a from "./x.mjs";\nimport {\n  b,\n} from \'./y.mjs\';\nimport \'./z.mjs\';';
+  assert.deepEqual(importsOf(mixed), ['./x.mjs', './y.mjs', './z.mjs']);
 });
 
 test('rules-check.mjs imports no module that reads a rule: only rules-data.mjs and rules.mjs', () => {

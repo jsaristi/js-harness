@@ -322,11 +322,15 @@ export function ruleValue(id, unit, list = RULES) {
  * A rule of scope `repository` gives `{ value }` only when `projectData` is the list the running copy holds (line
  * endings aside). `{ off: 'elsewhere' }` means a project that does not declare the rules, one that installs the
  * harness. `{ off: 'behind' }` means a copy of the harness whose list is not the project's. It refuses as `ruleValue`
- * does for an unknown id, a retired rule, a rule in prose and another unit. */
+ * does for an unknown id, a retired rule, a rule in prose and another unit. It throws for a `projectData` of a rule of
+ * scope `repository` that is neither a text nor nothing, because that is a caller's mistake and not a stale copy. */
 export function ruleHere(id, unit, projectData, list = RULES) {
   const rule = liveRule(id, list);
   checkUnit(rule, id, unit);
   if (rule.scope === undefined) return { value: rule.value };
+  if (projectData !== null && projectData !== undefined && typeof projectData !== 'string') {
+    throw new Error(`rule "${id}": ruleHere takes the text of the project's rules file, or nothing`);
+  }
   if (projectData === null || projectData === undefined) return { off: 'elsewhere' };
   if (typeof projectData === 'string' && lineFeeds(projectData) === lineFeeds(writeRules(list))) return { value: rule.value };
   return { off: 'behind' };
@@ -358,6 +362,8 @@ const FILE_KEYS = [
 // The keys that say what a rule says, in the order the hash reads them.
 const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
 
+// The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
+const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 // The paragraph that docs/RULES.md gives under its title.
 const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
 
@@ -512,7 +518,7 @@ export function renderList(list, { sources = {}, readers = {}, sentences = {} } 
     : proseBlock(rule, { sources, sentences }));
   return [
     '# Rules',
-    RENDER_NOTE,
+    `${RENDER_NOTE}\n${LIST_NOTE}`,
     `Hash ${code(rulesHash(list))}. In force: ${shown(inForce.length)} (${shown(sebastian.length)} of Sebastián, ${shown(project.length)} of the project). Retired: ${shown(retired.length)}.`,
     section("## Sebastián's", sebastian.map(block)),
     section("## The project's", project.map(block)),

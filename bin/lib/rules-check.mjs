@@ -237,6 +237,7 @@ export function checkRules(input) {
       continue;
     }
     if (by !== 'ruleOf' && !Object.hasOwn(rule, 'value')) findings.push(`${path}: reads rule "${id}", which has no value`);
+    if (by === 'ruleOf' && Object.hasOwn(rule, 'retired')) findings.push(`${path}: reads rule "${id}" with ruleOf, and it is retired`);
     if (by === 'ruleValue' && rule.scope === 'repository' && !Object.hasOwn(rule, 'retired')) {
       findings.push(`${path}: reads rule "${id}" with ruleValue, and it is of this repository only: read it with ruleHere`);
     }

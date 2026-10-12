@@ -636,6 +636,17 @@ test('ruleHere says elsewhere for a scoped rule when the project holds no list, 
   assert.deepEqual(ruleHere('alpha-value', 'characters', 'an older list\n', list), { off: 'behind' });
 });
 
+test('ruleHere throws for a scoped rule when projectData is neither a text nor nothing, and reads an unscoped rule whatever it is', () => {
+  const list = [valueRule('alpha-value', { scope: 'repository' }), valueRule('beta-value')];
+  for (const projectData of [Buffer.from('x'), 7, {}]) {
+    assert.throws(() => ruleHere('alpha-value', 'characters', projectData, list), {
+      name: 'Error',
+      message: 'rule "alpha-value": ruleHere takes the text of the project\'s rules file, or nothing',
+    }, `projectData ${String(projectData)}`);
+  }
+  assert.deepEqual(ruleHere('beta-value', 'characters', 7, list), { value: 12 });
+});
+
 test('ruleHere refuses as ruleValue does: an unknown id, a retired rule, a rule in prose and another unit', () => {
   const list = [
     valueRule('alpha-value', { scope: 'repository' }),
@@ -805,7 +816,7 @@ test('rulesHash is different when a unit, a flag, a path or the phrases change, 
 
 // ── renderList ─────────────────────────────────────────────────────────────────────────────────
 
-const NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
+const NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.\nThe list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 
 // One rule of each kind: his with a value and words, a project rule with a unit, a flag, earlier values,
 // two readers and a design source; prose with its sentence and without it; retired with successors and without.
@@ -975,4 +986,15 @@ test('renderList prints each form of the row: reports, refuses since a day, or r
   assert.equal(sinceLine(undefined), '- Since 2026-10-11. Row: reports. Source: none recorded.');
   assert.equal(sinceLine({ refuses: '2026-10-01' }), '- Since 2026-10-11. Row: refuses since 2026-10-01. Source: none recorded.');
   assert.equal(sinceLine({ reports: 'the gate reports it', since: '2026-10-02' }), '- Since 2026-10-11. Row: reports since 2026-10-02 (the gate reports it). Source: none recorded.');
+});
+
+test('the head of the list says it holds no engine version and no date of a check, as the last line of its explaining paragraph', () => {
+  const head = renderList([]).split('\n').slice(0, 5);
+  assert.deepEqual([head[0], head[1], head[3], head[4]], [
+    '# Rules',
+    '',
+    'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.',
+    '',
+  ]);
+  assert.ok(head[2].startsWith('Rendered by `js-harness rules render`'), head[2]);
 });

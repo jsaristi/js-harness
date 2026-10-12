@@ -12,13 +12,14 @@ import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.json'), 'utf8');
 const SOURCES = JSON.parse(SOURCES_TEXT);
 const COUNT_LINE = `${RULES.length} rules, hash ${rulesHash(RULES)}`;
 const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The files every project of these tests holds: the declarations, written from RULES as writeRules gives them, and the sources. */
@@ -243,6 +244,142 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['--x'], dir), { code: 2, out: [], err: [`unknown argument: --x\n\n${USAGE}`] });
     assert.deepEqual(await run(['check', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
+  });
+});
+
+test('the usage names the applied form, and a word after applied is a usage error', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
+    assert.match(USAGE, /\| applied\]$/);
+  });
+});
+
+// ── applied: the session records of the project, against the rules in force in it ───────────────
+
+const NOW = Date.parse('2026-10-12T12:00:00Z');
+const RULES_DATA_TEXT = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
+const LIST = { 'bin/lib/rules-data.mjs': RULES_DATA_TEXT };
+// A git that finds no repository: the project and its main checkout are then the folder itself.
+const NO_GIT = () => ({ status: 1, stdout: '', stderr: '' });
+
+/** Runs `body` in a temporary project that holds `files` and in a temporary Claude home, and removes both after. */
+async function withHome(files, body) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
+  try {
+    return await inProject(files, (project) => body(project, home));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+/** The folder of the session records of `project` under `home`, as Claude Code keeps it. */
+const recordsOf = (project, home) => path.join(home, 'projects', projectSlug(project));
+
+/** Writes one sub-agent launch answered by `model` under `records`, modified at NOW, with the meta file of a haiku launch. */
+function launch(records, model) {
+  const dir = path.join(records, 'session-1', 'subagents');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'agent-x.jsonl');
+  const entry = { type: 'assistant', version: '2.1.200', entrypoint: 'cli', timestamp: new Date(NOW).toISOString(), message: { model } };
+  fs.writeFileSync(file, `${JSON.stringify(entry)}\n`, 'utf8');
+  fs.writeFileSync(path.join(dir, 'agent-x.meta.json'), JSON.stringify({ model: 'haiku', effort: 'high', agentType: 'general-purpose' }), 'utf8');
+  fs.utimesSync(file, NOW / 1000, NOW / 1000);
+}
+
+/** Runs `js-harness rules applied` on `project` at NOW, with `env` (by default the Claude home is `home`), collecting its output. */
+async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }) {
+  const out = [];
+  const err = [];
+  const code = await rulesMain(['applied'], {
+    root: project,
+    cwd: project,
+    env,
+    homedir: () => home,
+    now: () => NOW,
+    run: NO_GIT,
+    stdout: (line) => out.push(line),
+    stderr: (line) => err.push(line),
+  });
+  return { code, out, err };
+}
+
+test('applied passes when a launch of haiku is answered by the model its rule declares', async () => {
+  await withHome(LIST, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    const { code, out, err } = await applied(project, home);
+    assert.deepEqual(err, []);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes('subagent-writer-model: claude-haiku-5-5, passed as `haiku`, since 2026-10-11'), out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied'), out.join('\n'));
+  });
+});
+
+test('applied fails, with the line to the lead, when a launch of haiku is answered by another model', async () => {
+  await withHome(LIST, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-4-5-20251001');
+    const { code, out } = await applied(project, home);
+    assert.equal(code, 1, out.join('\n'));
+    assert.ok(out.some((line) => line.startsWith('FAIL  subagent-writer-model:')), out.join('\n'));
+    assert.ok(out.some((line) => line.startsWith('To the lead:')), out.join('\n'));
+    assert.ok(!out.includes('PASS  rules applied'));
+  });
+});
+
+test('applied in a project with no rules-data.mjs leaves the scoped rules out, and exits 0 with that launch', async () => {
+  await withHome({}, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-4-5-20251001');
+    const { code, out } = await applied(project, home);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes('no rule with an alias is in force here'), out.join('\n'));
+    assert.ok(out.some((line) => line.startsWith('Left out:') && line.includes('not in force in this project')), out.join('\n'));
+  });
+});
+
+test('applied in a project whose rules-data.mjs is another text leaves the scoped rules out, as holding another list', async () => {
+  await withHome({ 'bin/lib/rules-data.mjs': 'export const RULES = [];\n' }, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-4-5-20251001');
+    const { code, out } = await applied(project, home);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.some((line) => line.startsWith('Left out:') && line.includes('holds another list')), out.join('\n'));
+  });
+});
+
+test('applied reads a list with \\r\\n line ends as the same list, so its rules are in force', async () => {
+  await withHome({ 'bin/lib/rules-data.mjs': RULES_DATA_TEXT.replace(/\r?\n/g, '\r\n') }, async (project, home) => {
+    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    const { code, out } = await applied(project, home);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied'), out.join('\n'));
+  });
+});
+
+test('applied with no records folder exits 0, says that nothing was read, and prints no PASS line', async () => {
+  await withHome(LIST, async (project, home) => {
+    const { code, out, err } = await applied(project, home);
+    assert.deepEqual([code, err], [0, []]);
+    assert.ok(out.includes('  no records there: nothing was read'), out.join('\n'));
+    assert.ok(!out.includes('PASS  rules applied'));
+  });
+});
+
+test('applied with CLAUDE_CONFIG_DIR unset looks for the records under the home folder', async () => {
+  await withHome(LIST, async (project, home) => {
+    const records = path.join(home, '.claude', 'projects', projectSlug(project));
+    launch(records, 'claude-haiku-5-5');
+    const { code, out } = await applied(project, home, {});
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes(`  records: ${records} (of ${project})`), out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied'), out.join('\n'));
+  });
+});
+
+test('applied reads no document, so a root with no docs/ still runs and exits 0', async () => {
+  await withHome(LIST, async (project, home) => {
+    assert.equal(fs.existsSync(path.join(project, 'docs')), false);
+    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    const { code, out } = await applied(project, home);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes('PASS  rules applied'), out.join('\n'));
   });
 });
 

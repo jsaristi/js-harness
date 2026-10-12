@@ -1,6 +1,7 @@
 # Rules
 
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
+The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
 Hash `950f2423e296`. In force: 16 (11 of Sebastián, 5 of the project). Retired: 0.
 

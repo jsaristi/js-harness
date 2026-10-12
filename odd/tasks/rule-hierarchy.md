@@ -1453,11 +1453,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       and the correction `331090b`; gentle-ai approved each code commit and Codex's records
       cover `859a797..6a721cc` and `b0ccff1..331090b`)
     - [ ] Second part: each constant reads its declaration, one file at a time, each told to
-      the orchestrator before it is touched
+      the orchestrator before it is touched. Done: the four bounds whose files were free
+      (commit `21b391f`). Left: the model and the effort of a Codex review, when
+      `feat/gate-wait` is on `main`; the context pause, declared when its file is free
     - [ ] Third part: model and effort as rules, as "Model and effort as rules" designs it:
       `alias` and `scope`, the guarded read, `js-harness rules applied`. It takes B1 and B4 of
       `docs/model-effort.md`, and with T13 the checking half of B3 (the orchestrator's
-      settlement of 2026-10-12)
+      settlement of 2026-10-12). Built: the fields, the guarded read and the declarations
+      (commit `528bf56`, approved by gentle-ai), the command (`34c2dfc` and the commit after
+      it). Left before it is checked off: gentle-ai on the command, Codex on all of it (held
+      for him by its plan), the row of `doctor`, and the check of launches (T13 with B3)
   - [ ] T16c The one command that changes a rule
   - [ ] T16d The row `rules`: a pattern for each rule on added lines, reporting and then
     refusing rule by rule, with a planted violation as its test; after the gate stops before
@@ -2061,16 +2066,54 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     16 rules, hash `950f2423e296`; `rules check` passes. The head line of `docs/RULES.md` about
     `rules applied` waits for the command (piece B). NEXT: the gate's answer on that commit,
     then gentle-ai from `47484bd` and Codex with `--base 47484bd`, plan first.
+  - Piece A is commit `528bf56` (the gate passed at 05:39). gentle-ai approved it and the
+    approval is acknowledged (`review-2f492055c33125b4`, medium, one lens, run from a detached
+    worktree `rules-rewire-review` at that commit, because the working one held untracked
+    files). Its three notes are all taken and corrected by a writer, in the last commit of
+    piece B: a `ruleOf` read of a retired rule passed the check and would throw when run; a
+    `projectData` that is no text was answered "behind" instead of refused; the test's reader
+    of imports took only single quotes.
+    **Codex on piece A is held for him**: the plan of `47484bd..528bf56` is 2 parts, 466
+    changed lines, about 570,000 input tokens, and the allowance is 1,200 x 466 = 559,200. Not
+    run, not split; the lead has the figure (its estimator's median is about 1,224 a line
+    today, so every range over about 250 lines plans over the rate).
+  - The rewiring of what is free is commit `21b391f` (the gate passed at 06:09): the bound of
+    lines and of files of a part, the count of parts without a flag and the wait of the gate
+    lock each read their rule; the three tests that stated the numbers hold each constant to
+    its rule; `bin/lib/rules-bindings.test.mjs` keeps only the review's model and effort,
+    which wait for `feat/gate-wait` on `main`. Route: inline, one line a file.
+  - Piece B, the command `js-harness rules applied`, is written by four narrow writers on
+    Haiku 5.5 (134,004 + 121,836 + 204,700 + 195,167 tokens) from four specifications in the
+    scratchpad (`t16b-third-b1.md` to `-b4.md`), the first three in a folder apart while the
+    gate ran on this worktree. `bin/lib/rules-applied.mjs`: `appliedOf`, pure, and
+    `appliedLines`, what is printed. `bin/lib/rules-applied-read.mjs`: `readRecords`, the
+    bounded reader. `bin/rules.mjs`: the form `applied`. The head of `docs/RULES.md` says where
+    the engine and the date are read. This session read the three modules whole and the diff of
+    the command; the test files are not read line by line. One call of this session against
+    its own specification: a window with no launch of a declared alias prints `Nothing
+    compared`, never `PASS` (a writer saw that the specified line read as a pass). It goes in
+    two commits, each under about 1,200 lines: the pure module, then the reader, the command
+    and the notes of the review. The pure module is commit `34c2dfc` (the gate passed at 06:40).
+    The command, run once on the real records inside a turn of the gate (06:57, exit 0):
+    163 launches and 27 sessions of 2026-10-06 to 12 read from 210 and 43 files, 60 older than
+    the window, 1 with no model that answered, 2 session files with no assistant entry in
+    their last 1 MB; `opus` gave `claude-opus-5-5` on all 50 launches and `haiku` gave
+    `claude-haiku-5-5` on all 26, both on claude-desktop 2.1.295; sdk-cli 2.1.296 has no
+    launch of either yet; 87 launches passed no model (67 general-purpose and 12 Explore
+    answered by Opus 5.5, 8 claude-code-guide by Haiku 5.5). NEXT: the last commit through the
+    gate, then gentle-ai from `528bf56` on the three commits; Codex by its plan, and over the
+    rate it waits for him.
 
 ## Next step
-In this order. (1) Piece A of the third part, as the last Progress entry says; piece 1 of the
-second part when its files are free. (2) The rest
-of the second part of T16b: each constant reads its declaration, one file at a time, each
-told to the orchestrator before it is touched; the context pause, one constant on `main` now
-(`bin/lib/sessions.mjs`), is declared with it. (3) The third part, as designed: the fields
-and the guarded read first, with the three notes gentle-ai left on the correction, then the
-reader of launches and `js-harness rules applied`; the new session rows need his line 990
-read again for their source. (4) T3e. (5) T1, which takes section D of the proposal. T2 and
+In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:
+gentle-ai from `528bf56`, Codex by its plan (over the rate it waits for him), then push and
+the pull request, which the push hook allows only with Codex's records. (2) The check of
+launches (T13 with the checking half of B3): it reads the list `readRecords` gives and holds
+the session rows and the sub-agents' effort, and says what each launch without a model ran
+on; designed before it is built, read by a reader that did not write it. (3) The rest of the
+second part of T16b when its files are free: the review's model and effort
+(`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
+(`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and
 T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts of
 "What the hosts allow" that T2 rests on are confirmed with a logging hook.
 His, written here and asked once when he is back (he is away from 2026-10-12 03:38 for about
