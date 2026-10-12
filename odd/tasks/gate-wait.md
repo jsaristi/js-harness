@@ -402,10 +402,10 @@ session's transcript.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
       tests first.
-- [ ] T6 · The head a review reads is pinned (done, `3e0b456`), and two records at once (open). Route: delegated,
-      tests first.
-- [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
-      does (done, `0dde768`); and `codex-review` says so when its base is itself a code commit with no
+- [x] T6 · The head a review reads is pinned (`3e0b456`), and two records at once (`4ca3c05`: they
+      stay whole, nothing to mend). Route: delegated, tests first.
+- [x] T6b · The row of a commit names the commits no record covers, as the row of a push
+      does (`0dde768`); and (`b165cde`) `codex-review` says so when its base is itself a code commit with no
       record, since a base is outside its range. From "JH 7" through the orchestrator
       (2026-10-12, a claim, to be read in the code before it is built): its row said "no
       Codex review record for 1 of N code commits" for hours without the name, and the
@@ -520,19 +520,76 @@ session's transcript.
   (under the budget). The row is not bounded: a branch with many such commits prints every
   one at every commit, as the row of a push does. Left as it is, said here. Sub-agents so
   far: 1,357,430 tokens.
+- 2026-10-12 · T6, what was left of it, commit `4ca3c05`: a test, written on Opus, that four
+  processes which start together and append a hundred records of four thousand bytes each
+  leave four hundred whole lines, each process's in its own order. It passed as the code
+  is: the append is one write to a file opened for appending, so nothing was made whole
+  because nothing tears. No RED: the test describes what holds.
+- 2026-10-12 · T6b, its second half, two writers on Haiku 5.5 (123,752 and 141,922 tokens),
+  commit `b165cde`. `baseLeftOut` in `bin/lib/codex-review-coverage.mjs` says whether the
+  commit a range starts at is a code commit of the branch that no record covers;
+  `defaultBranch` moved there from `bin/check.mjs`, since the command asks it now too; and a
+  plan, a review and a skip say it in one line before anything else, with the command that
+  starts one commit earlier. Said only of a commit of the branch: the usual base, the
+  default branch's own commit, is left alone. One thing added by hand: a repository with no
+  remote is told by one git question (`for-each-ref`) where finding no default branch took
+  three, since every review of the suite's tests asks it.
+  One turn for both (`t6c-turn.log`, asked 07:40:48, taken 08:06:35 after two gates of
+  other sessions): RED of the library, the file does not load against the library at HEAD
+  (`does not provide an export named 'baseLeftOut'`), which is a weak RED and is said as
+  one; RED of the command, its two tests that expect the line fail against the command at
+  HEAD; GREEN, 19 of 19, 26 of 26, 97 of 97 and 257 of 257 of the four test files; then
+  each commit over a tree that held its files alone, the other five set aside and put back:
+  `PASS  tests` at 08:33:08 (944 s) and at 08:49:04 (947 s). gentle-ai's rows: 63 lines and
+  245 lines, each under the budget; from `1841b96` the slice is 661 lines and its review is
+  due (`slice_budget_reached`).
+- 2026-10-12 · T2, in a worktree of its own, `D:\js-harness-worktrees\gate-wait-count`,
+  branch `feat/gate-wait-count` off `main` at `47484bd`: slice S2 touches only `scripts/`,
+  and a second worktree let its writers work while the first one waited 26 minutes for the
+  lock. One writer at a time. Three pieces on Haiku 5.5 (159,248, 157,117 and 161,885
+  tokens): the time line by test file; the seconds of each top-level test, from a reporter
+  of the tool's own (`scripts/count-git-reporter.mjs`); and the machine.
+  **A change to the design, taken here:** what the machine spent and what a start costs
+  (M1, points 3 and 4) are not in the counting tool. They are one separate script,
+  `scripts/measure-run.mjs`, that wraps any command: busy processor-seconds, what each
+  process that lived through the run spent, by name, and the starts of git and Node before
+  the command and inside it. The same numbers, one writer instead of three, and a tool that
+  measures a review or a gate as well as a count. What the Node processes report of
+  themselves stays in the counting tool's time line; "not attributed" is worked out in
+  Progress from the two.
+  Three things changed by hand after reading the writers: a space a writer had dropped in a
+  line of the report; the header of the new block, which held the words "by test file" that
+  an older test forbids for a run of one file (the first turn failed on it at GREEN, 26 of
+  27, exit 6, nothing committed); and the reader of the process table. The writer's, and my
+  brief's, was `Get-Process`, which on this machine returns no time for the antivirus
+  (`MsMpEng`: empty CPU and StartTime, read 08:00) and took 13 s; `Win32_Process` reads it
+  and takes 1 s. Only running the reader on the real machine showed it.
+- 2026-10-12 · Two readings on the way, neither a measurement of a suite. At 08:00 the
+  antivirus had used 204,630 processor-seconds since the machine started 289,316 s (3.35
+  days) before: 71% of one logical processor on average, 8.8% of the eight. And by 08:51
+  two `node tsserver.js`, named in the load row of both gates above, were each spending a
+  whole logical processor all the time (4.8 s in 5 s): one this session's own (pid 57964,
+  7,136 processor-seconds since 2026-10-11 15:52), stopped; the other another session's
+  (pid 59656), told to the orchestrator and left alone. This session's had been spinning
+  since before the first gate of this feature, so no gate recorded here ran without it;
+  M1 is the first run that does.
+  Sub-agents so far: 2,101,354 tokens. Codex in this feature: none.
 
 ## Next
-What is left of T6 (two records appended at once: the test is drafted in the scratchpad,
-`t6c-test-snippet.mjs`, not run) and the second half of T6b (`codex-review` says when its
-base is itself a code commit no record covers), one writer. Then gentle-ai on what follows
-`1841b96`.
-Codex on the slice when he has answered; its run is also M2's number 1 for Codex, under
-`measure-busy.mjs`. T2 can start beside them: its files are free.
+gentle-ai on what follows `1841b96` (661 lines, due): start it, run the `granted` choice,
+capture in a turn of the lock. Codex on the slice when he has answered; its run is also M2's
+number 1 for Codex, now under `scripts/measure-run.mjs` once S2 is committed.
+In the other worktree: the turn of T2 (`t2-turn.sh`: RED, GREEN, the commit with its gate,
+and then M1, the whole suite under the counting tool wrapped by the measuring script; its
+tables land in the scratchpad as `m1-count.json`, `m1-machine.json`, `m1-machine.txt`).
+Then T3: the tables into Progress, and the cuts chosen from them.
 
 ## Resume here
 - `feat/gate-wait` is not pushed; its head is the commit that holds this entry, on
-  `7411fe6`. T5 is `1841b96` and `8bae23f`, gated, the first reviewed by gentle-ai,
-  neither with a Codex record yet.
+  `7411fe6`. S1 is `1841b96`, `8bae23f`, `3e0b456`, `0dde768`, `4ca3c05`, `b165cde`, each
+  gated, the first reviewed by gentle-ai, none with a Codex record yet.
+- `feat/gate-wait-count` (worktree `D:\js-harness-worktrees\gate-wait-count`, off `main`
+  at `47484bd`, not pushed) holds S2. This document stays on `feat/gate-wait` only.
 - No Codex run until the orchestrator relays his answer on the margin over the rate.
 - `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
 - The scratchpad of this session
