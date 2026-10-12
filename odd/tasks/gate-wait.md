@@ -684,6 +684,16 @@ session's transcript.
   the writer's new test expected `pass 2` of a file with two top-level tests and one
   nested, and the runner rightly says `pass 3`. The test was corrected and the turn asked
   again.
+  Its second turn (taken 10:54:10) passed GREEN and **failed at the gate, the first whole
+  run through the runner**: 3,781 tests, 3,770 pass, 1 fails, 866 s (`t4-gate-failed-1109.log`
+  in the scratchpad), commit refused at 11:09:16. The one failure is a test of the runner
+  itself, the one its writer had flagged: it read the order of the files from which test
+  wrote its first line first, which is decided by how fast each process boots, and inside
+  the loaded suite it came out in another order. It now reads the order from the report,
+  which lists the files as the run was handed them (12 of 12, three times running alone).
+  Asked a third time. And one reading to keep beside the claim of the cut: that whole run
+  through the runner took 866 s, no shorter than the gates before it (839 s, 889 s) with
+  other sessions working; only M1 again, with its time line, can say what the order gave.
 - 2026-10-12 · **T6c committed, `3b810a4`**, one writer on Haiku 5.5 (118,070 tokens),
   tests alone: the record refused when `HEAD` cannot be read again after the review; the
   note on a base left out, on a skip; a deadline of 120 s for the writers of the test of
@@ -718,6 +728,24 @@ session's transcript.
   gated, the first reviewed by gentle-ai, none with a Codex record yet.
 - `feat/gate-wait-count` (worktree `D:\js-harness-worktrees\gate-wait-count`, off `main`
   at `47484bd`, not pushed) holds S2. This document stays on `feat/gate-wait` only.
+- The cut's turn was asked a third time at about 11:15 on 2026-10-12 (`t4-turn.sh`, log
+  `t4-turn.log`, the commit's gate in `t4-gate.log`, all in the scratchpad). First check
+  whether `feat/gate-wait-count` moved past `c844f29` and whether `m1b-count.json` and
+  `m1b-machine.json` exist: if the commit is there and they are not, M1 again is one
+  command of that script, to be run in a turn of its own. If the tree still holds the
+  eight files uncommitted, read the tail of the log before asking again; never the whole
+  log. To compare the two runs: the scratchpad's `m1-count.json` against `m1b-count.json`
+  (`timeLine`: where each long file starts and where the last one ends; `git.count`), and
+  `m1-machine.txt` against `m1b-machine.txt`.
+- `main` moved to `3088960` (pull request 73) at 10:41; both branches merge clean against
+  it by the orchestrator's `merge-tree`. Take it with a merge, and gate that tree, before
+  any pull request.
+- gentle-ai's lifecycle, as run twice here: `gentle-ai review assess --cwd . --agent
+  claude-code --base-ref <boundary> --committed-only --json`; its `next_transition.command`
+  verbatim; `review start` with the returned tokens (the scratchpad's `ga-exec.mjs` runs a
+  transition's tokens unchanged); the `granted` choice's invocation as given; the bound
+  status; the capture in a turn of the lock (`s1b-review-turn.sh` is the pattern); then
+  the acknowledgement command as returned.
 - No Codex run until the orchestrator relays his answer on the margin over the rate.
 - `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
 - The scratchpad of this session
