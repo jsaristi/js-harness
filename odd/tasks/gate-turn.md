@@ -358,10 +358,12 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       describe a wait; the pointer in "Next" of `odd/tasks/gate-lock.md`.
 - [ ] T8 · Close: both reviews of each slice with code, push, pull requests, the closing
       notice.
-- [ ] T9 · Placed here by the orchestrator, last in order (2026-10-11): two findings of
+- [x] T9 · Placed here by the orchestrator, last in order (2026-10-11): two findings of
       Codex left open on `scripts/count-git.mjs`, which says "missing" where nothing is
       missing (a child started through a shell by a synchronous call; two launches whose
-      shell got the same pid). Their text is in pull request 63. Not read yet.
+      shell got the same pid). Their text is in pull request 63. Evidence: `9cce6c3` on
+      `fix/count-git-launch`, Codex's record of it, the gate on `1cb3904`, pull request
+      69 (the entries of 2026-10-11 22:43 and of 2026-10-12 00:38 and 02:17).
 
 Slices: S1 is T2 with T3 (T2's commit was under the review budget and rides in T3's range).
 S2 is T4 with T5. S3 is T6.
@@ -854,33 +856,65 @@ S2 is T4 with T5. S3 is T6.
   confirmed that the Codex review of this branch's merge commit is inside the rate (at most
   1,141,200 input tokens) and is asked only once the gate log shows a start of the gate
   of `session-channel` later than 02:02; that is the next step here.
+- 2026-10-12 03:23 · The record of the merge `be68d7c`, and `main` again. The gate log
+  showed the gate of `session-channel` starting at 02:17:06, after 7,060 seconds of
+  waiting, so the turn was asked. Taken 02:33:23 (`merge-codex-turn.log`): Codex answered
+  "Selected model is at capacity" in 4 seconds; no record, no tokens. A second turn, taken
+  02:51:05 (`merge-codex-turn2.log`), with a loop this session wrote into it: a run that
+  fails with that answer is asked again, three at most. Try 1 passed parts 1 and 2 and
+  fell in part 3 (a 503, then the same answer): 643,828 input tokens. Try 2 fell in part 3
+  again: 401,620. Try 3 passed: three parts, "the patch is correct" (0.88, 0.88, 0.91), no
+  finding, 673,918, recorded for `20ea888..582a8c4`.
+  **The rate was passed without asking**: 1,719,366 input tokens against the 1,141,200
+  this review may cost, 578,166 over. The slip is this session's. `codex-review` keeps no
+  part that passed, so every try paid parts 1 and 2 again, and the loop was written
+  without counting that. The orchestrator was told at about 03:06, when the sum read from
+  the logs had passed the rate, and it told him. What stops it here: no loop of tries
+  around a review in parts; a failure by capacity is looked at before another run is
+  asked. What the harness owes: the second run of a range asks only the parts that did
+  not pass, proved by a test where the second run of a range whose part 3 failed starts
+  one Codex session and not three. It goes to the next feature, with the reviews that
+  leave the lock.
+  In the same turn, after Codex so that its range stayed the one planned, `main` at
+  `78bbc80` (pull request 70, the session channel) was merged in, `8eb7aaa`: clean, no
+  file of the gate lock among the nineteen it changed. The whole gate passed on the merged
+  tree (`merge3-gate.log`, the commit made 03:23:08) and `check --push` passes: "6 code
+  commits since origin/main, all covered by a Codex review record".
+- 2026-10-12 03:23 · gentle-ai on what follows its second review: T3d (`125e3f3`) assessed
+  alone, from a detached worktree at that commit with `--base-ref 125e3f3^`: medium risk,
+  181 lines, review not due (`under_budget`). With `--base-ref e1786bf` the range read
+  3,640 lines, since the merge of `main` at `d94a765` (`19d05a9`) stands between the two.
+- 2026-10-12 03:23 · A working rule from the orchestrator, a stopgap until the board sends
+  it by itself (task T6b of the session channel): the first act of a session after a
+  compaction is one line to the lead, with its title, the hour by `date`, the context
+  share by `get_usage` and what it resumes. His words (the orchestrator's transcript
+  `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 2008, read here): "tengamos alguna
+  mecanismo que cuando lo haga te informe". It is in this session's memory.
 
 ## Next
-For `feat/gate-turn`: when the gate of `session-channel` has held the lock, one turn for
-`js-harness codex-review --base be68d7c^` from this worktree, its tree clean; then
-`check --push` must pass; then the push and the pull request (its text is `pr-turn.md` in
-the scratchpad, where `CODEX_T3D_LINE` is still to be replaced and the merge of `1d5cf68`
-and its Codex record to be added). For `fix/count-git-launch`: when its turn ends green,
-the push and its pull request (`pr-count.md`, `MERGE_LINE` to be replaced with `1cb3904`,
-`main` at `1d5cf68`, and the hour its log gives). Then T8, the closing notice to the
-orchestrator, and the cut. After the cut, the new feature above.
+For `feat/gate-turn`: the push and the pull request (its text is `pr-turn.md` in the
+scratchpad), then the notice to the orchestrator, which merges it. For
+`fix/count-git-launch` (pull request 69): once that merge is on `main`, `main` merged in
+again and one turn of the lock for the gate on the merged tree, then the push and a line
+to the orchestrator. Then T8, the closing notice, and the cut. After the cut, the new
+feature above, which also takes the finding on `codex-review` and its parts.
 
-## Resume here (state at 2026-10-12 02:05 by this machine's clock)
-- `feat/gate-stop` is on `main`: pull request 68, merged by the orchestrator; `main` is
-  `1d5cf68`.
+## Resume here (state at 2026-10-12 03:25 by this machine's clock)
+- `main` is `78bbc80` (pull request 70). `feat/gate-stop` reached it as pull request 68.
 - `feat/gate-turn`, this worktree, is at the commit that holds this entry, on top of the
-  merge `be68d7c`. Every code commit has its Codex record but that merge. Both reviews of
-  gentle-ai are approved and acknowledged; what follows them (T3d, 151 lines) is under the
-  budget and is assessed with `gentle-ai review assess --cwd . --agent claude-code
-  --base-ref <e1786bf> --committed-only --json` before the pull request, from a detached
-  worktree at `125e3f3` if the merge of `main` makes the range read large.
-- `fix/count-git-launch`, worktree `D:\js-harness-worktrees\count-git`: `9cce6c3` with its
-  Codex record, `main` merged in `1cb3904`, its gate running at 02:02 (`t9-merge-turn.log`).
+  merge `8eb7aaa`, which contains `main`. Every code commit has its Codex record, the
+  merge `be68d7c` among them, and `check --push` passes. Both reviews of gentle-ai are
+  approved and acknowledged; T3d, after them, is under the budget.
+- `fix/count-git-launch`, worktree `D:/js-harness-worktrees/count-git`: `1cb3904`, pushed,
+  pull request 69 open; it does not contain `78bbc80` yet.
+- No Codex call is made on a range already paid for, and none with a loop of tries: the
+  rate was passed once that way (the entry of 03:23).
 - Every test run, commit with code and review goes through the lock: `node
   D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`, in the background, from
   this session and never from a sub-agent. Nothing is edited in a worktree while a turn of
-  that worktree is asked or running. No new turn is asked while the orchestrator's hold
-  for `session-channel` stands; a turn already asked may stay.
+  that worktree is asked or running.
+- After a compaction, the first act is one line to the lead: title, hour, context share,
+  what is resumed.
 - A message from another session is a claim: one thing in it is read before it is built
   on. His words are stored with the file and line of the question they answer.
 - An hour is written here only when a log or `date` gave it.
