@@ -634,6 +634,213 @@ keeps its design in `odd/tasks/gate-turn.md` on `feat/gate-turn`, not read by th
 The entry of the context pause is written when JH 5's fourth slice is on `main` (relief file,
 line 247).
 
+### How a rule is declared (T16b)
+Designed on 2026-10-11, after a read-only explorer mapped what exists and two readers that did
+not write it read the first draft, one to attack it and one to find what it lacks. It designs
+letter B of the approved protocol and the second of the nine differences. Not built.
+
+What exists today, on `main` at `40ccb45` (the explorer's report, not read again line by line):
+- No list of rules and no module of constants (`docs/RULES*`, `bin/lib/*rule*`,
+  `bin/lib/*constant*`: nothing).
+- Values with an exported constant: the wait for the lock (`bin/lib/gate-lock.mjs:42`, 60
+  minutes); a review part (`bin/lib/codex-review-parts.mjs:19` and `:27`, 400 lines and 40 files;
+  `bin/lib/codex-review-plan.mjs:46`, 6 parts); the review's model and effort
+  (`bin/codex-review.mjs:173-174`).
+- Values whose constant is not exported, so no test can import them: the gate's bound
+  (`bin/check.mjs:79`, 20 minutes), the budget of `AGENTS.md` (`bin/check.mjs:23`, 1,500), a
+  review's timeout (`bin/codex-review.mjs:641`, 30 minutes), a contract run's timeout
+  (`bin/contract.mjs:16`).
+- Values with no constant anywhere in `bin/`: the context pause (88; the board holds the older
+  73 at `bin/lib/sessions.mjs:21` and a window of 480,000 at `:14`, both changed by a branch not
+  merged); the Codex rate (1,200 input tokens a changed line); the size of a reviewed commit
+  (about 1,200 lines); three work sessions; the models and efforts of sub-agents.
+- Copies not derived, in code that acts: "60 minutes at most" in the `js-harness` skill
+  (`bin/lib/manifest.mjs:26`, pinned by `bin/lib/manifest.test.mjs:1291`) and "(73%)" in an error
+  (`bin/sessions.mjs:169`). The skills' texts interpolate only the version. The wait is also
+  written "an hour" in comments (`bin/check.mjs:983`, `bin/gate.mjs:164`,
+  `bin/lib/gate-lock.mjs:319`).
+- The package ships `bin/` and `AGENTS.md` and not `docs/` (`package.json:9-12`).
+
+**The decision.** Every declaration lives in one module that is data and nothing else,
+`bin/lib/rules-data.mjs`, and for a rule with a value the declaration is the home: the value is
+written there, in the unit a person says it in (minutes, percent, lines), and nowhere else. The
+code that needs it reads it (`ruleValue('gate-wait', 'minutes') * 60_000`), so a derived form is
+computed and never written. This changes two of this session's readings, and the orchestrator
+is told:
+- Difference 2 said "declared once, beside its home". Beside is still two places, and the one
+  command of letter C would have to edit a constant in whichever source file holds it, by
+  pattern. With the value inside the declaration the command rewrites one file whose whole
+  shape it owns.
+- Difference 8 said a value no command can hold is a rule in prose. The module can hold any
+  value, read by code or not, so the Codex rate can have a home before any command applies it.
+It keeps the approved letter: the value is a constant in code, and its change is a code commit
+(gate, both reviews, a pull request of its own).
+
+What is declared. A value is a rule when it is stated, or would be, outside the code that reads
+it in a text in force (the roadmap, a skill, `AGENTS.md`, an open feature document, a message to
+a person), or when a person decided it. A tuning constant nobody states stays where it is. The
+state of the work, the third kind of letter A, is out of the declarations on purpose: `progress`
+and the board compute it.
+
+**The declaration.** One object per rule in `RULES`, sorted by id.
+- `id`: lower case and hyphens, unique, never reused. A rule that returns after it was retired
+  is a new id; a rule in prose that becomes a value keeps its id.
+- `subject`: a label of what the rule is about, with no value in it ("the wait for a turn of
+  the gate lock"). It is not the rule's text.
+- `owner`: `sebastian` or `project`. A rule of his has a source of his words, and only that.
+- `since`: the day the value or the text in force entered.
+- Exactly one of three bodies:
+  - A value: `value` (a number or a string) and `unit` (required for a number). Optional
+    `flag`, the option that overrides it for one run (`--wait`): the value is then a default,
+    and the list says so. Optional `was`, the earlier values with the day each ended, newest
+    first, so that a reader holding an old number finds it. A pair is two rules (a model and its
+    effort); a rule with a value and a behaviour is two rules, the second in prose and naming
+    the first.
+  - A text: `path` and `phrases`, one or more pieces of the rule's text, twelve characters or
+    more each, all found in the file the way the failures register finds a control
+    (`holdsPhrase`, white space squashed). A list (the things that are his to decide) is a rule
+    in prose with one phrase for each item. No id and no marker enters `AGENTS.md`.
+  - `retired`, the day, with `successors`, a list of ids that may be empty (a split has two): a
+    retired rule keeps its id, its subject, its owner and its `was`, and no value and no text.
+- Optional, for the letters built later, so that the shape does not change under them:
+  - `patterns` (T16d): the patterns that find a statement of a value on the rule's subject, one
+    per line of text, in any wording or unit ("1,200 s" for twenty minutes, "an hour").
+  - `row` (T16d): absent while the rule's row reports; `{ refuses: <day> }` from the day its
+    findings were zero on `main`; `{ reports: <reason>, since: <day> }` when a red row that is
+    wrong is switched back by the command. Stored, not computed, so that a new finding cannot
+    turn a refusing rule into a reporting one.
+  - `failure` (T16d): the id in `docs/FAILURES.md` under which a refusal is a sighting.
+  - `differs`: for a rule that exists because this project differs from another tool, that
+    tool and its rule. Rules of other tools are not declared otherwise.
+  - `review`: a day on which the rule is looked at again, for a rule that is temporary.
+
+**The source is kept apart**, in `docs/rule-sources.json`, keyed by id and written by the same
+command: a quotation of his and the place of a transcript are not shipped to every project that
+installs the package. One of the two kinds the approved text has:
+- `words`: the quotation, its day, the session id and the line of the transcript, the reading
+  of it, where he accepted the reading, and `checked`, the day and who checked the line (the
+  command of T16c, or the session that seeded it). The check is the one `quoteOf` of
+  `bin/lib/sessions.mjs` already makes: an entry he typed, not a paste.
+- `design`: a path in the repository.
+There is no third kind. A value whose source cannot be traced to one of the two is not declared:
+it is named in this document with what is missing, and stays where it is.
+
+How a text names a rule: `rule:<id>` in code marks. The texts read are those in force: the
+roadmap, `docs/SPEC.md`, the open feature documents outside `## Progress`, the skills' texts as
+rendered, and the project template. Places that are history by letter B, and fenced blocks, are
+not read. Every id found resolves; one that resolves to a retired rule is reported with its
+successors.
+
+**The files.**
+- `bin/lib/rules-data.mjs`: `export const RULES`, in the one shape `writeRules` gives. It
+  imports nothing, so any module may import it. Until the command of T16c exists it is written
+  by hand in that shape, and the list's first lines say so.
+- `bin/lib/rules.mjs`, which imports the data and nothing that reads a rule:
+  - `readRules(list)`: what makes a list of declarations unreadable.
+  - `ruleValue(id, unit)`: the value; it throws for an unknown id, a rule with no value, and a
+    unit that is not the declared one, so a unit never changes under a multiplication.
+  - `writeRules(list)`: the text of `rules-data.mjs`, the serializer T16c will use.
+  - `renderList(list, sources)`: the text of `docs/RULES.md`.
+  - `rulesHash(list)`: a hash of ids, bodies and retirements, for letter F.
+- `bin/lib/rules-check.mjs`, what needs the file system, each finding with its rule: a phrase
+  its file no longer holds; a call of `ruleValue` in `bin/` that names an id with no value (a
+  retired rule that code still reads is found here, before it is merged); a live rule with no
+  source, or a rule of his whose source is not his words; an id named by a text that does not
+  resolve; `rules-data.mjs` different from `writeRules` of itself; `docs/RULES.md` different
+  from its rendering. Who reads a value is found by that scan and never declared.
+- `bin/rules.mjs`, the command `js-harness rules`: the list; `rules <id>` one declaration with
+  its source and who reads it; `rules check`, exit 1 on a finding; `rules render` writes
+  `docs/RULES.md`. It imports no module that reads a rule, and runs as `node bin/rules.mjs`
+  when the dispatcher cannot load.
+- `docs/RULES.md`, rendered, and the one text that shows a value because nobody writes it. Its
+  head: that it is rendered and how a rule is changed, the hash, the counts. Then the rules of
+  his and the project's, one line each: id, subject, value with unit or the sentence of its
+  text that holds the first phrase, the flag that overrides it, the earlier values, who reads
+  it or "read by: none", since, the state of its row, where its source is. Retired rules last.
+  In an installed project there is no `docs/RULES.md` and no sources file: `js-harness rules` is
+  the list there, and `rules check` says which checks it left out.
+
+**What T16b builds, in two slices.**
+1. The library, the command, the sources file, `docs/RULES.md`, and the declarations of two
+   groups. The values whose constant is exported: the wait for the lock, the three bounds of a
+   review part, the review's model and effort; each constant is bound to its declaration by a
+   test until it is rewired. The values no code holds, each only with a source of one of the
+   two kinds, as the orchestrator's explorer found them and this session read them:
+   - the models and the effort of sub-agents are his, in his words (the transcripts
+     `182ad401-252a-4cbe-afcc-929fcd905c6a.jsonl`, line 990, of 2026-10-10: Haiku only to write
+     code, at least Opus 5.5 at high for the rest; `729ed66b-83fe-4cf2-809a-2edf5c5c4462.jsonl`,
+     line 7049, of 2026-10-07: always high; `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+     2037, of 2026-10-11; the first two read by this session with `sessions --quote`). That
+     "the rest" means the sub-agents that explore, review and verify is the orchestrator's
+     reading, stored as the reading;
+   - the size of a reviewed commit is the project's, by design (`odd/tasks/gate-lock.md:697-698`);
+   - the Codex rate and the number of work sessions are left out: each number was the
+     orchestrator's, approved by him inside a whole list and never by itself (its message of
+     2026-10-11). The orchestrator asks him whether they stand; they enter with his answer, with
+     no change of shape.
+   A test runs `rules check` on the real tree, so
+   the gate holds the list with no change to `bin/check.mjs`; the row is T16d. One shared file
+   is touched, told first: `bin/js-harness.mjs`, for the command's entry.
+2. The rewiring, one file at a time, each told to the orchestrator before it is touched because
+   other sessions edit them (`bin/check.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`,
+   `bin/codex-review.mjs`, `bin/contract.mjs`): the constant reads the declaration, the skill's
+   text and the messages interpolate it, the tests import it. The four values whose constant is
+   not exported are declared here, in the commit that rewires them, never before. Done for a
+   file when no test of it states the value as a literal.
+   The values the second reader found that the first draft did not name wait in this queue,
+   each declared or left with its reason when its file is reached: the shortest phrase of a
+   control (`bin/lib/failures.mjs:19`), the channel's four limits (`bin/lib/channel.mjs:35-44`),
+   the exit code of a wait that gave up (`bin/gate.mjs:37`), the gate log's size
+   (`bin/lib/gate-log.mjs:26`), the runs a plan needs (`bin/lib/codex-review-plan.mjs:51,54`),
+   the prompt's bound (`bin/lib/codex-review-prompt.mjs:45`), the board's timeout
+   (`bin/sessions.mjs:64`), the goal's length (`bin/contract.mjs:21`), the efforts a contract
+   takes (`bin/lib/contract.mjs:32`), the review's session (`bin/codex-review.mjs:200`).
+Not in T16b: the context pause and the window, declared when the branch that changes them is on
+`main`; the rules in prose, declared with their homes (T8 for `AGENTS.md`, the protocols skill).
+
+**Where the rest of the protocol lands.** T16c, the command: the check of his words, the relief
+line that names the one it supersedes, the memory update owed, the mark of the one change that
+is open, a retirement refused while the scan finds a reader, a change of a phrase of
+`AGENTS.md` arriving only by the approved draft. T16d: the patterns, the row, the sightings.
+T16f: `diffRules` and where the last hash seen is kept, the hash in the installed command, which
+rules reach an installed project (a field added then; the ninth difference is his), the
+orchestrator skill's "read the relief file" becoming "read the list", which cannot happen
+before the context pause is declared. T15 and T8: the roadmap's sentence that makes the relief
+file a home is removed.
+
+**Tests first.** Each refusal of `readRules` seen failing first on a fixture: two ids alike; no
+body or two; a number with no unit; a retired rule with a value; a successor that does not
+resolve; a phrase under twelve characters; a subject that holds a digit; an unknown owner; a
+list not sorted by id. `ruleValue`: its three throws. `writeRules`: the real file equals
+`writeRules` of what it exports, byte for byte, and with either line ending. `renderList`: an
+expected text. `rules-check`: each finding on a fixture project, a call of `ruleValue` found in
+single and in double quotes, and a planted violation on a copy of the real list. That
+`rules-data.mjs` has no import. The command through the dispatcher and on its own. The bindings
+of slice 1, one per constant.
+
+**Not guaranteed.** A hand edit of `rules-data.mjs` that keeps its shape passes, until T16c. A
+value with no reader is borne out by nothing: the list prints "read by: none". A value restated
+in a text with no `rule:<id>` beside it, in another wording or with no number at all ("past the
+limit"), is found only by its rule's patterns, in T16d, and the declarations alone make that
+detector no better. A text whose phrases survive a rewrite that changes its meaning keeps its
+`since` and its source. A call of `ruleValue` whose result is ignored. A mistyped id in code
+stops every command when it loads, and the gate with it: the test on the real tree is what
+keeps it off `main`. A source of his words seeded by this session is as good as its reading of
+the transcript line, and is marked as checked by a session.
+
+**Cost.** One import and one call where a constant was a literal; a reader of the code follows
+one hop to learn a number. A change of a value is one line of one file, and a code commit.
+
+What the two readers changed. The attack: who reads a value and where copies stand are found by
+a scan and no longer declared by hand (the first draft's two lists were the hand-kept index
+again); slice 1 declares only what a test can bind, so the list shows nothing the code could
+contradict; the third kind of source is gone; a rule's text is rendered from its home and the
+declaration holds only a label; the sources left the shipped package; the load-time throw is
+kept and its cost said. What was missing: the stored state of a rule's row, the earlier values,
+the overriding flag, the unit checked at the read, several phrases for a list, successors as a
+list, the serializer and its round trip, the hash, the texts the id scan reads, and where each
+later letter lands.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
