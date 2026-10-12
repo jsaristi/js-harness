@@ -1895,14 +1895,54 @@ summary.
       5896, 5947 and 6158, the lead's 15 messages with its title, in 0.2 s):
       `compactionStretch` and `replyOf` in the sessions library; a message the app delivers
       for a session read as a session's (the defect of `main`, point 14); `toldBetween` in
-      the pause library, where the newer of the two state places now wins. Briefs ready in
-      the scratchpad for what is left, in this order: `brief-hook-facts.md` (the hook's four
-      facts: the place by the last feature document the session wrote, the relief file for
-      the orchestrator, a sub-agent ignored, a line for a person on an input not read);
-      the hook's new lines to a deadline (not written yet: compaction, told, state written,
-      his lines, other sessions' lines, the tail of the last reply, the worktree, work in
-      flight, the command that tells the lead); `brief-watch.md` (the watch returns once
-      for a compaction).
+      the pause library, where the newer of the two state places now wins. That commit is
+      `f117eff` (gate PASS 09:58; gentle-ai: 796 lines, approved, one warning and two
+      suggestions, all three answered in the fixes below). Codex then reviewed the slice,
+      `c87dddd..f117eff`: with that commit its plan was about 1,300,000 input tokens for
+      1,410 changed lines, inside the rate (1,692,000), so it ran, in a gate turn and capped
+      at the rate: 5 parts, all passed, no finding, 925,693 input tokens (659,840 cached) in
+      356 s. Pushed at 10:38: `origin/feat/session-compaction` is `f117eff`.
+      While that commit and that review waited in the gate's line, the writers went on in a
+      side worktree (`D:\js-harness-worktrees\session-channel-hook`, branch
+      `wip/session-compaction-hook`, never pushed; removed once its last files are copied
+      here), and what each left is copied here from a snapshot in the scratchpad, a commit
+      at a time:
+      - In the commit that holds this text (`snap-b`; three writers on Haiku 5.5, 56, 75 and
+        110 tool calls; `node --test bin/resume.test.mjs` 59 pass, read by the parent at
+        10:38): the resume hook's four facts (a session's place is the last feature document
+        its own `Edit` and `Write` calls wrote, and the notice is the fallback, a changed
+        branch said and not refused; the relief file for the orchestrator, its path, line
+        count and age, never its text; a sub-agent's input ignored; one line on standard
+        error when the input was not read) and its new lines, each a step to the hook's own
+        deadline of nine seconds: the compaction as the file shows it, whether the session
+        was told at the pause, how old the written state is against that notice (the file's
+        time and its last commit), the worktree's branch, head and changed files (one `git
+        --no-optional-locks status`), the work in flight and a turn at the gate from that
+        worktree, the lines where he and other sessions wrote, the end of the session's last
+        reply, "say so first" when the host compacted by itself, and the `notify` command
+        for a session that is not the orchestrator. Run by its writer with this session's
+        real input, reading only: exit 0 in 2.6 s, this document named, the two pieces in
+        flight named. Said plainly: the second writer saw its tests fail together (22 of 46)
+        and the third wrote some tests after their code; each behavior has a test, and the
+        two reviews read them.
+      - Next commit (`snap-c`, four writers and two lines by the parent): the watch returns
+        once for a compaction the board had not seen (`lastCompaction` in `sessionFacts`,
+        "was compacted by the host 2m ago: it held … before it"); `compactionMeasures` and
+        `holdsCompactBlock`, the reader of part d (told, kept, announced, a verdict only for
+        a compaction of the host that is in the file; `told` and `kept` are handed in);
+        seven things the reviews left (a test of `replyOf` on other attachments, which was
+        already right; the lock test of the pause's state derives what it locks and asserts
+        where the state landed; a state with no stamp takes its file's time; the hook
+        follows the input's `transcript_path` only when it is `<session id>.jsonl` inside
+        the Claude home's `projects`, as before it followed none; both times of the `State:`
+        line as ISO in UTC, and a commit time that does not parse proves nothing; the top
+        help names `--pause`; one `thousands`); and the dispatcher loads a command's module
+        only when it is asked (`resume --pause` went from about 2.6 to about 1.6 times a bare
+        `node`), where a name every object inherits (`js-harness toString`) is now an
+        unknown command and no stack trace.
+      Left after those two: `sessions --measures` (T9) hands `toldBetween` and a `git log`
+      of the document to `compactionMeasures`; the board's mark for a session whose last
+      compaction of the host misses a fact; e, below.
    d. The measure (told, kept, announced, for automatic compactions) in the sessions
       library; `--measures` itself is T9.
    e. The entry for `install` and the row of `doctor` that runs each entry's command: built

@@ -857,7 +857,7 @@ export function parsePsList(stdout) {
 const GATE_PATTERN = /(?:"(?:([^"]*)[\\/])?bin[\\/]check\.mjs"|(?<=^|\s)(?:(\S*)[\\/])?bin[\\/]check\.mjs(?=\s|$))/;
 
 /** A path as two spellings of it compare: forward slashes, no trailing one, and no case on a drive path. */
-function comparable(somePath) {
+export function comparable(somePath) {
   const flat = somePath.replace(/\\/g, '/').replace(/\/+$/, '');
   return /^[A-Za-z]:/.test(flat) ? flat.toLowerCase() : flat;
 }
@@ -1993,13 +1993,19 @@ function counted(value, label) {
   return value?.unavailable ? `${label} unavailable: ${value.unavailable}` : `${value} ${label}`;
 }
 
-function workLine(work, now) {
+/** How the board names a piece of work: its tool, its id (`(no id yet)` until the result gives one), its kind and whether it
+ * is a resumed one, and its description in quotes, as `workLine` and the hook's in-flight line print it. */
+export function workNameOf(work) {
   const id = work.id ?? '(no id yet)';
   // `resumed` says the subagent was sent a follow-up and is running again, not a second subagent.
   const labels = [work.kind, work.resumed ? 'resumed' : null].filter(Boolean);
   const kind = labels.length > 0 ? ` (${labels.join(', ')})` : '';
+  return `${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}`;
+}
+
+function workLine(work, now) {
   const file = work.file?.modifiedAt ? `file written ${ago(work.file.modifiedAt, now)}` : `file unavailable: ${work.file?.unavailable ?? 'not looked up'}`;
-  return `    ${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}  launched ${ago(work.launchedAt, now)}  ${file}`;
+  return `    ${workNameOf(work)}  launched ${ago(work.launchedAt, now)}  ${file}`;
 }
 
 /** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */

@@ -5,9 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resumeMain, transcriptTitle } from './resume.mjs';
-import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, writeOpening } from './lib/channel.mjs';
-import { statePath } from './lib/pause.mjs';
+import { parseStatus, resumeMain, transcriptTitle } from './resume.mjs';
+import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, reliefPath, writeOpening } from './lib/channel.mjs';
+import { pauseNotice, statePath } from './lib/pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
@@ -52,19 +52,23 @@ const isUnder = (folder, inner) => path.relative(folder, inner) === '' || (!path
  * worktree, whose branch changed the feature documents in `plans`. `branches` gives another branch to a
  * checkout, `failing` the commands (their first word that is not a flag) that fail, and `more` adds
  * worktrees, `{ path, branch }`, to the ones git lists. */
-function fakeGit(machine, { plans = ['odd/tasks/session-channel.md'], branches = {}, failing = [], more = [] } = {}) {
+function fakeGit(machine, { plans = ['odd/tasks/session-channel.md'], branches = {}, failing = [], more = [], uncommitted = false, commitTime = '2026-01-01T09:00:00+00:00', status = null } = {}) {
   const trees = [...more, { path: machine.worktree, branch: branches.worktree ?? 'feat/channel' }, { path: machine.root, branch: branches.root ?? 'main' }];
   const calls = [];
   const run = (command, args, { cwd } = {}) => {
     calls.push(`${command} ${args.join(' ')}`);
     const said = (stdout) => ({ status: 0, stdout, stderr: '' });
     const tree = trees.find((item) => isUnder(item.path, cwd));
-    const what = args.filter((arg) => !arg.startsWith('-'))[0];
+    // The subcommand is the first word that is not a flag, and the folder of `git -C <folder>` is not one.
+    const what = args.filter((arg, index) => !arg.startsWith('-') && args[index - 1] !== '-C')[0];
     if (command !== 'git' || !tree || failing.includes(what)) return { status: 128, stdout: '', stderr: 'fatal: made up' };
     if (what === 'rev-parse') return said(args.includes('--git-common-dir') ? `${path.join(machine.root, '.git')}\n` : `${tree.path}\n`);
     if (what === 'branch') return said(`${tree.branch}\n`);
     if (what === 'diff') return said(tree.path === machine.worktree ? plans.map((name) => `${name}\0`).join('') : '');
     if (what === 'ls-files') return said('');
+    // The last commit of the file named after `--`, and the status of the worktree, which is clean unless `status` gives its text.
+    if (what === 'log') return said(uncommitted ? '' : `1111111\t${commitTime}\n`);
+    if (what === 'status') return said(status ?? `# branch.oid ${'1'.repeat(40)}\0# branch.head ${tree.branch}\0`);
     if (what === 'worktree') return said(trees.slice().reverse().map((item) => `worktree ${item.path}\nHEAD 1111111111111111111111111111111111111111\nbranch refs/heads/${item.branch}\n`).join('\n'));
     return { status: 1, stdout: '', stderr: `not faked: ${args.join(' ')}` };
   };
@@ -92,10 +96,46 @@ async function runHook(machine, input, { git = fakeGit(machine), argv = ['--hook
   return { code, lines: out.join('\n').split('\n').filter((line, index, all) => !(all.length === 1 && line === '')), stderr: err.join('\n'), calls: git.calls };
 }
 
-const titled = (machine, title = TITLE) => fs.writeFileSync(path.join(machine.projectDir, `${SESSION}.jsonl`), `${JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: SESSION })}\n`);
+// A session's transcript as the host writes it: its title, then one reply of the session, so the stretch before a compaction has a reply in it.
+const titled = (machine, title = TITLE) => fs.writeFileSync(path.join(machine.projectDir, `${SESSION}.jsonl`), [{ type: 'custom-title', customTitle: title, sessionId: SESSION }, answered(1, 'Done.')].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
 const from = { host: 'claude-code', id: SESSION, source: 'environment', title: TITLE, permissionMode: 'auto' };
 const notified = (machine, more = {}) => appendNotice(machine.home, machine.slug, newNotice({ at: AT, from, to: 'orchestrator', kind: 'opened', text: 'the channel', cwd: machine.worktree, worktree: machine.worktree, branch: 'feat/channel', ...more }));
 const opened = (machine, title = TITLE) => writeOpening(machine.home, machine.slug, { title, text: 'Build the channel.\n', at: AT, from });
+
+/** The session's transcript: its title, then `entries`, one JSON line each. */
+const transcriptWith = (machine, entries) => fs.writeFileSync(path.join(machine.projectDir, `${SESSION}.jsonl`), [{ type: 'custom-title', customTitle: TITLE, sessionId: SESSION }, ...entries].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+/** A reply of the session at `at` that edits each of `files`, as the transcript records the calls. */
+const editedAt = (at, ...files) => ({ type: 'assistant', timestamp: at, message: { model: 'made-up-model', role: 'assistant', content: files.map((file) => ({ type: 'tool_use', name: 'Edit', input: { file_path: file } })) } });
+const RELIEF_READ = 'Read its last lines before anything else: it is the orchestrator\'s state, and no feature document is. Trust it over the summary. Then repeat to the user any question that is still open.';
+
+// The lines of the stretch before the compaction. A transcript made here puts the title on line 1, and each entry after it on the next line.
+const indented = (...lines) => lines.map((line) => `  ${line}`);
+const K = (tokens) => `${Math.round(tokens / 1000)}k`;
+const HELD = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT);
+const minute = (m) => `2026-01-01T10:${String(m).padStart(2, '0')}:00.000Z`;
+const asked = (m, text) => ({ type: 'user', timestamp: minute(m), origin: { kind: 'human' }, message: { role: 'user', content: text } });
+const answered = (m, text, usage) => ({ type: 'assistant', timestamp: minute(m), message: { model: 'made-up-model', role: 'assistant', stop_reason: 'end_turn', ...(usage === undefined ? {} : { usage }), content: [{ type: 'text', text }] } });
+const toolOnly = (m) => ({ type: 'assistant', timestamp: minute(m), message: { model: 'made-up-model', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_made', name: 'Bash', input: { command: 'made up' } }] } });
+const boundary = (m, trigger, tokens = HELD) => ({ type: 'system', subtype: 'compact_boundary', timestamp: minute(m), compactMetadata: { trigger, preTokens: tokens, postTokens: 15000 } });
+const hostBoundary = (m, tokens = HELD) => boundary(m, 'auto', tokens);
+const askedBoundary = (m, tokens = HELD) => boundary(m, 'manual', tokens);
+const messageOf = (m, name) => ({ type: 'user', timestamp: minute(m), isMeta: true, origin: { kind: 'peer', from: 'uds:made-up', fromSession: 'local_sender-1', fromMode: 'bypass', name, msg_id: `msg-${m}`, body: 'made up' }, message: { role: 'user', content: 'Another session sent this: made up' } });
+const headOf = (machine) => `Before this compaction, read from ${path.join(machine.projectDir, `${SESSION}.jsonl`)}:`;
+const NO_BOUNDARY = 'Compaction: its boundary is not in the transcript yet, which is how one made by the host looks when this hook runs (the host writes it after)';
+const NOT_TOLD = 'The pause: not known whether this session was told (it keeps no state of the pause\'s notice: that entry may not be installed).';
+const NO_USER = 'The user wrote nothing in this stretch.';
+const NONE_REPLY = 'This session\'s last reply with text: none in this stretch.';
+const HOST = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
+const NOTIFY = 'Then tell the orchestrator in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session\'s title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator\'s title, or that there is none).';
+const USER_LINE = (count, lines) => `The user wrote at ${count} lines of it, the last at ${lines}: read each with  js-harness sessions --quote ${SESSION} <line>`;
+const REPLY_LINE = (line, at, text) => `This session's last reply with text is line ${line} (${at}); it ended: "${text}"`;
+// The feature document of `titled` and `notified`, and the state line the hook says of it: written 12 minutes before the test's now, committed at 09:00.
+const DOCUMENT_OF = (machine) => path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
+const STATE_OF = (machine) => `State: ${DOCUMENT_OF(machine)} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111).`;
+// The worktree line of `titled` and `notified`: the machine's worktree is clean, on its branch.
+const CLEAN_OF = (machine) => `Worktree ${machine.worktree}: branch feat/channel, head 1111111, nothing changed and not committed.`;
+// What a transcript of `titled` says of its stretch: no boundary, the user wrote nothing, and the one reply is on line 2.
+const TITLED_BLOCK = (machine) => [headOf(machine), ...indented(`${NO_BOUNDARY}; the transcript records none before it.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(2, minute(1), 'Done.'), HOST)];
 
 /** Every file under `folder` with its size and the time of its last write: what a command that writes
  * nothing leaves as it was. */
@@ -126,6 +166,8 @@ test('after a compaction the hook prints the session\'s title, its opening, its 
     `Opening: ${opening}  (print it: js-harness sessions --opening '${TITLE}')`,
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
     READ,
+    ...TITLED_BLOCK(machine),
+    NOTIFY,
   ]);
   assert.equal(opening, path.join(openingsDir(machine.home, machine.slug), openingFileName(TITLE)));
   assert.deepEqual(snapshot(machine.dir), before, 'a hook that reads: no file written, none touched');
@@ -152,16 +194,17 @@ test('a title is looked up as it was given, with the blanks it holds; only what 
   const stored = opened(machine, wide).path;
   // The notice is of a transcript the app has since replaced, so only its title says whose it is.
   notified(machine, { from: { ...from, id: 'bbbbbbbb-2222-4222-8222-222222222222', title: wide } });
-  const said = (how) => [
+  const said = (how, tail) => [
     FIRST,
     `Session: "JH 5 · the channel" (${how})`,
     `Opening: ${stored}  (print it: js-harness sessions --opening 'JH 5 · the  channel')`,
     `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
     READ,
+    ...tail,
   ];
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: wide }))).lines, said('the title the host gave the hook'));
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: wide }))).lines, said('the title the host gave the hook', [NOTIFY]));
   titled(machine, wide);
-  assert.deepEqual((await runHook(machine, hookInput(machine))).lines, said('the title its transcript carries'));
+  assert.deepEqual((await runHook(machine, hookInput(machine))).lines, said('the title its transcript carries', [...TITLED_BLOCK(machine), NOTIFY]));
   // A line break in a title is printed as a blank, so the title stays on its line; no opening has that title.
   const broken = (await runHook(machine, hookInput(machine, { session_title: 'JH 5 · the\nchannel' }))).lines;
   assert.deepEqual(broken.slice(1, 3), ['Session: "JH 5 · the channel" (the title the host gave the hook)', `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`]);
@@ -205,7 +248,7 @@ test('the feature document is not known without a notice that names a worktree, 
   // The folders, the one a document was written in last first: a session writes its state there before it is compacted.
   const where = ['Feature documents are in these folders, the one written last first:', `  ${path.join(machine.worktree, 'odd', 'tasks')}  (branch feat/channel, last written 12m ago)`, `  ${path.join(machine.root, 'odd', 'tasks')}  (branch main, no document)`];
   const find = 'Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
-  const tail = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.slice(3);
+  const tail = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.slice(3, -1);
   assert.deepEqual(await tail(), ['Feature document: not known (no notice of this session in the channel\'s record names a worktree)', ...where, find]);
   // A notice of another session, and one written outside a worktree, say nothing of this one's.
   notified(machine, { from: { ...from, id: 'bbbbbbbb-2222-4222-8222-222222222222', title: 'JH 6 · other' } });
@@ -222,13 +265,74 @@ test('the feature document is not known without a notice that names a worktree, 
     'Read "Next step" in the one this session was working on, and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.',
   ]);
   assert.equal((await tail(fakeGit(machine, { plans: [] })))[0], `Feature document: not known (the branch feat/channel of ${machine.worktree} changed no feature document)`);
-  // The worktree has another branch checked out now: its documents are not this session's.
-  assert.equal((await tail(fakeGit(machine, { branches: { worktree: 'feat/other' } })))[0], `Feature document: not known (${machine.worktree} is on feat/other now; this session's last notice was written there on feat/channel)`);
+  // The worktree has another branch checked out now: its documents are the ones it has now, and the line says both branches.
+  assert.equal((await tail(fakeGit(machine, { branches: { worktree: 'feat/other' } })))[0], `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/other, in the worktree this session's last notice was written from, which is on feat/other now, and this session's last notice was written there on feat/channel)`);
   // A notice of the session's title, from a transcript the app has since replaced, is its notice too.
   const restarted = await runHook(machine, hookInput(machine, { session_id: 'cccccccc-3333-4333-8333-333333333333', session_title: TITLE }));
   assert.equal(restarted.lines[3], `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`);
   // And with neither its id nor its title in the record, the notices of the others are not its own.
   assert.equal((await runHook(machine, hookInput(machine, { session_id: 'cccccccc-3333-4333-8333-333333333333' }))).lines[3], 'Feature document: not known (no notice of this session in the channel\'s record names a worktree)');
+}));
+
+test('the feature document is the last one the session wrote, by its transcript, whatever branch its notice names', withMachine(async (machine) => {
+  const tasks = path.join(machine.worktree, 'odd', 'tasks');
+  const rule = path.join(tasks, 'rule-hierarchy.md');
+  fs.writeFileSync(rule, '# Rule hierarchy\n');
+  const forward = path.join(tasks, 'session-channel.md').replaceAll('\\', '/');
+  const feature = async (more = {}, deps = {}) => (await runHook(machine, hookInput(machine, { session_title: TITLE, ...more }), deps)).lines.slice(3, 5);
+  const reading = [`Feature document: ${forward}  (branch feat/channel, the last feature document this session wrote, by its transcript)`, READ];
+  // The notice was written on another branch of the worktree, and no transcript says otherwise: the transcript decides.
+  notified(machine, { branch: 'feat/old' });
+  // The latest of the documents the session wrote that is still there: a removed one and the notes it wrote do not count.
+  transcriptWith(machine, [
+    editedAt('2026-01-01T10:00:00.000Z', rule),
+    editedAt('2026-01-01T10:10:00.000Z', forward),
+    editedAt('2026-01-01T10:20:00.000Z', path.join(tasks, 'removed.md')),
+    editedAt('2026-01-01T10:30:00.000Z', path.join(machine.root, 'README.md'), path.join(tasks, 'notes.txt')),
+  ]);
+  assert.deepEqual(await feature(), reading);
+  // A transcript that names no document still there gives nothing: the notice decides, as before.
+  notified(machine);
+  transcriptWith(machine, [editedAt('2026-01-01T10:20:00.000Z', path.join(tasks, 'removed.md'))]);
+  const fromNotice = [`Feature document: ${path.join(tasks, 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, READ];
+  assert.deepEqual(await feature(), fromNotice);
+  // A transcript that cannot be read gives nothing here, and the hook goes on.
+  transcriptWith(machine, [editedAt('2026-01-01T10:10:00.000Z', forward)]);
+  assert.deepEqual(await feature({ transcript_path: path.join(machine.dir, 'missing.jsonl') }), fromNotice);
+  // The branch of the document's worktree is not known when git does not say it.
+  assert.deepEqual(await feature({}, { git: fakeGit(machine, { failing: ['branch'] }) }), [`Feature document: ${forward}  (branch not known, the last feature document this session wrote, by its transcript)`, READ]);
+}));
+
+test('an orchestrator\'s state is its relief file: the hook names it with its lines and when it was written, and no feature document', withMachine(async (machine) => {
+  const orq = 'JH ORQ · the channel';
+  notified(machine);
+  const file = reliefPath(machine.home, machine.slug);
+  const head = [FIRST, `Session: "${orq}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`];
+  // Missing: the line says so, with the reason, and no feature document takes its place.
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: orq }))).lines, [...head, `Relief file: ${file}  (missing: ENOENT)`, RELIEF_READ]);
+  // Written: its lines are counted and its text is not printed.
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, '- 10:00 a line of the relief\n\n- 10:05 another one\n- 10:06 a third\n');
+  writtenAt(file, 30);
+  const written = await runHook(machine, hookInput(machine, { session_title: orq }));
+  assert.deepEqual(written.lines, [...head, `Relief file: ${file}  (3 lines, last written 30m ago)`, RELIEF_READ]);
+  assert.equal(written.lines.some((line) => line.includes('a line of the relief')), false);
+  // Not read: the line says so, with the reason the read gave.
+  const denied = (asked) => {
+    if (asked === file) throw Object.assign(new Error('made up'), { code: 'EACCES' });
+    return fs.readFileSync(asked, 'utf8');
+  };
+  assert.equal((await runHook(machine, hookInput(machine, { session_title: orq }), { readFile: denied })).lines[3], `Relief file: ${file}  (not read: EACCES)`);
+  // A work session of the same project keeps its feature document: the relief file is the orchestrator's alone.
+  assert.equal((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines[3], `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`);
+}));
+
+test('a sub-agent\'s start of a session prints nothing: the hook speaks to the session, and an empty agent id is the session\'s own', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const sub = await runHook(machine, hookInput(machine, { session_title: TITLE, agent_id: 'made-up-agent' }));
+  assert.deepEqual([sub.code, sub.lines, sub.stderr, sub.calls], [0, [], '', []]);
+  assert.equal((await runHook(machine, hookInput(machine, { session_title: TITLE, agent_id: '' }))).lines[0], FIRST);
 }));
 
 test('what git cannot say is not known, and the hook still prints the rest', withMachine(async (machine) => {
@@ -259,7 +363,8 @@ test('with many worktrees the hook lists the six folders written last, and count
     `  ${path.join(more[4].path, 'odd', 'tasks')}  (branch feat/w4, last written 5h ago)`,
     '  and 4 more worktrees (git worktree list names them), the last of them written 6h ago',
   ]);
-  assert.equal(lines.length, 13, 'the line that says what to read comes after them');
+  assert.equal(lines[12].startsWith('Find there the document of the feature'), true, 'the line that says what to read comes after them');
+  assert.equal(lines.at(-1), NOTIFY, 'and the notify line is the last one');
   // A folder among the rest that could not be listed is counted as not looked at: "none with a document"
   // and "the last of them" are said of the ones that were.
   const refusing = (refused) => (asked) => {
@@ -296,7 +401,8 @@ test('the hook speaks only after a compaction: any other start of a session, and
   for (const source of ['startup', 'resume', 'clear', 'fork', undefined, 7]) {
     assert.deepEqual((await runHook(machine, hookInput(machine, { source }))).lines, [], String(source));
   }
-  for (const input of ['', 'not json', '[]', 'null', '"compact"', '{"source":"compact"', `\uFEFF${hookInput(machine, { source: 'startup' })}`]) {
+  // An input that is not read at all is said on standard error: the test after the next one.
+  for (const input of [`\uFEFF${hookInput(machine, { source: 'startup' })}`]) {
     const { code, lines, stderr } = await runHook(machine, input);
     assert.deepEqual([code, lines, stderr], [0, [], ''], input);
   }
@@ -307,6 +413,32 @@ test('the hook speaks only after a compaction: any other start of a session, and
     throw new Error('standard input must not be read from a terminal');
   };
   assert.deepEqual((await runHook(machine, '', { stdinIsTTY: true, readStdin: neverRead })).lines, []);
+}));
+
+test('in hook mode an input that was not read is said on standard error, and nothing is printed; a pause run says nothing', withMachine(async (machine) => {
+  titled(machine);
+  const said = (why) => `js-harness resume --hook: the host's JSON was expected on standard input and none was read (${why}); nothing was looked at.`;
+  const cases = [
+    ['', 'standard input is empty'],
+    [' \n', 'standard input is empty'],
+    ['﻿', 'standard input is empty'],
+    ['not json', 'standard input is not JSON'],
+    ['{"source":"compact"', 'standard input is not JSON'],
+    ['[]', 'standard input is not a JSON object'],
+    ['null', 'standard input is not a JSON object'],
+    ['"compact"', 'standard input is not a JSON object'],
+  ];
+  for (const [input, why] of cases) {
+    const { code, lines, stderr } = await runHook(machine, input);
+    assert.deepEqual([code, lines, stderr], [0, [], said(why)], JSON.stringify(input));
+  }
+  // A terminal is not read at all, which is what a person at a shell gets: it is said the same way.
+  const terminal = await runHook(machine, '', { stdinIsTTY: true, readStdin: () => { throw new Error('standard input must not be read from a terminal'); } });
+  assert.deepEqual([terminal.code, terminal.lines, terminal.stderr], [0, [], said('standard input is a terminal')]);
+  // A read that throws is not an input that was not read: it stays silent, as any other failure does.
+  assert.deepEqual((await runHook(machine, hookInput(machine), { readStdin: () => { throw new Error('made up'); } })).stderr, '');
+  // The pause run is the host's and says nothing on standard error.
+  for (const input of ['', 'not json', '[]']) assert.equal((await runPause(machine, input)).stderr, '', JSON.stringify(input));
 }));
 
 test('the hook never fails a session: whatever throws, it prints nothing and exits 0', withMachine(async (machine) => {
@@ -330,7 +462,7 @@ test('the hook never fails a session: whatever throws, it prints nothing and exi
     read.push(file);
     return fs.readFileSync(file, 'utf8');
   };
-  const odd = await runHook(machine, hookInput(machine, { session_id: '..\\..\\secrets' }), { readFile });
+  const odd = await runHook(machine, hookInput(machine, { session_id: '..\\..\\secrets', transcript_path: '' }), { readFile });
   assert.equal(odd.lines[1], 'Session: title not known (the host gave the hook none and no session id a transcript could be found by)');
   assert.deepEqual(read.filter((file) => file.includes('secrets')), []);
   // Extra arguments do not turn the hook into something that can fail.
@@ -360,7 +492,7 @@ test('when the disk cannot be read the hook prints what it still knows, and says
     `  ${path.join(machine.root, 'odd', 'tasks')}  (branch main, no document)`,
     'Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.',
   ];
-  assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${dir})`, ...unread]);
+  assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${dir})`, ...unread, NOTIFY]);
   // With no title from the host either, the transcript and the record are all that could give one, and
   // neither can be read: the hook says that of the record, and does not go silent.
   assert.deepEqual(await printed({}, { readFile: boom }), [
@@ -368,15 +500,16 @@ test('when the disk cannot be read the hook prints what it still knows, and says
     `Session: title not known (the host gave the hook none, its transcript ${SESSION.slice(0, 8)} gives none and the channel's record could not be read (made up))`,
     `Opening: not known without a title (the openings of this project are in ${dir}; js-harness sessions --opening "<title>" prints one)`,
     ...unread,
+    NOTIFY,
   ]);
 
   // No folder can be listed: an opening is stored, and the hook says it could not look, not that there is none.
   opened(machine);
   const unlisted = `Opening: could not look in ${dir} (made up)`;
-  assert.deepEqual(await printed({ session_title: TITLE }, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, unlisted, document, READ]);
-  assert.deepEqual(await printed({}, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title its transcript carries)`, unlisted, document, READ]);
+  assert.deepEqual(await printed({ session_title: TITLE }, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, unlisted, document, READ, ...TITLED_BLOCK(machine), NOTIFY]);
+  assert.deepEqual(await printed({}, { readdir: boom }), [FIRST, `Session: "${TITLE}" (the title its transcript carries)`, unlisted, document, READ, ...TITLED_BLOCK(machine), NOTIFY]);
   // No file can be read, and now the folder holds one: it may be the opening asked for, so "none stored" is not said.
-  assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: not known whether one is stored for that title (1 file of ${dir} could not be read as an opening)`, ...unread]);
+  assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: not known whether one is stored for that title (1 file of ${dir} could not be read as an opening)`, ...unread, NOTIFY]);
 }));
 
 test('an opening file that cannot be read is said as not read: "none stored" is said only of a folder read whole', withMachine(async (machine) => {
@@ -417,7 +550,7 @@ test('a folder of feature documents that could not be listed is said as not look
   const folders = async (deps) => {
     const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { git: fakeGit(machine, { more }), ...deps });
     assert.deepEqual([code, stderr], [0, '']);
-    return lines.slice(4, -1);
+    return lines.slice(4, -2);
   };
   const head = 'Feature documents are in these folders, the one written last first:';
   const refusing = (refused, code) => (asked) => {
@@ -460,7 +593,7 @@ test('a title that names several openings gets their titles and no command: sess
   const several = (count, more = '') => `Opening: ${count} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${more})`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, READ]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several(2), `  "JH 5 · the channel, reworded"  (${second})`, `  "JH 5 · the channel"  (${first})`, document, READ, NOTIFY]);
   // The command for `JH 5` would exit 2, so none is written.
   assert.deepEqual(lines.filter((line) => line.includes('print it:') || line.includes('--opening \'')), []);
   // A file that could not be read may be a third: it is said as not counted, as for one opening.
@@ -468,7 +601,7 @@ test('a title that names several openings gets their titles and no command: sess
   assert.equal((await runHook(machine, hookInput(machine, { session_title: 'JH 5' }))).lines[2], several(2, `; 1 file of ${dir} could not be read as an opening and is not counted`));
   fs.rmSync(path.join(dir, 'torn.json'));
   // A whole title names one opening, and nothing changes for it.
-  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines, [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: ${first}  (print it: js-harness sessions --opening '${TITLE}')`, document, READ]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines, [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: ${first}  (print it: js-harness sessions --opening '${TITLE}')`, document, READ, NOTIFY]);
   // And the code and the role that name one opening are a title a command is written for.
   assert.equal((await runHook(machine, hookInput(machine, { session_title: 'JH 6' }))).lines[2], `Opening: ${path.join(dir, openingFileName('JH 6 · other'))}  (print it: js-harness sessions --opening 'JH 6')`);
 }));
@@ -482,7 +615,7 @@ test('the titles of several openings are listed as the files hold them: a second
   const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
   assert.deepEqual([code, stderr], [0, '']);
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
 }));
 
 test('a title the list prints stays on its line: a quote, a line break and a line separator are escaped as the file holds them', withMachine(async (machine) => {
@@ -493,7 +626,7 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
   const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
   const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
-  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ]);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ, NOTIFY]);
   // A hand-written file may hold what writeOpening refuses: a line break and a line separator. Two files with that title are found by the whole title and listed on one line each.
   const torn = 'JH 5 · the\nchannel\u2028end';
   const handWritten = (name, at) => {
@@ -504,7 +637,7 @@ test('a title the list prints stays on its line: a quote, a line break and a lin
   const newer = handWritten('hand-newer.json', '2026-01-01T12:00:00.000Z');
   const older = handWritten('hand-older.json', '2026-01-01T11:30:00.000Z');
   const listed = await runHook(machine, hookInput(machine, { session_title: torn }));
-  assert.deepEqual(listed.lines, [FIRST, 'Session: "JH 5 · the channel end" (the title the host gave the hook)', several, `  "JH 5 · the\\nchannel\\u2028end"  (${newer})`, `  "JH 5 · the\\nchannel\\u2028end"  (${older})`, document, READ]);
+  assert.deepEqual(listed.lines, [FIRST, 'Session: "JH 5 · the channel end" (the title the host gave the hook)', several, `  "JH 5 · the\\nchannel\\u2028end"  (${newer})`, `  "JH 5 · the\\nchannel\\u2028end"  (${older})`, document, READ, NOTIFY]);
 }));
 
 test('a notice written on no branch, and a worktree git names no branch for, tell no feature document', withMachine(async (machine) => {
@@ -514,6 +647,201 @@ test('a notice written on no branch, and a worktree git names no branch for, tel
   // The last notice decides: one written on a detached HEAD names a worktree and no branch.
   notified(machine, { branch: null });
   assert.equal(await reason(), `Feature document: not known (this session's last notice was written in ${machine.worktree} on no branch)`);
+}));
+
+test('a compaction the user asked for, with no reply after it, is said so with its time, its tokens and its line; no host line', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
+  assert.deepEqual(lines.slice(lines.indexOf(headOf(machine))), [
+    headOf(machine),
+    ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), USER_LINE(1, '2'), REPLY_LINE(3, minute(2), 'the answer')),
+    NOTIFY,
+  ]);
+}));
+
+test('a compaction the host wrote, with a reply of the session after it, is not written yet: the line names the one before it, and the host line is said', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [asked(1, 'before the host compacted'), hostBoundary(2), answered(3, 'the stretch answer')]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+    headOf(machine),
+    ...indented(`${NO_BOUNDARY}; the one before it was at ${minute(2)}.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(4, minute(3), 'the stretch answer'), HOST),
+    NOTIFY,
+  ]);
+}));
+
+test('with no boundary in the transcript, the compaction line says that it records none before it', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [asked(1, 'the question'), answered(2, 'the answer')]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+    headOf(machine),
+    ...indented(`${NO_BOUNDARY}; the transcript records none before it.`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), USER_LINE(1, '2'), REPLY_LINE(3, minute(2), 'the answer'), HOST),
+    NOTIFY,
+  ]);
+}));
+
+test('a file the host continued holds a copy of the boundary and none of the stretch: its line says so in place of the stretch lines', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [hostBoundary(1)]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+    headOf(machine),
+    ...indented(`Compaction: made by the host at ${minute(1)}, holding ${K(HELD)} tokens (line 2).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), 'The stretch of work before this compaction is not in this transcript: the host continued the session in a new file, and no other session\'s file is read.', HOST),
+    NOTIFY,
+  ]);
+}));
+
+test('the pause line says that the session was told the pause in the stretch, that it was told after it, or that it is not known', withMachine(async (machine) => {
+  notified(machine);
+  const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  const home = machine.home;
+  // The reply of the session is past the pause, and the state of the pause is written by its own function, as the hook does.
+  const told = (m) => pauseNotice({ transcript, sessionId: SESSION, home, now: () => Date.parse(minute(m)), tmpdir: path.join(home, 'tmp') });
+  const pauseOf = async () => (await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.find((line) => line.startsWith('  The pause:'));
+  transcriptWith(machine, [answered(2, 'past the pause', { input_tokens: PAUSED }), askedBoundary(4)]);
+  assert.equal(await pauseOf(), `  ${NOT_TOLD}`, 'no state of the pause yet');
+  assert.notEqual(told(2), null, 'the session is told at minute 2, inside the stretch');
+  assert.equal(await pauseOf(), `  The pause: this session was told it had passed the context pause at ${minute(2)}, holding ${K(PAUSED)} tokens.`);
+  fs.rmSync(statePath(home, SESSION));
+  told(6);
+  assert.equal(await pauseOf(), '  The pause: this session was not told it had passed the context pause in this stretch.', 'told after the boundary, so outside the stretch');
+}));
+
+test('the lines of the user and of other sessions give their count, the last eight in order, and the names of the sessions with their counts', withMachine(async (machine) => {
+  notified(machine);
+  // Lines 2 to 11 are ten prompts of the user, line 12 a reply, lines 13 to 21 nine messages of other sessions, line 22 the compaction.
+  const names = ['JH ORQ · proj', 'JH 1 · made up', 'JH ORQ · proj', null, 'JH ORQ · proj', 'JH 1 · made up', 'JH ORQ · proj', 'JH 1 · made up', 'JH ORQ · proj'];
+  transcriptWith(machine, [
+    ...Array.from({ length: 10 }, (_, index) => asked(index + 1, `prompt ${index + 1}`)),
+    answered(11, 'Answered.'),
+    ...names.map((name, index) => messageOf(12 + index, name)),
+    askedBoundary(21),
+  ]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
+  assert.deepEqual(lines.slice(lines.indexOf(headOf(machine))), [
+    headOf(machine),
+    ...indented(
+      `Compaction: asked for by the user at ${minute(21)}, holding ${K(HELD)} tokens (line 22).`,
+      NOT_TOLD,
+      STATE_OF(machine),
+      CLEAN_OF(machine),
+      USER_LINE(10, '4, 5, 6, 7, 8, 9, 10, 11'),
+      `Other sessions wrote at 9 lines, the last at 14, 15, 16, 17, 18, 19, 20, 21 (from "JH ORQ · proj" ×5, "JH 1 · made up" ×3, no name ×1): the same command says whose each is.`,
+      REPLY_LINE(12, minute(11), 'Answered.'),
+    ),
+    NOTIFY,
+  ]);
+}));
+
+test('the last reply is said by its last 300 characters, with a leading ellipsis when it was longer; a reply of tool calls alone is none', withMachine(async (machine) => {
+  notified(machine);
+  const long = Array.from({ length: 120 }, (_, index) => `w${index}`).join(' ');
+  transcriptWith(machine, [answered(1, long), askedBoundary(2)]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+    headOf(machine),
+    ...indented(`Compaction: asked for by the user at ${minute(2)}, holding ${K(HELD)} tokens (line 3).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), NO_USER, REPLY_LINE(2, minute(1), `…${long.slice(-300).trim()}`)),
+    NOTIFY,
+  ]);
+  transcriptWith(machine, [asked(1, 'the question'), toolOnly(2), askedBoundary(3)]);
+  assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.slice(5), [
+    headOf(machine),
+    ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, NOT_TOLD, STATE_OF(machine), CLEAN_OF(machine), USER_LINE(1, '2'), NONE_REPLY),
+    NOTIFY,
+  ]);
+}));
+
+test('the notify line ends the output of any session but the orchestrator, and a session whose title is not known gets it too', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [answered(1, 'Done.')]);
+  const orchestrator = (await runHook(machine, hookInput(machine, { session_title: 'JH ORQ · the channel' }))).lines;
+  assert.equal(orchestrator.includes(headOf(machine)), true, 'the orchestrator is told what its transcript holds too');
+  assert.notEqual(orchestrator.at(-1), NOTIFY);
+  assert.equal((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.at(-1), NOTIFY);
+  fs.writeFileSync(path.join(machine.projectDir, `${SESSION}.jsonl`), `${JSON.stringify(answered(1, 'Done.'))}\n`);
+  const untitled = (await runHook(machine, hookInput(machine))).lines;
+  assert.match(untitled[1], /^Session: title not known/);
+  assert.equal(untitled.at(-1), NOTIFY);
+}));
+
+test('past the hook\'s own deadline once its transcript is read, the stretch, the folders, the pause and the reply are not read: the line names them, and the lines before are printed', withMachine(async (machine) => {
+  const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
+  const clock = { passed: false };
+  const readFile = (file) => {
+    const text = fs.readFileSync(file, 'utf8');
+    if (file === transcript) clock.passed = true;
+    return text;
+  };
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { readFile, now: () => (clock.passed ? NOW + 10000 : NOW) });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines, [
+    FIRST,
+    `Session: "${TITLE}" (the title the host gave the hook)`,
+    `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`,
+    'Feature document: not known (no notice of this session in the channel\'s record names a worktree)',
+    'Not read before this hook\'s own deadline (9 s): the stretch of work before this compaction, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
+    NOTIFY,
+  ]);
+}));
+
+test('past the deadline after the stretch is read, its lines are printed, and the pause and the reply are named as not read', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
+  const git = fakeGit(machine);
+  const clock = { passed: false };
+  const run = (command, args, options) => {
+    if (args[0] === 'branch') clock.passed = true;
+    return git.run(command, args, options);
+  };
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { git: { run, calls: git.calls }, now: () => (clock.passed ? NOW + 10000 : NOW) });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines.slice(3), [
+    `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
+    READ,
+    headOf(machine),
+    ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, USER_LINE(1, '2')),
+    'Not read before this hook\'s own deadline (9 s): the pause\'s notice, when the state was last written and committed, the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply.',
+    NOTIFY,
+  ]);
+}));
+
+test('a step that throws is said as not read in its place, and the rest of the hook prints', withMachine(async (machine) => {
+  notified(machine);
+  const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  // A transcript the hook is handed as something other than text: `compactionStretch` throws on it.
+  const readFile = (file) => (file === transcript ? 5 : fs.readFileSync(file, 'utf8'));
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { readFile });
+  assert.deepEqual([code, stderr], [0, '']);
+  const at = lines.indexOf(headOf(machine));
+  assert.notEqual(at, -1, 'the head is said: the transcript was read');
+  assert.match(lines[at + 1], /^ {2}The stretch of work before this compaction: not read \(.+\)$/);
+  assert.deepEqual(lines.slice(0, at), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`, `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`, READ]);
+  assert.deepEqual(lines.slice(at + 2), [NOTIFY]);
+}));
+
+test('a transcript the hook cannot read is no stretch: its lines are left out, and the rest prints', withMachine(async (machine) => {
+  notified(machine);
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: machine.projectDir }));
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines, [
+    FIRST,
+    `Session: "${TITLE}" (the title the host gave the hook)`,
+    `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`,
+    `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
+    READ,
+    NOTIFY,
+  ]);
+}));
+
+test('a harness home that cannot be read leaves the pause unknown, and the rest of the stretch prints', withMachine(async (machine) => {
+  transcriptWith(machine, [editedAt(minute(1), path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')), askedBoundary(2)]);
+  const notHome = path.join(machine.dir, 'not-a-folder');
+  fs.writeFileSync(notHome, 'made up');
+  const env = { CLAUDE_CONFIG_DIR: machine.claudeHome, JS_HARNESS_HOME: notHome };
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { env });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.ok(lines.includes(`  ${NOT_TOLD}`));
+  assert.ok(lines.includes(`  Compaction: asked for by the user at ${minute(2)}, holding ${K(HELD)} tokens (line 3).`));
+  assert.equal(lines.at(-1), NOTIFY);
 }));
 
 test('resume without --hook is a usage error: exit 2, with the usage on stderr and nothing read', async () => {
@@ -555,6 +883,168 @@ test('js-harness resume --hook, run as a process: it reads standard input, print
 // are made up, their figures come from the constants of `./lib/sessions.mjs`, and the state goes to the machine's
 // harness home, so nothing reaches the real one. The pause point of the default compaction is the share of the
 // window the host compacts at, scaled to the pause's share: a reply of exactly that many tokens is past it.
+test('the status of a worktree gives its branch and its head; a detached head is no branch, and the first commit is not one yet', () => {
+  const head = '2'.repeat(40);
+  assert.deepEqual(parseStatus(`# branch.oid ${head}\0# branch.head main\0`), { branch: 'main', head, paths: [] });
+  assert.equal(parseStatus(`# branch.oid ${head}\0# branch.head (detached)\0`).branch, 'no branch (detached)');
+  assert.equal(parseStatus('# branch.oid (initial)\0# branch.head main\0').head, '(initial)');
+});
+
+test('a changed, a renamed, an unmerged and an untracked file are each one path, the old name of a rename is not, and a path may hold blanks', () => {
+  const changed = `1 .M N... 100644 100644 100644 ${'3'.repeat(40)} ${'4'.repeat(40)} odd/tasks/my notes.md\0`;
+  const renamed = `2 R. N... 100644 100644 100644 ${'5'.repeat(40)} ${'6'.repeat(40)} R100 odd/tasks/new name.md\0odd/tasks/old name.md\0`;
+  const unmerged = `u UU N... 100644 100644 100644 100644 ${'7'.repeat(40)} ${'8'.repeat(40)} ${'9'.repeat(40)} odd/tasks/clash.md\0`;
+  const untracked = '? odd/tasks/fresh file.md\0';
+  const status = parseStatus(`# branch.oid ${'1'.repeat(40)}\0# branch.head main\0${changed}${renamed}${unmerged}${untracked}`);
+  assert.deepEqual(status.paths, ['odd/tasks/my notes.md', 'odd/tasks/new name.md', 'odd/tasks/clash.md', 'odd/tasks/fresh file.md']);
+});
+
+test('the block says when the feature document was last written and last committed, after the pause and before the lines of who wrote', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const document = path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md');
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
+  const pause = lines.indexOf(`  ${NOT_TOLD}`);
+  assert.equal(lines[pause + 1], `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111).`);
+}));
+
+test('the block says what git says of the worktree of the feature document: its branch, its head and what is not committed, read without the index lock', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const git = fakeGit(machine);
+  const { lines, calls } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { git });
+  assert.equal(lines[lines.indexOf(`  ${STATE_OF(machine)}`) + 1], `  Worktree ${machine.worktree}: branch feat/channel, head 1111111, nothing changed and not committed.`);
+  // The two calls that are new are the only ones that read a worktree's state: each takes no optional lock.
+  const reads = calls.filter((call) => / (status|log) /.test(call));
+  assert.equal(reads.length, 2, reads.join('\n'));
+  assert.ok(reads.every((call) => call.startsWith('git --no-optional-locks -C ')), reads.join('\n'));
+}));
+
+test('the worktree line counts what is not committed and names its first five paths; a detached head is said so', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const untracked = [1, 2, 3, 4, 5, 6].map((n) => `? odd/tasks/n${n}.md\0`).join('');
+  const status = `# branch.oid ${'2'.repeat(40)}\0# branch.head (detached)\0${untracked}`;
+  const worktree = (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git: fakeGit(machine, { status }) })).lines.find((line) => line.startsWith('  Worktree '));
+  assert.equal(worktree, `  Worktree ${machine.worktree}: branch no branch (detached), head 2222222, 6 files changed and not committed (odd/tasks/n1.md, odd/tasks/n2.md, odd/tasks/n3.md, odd/tasks/n4.md, odd/tasks/n5.md, …).`);
+}));
+
+test('a git that cannot say the state of the worktree is said as not read, with why: a failure, or a time limit', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const worktree = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.find((line) => line.startsWith('  Worktree '));
+  assert.equal(await worktree(fakeGit(machine, { failing: ['status'] })), `  Worktree ${machine.worktree}: its changes are not read (fatal: made up).`);
+  const timedOut = fakeGit(machine);
+  const run = (command, args, options) => (args.includes('status') ? { error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }), status: null, stdout: '', stderr: '' } : timedOut.run(command, args, options));
+  assert.equal(await worktree({ run, calls: timedOut.calls }), `  Worktree ${machine.worktree}: its changes are not read (ETIMEDOUT).`);
+}));
+
+test('the state line says what the pause\'s notice of the stretch says of the times: written and committed after it, written before it, or in no commit, or no commit read', withMachine(async (machine) => {
+  notified(machine);
+  const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
+  transcriptWith(machine, [answered(2, 'past the pause', { input_tokens: PAUSED }), askedBoundary(4)]);
+  // The notice is written at minute 2 of the stretch, as the pause writes it; the document was written 12 minutes before now.
+  assert.notEqual(pauseNotice({ transcript, sessionId: SESSION, home: machine.home, now: () => Date.parse(minute(2)), tmpdir: path.join(machine.home, 'tmp') }), null);
+  const document = DOCUMENT_OF(machine);
+  const stateOf = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.find((line) => line.startsWith('  State: '));
+  const written = `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago)`;
+  // Committed before the notice, and written after it: what is written is not committed.
+  assert.equal(await stateOf(fakeGit(machine)), `${written} and last committed at 2026-01-01T09:00:00+00:00 (1111111). It was written after the pause's notice and that is not committed.`);
+  // Committed after the notice too.
+  assert.equal(await stateOf(fakeGit(machine, { commitTime: '2026-01-01T10:30:00+00:00' })), `${written} and last committed at 2026-01-01T10:30:00+00:00 (1111111). Both are after the pause's notice.`);
+  // In no commit yet, and no commit that git can say of.
+  assert.equal(await stateOf(fakeGit(machine, { uncommitted: true })), `${written} and is in no commit yet. It was written after the pause's notice and that is not committed.`);
+  assert.equal(await stateOf(fakeGit(machine, { failing: ['log'] })), `${written} and its commit is not read (fatal: made up). It was written after the pause's notice, and whether that is committed is not read.`);
+  // Written before the notice: what it holds may be older than the work, and the reply is told so.
+  writtenAt(document, 180);
+  assert.equal(await stateOf(fakeGit(machine)), `  State: ${document} was last written at 2026-01-01T09:00:00.000Z (3h ago) and last committed at 2026-01-01T09:00:00+00:00 (1111111). It was last written before the pause's notice of ${minute(2)}: what it holds may be older than the work, so say so in your next reply to the user.`);
+}));
+
+test('an orchestrator\'s state line is its relief file\'s: when it was written, and no commit, since a relief file is in no repository', withMachine(async (machine) => {
+  titled(machine);
+  const file = reliefPath(machine.home, machine.slug);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, '- 10:00 a line of the relief\n');
+  writtenAt(file, 30);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH ORQ · the channel' }));
+  assert.equal(lines.includes(`  State: ${file} was last written at 2026-01-01T11:30:00.000Z (30m ago).`), true, lines.join('\n'));
+  assert.equal(lines.some((line) => line.startsWith('  Worktree ')), false, 'no worktree: the relief file has none');
+}));
+
+test('the block names the pieces of work the transcript leaves in flight when the session was compacted: a sub-agent and a background command with no end', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [
+    { type: 'assistant', timestamp: minute(1), message: { model: 'made-up-model', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_agent', name: 'Agent', input: { description: 'Review the hook', subagent_type: 'general-purpose' } }] } },
+    { type: 'assistant', timestamp: minute(2), message: { model: 'made-up-model', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_bash', name: 'Bash', input: { command: 'npm test', description: 'Run the tests', run_in_background: true } }] } },
+    askedBoundary(3),
+  ]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE }));
+  assert.deepEqual(lines.filter((line) => line.startsWith('  In flight')), ['  In flight when it was compacted, by the transcript: 2 (Agent (no id yet) (general-purpose) "Review the hook", Bash (no id yet) "Run the tests").']);
+}));
+
+test('the block says when a turn at the machine\'s gate is held from the worktree of the feature document, or waits from it; a gate of another folder says nothing', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const gate = path.join(machine.home, '.js-harness', 'gate');
+  const gateLines = async () => (await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines.filter((line) => line.startsWith('  A turn at'));
+  // The gate's lock is a folder with its holder's file in it: its `cwd` is the folder the gate checks.
+  fs.mkdirSync(path.join(gate, 'lock'), { recursive: true });
+  fs.writeFileSync(path.join(gate, 'lock', 'holder-4242-abcdef.json'), JSON.stringify({ cwd: machine.worktree, startedAt: '2026-01-01T11:50:00.000Z', pid: 4242 }));
+  assert.deepEqual(await gateLines(), ['  A turn at the machine\'s gate is held from this worktree (since 2026-01-01T11:50:00.000Z): it may be this session\'s.']);
+  fs.writeFileSync(path.join(gate, 'lock', 'holder-4242-abcdef.json'), JSON.stringify({ cwd: machine.root, startedAt: '2026-01-01T11:50:00.000Z', pid: 4242 }));
+  assert.deepEqual(await gateLines(), [], 'held from the main checkout: not from this worktree');
+  fs.rmSync(path.join(gate, 'lock'), { recursive: true });
+  // A gate that waits is a folder of its own with its file in it, and its `cwd` is where it was started.
+  fs.mkdirSync(path.join(gate, 'wait-4343-beef'), { recursive: true });
+  fs.writeFileSync(path.join(gate, 'wait-4343-beef', 'holder-4343-beef.json'), JSON.stringify({ cwd: machine.worktree, waitingSince: '2026-01-01T11:55:00.000Z' }));
+  assert.deepEqual(await gateLines(), ['  A turn at the machine\'s gate waits from this worktree.']);
+}));
+
+test('with no feature document the hook knows, or with several, the block says no state and no worktree of it', withMachine(async (machine) => {
+  titled(machine);
+  const stateLines = async (deps) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), deps)).lines.filter((line) => /^ {2}(State: |Worktree )/.test(line));
+  // No notice names a worktree: no document, so no line of one.
+  assert.deepEqual(await stateLines(), []);
+  notified(machine);
+  assert.equal((await stateLines()).length, 2);
+  // Two documents changed on the branch: this session works on one of them, and nothing is said of either.
+  fs.writeFileSync(path.join(machine.worktree, 'odd', 'tasks', 'rule-hierarchy.md'), '# Rule hierarchy\n');
+  assert.deepEqual(await stateLines({ git: fakeGit(machine, { plans: ['odd/tasks/session-channel.md', 'odd/tasks/rule-hierarchy.md'] }) }), []);
+}));
+
+test('a gate that cannot be read is no line and no failure: the block prints the rest', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const broken = { holder: () => { throw Object.assign(new Error('made up'), { code: 'EIO' }); }, waiters: () => { throw Object.assign(new Error('made up'), { code: 'EIO' }); } };
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { gate: broken });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.equal(lines.some((line) => line.startsWith('  A turn at') || line.includes('not read')), false);
+  assert.ok(lines.includes(`  ${STATE_OF(machine)}`), 'the rest of the block is printed');
+  assert.equal(lines.at(-1), NOTIFY);
+}));
+
+test('the three steps after the pause are each checked against the deadline before they start: a step that started is printed, one that did not is named', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const later = (passedAt) => {
+    const git = fakeGit(machine);
+    const clock = { passed: false };
+    const run = (command, args, options) => {
+      if (args.includes(passedAt)) clock.passed = true;
+      return git.run(command, args, options);
+    };
+    return runHook(machine, hookInput(machine, { session_title: TITLE }), { git: { run, calls: git.calls }, now: () => (clock.passed ? NOW + 10000 : NOW) });
+  };
+  // The deadline passes in the state's own `git log`: the state line is read, and the worktree, the flight and the reply are named.
+  const atLog = (await later('log')).lines;
+  assert.ok(atLog.includes(`  ${STATE_OF(machine)}`));
+  assert.equal(atLog.at(-2), 'Not read before this hook\'s own deadline (9 s): the worktree\'s changes, the work in flight and the machine\'s gate, this session\'s last reply.');
+  // It passes in the worktree's `git status`: the worktree line is read, and the flight and the reply are named.
+  const atStatus = (await later('status')).lines;
+  assert.ok(atStatus.includes(`  ${CLEAN_OF(machine)}`));
+  assert.equal(atStatus.at(-2), 'Not read before this hook\'s own deadline (9 s): the work in flight and the machine\'s gate, this session\'s last reply.');
+}));
+
 const PAUSED = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_PAUSE_PERCENT);
 const UNDER = PAUSED - 1;
 const SECOND = 'bbbbbbbb-2222-4222-8222-222222222222';
