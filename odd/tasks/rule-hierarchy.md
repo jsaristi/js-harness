@@ -1297,15 +1297,39 @@ names it, and the entry stays open until it does.
   register reads as before (59 failures, 17 not settled). The orchestrator's condition for the
   round's end (its message of that evening) is met by it: second priority, and nothing that
   `progress` or the row says today changes. It is task T3e.
+- 2026-10-11, `main` (`5af56c1`) is merged in: `9e7c226`, no conflict. The whole gate on the
+  result, through the lock, timed out the first time (19:58, 1,206 s, 3,195 tests passed and
+  none failed; the load before the sensors was 0.8 of 8, and the gate after it logged
+  `node codegraph.js` among the busiest, so the likely cause is this session's own merge being
+  indexed while its tests ran: not proven). It left `Microsoft/` untracked in the worktree,
+  removed by hand. Run again (20:20 to 20:51): `PASS  tests  npm run test passed`, and `6 code
+  commits since origin/main, all covered by a Codex review record`. Both are sightings in the
+  register.
+- 2026-10-11, what the merge did to the register, as the design said it would: with nothing
+  of this branch changed it read 22 not settled where it had read 17. Five tasks of
+  `odd/tasks/session-channel.md` that owed a control were checked off on `main`, and their
+  entries still said owed (`owed, stale`). The row passed. Four of them, and
+  `gate-ran-unseen`, which was stale before, now name the test that is their control, each
+  found by `git log -S` to have reached `main` on 2026-10-11; `wake-with-no-news` is left
+  stale on purpose, because the task that owed it (the watch wakes on a notice) is done and
+  nobody has shown that it stops a wake with no news. It reads 17 again.
+- 2026-10-11, two working rules he asked to apply ("me gusta mucho que apliquemos lo de los
+  ahorros": the orchestrator's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+  1798, read by this session; the measure they come from is the relief file's line 281, not
+  checked by this session): a writer sub-agent never waits for the gate, it returns its work
+  and the main thread commits through the lock, because a sub-agent's cache lasts five
+  minutes and a main thread's one hour; and a writer is given a narrow piece that ends in tens
+  of turns. Both are candidates for the delegation rules of this feature (protocol 6), not
+  designed, and applied by this session from now on.
 
 ## Next step
-In this order. (1) The reviews of what follows `5b754dd`:
-gentle-ai first (consent is pre-granted), then Codex for the code since the branch point,
-`js-harness codex-review --base 9a2edb1^` after its `--plan` says what it costs; neither beside
-a running gate. (2) Merge `main` in before the push of `feat/failures-register`: three unmerged
-branches change `bin/check.mjs` and `bin/js-harness.mjs` in the same places. Push, open the
-pull request with the twelve doubts of the seed in it, tell the orchestrator. (3) T17c, its
-code places read again on the new `main`, which changed three of the seven files. (4) T16b:
-how a rule is declared, designed and read before it is built. (5) T1. T2 and T8 wait for him: before
-T2 the first item of "Ask me before" is asked, and the host facts of "What the hosts allow"
-that T2 rests on are confirmed with a logging hook.
+In this order. (1) The pull request of the register (T3) is open: the lead merges it when it
+has read it. Until then the 219 lines that follow `6c687ab` plus the last two corrections
+are under the budget of a gentle-ai review and are assessed with the next slice, from the
+merge commit `9e7c226` as its base. (2) T17c, in a branch of its own from `main` once the
+register is merged: its code places read again on the new `main`, which changed four of the
+seven files; the orchestrator is told before `bin/lib/manifest.mjs` is touched. One writer,
+a narrow piece, and this session commits through the lock. (3) T16b: how a rule is declared,
+designed and read by a reader that did not write it before it is built. (4) T3e. (5) T1. T2
+and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
+of "What the hosts allow" that T2 rests on are confirmed with a logging hook.

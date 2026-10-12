@@ -292,6 +292,8 @@ row"); that tells the load and stops nothing.
 - Seen: 2026-10-11 — relief file, line 192 — the gate of JH 4 timed out, 03:27:59 to 03:48:06
 - Seen: 2026-10-11 — relief file, line 224 — 1,188 s of 1,200 (claimed); also
   odd/tasks/gate-log.md:590-596
+- Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — the gate on the result of merging
+  `main` in timed out at 1,206 s with 3,195 tests passed and none failed; run again, it passed
 
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
@@ -299,7 +301,8 @@ row"); that tells the load and stops nothing.
 - Aka: failure 9 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 122 — a gate of JH 2 ran 05:39 to about 05:53 unseen
 - Seen: 2026-10-10 — relief file, line 131 — a second one, from 06:41, again unseen
-- Control: owed — odd/tasks/gate-log.md — "`check` and `gate` write start, end and refused"
+- Control: check — bin/gate.test.mjs — "gate writes a start after the sample and before the command,
+  and an end after it with its exit code" — since 2026-10-11
 - Proof: the log; none exists on the branch yet, so the proof is owed by its session (owed: nothing
   prints it yet)
 
@@ -343,7 +346,8 @@ has no owner, and the board keeps showing rows and work that nobody holds.
 - Seen: 2026-10-11 — relief file, line 211 — again at 05:18; two rows with the orchestrator's title
 - Seen: 2026-10-11 — relief file, line 235 — the whole app at 13:14; two gates left as orphans,
   messages "not delivered" (the restart of the orchestrator itself is at line 234)
-- Control: owed — odd/tasks/session-channel.md — "The board: the roster; the channel section"
+- Control: check — bin/lib/sessions.test.mjs — "rosterOf: the transcripts of one title are one row,
+  which says what the latest of them records" — since 2026-10-11
 
 ### hours-guessed
 Hours written in the relief file were not read from a clock.
@@ -446,7 +450,8 @@ for a yes or went on by its own judgment.
   line's count)
 - Seen: 2026-10-11 — relief file, line 238 — JH 7; it compared the paste and read his words, no yes
   asked; also odd/tasks/rule-hierarchy.md:797-798
-- Control: owed — odd/tasks/session-channel.md — "`--address`, `--opening`, `--quote`"
+- Control: check — bin/sessions.test.mjs — "--opening prints the text of the opening stored for a
+  title" — since 2026-10-11
 - Proof: count of a yes after a paste is 0 (owed: nothing prints it yet)
 
 ### outside-load-unseen
@@ -597,8 +602,8 @@ A task stopped by hand, and a session that was archived, are printed by the boar
 - Seen: 2026-10-10 — relief file, line 67 — a Bash stopped with `TaskStop` keeps showing (answer 2)
 - Seen: 2026-10-10 — relief file, line 117 — the killed waiter still shows; archived sessions
   printed like live ones (line 118; odd/tasks/session-board.md:1508-1510)
-- Control: owed — odd/tasks/session-channel.md — "a stopped task and an archived session no longer
-  read as live"
+- Control: check — bin/lib/sessions.test.mjs — "renderBoard: a stopped task reads as stopped, and a
+  session that closed or was relieved no longer reads as live" — since 2026-10-11
 
 ### stray-folder-untracked
 A test run leaves `Microsoft/Windows/PowerShell/ModuleAnalysisCache` untracked in the worktree, and
@@ -617,6 +622,8 @@ an untracked path makes the review assessment answer "unassessable".
 - Seen: 2026-10-10 — odd/tasks/gate-lock.md:318-320 — in the worktree `gate-lock`
 - Seen: 2026-10-10 — relief file, line 118 — it made `gentle-ai review assess` return high,
   unassessable (claimed); untracked new files did the same at line 139
+- Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — a gate killed at its bound left
+  `Microsoft/` in the worktree `failures-register`, and the review row could not assess for it
 
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his
@@ -695,8 +702,8 @@ was taken for a leftover of another session.
   was JH 2's (lines 116 and 117); also odd/tasks/session-board.md:1504-1507
 - Seen: 2026-10-10 — relief file, line 174 — two `Wait-Process` alive, "owners not read, so not
   attributed"
-- Control: owed — odd/tasks/session-channel.md — "each wait is printed with the session it hangs
-  from"
+- Control: check — bin/sessions.test.mjs — "each wait on the board is printed with the session it
+  hangs from" — since 2026-10-11
 
 ### wait-tied-to-commit
 A notice told a session that could not be reached to wait for commits that might never come, and
