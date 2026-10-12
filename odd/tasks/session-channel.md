@@ -1808,6 +1808,27 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   `bin/check.mjs`: a commit of documents alone runs no sensor while the suite reads `docs/`
   and `odd/tasks/`; until then `node bin/js-harness.mjs rules check` is run by hand after
   such a commit (done after the one that holds this text).
+- 2026-10-12 14:08 to 15:22 local, the merge made again so that Codex reads the hand-written
+  line. The figures and the reasons are under "Next step", 1c, "How it ended". The mistake
+  of this session, in its parts: (1) what happened: a way to make a Codex record was
+  recommended to the lead, and through it to him, without `--plan` having been run on
+  that very way, and his answer rested on a figure the way could not give; (2) fixed at
+  once: stopped before any run, nothing spent, the plan's real output sent to the lead;
+  (3) what stops it again: a proposal of a command reaches him with the output of its dry
+  run, as the two orders tried after it did; (4) where it enters the harness: the mode of
+  `codex-review` for a merge ("Next step", 1c), and, for the orchestrator skill (T8), the
+  line "a proposal of a command carries its dry run"; (5) the proof for today: `node
+  bin/js-harness.mjs codex-review --plan --base 474f99a` at `33269c9` prints the 12 parts.
+  A second, smaller one: two lines to the lead carried hours that were not read from the
+  clock ("14:12" and "14:35", sent at about 14:04 and 14:10) and this document said pull
+  request 74 was opened at 14:10; corrected to the lead at 14:12 by `date` and here. Part
+  e's turn was taken out of the gate's line while it waited (nothing committed), since the
+  commits under it were to be re-made; it is cut again from the new head. One turn at the
+  gate for the two commits: asked 14:18:35, held from 14:50:48, ended 15:22:00. Codex for
+  the slice: 3,706,003 input tokens over 3,731 changed lines, 993 a line. Kept on this
+  machine until pull request 74 is merged, then removed: the refs under
+  `refs/review-base/` (the old merge, the old documents, the dry runs, the base that did
+  not work) and the worktree `D:\js-harness-worktrees\session-channel-merge`.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1819,7 +1840,7 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
 | 4 | T5, T6, T5b, T4d, the sweep's items of this session | `main`, pull request 70 |
-| 5 | T6b, parts a to d: the pause command, the resume hook after a compaction, the watch and the measure | `feat/session-compaction`, pull request 74, pushed up to `bd1459c`; the merge of `main` and what follows it are local until his decision ("Next step", 1c) |
+| 5 | T6b, parts a to d: the pause command, the resume hook after a compaction, the watch and the measure | `feat/session-compaction`, pull request 74, pushed whole: the merge of `main` is `8f17815`, the dispatcher's commit `221a7d0`, documents after it; the lead merges it |
 | 5e | T6b, part e: the entry of `install`, the check of `doctor`, the exact undo | built and held: the patch `part-e.patch` and the folder `snap-e` of the scratchpad, for the branch `feat/session-compaction-install` |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
@@ -2049,7 +2070,8 @@ summary.
       everything `main` brought, planned at about 4,130,000 input tokens for 5,457 changed
       lines in 12 parts (the rate gives it 6,875,820). Not run: whether one line needs it is
       his, put to him by the lead, who reads the resolution in the pull request.
-      Pull request 5 is number 74, opened at 14:10 and pushed up to `bd1459c` only: the
+      Pull request 5 is number 74, created at 14:03:35 by GitHub's own time (the "14:10"
+      first written here was not read from a clock) and pushed up to `bd1459c` only: the
       pre-push check refuses the merge (`check --push`: "1 of 8 code commits since
       origin/main have no Codex review record: 33269c9"), since a hand wrote in it, and
       passes at `bd1459c`. So `33269c9` and the document commits after it are on this
@@ -2060,6 +2082,45 @@ summary.
       two lines (recommended here; a new way to make a record, so his to allow); or a
       recorded skip, not proposed, since Codex can run. The pull request's body shows the
       resolution.
+      HOW IT ENDED (14:08 to 15:22, Progress): he chose the second way ("La Opcion A", the
+      lead's transcript `65318fd5`, line 4649, read with `sessions --quote`, exit 0; the A is
+      the lead's question at line 4644: Codex reads only the line the hand wrote, under
+      300,000, this one time). It could not be run as it was described, and the mistake is
+      this session's: `codex-review` reads a range from the merge-base of its base and its
+      head (`bin/lib/codex-review-prompt.mjs:127`), so from the commit made with `git
+      commit-tree` the plan was the whole range again, "12 parts, 5,457 changed lines …
+      about 4,130,000 input tokens". Nothing was run. What was run instead, on the lead's
+      yes and inside the standing rules, after two dry runs: `33269c9` and the two document
+      commits on it were never pushed and are replaced. The merge is `8f17815`, of
+      `3088960` into `bd1459c`, with `bin/js-harness.mjs` and `bin/js-harness.test.mjs`
+      exactly as `main` has them, so it writes no line (no file of it differs from both
+      parents, which is how the push check counts a merge's code); gate PASS 15:06. The
+      commit after it, `221a7d0`, puts this branch's two files back with the loader of
+      `rules`, the one line a hand wrote: gate PASS 15:20; gentle-ai: 137 lines, not due;
+      Codex on `8f17815..221a7d0`, planned at about 160,000 input tokens, budget 315,000:
+      one part, 234,165 input tokens (186,112 cached), "the patch is correct (confidence
+      0.94)", no finding. Its tree is `c39fa4a`, the tree of `33269c9`: the one the gate
+      passed at 13:59 and the practice journey walked, so the journey was NOT run again;
+      the two gates of this turn ran the whole suite on the merge's tree and on that one.
+      Said plainly: Codex read 137 lines, the lazy dispatcher again with the hand-written
+      line in it, and not that line alone; and for one commit the branch has `main`'s
+      dispatcher. The two document commits are picked on top (`bfe54c1`, `68bac9f`), and
+      everything is pushed with the commit that holds this text.
+      Tried on the way and red, so not taken: the line before the merge (this branch's own
+      test of the table walks every loader, and `bin/rules.mjs` is not there before the
+      merge: 30 pass, 1 fail), and the merge resolved as this branch's side with the line
+      after it (`bin/rules.test.mjs:396` runs `js-harness rules` through the dispatcher:
+      25 pass, 1 fail).
+      FOR WHOEVER BUILDS IT (a task the lead assigns, not this feature's): a merge resolved
+      by hand will come again with the next branch that meets `main` in a file both
+      changed. What a hand wrote in a merge is what `git show --remerge-diff <merge>`
+      prints, and `bin/lib/codex-review-coverage.mjs:118-130` already asks git for it to
+      decide that the merge is code; the review command has no way to read that alone,
+      since every range it reads starts at a merge-base, and a merge-base is an ancestor of
+      the merge, never "the merge without the hand". A mode of `codex-review` for one
+      merge, whose patch is the remerge diff and whose record covers that merge, would make
+      today's two-commit detour unnecessary; until then the detour works only when the
+      tree with one side's files is green.
       Part e is written in the side worktree and held from that pull request (snapshot
       `snap-e` in the scratchpad; it goes to a branch of its own, `feat/session-compaction-
       install`, cut from this one's head, pushed and with no pull request until he answers
