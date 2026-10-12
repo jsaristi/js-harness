@@ -3775,7 +3775,7 @@ function hookedRepo() {
   const remove = () => {
     for (const dir of [repo, home, checkout]) fs.rmSync(dir, { recursive: true, force: true });
   };
-  return { repo, home, marker, commit, remove };
+  return { repo, home, marker, commit, env, remove };
 }
 
 /** The paths the last commit of `cwd` holds. */
@@ -3844,6 +3844,58 @@ test('a commit of documents alone runs no sensor however it is made: plain, with
     assert.equal(code.status, 0, code.said);
     assert.match(code.said, /^PASS {2}tests /m);
     assert.equal(fs.existsSync(marker), true, 'the sensor did not run for a commit that holds a code file');
+  } finally {
+    remove();
+  }
+});
+
+// Git runs no pre-commit hook for the commit a merge makes by itself: it runs `pre-merge-commit`, with the
+// merged index staged. `.githooks/pre-merge-commit` starts the gate there, so such a merge is a gate as a
+// commit is.
+test('the hook of a merge starts the same command as the hook of a commit', () => {
+  const hooks = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.githooks');
+  const command = (hook) => fs.readFileSync(path.join(hooks, hook), 'utf8').split(/\r?\n/).filter((line) => line.startsWith('exec '));
+  assert.deepEqual(command('pre-merge-commit'), command('pre-commit'));
+  assert.equal(command('pre-commit').length, 1);
+});
+
+test('a merge git commits by itself goes through the gate: one that brings documents alone runs no sensor, and one that brings a code file runs them', async () => {
+  const { repo, home, marker, env, remove } = hookedRepo();
+  try {
+    const hooks = path.join(home, 'hooks');
+    fs.copyFileSync(path.join(hooks, 'pre-commit'), path.join(hooks, 'pre-merge-commit'));
+    fs.chmodSync(path.join(hooks, 'pre-merge-commit'), 0o755);
+    const trunk = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD');
+    // A branch off the trunk that changes `file`, committed with no gate: only the merge is looked at here.
+    const branch = (name, file) => {
+      git(repo, 'checkout', '--quiet', '-b', name, trunk);
+      writeFile(repo, file, `written on ${name}\n`);
+      git(repo, 'add', file);
+      git(repo, ...commitAs, '--no-verify', '-m', name);
+      git(repo, 'checkout', '--quiet', trunk);
+    };
+    // The trunk moves on as well, so that neither merge is a fast-forward, which makes no commit and runs no hook.
+    const merge = (name) => {
+      writeFile(repo, `trunk-${name}.txt`);
+      git(repo, 'add', `trunk-${name}.txt`);
+      git(repo, ...commitAs, '--no-verify', '-m', `the trunk before ${name}`);
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'merge', '--no-edit', name], { cwd: repo, env, encoding: 'utf8' });
+      return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
+    };
+    branch('documents', 'docs/guide.md');
+    branch('code', 'src/app.js');
+
+    const documents = merge('documents');
+    assert.equal(documents.status, 0, documents.said);
+    assert.deepEqual(sensorsRow(documents.said), noSensorRan(['docs/guide.md']), documents.said);
+    assert.equal(fs.existsSync(marker), false, 'a sensor ran for a merge that brings documents alone');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '1');
+
+    const code = merge('code');
+    assert.equal(code.status, 0, code.said);
+    assert.match(code.said, /^PASS {2}tests /m);
+    assert.equal(fs.existsSync(marker), true, 'no sensor ran for a merge that brings a code file');
+    assert.equal(git(repo, 'rev-list', '--count', '--merges', 'HEAD'), '2');
   } finally {
     remove();
   }
