@@ -400,7 +400,7 @@ session's transcript.
       the counts they are judged by. Route: inline, no source written.
 - [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
-- [ ] T5b · The four notes gentle-ai left on T5 (Progress). Route: delegated, one writer,
+- [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
       tests first.
 - [ ] T6 · The head a review reads is pinned, and two records at once. Route: delegated,
       tests first.
@@ -487,20 +487,25 @@ session's transcript.
   pull request. Told to the orchestrator, for "JH 7": `bin/lib/codex-review-parts.mjs` and
   `bin/lib/codex-review-plan.mjs` are free of this feature; `bin/lib/gate-lock.mjs` and
   `bin/lib/gate-log.mjs` are not touched by it.
+- 2026-10-12 · T5b, one writer on Haiku 5.5 (131,519 tokens), commit `8bae23f`. One turn
+  (`t5c-turn.log`, taken 06:09:35): RED, the new test of the error's last sentence fails
+  against the command as it was; GREEN, 249 of 249 of the command's tests; the gate passed
+  on the commit (`PASS  tests`, 06:26:56). gentle-ai's row: medium risk, 58 lines, review
+  not due (under the budget). Of the four notes, one is taken short and said so: no way
+  was found to make the reader of the run log throw at that one place, so the new test
+  proves that a log that cannot be read is read as empty and every part is asked; the
+  `catch` beside it stays without a test. Sub-agents so far: 1,052,797 tokens.
 
 ## Next
-T5b, one writer: the four notes of gentle-ai, tests first (the platform named in the
-second run of each guard test; a test where the reader of the run log throws and every
-part is asked; the error's last sentence only when a part's line was written, with its
-test; the all-kept test asserting the record, its `runs` and the findings shown). Then T6
-(the head pinned) and T6b (the row of a commit names its commits), one writer each, and
-one turn for the three: RED, GREEN, commits. Then gentle-ai on what follows `1841b96`.
+T6 (the head pinned) and T6b (the row of a commit names its commits), one writer each, and
+one turn for the two: RED, GREEN, commits. Then gentle-ai on what follows `1841b96`.
 Codex on the slice when he has answered; its run is also M2's number 1 for Codex, under
 `measure-busy.mjs`. T2 can start beside them: its files are free.
 
 ## Resume here
 - `feat/gate-wait` is not pushed; its head is the commit that holds this entry, on
-  `7411fe6`. T5 is `1841b96`, gated, reviewed by gentle-ai, with no Codex record yet.
+  `7411fe6`. T5 is `1841b96` and `8bae23f`, gated, the first reviewed by gentle-ai,
+  neither with a Codex record yet.
 - No Codex run until the orchestrator relays his answer on the margin over the rate.
 - `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
 - The scratchpad of this session
