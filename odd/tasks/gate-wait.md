@@ -1040,6 +1040,29 @@ session's transcript.
   `evals/paths.mjs:6` lets `ENOTDIR` through, so a raw directory below a file is refused
   with the system's words and not the command's; the run is still refused). So of seven,
   one confirmed and cosmetic, one possible, four of the tests. Nothing fixed.
+- 2026-10-12 · **T9, the 124 of GitHub's Windows: the suite assumes his machine** (one
+  reader on `t9-windows.log` and the sources at `14a6026`, 182,720 tokens; checked by me:
+  the log names `RUNNER~1`). 123 of the 124 have one cause: the runner's `TEMP` is
+  `C:\Users\RUNNER~1\AppData\Local\Temp`, an 8.3 short name, since the user `runneradmin`
+  is longer than eight letters. The fixtures build every repository from `os.tmpdir()` and
+  keep that spelling; the harness takes its root from `git rev-parse --show-toplevel`,
+  which answers the long one; Node's `fs.realpathSync` does not expand a short name (only
+  `.native` does), so the tests' comparisons and the ids hashed from a root cannot agree.
+  His user `Oficina` has seven letters and no short form, so the suite never met it. By
+  group: 62 assert a path equal, short against long; 49 of `bin/remote.test.mjs` seed
+  their fixtures under an id hashed from the short root while the command hashes the long
+  one; 5 inject a failing file call that matches the short path; 4 are hook or junction
+  paths judged outside the long root; 1 end to end; 1 the whole-file line that follows
+  from it (its `after` could not remove a temp folder, `EPERM`). The last one is the
+  symlink test that also fails on Linux: a stale expectation, run there because the runner
+  may make links. No timeout, no git configuration, and the C: and D: split is no cause.
+  **One finding in the harness itself, narrow and on the safe side:** `isWithinBase` of
+  `bin/lib/project.mjs` folds case and not 8.3 names, so a hooks path or a junction target
+  spelled short is judged outside the repository and its hook is not written; an ordinary
+  project never meets it, since every root comes from git's long answer. So: not a harness
+  that fails on a clean Windows. What a fix of the suite would be, not built: make each
+  fixture's root canonical once with `fs.realpathSync.native` before a path from it is
+  compared or hashed beside one git reports.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
