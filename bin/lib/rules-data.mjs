@@ -32,6 +32,15 @@ export const RULES = [
     "unit": "input tokens a changed line"
   },
   {
+    "id": "context-pause",
+    "subject": "the share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts",
+    "owner": "sebastian",
+    "since": "2026-10-11",
+    "value": 88,
+    "unit": "percent of the context window",
+    "flag": "--context-pause"
+  },
+  {
     "id": "control-phrase-min",
     "subject": "the shortest phrase by which a control or a rule in prose is found in its file",
     "owner": "project",

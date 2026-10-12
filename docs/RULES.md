@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `1ccb54f9013d`. In force: 17 (12 of Sebastián, 5 of the project). Retired: 0.
+Hash `55d36b08f413`. In force: 18 (13 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -24,6 +24,11 @@ The most input tokens a Codex review may cost for each changed line of its slice
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+
+### context-pause
+The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.
+- Read by: `bin/lib/sessions.mjs`.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
 ### review-effort
 The effort a Codex review runs at: high.

@@ -5,6 +5,7 @@
 import path from 'node:path';
 import { parseSnapshot } from './process-tree.mjs';
 import { parseFeature, tokenize } from './progress.mjs';
+import { ruleValue } from './rules.mjs';
 
 const TITLE_LENGTH = 60;
 
@@ -36,10 +37,10 @@ export const DEFAULT_CONTEXT_COMPACTION_PERCENT = 93;
  * judges whether what is left fits before the compaction. It limits nothing: it is where the board says
  * so and where a watch wakes (`--context-pause`).
  *
- * This line is the one home of the number, as above: the rule changed more than once, and every text
- * that had written its value kept the old one. So the rule is named ("the context pause") or read from
- * here, and its value is written nowhere else. */
-export const DEFAULT_CONTEXT_PAUSE_PERCENT = 88;
+ * The one home of the number is its declared rule, `context-pause` of ./rules-data.mjs: the rule changed
+ * more than once, and every text that had written its value kept the old one. So the rule is named ("the
+ * context pause") or read from this constant, and its value is written nowhere but in its declaration. */
+export const DEFAULT_CONTEXT_PAUSE_PERCENT = ruleValue('context-pause', 'percent of the context window');
 
 /** `percent` of `window`, in whole tokens: half of 500,000 is 250,000. */
 export function shareOf(window, percent) {

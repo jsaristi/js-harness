@@ -50,6 +50,23 @@
       "by": "session"
     }
   },
+  "context-pause": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Por otro lado ejemos entonces la regla del 88% y la compactacion al queda en el 93% con eso le deja 5%.",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1745
+      }
+    ],
+    "reading": "The 88 percent is the share of a session's context window at which it pauses: it writes its state in its feature document and judges whether what is left fits before the host compacts, which he puts at 93 percent, a figure of the host and not a rule (bin/lib/sessions.mjs holds it and a transcript's own measure wins over it). The rule had been 85, then 90 for an hour; this line settles it. It is not marked as of this repository only: the board the harness ships already pauses at this share by default, and its flag replaces it; what the harness turns on by default in a project that installs it stays his to decide, and this declaration changes nothing there.",
+    "accepted": "Not put to him as a reading: it is this session's, and his to correct.",
+    "checked": {
+      "date": "2026-10-12",
+      "by": "session"
+    }
+  },
   "control-phrase-min": {
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
