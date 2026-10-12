@@ -20,6 +20,7 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { findOpenings, openingsDir, placeOf, readNotices } from './lib/channel.mjs';
+import { pauseNotice } from './lib/pause.mjs';
 import { isSelf, mainCheckout, parseWorktreeList, projectSlug, readPlans, titleRead } from './lib/sessions.mjs';
 
 const USAGE = [
@@ -28,6 +29,10 @@ const USAGE = [
   '         after a compaction in a project with a harness.json, prints the session\'s title, its opening,',
   '         its feature document and what to read there. It prints nothing anywhere else, writes nothing',
   '         and always exits 0.',
+  'Usage: js-harness resume --pause',
+  '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
+  '         one JSON line with the notice the first time a stretch of work passes the pause, and nothing else.',
+  '         It never fails and always exits 0.',
 ].join('\n');
 
 // How long one `git` may take, in milliseconds. The hook asks at most seven questions and the host gives
@@ -268,6 +273,38 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
   return lines;
 }
 
+/** Whether `folder` or one of its parents holds a `harness.json`: the walk `--pause` makes, each folder tested with
+ * `isFile`, up to the root of the file system. It is a walk of files and no `git` call, since a `git` for each tool
+ * call would cost the hook more than the pause is worth; a checkout's root holds the file, and so does a folder under it. */
+function hasHarnessJson(folder, isFile) {
+  for (let dir = folder; ; dir = path.dirname(dir)) {
+    if (isFile(path.join(dir, 'harness.json'))) return true;
+    if (path.dirname(dir) === dir) return false;
+  }
+}
+
+/** The line `--pause` prints for the hook input `input`, or `null` when it says nothing: an input that is not an
+ * object, a sub-agent's call (`agent_id`), a call without a transcript, a project with no `harness.json` above the
+ * call's folder, or a call that does not pass the pause. `pauseNotice` throws for a session id it cannot name a
+ * state file by; the caller's catch turns that into silence. The state goes to the harness home, and its temp folder
+ * is under the same home when `JS_HARNESS_HOME` is set, so a made-up home never reaches the real temp folder. */
+function pauseLine(input, { defaultCwd, env, homedir, isFile }) {
+  if (!isObject(input) || (typeof input.agent_id === 'string' && input.agent_id !== '')) return null;
+  if (typeof input.transcript_path !== 'string' || input.transcript_path === '') return null;
+  const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
+  if (!hasHarnessJson(cwd, isFile)) return null;
+  const notice = pauseNotice({
+    transcript: input.transcript_path,
+    sessionId: input.session_id,
+    home: env.JS_HARNESS_HOME || homedir(),
+    tmpdir: env.JS_HARNESS_HOME ? path.join(env.JS_HARNESS_HOME, 'tmp') : undefined,
+  });
+  if (notice === null) return null;
+  // Another entry (a `Stop` hook, later) runs this command too, so the event is the input's own when it names one.
+  const event = typeof input.hook_event_name === 'string' && input.hook_event_name !== '' ? input.hook_event_name : 'PostToolUse';
+  return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: notice.text } });
+}
+
 export async function resumeMain(
   argv,
   {
@@ -287,12 +324,16 @@ export async function resumeMain(
     stdinIsTTY = tty.isatty(0),
   } = {},
 ) {
-  if (!argv.includes('--hook')) {
+  // `--pause` is the mode of a `PostToolUse` hook, so it takes no other argument: a hook never sends one, and a
+  // person who types one at a shell gets the usage.
+  const pause = argv.includes('--pause');
+  if (pause ? argv.length !== 1 : !argv.includes('--hook')) {
     stderr(USAGE);
     return 2;
   }
   // From here on nothing fails and nothing is half said: the lines are printed once they are all there,
-  // and whatever throws on the way leaves the session as it would be without the hook.
+  // and whatever throws on the way leaves the session as it would be without the hook. The pause mode is
+  // run after every tool call, so it is also silent on every failure: exit 2 from a hook would block the host.
   try {
     // A terminal is nobody's hook input, and reading it would wait for a key.
     if (stdinIsTTY) return 0;
@@ -306,6 +347,11 @@ export async function resumeMain(
         return false;
       }
     };
+    if (pause) {
+      const line = pauseLine(input, { defaultCwd, env, homedir, isFile });
+      if (line !== null) stdout(line);
+      return 0;
+    }
     const lines = resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, stat, now, isFile });
     if (lines.length > 0) stdout(lines.join('\n'));
   } catch {

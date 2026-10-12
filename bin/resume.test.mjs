@@ -7,7 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resumeMain, transcriptTitle } from './resume.mjs';
 import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, writeOpening } from './lib/channel.mjs';
-import { projectSlug, sessionFacts } from './lib/sessions.mjs';
+import { statePath } from './lib/pause.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
 // (folders only; `git` is a fake that answers for them), a Claude home with the project's sessions folder
@@ -548,4 +549,145 @@ test('js-harness resume --hook, run as a process: it reads standard input, print
   assert.deepEqual([silent.status, silent.stdout, silent.stderr], [0, '', '']);
   const help = spawnSync(process.execPath, [dispatcher, '--help'], { encoding: 'utf8', env, timeout: 60000 });
   assert.match(help.stdout, /^ {2}resume\s+.*after a compaction.*--hook/m);
+}));
+
+// The context pause, through `--pause`: the command a `PostToolUse` hook runs after each tool call. The transcripts
+// are made up, their figures come from the constants of `./lib/sessions.mjs`, and the state goes to the machine's
+// harness home, so nothing reaches the real one. The pause point of the default compaction is the share of the
+// window the host compacts at, scaled to the pause's share: a reply of exactly that many tokens is past it.
+const PAUSED = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_PAUSE_PERCENT);
+const UNDER = PAUSED - 1;
+const SECOND = 'bbbbbbbb-2222-4222-8222-222222222222';
+const THIRD = 'cccccccc-3333-4333-8333-333333333333';
+const FOURTH = 'dddddddd-4444-4444-8444-444444444444';
+const FIFTH = 'eeeeeeee-5555-4555-8555-555555555555';
+const SIXTH = 'ffffffff-6666-4666-8666-666666666666';
+
+/** The hook input of a `PostToolUse` call in `machine` by session `id`, whose transcript ends in a reply of `tokens`. */
+function pauseInput(machine, tokens, { id = SESSION, ...more } = {}) {
+  const transcript = path.join(machine.projectDir, `${id}.jsonl`);
+  fs.writeFileSync(transcript, `${JSON.stringify({ type: 'assistant', message: { model: 'made-up-model', role: 'assistant', usage: { input_tokens: tokens } } })}\n`);
+  return JSON.stringify({ session_id: id, transcript_path: transcript, cwd: machine.root, hook_event_name: 'PostToolUse', ...more });
+}
+
+/** Runs the pause command on `machine` with `input` on its standard input: `{ code, lines, stderr, calls }`. */
+async function runPause(machine, input, { git = fakeGit(machine), ...deps } = {}) {
+  const out = [];
+  const err = [];
+  const code = await resumeMain(['--pause'], {
+    cwd: machine.dir,
+    stdout: (line) => out.push(line),
+    stderr: (line) => err.push(line),
+    env: { JS_HARNESS_HOME: machine.home },
+    homedir: () => machine.home,
+    run: git.run,
+    readStdin: () => input,
+    stdinIsTTY: false,
+    ...deps,
+  });
+  return { code, lines: out, stderr: err.join('\n'), calls: git.calls };
+}
+
+test('past the pause the command prints one JSON line with the notice, and nothing again while the stretch lasts', withMachine(async (machine) => {
+  const input = pauseInput(machine, PAUSED);
+  const first = await runPause(machine, input);
+  assert.deepEqual([first.code, first.stderr, first.lines.length], [0, '', 1]);
+  const said = JSON.parse(first.lines[0]);
+  assert.deepEqual(Object.keys(said), ['hookSpecificOutput']);
+  assert.equal(said.hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.match(said.hookSpecificOutput.additionalContext, new RegExp(`^js-harness: this session holds ${percentOf(PAUSED, DEFAULT_CONTEXT_WINDOW)}% of its context window, and the host compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%: `));
+  assert.ok(fs.existsSync(statePath(machine.home, SESSION)), 'the state remembers that the session was told');
+  assert.deepEqual(await runPause(machine, input), { code: 0, lines: [], stderr: '', calls: [] }, 'the second call of the stretch says nothing');
+  assert.deepEqual(first.calls, [], 'no git is asked: the project is found by its harness.json alone');
+}));
+
+test('under the pause the command prints nothing, exits 0 and writes no state', withMachine(async (machine) => {
+  const { code, lines, stderr, calls } = await runPause(machine, pauseInput(machine, UNDER));
+  assert.deepEqual([code, lines, stderr, calls], [0, [], '', []]);
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness', 'channel', 'pause')), false, 'no file under the channel\'s pause folder');
+  assert.equal(fs.existsSync(path.join(machine.home, 'tmp')), false, 'and none in the temp folder of the home');
+}));
+
+test('a sub-agent\'s call prints nothing and leaves the notice to the session\'s own call', withMachine(async (machine) => {
+  assert.deepEqual((await runPause(machine, pauseInput(machine, PAUSED, { agent_id: 'made-up-agent' }))).lines, []);
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness', 'channel', 'pause')), false, 'a sub-agent writes no state either');
+  // An empty agent id is no sub-agent's: the call is the session's own.
+  assert.equal((await runPause(machine, pauseInput(machine, PAUSED, { agent_id: '' }))).lines.length, 1);
+}));
+
+test('a call with no harness.json above it prints nothing; a call under a checkout walks up to its harness.json, and git is never asked', withMachine(async (machine) => {
+  const outside = path.join(machine.dir, 'elsewhere');
+  fs.mkdirSync(outside);
+  assert.deepEqual(await runPause(machine, pauseInput(machine, PAUSED, { cwd: outside })), { code: 0, lines: [], stderr: '', calls: [] });
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness')), false);
+  const inside = await runPause(machine, pauseInput(machine, PAUSED, { id: SECOND, cwd: path.join(machine.worktree, 'odd', 'tasks') }));
+  assert.deepEqual([inside.code, inside.lines.length, inside.calls], [0, 1, []]);
+}));
+
+test('input that is not an object, or names no transcript or session the command can use, prints nothing, exits 0 and writes nothing', withMachine(async (machine) => {
+  const past = JSON.parse(pauseInput(machine, PAUSED));
+  const inputs = [
+    '',
+    'not json',
+    '"PostToolUse"',
+    '[]',
+    'null',
+    '{"session_id":"',
+    JSON.stringify({ ...past, transcript_path: '' }),
+    JSON.stringify({ ...past, transcript_path: 7 }),
+    JSON.stringify({ ...past, transcript_path: path.join(machine.projectDir, 'missing.jsonl') }),
+    JSON.stringify({ ...past, session_id: '../../escape' }),
+    JSON.stringify({ ...past, session_id: 'short' }),
+    JSON.stringify({ ...past, session_id: undefined }),
+  ];
+  for (const input of inputs) {
+    const { code, lines, stderr } = await runPause(machine, input);
+    assert.deepEqual([code, lines, stderr], [0, [], ''], input);
+  }
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness')), false);
+  // A terminal is no hook input: nothing is read from it, so the command never waits for a key.
+  let read = false;
+  const terminal = await runPause(machine, pauseInput(machine, PAUSED), { stdinIsTTY: true, readStdin: () => {
+    read = true;
+    return pauseInput(machine, PAUSED);
+  } });
+  assert.deepEqual([terminal.code, terminal.lines, read], [0, [], false]);
+}));
+
+test('the notice names the event of its input, and a byte order mark before the input is not part of it', withMachine(async (machine) => {
+  const eventOf = async (id, more) => {
+    const { code, lines, stderr } = await runPause(machine, pauseInput(machine, PAUSED, { id, ...more }));
+    assert.deepEqual([code, stderr, lines.length], [0, '', 1]);
+    return JSON.parse(lines[0]).hookSpecificOutput.hookEventName;
+  };
+  assert.equal(await eventOf(SECOND, { hook_event_name: 'Stop' }), 'Stop');
+  // A blank or missing event name is the tool call's own: the `PostToolUse` entry that runs this command.
+  assert.equal(await eventOf(THIRD, { hook_event_name: '' }), 'PostToolUse');
+  assert.equal(await eventOf(FOURTH, { hook_event_name: undefined }), 'PostToolUse');
+  // A pipe of Windows PowerShell puts a byte order mark before what it sends.
+  const { lines } = await runPause(machine, `﻿${pauseInput(machine, PAUSED, { id: FIFTH })}`);
+  assert.equal(lines.length, 1);
+}));
+
+test('--pause with --hook or with any other argument is a usage error: exit 2, with the usage on stderr and nothing read', async () => {
+  for (const argv of [['--pause', '--hook'], ['--hook', '--pause'], ['--pause', 'extra']]) {
+    const err = [];
+    const neverRun = () => {
+      throw new Error('a usage error must not run or read anything');
+    };
+    const code = await resumeMain(argv, { stdout: neverRun, stderr: (line) => err.push(line), run: neverRun, readStdin: neverRun, stdinIsTTY: false });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(err.join('\n'), /^Usage: js-harness resume --pause/m);
+  }
+});
+
+// Through the dispatcher, as the `PostToolUse` entry runs it: a process, the hook's input on its standard input and
+// a home of its own in `JS_HARNESS_HOME`.
+test('js-harness resume --pause, run as a process: past the pause its standard output is the one JSON line, and the exit is 0', withMachine(async (machine) => {
+  const dispatcher = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
+  const env = { ...process.env, JS_HARNESS_HOME: machine.home };
+  const run = spawnSync(process.execPath, [dispatcher, 'resume', '--pause'], { cwd: machine.root, input: pauseInput(machine, PAUSED, { id: SIXTH }), encoding: 'utf8', env, timeout: 60000 });
+  assert.deepEqual([run.status, run.stderr], [0, '']);
+  assert.equal(run.stdout.trim().split(/\r?\n/).length, 1);
+  assert.equal(JSON.parse(run.stdout).hookSpecificOutput.hookEventName, 'PostToolUse');
 }));
