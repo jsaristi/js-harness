@@ -238,6 +238,29 @@ test('installMain and syncMain keep the record of an optional file, and the file
   }
 });
 
+// Session channel, T6: two entries go into each host file, so a line names the hook it registered.
+test('installMain says which hook each entry it registers is, and uninstallMain takes every one back with the files it made', async () => {
+  const home = makeTmpHome();
+  try {
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(installed.code, 0);
+    const settings = path.join(home, '.claude', 'settings.json');
+    const hooks = path.join(home, '.codex', 'hooks.json');
+    assert.deepEqual(installed.outLines.filter((line) => line.startsWith('registered hook entry')), [
+      `registered hook entry in ${settings}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
+      `registered hook entry in ${hooks}: js-harness doctor --hook (SessionStart, matcher startup|resume)`,
+      `registered hook entry in ${settings}: js-harness resume --hook (SessionStart, matcher compact)`,
+      `registered hook entry in ${hooks}: js-harness resume --hook (SessionStart, matcher compact)`,
+    ]);
+    const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(removed.code, 0);
+    assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), [settings, settings, hooks, hooks].map((file) => `removed hook entry from ${file}`).sort());
+    assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstallMain reports an optional file with the removed files, and an edited one with the kept ones', async () => {
   const home = makeTmpHome();
   try {

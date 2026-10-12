@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, writeOpening } from './lib/channel.mjs';
-import { CHANNEL_NOT_KNOWN, NOT_VISIBLE, ROSTER_NOT_KNOWN, projectSlug, sessionFacts } from './lib/sessions.mjs';
+import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
 // `--claude-home` and `--tmp`, and `git`, `gh` and the process listing are fakes, so no test reads this
@@ -147,18 +148,25 @@ const USAGE_ERRORS = [
   // (`Number('')` is 0) nor a path.
   ['constructor', 'x'], ['toString', 'x'], ['hasOwnProperty', 'x'], ['__proto__', 'x'],
   ['--tail', ''], ['--tail', ' '], ['--tail', '0x2'], ['--hours', ''], ['--hours', ' '], ['--hours', '1e1'], ['--cwd', ''], ['--claude-home', ''], ['--tmp', ''],
-  // T5: the context limit is a whole number of tokens above zero.
-  ['--context-limit'], ['--context-limit', '0'], ['--context-limit', '1.5'], ['--context-limit', 'big'],
+  // Session channel, T5: the pause is a whole number of tokens above zero.
+  ['--context-pause'], ['--context-pause', '0'], ['--context-pause', '1.5'], ['--context-pause', 'big'],
   // T5: the waits of a watch are numbers above zero and mean nothing without it; --self is an id or its start.
   ['--watch', '--interval'], ['--watch', '--interval', '0'], ['--watch', '--interval', 'soon'], ['--watch', '--timeout', '0'], ['--watch', '--timeout', '-5'],
   ['--interval', '5'], ['--timeout', '5'], ['--timeout', '5', '--json'], ['--self'], ['--self', 'abc'], ['--watch', '--self', ''],
   // R3-watch-wait-upper-bound: a wait above what a Node timer takes fires after a millisecond, and digits
   // enough to parse as Infinity are not a number of anything.
   ['--watch', '--interval', '2147484'], ['--watch', '--timeout', '2147484'], ['--watch', '--interval', HUGE], ['--watch', '--timeout', HUGE],
-  ['--hours', HUGE], ['--tail', HUGE], ['--context-limit', HUGE], ['--context-limit', `${HUGE}%`], ['--context-window', HUGE],
-  // T5b: the window is a whole number of tokens above zero; the limit is that, or a percentage of the window up to 100.
+  ['--hours', HUGE], ['--tail', HUGE], ['--context-pause', HUGE], ['--context-pause', `${HUGE}%`], ['--context-window', HUGE],
+  // T5b: the window is a whole number of tokens above zero; the pause is that, or a percentage of the window up to 100.
   ['--context-window'], ['--context-window', '0'], ['--context-window', '1.5'], ['--context-window', 'big'], ['--context-window', '50%'],
-  ['--context-limit', '0%'], ['--context-limit', '101%'], ['--context-limit', '100.5%'], ['--context-limit', '%'], ['--context-limit', '73%%'], ['--context-limit', '-5%'], ['--context-limit', '7 %'],
+  ['--context-pause', '0%'], ['--context-pause', '101%'], ['--context-pause', '100.5%'], ['--context-pause', '%'], ['--context-pause', '50%%'], ['--context-pause', '-5%'], ['--context-pause', '7 %'],
+  // Session channel, T5: where the host compacts is given the same two ways; and the flag of the limit
+  // mark left with the mark, with or without a value.
+  ['--context-compaction'], ['--context-compaction', '0'], ['--context-compaction', '1.5'], ['--context-compaction', 'big'], ['--context-compaction', HUGE],
+  ['--context-compaction', '0%'], ['--context-compaction', '101%'], ['--context-compaction', '60%%'],
+  ['--context-limit'], ['--context-limit', '50%'], ['--context-limit', '350000'],
+  // A pause that is not below the compaction: the whole window can never be, nor any pause above a compaction of one token.
+  ['--context-pause', '100%'], ['--context-compaction', '1'], ['--context-pause', '60%', '--context-compaction', '50%'],
   // T6: the relief file is a path like the others.
   ['--relief'], ['--relief', ''], ['--relief', '--json'],
   // Session channel, T4a: --address takes a role, and answers with a title: no board to watch or to give as data.
@@ -393,36 +401,181 @@ test('a transcript that cannot be read is listed as unavailable with the reason,
   assert.equal(board.sessions[1].id, SESSION_B);
 }));
 
-// T5 A: each session's context size, and the limit that marks it.
-test('the board carries each session\'s context and whether it is past --context-limit', withMachine(async (machine) => {
+// Session channel, T5: each session's context as what the judgment at the pause needs: what it holds, the
+// room left before the host compacts it and what its last task cost.
+const spoke = (tokens, seconds) => ({ ...reply('ok', seconds), message: { role: 'assistant', model: 'model-x', stop_reason: 'end_turn', usage: { input_tokens: 0, cache_read_input_tokens: tokens, cache_creation_input_tokens: 0, output_tokens: 5 }, content: [{ type: 'text', text: 'ok' }] } });
+
+// The context figures as these tests say them, each computed from the library's constant: the pause is
+// the user's rule and the compaction the host's, each has one home, and a test that wrote its value would
+// be a second one. `k` says tokens as the board does.
+const WINDOW = DEFAULT_CONTEXT_WINDOW;
+const [PAUSE_PERCENT, COMPACTION_PERCENT] = [DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_COMPACTION_PERCENT];
+const [PAUSE, COMPACTION] = [shareOf(WINDOW, PAUSE_PERCENT), shareOf(WINDOW, COMPACTION_PERCENT)];
+const k = (tokens) => `${Math.round(tokens / 1000)}k`;
+const PAUSE_SAID = `${PAUSE_PERCENT}% of the window (${k(PAUSE)})`;
+// What the session of `writeWaitingSession` holds: a little past the pause, after a task of 60,000 tokens.
+const HELD = PAUSE + 5000;
+const HELD_SAID = `context ${k(HELD)} tokens (${percentOf(HELD, WINDOW)}%)`;
+const ROOM_SAID = `room ${k(COMPACTION - HELD)} before the host compacts (${k(COMPACTION)})`;
+
+/** A session that finished two tasks and waits: the second, of 60,000 tokens, took it past the pause. */
+function writeWaitingSession(machine, id = SESSION_C) {
+  writeAt(path.join(machine.projectDir, `${id}.jsonl`), jsonl({ type: 'custom-title', customTitle: 'JH 3 · the context', sessionId: id }, prompt('first task', 500), spoke(HELD - 60000, 400), prompt('second task', 300), spoke(HELD, 200)), 200);
+}
+
+test('the board carries each session\'s context, the room left before the host compacts and the cost of its last task', withMachine(async (machine) => {
   writeSessions(machine);
+  writeWaitingSession(machine);
   const plain = JSON.parse((await runSessions(machine, ['--json'])).stdout);
-  assert.deepEqual([plain.contextWindow, plain.contextLimit, plain.contextLimitPercent], [480000, 350400, 73]);
-  assert.deepEqual(plain.sessions.map((session) => [session.context, session.contextPercent, session.pastContextLimit]), [
-    [{ tokens: 12400, model: 'model-x', at: before(60).toISOString() }, 3, false],
-    [{ unavailable: 'no reply of the transcript records its token usage' }, null, null],
+  assert.deepEqual([plain.contextWindow, plain.contextPause, plain.contextPausePercent, plain.contextCompactionDefault, plain.contextCompactionDefaultPercent], [WINDOW, PAUSE, PAUSE_PERCENT, COMPACTION, COMPACTION_PERCENT]);
+  assert.deepEqual([plain.contextLimit, plain.contextLimitPercent], [undefined, undefined], 'the limit mark left');
+  // Two names for two things: the board's figure is the default, a number like the pause beside it; a
+  // session's `contextCompaction` is the point it is counted against, with whether the session measured it.
+  assert.deepEqual([plain.contextCompaction, plain.contextCompactionPercent], [undefined, undefined], 'one key, one shape');
+  assert.deepEqual(plain.sessions.map((session) => typeof session.contextCompaction), ['object', 'object', 'object']);
+  const unknown = { unavailable: 'its first task has not ended' };
+  const point = { tokens: COMPACTION, measured: false, at: null };
+  assert.deepEqual(plain.sessions.map((session) => [session.id.slice(0, 8), session.context, session.contextPercent, session.atContextPause, session.contextCompaction, session.contextRoom, session.lastTask, session.lastTaskFits]), [
+    ['aaaaaaaa', { tokens: 12400, model: 'model-x', at: before(60).toISOString() }, 2, false, point, COMPACTION - 12400, unknown, null],
+    ['cccccccc', { tokens: HELD, model: 'model-x', at: before(200).toISOString() }, percentOf(HELD, WINDOW), true, point, COMPACTION - HELD, { tokens: 60000, startedBy: 'person', startedAt: before(300).toISOString(), endedAt: before(200).toISOString(), compactions: 0 }, false],
+    ['bbbbbbbb', { unavailable: 'no reply of the transcript records its token usage' }, null, null, point, null, unknown, null],
   ]);
-  const low = JSON.parse((await runSessions(machine, ['--json', '--context-limit', '12000'])).stdout);
-  assert.deepEqual([low.contextWindow, low.contextLimit, low.contextLimitPercent], [480000, 12000, 3]);
-  assert.deepEqual(low.sessions.map((session) => session.pastContextLimit), [true, null]);
-  const text = (await runSessions(machine, ['--context-limit', '12000'])).stdout.split('\n');
-  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens (3%), past the limit of 3% (12k)'), text.join('\n'));
-  assert.ok(text.includes('  cwd C:\\proj  branch main  context unavailable: no reply of the transcript records its token usage'), text.join('\n'));
+  const text = (await runSessions(machine, [])).stdout.split('\n');
+  assert.ok(text.includes(`  context 12k tokens (2%)  room ${k(COMPACTION - 12400)} before the host compacts (${k(COMPACTION)})  last task not known: its first task has not ended`), text.join('\n'));
+  const atThePause = `  ${HELD_SAID}  ${ROOM_SAID}  last task 60k, which no longer fits  at the pause: ${PAUSE_SAID}`;
+  assert.ok(text.includes(atThePause), text.join('\n'));
+  assert.ok(text.includes('  context unavailable: no reply of the transcript records its token usage'), text.join('\n'));
+  // The session that runs the board has its own row like any other.
+  const own = (await runSessions(machine, ['--self', SESSION_C])).stdout.split('\n');
+  const row = own.findIndex((line) => line.startsWith('cccccccc') && line.endsWith('(this session)'));
+  assert.equal(own[row + 2], atThePause);
 }));
 
-// T5b: the limit as a share of the window, the way the desktop app shows a context.
-test('--context-limit takes a percentage of --context-window, in either order, and the board says both', withMachine(async (machine) => {
+// T5b: the pause as a share of the window, the way the desktop app shows a context.
+test('--context-pause and --context-compaction take tokens or a percentage of --context-window, in either order', withMachine(async (machine) => {
   writeSessions(machine);
   const board = async (...argv) => JSON.parse((await runSessions(machine, ['--json', ...argv])).stdout);
-  const facts = (json) => [json.contextWindow, json.contextLimit, json.contextLimitPercent, json.sessions[0].contextPercent, json.sessions[0].pastContextLimit];
-  assert.deepEqual(facts(await board('--context-limit', '2%')), [480000, 9600, 2, 3, true]);
-  assert.deepEqual(facts(await board('--context-limit', '2.5%')), [480000, 12000, 3, 3, true]);
-  assert.deepEqual(facts(await board('--context-limit', '100%')), [480000, 480000, 100, 3, false]);
-  assert.deepEqual(facts(await board('--context-window', '20000')), [20000, 14600, 73, 62, false], 'the default limit is 73% of the window given');
-  assert.deepEqual(facts(await board('--context-window', '20000', '--context-limit', '50%')), [20000, 10000, 50, 62, true]);
-  assert.deepEqual(facts(await board('--context-limit', '50%', '--context-window', '20000')), [20000, 10000, 50, 62, true]);
-  const text = (await runSessions(machine, ['--context-limit', '50%', '--context-window', '20000'])).stdout.split('\n');
-  assert.ok(text.includes('  cwd C:\\proj  branch main  context 12k tokens (62%), past the limit of 50% (10k)'), text.join('\n'));
+  const facts = (json) => [json.contextWindow, json.contextPause, json.contextPausePercent, json.contextCompactionDefault, json.contextCompactionDefaultPercent, json.sessions[0].contextPercent, json.sessions[0].atContextPause, json.sessions[0].contextRoom];
+  const room = COMPACTION - 12400; // the first session holds 12,400 tokens
+  assert.deepEqual(facts(await board('--context-pause', '2%')), [WINDOW, 10000, 2, COMPACTION, COMPACTION_PERCENT, 2, true, room]);
+  assert.deepEqual(facts(await board('--context-pause', '12400')), [WINDOW, 12400, 2, COMPACTION, COMPACTION_PERCENT, 2, true, room], 'at the pause is at it');
+  assert.deepEqual(facts(await board('--context-compaction', '100%')), [WINDOW, PAUSE, PAUSE_PERCENT, WINDOW, 100, 2, false, WINDOW - 12400], 'a share goes up to the whole window');
+  const small = [shareOf(20000, PAUSE_PERCENT), shareOf(20000, COMPACTION_PERCENT)];
+  assert.deepEqual(facts(await board('--context-window', '20000')), [20000, small[0], PAUSE_PERCENT, small[1], COMPACTION_PERCENT, 62, 12400 >= small[0], small[1] - 12400], 'the defaults are the two constants, as shares of the window given');
+  assert.deepEqual(facts(await board('--context-window', '20000', '--context-pause', '50%', '--context-compaction', '80%')), [20000, 10000, 50, 16000, 80, 62, true, 3600]);
+  assert.deepEqual(facts(await board('--context-compaction', '80%', '--context-pause', '50%', '--context-window', '20000')), [20000, 10000, 50, 16000, 80, 62, true, 3600]);
+  assert.deepEqual(facts(await board('--context-compaction', String(PAUSE + 1))), [WINDOW, PAUSE, PAUSE_PERCENT, PAUSE + 1, percentOf(PAUSE + 1, WINDOW), 2, false, PAUSE + 1 - 12400], 'in tokens, with the pause left at its default');
+  const text = (await runSessions(machine, ['--context-pause', '50%', '--context-window', '20000'])).stdout.split('\n');
+  assert.ok(text.includes(`  context 12k tokens (62%)  room ${k(small[1] - 12400)} before the host compacts (${k(small[1])})  last task not known: its first task has not ended  at the pause: 50% of the window (10k)`), text.join('\n'));
+}));
+
+// A pause at or past the compaction is one no session reaches: the host compacts it first, and a watch
+// would wake for the pause after the fact. Each mark alone is a valid one, so it is the pair that is
+// refused, whichever of the two a flag gave and in whichever unit.
+test('a pause that is not below the compaction point the board will use is refused with both figures, whichever flag gave either and in either unit', withMachine(async (machine) => {
+  writeSessions(machine);
+  const figure = (tokens, window) => `${tokens} tokens (${percentOf(tokens, window)}% of the window)`;
+  const refusal = (pause, compaction, window = WINDOW) => `--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
+  const refused = async (argv, pause, compaction, window) => {
+    const { code, stdout, stderr } = await runSessions(machine, argv);
+    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(pause, compaction, window)], argv.join(' '));
+    assert.match(stderr, /Usage: js-harness sessions/);
+  };
+  const accepted = async (argv, pause, compaction) => {
+    const { code, stdout } = await runSessions(machine, ['--json', ...argv]);
+    assert.equal(code, 0, argv.join(' '));
+    assert.deepEqual([JSON.parse(stdout).contextPause, JSON.parse(stdout).contextCompactionDefault], [pause, compaction], argv.join(' '));
+  };
+  const above = shareOf(WINDOW, COMPACTION_PERCENT + 1);
+  const justBelow = shareOf(WINDOW, COMPACTION_PERCENT - 1);
+  // The pause given, against the default compaction: above it, equal to it, just below it.
+  await refused(['--context-pause', `${COMPACTION_PERCENT + 1}%`], above, COMPACTION);
+  await refused(['--context-pause', String(COMPACTION + 1)], COMPACTION + 1, COMPACTION);
+  await refused(['--context-pause', `${COMPACTION_PERCENT}%`], COMPACTION, COMPACTION);
+  await refused(['--context-pause', String(COMPACTION)], COMPACTION, COMPACTION);
+  await accepted(['--context-pause', `${COMPACTION_PERCENT - 1}%`], justBelow, COMPACTION);
+  await accepted(['--context-pause', String(COMPACTION - 1)], COMPACTION - 1, COMPACTION);
+  // The compaction given, lowered to the default pause or under it.
+  await refused(['--context-compaction', `${PAUSE_PERCENT - 1}%`], PAUSE, shareOf(WINDOW, PAUSE_PERCENT - 1));
+  await refused(['--context-compaction', String(PAUSE - 1)], PAUSE, PAUSE - 1);
+  await refused(['--context-compaction', `${PAUSE_PERCENT}%`], PAUSE, PAUSE);
+  await refused(['--context-compaction', String(PAUSE)], PAUSE, PAUSE);
+  await accepted(['--context-compaction', String(PAUSE + 1)], PAUSE, PAUSE + 1);
+  // Both given, in either order and in mixed units; a percentage is a share of the window given.
+  await refused(['--context-compaction', '50%', '--context-pause', '60%'], 300000, 250000);
+  await refused(['--context-pause', '18000', '--context-compaction', '90%', '--context-window', '20000'], 18000, 18000, 20000);
+  await refused(['--context-window', '20000', '--context-pause', '95%', '--context-compaction', '18999'], 19000, 18999, 20000);
+  await accepted(['--context-window', '20000', '--context-pause', '17999', '--context-compaction', '90%'], 17999, 18000);
+}));
+
+test('--context-limit, the flag of the limit mark that left, is refused with the two flags that replaced it and their defaults, read from the constants', withMachine(async (machine) => {
+  writeSessions(machine);
+  const { code, stdout, stderr } = await runSessions(machine, ['--context-limit', '50%']);
+  assert.deepEqual([code, stdout], [2, '']);
+  const refusal = stderr.split('\n')[0];
+  assert.equal(refusal, `--context-limit is gone, with the mark it set: --context-pause sets where a session pauses (by default ${PAUSE_PERCENT}% of the window), and --context-compaction where the host compacts a session that has measured no point of its own (by default ${COMPACTION_PERCENT}%)`);
+  // The only shares it says are the two defaults: nothing of the mark that left, whatever its value was.
+  assert.deepEqual(refusal.match(/\d+(\.\d+)?\s?%/g), [`${PAUSE_PERCENT}%`, `${COMPACTION_PERCENT}%`]);
+  assert.match(stderr, /\[--context-pause <tokens>\|<n>%\] \[--context-compaction <tokens>\|<n>%\]/);
+  // The usage says the two defaults too, from the same constants.
+  assert.ok(stderr.split('\n').includes(`         --context-pause is ${PAUSE_PERCENT}% of the context window by default, and --context-compaction ${COMPACTION_PERCENT}%`), stderr);
+}));
+
+// T5b: the share of its context at which a session pauses changed three times in two days, and each time
+// it was carried by hand to every text that stated it; some were missed. The user's rule of 2026-10-11:
+// the number has one home, a constant, and a value that was replaced never stays beside the new one. These
+// two tests are what makes a miss fail: they read the texts of this feature that act (the sources and the
+// dispatcher's help, which is in one of them) and the feature document outside `## Progress`, whose
+// entries say what was true on their day and stay.
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CONTEXT_SOURCES = ['bin/lib/sessions.mjs', 'bin/sessions.mjs', 'bin/resume.mjs', 'bin/js-harness.mjs'];
+const FEATURE_DOCUMENT = 'odd/tasks/session-channel.md';
+// The shares the rule left behind: the board's limit mark, and the pause before his word of 2026-10-11.
+const SHARES_LEFT = [73, 85];
+
+/** The lines of `text` that write one of `values` as a share (`85%`, `85 %`, `85 percent`), each with its number. */
+function sharesWritten(text, values) {
+  const written = new RegExp(`\\b(${values.join('|')})(\\s?%| percent)`);
+  return text.split('\n').flatMap((line, index) => (written.test(line) ? [`${index + 1}: ${line.trim()}`] : []));
+}
+
+/** A feature document with the lines of its `## Progress` section emptied, so line numbers stay true. */
+function outsideProgress(text) {
+  let inProgress = false;
+  return text.split('\n').map((line) => {
+    if (/^## /.test(line)) inProgress = /^## Progress\s*$/.test(line);
+    return inProgress ? '' : line;
+  }).join('\n');
+}
+
+const contextTexts = () => [
+  ...CONTEXT_SOURCES.map((file) => [file, fs.readFileSync(path.join(REPO, file), 'utf8')]),
+  [`${FEATURE_DOCUMENT} outside its Progress`, outsideProgress(fs.readFileSync(path.join(REPO, FEATURE_DOCUMENT), 'utf8'))],
+];
+
+test('no text of this feature writes a share the context rule left behind, and the pause is none of them', () => {
+  assert.ok(!SHARES_LEFT.includes(DEFAULT_CONTEXT_PAUSE_PERCENT), `the pause is still ${DEFAULT_CONTEXT_PAUSE_PERCENT}`);
+  assert.deepEqual(outsideProgress('# T\n## Progress\n- at 85% then\n## Next step\nat 85% now\n').split('\n'), ['# T', '', '', '## Next step', 'at 85% now', '']);
+  assert.deepEqual(sharesWritten('a\nat 85% it pauses\nthe 73 % mark\n85 percent\n185% and 850 and 85 alone\n', SHARES_LEFT), ['2: at 85% it pauses', '3: the 73 % mark', '4: 85 percent']);
+  for (const [name, text] of contextTexts()) assert.deepEqual(sharesWritten(text, SHARES_LEFT), [], name);
+});
+
+test('the pause and the compaction are written once each, in their constants: no other text of this feature states either share', () => {
+  const library = fs.readFileSync(path.join(REPO, 'bin/lib/sessions.mjs'), 'utf8');
+  for (const name of ['DEFAULT_CONTEXT_PAUSE_PERCENT', 'DEFAULT_CONTEXT_COMPACTION_PERCENT']) {
+    assert.equal(library.match(new RegExp(`^export const ${name} = \\d+;`, 'gm'))?.length, 1, `${name} is defined once, as a number`);
+  }
+  for (const [name, text] of contextTexts()) assert.deepEqual(sharesWritten(text, [DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_COMPACTION_PERCENT]), [], name);
+});
+
+// The watch wakes once when a session reaches the pause, and its line carries the same figures.
+test('--watch returns when a session reaches the context pause, with the room left and the last task', withMachine(async (machine) => {
+  writeSessions(machine);
+  // Below the pause at the first look, with one task done; at it after the second task.
+  writeAt(path.join(machine.projectDir, `${SESSION_C}.jsonl`), jsonl({ type: 'custom-title', customTitle: 'JH 3 · the context', sessionId: SESSION_C }, prompt('first task', 500), spoke(HELD - 60000, 400)), 400);
+  const { code, lines } = await watch(machine, ['--interval', '5', '--timeout', '60'], [() => writeWaitingSession(machine)]);
+  assert.equal(code, 0);
+  assert.ok(lines.includes(`  session cccccccc "JH 3 · the context" reached the context pause, ${PAUSE_SAID}: ${HELD_SAID}, ${ROOM_SAID}, last task 60k, which no longer fits`), lines.join('\n'));
 }));
 
 // T5 B: each worktree's feature plans.
@@ -1669,6 +1822,47 @@ test('--quote warns on stderr when the user\'s entry is only pasted content, and
   assert.deepEqual(stdout.split('\n').slice(1), ['<pasted_content id="be4a">', 'Sos JH 5.', 'Leé el documento.', '</pasted_content id="be4a">']);
   assert.equal(stderr, 'js-harness sessions: line 3 is only pasted content: nothing was typed with it, and a paste alone is not his word');
   assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stderr, '');
+}));
+
+// T4d: what he sends while a session works is not a `user` entry: the host queues it and writes an
+// attachment of type `queued_command` (the shape and its counts are with the tests of `quoteOf`).
+const queuedCommand = (seconds, attachment = {}) => ({
+  type: 'attachment',
+  ...entry(seconds),
+  attachment: { type: 'queued_command', prompt: 'made up while it worked', source_uuid: 's1', delivery_id: 'd1', commandMode: 'prompt', origin: { kind: 'human' }, timestamp: before(seconds).toISOString(), humanTurn: true, ...attachment },
+});
+
+test('--quote takes a message the user sent while the session worked, and says that it was sent then', withMachine(async (machine) => {
+  const paste = '<pasted_content id="be4a">\nSos JH 5.\n</pasted_content id="be4a">';
+  const file = transcriptOf(machine, SESSION_A);
+  writeAt(file, jsonl(
+    { type: 'custom-title', customTitle: ORCHESTRATOR, sessionId: SESSION_A },
+    prompt('first', 100),
+    queuedCommand(90, { prompt: 'Sí, y además revisá el otro' }),
+    queuedCommand(80, { prompt: paste }),
+    queuedCommand(70, { origin: { kind: 'peer', name: 'JH 2 · made up', from: 'local_made-up', body: 'made up' }, isMeta: true, humanTurn: undefined }),
+    queuedCommand(60, { commandMode: 'task-notification', origin: { kind: 'task-notification' }, humanTurn: undefined }),
+    queuedCommand(50, { humanTurn: undefined }),
+    { type: 'attachment', ...entry(40), attachment: { type: 'hook_success', stdout: 'made up' } },
+    reply('Anotado.', 30),
+  ), 30);
+  const his = await runSessions(machine, ['--quote', 'aaaaaaaa', '3']);
+  assert.deepEqual([his.code, his.stdout.split('\n'), his.stderr], [0, [`${file}, line 3, ${before(90).toISOString()}, sent by the user while the session was working (the host queued it):`, 'Sí, y además revisá el otro'], '']);
+  // A typed entry is said as before, and a queued paste alone is warned of like any other.
+  assert.equal((await runSessions(machine, ['--quote', 'aaaaaaaa', '2'])).stdout.split('\n')[0], `${file}, line 2, ${before(100).toISOString()}, sent by the user:`);
+  const pasted = await runSessions(machine, ['--quote', 'aaaaaaaa', '4']);
+  assert.deepEqual([pasted.code, pasted.stdout.split('\n').length, pasted.stderr], [0, 4, 'js-harness sessions: line 4 is only pasted content: nothing was typed with it, and a paste alone is not his word']);
+  // What the host queues for anyone else, and every other attachment, stays "not his words", each named.
+  const not = (line, what) => [1, '', `js-harness sessions: not the user's words: line ${line} of ${file} is ${what}`];
+  const said = async (line) => {
+    const { code, stdout, stderr } = await runSessions(machine, ['--quote', 'aaaaaaaa', String(line)]);
+    return [code, stdout, stderr];
+  };
+  assert.deepEqual(await said(5), not(5, 'a queued message from another session ("JH 2 · made up")'));
+  assert.deepEqual(await said(6), not(6, 'a queued task notification'));
+  assert.deepEqual(await said(7), not(7, 'a queued message of origin "human" that the host does not mark as a turn of the person'));
+  assert.deepEqual(await said(8), not(8, 'an attachment of type "hook_success": the host wrote it, not the person'));
+  assert.match((await runSessions(machine, ['--nope'])).stderr, /a message the user sent while the session worked \(the host queues it\) is his too, and is said so/, 'the usage says so');
 }));
 
 test('--quote exits 2 when it cannot look: a transcript it cannot read, a start of an id that names two, a folder it cannot list', withMachine(async (machine) => {
