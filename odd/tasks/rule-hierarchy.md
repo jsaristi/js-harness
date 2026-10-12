@@ -2030,7 +2030,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     the scopes and the two session rows in `bin/lib/rules-data.mjs` with their sources (his
     line 990 read again), renders the list, and commits through the gate; then both reviews,
     Codex with `--base 47484bd`.
-  - Piece A is written and NOT yet read or committed: the writer's changes stand uncommitted
+  - Piece A is written and not committed. Read so far: the diff of `bin/lib/rules.mjs`, taken
+    as it is (the two constants the editor marked are read by the faults). Still to read:
+    `bin/lib/rules-check.mjs` and the two test files. The writer's changes stand uncommitted
     in the worktree, in the four files (207,285 tokens; by its report, each alone:
     `bin/lib/rules.test.mjs` 102 pass, `bin/lib/rules-check.test.mjs` 55, `bin/rules.test.mjs`
     17, and `rules check` passes with the hash unmoved). Its calls where the specification was
