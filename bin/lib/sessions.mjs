@@ -495,8 +495,9 @@ export function sessionFacts(
     if (!repeated) {
       const compaction = compactionOf(entry);
       // The newest by its time, not by its place: a resumed session writes an older boundary again after the
-      // newer one, and an equal time keeps the later entry, as `measured` does.
-      if (compaction && (lastCompaction === null || (compaction.at ?? '') >= (lastCompaction.at ?? ''))) {
+      // newer one, and an equal time keeps the later entry, as `measured` does. A side chain's is a sub-agent's
+      // own, as `boundariesOf` reads it: the session was not compacted by it.
+      if (compaction && !entry.isSidechain && (lastCompaction === null || (compaction.at ?? '') >= (lastCompaction.at ?? ''))) {
         lastCompaction = { uuid: typeof entry.uuid === 'string' ? entry.uuid : null, at: compaction.at, automatic: compaction.automatic, before: compaction.before };
       }
       const sentWith = compaction ? null : contextOf(entry);

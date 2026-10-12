@@ -534,6 +534,13 @@ test('sessionFacts says whether the newest compaction was asked for by the user,
   assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), asked, spoke(6, usage(0, 400000, 0)))).lastCompaction, { uuid: 'm1', at: at(5), automatic: false, before: 412000 });
 });
 
+test('a compaction of a side chain is not the session\'s last compaction: the watch would tell of one the session did not have', () => {
+  const own = compaction(3, 'auto', 398000, 14000, { uuid: 'c1' });
+  const side = compaction(5, 'auto', 412000, 15000, { uuid: 's1', isSidechain: true });
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), side, spoke(6, usage(0, 400000, 0)))).lastCompaction, null);
+  assert.deepEqual(lib.sessionFacts(transcript(prompt('go', 1), own, side, spoke(6, usage(0, 400000, 0)))).lastCompaction, { uuid: 'c1', at: at(3), automatic: true, before: 398000 });
+});
+
 // A task, for the board, is the work one instruction started: a prompt the person sent, or a message from
 // another session. Its cost is how much the context grew from the instruction to the last reply before
 // the next one.

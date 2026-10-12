@@ -52,7 +52,7 @@ const isUnder = (folder, inner) => path.relative(folder, inner) === '' || (!path
  * worktree, whose branch changed the feature documents in `plans`. `branches` gives another branch to a
  * checkout, `failing` the commands (their first word that is not a flag) that fail, and `more` adds
  * worktrees, `{ path, branch }`, to the ones git lists. */
-function fakeGit(machine, { plans = ['odd/tasks/session-channel.md'], branches = {}, failing = [], more = [], uncommitted = false, commitTime = '2026-01-01T09:00:00+00:00', status = null } = {}) {
+function fakeGit(machine, { plans = ['odd/tasks/session-channel.md'], branches = {}, failing = [], more = [], uncommitted = false, commitTime = '2026-01-01T09:00:00+00:00', status = null, fileStatus = ' M odd/tasks/session-channel.md\n' } = {}) {
   const trees = [...more, { path: machine.worktree, branch: branches.worktree ?? 'feat/channel' }, { path: machine.root, branch: branches.root ?? 'main' }];
   const calls = [];
   const run = (command, args, { cwd } = {}) => {
@@ -68,6 +68,8 @@ function fakeGit(machine, { plans = ['odd/tasks/session-channel.md'], branches =
     if (what === 'ls-files') return said('');
     // The last commit of the file named after `--`, and the status of the worktree, which is clean unless `status` gives its text.
     if (what === 'log') return said(uncommitted ? '' : `1111111\t${commitTime}\n`);
+    // The status of one file, asked with `--` before its path: changed, unless `fileStatus` is given empty.
+    if (what === 'status' && args.includes('--')) return said(fileStatus);
     if (what === 'status') return said(status ?? `# branch.oid ${'1'.repeat(40)}\0# branch.head ${tree.branch}\0`);
     if (what === 'worktree') return said(trees.slice().reverse().map((item) => `worktree ${item.path}\nHEAD 1111111111111111111111111111111111111111\nbranch refs/heads/${item.branch}\n`).join('\n'));
     return { status: 1, stdout: '', stderr: `not faked: ${args.join(' ')}` };
@@ -762,7 +764,9 @@ test('the notify line ends the output of any session but the orchestrator, and a
   assert.equal(untitled.at(-1), NOTIFY);
 }));
 
-test('past the hook\'s own deadline once its transcript is read, the stretch, the folders, the pause and the reply are not read: the line names them, and the lines before are printed', withMachine(async (machine) => {
+test('past the hook\'s own deadline once its transcript is read, the stretch, the feature document, the folders, the pause and the reply are not read: the line names them, the lines before are printed, and no git is started', withMachine(async (machine) => {
+  // A notice of the session names its worktree: the feature document would be found there by four calls of git.
+  notified(machine);
   const transcript = path.join(machine.projectDir, `${SESSION}.jsonl`);
   transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
   const clock = { passed: false };
@@ -771,16 +775,39 @@ test('past the hook\'s own deadline once its transcript is read, the stretch, th
     if (file === transcript) clock.passed = true;
     return text;
   };
-  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { readFile, now: () => (clock.passed ? NOW + 10000 : NOW) });
+  const { code, lines, stderr, calls } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { readFile, now: () => (clock.passed ? NOW + 10000 : NOW) });
   assert.deepEqual([code, stderr], [0, '']);
   assert.deepEqual(lines, [
     FIRST,
     `Session: "${TITLE}" (the title the host gave the hook)`,
     `Opening: none stored for that title (the openings of this project are in ${openingsDir(machine.home, machine.slug)})`,
-    'Feature document: not known (no notice of this session in the channel\'s record names a worktree)',
-    'Not read before this hook\'s own deadline (9 s): the stretch of work before this compaction, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
+    'Feature document: not known (this hook\'s own deadline passed before it was looked for)',
+    'Not read before this hook\'s own deadline (9 s): the stretch of work before this compaction, the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
     NOTIFY,
   ]);
+  // Each git call is allowed two seconds, and the host gives the hook fifteen in all: none is started past the deadline.
+  assert.deepEqual(calls.filter((call) => / (branch|diff|ls-files|worktree|log|status) /.test(`${call} `)), []);
+}));
+
+test('the deadline that passes inside the search for the feature document stops it: the git calls left are not started, and the line says so', withMachine(async (machine) => {
+  notified(machine);
+  transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
+  const git = fakeGit(machine);
+  const clock = { passed: false };
+  const run = (command, args, options) => {
+    if (args[0] === 'branch') clock.passed = true;
+    return git.run(command, args, options);
+  };
+  const { code, lines, stderr, calls } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { git: { run, calls: git.calls }, now: () => (clock.passed ? NOW + 10000 : NOW) });
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines.slice(3), [
+    'Feature document: not known (this hook\'s own deadline passed while it was looked for)',
+    headOf(machine),
+    ...indented(`Compaction: asked for by the user at ${minute(3)}, holding ${K(HELD)} tokens (line 4).`, USER_LINE(1, '2')),
+    'Not read before this hook\'s own deadline (9 s): the feature document, the feature document folders, the pause\'s notice, the work in flight and the machine\'s gate, this session\'s last reply.',
+    NOTIFY,
+  ]);
+  assert.deepEqual(calls.filter((call) => / (diff|ls-files|worktree|log|status) /.test(`${call} `)), []);
 }));
 
 test('past the deadline after the stretch is read, its lines are printed, and the pause and the reply are named as not read', withMachine(async (machine) => {
@@ -788,8 +815,9 @@ test('past the deadline after the stretch is read, its lines are printed, and th
   transcriptWith(machine, [asked(1, 'the stretch'), answered(2, 'the answer'), askedBoundary(3)]);
   const git = fakeGit(machine);
   const clock = { passed: false };
+  // It passes in the last git call of the search for the feature document, which was started in time.
   const run = (command, args, options) => {
-    if (args[0] === 'branch') clock.passed = true;
+    if (args.includes('ls-files')) clock.passed = true;
     return git.run(command, args, options);
   };
   const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: TITLE }), { git: { run, calls: git.calls }, now: () => (clock.passed ? NOW + 10000 : NOW) });
@@ -841,6 +869,18 @@ test('a transcript the input names under another project folder of the same Clau
   const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: other }), { readFile: recording(read) });
   assert.ok(read.includes(other), 'the other folder\'s transcript is read');
   assert.ok(lines.includes(`Feature document: ${edited}  (branch feat/channel, the last feature document this session wrote, by its transcript)`));
+}));
+
+test('for a transcript filed under another project the block writes no quote command: sessions --quote reads only this project\'s folder, and would answer for another file or for none', withMachine(async (machine) => {
+  notified(machine);
+  const other = path.join(machine.claudeHome, 'projects', 'other-project', `${SESSION}.jsonl`);
+  fs.mkdirSync(path.dirname(other), { recursive: true });
+  fs.writeFileSync(other, [{ type: 'custom-title', customTitle: TITLE, sessionId: SESSION }, asked(1, 'the stretch'), messageOf(2, 'JH ORQ · made up'), answered(3, 'the answer')].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: TITLE, transcript_path: other }));
+  assert.ok(lines.includes(`Before this compaction, read from ${other}:`));
+  assert.ok(lines.includes(`  The user wrote at 1 lines of it, the last at 2: no command reads them, since js-harness sessions --quote reads only the transcripts of ${machine.projectDir} and this one is filed under another project; read them in the file itself.`), lines.join('\n'));
+  assert.ok(lines.includes('  Other sessions wrote at 1 lines, the last at 3 (from "JH ORQ · made up" ×1).'), lines.join('\n'));
+  assert.equal(lines.some((line) => line.includes('--quote ' + SESSION)), false);
 }));
 
 test('a transcript the input names outside the Claude home, or in its projects folder under another session\'s name, or in a look-alike folder, is not read', withMachine(async (machine) => {
@@ -1019,6 +1059,11 @@ test('the state line says what the pause\'s notice of the stretch says of the ti
   const written = `  State: ${document} was last written at 2026-01-01T11:48:00.000Z (12m ago)`;
   // Committed before the notice, and written after it: what is written is not committed.
   assert.equal(await stateOf(fakeGit(machine)), `${written} and last committed at 2026-01-01T09:00:00.000Z (1111111). It was written after the pause's notice and that is not committed.`);
+  // Its time is after the notice and git says it holds what its commit holds (a checkout or a restore gives a file a new
+  // time): the state is the commit's, from before the notice, and nothing is "not committed".
+  assert.equal(await stateOf(fakeGit(machine, { fileStatus: '' })), `${written} and last committed at 2026-01-01T09:00:00.000Z (1111111). It holds what that commit holds, from before the pause's notice of ${minute(2)}: what it holds may be older than the work, so say so in your next reply to the user.`);
+  // A git that cannot say whether the file differs from its commit: not known, and never "not committed".
+  assert.equal(await stateOf(fakeGit(machine, { failing: ['status'] })), `${written} and last committed at 2026-01-01T09:00:00.000Z (1111111). It was written after the pause's notice, and whether that is committed is not read.`);
   // Committed after the notice too.
   assert.equal(await stateOf(fakeGit(machine, { commitTime: '2026-01-01T10:30:00+00:00' })), `${written} and last committed at 2026-01-01T10:30:00.000Z (1111111). Both are after the pause's notice.`);
   // In no commit yet, and no commit that git can say of.

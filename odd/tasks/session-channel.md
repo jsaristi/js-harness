@@ -1780,6 +1780,21 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   input tokens and the rate gives a commit of 400 changed lines 480,000. It is not asked of
   him: Codex reviews the slice once, from `8f4e010`, when the fixes and the command are in,
   where the rate covers the plan; told to the lead.
+- 2026-10-12 12:25 to 12:57 local, the final turn of the slice, an app restart inside it, and
+  a compaction of the host. The turn (Codex on `f117eff..1e09a64`, the merge of `main`, the
+  journey) was asked of the gate at 12:25:12, three gates ahead. At 12:32:42 the desktop app
+  restarted (the lead's reading, a claim): every session's process ended, the background
+  task of the turn was reported as stopped, and the turn itself went on as an orphan (node
+  pid 58848, checked alive in the process list at 12:43 and 12:46), took the gate at 12:40:07
+  and ended at 12:49:56 with exit 7 (the gate log's entry: 588 s). The host compacted this
+  session by itself on the way back, at about 55 percent of its window and with no block
+  given: the state was in this document and in the scratchpad, the lead had its line at
+  12:47, and the resume was read from "Next step". Nothing was written in the worktree while
+  the orphan ran. What the turn gave is under "Next step", 1c. A CASE FOR T6b, from the
+  lead and seen here: a turn started before an app restart sends no notice to the session
+  that asked for it; its own log and the gate log are the record, and a session that comes
+  back looks at the process list and at those two before it starts anything in the same
+  worktree. Codex for the slice so far: 3,276,445 input tokens over 3,456 changed lines.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1845,8 +1860,10 @@ summary.
    for scoped code; a writer never commits and never waits for the gate), each task closed by
    a commit through `node bin/js-harness.mjs gate --wait 180 -- git commit`, gentle-ai on
    the commit, and Codex inside the rate (the larger of 300,000 input tokens a review and
-   1,200 a changed line, by the plan's figure; over it, or a second run after a fall, waits
-   for him: one line to the lead and the next task). The design is point 14.
+   1,200 a changed line, by the plan's figure, with a margin of 5 percent since his answer of
+   2026-10-12, "listo la A", the lead's transcript `65318fd5`, line 3800, read with
+   `sessions --quote`, exit 0; over it, or a second run after a fall, waits for him: one line
+   to the lead and the next task). The design is point 14.
    a. Done: `main` at `5f011cc` merged into this branch as `8f4e010` and gated (`PASS tests
       npm run test passed`, 2026-10-12 04:13). `main` moved to `7411fe6` since (pull request
       69); it is taken with the merge before the pull request, not before.
@@ -1959,6 +1976,45 @@ summary.
       `f117eff..` the head (plan first, inside the rate), the merge of `main` (`3088960` at
       10:41 by the lead's line; read `docs/RULES.md` first) gated with the journey in the
       same turn, the push, pull request 5, one line to the lead.
+      That commit is `1e09a64` (gate PASS 12:22; gentle-ai: 1,064 lines, approved, one
+      warning, that the journey's new step was not proved by a run, which the journey's run
+      answers, and two suggestions for the next code of the hook: a test of a
+      `transcript_path` with no valid session id, and a Claude home spelled another way).
+      The final turn (12:25 to 12:50, Progress): Codex on `f117eff..1e09a64`, planned at
+      about 1,470,000 input tokens for 2,046 changed lines, inside the rate (2,455,200):
+      5 parts, 2,350,752 input tokens (2,007,168 cached) in 583 s, recorded. Three parts
+      correct, and four findings in the other two, each P2, each fixed test first in the
+      commit that holds this text, by the parent inline (`node --test`: `bin/resume.test.mjs`
+      66 pass, `bin/lib/sessions.test.mjs` 248):
+      - A compaction of a side chain was taken as the session's last one, so the watch would
+        tell of a compaction the session did not have: `lastCompaction` skips a side chain,
+        as `boundariesOf` does. Not changed, and older than this slice: the compaction point
+        a session "measured" and its context after a boundary are read from a side chain's
+        boundary too; it goes with the next code of the board.
+      - The hook could pass the host's fifteen seconds: with the transcript read at the
+        deadline it still searched for the feature document, four calls of git of two
+        seconds each. No git is started past the deadline now (the hook's `run` refuses it
+        and says why), the search is checked before it starts and named as not read, and a
+        search the deadline cut short says so and not "git does not say".
+      - The command the block prints for the user's lines named the session by its id, and
+        `sessions --quote` reads only the project's own sessions folder: for a transcript
+        filed under another project (a session opened in another folder) it would answer for
+        another file or for none. For such a transcript the line prints no command and says
+        why. The command itself is not widened here: which folders it may quote from is the
+        rule of point 7.
+      - "Written after the pause's notice and that is not committed" was said by two times
+        alone, and a checkout or a restore gives a new time to a file that holds exactly its
+        commit. The line asks git for that file's status first: changed, it says what it
+        said; unchanged, that the file holds what its commit holds, from before the notice,
+        and may be older than the work; not read, that it is not known.
+      The merge of `main` (`3088960`) did not apply clean in that turn and was undone:
+      `main` added the command `rules` to the table of `bin/js-harness.mjs` that this
+      branch made lazy. Tried in a throwaway worktree with the fixes over it (removed after):
+      this branch's side of both conflicts and a loader for `rules` (the script
+      `resolve-dispatcher.cjs` of the scratchpad, which refuses any other conflict); there
+      `node --test` of the dispatcher, the hook, the sessions, pause and practice libraries
+      and the three rules test files pass, and `js-harness rules check` says `PASS  rules
+      16 rules`. The journey did not run: it runs on the merged tree, in the next turn.
       Part e is written in the side worktree and held from that pull request (snapshot
       `snap-e` in the scratchpad; it goes to a branch of its own, `feat/session-compaction-
       install`, cut from this one's head, pushed and with no pull request until he answers

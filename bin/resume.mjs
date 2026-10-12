@@ -61,6 +61,7 @@ const REPLY_TAIL = 300;
 // The steps the hook reads after the stretch, as the line that says what it left unread names them.
 const STEP = {
   stretch: 'the stretch of work before this compaction',
+  feature: 'the feature document',
   folders: 'the feature document folders',
   pause: 'the pause\'s notice',
   written: 'when the state was last written and committed',
@@ -68,6 +69,9 @@ const STEP = {
   flight: 'the work in flight and the machine\'s gate',
   reply: 'this session\'s last reply',
 };
+
+// Why a git call was not started, and why a search was cut short: the words of the hook's own deadline.
+const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
@@ -453,10 +457,22 @@ function commitOf(run, worktree, file) {
   return { hash, at: Number.isNaN(time) ? given : new Date(time).toISOString() };
 }
 
+/** Whether `file` holds more than its last commit in `worktree`, by git's status of that one path: `true`, `false`, or
+ * `null` when git could not say. A file's time does not tell: a checkout or a restore gives a new time to a file that
+ * holds exactly what its commit holds. */
+function changedOf(run, worktree, file) {
+  const relative = path.relative(worktree, file).split(path.sep).join('/');
+  const asked = run('git', gitIn(worktree, ['status', '--porcelain', '--', relative]), { cwd: worktree });
+  if (asked.error || asked.status !== 0) return null;
+  return String(asked.stdout ?? '').trim() !== '';
+}
+
 /** When the state file was last written, and for a file in a worktree when it was last committed, as the line `State:` says
  * it, with what the pause's notice says of those times: `noticedAt`, the ISO time of the notice in the stretch, or `null`.
  * `worktree` is `null` for the relief file, which is in no repository and has no commit. A notice written before both
- * times, or the file, says that what the file holds may be older than the work. */
+ * times, or the file, says that what the file holds may be older than the work. A file written after the notice and
+ * committed before it is "not committed" only when git says it differs from that commit (`changedOf`): one that holds
+ * what the commit holds is as old as the commit, whatever its time. */
 function stateLineOf(file, { run, stat, now, worktree, noticedAt }) {
   const written = stat(file).mtimeMs;
   const when = `was last written at ${new Date(written).toISOString()} (${ago(written, now())})`;
@@ -475,7 +491,11 @@ function stateLineOf(file, { run, stat, now, worktree, noticedAt }) {
   // A commit time git gave in a form that does not parse proves nothing either way.
   const committed = Date.parse(commit.at);
   if (Number.isNaN(committed)) return `${line} It was written after the pause's notice, and whether that is committed is not read.`;
-  return committed >= noticed ? `${line} Both are after the pause's notice.` : `${line} It was written after the pause's notice and that is not committed.`;
+  if (committed >= noticed) return `${line} Both are after the pause's notice.`;
+  const changed = changedOf(run, worktree, file);
+  if (changed === null) return `${line} It was written after the pause's notice, and whether that is committed is not read.`;
+  if (changed) return `${line} It was written after the pause's notice and that is not committed.`;
+  return `${line} It holds what that commit holds, from before the pause's notice of ${noticedAt}: what it holds may be older than the work, so say so in your next reply to the user.`;
 }
 
 // How many of a worktree's uncommitted paths the line names; the rest are a count and "…".
@@ -544,23 +564,27 @@ function stepLines(step, work) {
 }
 
 /** The lines of the stretch the user wrote, `person` (`{ line, at }`): how many, the last few line numbers, oldest first, and
- * the command that reads each of them, for `target` (the session's id). */
-function userSaid(person, target) {
+ * the command that reads each of them, for `target` (the session's id). `target` is `null` for a transcript that is not in
+ * `projectDir`, the one folder `sessions --quote` reads: by the id it would answer for another file of that folder, or for
+ * none, so no command is written and the line says why. */
+function userSaid(person, target, projectDir) {
   if (person.length === 0) return 'The user wrote nothing in this stretch.';
   const last = person.slice(-LISTED).map((item) => item.line);
+  if (target === null) return `The user wrote at ${person.length} lines of it, the last at ${last.join(', ')}: no command reads them, since js-harness sessions --quote reads only the transcripts of ${projectDir} and this one is filed under another project; read them in the file itself.`;
   return `The user wrote at ${person.length} lines of it, the last at ${last.join(', ')}: read each with  js-harness sessions --quote ${target} <line>`;
 }
 
 /** The messages of other sessions in the stretch, `sessions` (`{ line, at, name }`): how many, the last few line numbers,
  * and the names of the sessions with their counts, in the order they were first written; a message with no name is
- * `no name`. Null when there is none, and no line is said for it. */
-function othersSaid(sessions) {
+ * `no name`. Null when there is none, and no line is said for it. The command of the user's line is named only when
+ * there is one (`target`, as `userSaid` takes it). */
+function othersSaid(sessions, target) {
   if (sessions.length === 0) return null;
   const counts = new Map();
   for (const { name } of sessions) counts.set(name ?? null, (counts.get(name ?? null) ?? 0) + 1);
   const names = [...counts].map(([name, count]) => `${name === null ? 'no name' : printedTitle(name)} ×${count}`).join(', ');
   const last = sessions.slice(-LISTED).map((item) => item.line);
-  return `Other sessions wrote at ${sessions.length} lines, the last at ${last.join(', ')} (from ${names}): the same command says whose each is.`;
+  return `Other sessions wrote at ${sessions.length} lines, the last at ${last.join(', ')} (from ${names})${target === null ? '.' : ': the same command says whose each is.'}`;
 }
 
 /** This session's last reply with text in the stretch, in words: its line, its time, and its last characters made one line,
@@ -587,7 +611,7 @@ function replySaid(facts, transcript, { late, left }) {
 /** The lines of the stretch before the compaction, read from `file`, the transcript the session was compacted in, with
  * the head line that says so. `stretch` is `stretchOf`'s: a stretch that could not be read says so in its place. A step
  * the deadline passed is not read and is named in `left`; a step that throws is said as not read. */
-function beforeLines(file, stretch, { transcript, sessionId, target, home, tmpdir, late, left, subject, run, stat, now, gate }) {
+function beforeLines(file, stretch, { transcript, sessionId, target, projectDir, home, tmpdir, late, left, subject, run, stat, now, gate }) {
   const head = `Before this compaction, read from ${file}:`;
   if (stretch.failed !== undefined) return [head, `  The stretch of work before this compaction: not read (${stretch.failed})`];
   const { facts } = stretch;
@@ -617,8 +641,8 @@ function beforeLines(file, stretch, { transcript, sessionId, target, home, tmpdi
     // holds the work after the compaction.
     if (late()) left.push(STEP.flight);
     else lines.push(...stepLines('The work in flight', () => flightLinesOf(transcript, subject?.worktree ?? null, { gate, home })));
-    lines.push(userSaid(facts.person, target));
-    const others = othersSaid(facts.sessions);
+    lines.push(userSaid(facts.person, target, projectDir));
+    const others = othersSaid(facts.sessions, target);
     if (others !== null) lines.push(others);
     const reply = replySaid(facts, transcript, { late, left });
     if (reply !== null) lines.push(reply);
@@ -630,11 +654,20 @@ function beforeLines(file, stretch, { transcript, sessionId, target, home, tmpdi
 
 /** The lines the hook prints for the hook input `input`, or none when it is not for it to speak: an input
  * that is not a compaction's, a sub-agent's, or a project that did not opt in. */
-function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, stat, now, late, isFile, gate }) {
+function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, readdir, stat, now, late, isFile, gate }) {
   if (!isObject(input) || input.source !== 'compact') return [];
   // A sub-agent's start is not the session's: the hook speaks to the session, not to a sub-agent inside it.
   if (typeof input.agent_id === 'string' && input.agent_id !== '') return [];
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
+  // No git is started once the hook's own deadline has passed: each call is allowed its own time limit, and what the
+  // host allows is for the whole hook, whose lines are lost when it is passed. A call that is not started reads as one
+  // git could not make, with why, and `refused` tells a search made of several calls that it was cut short.
+  const guard = { refused: false };
+  const run = (command, args, options) => {
+    if (!late()) return git(command, args, options);
+    guard.refused = true;
+    return { error: new Error(DEADLINE_PASSED), status: null, stdout: '', stderr: '' };
+  };
   // The opt-in comes first and costs one question to git: elsewhere nothing more is looked at.
   if (!isFile(path.join(checkoutOf(run, cwd), 'harness.json'))) return [];
 
@@ -676,6 +709,10 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
     const relief = reliefPath(harnessHome, slug);
     subject = { file: relief, worktree: null };
     lines.push(...reliefLinesOf(relief, { readFile, stat, now }));
+  } else if (late()) {
+    // The search costs up to four calls of git: past the deadline it is not started, and neither are the folders.
+    left.push(STEP.feature, STEP.folders);
+    lines.push(`Feature document: not known (${DEADLINE_PASSED} before it was looked for)`);
   } else {
     // What the session wrote last is the best word on where it works; the notice and its folders are asked only without it.
     const wrote = writtenOf(stretch?.facts?.wrote ?? null, { run, isFile });
@@ -683,6 +720,10 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
     if (wrote !== null) {
       subject = { file: wrote.path, worktree: wrote.worktree };
       lines.push(`Feature document: ${wrote.path}  (${wrote.branch === null ? 'branch not known' : `branch ${wrote.branch}`}, the last feature document this session wrote, by its transcript)`, `Read "Next step" in that document, ${TRUST}`);
+    } else if (feature.unknown !== undefined && guard.refused) {
+      // The deadline passed between two of the search's calls: what git "did not say" is that it was not asked.
+      left.push(STEP.feature, STEP.folders);
+      lines.push(`Feature document: not known (${DEADLINE_PASSED} while it was looked for)`);
     } else if (feature.unknown !== undefined) {
       lines.push(`Feature document: not known (${feature.unknown})`);
       if (late()) left.push(STEP.folders);
@@ -705,9 +746,11 @@ function resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
   if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
   if (transcript !== null && stretch !== null) {
-    // The session is named by its id, as `sessions --quote` takes it: a transcript is read only when the hook has one.
+    // The session is named by its id, as `sessions --quote` takes it, when its transcript is in the project's sessions
+    // folder, the one that command reads; a transcript is read only when the hook has one.
     const file = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
-    lines.push(...beforeLines(file, stretch, { transcript, sessionId, target: sessionId, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
+    const quoted = path.relative(projectDir, file) === path.basename(file);
+    lines.push(...beforeLines(file, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
