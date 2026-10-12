@@ -188,6 +188,10 @@ A session ran a command it did not know, to read its help, and the command acted
 - Seen: 2026-10-10 — relief file, line 54 — `claude remote-control --help` printed nothing and hung
   120 s; odd/tasks/session-board.md:1335-1339 calls it the same mistake, a day after the rule was
   written
+- Seen: 2026-10-12 — relief file, line 349 — the lead ran `install --help` to read the help and it
+  installed four files and a hook entry on his machine
+- Seen: 2026-10-12 — relief file, line 409 — JH 8 ran `check --help` and it started a gate, which
+  went to wait and was stopped before it ran anything (claimed)
 - Control: owed — odd/tasks/rule-hierarchy.md — "Every command that writes outside the repository
   refuses a flag it does not know"
 
@@ -266,6 +270,15 @@ machine for nothing.
 - Class: machine
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
+
+### documents-commit-skips-suite
+A commit of declared documents alone runs no sensor, and the suite reads those documents: such a
+commit can break a test, pass its own gate, and fail the next gate with code in any session.
+- Class: rule-not-acting
+- Seen: 2026-10-12 — relief file, line 407 — found by reading and not by a gate that broke (JH 8,
+  claimed): the skip is `bin/check.mjs:279-287`, and `bin/rules.test.mjs:480` runs `rules check`
+  on the real `docs/RULES.md` and `docs/rule-sources.json` (`bin/rules.mjs:24-25`); until the gate
+  runs the readers of a staged document, `rules check` is run by hand after such a commit
 
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
@@ -370,6 +383,11 @@ Hours written in the relief file were not read from a clock.
 - Aka: failure 18 (odd/tasks/rule-hierarchy.md); unnumbered in relief file, line 202
 - Seen: 2026-10-10 — relief file, line 96 — a roster line said 04:40 and was written about 04:29
 - Seen: 2026-10-10 — relief file, line 172 — seven hours in lines 166, 169 and 171 were guessed
+- Seen: 2026-10-12 — relief file, line 407 — three messages of the lead carried hours it guessed
+  (13:02, 13:09, 13:10 for 13:00 to 13:06); the control stamps a relief line, not a message
+- Seen: 2026-10-12 — relief file, line 436 — a message of JH 7 stamped 14:58 was sent at 14:53;
+  a second one the same day said 16:47 for 16:45 (odd/tasks/rule-hierarchy.md, Progress of that
+  day)
 - Control: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
   of the clock, and says the command wrote it" — since 2026-10-11
 
@@ -403,6 +421,16 @@ loads it in lines under the load row"); that row tells of it and stops nothing.
 - Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, `## Progress`, the entry of the second part of
   T16b — pid 59656 of the session of this feature spun one processor from 01:48 to 08:53; the gate
   of 07:50 named it and the session reported it without looking at whose it was
+
+### linux-probe-misnames-process
+On Linux the probe of a port named the process that listened by `ps -o comm=`, which answered the
+thread's name, so a listener was left alone as "not engram".
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — run 38296748258 of the suite on GitHub's Linux
+  (claimed; classified in odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, lines 1037-1039):
+  `evals/ports.mjs:168-169` got `MainThread` for a Node child; whether the real engram binary is
+  named right is not known. It can be reproduced only on Linux: a run there in which the probe
+  names a Node listener and the engram binary by what they are would prove a fix
 
 ### lock-folder-left
 The gate lock left an empty folder under his home after every run, and `uninstall` did not remove
@@ -533,6 +561,14 @@ stood.
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
 
+### refusal-in-system-words
+A path helper let a system error through, so a run was refused in the system's words and not in
+the harness's.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 425 — `evals/paths.mjs:6` lets `ENOTDIR` through for a
+  path below a file (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144, line 1040);
+  the run is still refused
+
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
 without that review, and the choice went to him.
@@ -595,6 +631,15 @@ prompt, or the name of a feature it no longer did.
 - Seen: 2026-10-11 — relief file, line 218 — a phone-opened session's transcript carries no title,
   so its roster row has no role (claimed)
 
+### short-name-judged-outside
+A path spelled with a Windows 8.3 short name was judged outside the repository, so a hook was not
+written.
+- Class: tool
+- Seen: 2026-10-12 — relief file, line 427 — on GitHub's Windows the runner's TEMP is
+  `C:\Users\RUNNER~1\...`; `isWithinBase` (`bin/lib/project.mjs:186`) folds case and not short
+  names (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at 6a9f605); on the safe side:
+  nothing is written outside
+
 ### stacked-pr-base-order
 A stacked pull request had its base changed after the one under it was merged; GitHub reported a
 conflict git did not reproduce and the merge was refused.
@@ -652,6 +697,14 @@ disk.
 - Aka: failure 13 (odd/tasks/rule-hierarchy.md; relief file, line 143)
 - Seen: 2026-10-10 — relief file, line 101 — 2,357 `js-harness-*` folders dated 10-01 to 10-10,
   counted by the orchestrator; 2,358 at line 105; also odd/tasks/gate-lock.md:316-317
+
+### test-skipped-here-never-run
+A test that this machine skips is run by no gate, so its expectation went stale and stood red with
+nothing to say so.
+- Class: unseen-state
+- Seen: 2026-10-12 — relief file, line 425 — `bin/lib/project.test.mjs:1936` expects a reason that
+  changed at ae471e7; Windows skips the test, and the first run on Linux (run 38296748258) showed
+  it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144)
 
 ### test-wrote-real-home
 A test that forgot `--home` wrote into the real home.

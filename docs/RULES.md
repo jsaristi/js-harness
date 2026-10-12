@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `950f2423e296`. In force: 16 (11 of Sebastián, 5 of the project). Retired: 0.
+Hash `1ccb54f9013d`. In force: 17 (12 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -12,6 +12,12 @@ The most input tokens a Codex review may cost however small its commit: 300,000 
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+
+### codex-review-margin
+How far over its allowance the plan of a Codex review may read and still count as inside it: 5 percent of the allowance.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-12. Row: reports. Source: his words of 2026-10-12, checked by a session on 2026-10-12.
 
 ### codex-review-rate
 The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
@@ -38,19 +44,19 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 ### session-effort
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
 ### session-model
 The model a session runs on: claude-opus-5-5.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model

@@ -242,6 +242,29 @@ test('entries with no version, a synthetic model, no time or too old are skipped
   assert.deepEqual(out.otherModels, []);
 });
 
+test('a time with no zone, a day alone or a text with a named zone is skipped as noTime, and a time with a zone is kept', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T10:00:00', file: 'no-zone.jsonl' }),
+    launch({ at: '2026-10-12', file: 'day-only.jsonl' }),
+    launch({ at: 'Oct 12 2026 10:00 GMT', file: 'named-zone.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00Z', file: 'z.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00.123Z', file: 'fraction.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00+02:00', file: 'offset.jsonl' }),
+  ]);
+  assert.equal(out.skipped.noTime, 3);
+  assert.equal(out.read.launches, 3);
+});
+
+test('an offset without its colon is skipped as noTime, and an offset with its colon is kept', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T10:00:00+0200', file: 'offset-no-colon.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00+02:00', file: 'offset-colon.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00Z', file: 'z.jsonl' }),
+  ]);
+  assert.equal(out.skipped.noTime, 1);
+  assert.equal(out.read.launches, 2);
+});
+
 test('an entry that is not an object is counted under no version and does not throw', () => {
   const out = run([rule()], [null, 5, 'x'], [undefined]);
   assert.equal(out.skipped.noVersion, 4);
@@ -369,6 +392,9 @@ test('with no launches and no sessions every rule has no engines, exit 0 and nul
     otherAliases: [],
     noModel: [],
     otherModels: [],
+    held: [],
+    heldOther: 0,
+    forLead: [],
     read: { launches: 0, sessions: 0, firstDay: null, lastDay: null },
     skipped: { noVersion: 0, synthetic: 0, noTime: 0, old: 0 },
   });
@@ -509,7 +535,7 @@ const FILES_ONE = '  files: 1 of launches, 1 of sessions';
 const NOTHING_READ = '  read: no launch and no session in the window';
 // A window in which no launch passed a declared alias proves nothing, so it is never written as a pass.
 const NOTHING_COMPARED = 'Nothing compared: no launch passed a declared alias in the window';
-const NOT_COMPARED = 'Not compared here: a rule with no alias. A Codex review holds its own model and effort at every run; what a session runs on and the effort of a sub-agent are for the check of launches, which is not built.';
+const NOT_COMPARED = 'Not compared here: the model and the effort of a Codex review, which the review holds itself at every run.';
 
 test('no records: the four head lines, then Not compared', () => {
   assert.deepEqual(appliedLines(emptyResult(), contextOf({ exists: false })), [
@@ -574,7 +600,7 @@ test('one rule with one engine that agrees: the whole array, with PASS last', ()
     '  cli 2.1.100: agrees, 1 launch, the last on 2026-10-11 (claude-haiku-5-5 x 1)',
     '',
     NOT_COMPARED,
-    'PASS  rules applied',
+    'PASS  rules applied: each short name gave its model',
   ]);
 });
 
@@ -666,7 +692,7 @@ test('two models on an engine are joined in the order given', () => {
     '  cli 2.1.100: agrees, 3 launches, the last on 2026-10-11 (claude-opus-5-0 x 1, claude-haiku-5-5 x 2)',
     '',
     NOT_COMPARED,
-    'PASS  rules applied',
+    'PASS  rules applied: each short name gave its model',
   ]);
 });
 
@@ -693,7 +719,7 @@ test('a difference is written under its engine, with 6 spaces', () => {
     '      claude-sonnet-5-5 on 2026-10-10: b.jsonl',
     '',
     NOT_COMPARED,
-    'PASS  rules applied',
+    'PASS  rules applied: each short name gave its model',
   ]);
 });
 
@@ -867,7 +893,7 @@ test('two fails of two rules: the ids are joined with and in the To the lead lin
   );
   assert.equal(lines.filter((line) => line.startsWith('FAIL  ')).length, 2);
   assert.equal(lines.at(-1), 'To the lead: the short name of haiku-rule and sonnet-rule no longer gives the declared model on the engine in use; the alias or the way of launching changes, by a reading.');
-  assert.ok(!lines.includes('PASS  rules applied'));
+  assert.ok(!lines.includes('PASS  rules applied: each short name gave its model'));
 });
 
 test('two fails of one rule: the id is written once in the To the lead line', () => {
@@ -877,7 +903,7 @@ test('two fails of one rule: the id is written once in the To the lead line', ()
   );
   assert.equal(lines.filter((line) => line.startsWith('FAIL  ')).length, 2);
   assert.equal(lines.at(-1), 'To the lead: the short name of haiku-rule no longer gives the declared model on the engine in use; the alias or the way of launching changes, by a reading.');
-  assert.ok(!lines.includes('PASS  rules applied'));
+  assert.ok(!lines.includes('PASS  rules applied: each short name gave its model'));
 });
 
 test('the fullest case: no line ends with a space, no two empty lines in a row, and none at the end', () => {
@@ -902,4 +928,444 @@ test('the fullest case: no line ends with a space, no two empty lines in a row, 
   assert.deepEqual(lines.filter((line) => line.endsWith(' ')), []);
   assert.deepEqual(lines.filter((line, i) => line === '' && lines[i - 1] === ''), []);
   assert.notEqual(lines.at(-1), '');
+});
+
+test('held: every session agrees with a model rule', () => {
+  const out = run([rule({ id: 'session-model' })], [], [
+    session(),
+    session({ at: '2026-10-10T10:00:00.000Z', file: 't.jsonl' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.deepEqual(out.held, [{
+    id: 'session-model',
+    value: 'claude-haiku-5-5',
+    since: '2026-10-01',
+    of: 'sessions',
+    field: 'model',
+    compared: 2,
+    agree: 2,
+    none: 0,
+    others: [],
+  }]);
+});
+
+test('held: a dated model id agrees, and is compared by its plain id', () => {
+  const out = run([rule({ id: 'session-model' })], [], [session({ model: 'claude-haiku-5-5-20251001' })], {
+    held: [{ id: 'session-model', of: 'sessions', field: 'model' }],
+  });
+  assert.equal(out.held[0].agree, 1);
+  assert.deepEqual(out.held[0].others, []);
+});
+
+test('held: another value is grouped by its entry point, with the last day and file of the group', () => {
+  const out = run([rule({ id: 'session-model' })], [], [
+    session(),
+    session({ entrypoint: 'claude-desktop', model: 'claude-sonnet-5-5', at: '2026-10-10T10:00:00.000Z', file: 'x.jsonl' }),
+    session({ entrypoint: 'claude-desktop', model: 'claude-sonnet-5-5', at: '2026-10-11T08:00:00.000Z', file: 'y.jsonl' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.equal(out.held[0].compared, 3);
+  assert.equal(out.held[0].agree, 1);
+  assert.deepEqual(out.held[0].others, [
+    { value: 'claude-sonnet-5-5', from: 'claude-desktop', count: 2, last: '2026-10-11', file: 'y.jsonl' },
+  ]);
+});
+
+test('held: other values are ordered by count, most first, then by value', () => {
+  const out = run([rule({ id: 'session-model' })], [], [
+    session({ model: 'claude-sonnet-5-5' }),
+    session({ model: 'claude-haiku-4-5-20251001' }),
+    session({ model: 'claude-opus-5-0', entrypoint: 'desktop' }),
+    session({ model: 'claude-opus-5-0', entrypoint: 'desktop', at: '2026-10-10T10:00:00.000Z' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.deepEqual(out.held[0].others.map((other) => [other.value, other.count]), [
+    ['claude-opus-5-0', 2],
+    ['claude-haiku-4-5', 1],
+    ['claude-sonnet-5-5', 1],
+  ]);
+});
+
+test('held: the efforts of launches are grouped by agent type, null first among equals', () => {
+  const out = run([{ id: 'subagent-effort', value: 'high', since: '2026-10-01' }], [
+    launch({ effort: 'medium', agentType: 'general-purpose', at: '2026-10-11T10:00:00.000Z', file: 'a.jsonl' }),
+    launch({ effort: 'medium', agentType: null, at: '2026-10-11T11:00:00.000Z', file: 'b.jsonl' }),
+    launch({ effort: 'low', agentType: 'explore', at: '2026-10-10T10:00:00.000Z', file: 'c.jsonl' }),
+    launch({ effort: 'low', agentType: 'explore', at: '2026-10-11T12:00:00.000Z', file: 'd.jsonl' }),
+  ], [], { held: [{ id: 'subagent-effort', of: 'launches', field: 'effort' }] });
+  assert.deepEqual(out.held[0].others, [
+    { value: 'low', from: 'explore', count: 2, last: '2026-10-11', file: 'd.jsonl' },
+    { value: 'medium', from: null, count: 1, last: '2026-10-11', file: 'b.jsonl' },
+    { value: 'medium', from: 'general-purpose', count: 1, last: '2026-10-11', file: 'a.jsonl' },
+  ]);
+});
+
+test('held: an entry with no effort, a launch or a session, is counted in none', () => {
+  const out = run([
+    { id: 'session-effort', value: 'high', since: '2026-10-01' },
+    { id: 'subagent-effort', value: 'high', since: '2026-10-01' },
+  ], [
+    launch({ effort: 'high' }),
+    launch({ effort: null }),
+    launch({ effort: '   ' }),
+  ], [
+    session({ effort: 'high' }),
+    session({ effort: '' }),
+  ], { held: [
+    { id: 'session-effort', of: 'sessions', field: 'effort' },
+    { id: 'subagent-effort', of: 'launches', field: 'effort' },
+  ] });
+  assert.deepEqual(out.held.map((item) => [item.compared, item.agree, item.none, item.others]), [
+    [2, 1, 1, []],
+    [3, 1, 2, []],
+  ]);
+});
+
+test('held: a session whose model is no text is skipped as synthetic, so no held model counts none', () => {
+  const out = run([rule({ id: 'session-model' })], [], [
+    session(),
+    session({ model: null, file: 'no-model.jsonl' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.equal(out.held[0].compared, 1);
+  assert.equal(out.held[0].agree, 1);
+  assert.equal(out.held[0].none, 0);
+  assert.equal(out.skipped.synthetic, 1);
+});
+
+test('held: an entry before since is not taken', () => {
+  const out = run([rule({ id: 'session-model', since: '2026-10-05' })], [], [
+    session({ model: 'claude-sonnet-5-5', at: '2026-10-03T10:00:00.000Z' }),
+    session(),
+  ], { days: 30, held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.equal(out.held[0].compared, 1);
+  assert.equal(out.held[0].agree, 1);
+  assert.deepEqual(out.held[0].others, []);
+});
+
+test('held: no entry at all is compared 0', () => {
+  const out = run([rule({ id: 'session-model' })], [], [], {
+    held: [{ id: 'session-model', of: 'sessions', field: 'model' }],
+  });
+  assert.deepEqual(out.held, [{
+    id: 'session-model',
+    value: 'claude-haiku-5-5',
+    since: '2026-10-01',
+    of: 'sessions',
+    field: 'model',
+    compared: 0,
+    agree: 0,
+    none: 0,
+    others: [],
+  }]);
+});
+
+test('held: an id with no rule, a rule with no text value, and a malformed item give nothing', () => {
+  const out = run([
+    rule({ id: 'session-model' }),
+    { id: 'blank', value: '  ', since: '2026-10-01' },
+  ], [], [session()], { held: [
+    { id: 'nope', of: 'sessions', field: 'model' },
+    { id: 'blank', of: 'sessions', field: 'model' },
+    null,
+    'session-model',
+    { id: 'session-model', of: 'sessions' },
+    { id: 'session-model', of: 'days', field: 'model' },
+    { id: 'session-model', of: 'sessions', field: 'model' },
+  ] });
+  assert.deepEqual(out.held.map((item) => item.id), ['session-model']);
+});
+
+test('held: a record that differs from two held rules is counted once in heldOther', () => {
+  const out = run([
+    rule({ id: 'session-model' }),
+    { id: 'session-effort', value: 'high', since: '2026-10-01' },
+  ], [], [
+    session({ model: 'claude-sonnet-5-5', effort: 'medium' }),
+    session({ effort: 'high' }),
+  ], { held: [
+    { id: 'session-model', of: 'sessions', field: 'model' },
+    { id: 'session-effort', of: 'sessions', field: 'effort' },
+  ] });
+  assert.deepEqual(out.held.map((item) => item.others.map((other) => other.count)), [[1], [1]]);
+  assert.equal(out.heldOther, 1);
+});
+
+test('held: heldOther counts every record that differs from an item, whatever its other value', () => {
+  const out = run([
+    rule({ id: 'session-model' }),
+    { id: 'subagent-effort', value: 'high', since: '2026-10-01' },
+  ], [launch({ effort: 'low' })], [
+    session({ model: 'claude-sonnet-5-5' }),
+    session({ model: 'claude-sonnet-5-5', entrypoint: 'desktop' }),
+    session({ model: 'claude-opus-5-0' }),
+  ], { held: [
+    { id: 'session-model', of: 'sessions', field: 'model' },
+    { id: 'subagent-effort', of: 'launches', field: 'effort' },
+  ] });
+  assert.equal(out.heldOther, 4);
+});
+
+test('held: forLead counts only launches that passed a declared short name', () => {
+  const out = run([rule(), { id: 'subagent-effort', value: 'high', since: '2026-10-01' }], [
+    launch({ alias: 'haiku', effort: 'low' }),
+    launch({ alias: 'haiku', effort: 'low' }),
+    launch({ alias: 'sonnet', effort: 'low' }),
+    launch({ alias: null, effort: 'low' }),
+  ], [], { held: [{ id: 'subagent-effort', of: 'launches', field: 'effort' }] });
+  assert.deepEqual(out.forLead, [{ id: 'subagent-effort', value: 'high', count: 2 }]);
+});
+
+test('held: forLead is empty when the differing launches passed no declared short name', () => {
+  const out = run([rule(), { id: 'subagent-effort', value: 'high', since: '2026-10-01' }], [
+    launch({ alias: null, effort: 'low' }),
+    launch({ alias: 'sonnet', effort: 'low' }),
+  ], [], { held: [{ id: 'subagent-effort', of: 'launches', field: 'effort' }] });
+  assert.equal(out.heldOther, 2);
+  assert.deepEqual(out.forLead, []);
+});
+
+test('held: a difference is information, so the exit is 0', () => {
+  const out = run([{ id: 'session-model', value: 'claude-haiku-5-5', since: '2026-10-01' }], [], [
+    session({ model: 'claude-opus-5-0' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.equal(out.heldOther, 1);
+  assert.equal(out.exit, 0);
+  assert.deepEqual(out.fails, []);
+});
+
+test('held: without the option, held is empty, heldOther is 0 and forLead is empty', () => {
+  const out = run([rule()], [launch()]);
+  assert.deepEqual([out.held, out.heldOther, out.forLead], [[], 0, []]);
+});
+
+test('held: the rules, the entries and the held items are not changed', () => {
+  const rules = [
+    { id: 'session-model', value: 'claude-haiku-5-5', since: '2026-10-01' },
+    { id: 'subagent-effort', value: 'high', since: '2026-10-01' },
+  ];
+  const launches = [launch({ effort: 'low' }), null];
+  const sessions = [session({ model: 'claude-opus-5-0' })];
+  const held = [
+    { id: 'session-model', of: 'sessions', field: 'model' },
+    { id: 'subagent-effort', of: 'launches', field: 'effort' },
+  ];
+  const options = { today: TODAY, days: 7, held };
+  const before = structuredClone([rules, launches, sessions, options]);
+  appliedOf(rules, launches, sessions, options);
+  assert.deepEqual([rules, launches, sessions, options], before);
+});
+
+test('held: the whole block of two rules, sessions and launches, as the spec shows it', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    held: [
+      {
+        id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort',
+        compared: 27, agree: 25, none: 0,
+        others: [{ value: 'medium', from: 'claude-desktop', count: 2, last: '2026-10-11', file: 'x.jsonl' }],
+      },
+      {
+        id: 'subagent-effort', value: 'high', since: '2026-10-07', of: 'launches', field: 'effort',
+        compared: 163, agree: 160, none: 2,
+        others: [{ value: 'medium', from: 'general-purpose', count: 1, last: '2026-10-12', file: 'y.jsonl' }],
+      },
+    ],
+  }), contextOf()), [
+    ...HEAD,
+    NOTHING_READ,
+    FILES_ONE,
+    '',
+    'no rule with an alias is in force here',
+    '',
+    'What ran, against the rules with no short name (information, never a failure):',
+    '  session-effort: high, since 2026-10-10',
+    '    agree: 25 of 27 sessions',
+    '    medium: 2 sessions on claude-desktop, the last on 2026-10-11',
+    '      x.jsonl',
+    '  subagent-effort: high, since 2026-10-07',
+    '    agree: 160 of 163 launches',
+    '    no effort recorded: 2 launches',
+    '    medium: 1 launch of general-purpose, the last on 2026-10-12',
+    '      y.jsonl',
+    '',
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: singular forms, 1 of 1 session and 1 of 1 launch, and 1 session and 1 launch in the others', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    held: [
+      {
+        id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort',
+        compared: 1, agree: 0, none: 0,
+        others: [{ value: 'medium', from: 'claude-desktop', count: 1, last: '2026-10-11', file: 's.jsonl' }],
+      },
+      {
+        id: 'subagent-effort', value: 'high', since: '2026-10-07', of: 'launches', field: 'effort',
+        compared: 1, agree: 1, none: 0, others: [],
+      },
+    ],
+  }), contextOf()), [
+    ...HEAD,
+    NOTHING_READ,
+    FILES_ONE,
+    '',
+    'no rule with an alias is in force here',
+    '',
+    'What ran, against the rules with no short name (information, never a failure):',
+    '  session-effort: high, since 2026-10-10',
+    '    agree: 0 of 1 session',
+    '    medium: 1 session on claude-desktop, the last on 2026-10-11',
+    '      s.jsonl',
+    '  subagent-effort: high, since 2026-10-07',
+    '    agree: 1 of 1 launch',
+    '',
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: compared 0 is one line of nothing to compare, for a session and for a launch', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    held: [
+      { id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort', compared: 0, agree: 0, none: 0, others: [] },
+      { id: 'subagent-effort', value: 'high', since: '2026-10-07', of: 'launches', field: 'effort', compared: 0, agree: 0, none: 0, others: [] },
+    ],
+  }), contextOf()), [
+    ...HEAD,
+    NOTHING_READ,
+    FILES_ONE,
+    '',
+    'no rule with an alias is in force here',
+    '',
+    'What ran, against the rules with no short name (information, never a failure):',
+    '  session-effort: high, since 2026-10-10',
+    '    nothing to compare: no session in the window since that day',
+    '  subagent-effort: high, since 2026-10-07',
+    '    nothing to compare: no launch in the window since that day',
+    '',
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: others with no agent type are written of no agent type, and unknown for a session; no effort recorded is singular for 1', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    held: [
+      {
+        id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort',
+        compared: 1, agree: 0, none: 0,
+        others: [{ value: 'medium', from: null, count: 1, last: '2026-10-11', file: 'u.jsonl' }],
+      },
+      {
+        id: 'subagent-effort', value: 'high', since: '2026-10-07', of: 'launches', field: 'effort',
+        compared: 2, agree: 0, none: 1,
+        others: [{ value: 'low', from: null, count: 1, last: '2026-10-10', file: 'n.jsonl' }],
+      },
+    ],
+  }), contextOf()), [
+    ...HEAD,
+    NOTHING_READ,
+    FILES_ONE,
+    '',
+    'no rule with an alias is in force here',
+    '',
+    'What ran, against the rules with no short name (information, never a failure):',
+    '  session-effort: high, since 2026-10-10',
+    '    agree: 0 of 1 session',
+    '    medium: 1 session on unknown, the last on 2026-10-11',
+    '      u.jsonl',
+    '  subagent-effort: high, since 2026-10-07',
+    '    agree: 0 of 2 launches',
+    '    no effort recorded: 1 launch',
+    '    low: 1 launch of no agent type, the last on 2026-10-10',
+    '      n.jsonl',
+    '',
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: no block when held is empty or missing', () => {
+  const without = appliedLines(emptyResult(), contextOf());
+  assert.deepEqual(appliedLines(emptyResult({ held: [] }), contextOf()), without);
+  assert.equal(without.includes('What ran, against the rules with no short name (information, never a failure):'), false);
+});
+
+test('held: the block comes after the counted blocks and before Left out, with one empty line around it', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    otherModels: [{ model: 'claude-sonnet-5-5', count: 2 }],
+    held: [
+      { id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort', compared: 1, agree: 1, none: 0, others: [] },
+    ],
+  }), contextOf({ leftOut: { elsewhere: 1, behind: 0 } })), [
+    ...HEAD,
+    NOTHING_READ,
+    FILES_ONE,
+    '',
+    'no rule with an alias is in force here',
+    '',
+    "Models that no rule's value names:",
+    '  claude-sonnet-5-5: 2',
+    '',
+    'What ran, against the rules with no short name (information, never a failure):',
+    '  session-effort: high, since 2026-10-10',
+    '    agree: 1 of 1 session',
+    '',
+    "Left out: 1 rule of the harness's own repository, not in force in this project",
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: the To the lead effort line comes after the pass line, with 1 launch or 2 launches', () => {
+  const lines = appliedLines(emptyResult({
+    rules: [agreeingRule()],
+    forLead: [{ id: 'subagent-effort', value: 'high', count: 1 }, { id: 'review-effort', value: 'low', count: 2 }],
+  }), contextOf());
+  assert.deepEqual(lines.slice(-3), [
+    'PASS  rules applied: each short name gave its model',
+    "To the lead: 1 launch that passed a declared short name ran at another effort than subagent-effort says (high); a call that passes no effort takes its session's.",
+    "To the lead: 2 launches that passed a declared short name ran at another effort than review-effort says (low); a call that passes no effort takes its session's.",
+  ]);
+});
+
+test('held: the Information line comes last, after a FAIL and its To the lead line, with 2 records', () => {
+  const lines = appliedLines(emptyResult({ rules: [differsRule()], fails: [failOf()], heldOther: 2 }), contextOf());
+  assert.deepEqual(lines.slice(-3), [
+    'FAIL  haiku-rule: `haiku` gave claude-opus-5-0 on cli 2.1.100 (2026-10-11, c.jsonl), and the rule says claude-haiku-5-5',
+    'To the lead: the short name of haiku-rule no longer gives the declared model on the engine in use; the alias or the way of launching changes, by a reading.',
+    'Information: 2 records ran at another value than a rule of the block above says; this is no failure.',
+  ]);
+});
+
+test('held: the Information line says 1 record, and comes after the pass line', () => {
+  const lines = appliedLines(emptyResult({ rules: [agreeingRule()], heldOther: 1 }), contextOf());
+  assert.equal(lines.at(-2), 'PASS  rules applied: each short name gave its model');
+  assert.equal(lines.at(-1), 'Information: 1 record ran at another value than a rule of the block above says; this is no failure.');
+});
+
+test('held: no block, no To the lead line and no Information line when there are no records', () => {
+  assert.deepEqual(appliedLines(emptyResult({
+    held: [{ id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort', compared: 1, agree: 1, none: 0, others: [] }],
+    forLead: [{ id: 'subagent-effort', value: 'high', count: 1 }],
+    heldOther: 1,
+  }), contextOf({ exists: false })), [
+    ...HEAD,
+    '  no records there: nothing was read',
+    NOT_COMPARED,
+  ]);
+});
+
+test('held: the fullest case with the block, the lead line and the Information line has no trailing space and no two empty lines in a row', () => {
+  const lines = appliedLines(emptyResult({
+    rules: [differsRule()],
+    fails: [failOf()],
+    held: [
+      {
+        id: 'session-effort', value: 'high', since: '2026-10-10', of: 'sessions', field: 'effort',
+        compared: 4, agree: 1, none: 1,
+        others: [{ value: 'medium', from: null, count: 2, last: '2026-10-11', file: 'u.jsonl' }],
+      },
+      { id: 'subagent-effort', value: 'high', since: '2026-10-07', of: 'launches', field: 'effort', compared: 0, agree: 0, none: 0, others: [] },
+    ],
+    forLead: [{ id: 'subagent-effort', value: 'high', count: 2 }],
+    heldOther: 2,
+    otherAliases: [{ alias: 'opus', agentType: null, count: 1 }],
+  }), contextOf({ leftOut: { elsewhere: 1, behind: 1 }, unreadable: [{ file: 'a.jsonl', reason: 'not JSON' }] }));
+  assert.deepEqual(lines.filter((line) => line.endsWith(' ')), []);
+  assert.deepEqual(lines.filter((line, i) => line === '' && lines[i - 1] === ''), []);
+  assert.equal(lines.at(-1), 'Information: 2 records ran at another value than a rule of the block above says; this is no failure.');
 });

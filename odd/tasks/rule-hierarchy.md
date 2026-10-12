@@ -1110,6 +1110,114 @@ before T16c; the kinds of work that are not rules, each with its reason; what co
 said under "Not guaranteed" and in the list's head; the hash of an installed copy; T13 and B4;
 who is told what; and that this is a third part with a task of its own.
 
+### What ran, against the rules with no short name (T16b, third part: the checking half of B3)
+Designed on 2026-10-12 and read by one reader that did not write it, whose changes are the last
+paragraph. Built on `feat/rules-held`, stacked on `feat/rules-rewire`. It adds one block to
+`js-harness rules applied`.
+
+**The problem.** Three declared rules say what runs, and nothing compares them with what ran:
+`session-model` and `session-effort` (what a session runs on) and `subagent-effort` (the effort
+of every sub-agent). `rules applied` answers another question, what a short name gives on each
+engine. B3 of `docs/model-effort.md` asks for this one: "the level a task really ran at is read
+from the session's records and a row of `check` compares it with the table, as INFO", and names
+the case that matters most: a sub-agent call that passes no effort takes the session's, so a
+session at another level silently lowers its reviewers.
+
+**What exists.** `readRecords` gives, for the last seven days, the last answer of each session
+and the first answer of each launch, with the model, the effort, the engine, the time and the
+file; `appliedOf` keeps or skips each entry and takes the rules in force. So the comparison
+needs no new read. Two things it does not have yet: `appliedOf` drops the effort of an entry it
+keeps, and the reader gives a launch the effort its meta file holds before the one its answer
+records.
+
+**The decisions.**
+
+1. One more key of what `appliedOf` returns, `held`, and one more block of `appliedLines`: not
+   a second command and not a second reader.
+
+2. Which rule is held to which field is said by the command, `bin/rules.mjs`, in three literal
+   reads: `ruleOf('session-model')` for the model of a session, `ruleOf('session-effort')` for
+   its effort, `ruleOf('subagent-effort')` for the effort of a launch. So `rules check` lists
+   the command as the reader of the three rules and refuses an id that is renamed or retired;
+   the pure module still imports nothing and is passed the three as
+   `{ id, of, field }`. One of them that is not among the rules in force (left out, in a project
+   that is not this repository) has no item.
+
+3. What ran is what the answer records. A launch's effort is the one its first answer holds,
+   not the one its meta file holds: the first is what the engine ran, the second what the call
+   asked for, and a call clamped by the engine would otherwise print as agreeing. The reader
+   changes for that. A record with no effort is counted apart, never as a difference.
+
+4. It is not a list of breaches. The folder holds records that are no rule's: a headless run
+   another tool started, an agent type that sets its own level, gentle-ai's reviewers. So each
+   other value is shown with what it came from, the entry point for a session and the agent
+   type for a launch, with its count, the day of the last and the file of the last on a line of
+   its own. The words are "agree" and the other value; nothing says "breach".
+
+5. It is information: it never changes the exit. B3 says INFO; the command is outside the gate
+   because its answer depends on the machine and the day; and no case here is free of a false
+   red, since the records do not say which sessions are work sessions. One case is not left
+   silent: a launch that passed a declared short name is this repository's own, so when such a
+   launch ran at another effort than `subagent-effort` says, a line "To the lead" says how
+   many, with the exit unchanged.
+
+6. The last lines say what they are about. `PASS` names the short names; a last line counts
+   the records that ran at another value than a rule of the block says, so that a pass above a
+   difference is not read as "all agrees". The closing note says only that a Codex review
+   holds its own model and effort.
+
+7. The last answer of a session, or the first of a launch, can be one the engine wrote itself
+   (`<synthetic>`): the reader steps past those to an answer a model gave, and gives the
+   synthetic one only when the read holds no other.
+
+A sub-agent's model with no short name passed is not held to a rule: the records do not say
+whether a launch wrote code or reviewed. The block "Launches that passed no model" shows them.
+
+**The lines**, after the three counted blocks and before "Left out", only when a rule of the
+three is in force:
+
+    What ran, against the rules with no short name (information, never a failure):
+      session-effort: high, since 2026-10-10
+        agree: 25 of 27 sessions
+        medium: 2 sessions on claude-desktop, the last on 2026-10-11
+          <file>
+      subagent-effort: high, since 2026-10-07
+        agree: 160 of 163 launches
+        no effort recorded: 2 launches
+        medium: 1 launch of general-purpose, the last on 2026-10-12
+          <file>
+
+**Tests first.** The reader: a launch whose meta file and answer hold two efforts gives the
+answer's; a launch with an effort only in its meta file gives none; a synthetic last answer
+after a real one, and a synthetic first answer before a real one; a transcript of synthetic
+answers only. `appliedOf`: all agree; another value by entry point and by agent type, most
+first; nothing to compare; an entry before `since`; a record with no effort; a dated model id
+agrees; a rule of the three not in force has no item; the exit is 0 with a difference; the
+count for the lead, only of launches that passed a declared short name. `appliedLines`: the
+block whole, its singular forms, the file on its own line, the last lines with and without a
+difference, no block when nothing is held. The command: the three rules are listed as read by
+`bin/rules.mjs`.
+
+**Not guaranteed.** A session's level in the middle of its life: only its last answer is read.
+Which sessions are work sessions of the project. A launch's kind of work. An engine that
+renames an effort level, or records it as something that is not a text: it prints as another
+value or as no effort. A rule's `since` is a day as he said it and a record's day is in
+universal time: an entry of the first hours can fall on the day before. Older than seven days,
+past the cap, or a host that keeps no records.
+
+**Cost.** One key and one block; the effort kept on an entry; two changes of the reader; three
+reads in the command; the last lines reworded.
+
+What the reader changed. Three things would have misled: the effort of a launch was the meta
+file's, so a clamped launch agreed; every other tool's record counted as a difference with no
+word of where it came from; and `PASS` or "Nothing compared" closed a block that showed
+differences. Taken as notes: `keep` drops the effort, so the cost was understated; a synthetic
+last answer hid its session; the renamed level and the two kinds of day under "Not
+guaranteed"; a line for the lead in the one case B3 names; the file on a line of its own, for
+a phone; zero compared, which read as a pass; and the home of the three ids, which as a table
+in the pure module no check could see, so they are literal reads in the command. Cut on its
+advice: a test of the table, and a promise about rows of `check` and `doctor`.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build
@@ -2161,14 +2269,131 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     stopped. It is the register's `language-server-load` again, with a sighting added; what would stop it is the
     gate's load line naming the session a spinning process belongs to, which is the lead's to
     place.
+  - On `feat/rules-held`, stacked on that branch so that its reviews do not move: the block
+    "What ran, against the rules with no short name", as its design section above says, which
+    one reader on Opus 5.5 attacked before it was built (117,949 tokens; three things that
+    would have misled, all taken). Two writers on Haiku 5.5 in files apart (115,309 and 193,629
+    tokens): the reader gives a launch the effort its answer records and steps past synthetic
+    answers; `appliedOf` returns `held`, `heldOther` and `forLead`, and `appliedLines` prints
+    the block and the new last lines. The three reads in `bin/rules.mjs` and their tests are
+    this session's, inline: one file of code. Commit `3f576ed` (the gate passed at 07:48);
+    the correction of the first branch (`878e2e8`) is merged into it, with one conflict in
+    `bin/lib/rules-applied.mjs` resolved by hand (both sides kept; its 78 tests pass). Route:
+    delegated for the two modules, inline for the command. NEXT here: the merge through the
+    gate, the command run once on the real records, then gentle-ai from `878e2e8` and Codex by
+    its plan; its pull request opens on `feat/rules-rewire`'s, or on `main` once that merges.
+  - Pull request 73 (`feat/rules-rewire`) is merged: `main` is `3088960` (the lead's notice of
+    10:45, checked with git: `ddac8b7` is an ancestor of `origin/main`). `feat/rules-held`
+    took it, with one conflict in this document, both sides kept.
+    On this branch since: commit `80a3032` (the gate passed at 10:54) corrects the five notes
+    of gentle-ai's last slice, by one writer on Haiku 5.5 (133,441 tokens): a time is taken
+    only when it names its zone; `readRecords` refuses a `now` that is no number; an empty
+    `CLAUDE_CONFIG_DIR` is read as unset; two paths of the form `applied` have their tests
+    (git naming a project and a main checkout that is another folder; an error said on stderr
+    with exit 1), and so has the cap of sessions. Left unproved, and said: a picked file that
+    cannot be opened, which no test can make here without a file system passed in.
+    The command with the new block, run once on the real records in a turn of the gate
+    (09:44, exit 0): `session-model` 21 of 21 sessions on `claude-opus-5-5`; `session-effort`
+    20 of 21 at high and one that ended at medium on 2026-10-11 (the trial); `subagent-effort`
+    172 of 173 launches at high and one at low on 2026-10-07, the day the rule was said;
+    `opus` 52 of 52 and `haiku` 42 of 42 on claude-desktop 2.1.295.
+    This session's context stood at 86 percent when this was written.
+    NEXT: this merge through the gate; gentle-ai from the detached worktree
+    `rules-rewire-review` on `3088960..` this branch's head (it holds the correction `88cde75`
+    that was left pending, already on `main`, so the slice is what this branch adds); Codex
+    with `--base 3088960`, plan first, inside the rate without asking; then push and a pull
+    request on `main`.
+  - The merge is commit `8a73dde`. gentle-ai approved `3088960..8a73dde` (1,032 lines, medium,
+    one lens, `review-2cec5a5174e2ea28`; its capture waited more than an hour for a turn of
+    the gate) and the approval is acknowledged. Three notes, none blocking, NOT corrected yet:
+    (1) a warning: no test shows what a held model rule gives for an entry with no text model
+    (`keep` skips such an entry, so `none` cannot count one for a model: prove it with a test
+    or drop the line `no model recorded`); (2) `ZONED_TIME` takes an offset with no colon
+    (`+0200`), which is outside the format the language defines, so its reading depends on the
+    engine: take only the colon form; (3) no test of the command writes a session record and
+    sees its model and effort reach the block.
+    Also to do, from his answer of 12:20 as the lead relays it (not read by this session): a
+    Codex plan up to 5 percent over the rate counts as inside it; declare that margin in the
+    rules list with its source, his line 3800 and the lead's question at 3736 of transcript
+    `65318fd5-…`, read first with `sessions --quote`.
+    This session stopped here at 88 percent of its context, for a compaction. NEXT, in this
+    order: one writer for the three notes (one commit through the gate); the margin as a new
+    rule in the same commit or the next; Codex with `--base 3088960`, plan first; push and a
+    pull request on `main`.
+  - After the compaction (2026-10-12, back at 13:10, context at 23 percent). The three notes
+    are corrected by one writer on Haiku 5.5 (126,930 tokens, 117 s), in the commit after
+    `b156d7e`: (1) a test shows a held model rule never counts `none`, since `keep` skips an
+    entry with no text model before the comparison (it passed at once: it pins what was true,
+    and the line `no model recorded` stays, unreachable for a model and reachable for an
+    effort); (2) `ZONED_TIME` takes an offset only with its colon, test first (it failed on
+    `skipped.noTime`, 0 for 1), and the older zone test that kept `+0200` as a good form now
+    writes `+02:00`; (3) a test of the command writes one session record and sees
+    `session-model` agree and `session-effort` name its other value, exit 0 (it passed at
+    once). The three rule test files after it: 81, 33 and 161 tests, none failing.
+    The margin is declared: `codex-review-margin`, 5 percent of the allowance, his, of this
+    repository only, since 2026-10-12. Its source is his line 3800 of transcript `65318fd5-…`
+    ("listo la A …", read with `sessions --quote`) and the option it answers at line 3736, an
+    assistant entry read directly: "un estimado hasta 5 % arriba del tope cuenta como dentro".
+    Nothing reads the rule yet: `codex-review --plan` is open in `feat/gate-wait`, so its
+    reader joins the rest of the second part of T16b. The list has 17 rules, hash
+    `1ccb54f9013d`; `rules check` passes.
+    The register gets `documents-commit-skips-suite` (the lead's notice of 13:07, relief file
+    line 407): a commit of declared documents alone runs no sensor while the suite reads them.
+    Until the gate covers it, `rules check` is run by hand after a commit of documents that
+    touches `docs/RULES.md` or `docs/rule-sources.json`.
+    NEXT: this commit through the gate; gentle-ai assessed from `8a73dde`; Codex with
+    `--base 3088960`, plan first, run when the plan is at most 1.05 times the allowance; push
+    and a pull request on `main`.
+  - That commit is `f7649b8` (the gate passed at 14:16, after an hour in its line). gentle-ai
+    assessed `8a73dde..f7649b8` as medium and not due (`under_budget`). Codex reviewed
+    `3088960..f7649b8` in 3 parts and the review is recorded: 848,242 input tokens (678,912
+    cached), 206 s, against a plan of about 750,000 and an allowance of 1,125,600 for 938
+    changed lines. Two parts with no defect and one finding of the second priority, taken:
+    `heldOther` summed the other values of every held item, so a session that differs in its
+    model and in its effort was said as "2 records". It now counts each differing record
+    once, test first (2 for 1 before the change); 82 and 33 tests pass.
+    The register also gets, from the first run of the suite on GitHub's Linux (run
+    38296748258, relief file line 425, classified by JH 8): `test-skipped-here-never-run`,
+    `linux-probe-misnames-process`, `refusal-in-system-words`; and two more sightings of
+    `command-run-for-help` (`install --help` at 03:25 and `check --help` at 13:16, both on
+    2026-10-12), four in all with its control still owed.
+    Taken from the lead (14:48, a claim): after this pull request, one small branch off `main`
+    corrects the stale expectation (`bin/lib/project.test.mjs:1936`, by reading ae471e7; no
+    run can show it green here, since this machine skips the test) and the `ENOTDIR` of
+    `evals/paths.mjs:6`, test first. The probe of `evals/ports.mjs:168-169` waits as its
+    register entry: it is reproduced only on Linux.
+    NEXT: this correction through the gate; Codex on that one commit, plan first; push and
+    the pull request on `main`.
+  - The correction is `e9b1711` (the gate passed at 15:48, after 56 minutes in its line).
+    Codex reviewed `f7649b8..e9b1711` and found the patch correct; the review is recorded
+    (127,297 input tokens, 90,240 cached, against the floor of 300,000). Codex on this branch:
+    975,539 input tokens in two runs. No finding is open.
+    `main` moved three times while the branch waited (pull requests 74, 76 and 75, to
+    `af20747`), and one more move is announced. Twice a merge of `main` was staged and put in
+    the gate's line, and twice it was taken out before it ran, by stopping this session's own
+    waiter (a dead waiter is passed after the stale time of 60 s, `bin/lib/gate-lock.mjs:60`):
+    nothing was committed, the head stayed `e9b1711`. From now the merge is made inside the
+    turn of the gate, of `main` as it stands when the turn starts (the lead's way, 16:49, a
+    claim): a script fetches, merges without committing, and commits, whose hook runs the gate
+    under the lock the turn holds (`JS_HARNESS_GATE_HELD`, `bin/check.mjs:445-463`). A merge
+    that does not apply clean is undone and nothing is committed.
+    A slip of this session, twice on this day: a message to the lead carried an hour that was
+    guessed and not read (14:58 for 14:53; 16:47 for 16:45). Both are corrected to the lead
+    and added to the register under `hours-guessed`, whose control stamps a relief line and
+    not a message. Until a message is stamped by the channel, this session writes an hour
+    only when `date` printed it in the same turn. The register also gets
+    `short-name-judged-outside` (relief file line 427).
+    NEXT: the merge in its turn of the gate; push; the pull request on `main`. Then
+    `fix/linux-run-findings` off `main`, and the pause percent of `bin/lib/sessions.mjs` as a
+    declared rule, each its own branch.
 
 ## Next step
-In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:
-gentle-ai slice by slice, then Codex once on the whole range, inside the rate; then push and
-the pull request, which the push hook allows only with Codex's records. (2) The check of
-launches (T13 with the checking half of B3): it reads the list `readRecords` gives and holds
-the session rows and the sub-agents' effort, and says what each launch without a model ran
-on; designed before it is built, read by a reader that did not write it. (3) The rest of the
+In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
+through the gate, gentle-ai on what the branch adds, Codex by its plan, push and the pull
+request on `main`. That closes the checking half of B3 as a block of `rules applied`; the
+hook of C8 that refuses a launch (T13) stays his, and a row of `check` or `doctor` that calls
+the command waits for those files. (2) The third part of T16b is then checked off, with what
+it leaves named. (3) The rest of the
 second part of T16b when its files are free: the review's model and effort
 (`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
 (`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and

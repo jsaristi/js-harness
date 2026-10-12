@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
-import { renderList, rulesHash, ruleHere } from './lib/rules.mjs';
+import { renderList, rulesHash, ruleHere, ruleOf } from './lib/rules.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -221,20 +221,32 @@ function rulesInForce(projectData) {
   return { rules, leftOut };
 }
 
+/** The rules with no short name that the records are held to, and the field of a record each is held to. Each is read
+ * here by its id, so that `rules check` lists this file as its reader and refuses an id that is renamed or retired.
+ * One that is not in force in the project has no line: `appliedOf` takes only the rules it is passed. */
+function heldRules() {
+  return [
+    { rule: ruleOf('session-model'), of: 'sessions', field: 'model' },
+    { rule: ruleOf('session-effort'), of: 'sessions', field: 'effort' },
+    { rule: ruleOf('subagent-effort'), of: 'launches', field: 'effort' },
+  ].map(({ rule, of, field }) => ({ id: rule.id, of, field }));
+}
+
 /** Writes the lines of `js-harness rules applied` for the project `cwd` is in, and gives its exit code: each declared
- * alias against the launches and sessions the records of that project hold, over the last APPLIED_DAYS days. The records
+ * alias against the launches and sessions the records of that project hold, and what ran against the rules with no
+ * short name, as information, over the last APPLIED_DAYS days. The records
  * are those of the main checkout, under `env.CLAUDE_CONFIG_DIR` or else the user's `.claude`; the rules are those of the
  * project's own rules-data.mjs. Nothing is written. The exit is 1 when a short name gives another model than its rule
  * declares on the engine in use, and 0 otherwise, and when no record folder is there. */
 function appliedForm({ cwd, env, homedir, now, run }, stdout) {
   const project = projectOf(run, cwd);
   const main = mainCheckout(run, cwd);
-  const recordsDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', projectSlug(main));
+  const recordsDir = path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', projectSlug(main));
   const { rules, leftOut } = rulesInForce(readOptional(project, 'bin/lib/rules-data.mjs'));
   const at = now();
   const records = readRecords(recordsDir, { now: at, days: APPLIED_DAYS, maxFiles: APPLIED_MAX_FILES });
   const today = new Date(at).toISOString().slice(0, 10);
-  const result = appliedOf(rules, records.launches, records.sessions, { today, days: APPLIED_DAYS });
+  const result = appliedOf(rules, records.launches, records.sessions, { today, days: APPLIED_DAYS, held: heldRules() });
   const lines = appliedLines(result, {
     project,
     main,

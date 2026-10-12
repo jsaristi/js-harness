@@ -1,7 +1,8 @@
 // The reader of session records for `js-harness rules applied`: the sub-agent launches and the
 // sessions of one project folder, each with the few fields the count needs. Its reads are bounded
 // on purpose. A transcript is read only as far as its first assistant entry (a launch) or its last
-// one (a session), in steps from 64 KB up to 1 MB, and only the recent files are picked, at most
+// one (a session) that the engine did not write itself, in steps from 64 KB up to 1 MB, and only the
+// recent files are picked, at most
 // `maxFiles` of each kind. A read of every transcript, whole, loaded the machine before. The module
 // prints nothing, reads no clock and no environment variable: the time is passed in as `now`.
 import fs from 'node:fs';
@@ -147,31 +148,54 @@ function assistantEntry(line) {
   return entry !== null && typeof entry === 'object' && entry.type === 'assistant' ? entry : null;
 }
 
-/** The first assistant entry of a transcript, read from its start in the sizes of `readSizes`. Gives
- * `{ entry }`, or `{ reason }` when no read reaches one. */
-function firstAssistant(file, size) {
-  for (const len of readSizes(size)) {
-    const lines = completeLines(readSpan(file, 0, len), { cutStart: false, cutEnd: len < size });
-    for (const line of lines) {
-      const entry = assistantEntry(line);
-      if (entry) return { entry };
-    }
-  }
-  return { reason: NO_LAUNCH };
+/** True when an assistant entry is one the engine wrote itself: its model is '<synthetic>', or it has
+ * no model that is a non-empty text. */
+function isSynthetic(entry) {
+  const model = entry.message?.model;
+  return model === '<synthetic>' || text(model) === null;
 }
 
-/** The last assistant entry of a transcript, read from its end in the sizes of `readSizes`. Gives
- * `{ entry }`, or `{ reason }` when no read reaches one. */
-function lastAssistant(file, size) {
-  for (const len of readSizes(size)) {
-    const start = size - len;
-    const lines = completeLines(readSpan(file, start, len), { cutStart: start > 0, cutEnd: false });
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const entry = assistantEntry(lines[i]);
-      if (entry) return { entry };
+/**
+ * The assistant entry a transcript gives, from reads of growing size. `linesOf(len)` gives the lines
+ * of a read of `len` bytes in the order they are visited. The first entry that is not synthetic is
+ * taken. A read that holds only synthetic entries goes on to the next size; when no read holds a
+ * real one, the first synthetic entry seen is taken (the reads nest, so it is the one the last read
+ * holds too). Gives `{ entry }`, or `{ reason }` when no read holds an assistant entry.
+ */
+function pickAssistant(sizes, linesOf, reason) {
+  let synthetic = null;
+  for (const len of sizes) {
+    for (const line of linesOf(len)) {
+      const entry = assistantEntry(line);
+      if (!entry) continue;
+      if (!isSynthetic(entry)) return { entry };
+      if (!synthetic) synthetic = entry;
     }
   }
-  return { reason: NO_SESSION };
+  return synthetic ? { entry: synthetic } : { reason };
+}
+
+/** The first assistant entry of a transcript that is not synthetic, read from its start in the sizes
+ * of `readSizes`. Gives `{ entry }`, or `{ reason }` when no read reaches one. */
+function firstAssistant(file, size) {
+  return pickAssistant(
+    readSizes(size),
+    (len) => completeLines(readSpan(file, 0, len), { cutStart: false, cutEnd: len < size }),
+    NO_LAUNCH,
+  );
+}
+
+/** The last assistant entry of a transcript that is not synthetic, read from its end in the sizes of
+ * `readSizes`. Gives `{ entry }`, or `{ reason }` when no read reaches one. */
+function lastAssistant(file, size) {
+  return pickAssistant(
+    readSizes(size),
+    (len) => {
+      const start = size - len;
+      return completeLines(readSpan(file, start, len), { cutStart: start > 0, cutEnd: false }).reverse();
+    },
+    NO_SESSION,
+  );
 }
 
 /** The meta object of a launch, or null when the file is missing, is not JSON, or is not an object. */
@@ -184,13 +208,17 @@ function readMeta(file) {
   }
 }
 
-/** The item of a launch: the meta values where they are text, and the entry's fields as they are. */
+/**
+ * The item of a launch: the alias and agentType from its meta file where they are text, and the
+ * effort and the other fields from the answer, as they are. The meta file's effort is not read: it
+ * says what the call asked for, and the answer's effort is what the engine ran.
+ */
 function launchItem(candidate, entry) {
   const meta = readMeta(candidate.metaAbs) ?? {};
   return {
     alias: text(meta.model),
     model: entry.message?.model,
-    effort: text(meta.effort) ?? text(entry.effort),
+    effort: text(entry.effort),
     agentType: text(meta.agentType),
     entrypoint: entry.entrypoint,
     version: entry.version,
@@ -225,9 +253,11 @@ function attempt(read) {
  * it was modified at or after `now - days` days. Gives `{ exists, launches, sessions, unreadable,
  * files, capped }`: the launches and sessions picked (at most `maxFiles` of each, the newest), the
  * picked files that gave no item with their reason, how many of each were picked, and whether any
- * recent file was left out by the cap. Never throws for a file or folder it cannot read.
+ * recent file was left out by the cap. Never throws for a file or folder it cannot read; it throws
+ * only for a `now` that is no number, which would turn the window off in silence.
  */
 export function readRecords(projectDir, { now, days = 7, maxFiles = 500 }) {
+  if (!Number.isFinite(now)) throw new Error('readRecords needs now as a time in milliseconds');
   const top = listDir(projectDir);
   if (top === null) return emptyRecords();
   const since = now - days * DAY_MS;
