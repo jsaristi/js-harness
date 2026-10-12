@@ -694,6 +694,30 @@ session's transcript.
   Asked a third time. And one reading to keep beside the claim of the cut: that whole run
   through the runner took 866 s, no shorter than the gates before it (839 s, 889 s) with
   other sessions working; only M1 again, with its time line, can say what the order gave.
+- 2026-10-12 · **The first cut committed, `fc70dc3`**, on `feat/gate-wait-count` (third
+  turn, asked 11:10:47, taken 11:41:53): `PASS  tests` at 11:55:59, the whole suite through
+  the runner. **M1 again, through the runner**, 11:55:59 to 12:08:19, 78 test files
+  (`m1b-count.json`, `m1b-machine.json`, `m1b-machine.txt`):
+
+  | | M1 | M1 again | |
+  |---|---|---|---|
+  | Wall | 780.6 s | **735.6 s** | 45 s less, 5.8% |
+  | Busy of the eight processors | 88% | 93% | |
+  | Where the last file ends | 780.3 (`evals/runner`) | 735.0 (`evals/runner`) | |
+  | `bin/codex-review.test.mjs`, start to end | 0.2 to 686.0 | 0.2 to 691.3 | |
+  | `evals/runner.test.mjs` | 261.0 to 780.3 | 0.2 to 735.0 | |
+  | `evals/isolation-probe.test.mjs` | 204.8 to 635.7 | 0.2 to 527.9 | |
+  | `evals/task-proof.test.mjs` | 311.2 to 695.8 | 0.2 to 612.2 | |
+  | git processes | 12,041 | 12,041 | none claimed |
+  | Start of `git --version` inside | 209 ms | 206 ms | |
+  | The antivirus | 1,077.4 s | 917.5 s | |
+
+  What it gave, plainly: the long files all start at once, as claimed, and the run is 45 s
+  shorter, about half of the 80 s claimed. The run does not end with its longest file:
+  `evals/runner.test.mjs`, which took 519 s when it started late and alone, takes 735 s
+  beside the others from the first second. One reading of the wall time, no proof. With the
+  processors 93% busy there is no slack left to arrange: from here only less work shortens
+  the suite (cuts 2 and 3, and the antivirus, which is his).
 - 2026-10-12 · **T6c committed, `3b810a4`**, one writer on Haiku 5.5 (118,070 tokens),
   tests alone: the record refused when `HEAD` cannot be read again after the review; the
   note on a base left out, on a skip; a deadline of 120 s for the writers of the test of
@@ -704,7 +728,7 @@ session's transcript.
   lines, under the budget. Sub-agents so far: 2,389,643 tokens.
 
 ## Next
-1. The turn of the first cut (`t4-turn.sh`, in `gate-wait-count`): read its log
+1. (Done: the first cut is `fc70dc3` and M1 again is in Progress.) Was: read its log
    (`t4-turn.log`), then the second run's tables (`m1b-count.json`, `m1b-machine.json`,
    `m1b-machine.txt` in the scratchpad) against the first: where the last file ends, the
    wall time, the counts. Write it in Progress as it came out, plainly if it gave nothing.
@@ -728,7 +752,7 @@ session's transcript.
   gated, the first reviewed by gentle-ai, none with a Codex record yet.
 - `feat/gate-wait-count` (worktree `D:\js-harness-worktrees\gate-wait-count`, off `main`
   at `47484bd`, not pushed) holds S2. This document stays on `feat/gate-wait` only.
-- The cut's turn was asked a third time at 11:10 on 2026-10-12 (by `date`, 11:11:04 just after) (`t4-turn.sh`, log
+- (Done at 12:08: `fc70dc3`, M1 again written in Progress.) The cut's turn was asked a third time at 11:10 on 2026-10-12 (by `date`, 11:11:04 just after) (`t4-turn.sh`, log
   `t4-turn.log`, the commit's gate in `t4-gate.log`, all in the scratchpad). First check
   whether `feat/gate-wait-count` moved past `c844f29` and whether `m1b-count.json` and
   `m1b-machine.json` exist: if the commit is there and they are not, M1 again is one
