@@ -40,7 +40,7 @@ Commands:
   notify      Append one notice to the project's channel record under the home (.js-harness/channel/<project>.jsonl), with the time of the clock, the sender's session and the worktree and branch it ran in: js-harness notify --to orchestrator|<number> --kind opened|waiting|closed|note|answer|relieved "<one line>" (an answer also takes --transcript and --line, where the user's words are read). It then prints the address of the role, as sessions --address gives it, so the sender can ring it; it sends no message, and its exit is 0 once the notice is recorded. --relief "<one line>" appends a line stamped by the clock to the orchestrator's relief file; --opening "<title>" stores the opening of a session, read from standard input. A notice is a claim of the session that wrote it, never the user's word.
   resume      The SessionStart hook that runs after a compaction (matcher compact), which install registers for Claude Code and Codex: js-harness resume --hook reads the hook input from standard input and prints the title of the session, the opening stored for it, the feature document it works on and what to read there, so nobody pastes a resume prompt. It speaks only in a project with a harness.json, writes nothing and always exits 0.
 
-Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX override --home/--source/--prefix.
+Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX are used when --home/--source/--prefix are not given.
 `;
 
 const commands = {
