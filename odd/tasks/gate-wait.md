@@ -1660,6 +1660,35 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   to say: asked. What T8 buys is a review's wait for the lock (up to 24 minutes behind two
   gates today), not suite time. The order proposed: T14's turn and pull request; S1's
   Codex record with number 2 measured in the same step; S1's pull request; T8's texts.
+- 2026-10-12 · **Road 1's second slice, sized from the reading already made**
+  (`eval-children-reading.md` against `t14-count.json`; nothing built, no reader yet; sent
+  to the orchestrator at 17:21). What the four files still start that is not git: runner
+  331, task-proof 176, isolation-probe 123, tasks 99. By kind, with the run now a
+  parameter of every entry:
+
+  | kind | starts left | could go | what stays on the real path | lines, a guess |
+  |---|---|---|---|---|
+  | `proveTask`'s graders and visible suites, in tests of a file's shape (`evals/task-proof.test.mjs`) | 171 | 91 (the tests classed fixture), 126 with the borderline ones | the eleven proof tests (47 starts) and the five real tasks of `evals/tasks.test.mjs` (74) | 100 to 150: a stand-in run that answers five clean results, handed in by the `prove` helper |
+  | by-path sweeps and version probes of suites that do not stub them (`evals/runner.test.mjs`) | 50 | 21 | the nine direct `killByPath` tests, the two orphan trials, the two version tests | about 30: seams that exist |
+  | the fake agent and its grader in trials that test the runner's bookkeeping (`evals/runner.test.mjs`) | about 194 | about 115, about 150 with the borderline ones | every test that reads what a real child received or that a tree dies (169 starts before the first slice) | 300 to 450: the fake agent's modes as a function the stand-in calls, and a grader's answer by mode |
+  | the probe's fake Claude in scenario tests (`evals/isolation-probe.test.mjs`) | about 95 | about 80 | the ten proof tests (environment, timeout, orphans, a real listener) | 250 to 400: the fake Claude's modes as a function, with its files and HTTP requests made in the test's own process |
+
+  **Two slices, not one.** The second: the first two rows, about 110 to 150 starts for
+  about 130 to 180 lines, with no new stand-in logic beyond five canned results. The
+  third: the last two rows, about 195 to 230 starts for 550 to 850 lines, and a different
+  risk: a fixture that was a process becomes a function inside the test's process (its
+  `process.exit`, its working directory, its ports), which is a stand-in of a stand-in and
+  wants its own reader. Both together stay under 1,200 lines, but they are not one design.
+  **What is not known, and comes first: where the wall is now.** Before the first slice
+  the four longest files of a whole run were `evals/runner.test.mjs` 704 s,
+  `bin/codex-review.test.mjs` 648 s, `evals/task-proof.test.mjs` 606 s and
+  `evals/isolation-probe.test.mjs` 525 s (`m1d-count.json`). After it the four eval files
+  alone take 227, 69, 199 and 88 s, and the whole suite took 554 s: the longest file of a
+  whole run is probably `bin/codex-review.test.mjs` now, whose time is 6,067 git starts,
+  not an eval's. If so, the next second of wall is in cut 2 of git and the eval slices
+  buy load, not wall. One whole run under the counting tool on the merged tree (a turn of
+  about ten minutes, no review, no spend) says which; proposed as the step after T14's
+  pull request and before either design.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
