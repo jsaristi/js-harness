@@ -1792,8 +1792,16 @@ summary.
       once and answered nothing the second time). Left by the writer and not fixed: a state
       written armed in the home that then cannot be written is read before the newer one in
       the temp folder, so the notice repeats in that case; the newer of the two should win.
-      Owed for that commit: what its gate and gentle-ai said (log `jh5-s5-turn-2.log` in the
-      system's temp folder). Codex is owed for the slice, once, from
+      That commit is `6d467c2` (gate PASS 05:26; gentle-ai: 267 lines, not due). The command
+      `js-harness resume --pause` is `417927f` (one writer on Haiku 5.5, 28 tool calls; gate
+      PASS 05:55; gentle-ai: 194 lines, not due; read by the parent: `node --test
+      bin/resume.test.mjs` 29 pass, and through the dispatcher on this session's own
+      transcript it printed its one line at 92% and nothing the second time). STATE AT
+      2026-10-12 08:55: the tree is clean at the commit that holds this text; nothing is in
+      flight; the next piece is c, below, whose reader comes first; then
+      `codex-review --plan --base 8f4e010` and its figure to the lead (run only inside the
+      rate). Left for the next code: the top help line of `bin/js-harness.mjs` names only
+      `--hook`; the dispatcher's lazy imports. Codex is owed for the slice, once, from
       `8f4e010`, after the command is in. Next, its brief ready as `brief-pause-command.md`:
       `js-harness resume --pause` for a
       `PostToolUse` input (it reads the hook's JSON, finds the project's `harness.json` by
