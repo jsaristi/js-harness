@@ -197,6 +197,36 @@ export function discoverDocuments(cwd) {
   return { documents, source: 'harness.json' };
 }
 
+const DOCUMENT_SENSORS_SHAPE = 'harness.json "documentSensors" must be an object of names to non-empty command strings';
+
+/** How long one sensor of documents may run. They run at a commit that waits for no turn at the gate
+ * lock, beside whatever gate holds it, so they are checks of seconds; this is the bound that says so. */
+export const DOCUMENT_SENSOR_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** The sensors of a commit that holds documents alone: `harness.json` `documentSensors`, named commands
+ * of the shape of `sensors`. Such a commit runs none of the project's sensors (`stagedDocuments`), and
+ * yet a document may be what a check reads: a rule kept in one, a text a test holds to a figure. These
+ * are the checks that still run there, and nowhere else: a commit that holds anything that is no
+ * document runs `sensors`, which are expected to cover the documents as well.
+ *
+ * `documents` are the ones the project declares (`discoverDocuments`). Declared without them these could
+ * never run, which is an `error` and not a key quietly ignored; so is a value of the wrong shape. A
+ * project without the key, or with an empty map, declares none: its commits of documents run nothing,
+ * as before. */
+export function discoverDocumentSensors(cwd, documents) {
+  const none = { sensors: [] };
+  const { declared, error } = readHarness(cwd);
+  if (error) return { ...none, error };
+  if (!declared || !('documentSensors' in declared)) return none;
+  const { documentSensors } = declared;
+  if (!isObject(documentSensors) || !Object.values(documentSensors).every(isCommand)) return { ...none, error: DOCUMENT_SENSORS_SHAPE };
+  const sensors = Object.entries(documentSensors).map(([name, command]) => ({ name, command }));
+  if (sensors.length > 0 && documents.length === 0) {
+    return { ...none, error: 'harness.json declares "documentSensors" and no "documents", so no commit would ever run them' };
+  }
+  return { sensors };
+}
+
 /** Whether `one` and `other` are the same folder, however each is spelled (a link on the way, a short
  * Windows name, another case). `false` when either is not there or cannot be looked at. */
 function sameFolder(one, other) {
@@ -276,17 +306,37 @@ function namedPaths(paths) {
   return [...named, ...(more > 0 ? [`and ${more} more`] : [])];
 }
 
-/** The one row of a gate that ran no sensor because the commit holds documents alone: which `sensors`
- * did not run, and for which staged `paths` (`namedPaths`). */
-function documentsRow(sensors, paths) {
+/** The first row of a gate that ran none of the project's `sensors` because the commit holds documents
+ * alone: which did not run, and for which staged `paths` (`namedPaths`). With `quick`, the sensors of
+ * documents that ran in their place (`discoverDocumentSensors`), it names those as well, and says that
+ * no gate lock was taken for them; their own rows follow this one. */
+function documentsRow(sensors, paths, quick = []) {
   const staged = paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`;
-  return {
-    name: 'sensors',
-    pass: true,
-    info: true,
-    detail: `no sensor ran (${sensors.map((sensor) => sensor.name).join(', ')}): ${staged} declared in harness.json "documents"`,
-    lines: namedPaths(paths),
-  };
+  const declared = `${staged} declared in harness.json "documents"`;
+  const names = (list) => list.map((sensor) => sensor.name).join(', ');
+  let detail = `no sensor ran (${names(sensors)}): ${declared}`;
+  if (quick.length > 0) {
+    detail = sensors.length > 0
+      ? `the sensors did not run (${names(sensors)}): ${declared}; its "documentSensors" ran in their place (${names(quick)}), with no gate lock taken`
+      : `${declared}: its "documentSensors" ran (${names(quick)}), with no gate lock taken`;
+  }
+  return { name: 'sensors', pass: true, info: true, detail, lines: namedPaths(paths) };
+}
+
+/** One row per sensor of documents, run one after another as the sensors are (`checkSensor`), each for
+ * `DOCUMENT_SENSOR_TIMEOUT_MS` at most, or for the shorter time a caller gives every sensor. One whose time
+ * ran out says where a longer check belongs. `held` is whether the gate was started in a turn at the
+ * machine's gate lock, which a sensor is told (`GATE_HELD_ENV`). */
+async function documentSensorRows(cwd, quick, deps, held) {
+  const sensorTimeout = Math.min(deps.sensorTimeout ?? DOCUMENT_SENSOR_TIMEOUT_MS, DOCUMENT_SENSOR_TIMEOUT_MS);
+  const rows = [];
+  for (const sensor of quick) {
+    const row = await checkSensor(cwd, sensor, { ...deps, sensorTimeout, gateHeld: held });
+    rows.push(row.timedOut
+      ? { ...row, detail: `${row.detail}; a sensor of documents runs with no gate lock taken, so it is a check of seconds: a longer one belongs in "sensors"` }
+      : row);
+  }
+  return rows;
 }
 
 /** The untracked paths of the repository `cwd` is in, as git lists them from its top and one for each file
@@ -775,6 +825,10 @@ const sensorsResult = (rows) => (rows.some((row) => row.timedOut) ? 'timeout' : 
  * that says which sensors did not run and for which paths, and no lock is taken, there being nothing to
  * run under it. `deps.git` stands in for the `spawnSync` that asks git what is staged.
  *
+ * Where the project also declares sensors of documents (`discoverDocumentSensors`), that commit runs
+ * those, one row each after the INFO row, and still takes no lock and leaves no record: they are checks
+ * of seconds (`documentSensorRows`), and they run even in a gate that a static row already failed.
+ *
  * With `lock` (`{ home, wait, waitMinutes, session }`, which is what a gate passes) the sensors
  * run under the machine's gate lock in that home, and only when there is a sensor to run: see
  * `underGateLock`, which may add a row named `gate`. With `{ held: true }` for `lock`, which is what a
@@ -832,15 +886,22 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // where there is no sensor for it to skip.
   const declared = discoverDocuments(cwd);
   if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error }];
+  const quick = discoverDocumentSensors(cwd, declared.documents);
+  if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
+  // Git is asked only by a project that declares documents, and has a sensor their commit would not run
+  // or one it would: without them nothing here changed.
+  const staged = declared.documents.length > 0 && sensors.length + quick.sensors.length > 0
+    ? stagedDocuments(cwd, declared.documents, deps.git)
+    : null;
+  // Before the stop below, and with no record: the sensors of documents wait for no turn and are no
+  // suite, so there is nothing for a stop to save, and a failure of theirs is read in the same run.
+  if (staged) return [documentsRow(sensors, staged, quick.sensors), ...(await documentSensorRows(cwd, quick.sensors, deps, lock?.held === true))];
   if (sensors.length === 0) {
     const detail = source === 'harness.json'
       ? 'harness.json declares no sensors, so none ran'
       : 'no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json';
     return [{ name: 'sensors', pass: true, info: true, detail }];
   }
-  // Git is asked only by a project that declares documents: without them nothing here changed.
-  const staged = declared.documents.length > 0 ? stagedDocuments(cwd, declared.documents, deps.git) : null;
-  if (staged) return [documentsRow(sensors, staged)];
   const record = lock && lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', ...deps.gateLog })
     : null;
@@ -1193,9 +1254,24 @@ export function parseGateWait(argv) {
   return { noWait, waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait) };
 }
 
+const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait'];
+const BARE_FLAGS = ['--push', '--no-wait'];
+
+/** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
+ * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
+ * for the lock and would have run the suite. The value after a flag that takes one is not looked at
+ * here, whatever it is. */
+function refuseUnknown(argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (VALUED_FLAGS.includes(argv[i])) i += 1;
+    else if (!BARE_FLAGS.includes(argv[i])) throw new CheckArgError(`unknown argument: ${argv[i]}`);
+  }
+}
+
 /** Parses `argv`, matching `doctor.mjs`'s precedence: `--home` flag, then `env.JS_HARNESS_HOME`,
  * then `os.homedir()`. Throws `CheckArgError` when `--cwd`/`--home`/`--head`/`--remote`/`--wait` is given
- * without a value, and for a `--wait` it cannot take (`parseGateWait`). */
+ * without a value, for a `--wait` it cannot take (`parseGateWait`), and for an argument it does not know
+ * (`refuseUnknown`). */
 function parseArgs(argv, env) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
@@ -1203,6 +1279,7 @@ function parseArgs(argv, env) {
   };
   // Read first, as it always was: a `--wait` that cannot be taken is said before any other flag's fault.
   const { noWait, waitMinutes } = parseGateWait(argv);
+  refuseUnknown(argv);
   return {
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
@@ -1222,9 +1299,10 @@ function formatRow(row) {
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
- * stderr and running no row, when a flag that takes a value is given without one or `--wait` is given
- * a value it cannot take (`parseArgs`). A gate whose static row fails stops before its sensors: it prints
- * the rows it has and one that says it stopped, and exits 1 as that failure always made it. */
+ * stderr and running no row, when a flag that takes a value is given without one, `--wait` is given a
+ * value it cannot take, or an argument is given that `check` does not know (`parseArgs`). A gate whose
+ * static row fails stops before its sensors: it prints the rows it has and one that says it stopped, and
+ * exits 1 as that failure always made it. */
 export async function main(argv = process.argv.slice(2), env = process.env, deps = {}) {
   let parsed;
   try {
@@ -1253,8 +1331,9 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // together. The inner check and a push run no sensor and so take no lock: the inner one could only
   // wait for the gate that runs it. Nor does a gate started by a process that holds the lock, which
   // says so with the mark of a held lock (`GATE_HELD_ENV`): it runs its sensors in that turn.
-  // The gate of a commit that holds declared documents alone runs no sensor, and takes no lock either
-  // (`checkSensors`); the rows above ran all the same, so a contract it breaks still fails it.
+  // The gate of a commit that holds declared documents alone runs none of the project's sensors, and
+  // takes no lock either (`checkSensors`): it runs the sensors of documents, where the project declares
+  // them. The rows above ran all the same, so a contract it breaks still fails it.
   // A gate that runs sensors reads the machine's load before them, unless its environment switches that
   // off (`GATE_LOAD_ENV`, for a gate a test starts as a process of its own), and leaves its record in the
   // gate log of `home`, whatever the lock did, unless its environment switches that off (`GATE_LOG_ENV`).
