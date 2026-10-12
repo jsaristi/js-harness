@@ -2303,6 +2303,23 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     that was left pending, already on `main`, so the slice is what this branch adds); Codex
     with `--base 3088960`, plan first, inside the rate without asking; then push and a pull
     request on `main`.
+  - The merge is commit `8a73dde`. gentle-ai approved `3088960..8a73dde` (1,032 lines, medium,
+    one lens, `review-2cec5a5174e2ea28`; its capture waited more than an hour for a turn of
+    the gate) and the approval is acknowledged. Three notes, none blocking, NOT corrected yet:
+    (1) a warning: no test shows what a held model rule gives for an entry with no text model
+    (`keep` skips such an entry, so `none` cannot count one for a model: prove it with a test
+    or drop the line `no model recorded`); (2) `ZONED_TIME` takes an offset with no colon
+    (`+0200`), which is outside the format the language defines, so its reading depends on the
+    engine: take only the colon form; (3) no test of the command writes a session record and
+    sees its model and effort reach the block.
+    Also to do, from his answer of 12:20 as the lead relays it (not read by this session): a
+    Codex plan up to 5 percent over the rate counts as inside it; declare that margin in the
+    rules list with its source, his line 3800 and the lead's question at 3736 of transcript
+    `65318fd5-…`, read first with `sessions --quote`.
+    This session stopped here at 88 percent of its context, for a compaction. NEXT, in this
+    order: one writer for the three notes (one commit through the gate); the margin as a new
+    rule in the same commit or the next; Codex with `--base 3088960`, plan first; push and a
+    pull request on `main`.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
