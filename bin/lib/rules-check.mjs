@@ -11,6 +11,8 @@ import { holdsPhrase } from './failures.mjs';
 const READ_PATTERN = /ruleValue\(\s*(['"])([^'"]*)\1/g;
 // A mark that names a rule in code marks, on one line of a text.
 const NAME_PATTERN = /`rule:([a-z][a-z0-9-]*)`/g;
+// The run of backticks or tildes at the start of a trimmed line, three or more long: the mark that opens a fence.
+const FENCE_RUN = /^(`{3,}|~{3,})/;
 // The characters that can end a sentence.
 const TERMINATORS = '.?!';
 
@@ -90,20 +92,21 @@ export function sentenceOf(text, phrase) {
 }
 
 /** Every `rule:<id>` mark in code marks, on a line that is not inside a fenced block: `{ path, id }`. A fence
- * opens on a line that starts with three backticks or three tildes, and closes on the next line that starts with
- * the same three characters. The lines that open and close a fence are not read for marks. */
+ * opens on a line that starts with three or more backticks or tildes, and closes on the next line that starts with
+ * the same character as many times or more, so a longer fence can hold a shorter one. The lines that open and close
+ * a fence are not read for marks. */
 export function namedRules(textFiles) {
   const named = [];
   for (const { path, text } of textFiles) {
     let fence = null;
     for (const line of text.split('\n')) {
       const trimmed = line.trim();
+      const run = FENCE_RUN.exec(trimmed);
       if (fence !== null) {
-        if (trimmed.startsWith(fence)) fence = null;
+        if (run !== null && run[1][0] === fence[0] && run[1].length >= fence.length) fence = null;
         continue;
       }
-      if (trimmed.startsWith('```')) fence = '```';
-      else if (trimmed.startsWith('~~~')) fence = '~~~';
+      if (run !== null) fence = run[1];
       else {
         for (const match of line.matchAll(NAME_PATTERN)) named.push({ path, id: match[1] });
       }
@@ -172,6 +175,13 @@ export function checkRules(input) {
         findings.push(`rule "${rule.id}": its source is not a design with its path, or his words with their quotes, reading, acceptance and check`);
       } else if (isDesign(source) && rule.owner === 'sebastian') {
         findings.push(`rule "${rule.id}": a rule of his needs his words as its source`);
+      }
+    }
+    // A retired rule needs no source, but a source it has must be one that can be rendered, like the others.
+    for (const rule of rules.filter((item) => Object.hasOwn(item, 'retired'))) {
+      const source = Object.hasOwn(sources, rule.id) ? sources[rule.id] : undefined;
+      if (source !== undefined && !isDesign(source) && !isWords(source)) {
+        findings.push(`rule "${rule.id}": its source is not a design with its path, or his words with their quotes, reading, acceptance and check`);
       }
     }
     for (const key of Object.keys(sources)) {

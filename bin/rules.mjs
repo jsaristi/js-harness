@@ -103,7 +103,8 @@ function textFilesUnder(root) {
 }
 
 /** What the command reads under `root`, each file once. The sources are `null` when there is no file, and a file
- * that is not JSON is an error. `readFile` answers for any file of the project, or `null`. */
+ * that is not JSON is an error. `readFile` answers for any file of the project: `null` when it is not there, and an
+ * error when it is there and cannot be read. */
 function readAll(root) {
   const sourcesText = readOptional(root, SOURCES);
   let sources = null;
@@ -113,6 +114,10 @@ function readAll(root) {
     } catch (err) {
       throw new Error(`${SOURCES} is not JSON: ${err.message}`);
     }
+    // A file that is JSON but not an object keyed by id is an error too: `null` must not pass for an absent file.
+    if (sources === null || typeof sources !== 'object' || Array.isArray(sources)) {
+      throw new Error(`${SOURCES} is not an object keyed by rule id`);
+    }
   }
   return {
     sources,
@@ -120,13 +125,7 @@ function readAll(root) {
     listText: readOptional(root, LIST),
     codeFiles: codeFilesUnder(root),
     textFiles: textFilesUnder(root),
-    readFile: (file) => {
-      try {
-        return fs.readFileSync(path.join(root, ...file.split('/')), 'utf8');
-      } catch {
-        return null;
-      }
-    },
+    readFile: (file) => readOptional(root, file),
   };
 }
 
@@ -192,7 +191,7 @@ function renderLists(root, { sources, findings, readers, sentences }, stdout, st
 }
 
 /** `js-harness rules` and its forms: the listing, `<id>`, `check` and `render`. It returns the exit code: 0 when the
- * form succeeds, 1 when a rule is not declared, the list has a finding, or the sources are not JSON, and 2 with the
+ * form succeeds, 1 when a rule is not declared, the list has a finding, or a file is unreadable or not the sources, and 2 with the
  * usage on stderr for an argument it does not know. Every file is read under `root`, which defaults to the package. */
 export async function rulesMain(argv, { root = PACKAGE_ROOT, stdout = console.log, stderr = console.error } = {}) {
   let parsed;
@@ -203,24 +202,27 @@ export async function rulesMain(argv, { root = PACKAGE_ROOT, stdout = console.lo
     return 2;
   }
 
+  // The plain listing needs only the declarations, so a file it does not read cannot stop it.
+  if (parsed.command === 'list') return listRules(stdout);
+
   let read;
+  let result;
   try {
     read = readAll(root);
+    result = checkRules({
+      rules: RULES,
+      sources: read.sources,
+      dataText: read.dataText,
+      listText: read.listText,
+      codeFiles: read.codeFiles,
+      textFiles: read.textFiles,
+      readFile: read.readFile,
+    });
   } catch (err) {
     stderr(err.message);
     return 1;
   }
-  const result = checkRules({
-    rules: RULES,
-    sources: read.sources,
-    dataText: read.dataText,
-    listText: read.listText,
-    codeFiles: read.codeFiles,
-    textFiles: read.textFiles,
-    readFile: read.readFile,
-  });
 
-  if (parsed.command === 'list') return listRules(stdout);
   if (parsed.command === 'id') return showRule(parsed.id, { sources: read.sources, readers: result.readers }, stdout, stderr);
   if (parsed.command === 'check') return checkList(result, stdout);
   return renderLists(root, { sources: read.sources, ...result }, stdout, stderr);

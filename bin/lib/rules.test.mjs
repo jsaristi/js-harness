@@ -267,10 +267,11 @@ test('a phrase shorter than 12 characters is refused, one fault per such phrase'
 });
 
 test('a phrase is measured after its white space is squashed, so padding does not make it long enough', () => {
-  assert.deepEqual(readRules([textRule('alpha-text', { phrases: ['   eleven   chars  '] })]), []);
-  assert.deepEqual(readRules([textRule('alpha-text', { phrases: ['eleven char'] })]), [
-    'rule "alpha-text": the phrase "eleven char" is shorter than 12 characters: it could be found by accident',
+  // Twenty-one characters raw, nine once the white space is squashed to single spaces.
+  assert.deepEqual(readRules([textRule('alpha-text', { phrases: ['a    b    c    d    e'] })]), [
+    'rule "alpha-text": the phrase "a b c d e" is shorter than 12 characters: it could be found by accident',
   ]);
+  assert.deepEqual(readRules([textRule('alpha-text', { phrases: ['twelve chars'] })]), []);
 });
 
 // ── Fault 13: the retired body ─────────────────────────────────────────────────────────────────
@@ -314,6 +315,11 @@ test('a unit on a rule in prose is refused: a unit goes with a value', () => {
 
 test('a flag on a rule in prose is refused: a flag goes with a value', () => {
   assert.deepEqual(readRules([textRule('alpha-text', { flag: '--wait' })]), ['rule "alpha-text": a flag goes with a value']);
+});
+
+test('successors on a rule that is not retired are refused, on a value and on a rule in prose', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { successors: [] })]), ['rule "alpha-value": successors go with a retired rule']);
+  assert.deepEqual(readRules([textRule('alpha-text', { successors: [] })]), ['rule "alpha-text": successors go with a retired rule']);
 });
 
 test('earlier values on a rule in prose are refused: they go with a value or a retired rule', () => {
@@ -455,6 +461,17 @@ test('the minPhrase option moves the bound a phrase is measured against', () => 
   assert.deepEqual(readRules([rule], { minPhrase: 20 }), [
     'rule "alpha-text": the phrase "eleven char" is shorter than 20 characters: it could be found by accident',
   ]);
+});
+
+test('an unreadable shortest phrase is the first fault, and the bound is then 0, so no phrase is too short', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { subject: '' }), textRule('beta-text', { phrases: ['abc'] })], { declared: [] }), [
+    'the shortest phrase cannot be read: no rule "control-phrase-min" is declared (bin/lib/rules-data.mjs)',
+    'rule "alpha-value": the subject is missing',
+  ]);
+});
+
+test('an explicit minPhrase is used as it is, and nothing is read from the declared list', () => {
+  assert.deepEqual(readRules([textRule('alpha-text')], { minPhrase: 12, declared: [] }), []);
 });
 
 // ── ruleValue ──────────────────────────────────────────────────────────────────────────────────
@@ -622,6 +639,15 @@ test('rulesHash is different when a rule is retired', () => {
   assert.notEqual(rulesHash([retiredRule('alpha-value')]), rulesHash([valueRule('alpha-value')]));
 });
 
+test('rulesHash is different when a unit, a flag, a path or the phrases change, and the same when a row is added', () => {
+  const base = rulesHash([valueRule('alpha-value')]);
+  assert.notEqual(rulesHash([valueRule('alpha-value', { unit: 'seconds' })]), base);
+  assert.notEqual(rulesHash([valueRule('alpha-value', { flag: '--wait' })]), base);
+  assert.notEqual(rulesHash([textRule('alpha-text', { path: 'docs/origin.md' })]), rulesHash([textRule('alpha-text')]));
+  assert.notEqual(rulesHash([textRule('alpha-text', { phrases: ['another phrase that is found'] })]), rulesHash([textRule('alpha-text')]));
+  assert.equal(rulesHash([valueRule('alpha-value', { row: { refuses: '2026-10-01' } })]), base);
+});
+
 // ── renderList ─────────────────────────────────────────────────────────────────────────────────
 
 const NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
@@ -715,6 +741,19 @@ test('renderList of an empty list keeps its three sections, each with None, and 
 
 test('renderList prints a number with its digits grouped, so 1200 prints as 1,200', () => {
   assert.ok(renderList([valueRule('alpha-value', { value: 1200 })]).split('\n').includes('The test value of a thing: 1,200 characters.'));
+});
+
+test('renderList keeps the fraction digits of a value, so 0.0001 seconds and 1234.5678 are not rounded', () => {
+  assert.ok(renderList([valueRule('alpha-value', { value: 0.0001, unit: 'seconds' })]).split('\n').includes('The test value of a thing: 0.0001 seconds.'));
+  assert.ok(renderList([valueRule('alpha-value', { value: 1234.5678 })]).split('\n').includes('The test value of a thing: 1,234.5678 characters.'));
+  assert.ok(renderList([valueRule('alpha-value', { value: 1200 })]).split('\n').includes('The test value of a thing: 1,200 characters.'));
+});
+
+test('renderList shows a source it cannot read as not readable, and does not throw on it', () => {
+  for (const source of [null, 'x', { kind: 'words' }, { kind: 'design' }]) {
+    const lines = renderList([valueRule('alpha-value')], { sources: { 'alpha-value': source } }).split('\n');
+    assert.ok(lines.includes('- Since 2026-10-11. Row: reports. Source: not readable.'), JSON.stringify(source));
+  }
 });
 
 test('renderList prints each form of the row: reports, refuses since a day, or reports since a day with its reason', () => {

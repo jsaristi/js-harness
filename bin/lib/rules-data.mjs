@@ -5,6 +5,22 @@
 // gives for the list, and a test holds it to that: a rule is changed there, never in another shape.
 export const RULES = [
   {
+    "id": "codex-review-floor",
+    "subject": "the most input tokens a Codex review may cost however small its commit",
+    "owner": "sebastian",
+    "since": "2026-10-11",
+    "value": 300000,
+    "unit": "input tokens a review"
+  },
+  {
+    "id": "codex-review-rate",
+    "subject": "the most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor",
+    "owner": "sebastian",
+    "since": "2026-10-11",
+    "value": 1200,
+    "unit": "input tokens a changed line"
+  },
+  {
     "id": "control-phrase-min",
     "subject": "the shortest phrase by which a control or a rule in prose is found in its file",
     "owner": "project",
@@ -64,8 +80,8 @@ export const RULES = [
   {
     "id": "reviewed-commit-lines",
     "subject": "about how many changed lines a commit that will be reviewed stays under",
-    "owner": "project",
-    "since": "2026-10-10",
+    "owner": "sebastian",
+    "since": "2026-10-11",
     "value": 1200,
     "unit": "changed lines"
   },
@@ -89,5 +105,13 @@ export const RULES = [
     "owner": "sebastian",
     "since": "2026-10-11",
     "value": "Haiku 5.5"
+  },
+  {
+    "id": "work-sessions",
+    "subject": "the most work sessions open at one time",
+    "owner": "sebastian",
+    "since": "2026-10-09",
+    "value": 3,
+    "unit": "sessions"
   }
 ];

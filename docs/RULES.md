@@ -2,9 +2,19 @@
 
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 
-Hash `bd124ff87141`. In force: 11 (5 of Sebastián, 6 of the project). Retired: 0.
+Hash `807fdc507a1d`. In force: 14 (9 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
+
+### codex-review-floor
+The most input tokens a Codex review may cost however small its commit: 300,000 input tokens a review.
+- Read by: none.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+
+### codex-review-rate
+The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
+- Read by: none.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### review-effort
 The effort a Codex review runs at: high.
@@ -15,6 +25,11 @@ The effort a Codex review runs at: high.
 The one model a Codex review runs on: gpt-6.1-sol.
 - Read by: none.
 - Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
+
+### reviewed-commit-lines
+About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
+- Read by: none.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
@@ -30,6 +45,11 @@ The least model of a sub-agent that explores, reviews or verifies: Opus 5.5.
 The model of a sub-agent that writes scoped code, in this repository: Haiku 5.5.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
+
+### work-sessions
+The most work sessions open at one time: 3 sessions.
+- Read by: none.
+- Since 2026-10-09. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ## The project's
 
@@ -57,11 +77,6 @@ The most changed lines one part of a Codex review holds, by default: 400 changed
 The most parts a Codex review runs in without being told its count: 6 parts. The flag `--max-parts` overrides it for one run.
 - Read by: none.
 - Since 2026-10-09. Row: reports. Source: design, `odd/tasks/codex-review-cost.md`.
-
-### reviewed-commit-lines
-About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
-- Read by: none.
-- Since 2026-10-10. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
 
 ## Retired
 

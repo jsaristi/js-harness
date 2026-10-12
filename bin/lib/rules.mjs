@@ -201,6 +201,7 @@ function ruleFaults(rule, { minPhrase, declared }) {
   if (body === 'retired') faults.push(...retiredFaults(rule, declared));
   if (rule.unit !== undefined && (body === 'text' || body === 'retired')) faults.push('a unit goes with a value');
   if (rule.flag !== undefined && body !== 'value') faults.push('a flag goes with a value');
+  if (rule.successors !== undefined && (body === 'value' || body === 'text')) faults.push('successors go with a retired rule');
   if (rule.was !== undefined && body === 'text') faults.push('earlier values go with a value or a retired rule');
   if (rule.was !== undefined && (body === 'value' || body === 'retired')) faults.push(...wasFaults(rule.was));
   faults.push(...optionalFaults(rule));
@@ -211,15 +212,26 @@ function ruleFaults(rule, { minPhrase, declared }) {
  * an empty result means the list is readable. It never throws, and it says every fault it finds,
  * because a list that is read one fault at a time takes one round per fault to repair. The shortest
  * phrase is itself a declared rule, read here when no other bound is given. */
-export function readRules(list, { minPhrase = ruleValue('control-phrase-min', 'characters') } = {}) {
+export function readRules(list, { minPhrase, declared = RULES } = {}) {
   if (!Array.isArray(list)) return ['the rules are not a list'];
+  const faults = [];
+  // The shortest phrase, read from `declared` when no bound is given. When it cannot be read, that is the first
+  // fault, and the bound is 0, so that no phrase is too short and the rest of the list is still read.
+  let bound = minPhrase;
+  if (bound === undefined) {
+    try {
+      bound = ruleValue('control-phrase-min', 'characters', declared);
+    } catch (err) {
+      faults.push(`the shortest phrase cannot be read: ${err.message}`);
+      bound = 0;
+    }
+  }
   // Every id a rule declares, so that a successor is checked against the whole list, not only the rules before it.
-  const declared = new Set();
+  const ids = new Set();
   for (let index = 0; index < list.length; index += 1) {
-    if (isObject(list[index]) && usableId(list[index].id)) declared.add(list[index].id);
+    if (isObject(list[index]) && usableId(list[index].id)) ids.add(list[index].id);
   }
 
-  const faults = [];
   const seen = new Set();
   let previous = null;
   for (let index = 0; index < list.length; index += 1) {
@@ -242,7 +254,7 @@ export function readRules(list, { minPhrase = ruleValue('control-phrase-min', 'c
       }
       seen.add(id);
     }
-    for (const message of ruleFaults(rule, { minPhrase, declared })) faults.push(who + message);
+    for (const message of ruleFaults(rule, { minPhrase: bound, declared: ids })) faults.push(who + message);
     previous = usable ? id : null;
   }
   return faults;
@@ -334,7 +346,7 @@ export function rulesHash(list) {
 const upper = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** A number with its digits grouped as an English reader sees them (1200 is 1,200), and any other value as text. */
-const shown = (value) => (typeof value === 'number' ? value.toLocaleString('en-US') : String(value));
+const shown = (value) => (typeof value === 'number' ? value.toLocaleString('en-US', { maximumFractionDigits: 20 }) : String(value));
 
 /** A value and its unit with a space between them, or the value alone when the rule has no unit. */
 const amount = (value, unit) => (unit === undefined ? shown(value) : `${shown(value)} ${unit}`);
@@ -355,13 +367,17 @@ function rowText(row) {
   return `reports since ${row.since} (${row.reports})`;
 }
 
-/** The source of a rule: the design it is written in, or the dates of his words that set it and the check that read them. */
+/** The source of a rule: the design it is written in, or the dates of his words that set it and the check that read them.
+ * A source of another shape is `not readable`, so that no source can make the list throw; rules-check.mjs names each one. */
 function sourceText(source) {
   if (source === undefined) return 'none recorded';
-  if (source.kind === 'design') return `design, ${code(source.path)}`;
-  const dates = source.quotes.map((quote) => quote.date).join(', ');
+  if (!isObject(source)) return 'not readable';
+  if (source.kind === 'design') return typeof source.path === 'string' ? `design, ${code(source.path)}` : 'not readable';
+  const words = source.kind === 'words' && Array.isArray(source.quotes) && source.quotes.every(isObject) && isObject(source.checked);
+  if (!words) return 'not readable';
+  const dates = source.quotes.map((quote) => show(quote.date)).join(', ');
   const who = source.checked.by === 'session' ? 'a session' : 'the command';
-  return `his words of ${dates}, checked by ${who} on ${source.checked.date}`;
+  return `his words of ${dates}, checked by ${who} on ${show(source.checked.date)}`;
 }
 
 /** The line that gives a rule's day, its row and its source. */
@@ -406,7 +422,8 @@ function section(heading, blocks) {
 }
 
 /** The text of docs/RULES.md for `list`. It is pure: the sources, the readers and the sentences of the rules
- * come in as arguments, so the text depends on nothing it is not given. Each section lists its rules by id. */
+ * come in as arguments, so the text depends on nothing it is not given. Each section lists its rules by id. It expects
+ * a list that `readRules` accepted. */
 export function renderList(list, { sources = {}, readers = {}, sentences = {} } = {}) {
   const rules = byId(list);
   const inForce = rules.filter((rule) => !Object.hasOwn(rule, 'retired'));

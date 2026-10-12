@@ -126,6 +126,11 @@ test('namedRules ignores a mark inside a fence, and a fence closes only with its
   ]);
 });
 
+test('a fence opened with four marks closes only on a line of at least four, so a line of three stays inside', () => {
+  const text = ['````', '```', 'Inside `rule:review-note`.', '````', 'After `rule:gone-rule`.'].join('\n');
+  assert.deepEqual(namedRules([{ path: 'docs/NOTES.md', text }]), [{ path: 'docs/NOTES.md', id: 'gone-rule' }]);
+});
+
 test('a clean input gives no finding and no note, with the readers and sentences of its texts', () => {
   assert.deepEqual(checkRules(build()), { findings: [], notes: [], readers: READERS, sentences: SENTENCES });
 });
@@ -312,4 +317,13 @@ test('a source that cannot be rendered is a finding and never a throw: the list 
 test('a sources file that is a list is refused as a whole', () => {
   const result = checkRules({ ...build(), sources: [] });
   assert.deepEqual(result.findings, ['docs/rule-sources.json is not an object keyed by rule id']);
+});
+
+test('a retired rule whose source is malformed is a finding, and a retired rule with no source entry is not', () => {
+  const rules = [declared()[0], OLD, declared()[1]];
+  const result = checkRules(build({ rules, sources: { ...SOURCES, 'old-wait': { kind: 'words' } } }));
+  assert.deepEqual(result.findings, [
+    'rule "old-wait": its source is not a design with its path, or his words with their quotes, reading, acceptance and check',
+  ]);
+  assert.deepEqual(checkRules(build({ rules })).findings, []);
 });

@@ -111,6 +111,26 @@ test('a docs/rule-sources.json that is not JSON fails check and render alike, wi
   });
 });
 
+test('a docs/rule-sources.json that is JSON but not an object keyed by id fails check with its message', async () => {
+  const message = 'docs/rule-sources.json is not an object keyed by rule id';
+  for (const text of ['null', '[]', '7', '"a text"']) {
+    await inProject({ ...BASE(), 'docs/rule-sources.json': text }, async (dir) => {
+      assert.deepEqual(await run(['check'], dir), { code: 1, out: [], err: [message] }, text);
+    });
+  }
+});
+
+test('a file that is there and cannot be read is an error: a roadmap that is a directory fails check with its reason', async () => {
+  await inProject(BASE(), async (dir) => {
+    fs.mkdirSync(path.join(dir, 'docs', 'ROADMAP.md'));
+    const { code, out, err } = await run(['check'], dir);
+    assert.equal(code, 1);
+    assert.deepEqual(out, []);
+    assert.equal(err.length, 1);
+    assert.match(err[0], /^cannot read docs\/ROADMAP\.md/);
+  });
+});
+
 test('a code file that reads an undeclared rule fails check, and render refuses', async () => {
   await inProject(BASE(), async (dir) => {
     assert.equal((await run(['render'], dir)).code, 0);
@@ -133,6 +153,16 @@ test('a test file that reads an undeclared rule is not read', async () => {
     await run(['render'], dir);
     write(dir, { 'bin/x.test.mjs': READS_UNDECLARED });
     assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE], err: [] });
+  });
+});
+
+test('the plain listing reads no file, so a sources file that is not JSON does not stop it, while check still fails', async () => {
+  await inProject({ ...BASE(), 'docs/rule-sources.json': '{ "control-phrase-min": ' }, async (dir) => {
+    const listing = await run([], dir);
+    assert.deepEqual([listing.code, listing.err], [0, []]);
+    assert.equal(listing.out.length, RULES.length + 1);
+    assert.equal(listing.out.at(-1), COUNT_LINE);
+    assert.equal((await run(['check'], dir)).code, 1);
   });
 });
 
@@ -159,9 +189,11 @@ test('rules prints one line per rule, with its value and unit, then the count li
     const { code, out, err } = await run([], dir);
     assert.deepEqual([code, err], [0, []]);
     assert.equal(out.length, RULES.length + 1);
-    assert.equal(out[0], 'control-phrase-min  12 characters  project');
-    assert.equal(out[1], 'gate-wait  60 minutes  project');
-    assert.equal(out[2], 'review-effort  high  sebastian');
+    // In list order, whatever rules are declared: a line is the id, what the rule is, and its owner.
+    assert.deepEqual(out.slice(0, -1).map((line) => line.split('  ')[0]), RULES.map((rule) => rule.id));
+    assert.ok(out.includes('control-phrase-min  12 characters  project'));
+    assert.ok(out.includes('gate-wait  60 minutes  project'));
+    assert.ok(out.includes('review-effort  high  sebastian'));
     assert.equal(out.at(-1), COUNT_LINE);
   });
 });
