@@ -494,13 +494,32 @@ test('several recorded runs are searched with one snapshot, and what each left b
   assert.equal(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS, '200@5500\n250@5600');
 });
 
-test('a run handed in with no exit time is recorded with the exit read at that moment, so a child created later is not found', () => {
-  let clock = 6000;
-  const sync = scripted([{ stdout: rows({ pid: 200, ppid: 100, createdAt: 5500, name: 'a.exe' }, { pid: 300, ppid: 100, createdAt: 6500, name: 'b.exe' }) }, { stdout: 'K\t200\r\n' }]);
-  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => clock });
+test('a run whose root was not seen to exit is handed to the real sweep at once, and nothing of it waits for the end of the file', () => {
+  const sync = scripted([]);
+  const handed = [];
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6000, killSurvivors: (...args) => handed.push(args) });
+  const child = { pid: 100 };
+  later.killSurvivors(child, { startedAt: 5000 });
+  assert.equal(handed.length, 1, 'a kill that failed leaves the root running: only the real sweep kills a root');
+  assert.equal(handed[0][0], child);
+  assert.deepEqual(handed[0][1], { startedAt: 5000 });
+  assert.equal(handed[0][2].platform, 'win32');
+  assert.equal(handed[0][2].spawnSync, sync);
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 0, 'the run was not recorded: the look has nothing to search');
+});
+
+test('a root still running when its run ends is killed at once with what it started, not left for a look that would not select it', () => {
+  const sync = scripted([
+    { stdout: rows({ pid: 100, ppid: 1, createdAt: 5100, name: 'agent.exe' }, { pid: 200, ppid: 100, createdAt: 5500, name: 'child.exe' }) },
+    { stdout: 'K\t100\r\nK\t200\r\n' },
+  ]);
+  const later = sweepLater({ platform: 'win32', spawnSync: sync, now: () => 6000 });
   later.killSurvivors({ pid: 100 }, { startedAt: 5000 });
-  clock = 9000; // read at check time, the window would reach the child created at 6500
-  assert.deepEqual(later.check(), [{ pid: 200, name: 'a.exe' }]);
+  assert.equal(sync.calls.length, 2, 'one snapshot and one kill, when the run ends');
+  assert.deepEqual(sync.calls[1].options.env.JS_HARNESS_KILL_TARGETS.split('\n').sort(), ['100@5100', '200@5500']);
+  assert.deepEqual(later.check(), []);
+  assert.equal(sync.calls.length, 2, 'nothing was left to the end of the file');
 });
 
 test('a run whose start is not known makes the recorder throw, and nothing is looked up', () => {

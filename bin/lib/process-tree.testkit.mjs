@@ -142,8 +142,10 @@ export function createReaper({ platform = process.platform, spawnSync: sync = sp
  * leaves behind: it pays one snapshot at its end in place of one a run (on Windows each run's sweep starts a
  * PowerShell that lists every process of the machine). `killSurvivors` is what the test hands to `runProcess`: it
  * records what the run ends with (the child, and when it started and exited, as the real sweep is given them) and
- * does nothing else. `check()` is called once, in the file's `after`: it takes one snapshot, selects each recorded
- * run's descendants as the real sweep does (`resolveRoot`, `selectDescendants`), kills what it finds through the
+ * does nothing else, but for a run whose root was not seen to exit, which goes to the real sweep at once: a root
+ * that may still run is killed only by it. `check()` is called once, in the file's `after`: it takes one snapshot,
+ * selects each recorded run's descendants as the real sweep does (`resolveRoot`, `selectDescendants`), kills what it
+ * finds through the
  * snapshot's own identities, and returns it as `[{ pid, name }]` for the file to fail on. So a leak lives until the
  * file ends and then fails the file by name, where the real sweep kills it at once and in silence. Off Windows
  * `killSurvivors` is the real sweep, which starts nothing, and `check` returns `[]`. Its limit: a grandchild whose
@@ -160,9 +162,14 @@ export function sweepLater({
     if (!Number.isFinite(lifetime?.startedAt)) {
       throw new Error(`cannot search later what pid ${child.pid} left behind: when it started is not known, and a pid alone does not name its children`);
     }
-    // Read now where the run did not hand one over: a window that ran on to the end of the file would let in the
-    // children of a pid that Windows gave to another process in the meantime.
-    runs.push({ pid: child.pid, startedAt: lifetime.startedAt, exitedAt: lifetime.exitedAt ?? now() });
+    // A run that ends with no exit time has a root nobody saw exit (a timeout or an interrupt whose kill failed):
+    // it may still run, and a search by parentage leaves the root itself out. Only the real sweep kills a root,
+    // so that run is swept now, at the price of the snapshot this file otherwise saves.
+    if (!Number.isFinite(lifetime.exitedAt)) {
+      real(child, lifetime, { platform, spawnSync: sync, now });
+      return;
+    }
+    runs.push({ pid: child.pid, startedAt: lifetime.startedAt, exitedAt: lifetime.exitedAt });
   };
   const check = () => {
     const recorded = runs.splice(0);
