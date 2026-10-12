@@ -48,6 +48,7 @@ does not return (lines 143 and 145).
 - `node --test bin/lib/sessions.test.mjs` exits 0
 - `node --test bin/js-harness.test.mjs` exits 0
 - `node --test bin/resume.test.mjs` exits 0
+- `node --test bin/lib/pause.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
 - The practice journey, with this feature's step in it, passes on the machine that builds it
   (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
@@ -1762,10 +1763,20 @@ summary.
    a. Done: `main` at `5f011cc` merged into this branch as `8f4e010` and gated (`PASS tests
       npm run test passed`, 2026-10-12 04:13). `main` moved to `7411fe6` since (pull request
       69); it is taken with the merge before the pull request, not before.
-   b. The pause command (point 14, part 1): a module of its own that reads the end of a
-      transcript, the mark for a stretch, the function JH 7's `Stop` check will import, and
-      `js-harness resume --pause` for a `PostToolUse` input; never an exit but 0. No entry
-      in `install` yet.
+   b. The pause command (point 14, part 1), in two commits. Done in the commit that holds
+      this text: the library `bin/lib/pause.mjs` (`readEnd`, `statePath`, `pauseNotice`, the
+      function JH 7's `Stop` check imports), by one writer on Haiku 5.5 at effort high, 20
+      tool calls, test first; read by the parent: `node --test bin/lib/pause.test.mjs` 19
+      pass, and on this session's own transcript it read 414,207 tokens in 8.6 ms, answered
+      nothing under the pause and wrote no file. A stretch is told by the context falling
+      under the pause again, not by a boundary's `uuid`, which may be megabytes before the
+      end; the state file of a session keeps when it was told. Owed for that commit: what
+      its gate, gentle-ai and Codex said. Next: `js-harness resume --pause` for a
+      `PostToolUse` input (it reads the hook's JSON, finds the project's `harness.json` by
+      walking up from `cwd` with no git call, ignores an input with `agent_id`, prints the
+      host's JSON with `additionalContext`, never an exit but 0), and the dispatcher loading
+      a command's module only when it is asked, since through it a start costs 210 ms and a
+      bare one 130. No entry in `install` yet.
    c. The resume hook's new lines (part 3) and the fact of a compaction recorded in the
       channel's record (part 4, a), which the two readers have not read: a reader reads
       part 4 before it is built.
