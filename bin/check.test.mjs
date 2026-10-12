@@ -2599,6 +2599,22 @@ test('takeGateTurn says of each gate what is true of it: one that holds the lock
   }
 });
 
+// Found in review, 2026-10-11: a wait that ran out beside a gate of an older version (which keeps no line) was
+// worded as one that ended "without the lock changing hands", which is not what the bound counted there.
+test('takeGateTurn words a timeout beside a gate of an older version without "without the lock changing hands", and says that older gate waited beside it', async () => {
+  const HOLDER = 'the gate of C:\\work\\other (pid 4321, started 2026-10-11T07:00:00.000Z)';
+  const holder = { token: '4321-aa', pid: 4321, cwd: 'C:\\work\\other', command: 'check', session: null, startedAt: '2026-10-11T07:00:00.000Z', beatAt: 1, stale: false };
+  const answer = { refused: 'timeout', holder, line: { ahead: 1, head: null }, waitedMs: 3_700_000, stillMs: 3_700_000, besideOlder: true };
+  const { turn, said } = await turnSaid(async () => answer);
+  assert.equal(
+    turn.refused,
+    `${HOLDER} holds the machine's gate lock now; this gate had waited 61 min 40 s in all, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after 1 minute)`,
+  );
+  assert.match(turn.refused, /older version/);
+  assert.doesNotMatch(turn.refused, /without the lock changing hands/);
+  assert.deepEqual([turn.reason, said], ['timeout', []]);
+});
+
 test('main stands behind a gate that arrived before it when the lock is free, says that this gate waits and holds nothing, and keeps it in its log as a gate it waited for from the moment it held the lock', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const clock = gateClock();
   const first = await clock.take({ home, ...OTHER_GATE });

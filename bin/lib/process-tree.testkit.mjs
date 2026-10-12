@@ -38,8 +38,9 @@ function describeLook(pid, recorded, row, rows) {
  * creation time, its parent), for the message of a failure, and `null` when nothing answered. The number is asked
  * first, which takes no time, and a snapshot is taken only when one answered: "nothing answers" is true of the instant
  * of the call, while a number that answered is judged by what a snapshot saw a second or so later, so a process that
- * ended in between is not alive, and `found` says that it answered. A snapshot that failed throws. POSIX: the answer
- * to the number stands. Nothing is ever signalled by a look. */
+ * ended in between is not alive, and `found` says that it answered. A snapshot that failed throws, and so does a
+ * recorded pid that answers under a row with no creation time: its identity cannot be told, so it is neither
+ * alive nor gone. POSIX: the answer to the number stands. Nothing is ever signalled by a look. */
 export function createReaper({ platform = process.platform, spawnSync: sync = spawnChildSync, kill = process.kill } = {}) {
   const children = new Set();
   const learned = new Map(); // pid -> identity
@@ -99,6 +100,11 @@ export function createReaper({ platform = process.platform, spawnSync: sync = sp
         if (!answering.has(pid)) return { pid, alive: false, found: null };
         const recorded = learned.get(pid);
         const row = rows.get(pid);
+        // A recorded pid that answers, under a row with no creation time, is neither the recorded process nor
+        // proved another one: "not alive" would let a survivor pass as gone. Found in review, 2026-10-11.
+        if (recorded && row && !Number.isFinite(row.createdAt)) {
+          throw new Error(`pid ${pid} answers, and the snapshot lists ${row.name || 'a process without a name'} under it with no creation time, so its identity could not be told: the process recorded was ${createdOn(recorded.createdAt)}`);
+        }
         return { pid, alive: Boolean(recorded && row && row.createdAt === recorded.createdAt), found: describeLook(pid, recorded, row, rows) };
       });
     },

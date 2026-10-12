@@ -269,6 +269,8 @@ test('the wait is bounded: past it the gate is refused and the holder keeps the 
   assert.equal(second.refused, 'timeout');
   assert.equal(second.holder.pid, 11);
   assert.equal(second.waitedMs, 60_000);
+  // No gate of an older version was beside it at any look.
+  assert.equal(second.besideOlder, false);
   assert.equal(first.lost(), false);
   assert.equal(readGateHolder(home, { now: clock.now }).pid, 11);
   first.release();
@@ -1480,6 +1482,33 @@ test('with wait off and the lock held, the refusal names the holder, and counts 
   first.release();
 }));
 
+// Found in review, 2026-10-11: a gate that was ahead in the line renamed its folder to `lock` between the look
+// at the line and the look at the lock. Its token was then both ahead and the holder's, so it was counted
+// twice and named as the head of a line it no longer waited in.
+test('a gate ahead that becomes the holder between the look at the line and the look at the lock is counted once, and is no head of the line', withHome(async (home) => {
+  const clock = fakeClock();
+  const since = clock.now();
+  const ahead = inLine(home, tokenOf(11), saysLine(11, since), new Date(since));
+  clock.advance(1000);
+  // The rename is made just before the lock folder is listed: after the line was read, before the lock is.
+  let renamed = false;
+  const io = tapped((name, args) => {
+    if (name === 'readdirSync' && args[0] === gateLockDir(home) && !renamed) {
+      renamed = true;
+      fs.renameSync(ahead.folder, gateLockDir(home));
+    }
+  });
+  const told = [];
+  // The gate of pid 11 is then the holder, and it releases at the first poll, so the gate of pid 22 takes the lock.
+  clock.onSleep = () => fs.rmSync(gateLockDir(home), { recursive: true, force: true });
+  const second = await take(home, clock, { pid: 22, fileSystem: io, onWait: (holder, leftMs, line) => told.push({ token: holder.token, line }) });
+  assert.equal(second.refused, undefined);
+  assert.equal(told.length, 1);
+  assert.equal(told[0].token, tokenOf(11));
+  assert.deepEqual(told[0].line, { ahead: 1, head: null });
+  second.release();
+}));
+
 // --- the bound of a wait: how long the lock may stay in the same hands ---
 // Found on 2026-10-11: with gates of about fourteen minutes, a gate with four ahead reached its hour while
 // the line moved, was refused and came back at the end of the line. Two commits lost an hour each that way.
@@ -1558,6 +1587,9 @@ test('beside a live gate of an older version, where no line is kept and every ga
   // Told, with the second holder, what was left by then and not the whole bound again; and of no line.
   assert.deepEqual(told, [[11, waitMs, 1], [21, waitMs - 3 * POLL_MS, 1]]);
   assert.deepEqual(back.line, { ahead: 1, head: null });
+  // The refusal says so: beside the older gate the count did not restart with each holder, so it is not a
+  // wait that ended without the lock changing hands.
+  assert.equal(back.besideOlder, true);
   release();
 }));
 

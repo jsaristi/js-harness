@@ -420,7 +420,7 @@ function unreadable(dir, { token, since, answer }) {
  * file for whoever reads the lock (`readGateHolder`, `readGateWaiters`), and is given by the caller, which
  * has the environment; nothing here reads it.
  *
- * Resolves to `{ refused, holder, line, waitedMs, stillMs }` when it is not taken. `refused` is:
+ * Resolves to `{ refused, holder, line, waitedMs, stillMs, besideOlder }` when it is not taken. `refused` is:
  *   - `'held'`, with `wait` off, at once: `holder` holds the lock;
  *   - `'ahead'`, with `wait` off, at once: nobody holds the lock (`holder` is `null`) and a gate that
  *     arrived before this one waits for it, which taking the lock would pass. A gate that died as it
@@ -432,7 +432,11 @@ function unreadable(dir, { token, since, answer }) {
  * holder included, and the gate that waits first among them, as `readGateWaiters` gives one, or `null`
  * when only the holder is before this one. `waitedMs` is the whole wait, and `stillMs` how long the lock
  * had not changed hands when the wait ended, as the bound counts it (below): a change of hands that did
- * not start the count again, beside a gate of an older version, is not in it.
+ * not start the count again, beside a gate of an older version, is not in it. `besideOlder` is whether a
+ * look of this take was beside a live gate of an older version, which kept no line (`gatesAhead` answered
+ * `null`): at any look of the take, not only the last one. Then the bound counted as it did before the line
+ * (below), and a refusal for it is worded so by `check`, which says the wait was not counted from the last
+ * change of hands alone.
  *
  * The bound of a wait is `waitMs` without the lock changing hands, counted from the last time it did and
  * not from the arrival (`boundFrom`, the one place the count is anchored). Counted from the arrival, a
@@ -561,6 +565,8 @@ export async function takeGateLock({
   let everRead = false;
   // How many looks this take has had at a lock it could not take.
   let looks = 0;
+  // Whether any look of this take was beside a live gate of an older version (`besideOlder` in each refusal).
+  let besideOlderSeen = false;
 
   /** This gate's own folder, with its file as it must read at the instant it becomes the lock: started
    * now, beaten now. Made again when it is gone, which happens to a gate that slept the stale time.
@@ -635,6 +641,7 @@ export async function takeGateLock({
     } catch {
       ahead = [];
     }
+    if (besideOlder) besideOlderSeen = true;
     // The rename is tried at the head of the line only. It is still the one step that grants the lock:
     // two gates that both read themselves at the head both try it, and the file system lets one through.
     // `refusedBy` is what it answered; it stays `undefined` for a gate that left it to the gate ahead.
@@ -672,8 +679,13 @@ export async function takeGateLock({
     // What this look read of the lock, for the bound: free, or whose it is. Not a folder that could not be
     // listed, of which nothing was read.
     if (!nobodyKnown) handsRead(seen?.holder?.token ?? null, besideOlder);
-    // What a caller is told of the line: the gates before this one, the holder included.
-    const line = { ahead: ahead.length + (seen?.holder ? 1 : 0), head: ahead[0]?.waiter ?? null };
+    // What a caller is told of the line: the gates before this one, the holder included. A gate ahead whose
+    // token is the holder's read at this look became the holder between the line and the lock (its folder
+    // was renamed to `lock` meanwhile): it is counted once, as the holder, and is no gate that waits, so it
+    // is no head of the line either. Found in review, 2026-10-11. This is what `line` reports only; `atHead`
+    // and the rename are decided before it.
+    const waitingAhead = ahead.filter(({ token: waiting }) => waiting !== seen?.holder?.token);
+    const line = { ahead: waitingAhead.length + (seen?.holder ? 1 : 0), head: waitingAhead[0]?.waiter ?? null };
 
     if (!seen?.holder && !atHead) {
       // The lock is free and a gate is ahead: the turn is that gate's, which takes the lock at its next
@@ -693,7 +705,7 @@ export async function takeGateLock({
       const refused = !wait ? 'ahead' : stillMs >= waitMs ? 'timeout' : undefined;
       if (refused) {
         unstage();
-        return { refused, holder: null, line, waitedMs, stillMs };
+        return { refused, holder: null, line, waitedMs, stillMs, besideOlder: besideOlderSeen };
       }
       // Said once for each gate stood behind, as for each holder waited for.
       const telling = `behind|${ahead[0].token}`;
@@ -764,7 +776,7 @@ export async function takeGateLock({
     const refused = !wait && !holder.stale ? 'held' : over ? 'timeout' : undefined;
     if (refused) {
       unstage();
-      return { refused, holder, line, waitedMs, stillMs };
+      return { refused, holder, line, waitedMs, stillMs, besideOlder: besideOlderSeen };
     }
     // Said for each gate waited for, and again when its beat stops being readable or becomes so: what is
     // left of the wait is not the same for the two. With a new holder what is left of the bound is the

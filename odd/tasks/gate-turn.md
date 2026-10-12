@@ -324,15 +324,18 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       `bin/check.test.mjs:1688`. Test first. Route: one writer.
 - [x] T3b · The four findings of gentle-ai on S1 (Progress, 19:23). Route: one writer.
       Evidence: Progress, "T3b built".
-- [ ] T3c · With what Codex finds on S1, one narrow writer: the words of a refusal for the
+- [x] T3c · Evidence: Progress, "T3c written", and its commit. With what Codex finds on
+      S1, one narrow writer: the words of a refusal for the
       bound beside a gate of an older version (`refusalSaid`, `bin/check.mjs`) say "still
       held … after the whole wait" and "without the lock changing hands", and there the
       holder did change and the count is from the arrival; the refusal must carry that the
       gate stood beside an older one. And a touch of the own file that fails leaves the
       caller told `ahead` without the gate it did not read (said, no channel added).
-- [ ] T4 · The stop in `bin/check.mjs`, its line in the gate log, the
+- [x] T4 · Evidence: `b567112` on `feat/gate-stop` (Progress, 21:31). The stop in
+      `bin/check.mjs`, its line in the gate log, the
       three states of the lock. Test first. Route: one writer.
-- [ ] T5 · `PSModuleAnalysisCachePath` in the sensor's environment, and
+- [x] T5 · Evidence: `b567112` on `feat/gate-stop`, whose own gate left no folder and
+      printed no row `tree`. `PSModuleAnalysisCachePath` in the sensor's environment, and
       the row that lists what the sensors left in the tree.
 - [x] T6 · Notice sent to the orchestrator for "JH 5" on 2026-10-11, after `d133965`.
       The session's title beside each gate that waits, on the board. Not built here
@@ -592,11 +595,67 @@ S2 is T4 with T5. S3 is T6.
   effort high; one that explores, reviews or verifies stays on Opus at high; this session
   stays at high. On the first such writer its model id is read once in its transcript; a
   piece it gets wrong twice is written on Opus and told to the orchestrator.
+- 2026-10-11, before 21:21 (the hour its commit turn was launched) · T3c written, route one writer on `haiku` (its transcript records
+  `claude-haiku-5-5`, read once; 173,765 tokens, three and a half minutes, nothing run, as
+  the rule says), its changed code read back here: 92 lines added, 10 removed, six files.
+  A: `line` is made from the gates ahead without the holder read at that look. B: `look`
+  throws for a recorded pid that answers under a row with no creation time. C: a refusal
+  carries `besideOlder`, true when any look of the take saw a live gate of an older
+  version, and `refusalSaid` then says who holds the lock now, the whole wait, and that
+  the bound counted "from its arrival or from the last change of hands read while the line
+  was kept". That last wording is the writer's correction of this session's brief, which
+  said "from the arrival" and was wrong for a take that kept the line before the older
+  gate appeared. First piece on `haiku`: right at the first try. Its red and green run in
+  the turn of its commit (the logs `t3c-red.log` and `t3c-gate.log` in the scratchpad).
+- 2026-10-11 21:31 · `feat/gate-stop`: T4 and T5 committed, `b567112`, through the lock; the
+  whole gate passed (`PASS tests`). Its turn was asked at 20:21:06 and ended at 21:31:04
+  (`stop-gate.log`); it waited until about 21:14 behind four gates,
+  two of them this session's and two that arrived after it: a fifth sighting of the lock
+  that is no line, and a wait that the sixty minutes would have refused (`--wait 180`).
+  Two proofs in that same gate, which ran this branch's own `check`: it printed no row
+  `tree`, and `git status --short` in the worktree is empty after it, so no `Microsoft`
+  folder was left, where the gate of `feat/gate-turn` an hour before left one. Its report:
+  "medium risk, 6 paths, 913 lines: review due (slice_budget_reached)". Not done there
+  yet: `main` (`40ccb45`) merged, gentle-ai, Codex, a real gate with a failing static row.
+- 2026-10-11, after 21:31 · The pause of the context rule: this session read 84 percent
+  before T3c's writer was launched and is near 88 now. The state is this document; what is in flight is the turn of T3c's
+  commit (`t3c-turn.sh`, launched 21:21:10 by its log, which leaves `t3c-red.log` and `t3c-gate.log`).
+  Much is left (two reviews, the roadmap, two pull requests, T9), so the session is
+  compacted and goes on from "Resume here".
+- 2026-10-11 22:08, after the compaction (context read at 22 percent) · The state was
+  checked against the files, not the summary. T3c's turn, asked at 21:21:10, still waits:
+  its log names three gates that took the lock meanwhile (`session-channel` 21:31:04,
+  `sweep-code` 21:51:06, `session-channel` 22:07:36); whether they arrived after it is
+  not read, since nothing is read beside a running gate. In `feat/gate-stop`, route
+  inline (two lines and one test in two files): `main` (`40ccb45`) merged with no
+  conflict; `failures` moved to the first place of the static rows, as "Design, 2" holds,
+  with the test of pull request 66 that pinned it after `contracts`; a new test that a
+  register which is not read stops the gate, alone and beside a failing budget; the
+  roadmap's paragraph. Its turn was asked between 22:06 and 22:09 (`stopm-turn.sh`: the
+  red of both tests against the old order, the merge commit, the roadmap's commit).
+  Here, T7 written and not committed: the roadmap's paragraph of the line and of what
+  `--wait` bounds, and the pointer in "Next" of `odd/tasks/gate-lock.md`; the texts of
+  the manifest and of the help changed with T3.
+- 2026-10-11, after 22:08 · T9 read and designed here, route one writer on `haiku` in a
+  worktree of its own (`D:\js-harness-worktrees\count-git`, branch `fix/count-git-launch`
+  from `main` `40ccb45`), so that a half-written test file is never in the tree of a gate
+  of this branch. The text of the two findings is under "Not checked" of pull request 63.
+  Cause, read in `scripts/count-git.mjs` (`missingReports`) and its preload: a report is
+  matched to a launch by pid. `execSync` returns the output alone, so its launch records
+  no pid, and the `node` behind its shell reports a parent nobody knows; and a Map by pid
+  credits two launches whose shells got the same pid to one parent. Design: no pid. Each
+  process takes an identity of its own (`crypto.randomUUID`), each launch it counts as
+  `node` gets a token, identity and a number, set in `COUNT_GIT_LAUNCH` for the length of
+  the call (the functions of `node:child_process` read the environment inside the call)
+  and written into an environment the caller wrote out; the child reads it, deletes it
+  from its own environment so that nothing it starts by another road inherits it, and
+  reports it. A launch is missing when no report carries its token. Not taken: the
+  starter's pid inherited through the environment, which credits to a process a `node`
+  it did not count (behind `npm`, behind a hook) and so can hide one that never reported.
 
 ## Next
-T3c, one narrow writer on `haiku` that returns without running anything: the two findings of
-Codex and the words of a refusal beside an older gate. Then its tests and its commit in a
-turn of the lock, `main` (`40ccb45`) merged, Codex on the fix alone, a real gate taken with
+The commit of T3c in a turn of the lock (red of its new tests against the old code, then the
+whole gate), `main` (`40ccb45`) merged, Codex on the fix alone, a real gate taken with
 this branch's own lock, the roadmap, push and the pull request, which says that the default
 of `--wait` waits for his word. In `feat/gate-stop`: the commit queued since 20:21, `main`
 merged (the order of the static rows with `failures`), gentle-ai and Codex in their turn, a

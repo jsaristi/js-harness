@@ -323,6 +323,15 @@ test('a look asks the number first and takes a snapshot only for one that answer
   assert.throws(() => createReaper(lookHost([], () => [200])).look([200]), /snapshot/, '"not alive" is never read from "could not look"');
 });
 
+test('a look throws for a recorded process that answers under a row with no creation time: its identity cannot be told, so it is neither alive nor gone', () => {
+  const agent = { pid: 200, ppid: 1, createdAt: 5100, name: 'node.exe' };
+  const unnamedTime = { pid: 200, ppid: 1, createdAt: null, name: 'node.exe' };
+  const host = lookHost([[agent], [unnamedTime]], () => [200]);
+  const reaper = createReaper(host);
+  reaper.pids([200], { since: 5000 });
+  assert.throws(() => reaper.look([200]), /pid 200 answers.*no creation time.*identity could not be told/);
+});
+
 test('on POSIX a look is the answer to the number, since no creation time is read there, and nothing is spawned', () => {
   const never = () => assert.fail('nothing is spawned on POSIX');
   const kill = (pid) => {

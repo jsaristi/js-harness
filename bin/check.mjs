@@ -490,15 +490,22 @@ export const GATE_WAIT_USAGE =
  * that ran out says how long the lock had not changed hands, which is what the bound is set on, and how
  * long the whole wait was where the two differ: behind a line that moved, a gate may have waited far
  * longer than its bound. */
-function refusalSaid({ refused, holder, line, waitedMs, stillMs }, waitMinutes) {
+function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, waitMinutes) {
   if (refused === 'held') return `${gateOf(holder)} holds the machine's gate lock, and --no-wait was given`;
   if (refused === 'ahead') {
     return `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`;
   }
+  const inAll = `this gate had waited ${duration(waitedMs)} in all`;
+  // Beside a gate of an older version no line is kept, and the bound was not counted from the last change of
+  // hands alone: it counts from the arrival, or from a change of hands read while the line was kept. So the
+  // words "without the lock changing hands" would be untrue here (found in review, 2026-10-11).
+  if (refused === 'timeout' && besideOlder) {
+    const who = holder ? `${gateOf(holder)} holds the machine's gate lock now` : `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds`;
+    return `${who}; ${inAll}, and a gate of an older version of js-harness waited beside it, which keeps no line, so the bound counted from its arrival or from the last change of hands read while the line was kept (--wait gives up after ${minutes(waitMinutes)})`;
+  }
   const bound = `(--wait gives up after ${minutes(waitMinutes)} without the lock changing hands)`;
   // A lock that did not tell is one that never changed hands while this gate waited, as far as is known.
   const still = Number.isFinite(stillMs) ? stillMs : waitedMs;
-  const inAll = `this gate had waited ${duration(waitedMs)} in all`;
   if (!holder) {
     return `${waitingGateOf(line?.head)} waited ahead of this one and did not take the machine's gate lock, which no gate held: the lock had not changed hands for ${duration(still)}, and ${inAll} ${bound}`;
   }
