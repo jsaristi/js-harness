@@ -948,8 +948,8 @@ session's transcript.
   symlink placed where a written file used to be". A finding, not fixed, no second push.
   What it says: 184 s on two Linux processors against 735.6 s on his eight under Windows,
   so what costs here is Windows starting processes and what scans them, not the tests'
-  work. Windows (job 114969540380) was still running at 14:37; a background wait prints
-  each job's result when the run ends or at 44 minutes. Told to the orchestrator at 14:37.
+  work. Windows (job 114969540380) was still running at about 14:35 (the hour was not read then; the entry was committed at 14:36:11 by `date`); a background wait prints
+  each job's result when the run ends or at 44 minutes. Told to the orchestrator just before that.
   Still owed to it: Windows passed or not and its wall time, and what was billed
   (`gh api repos/jsaristi/js-harness/actions/runs/38296748258/timing`).
 - 2026-10-12 · **T11, the merge hook is committed, `97703f9`** on `feat/gate-merge-hook`
