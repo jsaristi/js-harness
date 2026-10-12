@@ -8,6 +8,7 @@ import { statusMain, updateMain, upgradeMain } from './update.mjs';
 import { doctorMain } from './doctor.mjs';
 import { progressMain } from './progress.mjs';
 import { contractMain } from './contract.mjs';
+import { failuresMain } from './failures.mjs';
 import { codexReviewMain } from './codex-review.mjs';
 import { remoteMain } from './remote.mjs';
 import { sessionsMain } from './sessions.mjs';
@@ -32,6 +33,7 @@ Commands:
   doctor      Report the stack's tools: installed, configured, up to date.
   progress    Show roadmap and feature progress from their checkboxes.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition).
+  failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost, or seen again). Read-only: only an editor writes the register.
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
   sessions    Show the project's recent Claude Code sessions (state, context size with the room left before the host compacts it and what its last task cost, background work still open, tail of the last reply), with their roster by the role each title gives and what the channel's record says of each, the worktrees and each one's feature plan, the running gates and the session each hangs from, the open pull requests, the orchestrator's relief file (its path and last lines) and the channel (the last notices of the record and the last messages between sessions). The board is read-only; --json gives the same data. --watch waits and returns only when the board changes in a way that needs a decision, a notice for the orchestrator among them, or at --timeout. --address <role> (orchestrator, or a work session's number) prints the title of the one other session that holds the role: exit 0 for one, 1 for none with every transcript read, 2 for several or when it cannot tell. --opening "<title>" prints the opening stored for a session (notify --opening) and records in the channel which session read it. --quote <transcript> <line> prints the entry at that line of a transcript only when the user sent it, a message sent while the session worked included, with its time (exit 1 otherwise).
@@ -54,6 +56,7 @@ const commands = {
   doctor: doctorMain,
   progress: progressMain,
   contract: contractMain,
+  failures: failuresMain,
   'codex-review': codexReviewMain,
   remote: remoteMain,
   sessions: sessionsMain,

@@ -979,6 +979,36 @@ test('main --push does not run the contracts row', async () => {
   }
 });
 
+// --- failures row: the register of failures, when the project keeps one (./failures.mjs) ---
+
+test('main runs the failures row after contracts when the project keeps a register, prints the entries that are not settled, and a register it cannot read makes it exit 1', async () => {
+  const dir = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(dir, 'docs'));
+    const register = (...fields) =>
+      ['## Classes', '- `machine` — load', '', '## Entries', '', '### gate-at-its-bound', 'A gate reached its bound.', ...fields, ''].join('\n');
+    const seen = (day) => `- Seen: ${day} — relief file, line 224 — a gate at its bound`;
+    const env = { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir };
+    const namesOf = (output) => output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line)).map((row) => row.split('  ')[1]);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FAILURES.md'), register('- Class: machine', seen('2026-10-10'), seen('2026-10-11')));
+    const read = await runCheck(['--cwd', dir], env);
+    assert.equal(read.code, 0);
+    assert.deepEqual(namesOf(read.output).slice(0, 3), ['budget', 'contracts', 'failures']);
+    assert.match(read.output, /^PASS {2}failures {2}1 failure, 2 sightings, 1 seen more than once, 1 not settled; /m);
+    assert.match(read.output, /^ {6}gate-at-its-bound {2}repeated {2}first seen 2026-10-10$/m);
+
+    fs.writeFileSync(path.join(dir, 'docs', 'FAILURES.md'), register(seen('2026-10-10')));
+    const refused = await runCheck(['--cwd', dir], env);
+    assert.equal(refused.code, 1);
+    assert.match(refused.output, /^FAIL {2}failures {2}docs\/FAILURES\.md is not read: 1 fault to repair in that file$/m);
+    assert.match(refused.output, /^ {6}entry "gate-at-its-bound": has no class: /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- review row: whether the pending change is due a gentle-ai review, informational and fail-open ---
 
 const MODE_ON = JSON.stringify({
