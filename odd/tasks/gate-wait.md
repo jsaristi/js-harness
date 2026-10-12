@@ -1295,6 +1295,21 @@ by me against the log or table named in the section).
   machine; and every road but a cheaper Windows run is the trade he passed over at 01:48,
   so one question would go to him. Owed before it is asked: M1d, and a reading of what
   the 1,681 children are for.
+- 2026-10-12 · **What the 1,681 children are, from the table alone** (`m1b-count.json`,
+  `timeLine`, read at 15:11): 29 test files start a child that is not git; the 21 files
+  of `evals/` start 1,395 of them, 4,096 s of the 4,668 s summed, and `bin/` and
+  `scripts/` the other 286 (573 s). By file: `evals/runner` 501 (1,044 s),
+  `evals/task-proof` 346 (1,823 s), `evals/isolation-probe` 210 (411 s), `evals/tasks` 99
+  (268 s), `evals/suite` 82, `evals/configs` 70, `bin/check` 54, `bin/js-harness` 49.
+  They are Node processes: the fake agent a trial is run against
+  (`evals/fixtures/fake-agent.mjs`, started through `evals/runner.mjs:289`), nested
+  `node --test` runs (`evals/task-proof.test.mjs:384`) and version probes. **The eval
+  machinery's tests are 878 of the 3,781 tests and 2,696 of the 4,473 seconds the files
+  take, summed: six tenths of the suite's time in a quarter of its tests.** With
+  `bin/codex-review` (691 s, 6,067 git processes) they are the wall: three of the four
+  longest files are `evals/`. Not read: whether those tests need a real process for what
+  they prove (a process tree that is killed does; a trial's outcome read back may not).
+  That reading is road 1's next step, and it is a reading, not a cut.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
