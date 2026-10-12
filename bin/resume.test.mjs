@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resumeMain, transcriptTitle } from './resume.mjs';
-import { appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, writeOpening } from './lib/channel.mjs';
+import { OPENING_SCHEMA, appendNotice, appendReading, newNotice, newReading, openingFileName, openingsDir, writeOpening } from './lib/channel.mjs';
 import { projectSlug, sessionFacts } from './lib/sessions.mjs';
 
 // Every test below has a machine of its own under a temp folder: a project with one linked worktree
@@ -470,6 +470,40 @@ test('a title that names several openings gets their titles and no command: sess
   assert.deepEqual((await runHook(machine, hookInput(machine, { session_title: TITLE }))).lines, [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: ${first}  (print it: js-harness sessions --opening '${TITLE}')`, document, READ]);
   // And the code and the role that name one opening are a title a command is written for.
   assert.equal((await runHook(machine, hookInput(machine, { session_title: 'JH 6' }))).lines[2], `Opening: ${path.join(dir, openingFileName('JH 6 · other'))}  (print it: js-harness sessions --opening 'JH 6')`);
+}));
+
+test('the titles of several openings are listed as the files hold them: a second blank in one of them is kept', withMachine(async (machine) => {
+  notified(machine);
+  // The two titles differ only by a second blank: each is an opening of its own, and the list must tell them apart.
+  const single = opened(machine).path;
+  const double = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the  channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
+  const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the  channel"  (${double})`, `  "JH 5 · the channel"  (${single})`, document, READ]);
+}));
+
+test('a title the list prints stays on its line: a quote, a line break and a line separator are escaped as the file holds them', withMachine(async (machine) => {
+  notified(machine);
+  const dir = openingsDir(machine.home, machine.slug);
+  const quoted = writeOpening(machine.home, machine.slug, { title: 'JH 5 · the "odd" channel', text: 'Build it.\n', at: '2026-01-01T11:00:00.000Z', from }).path;
+  const single = opened(machine).path;
+  const document = `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`;
+  const several = `Opening: 2 openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it)`;
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: 'JH 5' }));
+  assert.deepEqual(lines, [FIRST, 'Session: "JH 5" (the title the host gave the hook)', several, `  "JH 5 · the \\"odd\\" channel"  (${quoted})`, `  "JH 5 · the channel"  (${single})`, document, READ]);
+  // A hand-written file may hold what writeOpening refuses: a line break and a line separator. Two files with that title are found by the whole title and listed on one line each.
+  const torn = 'JH 5 · the\nchannel\u2028end';
+  const handWritten = (name, at) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, `${JSON.stringify({ schema: OPENING_SCHEMA, title: torn, at, from, text: 'Written by hand.\n' })}\n`, 'utf8');
+    return file;
+  };
+  const newer = handWritten('hand-newer.json', '2026-01-01T12:00:00.000Z');
+  const older = handWritten('hand-older.json', '2026-01-01T11:30:00.000Z');
+  const listed = await runHook(machine, hookInput(machine, { session_title: torn }));
+  assert.deepEqual(listed.lines, [FIRST, 'Session: "JH 5 · the channel end" (the title the host gave the hook)', several, `  "JH 5 · the\\nchannel\\u2028end"  (${newer})`, `  "JH 5 · the\\nchannel\\u2028end"  (${older})`, document, READ]);
 }));
 
 test('a notice written on no branch, and a worktree git names no branch for, tell no feature document', withMachine(async (machine) => {

@@ -172,10 +172,14 @@ function instructionBy(entry) {
 const isPeerMessage = (entry) => entry.type === 'user' && isObject(entry.origin) && entry.origin.kind === 'peer';
 
 /** Who sent what an origin of kind `peer` marks: `'subagent'` for a hand-back, `'host'` for a message the
- * app put in, and `'session'`, another session, for every other. The origin says it the same way on a
- * `user` entry and inside a queued command (4 of the 49 queued commands of origin `peer` in this
- * project's transcripts are hand-backs, 2026-10-11). */
-const peerSender = (origin) => (origin.handback === true ? 'subagent' : origin.hostInjected === true ? 'host' : 'session');
+ * app put in, and `'session'`, another session, for every other. A hand-back is an origin with `handback:
+ * true` or one that names the sub-agent by `senderTaskId`, a string, which no origin of another session
+ * carries. In this project's transcripts (262 transcripts, 2026-10-11), of the origins of kind `peer`: 280
+ * from another session carry `fromSession`, `name` and `msg_id` and no `senderTaskId`; 19 hand-backs carry
+ * `handback: true` with `senderTaskId`; and 1 queued command carries `senderTaskId` and `name` with no
+ * `handback`, which the rule reads as a hand-back. The origin says it the same way on a `user` entry and
+ * inside a queued command. */
+const peerSender = (origin) => (origin.handback === true || typeof origin.senderTaskId === 'string' ? 'subagent' : origin.hostInjected === true ? 'host' : 'session');
 
 /** The peer message `entry` holds as the board keeps it, `{ at, from, name, session, mode, id }`, or `null`
  * for an entry that holds none. `from` is `'session'` for another session, which gives its title in

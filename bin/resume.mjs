@@ -70,7 +70,9 @@ function checkoutOf(run, cwd) {
  * from the project's sessions folder, by the session's id: the path the input carries is not followed.
  * The title is the one given, with every blank it holds: an opening is stored under its whole title and a
  * notice carries the one of its transcript, so a title with two blanks in a row made one finds neither.
- * It is made one line (`oneLine`) where it is printed, and nowhere else. */
+ * It is made one line (`oneLine`) where the session's line prints it, and nowhere else: the titles of the
+ * openings the hook lists are printed as they are stored (`printedTitle`), since a blank is what tells two
+ * openings apart. */
 function titleOf(input, sessionId, { projectDir, record, readFile }) {
   if (typeof input.session_title === 'string' && input.session_title.trim() !== '') return { title: input.session_title, from: 'the title the host gave the hook' };
   if (sessionId === null) return { title: null, from: 'the host gave the hook none and no session id a transcript could be found by' };
@@ -198,13 +200,20 @@ function printing(title) {
   return 'no command is written for it: its title holds marks that shells read each its own way. To print it, give js-harness sessions --opening that title, as the file holds it, as one argument, after a lone -- when it begins with --';
 }
 
+/** An opening's title as the list prints it: between double quotes, with every blank it holds, on one line.
+ * `JSON.stringify` escapes a quote, a backslash and the line breaks a hand-written file may hold, and leaves
+ * the line separators that `channel.mjs` counts as line breaks: those are escaped here too. */
+const printedTitle = (title) => JSON.stringify(title).replace(/[\u0085\u2028\u2029]/g, (mark) => `\\u${mark.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
 /** The lines that say which opening is stored for `title`, from what `findOpenings` found. They say what
  * `sessions --opening` says for the same folder, so the session is never sent to a command that refuses
  * it: "none stored" only of a folder that was listed and whose every file was read; "not known" when a
  * file that could not be read may be the one; and for a title that names several (the code and the role
  * a title starts with, after a purpose was reworded), their titles and no command, since the command for
  * that title exits 2. A file that could not be read beside the ones found may be one more of that title:
- * it is said as not counted. */
+ * it is said as not counted. The titles listed are not flattened: `findOpenings` compares a whole title exactly,
+ * so two titles that differ by a blank are two openings, and a list that made them one line would send the
+ * session to the wrong one. */
 function openingLines(found, title) {
   const { dir, openings } = found;
   if (found.unavailable !== undefined) return [`Opening: could not look in ${dir} (${found.unavailable})`];
@@ -214,7 +223,7 @@ function openingLines(found, title) {
   if (openings.length === 1) return [`Opening: ${openings[0].path}  (${printing(title)}${uncounted})`];
   return [
     `Opening: ${openings.length} openings are named by that title, the latest first: ask for one by its whole title (js-harness sessions --opening "<whole title>" prints it${uncounted})`,
-    ...openings.map((opening) => `  "${oneLine(opening.title)}"  (${opening.path})`),
+    ...openings.map((opening) => `  ${printedTitle(opening.title)}  (${opening.path})`),
   ];
 }
 

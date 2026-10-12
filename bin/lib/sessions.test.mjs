@@ -2930,6 +2930,34 @@ test('a queued instruction of the person or of another session starts a task, as
   assert.deepEqual([ended.work.map((item) => item.status), ended.state, ended.lastTask.tokens], [['completed'], 'waiting', 80000]);
 });
 
+// A queued command that names a subagent by `senderTaskId` and carries no `handback` is a hand-back as well.
+// The tally of this project's transcripts (2026-10-11, 262 transcripts) has `senderTaskId` on 19 hand-backs
+// that also carry `handback: true`, on 1 queued command with no `handback`, and on no message of another
+// session, which gives `fromSession` instead. Read as another session's, that one started a task for the
+// board, and the task before it cost 20k where it cost 80k.
+test('a queued command that names a subagent by senderTaskId starts no task, with or without handback', () => {
+  const held = COMPACTION - 35000;
+  const worked = (...sent) => [prompt('first', 1), spoke(2, usage(0, held - 80000, 0), { stop: 'tool_use' }), spoke(3, usage(0, held - 20000, 0), { stop: 'tool_use' }), ...sent];
+  const session = (...sent) => lib.sessionFacts(transcript(...worked(...sent), spoke(5, usage(0, held, 0))));
+  const named = { kind: 'peer', senderTaskId: 'a1f', name: 'made up' };
+
+  const plain = session();
+  const withHandback = session(queued(4, { origin: { ...named, handback: true }, isMeta: true, humanTurn: undefined }));
+  const withoutHandback = session(queued(4, { origin: named, isMeta: true, humanTurn: undefined }));
+  assert.deepEqual(withHandback.lastTask, plain.lastTask);
+  assert.deepEqual(withoutHandback.lastTask, plain.lastTask, 'the growth since the instruction the person gave, not the growth after the hand-back');
+  assert.deepEqual([withoutHandback.lastTask.tokens, withoutHandback.lastTaskFits], [80000, false]);
+});
+
+test('the board keeps a peer message that names a subagent by senderTaskId as a hand-back, queued or between turns', () => {
+  const named = { kind: 'peer', senderTaskId: 'a1f', name: 'made up' };
+  const queuedOne = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 1000, 0), { stop: 'tool_use' }), queued(3, { origin: named, isMeta: true, humanTurn: undefined }), spoke(9, usage(0, 2000, 0))));
+  const betweenTurns = lib.sessionFacts(transcript(prompt('go', 1), { ...peer(3), origin: named }, reply('done', 9)));
+  const message = { at: at(3), from: 'subagent', name: 'made up', session: null, mode: null, id: null };
+  assert.deepEqual(queuedOne.received, [message]);
+  assert.deepEqual(betweenTurns.received, [message]);
+});
+
 // A message of another session that arrives while the session works is a queued command as well, and the
 // list of what a session received read `user` entries only: the board then said of such a message that
 // it was not seen to arrive, with the receiver's transcript holding it. From a tally of this project's
