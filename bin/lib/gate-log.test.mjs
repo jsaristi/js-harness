@@ -36,6 +36,7 @@ const AT = '2026-10-11T07:33:28.000Z';
 const start = (id, more = {}) => ({ v: 1, event: 'start', id, at: AT, cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [], ...more });
 const end = (id, more = {}) => ({ v: 1, event: 'end', id, at: AT, seconds: 12.5, result: 'pass', sensors: [{ name: 'tests', seconds: 12.4, pass: true, timedOut: false }], ...more });
 const refused = (id, more = {}) => ({ v: 1, event: 'refused', id, at: AT, cwd: 'C:\\work\\one', command: 'check', pid: 100, reason: 'held', waitedSeconds: 0, waitedFor: [], ...more });
+const stopped = (id, more = {}) => ({ v: 1, event: 'stopped', id, at: AT, cwd: 'C:\\work\\one', command: 'check', pid: 100, rows: ['budget'], ...more });
 
 const files = (home) => fs.readdirSync(gateLogDir(home)).sort();
 const linesOf = (home, name = 'log.jsonl') => fs.readFileSync(path.join(gateLogDir(home), name), 'utf8').split('\n');
@@ -138,9 +139,9 @@ test('readGateLog skips what is no event of this log: a torn line, text, JSON of
 test('readGateLog leaves out in silence a line with a sound head whose kind this version does not know, and still counts what is damaged', withHome(async (home) => {
   appendGateEvent(home, start('a'));
   const unknown = [
-    { v: 1, event: 'stopped', id: 'a', at: AT, seconds: 3.2, reason: 'no sensor declared' },
+    { v: 1, event: 'paused', id: 'a', at: AT, seconds: 3.2, reason: 'no sensor declared' },
     // Its body is its version's own business: nothing here takes it apart.
-    { v: 1, event: 'stopped', id: 'b', at: AT, cwd: { toString: null }, waitedFor: [null], load: 'busy', seconds: 'three' },
+    { v: 1, event: 'paused', id: 'b', at: AT, cwd: { toString: null }, waitedFor: [null], load: 'busy', seconds: 'three' },
     { v: 1, event: '', id: 'c', at: AT },
     { v: 1, event: 'START', id: 'd', at: AT },
   ];
@@ -154,11 +155,11 @@ test('readGateLog leaves out in silence a line with a sound head whose kind this
   // What is still counted: a torn line, a head that is wrong (of an unknown kind as of a known one), an
   // event that is no text, and a known kind with a body that is not one.
   const damaged = [
-    '{"v":1,"event":"stopped","id":"torn',
-    JSON.stringify({ v: 2, event: 'stopped', id: 'e', at: AT }),
-    JSON.stringify({ v: 1, event: 'stopped', id: 7, at: AT }),
-    JSON.stringify({ v: 1, event: 'stopped', id: 'f', at: 'yesterday' }),
-    JSON.stringify({ v: 1, event: 'stopped', id: 'g' }),
+    '{"v":1,"event":"paused","id":"torn',
+    JSON.stringify({ v: 2, event: 'paused', id: 'e', at: AT }),
+    JSON.stringify({ v: 1, event: 'paused', id: 7, at: AT }),
+    JSON.stringify({ v: 1, event: 'paused', id: 'f', at: 'yesterday' }),
+    JSON.stringify({ v: 1, event: 'paused', id: 'g' }),
     JSON.stringify({ v: 1, event: null, id: 'h', at: AT }),
     JSON.stringify({ v: 1, event: ['start'], id: 'i', at: AT }),
     JSON.stringify({ v: 1, id: 'j', at: AT }),
@@ -166,6 +167,19 @@ test('readGateLog leaves out in silence a line with a sound head whose kind this
   ];
   fs.appendFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${damaged.join('\n')}\n`);
   assert.deepEqual(readGateLog(home), { dir: gateLogDir(home), events: [start('a'), end('a')], skipped: damaged.length });
+}));
+
+// A gate that stopped before its sensors writes one line of a kind of its own (`stopped`). This version
+// knows the kind, so the body of such a line is asked as any other's: its rows are printed.
+test('readGateLog reads the line of a gate that stopped before its sensors, and leaves out and counts one whose rows or folder are not what a gate writes there', withHome(async (home) => {
+  const odd = { toString: null };
+  const sound = [stopped('a'), stopped('b', { rows: ['budget', 'contracts'] }), stopped('c', { rows: [] }), { v: 1, event: 'stopped', id: 'd', at: AT }];
+  const malformed = [stopped('e', { rows: 'budget' }), stopped('f', { rows: [null] }), stopped('g', { rows: ['budget', odd] }), stopped('h', { rows: null }), stopped('i', { rows: [7] }), stopped('j', { cwd: odd })];
+  for (const line of [...sound.slice(0, 2), ...malformed, ...sound.slice(2)]) appendGateEvent(home, line);
+  const read = readGateLog(home);
+  assert.deepEqual(read, { dir: gateLogDir(home), events: sound, skipped: malformed.length });
+  // And what is read can be said, a line for each.
+  assert.equal(formatGates(gatesOf(read.events)).length, 4);
 }));
 
 // Found in review (Codex), 2026-10-11: a write that was cut short leaves a tail with no line break, and the
@@ -353,6 +367,19 @@ test('gatesOf pairs a start with its end by id, keeps a start that has none, a r
   assert.deepEqual(gatesOf([]), []);
 });
 
+// A gate that stopped ran nothing, so it has no start to be the end of: it is a gate of its own, as a
+// refusal is, whatever id its line has.
+test('gatesOf keeps a gate that stopped before its sensors on its own, in its place, and takes it for the end of no start', () => {
+  const events = [start('a'), stopped('s'), stopped('a', { rows: ['contracts'] }), end('s'), end('a'), refused('r'), start('b')];
+  assert.deepEqual(gatesOf(events), [
+    { start: start('a'), end: end('a') },
+    { stopped: stopped('s') },
+    { stopped: stopped('a', { rows: ['contracts'] }) },
+    { refused: refused('r') },
+    { start: start('b') },
+  ]);
+});
+
 /** `iso` as the formatter says it: the local month, day and time. */
 function when(iso) {
   const at = new Date(iso);
@@ -383,6 +410,23 @@ test('formatGates says one gate a line: when, seconds, result, lock, load, whom 
     `${at}  refused (timeout)  waited 30 s for D:\\js-harness  C:\\work\\one`,
   ]);
   assert.deepEqual(formatGates([]), []);
+});
+
+// Never as a gate that ran (`pass`), was refused, or has no end (`killed, or still running`).
+test('formatGates says a gate that stopped before its sensors as what it was: when, that it stopped and for which rows, and its folder', () => {
+  const at = when(AT);
+  const gates = [
+    { stopped: stopped('a') },
+    { stopped: stopped('b', { rows: ['budget', 'contracts'], cwd: 'C:\\work\\two' }) },
+    { stopped: stopped('c', { rows: [] }) },
+    { stopped: { v: 1, event: 'stopped', id: 'd', at: AT } },
+  ];
+  assert.deepEqual(formatGates(gates), [
+    `${at}  stopped before its sensors (budget)  C:\\work\\one`,
+    `${at}  stopped before its sensors (budget, contracts)  C:\\work\\two`,
+    `${at}  stopped before its sensors  C:\\work\\one`,
+    `${at}  stopped before its sensors`,
+  ]);
 });
 
 /** A stand-in for the writer that keeps what it was handed, and a clock that moves by hand. */
@@ -486,6 +530,82 @@ test('gateRecord writes no gate it waited for whose folder or pid the reader wou
   assert.equal(read.skipped, 0);
   assert.deepEqual(read.events.map(({ event, waitedFor: waited }) => [event, waited]), [['start', [holder, unknown]], ['end', undefined], ['refused', [holder, unknown]]]);
   assert.equal(formatGates(gatesOf(read.events)).length, 2);
+}));
+
+// Left by the review of the slice before (gentle-ai, 2026-10-11): the reader refuses a start whose load
+// holds a figure that is no finite number or a busiest name that is no text, and the writer wrote the load
+// as it was handed it. The sampler hands neither today; a start that is refused takes its gate's end with it.
+test('gateRecord writes no part of a load that the reader would refuse and keeps the rest of it, so the gate is read back with its end', withHome(async (home) => {
+  const odd = { toString: null };
+  const node = { name: 'node', script: 'tsserver.js', pid: 41012, cpuSeconds: 1.1 };
+  const loads = [
+    { busy: NaN, processors: 8, share: 0.1, sampleMs: 1000 },
+    { busy: 1.4, processors: Infinity, sampleMs: 1000 },
+    { busy: '1.4', processors: odd, sampleMs: 1000 },
+    { notRead: odd, sampleMs: 1000 },
+    { busy: 1.4, processors: 8, busiest: [node, { ...node, name: odd }, { ...node, name: 7 }, { ...node, script: odd }, null, 'node', { ...node, script: null }] },
+    { busy: 1.4, processors: 8, busiest: 'node' },
+    // What is no load at all is left out whole, as a load that was not sampled is.
+    'busy',
+    [1.4, 8],
+    7,
+  ];
+  const handed = structuredClone(loads);
+  for (const [index, load] of loads.entries()) {
+    const record = gateRecord({ home, cwd: `C:\\work\\${index}`, command: 'check' });
+    record.start({ lock: 'own', waitedMs: 0, waitedFor: [], load });
+    record.end({ result: 'pass', sensors: [] });
+    assert.equal(record.failure(), undefined);
+  }
+  assert.deepEqual(loads, handed, 'the load a gate handed over was changed');
+  const read = readGateLog(home);
+  assert.equal(read.skipped, 0);
+  const gates = gatesOf(read.events);
+  assert.deepEqual(gates.map(({ start: began, end: ended }) => [ended?.id === began.id, began.load]), [
+    [true, { processors: 8, share: 0.1, sampleMs: 1000 }],
+    [true, { busy: 1.4, sampleMs: 1000 }],
+    [true, { sampleMs: 1000 }],
+    [true, { sampleMs: 1000 }],
+    [true, { busy: 1.4, processors: 8, busiest: [node, { ...node, script: null }] }],
+    [true, { busy: 1.4, processors: 8 }],
+    [true, undefined],
+    [true, undefined],
+    [true, undefined],
+  ]);
+  // What is left of each can be said: a load with a figure missing is one that was not read.
+  assert.deepEqual(formatGates(gates).map((line) => line.split('  ')[3]), [
+    'load not read', 'load not read', 'load not read', 'load not read', 'load 1.4 of 8 (node tsserver.js, node)', 'load 1.4 of 8', 'C:\\work\\6', 'C:\\work\\7', 'C:\\work\\8',
+  ]);
+}));
+
+test('gateRecord writes a gate that stopped before its sensors as one line with the rows that stopped it, and no end after it', () => {
+  const { events, deps } = captured();
+  const record = gateRecord({ home: 'C:\\home', cwd: 'C:\\work\\one', command: 'check', pid: 100, ...deps });
+  record.stopped({ rows: ['budget', 'contracts'] });
+  // A gate that never started has no end.
+  record.end({ result: 'pass' });
+  assert.deepEqual(events, [{ home: 'C:\\home', event: { v: 1, event: 'stopped', id: 'id-1', at: AT, cwd: 'C:\\work\\one', command: 'check', pid: 100, rows: ['budget', 'contracts'] } }]);
+  assert.equal(record.failure(), undefined);
+
+  const said = [];
+  const failed = gateRecord({ home: 'h', cwd: 'c', command: 'check', ...captured(() => ({ error: 'EBUSY: resource busy or locked' })).deps, onFailure: (why) => said.push(why) });
+  failed.stopped({ rows: ['budget'] });
+  assert.equal(failed.failure(), 'could not be written (EBUSY: resource busy or locked), so this stop is not in it');
+  assert.deepEqual(said, [failed.failure()]);
+});
+
+test('gateRecord writes no row of a gate that stopped that the reader would refuse, and what it writes is read back', withHome(async (home) => {
+  gateRecord({ home, cwd: 'C:\\work\\one', command: 'check' }).stopped({ rows: ['budget', null, 7, { toString: null }, 'contracts'] });
+  gateRecord({ home, cwd: 'C:\\work\\two', command: 'check' }).stopped({ rows: 'budget' });
+  gateRecord({ home, cwd: 'C:\\work\\three', command: 'check' }).stopped({});
+  const read = readGateLog(home);
+  assert.equal(read.skipped, 0);
+  assert.deepEqual(read.events.map(({ event, cwd, rows }) => [event, cwd, rows]), [
+    ['stopped', 'C:\\work\\one', ['budget', 'contracts']],
+    ['stopped', 'C:\\work\\two', []],
+    ['stopped', 'C:\\work\\three', []],
+  ]);
+  assert.equal(formatGates(gatesOf(read.events)).length, 3);
 }));
 
 test('gateRecord never throws to its gate: a write that fails is kept as one sentence, said once, and a gate whose start is not in the log writes no end', () => {

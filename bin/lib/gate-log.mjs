@@ -2,7 +2,10 @@
 // beside which" was a session's memory, and a gate's time was known only to the session that ran it. So a
 // gate writes one JSON line when its sensors are about to run and one when they are done, and a gate that
 // was refused its turn writes one: a gate that was killed is still there, as a start without an end.
-// See odd/tasks/gate-log.md ("S2 · The gate log").
+// A gate that stopped before its sensors, because a row it knew before them had already failed, writes one
+// line of a kind of its own and no start: it ran nothing, and a start without an end would read as killed.
+// See odd/tasks/gate-log.md ("S2 · The gate log") and odd/tasks/gate-turn.md ("The gate stops before its
+// sensors").
 //
 // It lives in a folder of its own under the harness home, beside the lock's and not in it: a gate leaves
 // nothing in the lock's folder, and `uninstall` reads that folder to know whether a gate is alive. It is
@@ -121,11 +124,25 @@ const shaped = (fields) => (value) => isObject(value) && Object.entries(fields).
  * the lock could not read it. Its command is printed nowhere. */
 const isGateWaitedFor = shaped({ cwd: orNull(isText), pid: orNull(Number.isFinite) });
 
+/** A process the load of a start names, as far as a reader prints it: its name, and its script or `null`. */
+const isBusiest = shaped({ name: isText, script: orNull(isText) });
+
+/** What a field of the load of a start is when it is there, for the fields a reader prints: why it was not
+ * read, the two figures, and the processes that loaded the machine. Asked by the reader of a line (`BODY`)
+ * and by its writer (`loadWritten`), so that the two cannot come apart. */
+const LOAD = {
+  notRead: isText,
+  busy: Number.isFinite,
+  processors: Number.isFinite,
+  busiest: listOf(isBusiest),
+};
+
 /** What a field of a line is when it is there, for every field a reader takes apart, counts with or
  * prints: the folder, the lock, the reason and the result, which are texts, the seconds, the gates it
- * waited for, the load with the processes it names, and the sensors, a list of objects of which nothing is
- * printed. One that is there as something else (a `null` among the gates it waited for, a text where the
- * seconds go, an object where the folder goes) is a fault, and the line is no event.
+ * waited for, the load with the processes it names, the sensors, a list of objects of which nothing is
+ * printed, and the rows that stopped a gate before its sensors, which are their names. One that is there as
+ * something else (a `null` among the gates it waited for, a text where the seconds go, an object where the
+ * folder goes) is a fault, and the line is no event.
  *
  * What is printed is asked as well as what is taken apart: `{"cwd":{"toString":null}}` is an object no
  * text can be made of, and it made `formatGates` throw as a `null` in a list did (found in review,
@@ -140,19 +157,17 @@ const BODY = {
   waitedSeconds: Number.isFinite,
   waitedFor: listOf(isGateWaitedFor),
   sensors: listOf(isObject),
-  load: shaped({
-    notRead: isText,
-    busy: Number.isFinite,
-    processors: Number.isFinite,
-    busiest: listOf(shaped({ name: isText, script: orNull(isText) })),
-  }),
+  load: shaped(LOAD),
+  rows: listOf(isText),
 };
 
 /** Whether `value` has the body of an event: each field of `BODY` that is there is what it says. */
 const hasBody = shaped(BODY);
 
-/** The kinds of event this version writes and reads. */
-const KINDS = ['start', 'end', 'refused'];
+/** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
+ * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
+ * no start for that version to show alone. */
+const KINDS = ['start', 'end', 'refused', 'stopped'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
@@ -219,13 +234,15 @@ export function readGateLog(home, { fileSystem: io = fs } = {}) {
 }
 
 /** The gates of `events`, in the order they began: `{ start, end }` for a gate that ran, with no `end` for
- * one that was killed or still runs, and `{ refused }` for one that was refused its turn. An end whose
- * start is not there, because it was rotated away, is left out. */
+ * one that was killed or still runs, `{ refused }` for one that was refused its turn, and `{ stopped }` for
+ * one that stopped before its sensors, which is the end of no start whatever id it has. An end whose start
+ * is not there, because it was rotated away, is left out. */
 export function gatesOf(events) {
   const gates = [];
   const began = new Map();
   for (const event of events) {
     if (event.event === 'refused') gates.push({ refused: event });
+    else if (event.event === 'stopped') gates.push({ stopped: event });
     else if (event.event === 'start') {
       began.set(event.id, { start: event });
       gates.push(began.get(event.id));
@@ -245,10 +262,12 @@ function localTime(iso) {
 
 const wholeSeconds = (seconds) => `${Number.isFinite(seconds) ? Math.round(seconds) : '?'} s`;
 
-/** The load of a start, in a few words: the figure, and what loaded the machine where the gate found it. */
+/** The load of a start, in a few words: the figure, and what loaded the machine where the gate found it.
+ * A load with either of its two figures missing is one that was not read: the writer leaves out a figure
+ * that is no number (`loadWritten`), and half a figure says nothing. */
 function loadSaid(load) {
   if (!isObject(load)) return null;
-  if (load.notRead || !Number.isFinite(load.busy)) return 'load not read';
+  if (load.notRead || !Number.isFinite(load.busy) || !Number.isFinite(load.processors)) return 'load not read';
   const names = (Array.isArray(load.busiest) ? load.busiest : []).map(({ name, script }) => (script ? `${name} ${script}` : name));
   return `load ${load.busy.toFixed(1)} of ${load.processors}${names.length ? ` (${names.join(', ')})` : ''}`;
 }
@@ -262,16 +281,24 @@ function waitSaid({ waitedSeconds, waitedFor }, always = false) {
 
 const LOCK_SAID = { parent: "in its parent's turn", none: 'without the lock' };
 
+/** That a gate stopped before its sensors, and for which rows where its line names them. */
+function stopSaid({ rows }) {
+  const names = Array.isArray(rows) ? rows : [];
+  return `stopped before its sensors${names.length ? ` (${names.join(', ')})` : ''}`;
+}
+
 /** One line for each of `gates` (`gatesOf`), short enough to be read on a phone: when it began, how long it
  * took and how it ended, the lock where it was not its own, the load it started under, whom it waited for,
- * and its folder. A start that has no end says so, and a refusal says why it was refused. What a gate does
- * not have is left out of its line. */
+ * and its folder. A start that has no end says so, a refusal says why it was refused, and a gate that
+ * stopped before its sensors says that and for which rows, so that it reads as none of the others: it
+ * neither ran, nor was refused, nor was killed. What a gate does not have is left out of its line. */
 export function formatGates(gates) {
-  return gates.map(({ start, end, refused }) => {
-    const first = start ?? refused;
-    const parts = refused
-      ? [`refused (${refused.reason})`, waitSaid(refused, true)]
-      : [end ? `${wholeSeconds(end.seconds)}  ${end.result}` : 'no end (killed, or still running)', LOCK_SAID[start.lock], loadSaid(start.load), waitSaid(start)];
+  return gates.map(({ start, end, refused, stopped }) => {
+    const first = start ?? refused ?? stopped;
+    let parts;
+    if (stopped) parts = [stopSaid(stopped)];
+    else if (refused) parts = [`refused (${refused.reason})`, waitSaid(refused, true)];
+    else parts = [end ? `${wholeSeconds(end.seconds)}  ${end.result}` : 'no end (killed, or still running)', LOCK_SAID[start.lock], loadSaid(start.load), waitSaid(start)];
     return [localTime(first.at), ...parts, first.cwd].filter(Boolean).join('  ');
   });
 }
@@ -279,19 +306,43 @@ export function formatGates(gates) {
 /** Milliseconds as the seconds a line holds, to a tenth. */
 const seconds = (ms) => (Number.isFinite(ms) ? Math.round(ms / 100) / 10 : 0);
 
+/** The load of a start as it is written: `load` without what the reader of a line would refuse (`LOAD`,
+ * which is what `BODY` asks of it), or `undefined` for what is no load at all. A figure that is no finite
+ * number and a reason that is no text are left out, and so is each of the busiest processes whose name or
+ * script is not what the reader prints, and whatever stands where their list goes and is no list. The rest
+ * stays as it was handed over, the fields no reader looks at included, and `load` itself is not touched.
+ *
+ * The sampler hands none of this today (`./machine-load.mjs`). It is filtered all the same, as the gates a
+ * gate waited for are: the reader refuses the whole line for one such field, a start it refuses takes the
+ * gate's end with it, and a writer must not write what its own reader leaves out (found in review,
+ * 2026-10-11). */
+function loadWritten(load) {
+  if (!isObject(load)) return undefined;
+  return Object.fromEntries(Object.entries(load).flatMap(([field, value]) => {
+    if (field === 'busiest' && Array.isArray(value)) return [[field, value.filter(isBusiest)]];
+    return !(field in LOAD) || LOAD[field](value) ? [[field, value]] : [];
+  }));
+}
+
 /** The record of one gate: what `check` and `js-harness gate` write the log through. The gate checks
  * `cwd` and runs `command`, which is cut at `GATE_COMMAND_MAX`.
  *
  * - `start({ lock, waitedMs, waitedFor, load })`, when the gate is about to run what it runs: `lock` is
  *   `own`, `parent` (the turn of the process that started it) or `none` (no lock could be taken),
  *   `waitedFor` the gates it waited for as `[{ cwd, pid, command }]`, the command of each cut as the
- *   gate's own, `load` the sample of the machine's load as it was read, left out where none was taken.
+ *   gate's own, `load` the sample of the machine's load as it was read (`loadWritten`), left out where
+ *   none was taken.
  * - `end({ result, sensors })`, on every way out of a gate that started: `result` is `pass`, `fail` or
  *   `timeout` for the sensors of `check`, with a line for each in `sensors`, `exit <code>` or `killed` for
  *   the command of `js-harness gate`, and `error` for a gate that ended by an error of its own. Nothing
  *   is written for a gate whose start is not in the log: an end alone says nothing.
- * - `refused({ reason, waitedMs, waitedFor })`, for a gate that ran nothing: `reason` is `held` (told not
- *   to wait) or `timeout` (its wait ran out).
+ * - `refused({ reason, waitedMs, waitedFor })`, for a gate that ran nothing because the lock was not its
+ *   to take: `reason` is the word the lock refused it with, such as `held` (told not to wait) or `timeout`
+ *   (its wait ran out). It is written as the lock says it and read as any text, so a reason the lock
+ *   comes to give later needs no change here.
+ * - `stopped({ rows })`, for a gate that ran nothing because a row it knew before its sensors had already
+ *   failed: `rows` are the names of the rows that stopped it. It is the one line of that gate, which wrote
+ *   no start and writes no end.
  * - `failure()`: `undefined`, or why the log could not be written and what is missing from it, to be said
  *   after `the gate log`. A gate has one such sentence at most, and `onFailure` is called with it once.
  *
@@ -327,7 +378,8 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
   return {
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();
-      if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...(load && { load }) })) startedAt = at;
+      const sampled = loadWritten(load);
+      if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...(sampled && { load: sampled }) })) startedAt = at;
     },
     end({ result, sensors }) {
       if (startedAt === undefined) return;
@@ -336,6 +388,11 @@ export function gateRecord({ home, cwd, command, pid = process.pid, append = app
     },
     refused({ reason, waitedMs, waitedFor }) {
       write('this refusal', now(), { event: 'refused', ...said, reason, ...waited({ waitedMs, waitedFor }) });
+    },
+    stopped({ rows } = {}) {
+      // A name that is no text is left out, as a gate that is none is among the gates waited for: the
+      // reader refuses the whole line for one (`BODY`).
+      write('this stop', now(), { event: 'stopped', ...said, rows: (Array.isArray(rows) ? rows : []).filter(isText) });
     },
     failure: () => failure,
   };
