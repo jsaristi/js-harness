@@ -5138,6 +5138,80 @@ test('the row of the plain check and the plan of the command size the same revie
   }
 });
 
+/** What a run says of its base when the base is a code commit of its branch that no record covers: `shortId`
+ * and `subject` are those of that commit, as git names them. */
+const baseLeftOutSaid = ({ shortId, subject }) =>
+  `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
+
+/** The lines of `out` that say something of the base of the run. */
+const basesSaid = (out) => out.split('\n').filter((line) => line.startsWith('The base '));
+
+/** The short id and the subject of `commit` in `root`, as `baseLeftOutSaid` takes them. */
+const namedOf = (root, commit) => ({ shortId: git(root, 'rev-parse', '--short', commit), subject: git(root, 'show', '-s', '--format=%s', commit) });
+
+test('a run from the first commit of a branch off the default branch says so before its plan: that commit is a code commit no record covers, a range starts after it, and a command reviews it', async () => {
+  const { root, base, one } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', one, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  const lines = result.out.split('\n');
+  assert.equal(lines[0], baseLeftOutSaid(namedOf(root, one)), result.out);
+  assert.ok(lines.slice(1).some((line) => line.startsWith('Plan of the Codex review of ')), result.out);
+  nothing.untouched('a plan from the first commit of a branch');
+});
+
+test('a run from the default branch says nothing of its base: the base of a branch off the default branch is the default branch\'s own commit', async () => {
+  const { root, base } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', 'origin/main', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.deepEqual(basesSaid(result.out), []);
+  nothing.untouched('a plan from the default branch');
+});
+
+test('a run from a base that a record covers says nothing of it: the record covers that commit, so it is no base left out', async () => {
+  const { root, base, one } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  appendCodexReview(root, reviewedRecord(base, one));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', one, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.deepEqual(basesSaid(result.out), []);
+  nothing.untouched('a plan from a base a record covers');
+});
+
+test('a base the records leave out is said even when the records cover the range it starts, which is then nothing to review', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  appendCodexReview(root, reviewedRecord(one, three));
+  const nothing = startsNothing(root);
+  const result = await run(['--base', one, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.deepEqual(result.out.split('\n'), [
+    baseLeftOutSaid(namedOf(root, one)),
+    `Nothing to review: ${rangeOf(one, three)} holds 2 code commits, and a Codex review record already covers all of them. ${AGAIN_TAKES_IT}`,
+  ]);
+  nothing.untouched('a plan of a range the records cover, from a base they leave out');
+});
+
+test('--again takes the base as it was given, so it says nothing of the base and plans the range from it', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', one, '--again', '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.deepEqual(result.out.split('\n'), planned(root, one, three, LAST_TWO));
+  assert.deepEqual(basesSaid(result.out), []);
+  nothing.untouched('a plan with --again from a base left out');
+});
+
 // --- one run asks git where its repository is once, and what it learned ends with it ---
 
 /** `deps` with a `spawn` that also keeps the git processes it starts, in order: each `{ args, cwd, input }`,

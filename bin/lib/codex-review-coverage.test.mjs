@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { COMMITS_UNREAD, MARKS_UNREAD, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 
 // Real git in every test, isolated from the host's config. What `check` says of the records over the range
@@ -423,4 +423,84 @@ test('an answer git does not give is not a yes: the range as it was given', () =
   const { spawn, started } = countingSpawn();
   assert.notEqual(reviewStart(uncovered, { cwd: root, from: first, tip: three, spawn }).start, first);
   assert.deepEqual(started, ['merge-base', 'rev-list']);
+});
+
+// --- the base of a review, when the commit it starts at is one of the branch that no record covers ---
+
+/** The remote `origin` with its `main` at `tip`, a commit of `root`. Nothing else is fetched: a default
+ * branch needs no network, only the ref that names it. */
+function remoteMainAt(root, tip) {
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', tip);
+}
+
+test('the base of a review that is a code commit of the branch, with no record, is that commit: its id, short id and subject', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  assert.deepEqual(baseLeftOut(root, { from: one }), { id: one, shortId: git(root, 'rev-parse', '--short', one), subject: 'feat: two' });
+});
+
+test('the base of a review that is the tip of the default branch is no base left out, though it is a code commit with no record', () => {
+  const { root } = makeRepo();
+  const tip = commit(root, 'b.js', 'two', 'feat: two');
+  remoteMainAt(root, tip);
+  assert.equal(baseLeftOut(root, { from: tip }), null);
+});
+
+test('the base of a review that a record covers is no base left out', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, first, one);
+  assert.equal(baseLeftOut(root, { from: one }), null);
+});
+
+test('the base of a review that a record covers, from a later commit of the branch, is no base left out', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  const two = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, first, two);
+  assert.equal(baseLeftOut(root, { from: one }), null);
+});
+
+test('the base of a review that changes only a Markdown file is no base left out', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const doc = commit(root, 'notes.md', 'words', 'docs: notes');
+  assert.equal(baseLeftOut(root, { from: doc }), null);
+});
+
+test('a repository with no remote has no default branch, so there is no base left out', () => {
+  const { root } = makeRepo();
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  assert.equal(baseLeftOut(root, { from: one }), null);
+});
+
+test('the base of a review that is a root commit of an unrelated history is no base left out', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '--orphan', 'unrelated');
+  const alone = commit(root, 'z.js', 'unrelated', 'feat: a root commit');
+  assert.equal(baseLeftOut(root, { from: alone }), null);
+});
+
+test('a spawn that fails every merge-base call gives no base left out, and throws nothing', () => {
+  const { root, first } = makeRepo();
+  remoteMainAt(root, first);
+  git(root, 'checkout', '--quiet', '-b', 'feat');
+  const one = commit(root, 'b.js', 'two', 'feat: two');
+  const failing = (cmd, args, opts) => (args[0] === 'merge-base' ? { status: 128, stdout: '', stderr: 'fatal' } : spawnSync(cmd, args, opts));
+  const throwing = (cmd, args, opts) => {
+    if (args[0] === 'merge-base') throw new Error('spawnSync git ENOENT');
+    return spawnSync(cmd, args, opts);
+  };
+  assert.equal(baseLeftOut(root, { from: one, spawn: failing }), null);
+  assert.equal(baseLeftOut(root, { from: one, spawn: throwing }), null);
 });

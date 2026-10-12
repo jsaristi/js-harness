@@ -153,7 +153,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
-import { MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { baseLeftOut, MARKS_UNREAD, notReviews, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, needsFlagLine, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
@@ -963,6 +963,13 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why }) {
   return { parts };
 }
 
+/** The line that says a run's base is a code commit of its branch that no Codex review record covers, and what
+ * reviews it: `commit` is what `baseLeftOut` answers, `{ id, shortId, subject }`. A range starts after its
+ * base, so the run does not read the base, and no record of the run covers it. */
+function baseLeftOutSaid({ shortId, subject }) {
+  return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
+}
+
 /** What the Codex review records leave of `from..head` for a run to do (both full commit ids, `from` the
  * commit the range starts at), by the definition `check --push` reads them with
  * (`bin/lib/codex-review-coverage.mjs`); `given` is the range as the run names it, for what is said.
@@ -1151,9 +1158,15 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * `--again` is the way to review on purpose what has a record: the range is then taken as it was given,
    * and the records are not read. Nor are they for a range that holds no commit, which has none a record
    * could cover and no part either. A caller that asks for `everyFile` measures the review of the range it
-   * names, so its range is taken as it was given too. */
+   * names, so its range is taken as it was given too.
+   *
+   * The base is asked about first: a range starts after its base, so a run never reads the commit `given`
+   * names. When that commit is a code commit of the branch that no record covers, the line that says so comes
+   * before what the records say (`baseLeftOutSaid`), whichever way they come out. */
   const startingAt = (given) => {
     if (args.again || everyFile || given === head) return given;
+    const leftOut = baseLeftOut(root, { from: given, spawn, where });
+    if (leftOut !== null) log(baseLeftOutSaid(leftOut));
     const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}`, where });
     if (left.covered !== undefined) {
       log(left.covered);

@@ -35,6 +35,20 @@ function gitYes(spawn, cwd, args) {
   }
 }
 
+/** Whether `git <args>` answers yes (exit 0) or no (exit 1), for the yes/no commands where a non-zero exit is
+ * an answer; `null` when git did not say: it failed, it could not be started, or it threw. Unlike `gitYes`,
+ * a git that fails is no "no", which is what a caller needs when a "no" is the one answer it acts on. */
+function gitAnswer(spawn, cwd, args) {
+  try {
+    const result = spawn('git', args, { cwd, encoding: 'utf8' });
+    if (!result || result.error) return null;
+    if (result.status === 0) return true;
+    return result.status === 1 ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The commits a valid `rec` covers, or `null` when its ids are not commits this repository knows. */
 function coveredBy(spawn, cwd, rec) {
   const listed = gitOut(spawn, cwd, ['rev-list', `${rec.base}..${rec.head}`]);
@@ -306,4 +320,48 @@ export function reviewStart(uncovered, { cwd, from, tip, spawn = spawnSync }) {
   if (after === null) return asGiven;
   const reviewed = new Set(after.split('\n'));
   return uncovered.every((commit) => reviewed.has(commit.id)) ? whereTheRecordsEnd : asGiven;
+}
+
+/** The branch a push is measured against: what `refs/remotes/<remote>/HEAD` points at, else
+ * `<remote>/main`, else `<remote>/master`; `null` when none of them resolves to a commit. Only the
+ * remote's own refs count, never a local branch: pushing `main` itself would otherwise be measured
+ * against the very commits being pushed and pass with nothing to review. */
+export function defaultBranch(spawn, cwd, remote) {
+  const resolves = (ref) => gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  const pointed = gitOut(spawn, cwd, ['symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`]);
+  const candidates = [pointed, `refs/remotes/${remote}/main`, `refs/remotes/${remote}/master`].filter(Boolean);
+  const ref = candidates.find((candidate) => resolves(candidate));
+  return ref ? { ref, label: ref.replace(/^refs\/remotes\//, '') } : null;
+}
+
+/** The base of a review, when it is a code commit of the branch that no Codex review record covers: `{ id,
+ * shortId, subject }` of `from`, else `null`. `from` is the full id of the commit a review's range starts at
+ * (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,
+ * and no record of the range covers it: a branch whose first commit was the base kept that commit with no
+ * review and no word about it.
+ *
+ * It is this case only when all of these hold: `remote` has a default branch; `from` is not an ancestor of
+ * it nor the commit it names, so `from` is a commit of the branch under review; `from` has a parent, the
+ * first one, as `reviewStart` takes it; and the coverage of `<parent>..<from>` reads, and lists `from` as an
+ * uncovered code commit. Every other case is `null`, and so is every case in which git cannot say, a failed
+ * git among them. It never throws: the caller prints a note or nothing. */
+export function baseLeftOut(cwd, { from, remote = 'origin', spawn = spawnSync, where }) {
+  try {
+    // Every review asks this, and most repositories a test builds have no remote: one question says so,
+    // where finding no default branch takes three.
+    if (!gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`])) return null;
+    const branch = defaultBranch(spawn, cwd, remote);
+    if (branch === null) return null;
+    // Only exit 1 is the answer that `from` is not on the default branch: a failed git is no answer.
+    if (gitAnswer(spawn, cwd, ['merge-base', '--is-ancestor', from, branch.ref]) !== false) return null;
+    // A root commit has no `<from>^`, and so no range to be a code commit of.
+    const parent = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${from}^`]);
+    if (parent === null) return null;
+    const coverage = reviewCoverage(cwd, { from: parent, tip: from, spawn, where });
+    if (coverage.unknown !== undefined) return null;
+    const commit = coverage.uncovered.find((entry) => entry.id === from);
+    return commit ? { id: commit.id, shortId: commit.shortId, subject: commit.subject } : null;
+  } catch {
+    return null;
+  }
 }

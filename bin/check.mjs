@@ -10,7 +10,7 @@ import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
-import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
@@ -960,18 +960,6 @@ export function checkReview(cwd, { spawn = spawnSync, timeout = 20000 } = {}) {
   const next = assessed.next_transition?.command;
   if (due && typeof next === 'string') lines.push(`next: ${next}`);
   return row(detail, lines);
-}
-
-/** The branch a push is measured against: what `refs/remotes/<remote>/HEAD` points at, else
- * `<remote>/main`, else `<remote>/master`; `null` when none of them resolves to a commit. Only the
- * remote's own refs count, never a local branch: pushing `main` itself would otherwise be measured
- * against the very commits being pushed and pass with nothing to review. */
-function defaultBranch(spawn, cwd, remote) {
-  const resolves = (ref) => gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
-  const pointed = gitOut(spawn, cwd, ['symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`]);
-  const candidates = [pointed, `refs/remotes/${remote}/main`, `refs/remotes/${remote}/master`].filter(Boolean);
-  const ref = candidates.find((candidate) => resolves(candidate));
-  return ref ? { ref, label: ref.replace(/^refs\/remotes\//, '') } : null;
 }
 
 /** What the Codex review records say of the code commits between the default branch of `remote` and
