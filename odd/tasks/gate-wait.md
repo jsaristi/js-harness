@@ -399,7 +399,7 @@ session's transcript.
 - [ ] T3 · M1: one whole run under the lock; the tables in Progress; the cuts chosen, with
       the counts they are judged by. Route: inline, no source written.
 - [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
-- [ ] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first.
+- [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [ ] T6 · The head a review reads is pinned, and two records at once. Route: delegated,
       tests first.
 - [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
@@ -454,7 +454,7 @@ session's transcript.
   run log's 36 pass; of the command's 247, 245 pass and two fail, both faults of the
   tests: the usage sentence asserted in a second place, and a second run that did not name
   the platform the first had, so its key differed, which is the key doing its work. Both
-  corrected by hand; nothing was committed in that turn. The next turn runs it all again.
+  corrected by hand; nothing was committed in that turn. The next turn ran it all again (`t5b-turn.log`, taken 04:50:23): RED the same five, GREEN 36 of 36 and 247 of 247, and the commit `1841b96`, whose gate passed (`PASS  tests`, 05:11:59). gentle-ai's row: medium risk, 474 lines, review due.
 
 ## Next
 The turn of T5 again (`t5-turn.sh` in the scratchpad: RED, GREEN, the commit with its
