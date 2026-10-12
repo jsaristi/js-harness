@@ -3,14 +3,17 @@
 // this file's own tests can use inline fixture strings instead of touching disk.
 
 const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})/;
+// The same marker at any depth: a fence under a list item is indented with the item's text.
+const INDENTED_FENCE_OPEN_PATTERN = /^\s*(`{3,}|~{3,})/;
 const HEADING_PATTERN = /^ {0,3}(#{1,6})\s+(.*)$/;
 const STEP_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s*(.*)$/;
 
 /** A line's fence marker, whether or not it is valid as an *opener*: its character (`` ` `` or
  * `~`) and length (3+), plus whatever follows it (the info string, for an opener; must be
- * whitespace-only, for a closer). Used by both `matchFenceOpen` and `isFenceClose` below. */
-function matchFenceMarker(line) {
-  const m = line.match(FENCE_OPEN_PATTERN);
+ * whitespace-only, for a closer). Used by both `matchFenceOpen` and `isFenceClose` below.
+ * `pattern` says how far a marker may be indented. */
+function matchFenceMarker(line, pattern) {
+  const m = line.match(pattern);
   if (!m) return null;
   const marker = m[1];
   return { char: marker[0], length: marker.length, rest: line.slice(m[0].length) };
@@ -20,8 +23,8 @@ function matchFenceMarker(line) {
  * contain a backtick (R3-backtick-info-string) — otherwise inline code like `` ```inline``` text ``
  * would be misread as opening a code block instead of being read as ordinary text. A tilde fence's
  * info string has no such restriction, since a tilde fence can safely contain backticks inside it. */
-function matchFenceOpen(line) {
-  const marker = matchFenceMarker(line);
+function matchFenceOpen(line, pattern) {
+  const marker = matchFenceMarker(line, pattern);
   if (!marker) return null;
   if (marker.char === '`' && marker.rest.includes('`')) return null;
   return marker;
@@ -32,8 +35,8 @@ function matchFenceOpen(line) {
  * (Codex P2). A shorter marker, a different character (` ``` ` never closes `~~~`, and vice versa),
  * or trailing text after the marker is just more fenced content, not a closer. (The backtick/info
  * -string restriction above does not apply here: a closer's `rest` must already be blank.) */
-function isFenceClose(line, fence) {
-  const marker = matchFenceMarker(line);
+function isFenceClose(line, fence, pattern) {
+  const marker = matchFenceMarker(line, pattern);
   return (
     marker !== null && marker.char === fence.char && marker.length >= fence.length && marker.rest.trim() === ''
   );
@@ -96,8 +99,12 @@ function uncomment(line, open) {
  * keeps its `line`, so `bin/lib/contract.mjs` can rebuild a section's body from them. With
  * `stripComments`, HTML comments (also multi-line ones) are removed from every line outside a
  * fence before it is classified, so a commented-out heading or list item is never read; a `<!--`
- * inside a fence is fenced content, and a fence marker inside a comment is not a fence. */
-export function tokenize(markdown, { stripComments = false } = {}) {
+ * inside a fence is fenced content, and a fence marker inside a comment is not a fence. With
+ * `indentedFences`, a fence marker counts at any indentation, not only up to three spaces: a fence
+ * under a list item is indented with the item, and without this its lines are read as text and a
+ * checkbox it shows as a step. */
+export function tokenize(markdown, { stripComments = false, indentedFences = false } = {}) {
+  const pattern = indentedFences ? INDENTED_FENCE_OPEN_PATTERN : FENCE_OPEN_PATTERN;
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const tokens = [];
   let fence = null; // { char, length } of the currently open fence, or null outside any fence
@@ -106,17 +113,19 @@ export function tokenize(markdown, { stripComments = false } = {}) {
     let raw = original;
     // A line that opens a fence is fenced content from its marker on, so it is not uncommented: a
     // `<!--` after the marker must not leave a comment open once the fence closes.
-    if (!fence && stripComments && (inComment || !matchFenceOpen(original))) {
+    if (!fence && stripComments && (inComment || !matchFenceOpen(original, pattern))) {
       ({ text: raw, inComment } = uncomment(original, inComment));
     }
     if (fence) {
-      if (isFenceClose(raw, fence)) fence = null;
+      if (isFenceClose(raw, fence, fence.pattern)) fence = null;
       tokens.push({ fence: true, line: raw });
       continue;
     }
-    const opened = matchFenceOpen(raw);
+    const opened = matchFenceOpen(raw, pattern);
     if (opened) {
-      fence = opened;
+      // A fence closes by the rule it opened with: one that opened within three spaces is closed
+      // only by a marker within three, so a deeper marker inside it is still its content.
+      fence = { ...opened, pattern: matchFenceOpen(raw, FENCE_OPEN_PATTERN) ? FENCE_OPEN_PATTERN : pattern };
       tokens.push({ fence: true, line: raw });
       continue;
     }

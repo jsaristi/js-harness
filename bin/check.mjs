@@ -7,6 +7,7 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
+import { checkFailures } from './failures.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
@@ -1115,7 +1116,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote })]
-    : [checkBudget(cwd), checkContracts(cwd), ...checkPayload(cwd, home)];
+    : [checkBudget(cwd), checkContracts(cwd), ...checkFailures(cwd), ...checkPayload(cwd, home)];
 
   // Guard against recursion: a sensor's suite may run check again (this repo's tests call `main`),
   // and that inner check must not spawn the sensors that are running it.

@@ -640,14 +640,19 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
 // a network stall), and without a bound the command would wait forever.
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
 
-const WAYS_ON = 'Rerun the review, or record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+// What a review that did not stand ends with. A review that failed is run again, in a turn of the gate
+// lock; the explicit skip is for a machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The
+// command does not tell a spent usage limit from another failure, so every failed review is sent to the rerun.
+const WAYS_ON =
+  'Rerun the review in a turn of the gate lock: `js-harness gate -- js-harness codex-review --base <rev>`. ' +
+  'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
 
 // What a refusal to make the session's home ends with. The home needs two things: a login in `auth.json`,
 // to link, and the harness's state dir on the volume of the Codex home, since a hard link cannot cross
 // volumes. On a machine without one of them no review can run, and there is no other session to send a
 // person to: until 2026-10-08 this sentence named `--session current`, which needed no home and whose
 // model nobody could check. So the way out is the one the command has for a review that could not be
-// made, the explicit skip, in the words it uses for it elsewhere (`WAYS_ON`), whatever the reason the
+// made, the explicit skip, in the words it uses for it elsewhere (`NO_CODEX`), whatever the reason the
 // home could not be made and whatever flags the refused command carried.
 const SKIP_IS_THE_WAY_OUT =
   'The way out, on a machine where the lean session cannot run: record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
