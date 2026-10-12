@@ -975,7 +975,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     feature documents, 83 places, pull request 62 (commit `119adbc`); four more are left
     unchecked in the list with their reason, and the six of `odd/tasks/codex-parity.md` wait
     for that document's branch
-  - [ ] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
+  - [x] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
     `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/codex-review-parts.mjs`,
     `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
   - [x] T17d One entry of the register for the failure itself, with the sweep as a sighting
@@ -1356,11 +1356,21 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   that day, with the sentence that called every entry open replaced by a pointer to the
   register, because this document cites the table's numbers in five places. The register gains
   one sighting under `chained-step-not-conditional`, the orchestrator's own report.
+- 2026-10-11, T17c closed. Commit `1374a2b`: the gate passed on its first run (22:07, after an
+  hour waiting for its turn). gentle-ai on `40ccb45..1374a2b`: risk medium, 146 changed lines,
+  review not due (under budget), so it is assessed with the next slice. Codex on
+  `40ccb45..f45176a`: "the patch is correct", no finding, 70,550 input tokens for 36 changed
+  lines of code. That is over 1,200 a line, and it waited for his answer: on that day he
+  confirmed a floor, up to 300,000 input tokens a review however small the commit, or 1,200 a
+  changed line, whichever is more (the orchestrator's transcript
+  `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, his answer at line 2963, read by this session,
+  to the question at line 2958, not read). `f45176a` adds three sightings the orchestrator
+  reported. The parent task stays open: four places of T17b are left with their reason and
+  the six of `odd/tasks/codex-parity.md` wait for that document's branch.
 
 ## Next step
-In this order. (1) T17c is on `fix/sweep-code-places`: its commit through the gate, the
-gentle-ai assessment from `main` as the base, Codex over the same range, then its pull
-request; the box is checked when both reviews are recorded. (2) T16b: how a rule is declared,
-designed and read by a reader that did not write it before it is built. (3) T3e. (4) T1. T2
+In this order. (1) The pull request of T17c is open: the lead merges it. (2) T16b, on
+`feat/rules-list`: its design and its first slice are there; its Progress is written on that
+branch once this one is on `main`. (3) T3e. (4) T1. T2
 and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
 of "What the hosts allow" that T2 rests on are confirmed with a logging hook.
