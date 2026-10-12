@@ -16,6 +16,12 @@ import { isSelf, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
 
 export const NOTICE_SCHEMA = 'js-harness.channel-notice/v1';
 export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
+/** The schema of a reading: the line `sessions --opening` appends to the record, which says that a session
+ * read the opening written for a title. It is not a notice: nobody is told anything by it, and it has no
+ * kind. It is how a session whose transcript carries no title (one opened from the phone, whose title
+ * lives in the app only) is known by one: the board and `notify` take the title from the latest reading
+ * of that session's id. */
+export const READING_SCHEMA = 'js-harness.channel-reading/v1';
 
 /** The kinds of a notice, and no other: each one costs its receiver a turn. `opened` (feature, worktree,
  * branch), `waiting` (on what, and whose it is), `closed` (what was delivered, and that nothing more goes
@@ -132,7 +138,41 @@ export function appendNotice(home, slug, notice) {
   return file;
 }
 
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+/** A reading as the record keeps it: `{ schema, at, reader: { host, id, source }, title }`. `reader` is the
+ * session that read, as `senderOf` gives it, and `title` the title of the opening it was given, one line.
+ * Throws a `ChannelInputError` for a reader with no session id: a reading says something of one session,
+ * so the caller writes none when the host names no session. */
+export function newReading({ at, reader, title }) {
+  if (!isObject(reader) || typeof reader.id !== 'string' || reader.id === '') throw new ChannelInputError('a reading is of a session: it takes its session id');
+  return { schema: READING_SCHEMA, at, reader: { host: reader.host ?? 'unknown', id: reader.id, source: reader.source ?? null }, title: openingTitleOf(title) };
+}
+
+/** Appends `reading` (`newReading`) to the record of the project `slug` under `home`, as a line of its
+ * own beside the notices, and returns the record's path. */
+export function appendReading(home, slug, reading) {
+  const file = recordPath(home, slug);
+  appendLine(file, JSON.stringify(reading));
+  return file;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Whether `value` is a reading of this schema: enough of one to give a session its title. */
+function isReading(value) {
+  return (
+    isObject(value) &&
+    value.schema === READING_SCHEMA &&
+    typeof value.at === 'string' &&
+    Number.isFinite(Date.parse(value.at)) &&
+    typeof value.title === 'string' &&
+    value.title.trim() !== '' &&
+    isObject(value.reader) &&
+    typeof value.reader.id === 'string' &&
+    value.reader.id !== ''
+  );
+}
 
 /** Whether `value` is a notice of this schema: enough of one for a board to print it. */
 function isNotice(value) {
@@ -148,20 +188,23 @@ function isNotice(value) {
   );
 }
 
-/** The record of the project `slug` under `home`: `{ path, notices, skipped }`, the notices in the order
- * written. A project with no record yet has none. A line that is torn (a session appends while this
- * reads), that is not JSON or that is not a notice of this schema is counted in `skipped` and left out,
- * never fatal. A record that is there and cannot be read is `unavailable` with the reason, so that
- * "could not look" is never read as "no notices". */
+/** The record of the project `slug` under `home`: `{ path, notices, readings, skipped }`, the notices and
+ * the readings (`newReading`), each in the order written. A project with no record yet has none. A line
+ * that is torn (a session appends while this reads), that is not JSON or that is neither a notice nor a
+ * reading of these schemas is counted in `skipped` and left out, never fatal. A record that is there and
+ * cannot be read is `unavailable` with the reason, so that "could not look" is never read as "no
+ * notices". */
 export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const file = recordPath(home, slug);
   let text;
   try {
     text = readFile(file);
   } catch (err) {
-    return err.code === 'ENOENT' ? { path: file, notices: [], skipped: 0 } : { path: file, unavailable: err.code ?? err.message, notices: [], skipped: 0 };
+    const none = { path: file, notices: [], readings: [], skipped: 0 };
+    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], skipped: 0 };
   }
   const notices = [];
+  const readings = [];
   let skipped = 0;
   for (const line of text.split('\n')) {
     if (line.trim() === '') continue;
@@ -172,9 +215,10 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
       parsed = null;
     }
     if (isNotice(parsed)) notices.push(parsed);
+    else if (isReading(parsed)) readings.push(parsed);
     else skipped += 1;
   }
-  return { path: file, notices, skipped };
+  return { path: file, notices, readings, skipped };
 }
 
 // ---- the relief file ----------------------------------------------------------------------------------

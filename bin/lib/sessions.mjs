@@ -193,10 +193,19 @@ function resumedWork(block, entry, agent, kind) {
 // The third, `agent`, is a subagent of the session that calls.
 const SESSION_RECIPIENTS = new Set(['name', 'session']);
 
-/** The message a `SendMessage` call sends to another session, before its result is known (`sessionFacts`). */
+// The longest summary of a sent message the board keeps. Every `SendMessage` call of this project's
+// transcripts gives one (290 of 290, 2026-10-11), and the 182 sent to a session run from 17 to 69 characters.
+const SUMMARY_LENGTH = 100;
+
+/** The message a `SendMessage` call sends to another session, before its result is known (`sessionFacts`).
+ * `summary` is the line the call itself gives about the message, flattened to one line and cut at
+ * `SUMMARY_LENGTH`, or `null` when it gives none: it is what the sender said the message is about, and
+ * the only words of a message the board keeps. The message itself stays in the transcript. */
 function sentMessage(block, entry) {
   const given = (value) => (typeof value === 'string' ? value : null);
-  return { at: entry.timestamp ?? null, to: given(block.input?.to), toKind: given(block.input?.recipient_kind), id: null, failed: false };
+  const said = (given(block.input?.summary) ?? '').replace(/\s+/g, ' ').trim();
+  const summary = said === '' ? null : said.length > SUMMARY_LENGTH ? `${said.slice(0, SUMMARY_LENGTH - 1)}…` : said;
+  return { at: entry.timestamp ?? null, to: given(block.input?.to), toKind: given(block.input?.recipient_kind), id: null, failed: false, summary };
 }
 
 function end(work, at, status) {
@@ -214,7 +223,8 @@ function end(work, at, status) {
  * call that resumed a subagent. Its id (the task id of a shell, the agent id of a subagent) comes from
  * the tool result that follows the call, never from the call itself, so work whose result is not written
  * yet has `id: null`. A foreground `Agent` call ends with its tool result; everything else ends with a
- * task notification that carries a status.
+ * task notification that carries a status, or with the result of a `TaskStop` call that names it, whose
+ * status is `stopped`.
  *
  * An end closes only work launched before it. One that names a call closes that call's piece, and any
  * older piece of the same id still open; one that names only the task closes every open piece of that
@@ -236,12 +246,13 @@ function end(work, at, status) {
  * which sessions can ring each other.
  *
  * `received` is every peer message the transcript holds (`peerMessageOf`), in the order written, and
- * `sent` every `SendMessage` call to another session, as `{ at, to, toKind, id, failed }`: the address
- * it was sent to, as the call gives it (a title, or a session's own address), the kind of recipient the
- * call names (`name`, `session`, or `null` from a host that named none), the id the host returned for
- * the message, and whether the call failed. `id` is `null` until the result is written, and when the
- * result gives none. A follow-up to a subagent is not one of them: it is work (`resumedWork`), or
- * nothing. A resumed session writes earlier entries again, so each message is listed once. */
+ * `sent` every `SendMessage` call to another session, as `{ at, to, toKind, id, failed, summary }`: the
+ * address it was sent to, as the call gives it (a title, or a session's own address), the kind of
+ * recipient the call names (`name`, `session`, or `null` from a host that named none), the id the host
+ * returned for the message, whether the call failed, and the line the call gives about the message
+ * (`sentMessage`). `id` is `null` until the result is written, and when the result gives none. A
+ * follow-up to a subagent is not one of them: it is work (`resumedWork`), or nothing. A resumed session
+ * writes earlier entries again, so each message is listed once. */
 export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LIMIT, contextWindow = DEFAULT_CONTEXT_WINDOW } = {}) {
   const { entries, skipped } = parseTranscript(text);
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
@@ -334,6 +345,16 @@ export function sessionFacts(text, { tail = 3, contextLimit = DEFAULT_CONTEXT_LI
         if (message) {
           if (typeof outcome.msg_id === 'string') message.id = outcome.msg_id;
           if (block.is_error === true) message.failed = true;
+        }
+      } else if (launch.block.name === 'TaskStop') {
+        // A task stopped by hand: the result of the call is the only thing a transcript records of it (no
+        // notification follows: none for the ten stopped shells of this project's transcripts,
+        // 2026-10-11). It ends the work of that id launched before the call, and no other: a resumed
+        // session writes the stop again, after work that started later under the same id. What it says is
+        // that the host stopped the task, not that its process is gone: the process listing says that.
+        const task = typeof outcome.task_id === 'string' ? outcome.task_id : launch.block.input?.task_id;
+        if (block.is_error !== true && typeof task === 'string') {
+          for (const item of workByCall.values()) if (item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'stopped');
         }
       } else if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
@@ -472,17 +493,22 @@ function gitCount(run, cwd, args, parse = printedCount) {
 
 const PENDING_LENGTH = 40;
 
-/** One feature document as a plan: `{ path, title, done, total, pending, nextStep }`. Title and checkboxes
- * are `parseFeature`'s (bin/lib/progress.mjs), so the board counts what `js-harness progress` counts.
- * `pending` names each unchecked step by the id that starts it (`T5`, `T3b`), or by the start of its text
- * when it has none. `nextStep` is every non-blank line of the `## Next step` section, all of them, because
- * a watch compares the whole text; the text board prints the first few. */
+/** The id that starts a task's text (`T5`, `T3b`), or `null` when it has none. */
+const taskId = (text) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(text)?.[1] ?? null;
+
+/** One feature document as a plan: `{ path, title, done, total, pending, tasks, nextStep }`. Title and
+ * checkboxes are `parseFeature`'s (bin/lib/progress.mjs), so the board counts what `js-harness progress`
+ * counts. `pending` names each unchecked step by the id that starts it (`T5`, `T3b`), or by the start of
+ * its text when it has none. `tasks` is the text of every step, ticked or not, as its checkbox line has
+ * it: what a watch compares to tell a plan that changed from one that advanced (`taskDifferences`).
+ * `nextStep` is every non-blank line of the `## Next step` section, all of them, because a watch compares
+ * the whole text; the text board prints the first few. */
 export function planOf(markdown, docPath) {
   const id = docPath.split('/').at(-1).replace(/\.md$/, '');
   const { title, done, total, steps } = parseFeature(markdown, id);
   const pending = steps
     .filter((step) => !step.done)
-    .map((step) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(step.text)?.[1] ?? (step.text.length > PENDING_LENGTH ? `${step.text.slice(0, PENDING_LENGTH)}…` : step.text));
+    .map((step) => taskId(step.text) ?? (step.text.length > PENDING_LENGTH ? `${step.text.slice(0, PENDING_LENGTH)}…` : step.text));
   const nextStep = [];
   let inSection = false;
   for (const token of tokenize(markdown)) {
@@ -493,7 +519,7 @@ export function planOf(markdown, docPath) {
       nextStep.push(token.line.trim());
     }
   }
-  return { path: docPath, title, done, total, pending, nextStep };
+  return { path: docPath, title, done, total, pending, tasks: steps.map((step) => step.text), nextStep };
 }
 
 /** The plans of the branch checked out at `cwd`: its feature documents, `odd/tasks/*.md`, that differ
@@ -810,6 +836,71 @@ export function roleNamed(text) {
   return Number.isSafeInteger(number) ? { role: 'work', number } : null;
 }
 
+/** Whether a session has a title it was given: the one its transcript carries (`custom-title`), or the
+ * one of the opening it read (`reading`, `titledByReadings`). The start of a first prompt, which the
+ * board shows for a session with neither, names nobody. */
+export const hasTitle = (session) => (session.titleSource === 'custom-title' || session.titleSource === 'reading') && typeof session.title === 'string';
+
+/** The title the record gives the session `id`: the one of the opening it read last (`readings`, the
+ * readings of the record in the order written), or `null` when it read none. A reading is the session's
+ * when its reader's id is the session's id or the start of it (`isSelf`), which is how `--self` names a
+ * session and the rule by which a notice is its row's (`recordOfRows`). */
+export function titleRead(readings, id) {
+  if (typeof id !== 'string') return null;
+  for (let index = readings.length - 1; index >= 0; index--) if (isSelf(id, readings[index].reader.id)) return readings[index].title;
+  return null;
+}
+
+/** `sessions` (of a board) again, each session whose transcript carries no title given the one of the
+ * opening it read (`titleRead`), with `titleSource: 'reading'`. That is every session opened from the
+ * phone: its transcript has no `custom-title` entry (none in the two of this project, 2026-10-11), its
+ * title lives in the app only, and the command by which it reads its opening is what says which session
+ * it is. A title in the transcript wins: it is the one the app shows, and it can change after the
+ * reading. The sessions given are not changed. */
+export function titledByReadings(sessions, readings) {
+  return sessions.map((session) => {
+    if (session.unavailable || session.titleSource === 'custom-title') return session;
+    const title = titleRead(readings, session.id);
+    return title === null ? session : { ...session, title, titleSource: 'reading' };
+  });
+}
+
+// The kinds of notice that say where a session is in its life: the last one of them is its place.
+const STATUS_KINDS = new Set(['opened', 'waiting', 'closed', 'relieved']);
+// Those after which nothing more comes from the session, by its own word.
+const ENDED_KINDS = new Set(['closed', 'relieved']);
+
+/** What the record says of each row of `rows`, as a `Map` from the row to `{ status, worktree, branch,
+ * notices }`, with no entry for a row the record says nothing of. `status` is the last notice of the row
+ * that is one of `opened`, `waiting`, `closed` and `relieved`, as `{ kind, at, text }` (the text says on
+ * what a session waits, and who has the role of one that was relieved), or `null`. `worktree` and
+ * `branch` are those of its last notice written from inside a worktree: where the command ran, which a
+ * transcript does not record for a session that reached a worktree by `cd`. `notices` counts them.
+ *
+ * A notice is the row's when its sender's session id is the id of one of the row's transcripts, or the
+ * start of one (`--self`); otherwise, when the title it carries is the row's. The id comes first because
+ * it cannot be mistaken; the title is for a notice whose session the app has since restarted into a new
+ * transcript, which carries the same title and another id. That is also why the id cannot tell two
+ * sessions under one title apart: a restart and a twin both arrive with a new one. */
+function recordOfRows(rows, notices) {
+  const said = new Map();
+  for (const notice of notices) {
+    const { id, title } = notice.from ?? {};
+    const byId = typeof id === 'string' && id !== '' ? rows.find((row) => row.transcripts.some((transcript) => isSelf(transcript.id, id))) : undefined;
+    const row = byId ?? (typeof title === 'string' ? rows.find((item) => hasTitle(item) && item.title === title) : undefined);
+    if (!row) continue;
+    const kept = said.get(row) ?? { status: null, worktree: null, branch: null, notices: 0 };
+    kept.notices += 1;
+    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text };
+    if (typeof notice.worktree === 'string') {
+      kept.worktree = notice.worktree;
+      kept.branch = typeof notice.branch === 'string' ? notice.branch : null;
+    }
+    said.set(row, kept);
+  }
+  return said;
+}
+
 /** The roster of `sessions`, the sessions of a board: `{ rows, unread, outside }`.
  *
  * A row is a title, not a transcript: the app can restart a session's process, which goes on under its
@@ -817,9 +908,12 @@ export function roleNamed(text) {
  * up to four in a row), and nothing a transcript holds names the app session it belongs to. So every
  * transcript whose own title is that title is in the row, the latest first, each with its last entry.
  * The other side of it: two sessions that carry one same title are one row too, which the row cannot
- * tell and the roster's last line says (`ROSTER_NOT_KNOWN`). Only a title a session was given is one:
- * the start of a first prompt, which the board shows for a session with none, names nobody, and such a
- * session is a row of its own, as is one with nothing to show.
+ * tell and the roster's last line says (`ROSTER_NOT_KNOWN`). Only a title a session was given is one
+ * (`hasTitle`): the one its transcript carries, or the one of the opening it read when its transcript
+ * carries none (`titledByReadings`), and then the row's `titleSource` is `reading` unless another
+ * transcript of the row carries the title. The start of a first prompt, which the board shows for a
+ * session with neither, names nobody, and such a session is a row of its own, as is one with nothing to
+ * show.
  *
  * A row has `title` and `titleSource`; what the title says, `code`, `role`, `number` and `purpose`
  * (`roleOfTitle`), all `null` for a title outside the shape; `self` when the session that asked is one of
@@ -831,6 +925,10 @@ export function roleNamed(text) {
  * is the one the entries record, which is where the session was opened: one that reaches a worktree by
  * `cd` still records the other, so neither `worktree` nor `features` says where a session works.
  *
+ * `record` is what the channel's record says of the row's session (`recordOfRows`), from the notices of
+ * the `record` handed in (`{ notices }`, as the record's reader gives it), and `null` for a row it says
+ * nothing of, or with no record given. It replaces nothing: `cwd` stays what the transcript records.
+ *
  * The orchestrator comes first, then the work sessions by number, then the rows with no role; among
  * equals the latest first. `unread` counts the transcripts that could not be read: they have no title,
  * so they are in no row.
@@ -841,7 +939,7 @@ export function roleNamed(text) {
  * 13 and 14 days old were in a window of 12 hours). So a transcript is in a row, and holds a role, only
  * when its last timed entry is in the window; the others, and those with no timed entry at all, are
  * counted in `outside`. With no `since` every transcript given is in a row. */
-export function rosterOf(sessions, { worktrees, since } = {}) {
+export function rosterOf(sessions, { worktrees, since, record } = {}) {
   const trees = worktrees?.available ? worktrees.items : [];
   const groups = new Map();
   let unread = 0;
@@ -855,7 +953,7 @@ export function rosterOf(sessions, { worktrees, since } = {}) {
       outside += 1;
       continue;
     }
-    const key = session.titleSource === 'custom-title' && typeof session.title === 'string' ? `title ${session.title}` : `transcript ${session.id}`;
+    const key = hasTitle(session) ? `title ${session.title}` : `transcript ${session.id}`;
     groups.set(key, [...(groups.get(key) ?? []), session]);
   }
   const recency = (item) => item.lastEntryAt ?? '';
@@ -863,13 +961,14 @@ export function rosterOf(sessions, { worktrees, since } = {}) {
   const rows = [...groups.values()].map((group) => {
     const members = [...group].sort(latestFirst);
     const [latest] = members;
-    const said = latest.titleSource === 'custom-title' ? roleOfTitle(latest.title) : null;
+    const said = hasTitle(latest) ? roleOfTitle(latest.title) : null;
     const placed = members.find((member) => typeof member.cwd === 'string') ?? latest;
     const tree = typeof placed.cwd === 'string' ? trees.find((item) => comparable(item.path) === comparable(placed.cwd)) : undefined;
     const sameBranch = typeof placed.gitBranch === 'string' && tree?.branch === placed.gitBranch;
     return {
       title: latest.title ?? null,
-      titleSource: latest.titleSource ?? null,
+      // One transcript of the row that carries the title is enough for the row to have it from there.
+      titleSource: members.some((member) => member.titleSource === 'custom-title') ? 'custom-title' : (latest.titleSource ?? null),
       code: said?.code ?? null,
       role: said?.role ?? null,
       number: said?.number ?? null,
@@ -882,8 +981,10 @@ export function rosterOf(sessions, { worktrees, since } = {}) {
       worktree: tree?.path ?? null,
       features: sameBranch && tree.plans?.available ? tree.plans.items.map((plan) => plan.path.split('/').at(-1).replace(/\.md$/, '')) : [],
       transcripts: members.map((member) => ({ id: member.id, lastEntryAt: member.lastEntryAt ?? null })),
+      record: null,
     };
   });
+  for (const [row, said] of recordOfRows(rows, record?.notices ?? [])) row.record = said;
   const rank = (row) => (row.role === 'orchestrator' ? 0 : row.role === 'work' ? 1 : 2);
   rows.sort((one, other) => rank(one) - rank(other) || (one.number ?? 0) - (other.number ?? 0) || latestFirst(one, other));
   return { rows, unread, outside };
@@ -895,6 +996,220 @@ export function roleHolders(roster, wanted) {
   return roster.rows.filter((row) => row.role === wanted.role && row.number === wanted.number);
 }
 
+// ---- the channel: what the sessions told each other ---------------------------------------------------
+//
+// Two sources, kept apart because they say different things (odd/tasks/session-channel.md, points 2 and
+// 3). The record is the file `notify` writes: every notice is in it, with its text, whoever it was for
+// and whether or not anybody was rung. The messages between sessions are the doorbell, read from the
+// transcripts: who rang whom, and whether the ring is seen to have arrived.
+
+/** How many notices of the record, and how many messages between sessions, a board holds and prints: the
+ * last ones, like the lines of the relief file. The record has the rest. */
+export const CHANNEL_LINES = 5;
+
+/** The messages the sessions of a board sent each other, the oldest first: `{ id, at, from: { session,
+ * title }, to: { address, session, title }, summary, state }`.
+ *
+ * A message is a `SendMessage` call of one transcript (`sent`), and it is seen to have arrived when a
+ * transcript of the board holds a message from a session with the same id (`received`): `state` is then
+ * `'arrived'`, and `to` has the session that got it and its title, which is not always the address it was
+ * sent to (a title handed over, a session's own address). Otherwise it is `'failed'` when the call
+ * failed, and `'not-seen'`: no transcript of the board holds it, which is all a transcript can show. The
+ * app may hold it, it may have expired, or it reached a session whose transcript is outside the window
+ * or could not be read; nothing here calls it held. A message that arrived and whose sender's transcript
+ * is not on the board is given from the receiver's side, with the title the sender had.
+ *
+ * `summary` is the line the call gave about the message (`sentMessage`), `null` for one seen only from
+ * the receiver's side. No text of a message is kept: the notice of the record is what was said, and the
+ * transcript has the message. A message written twice (a session the app restarted writes its entries
+ * again in a new transcript) is one: by its id, and by `copyKey` when it has none. */
+function messagesBetween(sessions) {
+  const readable = sessions.filter((session) => !session.unavailable);
+  const whose = (session) => ({ session: session.id, title: hasTitle(session) ? session.title : null });
+  const arrivals = new Map(); // message id -> { at, name, receiver }
+  for (const session of readable) {
+    for (const message of session.received ?? []) {
+      if (message.from === 'session' && message.id !== null && !arrivals.has(message.id)) arrivals.set(message.id, { at: message.at, name: message.name, receiver: session });
+    }
+  }
+  // A send is a call, and its copy in the transcript of a restart is the same entry again: the same time
+  // to the millisecond, address, kind of address and summary, under the same title. Those are the key by
+  // which two copies are one send. What its result gave is not part of it, because the result can be in
+  // one transcript only (a session restarted between the call and its result): one copy then has no id
+  // and the other has it, or one failed and the other says nothing yet. The copy that knows more is
+  // kept: an id, then a failure, then neither.
+  //
+  // Copies are matched across transcripts only: two calls of one transcript are two messages whatever
+  // they share, since one reply can make both, so a send of a key held so far takes at most one call of
+  // each transcript. Two ids are two sends: a call with an id is the held send with that id, or else the
+  // first held send of its key that has no id yet, and never one with another id (a transcript resumed
+  // part way holds only some of the sends of a key, so the place of a call among them says nothing). A
+  // call with no id is the first held send of its key that no call of its transcript is yet. A send
+  // with no time has no key. Two different messages would have to come from two sessions of one title,
+  // in the same millisecond, to one address, in the same words.
+  const copyKey = (session, message) => (typeof message.at === 'string' ? JSON.stringify([whose(session).title, message.at, message.to, message.toKind ?? null, message.summary ?? null]) : null);
+  const known = (message) => (message.id !== null ? 2 : message.failed ? 1 : 0);
+  //
+  // The sends are kept in the order of the calls: sends of one reply share their moment, so that order
+  // is all that tells the last of them from the first. A send a transcript adds goes before the send
+  // its next call is, so a transcript that holds only the last sends of a reply, read first, does not
+  // put them before the rest.
+  const calls = []; // one per send, in the order of the calls: { session, message }, the copy that knows most
+  const slots = new Map(); // key -> the sends of that key held so far
+  for (const session of readable) {
+    const sent = session.sent ?? [];
+    const sends = new Array(sent.length); // the send each call of this transcript is, by its place
+    const added = new Set(); // those no transcript before this one had
+    const here = new Map(); // key -> the places of the calls of this transcript that have it, in their order
+    sent.forEach((message, place) => {
+      const key = copyKey(session, message);
+      if (key === null) {
+        sends[place] = { session, message };
+        added.add(sends[place]);
+      } else {
+        here.set(key, [...(here.get(key) ?? []), place]);
+      }
+    });
+    for (const [key, places] of here) {
+      const held = slots.get(key) ?? [];
+      slots.set(key, held);
+      const taken = new Set(); // the held sends a call of this transcript already is
+      const rest = [];
+      for (const place of places) {
+        const { id } = sent[place];
+        const same = id === null ? undefined : held.find((send) => send.message.id === id && !taken.has(send));
+        if (same === undefined) {
+          rest.push(place);
+          continue;
+        }
+        taken.add(same);
+        sends[place] = same;
+      }
+      for (const place of rest) {
+        const message = sent[place];
+        const copied = held.find((send) => !taken.has(send) && (message.id === null || send.message.id === null));
+        const send = copied ?? { session, message };
+        taken.add(send);
+        sends[place] = send;
+        if (copied === undefined) {
+          held.push(send);
+          added.add(send);
+        } else if (known(message) > known(copied.message)) {
+          Object.assign(copied, { session, message });
+        }
+      }
+    }
+    let next = calls.length; // where in `calls` the send of the following call of this transcript is
+    for (let place = sent.length - 1; place >= 0; place -= 1) {
+      if (added.has(sends[place])) calls.splice(next, 0, sends[place]);
+      else next = calls.indexOf(sends[place]);
+    }
+  }
+  const messages = [];
+  const sent = new Set();
+  for (const { session, message } of calls) {
+    // An id is one message whatever else its copies say (a session renamed between two transcripts).
+    if (message.id !== null) {
+      if (sent.has(message.id)) continue;
+      sent.add(message.id);
+    }
+    const arrival = message.id === null ? undefined : arrivals.get(message.id);
+    const to = arrival ? whose(arrival.receiver) : { session: null, title: null };
+    messages.push({ id: message.id, at: message.at, from: whose(session), to: { address: message.to, ...to }, summary: message.summary ?? null, state: arrival ? 'arrived' : message.failed ? 'failed' : 'not-seen' });
+  }
+  for (const [id, arrival] of arrivals) {
+    if (!sent.has(id)) messages.push({ id, at: arrival.at, from: { session: null, title: arrival.name }, to: { address: null, ...whose(arrival.receiver) }, summary: null, state: 'arrived' });
+  }
+  const time = (message) => message.at ?? '';
+  return messages.sort((one, other) => (time(one) < time(other) ? -1 : time(one) > time(other) ? 1 : 0));
+}
+
+/** The channel of a board, from the record as its reader gives it (`{ path, notices, skipped,
+ * unavailable }`, bin/lib/channel.mjs) and the board's sessions: `{ path, skipped, noticeCount, notices,
+ * forOrchestrator: { count, notices }, messageCount, messages }`, and `unavailable` with the reason when
+ * the record is there and could not be read. `notices` are the last `count` of the record, in the order
+ * written, and `messages` the last `count` between sessions (`messagesBetween`); the two counts are of
+ * all of them.
+ *
+ * `forOrchestrator` is the same for the notices addressed to the orchestrator's role alone: how many the
+ * record holds, and the last `count`. A watch compares that number between two looks, so it returns for
+ * a notice written to the orchestrator and for no other (`boardChanges`); the record only grows, so the
+ * number says how many are new. */
+export function channelOf(record, sessions, { count = CHANNEL_LINES } = {}) {
+  const notices = record.notices ?? [];
+  const last = (items) => items.slice(items.length - Math.min(count, items.length));
+  const toOrchestrator = notices.filter((notice) => notice.to.role === 'orchestrator');
+  const messages = messagesBetween(sessions);
+  return {
+    path: record.path,
+    ...(record.unavailable !== undefined && { unavailable: record.unavailable }),
+    skipped: record.skipped ?? 0,
+    noticeCount: notices.length,
+    notices: last(notices),
+    forOrchestrator: { count: toOrchestrator.length, notices: last(toOrchestrator) },
+    messageCount: messages.length,
+    messages: last(messages),
+  };
+}
+
+// ---- whose words a line of a transcript holds ---------------------------------------------------------
+
+// A paste as the host writes it into the person's entry: the same id opens and closes it.
+const PASTED_CONTENT = /<pasted_content id="([^"]*)">[\s\S]*?<\/pasted_content id="\1">/g;
+
+/** What an entry is when it is not what the person sent, in words: `null` for one that is. */
+function notThePersons(entry) {
+  if (entry.type === 'assistant') return 'an assistant entry';
+  if (entry.type !== 'user') return `an entry of type ${JSON.stringify(entry.type ?? null)}`;
+  if (blocksOf(entry).some((block) => block.type === 'tool_result')) return 'the result of a tool call';
+  if (entry.isCompactSummary) return 'a compaction summary';
+  if (entry.isSidechain) return 'an entry of a side chain';
+  if (isPeerMessage(entry)) {
+    const message = peerMessageOf(entry);
+    return message.from === 'subagent' ? 'what a subagent handed back' : message.from === 'host' ? 'a message the app put in' : `a message from another session (${JSON.stringify(message.name ?? 'no name')})`;
+  }
+  const kind = isObject(entry.origin) ? entry.origin.kind : undefined;
+  if (kind === 'task-notification') return 'a task notification';
+  if (entry.isMeta) return 'a meta entry: the host wrote it, not the person';
+  // A host from before `origin` wrote none: such an entry may be his, and nothing in it says so.
+  if (kind === undefined) return 'a user entry that records no origin: it cannot be told whose it is';
+  return kind === 'human' ? null : `a user entry of origin ${JSON.stringify(kind)}`;
+}
+
+/** The entry at line `line` (from 1) of a transcript's `text`, when it is what the person sent: `{
+ * person: true, at, text, images, pastedOnly }`, with the time of the entry, its text as the transcript
+ * has it (the text blocks of a list, one per line), how many images came with it, and whether it is only
+ * pasted content: one or more pastes as the host wraps them (`PASTED_CONTENT`) and nothing typed before,
+ * between or after them. Anything else is `{ person: false, what }`, `what` saying which entry it is, or
+ * that there is none at that line.
+ *
+ * It is what `sessions --quote` answers with, and what a session checks before it takes words carried
+ * by another session as the user's: a user entry whose `origin.kind` is `human`, and no other. The
+ * host marks a message from another session `peer`, a task's end `task-notification`, and writes no
+ * origin on what it puts in itself. */
+export function quoteOf(text, line) {
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop(); // what follows the last line break is not a line
+  // A whole number only: 1.5 is inside the range and names no line.
+  if (!(Number.isSafeInteger(line) && line >= 1 && line <= lines.length)) return { person: false, what: `no line of the transcript, which has ${lines.length} line${lines.length === 1 ? '' : 's'}` };
+  const written = lines[line - 1];
+  if (written.trim() === '') return { person: false, what: 'an empty line' };
+  let entry;
+  try {
+    entry = JSON.parse(written);
+  } catch {
+    entry = null;
+  }
+  if (!isObject(entry)) return { person: false, what: 'not an entry: the line does not parse' };
+  const what = notThePersons(entry);
+  if (what !== null) return { person: false, what };
+  const content = entry.message?.content;
+  const blocks = blocksOf(entry);
+  const said = typeof content === 'string' ? content : blocks.filter(isText).map((block) => block.text).join('\n');
+  const typed = said.replace(PASTED_CONTENT, '');
+  return { person: true, at: entry.timestamp ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '' };
+}
+
 // ---- what changed between two boards ------------------------------------------------------------------
 //
 // `sessions --watch` looks at the board again and again and returns only when something on it calls for
@@ -903,6 +1218,13 @@ export function roleHolders(roster, wanted) {
 /** Whether `id` is the session named by `self`: its whole id, or its first eight characters or more. */
 export function isSelf(id, self) {
   return typeof self === 'string' && self !== '' && (id === self || (self.length >= 8 && id.startsWith(self)));
+}
+
+/** Whether two ids as they were written name one session: the same id, or one of them the start (eight
+ * characters or more) of the other. Either side may be the short one: `--self` takes the start of an id,
+ * and what was written with it keeps that start when no transcript could be read to complete it. */
+export function sameSession(one, other) {
+  return typeof one === 'string' && typeof other === 'string' && (isSelf(one, other) || isSelf(other, one));
 }
 
 /** How a board says context sizes: `of(tokens)` is `342k tokens (71%)`, `limit` is `73% (350k)`. The
@@ -922,6 +1244,11 @@ function sessionChanges(before, after, self) {
   const lines = [];
   const earlier = byKey(before.sessions, 'id');
   const sizes = contextSizes(after);
+  // A look that could not read the record has a roster that knows of no session that ended. The last
+  // record read is then what says it (`watchBaseline` keeps its roster): a session that said `closed`
+  // has not taken it back because a file was busy. Should it have opened again meanwhile, its notice
+  // wakes the watch at the first look that reads the record.
+  const ended = endedSessions(after.channel?.unavailable !== undefined ? before : after);
   for (const session of after.sessions) {
     const listed = earlier.get(session.id);
     // A transcript that cannot be read says nothing about what the session did.
@@ -929,7 +1256,10 @@ function sessionChanges(before, after, self) {
     // The board to compare with keeps the last readable facts of a session (`watchBaseline`), so one that
     // is unreadable there was never read: this is the first look that says anything about it.
     const was = listed?.unavailable ? undefined : listed;
-    if (!was) lines.push(`${sessionLabel(session)} appeared (${session.state})${listed ? ': its transcript could not be read until now' : ''}`);
+    // A session that said `closed` or `relieved` waits for nobody: its turn ending is no call to answer it.
+    if (session.state === 'waiting' && ended.has(session.id)) {
+      // nothing to say of its waiting, whether it appears, starts to wait or ends another turn
+    } else if (!was) lines.push(`${sessionLabel(session)} appeared (${session.state})${listed ? ': its transcript could not be read until now' : ''}`);
     else if (session.state === 'waiting' && was.state !== 'waiting') {
       const open = was.work.filter((work) => !work.ended).length;
       const how = was.state === 'background' ? `: the ${pieces(open)} it had open ended` : '';
@@ -972,15 +1302,16 @@ function sameGate(one, other) {
   return one.pid === other.pid && (!timed || one.startedAt === other.startedAt);
 }
 
-/** A gate started when it is no gate of the older board, and ended when it is none of the newer one
- * (`sameGate`): the worktrees say which gates are watched, never whether one runs. So a worktree removed
- * or added under a running gate is neither its end nor its start.
+/** The one thing a watch says of the gates: a gate that started beside another that runs. A gate started
+ * when it is no gate of the older board (`sameGate`): the worktrees say which gates are watched, never
+ * whether one runs, so a worktree added under a running gate is not its start.
  *
- * A gate that starts and waits for the machine's gate lock is said so, with the gate it waits for: that
- * is one gate running and one in line, which is the lock doing its work and no mistake. Nothing is said
- * when it then takes the lock: the gate before it ended, which is said, and the board shows who runs.
+ * Nothing is said of a gate that starts alone, of one that starts and waits for the machine's gate lock
+ * (one gate running and one in line is the lock doing its work), of one that takes the lock it waited
+ * for, or of one that ends. Each was said until 2026-10-11, and each woke the orchestrator for a session
+ * that was only getting on with its work; the board shows them to whoever looks.
  *
- * Two gates that run at once are still said, and they can only be so when one of them does not know the
+ * Two gates that run at once are said, and they can only be so when one of them does not know the
  * lock (`knowsLock`), as every gate of a checkout from before it: such a gate runs its sensors whenever
  * it is started, and no gate waits for it. So the alarm is for a gate that does not know the lock, beside
  * another such gate or beside the gate that holds the lock and still beats; and for a gate that knows the
@@ -994,9 +1325,8 @@ function sameGate(one, other) {
  * two reviews, 2026-10-10). What is not seen from here: a gate that knows the lock and ran its sensors
  * without it, which happens when the lock can be neither read nor written, and its own report says so. */
 function gateChanges(before, after) {
-  const was = watchedGates(before);
   const is = watchedGates(after);
-  if (was === null || is === null) return []; // a listing that failed is not a gate that ended
+  if (watchedGates(before) === null || is === null) return []; // a look that listed no gates knows of none that started
   const holder = boardGates(after).find((gate) => gate.lock?.role === 'holder');
   // The gate that holds the lock and still beats runs, whatever folder it checks: the lock is the
   // machine's. A lock of which nothing could be read, not even a pid, has shown no gate.
@@ -1004,17 +1334,12 @@ function gateChanges(before, after) {
   const without = is.filter((gate) => !knowsLock(gate));
   const lines = [];
   for (const gate of is) {
-    if (before.gates.items.some((old) => sameGate(old, gate))) continue;
-    if (gate.lock?.role === 'waiter') {
-      lines.push(`gate started ${gatePlace(gate)}, waiting for ${holder ? `the gate ${gatePlace(holder)}` : "the machine's gate lock"}`);
-      continue;
-    }
+    if (before.gates.items.some((old) => sameGate(old, gate)) || gate.lock?.role === 'waiter') continue;
     // Two gates at once is what the board exists to catch: they share the machine and one of them is
     // probably a mistake. A pid is one process, so a gate is never beside what carries its own.
     const other = (knowsLock(gate) ? without : [...holding, ...without]).find((item) => item.pid !== gate.pid);
-    lines.push(`gate started ${gatePlace(gate)}${other ? ` while another runs ${gatePlace(other)}` : ''}`);
+    if (other) lines.push(`gate started ${gatePlace(gate)} while another runs ${gatePlace(other)}`);
   }
-  for (const gate of was) if (!after.gates.items.some((now) => sameGate(now, gate))) lines.push(`gate ended ${gatePlace(gate)}`);
   return lines;
 }
 
@@ -1030,17 +1355,77 @@ function pullRequestChanges(before, after) {
   ];
 }
 
+/** Who wrote a notice, in words: its title, the start of its session id, or that the host named none. */
+function senderWords(from, { quoted = false } = {}) {
+  if (typeof from?.title === 'string') return quoted ? JSON.stringify(from.title) : from.title;
+  return typeof from?.id === 'string' ? `session ${from.id.slice(0, 8)}` : 'a sender the host does not name';
+}
+
+/** The notices for the orchestrator that the record gained between two boards, one line each: the kind,
+ * who wrote it and its text. The record only grows, so those are its last ones, as many as the count
+ * rose by (`channelOf`); when it rose by more than a board holds, the rest are said by their number,
+ * with the record's path. A notice the watching session wrote itself is left out: it knows it. A board
+ * with no channel, or whose record could not be read, is not compared, and neither is a record that
+ * shrank (an uninstall removes it). */
+function channelChanges(before, after, self) {
+  const was = before.channel;
+  const is = after.channel;
+  if (!was || !is || was.unavailable !== undefined || is.unavailable !== undefined) return [];
+  const gained = is.forOrchestrator.count - was.forOrchestrator.count;
+  if (gained <= 0) return [];
+  const held = is.forOrchestrator.notices;
+  const fresh = held.slice(held.length - Math.min(gained, held.length));
+  const lines = fresh
+    .filter((notice) => !sameSession(notice.from?.id, self))
+    .map((notice) => `notice for the orchestrator, ${notice.kind} from ${senderWords(notice.from, { quoted: true })}: ${clipped(notice.text)}`);
+  const rest = gained - fresh.length;
+  if (rest > 0) lines.push(`${rest} earlier notice${rest === 1 ? '' : 's'} for the orchestrator ${rest === 1 ? 'is' : 'are'} in the record: ${is.path}`);
+  return lines;
+}
+
 const pendingText = (plan) => (plan.pending.length > 0 ? plan.pending.join(', ') : 'nothing');
 const START_LENGTH = 100;
 
-/** What changed in one feature plan, as the parts of one line; empty when nothing that matters did. */
+const startOf = (text) => JSON.stringify(text.length > START_LENGTH ? `${text.slice(0, START_LENGTH - 1)}…` : text);
+
+/** The tasks a plan gained, lost or has in other words, as the parts of one line: added, removed, then
+ * reworded. A task is known by the id that starts its text, or by its whole text when it has none, so a
+ * task with no id that is reworded reads as one removed and one added. Whether a box is ticked is not
+ * looked at, nor the order of the tasks: a ticked box is the plan advancing, not changing. A plan with no
+ * `tasks` (a board from before they were kept) has none to compare. */
+function taskDifferences(was, plan) {
+  if (!Array.isArray(was.tasks) || !Array.isArray(plan.tasks)) return [];
+  const byTask = (tasks) => {
+    const texts = new Map();
+    for (const text of tasks) {
+      const key = taskId(text) ?? text;
+      texts.set(key, [...(texts.get(key) ?? []), text]);
+    }
+    return texts;
+  };
+  const old = byTask(was.tasks);
+  const now = byTask(plan.tasks);
+  const added = [];
+  const removed = [];
+  const reworded = [];
+  for (const [key, texts] of now) {
+    const before = old.get(key) ?? [];
+    if (texts.length > before.length) added.push(...texts.slice(before.length).map((text) => `task added ${startOf(text)}`));
+    else if (texts.length === before.length && texts.join('\n') !== before.join('\n')) reworded.push(`task ${key} reworded, now ${startOf(texts.join(' / '))}`);
+  }
+  for (const [key, texts] of old) {
+    const after = now.get(key) ?? [];
+    if (texts.length > after.length) removed.push(...texts.slice(after.length).map((text) => `task removed ${startOf(text)}`));
+  }
+  return [...added, ...removed, ...reworded];
+}
+
+/** What changed in one feature plan, as the parts of one line; empty when nothing that matters did. Its
+ * counts of done and pending tasks are not among them: they change with every box a session ticks. */
 function planDifferences(was, plan) {
-  const parts = [];
-  if (plan.done !== was.done || plan.total !== was.total) parts.push(`${plan.done}/${plan.total} done (was ${was.done}/${was.total})`);
-  if (pendingText(plan) !== pendingText(was)) parts.push(`pending ${pendingText(plan)} (was ${pendingText(was)})`);
+  const parts = taskDifferences(was, plan);
   if (plan.nextStep.join('\n') !== was.nextStep.join('\n')) {
-    const start = plan.nextStep[0] ?? '';
-    parts.push(plan.nextStep.length === 0 ? 'its next step is now empty' : `next step now starts ${JSON.stringify(start.length > START_LENGTH ? `${start.slice(0, START_LENGTH - 1)}…` : start)}`);
+    parts.push(plan.nextStep.length === 0 ? 'its next step is now empty' : `next step now starts ${startOf(plan.nextStep[0] ?? '')}`);
   }
   return parts;
 }
@@ -1075,23 +1460,32 @@ function planChanges(before, after) {
  * and `[]` when nothing did:
  *
  * - a session that appears, one that starts waiting (from any other state) or that waits again after
- *   another turn, one that passes the context limit, one that leaves the window;
- * - a gate that starts (said apart when it waits for the one that holds the machine's gate lock, and when
- *   it runs beside another and one of the two does not know the lock) or ends, among the gates of the
- *   board's worktrees (`watchedGates`, `gateChanges`);
+ *   another turn, one that passes the context limit, one that leaves the window. The waiting of a session
+ *   whose last word in the record is `closed` or `relieved` is not among them (`endedSessions`);
+ * - a gate that starts beside another that runs, when one of the two does not know the machine's gate
+ *   lock, among the gates of the board's worktrees (`watchedGates`, `gateChanges`);
  * - a pull request that opens or is no longer open;
- * - a feature plan that appears, stops differing from `origin/main`, or whose done or total count,
- *   pending tasks or next step changed.
+ * - a feature plan that appears or stops differing from `origin/main`, one that gains or loses a task or
+ *   has one reworded (`taskDifferences`), and one whose next step changed. A plan that appears or goes
+ *   is said whatever its tasks: the board reads a document while it differs from `origin/main` and never
+ *   the version it differs from, so it cannot tell a first ticked box from a task added, nor a merge from
+ *   a change taken back;
+ * - a notice for the orchestrator that the channel's record gained (`channelChanges`). This is how a
+ *   notice reaches the orchestrator with no message: from a session of another permission class, whose
+ *   message the app would hold, and from a host that has no messages between sessions.
  *
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
  * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree,
- * a gate that takes the lock it waited for. The roster is not compared either: it is the sessions again,
- * whose arrival is already said, and a title that changes is a handover the sessions do themselves.
+ * a gate that starts alone, stands in line for the lock, takes it or ends, a box that is ticked or
+ * unticked in a plan and the counts that follow from it. The roster is not compared either: it is the sessions again,
+ * whose arrival is already said, and a title that changes is a handover the sessions do themselves. Nor
+ * are the notices for another role, which are that role's to read, or the messages between sessions,
+ * which each session has in its own transcript.
  * `self` names the session that is watching, which is never compared: it works for as long as it watches.
  * A fact that could not be read on either side is not compared, so a failed listing is never a change. */
 export function boardChanges(before, after, { self } = {}) {
-  return [...sessionChanges(before, after, self), ...gateChanges(before, after), ...pullRequestChanges(before, after), ...planChanges(before, after)];
+  return [...sessionChanges(before, after, self), ...gateChanges(before, after), ...pullRequestChanges(before, after), ...planChanges(before, after), ...channelChanges(before, after, self)];
 }
 
 /** The board the next look is compared with: `newer`, with whatever it could not read taken from `older`.
@@ -1117,6 +1511,10 @@ export function watchBaseline(older, newer) {
     // What the lock said last still names the folder of a gate whose command line names none (`watchedGates`).
     ...(newer.gateLock && { gateLock: newer.gateLock.available ? newer.gateLock : (older.gateLock ?? newer.gateLock) }),
     pullRequests: kept(newer.pullRequests, older.pullRequests),
+    // A record that could not be read at one look has gained nothing: the count to compare with is the last one read.
+    ...(newer.channel && { channel: newer.channel.unavailable !== undefined && older.channel ? older.channel : newer.channel }),
+    // Nor does its roster know which sessions ended: the one made with the last record read does (`sessionChanges`).
+    ...(newer.roster && { roster: newer.channel?.unavailable !== undefined && older.roster ? older.roster : newer.roster }),
     worktrees: newer.worktrees.available ? { ...newer.worktrees, items: newer.worktrees.items.map((tree) => (tree.plans === undefined ? tree : { ...tree, plans: plansOf(tree) })) } : older.worktrees,
   };
 }
@@ -1166,13 +1564,18 @@ function contextText(session, sizes) {
   return `context ${sizes.of(context.tokens)}${session.pastContextLimit ? `, past the limit of ${sizes.limit}` : ''}`;
 }
 
-function sessionLines(session, now, sizes) {
+/** The lines of one session. `ended` is the notice by which the session said that nothing more comes from
+ * it (`closed`, or `relieved`), when the record has one as its last word (`endedSessions`): its first
+ * line then says that, with the state its transcript shows beside it, so a session that closed does not
+ * read as one that waits or works. */
+function sessionLines(session, now, sizes, ended) {
   const id = session.id.slice(0, 8);
   // The session that asked for the board is marked: its own state is always "working", and a watch
   // leaves it out of what it compares.
   const self = session.self ? '  (this session)' : '';
   if (session.unavailable) return [`${id}  unavailable: ${session.unavailable}${self}`];
-  const state = session.stateReason ? `${session.state} (${session.stateReason})` : session.state;
+  const read = session.stateReason ? `${session.state} (${session.stateReason})` : session.state;
+  const state = ended ? `${ended.kind} ${ago(ended.at, now)} by its own notice (its transcript: ${read})` : read;
   const lines = [`${id}  ${state}  ${session.title ?? '(no title)'}  last entry ${ago(session.lastEntryAt, now)}${self}`];
   const recorded = (value) => value ?? 'unavailable: no entry records it';
   lines.push(`  cwd ${recorded(session.cwd)}  branch ${recorded(session.gitBranch)}  ${contextText(session, sizes)}`);
@@ -1244,11 +1647,37 @@ function reliefLines(relief) {
 
 /** The roster's last line: what no transcript tells it, so a row is never read as "this session is there". */
 export const ROSTER_NOT_KNOWN =
-  'Not known from here: whether a silent session is alive or archived (nothing outside a session lists the sessions of the app), whether the transcripts of one row are one session the app restarted or several sessions under one title, and the worktree a session reaches by `cd` (`folder` is the one its entries record).';
+  'Not known from here: whether a silent session is alive or archived (nothing outside a session lists the sessions of the app; a session that closed or was relieved said so in the record), whether the transcripts of one row are one session the app restarted or several sessions under one title (either one arrives with a new session id, so the record does not tell), and the worktree a session reaches by `cd`, unless a notice of the session says it (`folder` is the one its entries record).';
 
-/** The `Roster` section: two lines per row of `rosterOf`. The first has the role, the title and how long
- * the session has been silent, never that it is alive, which no transcript says; the session that asked
- * is the one exception, and is said to be this one. A row with no role says why it has none. The second
+/** The sessions of `board` whose row of the roster ends with `closed` or `relieved` in the record, as a
+ * `Map` from a transcript's id to that notice (`{ kind, at, text }`). It is the row's word, so every
+ * transcript of the row has it: the transcripts of a row are not told apart (`ROSTER_NOT_KNOWN`). */
+function endedSessions(board) {
+  const ended = new Map();
+  for (const row of board.roster?.rows ?? []) {
+    if (!row.record?.status || !ENDED_KINDS.has(row.record.status.kind)) continue;
+    for (const transcript of row.transcripts) ended.set(transcript.id, row.record.status);
+  }
+  return ended;
+}
+
+/** What the record says of a row, as its third line in the roster, or none: its last state with its age
+ * and its text (on what it waits, what it delivered, who has the role now), then the worktree and the
+ * branch its notices were written from. */
+function recordLine(record, now) {
+  if (!record) return [];
+  const { status } = record;
+  const state = status ? `${status.kind}${status.kind === 'waiting' ? ' since' : ''} ${ago(status.at, now)}: ${clipped(status.text)}` : null;
+  const place = record.worktree === null ? null : `notices written from ${record.worktree}${record.branch === null ? ', no branch read' : ` on ${record.branch}`}`;
+  const parts = [state, place].filter(Boolean);
+  return parts.length === 0 ? [] : [`    record: ${parts.join('  ')}`];
+}
+
+/** The `Roster` section: two lines per row of `rosterOf`, and a third for a row the record says something
+ * of (`recordLine`). The first has the role, the title and how long the session has been silent, never
+ * that it is alive, which no transcript says; the session that asked is the one exception, and is said
+ * to be this one. A row whose last word in the record is `closed` or `relieved` says that, with its age,
+ * in the place of its silence. A row with no role says why it has none. The second
  * has the permission mode, the folder and the branch the entries record, the feature of that branch when
  * it is known, and the transcripts of the row, each with its age when there are several. It says
  * `folder` and not `worktree`: that is where the session was opened, and one that works in a worktree it
@@ -1264,12 +1693,20 @@ function rosterLines(roster, now) {
   for (const row of roster.rows) {
     const role = row.role === 'orchestrator' ? 'orchestrator' : row.role === 'work' ? `work ${row.number}` : 'no role';
     const last = row.lastEntryAt === null ? null : ago(row.lastEntryAt, now);
-    const activity = row.self ? `this session${last === null ? '' : `, last entry ${last}`}` : last === null ? 'silent, no entry of it has a time' : `silent since ${last}`;
-    const noRole = row.titleSource === 'custom-title' ? `its title is not "${TITLE_WORDS}"` : row.titleSource === 'first-prompt' ? 'it has no title: this is the start of its first prompt' : 'it has no title';
+    const lastEntry = last === null ? '' : `, last entry ${last}`;
+    // A row that closed or was relieved says that, and not for how long it has been silent.
+    const status = row.record?.status;
+    const ended = status && ENDED_KINDS.has(status.kind) ? `${status.kind} ${ago(status.at, now)}` : null;
+    const silent = last === null ? 'silent, no entry of it has a time' : `silent since ${last}`;
+    const activity = row.self ? `this session${ended ? `, ${ended}` : ''}${lastEntry}` : ended ? `${ended}${lastEntry}` : silent;
+    const given = row.titleSource === 'custom-title' || row.titleSource === 'reading';
+    const noRole = given ? `its title is not "${TITLE_WORDS}"` : row.titleSource === 'first-prompt' ? 'it has no title: this is the start of its first prompt' : 'it has no title';
     lines.push(`  ${role}  ${row.title ?? '(no title)'}  ${activity}${row.role === null ? `  (${noRole})` : ''}`);
     const feature = row.features.length > 0 ? `  feature ${row.features.join(', ')}` : '';
     const transcripts = row.transcripts.length === 1 ? `transcript ${short(row.transcripts[0].id)}` : `transcripts ${row.transcripts.map((transcript) => `${short(transcript.id)} (${ago(transcript.lastEntryAt, now)})`).join(', ')}`;
-    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}`);
+    // A title no transcript of the row carries is the one of the opening its session read (`titledByReadings`).
+    const read = row.titleSource === 'reading' ? '  title from the opening it read' : '';
+    lines.push(`    mode ${row.permissionMode ?? 'unknown'}  folder ${row.cwd ?? 'unknown'}  branch ${row.gitBranch ?? 'unknown'}${feature}  ${transcripts}${read}`, ...recordLine(row.record, now));
   }
   const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
   if (orchestrators.length > 1) {
@@ -1279,6 +1716,79 @@ function rosterLines(roster, now) {
   if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));
   lines.push(`  ${ROSTER_NOT_KNOWN}`, '');
   return lines;
+}
+
+/** The channel's last line: what a notice is, and what a transcript cannot show of a message. */
+export const CHANNEL_NOT_KNOWN =
+  "A notice is what a session says, never the user's word. A message not seen arrived in no transcript of the window: whether the app keeps it back, it expired or it reached a session outside the window cannot be read from here.";
+
+const STATE_WORDS = { arrived: 'arrived', failed: 'failed', 'not-seen': 'not seen in a transcript of the window' };
+
+/** The `Channel` section, or no lines when there is nothing to show: no notice in the record, no line of
+ * it skipped, no message between sessions, and a record that could be read.
+ *
+ * First the record, with its path: how many notices it holds and the last ones (`channelOf`), each with
+ * its age, who wrote it, the role it is for, its kind and its text; an answer also says where the user's
+ * words are read, which is what `sessions --quote` takes. Then the messages between sessions seen in the
+ * transcripts: age, from whom, to which address, whether it was seen to arrive (and at which session,
+ * when that is not the address), and the line its call gave about it. Last, `CHANNEL_NOT_KNOWN`. */
+function channelLines(channel, now) {
+  if (!channel) return [];
+  const unread = channel.unavailable !== undefined;
+  if (!unread && channel.noticeCount === 0 && channel.skipped === 0 && channel.messageCount === 0) return [];
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const lastOf = (total, shown) => (shown < total ? `, the last ${shown}` : '');
+  const lines = ['Channel'];
+  if (unread) lines.push(`  ${channel.path}  unavailable: ${channel.unavailable}`);
+  else if (channel.noticeCount > 0) lines.push(`  ${channel.path}  ${plural(channel.noticeCount, 'notice')}${lastOf(channel.noticeCount, channel.notices.length)}:`);
+  else if (channel.skipped > 0) lines.push(`  ${channel.path}  no notice`);
+  for (const notice of channel.notices) {
+    const to = notice.to.role === 'orchestrator' ? 'orchestrator' : `work ${notice.to.number}`;
+    const read = notice.kind === 'answer' && notice.transcript !== undefined ? `  (his words: transcript ${notice.transcript}, line ${notice.line})` : '';
+    lines.push(`  | ${ago(notice.at, now)}  ${senderWords(notice.from)} to ${to}  ${notice.kind}  ${clipped(notice.text)}${read}`);
+  }
+  if (channel.skipped > 0) lines.push(`  ${channel.skipped} line${channel.skipped === 1 ? ' of the record is' : 's of the record are'} neither a notice nor a reading: skipped`);
+  if (channel.messageCount > 0) lines.push(`  ${plural(channel.messageCount, 'message')} between sessions in the transcripts of the window${lastOf(channel.messageCount, channel.messages.length)}:`);
+  const named = (who) => who.title ?? (who.session === null ? null : `session ${who.session.slice(0, 8)}`);
+  for (const message of channel.messages) {
+    const to = message.to.address ?? named(message.to) ?? 'an unknown address';
+    const receiver = named(message.to);
+    const state = message.state === 'arrived' && receiver !== null && receiver !== to ? `arrived at ${receiver}` : STATE_WORDS[message.state];
+    lines.push(`  | ${ago(message.at, now)}  ${named(message.from) ?? 'an unknown session'} to ${to}  ${state}${message.summary === null ? '' : `  ${JSON.stringify(message.summary)}`}`);
+  }
+  lines.push(`  ${CHANNEL_NOT_KNOWN}`, '');
+  return lines;
+}
+
+/** The session a gate hangs from, as its line in `Gates` says it after what the gate does, or nothing
+ * for a board with no roster. A gate is a process, and nothing a process carries names a session: what
+ * ties the two is the folder. So it is the row of the roster whose notices were written from the folder
+ * the gate checks (`record.worktree`, where the session really works), or the row whose transcript
+ * records that folder and whose notices place it nowhere else. Several such rows are all named, as one
+ * of them, and when they are of both kinds each is named with what places it (Codex review of 7a19710:
+ * the first kind alone was named, as if a notice made the folder's processes that session's); none is
+ * said as not known, never left out. This is what lets a gate that waits
+ * for the machine be told from a leftover of another session (failure 7 of 2026-10-10: the board
+ * printed neither a wait's owner nor its pid). */
+function gateSession(gate, roster) {
+  if (!roster) return [];
+  if (gate.worktree?.unavailable) return ['session not known: the gate names no folder'];
+  const folder = comparable(String(gate.worktree));
+  const name = (row) => row.title ?? `transcript ${row.transcripts[0].id.slice(0, 8)}`;
+  const byNotices = roster.rows.filter((row) => typeof row.record?.worktree === 'string' && comparable(row.record.worktree) === folder);
+  const byFolder = roster.rows.filter((row) => typeof row.record?.worktree !== 'string' && typeof row.cwd === 'string' && comparable(row.cwd) === folder);
+  const NOTICES = ['its notices were written from this folder', 'whose notices were written from this folder'];
+  const FOLDER = ['its transcript records this folder', 'whose transcripts record this folder'];
+  // A notice says where a session works, not that the processes of that folder are its own: a session
+  // opened in the folder could have started the gate too, so both kinds are candidates, each with what
+  // places it.
+  if (byNotices.length > 0 && byFolder.length > 0) {
+    const placed = [...byNotices.map((row) => `${name(row)} (${NOTICES[0]})`), ...byFolder.map((row) => `${name(row)} (${FOLDER[0]})`)];
+    return [`one of ${placed.length} sessions in this folder: ${placed.join(', ')}`];
+  }
+  const [rows, [how, shared]] = byNotices.length > 0 ? [byNotices, NOTICES] : [byFolder, FOLDER];
+  if (rows.length === 0) return ['session not known: no row of the roster is in this folder'];
+  return [rows.length === 1 ? `session ${name(rows[0])} (${how})` : `one of ${rows.length} sessions ${shared}: ${rows.map(name).join(', ')}`];
 }
 
 /** What a gate does, as its line in `Gates` says it. A `check` process the lock says nothing of is given
@@ -1324,7 +1834,8 @@ function gateLines(board, now) {
   const lines = boardGates(board).map((gate) => {
     const worktree = gate.worktree?.unavailable ? `worktree unavailable: ${gate.worktree.unavailable}` : gate.worktree;
     const command = isProcess(gate) ? gate.commandLine : `${gate.lock.command ?? 'command unknown'} (${gate.commandLine.unavailable})`;
-    return `  ${gate.pid === null ? 'pid unknown' : `pid ${gate.pid}`}  ${worktree}  ${gateState(gate, now, lockRead, lockNow)}  ${command}`;
+    // After what the gate does, the session it hangs from: a gate that waits is otherwise a pid nobody owns.
+    return [`  ${gate.pid === null ? 'pid unknown' : `pid ${gate.pid}`}`, worktree, gateState(gate, now, lockRead, lockNow), ...gateSession(gate, board.roster), command].join('  ');
   });
   if (!board.gates.available) lines.push(`  unavailable: ${board.gates.reason}`);
   else if (lines.length === 0) lines.push('  none running');
@@ -1333,15 +1844,18 @@ function gateLines(board, now) {
 }
 
 /** The board as lines of text: the sessions (in the order given, most recent first), the roster of
- * those sessions by role when the board has one, then worktrees, the gates that run and wait, open pull
- * requests and the orchestrator's relief file, and a last line that says what the board cannot see. */
+ * those sessions by role when the board has one, the channel when it has something to show, then
+ * worktrees, the gates that run and wait, open pull requests and the orchestrator's relief file, and a
+ * last line that says what the board cannot see. */
 export function renderBoard(board, { now }) {
   const lines = [`Sessions  ${board.root}  ${board.sessions.length} changed in the last ${board.hours}h`, ''];
   const sizes = contextSizes(board);
-  for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes), '');
+  const ended = endedSessions(board);
+  for (const session of board.sessions) lines.push(...sessionLines(session, now, sizes, ended.get(session.id)), '');
 
   lines.push(
     ...(board.roster ? rosterLines(board.roster, now) : []),
+    ...channelLines(board.channel, now),
     ...sectionLines('Worktrees', board.worktrees, 'none', (tree) => {
       const upstream = tree.aheadOfUpstream === 'no upstream' ? 'no upstream' : counted(tree.aheadOfUpstream, 'not pushed');
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
