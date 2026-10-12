@@ -1887,6 +1887,28 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   449 s. Each is a change of the shipping command, so each needs the test that the
   command still refuses what it refused: a base that is no commit, a repository with no
   commit, no git on the path.
+- 2026-10-12 · **S1's last commit has its Codex record, and `main` is in the branch:
+  `29e3ca7`** (`s1b-turn.log`, 18:44:57 to 18:57:17). Codex on `f04efca^`, once: "the
+  patch is correct" (0.9), no finding, recorded for `88e2414..062b890`. Plan 200,000,
+  **spent 297,743 input tokens (237,568 cached) in 8 requests**, 72 s, 7 commands and no
+  `node --test`; 49% over its plan, inside the rate of 315,000. The ninth session of the
+  day and the seventh over its plan. Beside it the machine was 53% busy (324 of 607
+  processor-seconds; `node` 82, `MsMpEng` 57), with a reader of mine at work, so no
+  figure for M2. Then the merge of `main` `f0b538f` (pull request 80 had been merged at
+  18:46:01, the orchestrator; fetched by the turn), 54 paths, gated on the merged tree:
+  **`PASS  tests`, 645 s** (gate log, 18:46:29, load 3.9 of 8). The orchestrator's word
+  not to pay a turn for a merge before the push reached me when the merge was staged;
+  S1 owes one more at its push, since two more pull requests land before it. Not pushed.
+  Spent on Codex in the feature: 3,544,638 input tokens.
+- 2026-10-12 · **The orchestrator's order after M1e** (received after 18:38): cut 2 of
+  git first, scoped "the review command asks git less", read by me, designed with one
+  reader's attack, built test first, both reviews; slice 2 of road 1 after it; the git
+  file in two is not done. JH 7 waits for `bin/codex-review.mjs` until this cut is on
+  `main`. The worktree `gate-wait-eval-sweep` and its local branch are removed. The
+  design's first version is `design-git-cut.md` in the scratchpad and its reader is at
+  work; **read in S1's code, not counted: S1 adds two git processes a hold
+  (`bin/codex-review.mjs:1397-1398`, `:1756-1757`), about 500 to 900 starts in the file
+  that is the wall, so the cut is built on S1 and its count before is taken there.**
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
