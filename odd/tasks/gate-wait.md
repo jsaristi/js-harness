@@ -1362,6 +1362,54 @@ by me against the log or table named in the section).
   The orchestrator's sentence, with reader 1's count: 25 of the day's 53 gates came from
   this feature's own worktrees, so part of today's line is the cost of measuring the
   line.
+- 2026-10-12 · **M1d, the fourth whole run: the tests' temp folder inside the place he
+  excluded** (`m1d-turn.log`, 15:23:49 to 15:35:38; tree `fc70dc3`, the command of the
+  second and third runs with `TEMP` and `TMP` set to
+  `D:\js-harness-worktrees\.gate-tmp-m1` for that command alone; 45 s in the folder held
+  49 entries, so the fixtures did land there; removed at the end). Side by side, from
+  the three tables:
+
+  | run | wall | busy of capacity | `MsMpEng` | `claude` | tests summed | children not git |
+  |---|---|---|---|---|---|---|
+  | M1b, before the exclusion | 735.6 s | 5,464 of 5,884 (93%) | 917 s | 144 s | 4,519 s | 4,668 s |
+  | M1c, after it, Temp outside | 830.2 s | 6,209 of 6,642 (93%) | 1,171 s | 435 s | 5,171 s | 5,422 s |
+  | M1d, Temp inside | 705.2 s | 5,152 of 5,641 (91%) | 655 s | 156 s | 4,292 s | 4,583 s |
+
+  Git: 12,041 processes in all three, 1,516 s, 1,729 s and 1,455 s. The same five tests
+  fail in the three, by the counting tool's own variables; none fails for the moved temp
+  root. **The reading.** The antivirus fell clearly: 655 s against 917 s with the other
+  sessions' load about the same (`claude` 156 s against 144 s), 29% less, and against
+  1,171 s of the run a busier machine made. So his exclusion works where the files are,
+  and the tests' repositories under Temp were part of the cost. **And the wall hardly
+  moved:** 705 s against 736 s, 30 s, inside the 95 s two runs of one tree already
+  differed by. What is left, 655 processor-seconds, the exclusion of a folder does not
+  reach: the antivirus still looks at each of some 13,700 processes as it starts, and the
+  programs are not excluded (his choice, the orchestrator's record). So a temp root of the
+  gate under an excluded place is worth about half a minute of twelve on his machine, and
+  nothing on a machine with no exclusion; it would be a small thing to build and it is
+  not what makes the gate shorter. Fewer process starts is. Beside the measure: the eval
+  reader worked until about 15:25 and I pushed a branch and wrote this document in its
+  first two minutes; `claude` at 156 s says the load was that of M1b.
+- 2026-10-12 · **Asked by the orchestrator at 15:31, in the line as `hook2-turn.sh`:**
+  `main` moved to `e60cbda` (pull request 74), so pull request 75 must hold it; and the
+  first of gentle-ai's two notes is wanted before the hook is relied on. One turn on
+  `feat/gate-merge-hook`: the test "a merge whose gate fails is not committed" (red
+  against a hook of a merge that runs no gate, green against the real one;
+  `hook2-apply.cjs`), its commit with the whole gate, gentle-ai's assessment and, when no
+  review of its own is due and the plan is inside the rate, Codex on that one commit;
+  then `git merge origin/main`, which this branch's own merge hook gates with the whole
+  suite. Then the push, and the head to the orchestrator. The second note stays: the
+  shipped hook takes `node` and gentle-ai from the machine's PATH, so a test that ran it
+  would start this machine's own.
+  **Its order after that:** road 1 is the next design, inside his option 3 and with no
+  question to him: a test whose point is not survival runs without the PowerShell
+  snapshot that ends every `runProcess`, threaded through `runTrial`, `gradeWorkspace`,
+  `proveTask` and the probe's arm, the real trial unchanged and the tests of survival,
+  timeout and interrupt left on the real sweep; one independent reader attacks the design
+  before it is built (what proof a test silently loses when its sweep is a stand-in;
+  whether the real path stays covered); a measure planned against the 95 s of noise
+  (summed child-seconds, or the same tree twice); slices of about 1,200 lines at most,
+  both reviews each; its size to the orchestrator before building. Cut 2 of git: not now.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
