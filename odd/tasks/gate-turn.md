@@ -566,8 +566,59 @@ S2 is T4 with T5. S3 is T6.
   carried hours it had not read (20:10, 20:35, 20:40, and 19:35 for the notice of T6); the
   real hour when they were written was before 20:00. They now carry the hours read from
   the logs of the runs, or none.
+- 2026-10-11 21:14 · Codex on S1, `5af56c1..156ad7e`, in a turn of the lock (launched
+  20:37:50, behind two gates): 5 parts, 1,648 changed lines, 1,386,358 input tokens
+  (1,104,512 cached), recorded in the repository's `codex-reviews.jsonl`. Three parts
+  correct, two findings, both P2 and both right, taken into T3c:
+  1. `bin/lib/gate-lock.mjs:676`: a gate ahead that takes the lock between the reading of
+     the line and the look at the lock is counted twice, as a gate that waits and as the
+     holder, and is named as `line.head`. Exclusion is whole; the count and the words are
+     wrong. Fix: leave the holder's token out of the gates that wait before `line` is made.
+  2. `bin/lib/process-tree.testkit.mjs:102`: a pid that answers and whose row in the
+     snapshot has no creation time is reported dead by `look`, so the interrupt test could
+     pass with a survivor. It is the case T2 left "not excluded by reading". Fix: `look`
+     throws for an identity it cannot tell.
+- 2026-10-11 · From the orchestrator, by message (claims): `main` is `40ccb45` with the
+  failures register of "JH 7" (pull request 66), which adds the row `failures` in
+  `bin/check.mjs` and one test block; both branches here merge `main` before they are
+  delivered, and in `feat/gate-stop` the test that pins the order of the rows is this
+  feature's to adjust. A gate of "JH 7" timed out at 1,206 s with no test failed, which it
+  reads as the code graph indexing thirty changed files during its tests; a `codegraph.js`
+  was also seen busy at the start of this session's green run.
+- 2026-10-11 · Models by stage, on his words (the orchestrator's transcript `130317af…`,
+  line 2037: "apliquemos lo que investigaste y siempre dime en que modo de esfuerzo debemos
+  trabajar", the phrase found there by this session; what it approves is the orchestrator's
+  relief line 285): a sub-agent that writes scoped code is launched with model `haiku` and
+  effort high; one that explores, reviews or verifies stays on Opus at high; this session
+  stays at high. On the first such writer its model id is read once in its transcript; a
+  piece it gets wrong twice is written on Opus and told to the orchestrator.
 
 ## Next
-Codex on `main..HEAD` in its turn,
+T3c, one narrow writer on `haiku` that returns without running anything: the two findings of
+Codex and the words of a refusal beside an older gate. Then its tests and its commit in a
+turn of the lock, `main` (`40ccb45`) merged, Codex on the fix alone, a real gate taken with
+this branch's own lock, the roadmap, push and the pull request, which says that the default
+of `--wait` waits for his word. In `feat/gate-stop`: the commit queued since 20:21, `main`
+merged (the order of the static rows with `failures`), gentle-ai and Codex in their turn, a
+real gate with a failing static row, the roadmap, push and its pull request. Last: T9.
+
+## Resume here (state at 2026-10-11 21:20, for a session that lost its conversation)
+- Two branches, two worktrees: `feat/gate-turn` in `D:\js-harness-worktrees\gate-turn`
+  (the line; this document lives here alone) and `feat/gate-stop` in
+  `D:\js-harness-worktrees\gate-stop` (the stop, the cache, the row `tree`).
+- Every test run and every commit with code goes through the lock taken with the stable
+  copy on `main`: `node D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`,
+  launched in the background by this session and never by a sub-agent. A commit message is
+  a file in the scratchpad (`git commit -F`). Logs of every run are in the scratchpad
+  `…\d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86\scratchpad` (`*-gate.log`, `codex-s1.log`,
+  `review-*.json`, `stop-*.log`).
+- Before an assessment or a Codex review: the tree clean and nothing untracked; a gate
+  leaves `Microsoft/` in the worktree until T5 is merged, and it is removed by hand first.
+- What is his and open: the default meaning of `--wait` ("Ask me before"). The
+  orchestrator asks him; `feat/gate-turn` is not merged before his answer.
+- The review of gentle-ai for a slice: `gentle-ai review assess --cwd . --agent claude-code
+  --base-ref <boundary> --committed-only --json`, then the commands it returns, verbatim;
+  consent is granted without asking (`AGENTS.md`); the capture runs in a turn of the lock.
+  The last reviewed tree of `feat/gate-turn` is `15f06b2`; `9b90797` is under budget. on `main..HEAD` in its turn,
 the notice of T6, a real gate with this branch's own lock. In `feat/gate-stop`: the writer's
 report, its diff read back, its commit through the lock, its two reviews.
