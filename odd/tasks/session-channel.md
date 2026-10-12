@@ -1795,6 +1795,19 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   that asked for it; its own log and the gate log are the record, and a session that comes
   back looks at the process list and at those two before it starts anything in the same
   worktree. Codex for the slice so far: 3,276,445 input tokens over 3,456 changed lines.
+- 2026-10-12 12:58 to 14:00 local, the fifth slice closes. One turn at the gate, 33 minutes
+  in its line: the commit of Codex's four findings (`bd1459c`), its gentle-ai assessment
+  (not due), its Codex review (195,393 input tokens, correct, no finding), the merge of
+  `main` with the one known resolution (`33269c9`, gated), and the practice journey on the
+  merged tree (11 of 11). The figures are under "Next step", 1c. Codex for the slice:
+  3,471,838 input tokens over 3,594 changed lines, 966 a line. From the lead, claims of its
+  own: before it merges a pull request it asks that a merge resolved by hand be inside a
+  Codex record, so the order of a turn matters (the merge before the review's head); here
+  the turn kept its order, since a range that holds the merge holds all of `main`'s lines,
+  and the choice goes to him with the plan's figure. And a hole JH 8 found and fixes in
+  `bin/check.mjs`: a commit of documents alone runs no sensor while the suite reads `docs/`
+  and `odd/tasks/`; until then `node bin/js-harness.mjs rules check` is run by hand after
+  such a commit (done after the one that holds this text).
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1806,6 +1819,8 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
 | 4 | T5, T6, T5b, T4d, the sweep's items of this session | `main`, pull request 70 |
+| 5 | T6b, parts a to d: the pause command, the resume hook after a compaction, the watch and the measure | `feat/session-compaction`, its pull request open against `main` |
+| 5e | T6b, part e: the entry of `install`, the check of `doctor`, the exact undo | built and held: the patch `part-e.patch` and the folder `snap-e` of the scratchpad, for the branch `feat/session-compaction-install` |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
 - Reviews of the fourth slice: gentle-ai approved it as two candidates and Codex reviewed
@@ -2015,6 +2030,27 @@ summary.
       `node --test` of the dispatcher, the hook, the sessions, pause and practice libraries
       and the three rules test files pass, and `js-harness rules check` says `PASS  rules
       16 rules`. The journey did not run: it runs on the merged tree, in the next turn.
+      That turn (asked 12:58, held from 13:31, ended 13:59, exit 0): the fixes are `bd1459c`
+      (gate PASS 13:44; gentle-ai: 198 lines, not due; Codex on `1e09a64..bd1459c`, planned
+      at about 160,000 input tokens, budget 315,000: one part, 195,393 input tokens, 134,272
+      cached, "the patch is correct (confidence 0.87)", no finding, by reading only, since
+      its sandbox refuses the tests' child processes). `main` at `3088960` is merged as
+      `33269c9`, gated by the merge commit's own check (`PASS tests npm run test passed`,
+      13:59; `codex-review  7 code commits since origin/main, all covered`). The practice
+      journey ran on `33269c9`, clean: 11 of 11 steps passed, the new step `pause-hook`
+      among them ("the first run printed one PostToolUse notice of 497 characters; the
+      second run printed nothing, and so did the run from … outside"), the real home
+      unchanged; its line is the one of 2026-10-12T18:59:01Z in
+      `D:\js-harness-practice\record.jsonl`. That answers gentle-ai's warning on `1e09a64`.
+      The resolution of the merge against this branch's side is two added lines, both main's:
+      the help line of `rules`, which git merged by itself, and `rules: async () => (await
+      import('./rules.mjs')).rulesMain,` in the table, the one line a hand wrote. It is in no
+      Codex record: a range that holds the merge and not its base is `bd1459c..33269c9`,
+      everything `main` brought, planned at about 4,130,000 input tokens for 5,457 changed
+      lines in 12 parts (the rate gives it 6,875,820). Not run: whether one line needs it is
+      his, put to him by the lead, who reads the resolution in the pull request.
+      Pushed, and pull request 5 opened against `main`, after the commit that holds this
+      text.
       Part e is written in the side worktree and held from that pull request (snapshot
       `snap-e` in the scratchpad; it goes to a branch of its own, `feat/session-compaction-
       install`, cut from this one's head, pushed and with no pull request until he answers
