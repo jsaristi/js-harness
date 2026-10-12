@@ -11,7 +11,9 @@
 //    A pid that was not running then, or started before `since`, has no identity and is never killed.
 // POSIX: the module has no creation-time lookup there, so a learned pid is signalled by its number, as before.
 import { spawnSync as spawnChildSync } from 'node:child_process';
-import { CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, takeSnapshot } from './process-tree.mjs';
+import {
+  CLOCK_TOLERANCE_MS, identifyProcesses, killProcesses, killSurvivors, resolveRoot, selectDescendants, takeSnapshot,
+} from './process-tree.mjs';
 
 const createdOn = (ms) => (Number.isFinite(ms) ? `created ${new Date(ms).toISOString()}` : 'whose creation time Windows does not give');
 // How many snapshots a look takes at most while a recorded pid answers under a row with no creation time: a process in
@@ -134,4 +136,56 @@ export function createReaper({ platform = process.platform, spawnSync: sync = sp
       stop(identities);
     },
   };
+}
+
+/** The sweep of a test file put off to the end of the file, for a file whose runs are not about what a process
+ * leaves behind: it pays one snapshot at its end in place of one a run (on Windows each run's sweep starts a
+ * PowerShell that lists every process of the machine). `killSurvivors` is what the test hands to `runProcess`: it
+ * records what the run ends with (the child, and when it started and exited, as the real sweep is given them) and
+ * does nothing else. `check()` is called once, in the file's `after`: it takes one snapshot, selects each recorded
+ * run's descendants as the real sweep does (`resolveRoot`, `selectDescendants`), kills what it finds through the
+ * snapshot's own identities, and returns it as `[{ pid, name }]` for the file to fail on. So a leak lives until the
+ * file ends and then fails the file by name, where the real sweep kills it at once and in silence. Off Windows
+ * `killSurvivors` is the real sweep, which starts nothing, and `check` returns `[]`. Its limit: a grandchild whose
+ * own parent exits between the end of the run and the end of the file is no longer tied to the run by parentage,
+ * as with the real sweep a moment earlier. */
+export function sweepLater({
+  platform = process.platform, spawnSync: sync = spawnChildSync, now = Date.now, killSurvivors: real = killSurvivors,
+} = {}) {
+  // Off Windows the real sweep is one kill of a process group: it starts nothing, and it is the only cleanup.
+  if (platform !== 'win32') return { killSurvivors: real, check: () => [] };
+  const runs = [];
+  const record = (child, lifetime) => {
+    if (!child?.pid) return;
+    if (!Number.isFinite(lifetime?.startedAt)) {
+      throw new Error(`cannot search later what pid ${child.pid} left behind: when it started is not known, and a pid alone does not name its children`);
+    }
+    // Read now where the run did not hand one over: a window that ran on to the end of the file would let in the
+    // children of a pid that Windows gave to another process in the meantime.
+    runs.push({ pid: child.pid, startedAt: lifetime.startedAt, exitedAt: lifetime.exitedAt ?? now() });
+  };
+  const check = () => {
+    const recorded = runs.splice(0);
+    if (recorded.length === 0) return [];
+    const snapshot = takeSnapshot({ spawnSync: sync });
+    const entries = new Map(snapshot.map((entry) => [entry.pid, entry]));
+    const found = new Map();
+    for (const run of recorded) {
+      const root = resolveRoot(snapshot, run, { now: now() });
+      for (const pid of selectDescendants(snapshot, root)) found.set(pid, entries.get(pid));
+    }
+    const left = [...found.values()];
+    if (left.length === 0) return [];
+    // The same refusal as the real sweep: a survivor that outlives its kill is a failure, not a line of the report.
+    const { running } = killProcesses(left.map(({ pid, createdAt }) => ({ pid, createdAt })), { spawnSync: sync });
+    if (running.length > 0) throw new Error(`still running after the kill: pid ${running.join(', ')}`);
+    return left.map(({ pid, name }) => ({ pid, name }));
+  };
+  return { killSurvivors: record, check };
+}
+
+/** `runProcess` with its sweep put off to the end of the file: `{ runProcess, check }`, see `sweepLater`. */
+export function sweptLater(runProcess, options) {
+  const later = sweepLater(options);
+  return { runProcess: (o) => runProcess({ ...o, killSurvivors: later.killSurvivors }), check: later.check };
 }
