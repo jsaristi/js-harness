@@ -847,6 +847,13 @@ S2 is T4 with T5. S3 is T6.
   minutes his account includes, with no spend. It gets a feature document of its own. The
   assignment whole is in engram, topic `odd/gate-wait/assignment`; the orchestrator sent
   two readings before it, both replaced.
+- 2026-10-12 02:17 · T9: the gate on the tree with `main` (`1d5cf68`) merged in, `1cb3904`,
+  passed (`t9-merge-turn.log`, ended 02:17:01), `check --push` passes, and pull request 69
+  is open on it. Its text says that the record of its reviews is this document, so it
+  merges after this branch's pull request, with `main` merged in again. The orchestrator
+  confirmed that the Codex review of this branch's merge commit is inside the rate (at most
+  1,141,200 input tokens) and is asked only once the gate log shows a start of the gate
+  of `session-channel` later than 02:02; that is the next step here.
 
 ## Next
 For `feat/gate-turn`: when the gate of `session-channel` has held the lock, one turn for
