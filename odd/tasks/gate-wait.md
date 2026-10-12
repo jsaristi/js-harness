@@ -400,6 +400,8 @@ session's transcript.
       the counts they are judged by. Route: inline, no source written.
 - [ ] T4 · The cuts T3 chose, each judged by a second run. Route: set per cut in T3.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
+- [ ] T5b · The four notes gentle-ai left on T5 (Progress). Route: delegated, one writer,
+      tests first.
 - [ ] T6 · The head a review reads is pinned, and two records at once. Route: delegated,
       tests first.
 - [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
@@ -456,16 +458,55 @@ session's transcript.
   the platform the first had, so its key differed, which is the key doing its work. Both
   corrected by hand; nothing was committed in that turn. The next turn ran it all again (`t5b-turn.log`, taken 04:50:23): RED the same five, GREEN 36 of 36 and 247 of 247, and the commit `1841b96`, whose gate passed (`PASS  tests`, 05:11:59). gentle-ai's row: medium risk, 474 lines, review due.
 
+- 2026-10-12 · gentle-ai on T5 (`7411fe6..1841b96`, medium risk, 474 lines, one lens:
+  reliability): **approved and acknowledged**, lineage `review-66d7ba384db9da9a`
+  (`s1-capture.json`, `s1-ack.json` in the scratchpad). Four notes, none blocking, all
+  taken as T5b: (1) the tests that say `--fresh`, another effort and a moved head reuse
+  nothing run their second time without the platform their first run named, so the key
+  would differ anyway and they do not isolate what they name; (2) no test reaches the run
+  log that cannot be read while kept parts are looked up; (3) the error says what passed
+  is kept even when the line of a part could not be written; (4) the test of a run whose
+  parts were all kept does not assert what it records and shows.
+- 2026-10-12 · M2, number 1, for gentle-ai (T7, half): its capture ran alone in a turn
+  (`s1-review-turn.log`, taken 05:39:41) under `measure-busy.mjs`, a script of the
+  scratchpad that reads `os.cpus()`. A quiet minute first: 129.5 busy processor-seconds,
+  2.2 a second, which is the other sessions and the browser. Then the capture, 111.2 s:
+  249 busy processor-seconds, **9.1 above the quiet rate, so at most 2.3 s added to a gate
+  beside it, against the 30 s it had to stay under**. One lens; a review of four lenses
+  was not measured. Codex's number is not measured: its review of T5 is not run (below).
+- 2026-10-12 · Codex on T5 waits for him. Its plan is "about 580,000" input tokens (2
+  parts, 474 lines) and the rate gives 568,800: 2% over. The orchestrator holds every
+  Codex run whose plan is over the rate, in any session, until he answers whether a plan
+  within a margin counts as inside (he is back at about 11:40, by the orchestrator). From
+  the run log, for that question: the median is about 1,256 input tokens a changed line
+  over 117 reviewed parts of up to 400 lines, above the rate's 1,200; the cost a line
+  falls with size (1,947 at 78 lines, 312 to 444 at 494). Codex spent on this feature so
+  far: 0. Sub-agents so far: 921,278 tokens.
+- 2026-10-12 · `main` moved to `47484bd` (pull request 72, the rules list of "JH 7"), clean
+  against this branch by the orchestrator's merge-tree; taken with the merge before the
+  pull request. Told to the orchestrator, for "JH 7": `bin/lib/codex-review-parts.mjs` and
+  `bin/lib/codex-review-plan.mjs` are free of this feature; `bin/lib/gate-lock.mjs` and
+  `bin/lib/gate-log.mjs` are not touched by it.
+
 ## Next
-The turn of T5 again (`t5-turn.sh` in the scratchpad: RED, GREEN, the commit with its
-gate). Then T6 and T6b by writers, then both reviews of S1, which are also M2's (T7).
-T2 can start beside them: its files are free.
+T5b, one writer: the four notes of gentle-ai, tests first (the platform named in the
+second run of each guard test; a test where the reader of the run log throws and every
+part is asked; the error's last sentence only when a part's line was written, with its
+test; the all-kept test asserting the record, its `runs` and the findings shown). Then T6
+(the head pinned) and T6b (the row of a commit names its commits), one writer each, and
+one turn for the three: RED, GREEN, commits. Then gentle-ai on what follows `1841b96`.
+Codex on the slice when he has answered; its run is also M2's number 1 for Codex, under
+`measure-busy.mjs`. T2 can start beside them: its files are free.
 
 ## Resume here
-- `feat/gate-wait` is not pushed. It holds this document; T5 is in the working tree of
-  four files (`bin/codex-review.mjs`, `bin/lib/codex-review-runs.mjs` and their tests)
-  until its turn commits it.
+- `feat/gate-wait` is not pushed; its head is the commit that holds this entry, on
+  `7411fe6`. T5 is `1841b96`, gated, reviewed by gentle-ai, with no Codex record yet.
+- No Codex run until the orchestrator relays his answer on the margin over the rate.
 - `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
+- The scratchpad of this session
+  (`…/Temp/claude/D--js-harness/d14eb9a1-e0dd-467c-8dc0-e2c7db2b0a86/scratchpad`) holds
+  the turn scripts and logs (`t5-turn.sh`, `t5b-turn.log`, `s1-review-turn.sh`),
+  `measure-busy.mjs`, and the review's files (`s1-*.json`).
 - Every test run and commit with code goes through the lock: `node
   D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`, in the background, from
   this session and never from a sub-agent; a turn is one command, and a script handed to it
