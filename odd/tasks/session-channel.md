@@ -690,6 +690,79 @@ Three parts.
    built, the lead's working rule holds: the first act of a session after a compaction is one
    line to the lead (title, hour by date, share of the context, what it resumes).
 
+Parts 3 and 4 after their reader (2026-10-12 09:05; one read-only reader on Opus 5.5 at effort
+high, 34 tool calls, over the 57 transcripts; the parent read its first finding again at this
+session's own transcript). What it found, and what changes:
+
+- After an automatic compaction the resume hook runs before the host writes that compaction's
+  boundary: in 16 of 16 automatic compactions every `SessionStart:compact` hook had ended
+  before the boundary's own time, and in 24 of 24 he asked for they ran after it. Here, at
+  08:55: the boundary `fe414f84` is stamped 13:55:27.688Z and the harness's hook ended at
+  13:55:25.516Z. So the hook cannot name the new boundary, and says "automatic" only as what
+  the file looks like: the newest boundary has a reply of the session after it. The measure
+  judges later, when the boundary is written.
+- A file is not in time order: a compaction writes old entries again, an older boundary at
+  their head (1,541 entries in this session's file), so a walk back from the end takes a copy
+  for "the compaction before". The stretch is told by time, each entry counted once by its
+  `uuid`, in one pass over the whole file (an 18 MB transcript reads and parses in 0.3 s on a
+  quiet machine; a tail is not enough, since the stretch here was 9 MB).
+- The hook took 7.4 s of its 15 at the real compaction, against 1.2 s on a quiet machine. So
+  it works to a deadline of its own, prints what it has when the deadline comes, and names
+  what it could not read.
+- Neither the transcript's `cwd` and `gitBranch` nor the hook's `cwd` say where a session
+  works: a session that reached its worktree by `cd` records the folder it was opened in on
+  every entry. The place is the latest `Edit` or `Write` call of its own whose path is
+  `<tree>/odd/tasks/<document>.md`, which names the worktree and the document; failing that,
+  the worktree of its last notice, with both branches said when they differ and no refusal.
+  This is what made the hook answer "feature document: not known" to this session at 08:55.
+- "Told" as built is a list that only grows, named by the session: `toldBetween` reads it
+  between two times. `--quote` refuses a reply of the session, so the twin is `replyOf`.
+- Part 4 (a) is cut to less. The channel's record gets no new kind of entry and the hook
+  still writes nothing: the board already reads every boundary of every transcript, so the
+  transcript is the record of a compaction, with no model in it, and it also holds the
+  compactions whose hook failed (twice on 2026-10-12, "Unknown command: resume", exit 2),
+  which a line written by the hook would have missed. A line of a new kind would also show as
+  a skipped entry on any older copy of the harness. What is built instead: the watch
+  (`boardChanges`) returns once when a session has a compaction the board had not seen, which
+  is what wakes the lead; and the hook prints, for the resumed session, the one command that
+  tells the lead (`js-harness notify --to orchestrator --kind note "…"`, which records, wakes
+  the lead's watch and answers with the lead's title or that there is none), or the relief
+  file when the session is the orchestrator by its title (`roleOfTitle`). For (b) nothing
+  more is needed: the blocks and the compaction are both in the transcript. For (c) the
+  lead's reply needs a fixed form that names a session's cut as pending, or the measure is a
+  pattern over free text: T8.
+- Smaller: the resume hook ignores a sub-agent's input (`agent_id`), as the pause does; with
+  no `harness.json` it reads nothing; "kept" misses a document written and not yet committed
+  because the gate was held, so the hook's lines say the document's own time as well as its
+  last commit; the lead's relief file is 500 kB, so the hook prints its path and its last
+  lines' count, never its text.
+- Not built and noted: an entry anyone could forge by piping an input to the hook (there is
+  none now); `/clear`, which loses more than a compaction and gets nothing; a `PostCompact`
+  entry to learn the trigger, which the measure does not need.
+- Not verified: whether the boundary is on disk when the hook runs (times were compared, no
+  live run: it is the third try of the list below); whether a sub-agent fires `SessionStart`;
+  whether a session opened from the phone is given its title.
+
+A defect of `main` found by the parent's own look at the first of these (2026-10-12 09:15):
+the stretch reader, run on this session's transcript cut where the hook read it, gave his
+four entries at their lines (4408, 5896, 5947, 6158) and no message of another session,
+where the lead had sent 32. A message one session sends another through the app's own tool
+is written with the origin `{ kind: "peer", from: "local_<id>", fromMode, hostInjected: true
+}` and the text `Another Claude session sent a message: <cross-session-message from="…"
+name="<title>">`: 147 of them in the 57 transcripts, each counted once by `uuid`, all 147
+with that text; the survey of 2026-10-10 had 2 and read them as what the app puts in
+(`peerSender`, "What exists to build on"). So on `main` the work a session does on the
+lead's order starts no task (`instructionBy`) and is added to the task before, and `--quote`
+names no sender for it. Fixed in this slice by one writer: such a message is a session's,
+its sender's title read from that tag; a `hostInjected` entry with any other text stays the
+app's.
+
+Built in this order, each one narrow writer and test first: `compactionStretch` and
+`replyOf` in the sessions library; the fix above; `toldBetween` in the pause library, and the newer of its
+two state places wins; the resume hook's three facts (the place, the relief file, a line for
+a person on an input it cannot read, a sub-agent ignored); the hook's new lines to a
+deadline; the watch's change.
+
 A fact of 2026-10-12 03:25 that part 1's guard and part 3 answer to (the lead's account): the
 entry of the resume hook is registered on this machine and the command on the path is an
 older copy with no `resume`, so the hook prints "Unknown command" and exits 2 after each
@@ -1809,9 +1882,27 @@ summary.
       host's JSON with `additionalContext`, never an exit but 0), and the dispatcher loading
       a command's module only when it is asked, since through it a start costs 210 ms and a
       bare one 130. No entry in `install` yet.
-   c. The resume hook's new lines (part 3) and the fact of a compaction recorded in the
-      channel's record (part 4, a), which the two readers have not read: a reader reads
-      part 4 before it is built.
+   c. The resume hook's new lines (part 3) and how the lead learns of a compaction (part 4),
+      as point 14 says under "Parts 3 and 4 after their reader" (read 2026-10-12 09:05; the
+      hook writes nothing and the record gets no new kind of entry). The session came back
+      from the host's compaction of 08:55 and told the lead. Codex's plan for the slice then:
+      about 920,000 input tokens for 749 changed lines, over the rate (898,800), so the
+      review is HELD for him and the lead has the figure; nothing is pushed since `c87dddd`.
+      Built, in the commit that holds this text (three writers on Haiku 5.5 at effort high,
+      25, 60 and 25 tool calls, test first; read by the parent at 09:30: `node --test
+      bin/lib/sessions.test.mjs` 220 pass, `node --test bin/lib/pause.test.mjs` 39 pass, and
+      on this session's transcript cut where the hook read it: his entries at lines 4408,
+      5896, 5947 and 6158, the lead's 15 messages with its title, in 0.2 s):
+      `compactionStretch` and `replyOf` in the sessions library; a message the app delivers
+      for a session read as a session's (the defect of `main`, point 14); `toldBetween` in
+      the pause library, where the newer of the two state places now wins. Briefs ready in
+      the scratchpad for what is left, in this order: `brief-hook-facts.md` (the hook's four
+      facts: the place by the last feature document the session wrote, the relief file for
+      the orchestrator, a sub-agent ignored, a line for a person on an input not read);
+      the hook's new lines to a deadline (not written yet: compaction, told, state written,
+      his lines, other sessions' lines, the tail of the last reply, the worktree, work in
+      flight, the command that tells the lead); `brief-watch.md` (the watch returns once
+      for a compaction).
    d. The measure (told, kept, announced, for automatic compactions) in the sessions
       library; `--measures` itself is T9.
    e. The entry for `install` and the row of `doctor` that runs each entry's command: built

@@ -145,36 +145,50 @@ export function statePath(home, sessionId) {
 
 const freshState = () => ({ compaction: null, armed: true, told: [] });
 
-/** The state a session holds, read from the first of `files` that holds a readable one. A place that is missing,
- * unreadable or unparseable is passed over; when none holds one the session reads as never told and armed, so
- * a crossing tells it. */
-function readState(files, fileSystem) {
-  for (const file of files) {
-    const state = readStateFile(file, fileSystem);
-    if (state !== null) return state;
-  }
-  return freshState();
+/** The states the places hold: each place that is readable, in the order of `files`. A place that is missing,
+ * unreadable or unparseable holds none and is passed over. */
+function readStates(files, fileSystem) {
+  return files.map((file) => readStateFile(file, fileSystem)).filter((state) => state !== null);
 }
 
-/** One place of the state, or `null` when the file cannot be read or does not parse as a state. */
+/** The newest of `states`, or `null` when there is none. A state stamped with its write's time is newer than one
+ * with no stamp, which a state written before stamps were kept is, and a tie keeps the state that comes first.
+ * The newest is the one a session reads: a place written before the other one, and then made unwritable, must
+ * not speak for the session again. */
+function newestOf(states) {
+  const rank = (state) => state.written ?? -Infinity;
+  return states.reduce((newest, state) => (newest === null || rank(state) > rank(newest) ? state : newest), null);
+}
+
+/** The state a session holds: the newest of the places, or the state of a session never told and armed when
+ * no place holds one, so a crossing tells it. */
+function readState(files, fileSystem) {
+  return newestOf(readStates(files, fileSystem)) ?? freshState();
+}
+
+/** One place of the state, or `null` when the file cannot be read or does not parse as a state. `written` is the
+ * time the state was written, in milliseconds, or `null` for a state that carries none. */
 function readStateFile(file, fileSystem) {
   try {
     const value = JSON.parse(fileSystem.readFileSync(file, 'utf8'));
     if (!isObject(value)) return null;
+    const written = typeof value.written === 'string' ? Date.parse(value.written) : NaN;
     return {
       compaction: pointOf(value.compaction),
       armed: typeof value.armed === 'boolean' ? value.armed : true,
       told: Array.isArray(value.told) ? value.told : [],
+      written: Number.isFinite(written) ? written : null,
     };
   } catch {
     return null;
   }
 }
 
-/** Writes the state to the first of `files` that takes it, and says whether one did. Each place is written as a
- * temp file beside it that is renamed over it, so a reader never sees half of it. */
-function writeState(files, state, fileSystem) {
-  return files.some((file) => writeStateFile(file, state, fileSystem));
+/** Writes the state, stamped with the time of this write, to the first of `files` that takes it, and says whether
+ * one did. Each place is written as a temp file beside it that is renamed over it, so a reader never sees half of it. */
+function writeState(files, state, fileSystem, now) {
+  const stamped = { ...state, written: new Date(now()).toISOString() };
+  return files.some((file) => writeStateFile(file, stamped, fileSystem));
 }
 
 /** Writes one place of the state, `true` when it is kept there. A write that fails leaves nothing behind: the
@@ -209,6 +223,12 @@ function noticeOf(tokens, compaction) {
   return { tokens: whole, share, compactionShare: DEFAULT_CONTEXT_COMPACTION_PERCENT, room, text };
 }
 
+/** The places a session's state is kept in, the state file under `home` first and then the file of the same name in
+ * `tmpdir`. A session id that is not of the shape of one throws, from `statePath`. */
+function placesOf(home, sessionId, tmpdir) {
+  return [statePath(home, sessionId), path.join(tmpdir, `js-harness-pause-${sessionId}.json`)];
+}
+
 /** The context pause for a session, run after every tool call: `null`, or the notice the one time a stretch
  * of work passes the pause. A stretch is told by the context falling under the pause again, which a
  * compaction does, and not by looking for a boundary, which may be megabytes before the end of the file.
@@ -220,13 +240,13 @@ function noticeOf(tokens, compaction) {
  * nothing new no file is made.
  *
  * The state is kept in its file under `home`, or, when that cannot be written, in a file of the same name in
- * `tmpdir`. A crossing gives the notice only when the disarmed state was kept in one of them: when neither
+ * `tmpdir`. A read takes the newer of the two (the stamp of each write decides), so a home that was written and
+ * then became unwritable never speaks for the session over the newer state kept in the temp folder. A crossing gives the notice only when the disarmed state was kept in one of them: when neither
  * takes it the session is not told, and the board and the reply check still say the pause. Telling a session
  * twice, once each time the write fails, would cost it the context the pause is there to protect. It never
  * throws for a transcript or a state it cannot read or write. */
 export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(), fileSystem = fs, tmpdir = os.tmpdir() } = {}) {
-  const file = statePath(home, sessionId);
-  const files = [file, path.join(tmpdir, `js-harness-pause-${sessionId}.json`)];
+  const files = placesOf(home, sessionId, tmpdir);
   const end = readEnd(transcript, { fileSystem });
   if (end === null) return null;
   const state = readState(files, fileSystem);
@@ -238,7 +258,29 @@ export function pauseNotice({ transcript, sessionId, home, now = () => Date.now(
     armed: !past,
     told: told ? [...state.told, { at: new Date(now()).toISOString(), tokens: end.tokens }] : state.told,
   };
-  if (told) return writeState(files, next, fileSystem) ? noticeOf(end.tokens, compaction) : null;
-  if (next.armed !== state.armed || next.compaction !== state.compaction) writeState(files, next, fileSystem);
+  if (told) return writeState(files, next, fileSystem, now) ? noticeOf(end.tokens, compaction) : null;
+  if (next.armed !== state.armed || next.compaction !== state.compaction) writeState(files, next, fileSystem, now);
   return null;
+}
+
+/** What the session's state says about a stretch of its work: whether the session was told the pause at all, and
+ * the tokens and time of the latest telling whose `at` is after `after` and before `before` (ISO strings, compared
+ * as strings; a bound that is `null` is open). `known` is `false` when neither place holds a state, or when the
+ * session id or the home cannot be read: the reader never throws for them. `at` and `tokens` are `null` when no
+ * telling falls in the stretch. It reads the newer place, as `pauseNotice` does, and writes nothing. */
+export function toldBetween({ home, sessionId, after = null, before = null, fileSystem = fs, tmpdir = os.tmpdir() } = {}) {
+  const unknown = { known: false, at: null, tokens: null };
+  let states;
+  try {
+    states = readStates(placesOf(home, sessionId, tmpdir), fileSystem);
+  } catch {
+    return unknown;
+  }
+  const state = newestOf(states);
+  if (state === null) return unknown;
+  const inside = (entry) => isObject(entry) && typeof entry.at === 'string'
+    && (after === null || entry.at > after) && (before === null || entry.at < before);
+  const latest = state.told.filter(inside).pop();
+  if (latest === undefined) return { known: true, at: null, tokens: null };
+  return { known: true, at: latest.at, tokens: Number.isFinite(latest.tokens) ? latest.tokens : null };
 }

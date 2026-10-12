@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pauseNotice, readEnd, statePath } from './pause.mjs';
+import { pauseNotice, readEnd, statePath, toldBetween } from './pause.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, percentOf, shareOf } from './sessions.mjs';
 
 // Every test writes under a home of its own in the temp folder and reads synthetic transcripts: nothing
@@ -50,7 +50,26 @@ function watchedFs() {
   return { writes, fileSystem: { ...fs, mkdirSync: watch('mkdirSync'), writeFileSync: watch('writeFileSync'), renameSync: watch('renameSync') } };
 }
 
+/** The real file system, with every write under `dir` refused once `lock()` is called: a home that became unwritable. */
+function lockableFs(dir) {
+  let locked = false;
+  const refuse = (name) => (...args) => {
+    if (locked && String(args[0]).startsWith(dir)) throw new Error(`${name} is refused`);
+    return fs[name](...args);
+  };
+  return {
+    lock: () => { locked = true; },
+    fileSystem: { ...fs, mkdirSync: refuse('mkdirSync'), writeFileSync: refuse('writeFileSync'), renameSync: refuse('renameSync') },
+  };
+}
+
 const stateOf = (home) => JSON.parse(fs.readFileSync(statePath(home, SESSION), 'utf8'));
+
+/** Writes a state into one place as it is held there: `file` is the path of the place. */
+function putState(file, state) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(state));
+}
 
 /** The temp files a folder holds, which a failed write must not leave: none when the folder does not exist. */
 const tmpFilesIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')) : []);
@@ -308,4 +327,92 @@ test('a compaction point that is not a whole number gives a whole room, and the 
 
 test('a bad session id is a TypeError from pauseNotice too, before the transcript is read', inHome((home) => {
   assert.throws(() => pauseNotice({ transcript: path.join(home, 'missing.jsonl'), sessionId: '../x', home, now: () => NOW }), TypeError);
+}));
+
+// --- the newer of the two places ---
+
+test('the newer place wins: a home that became unwritable after it was armed does not tell the session again', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  fs.mkdirSync(tmpdir);
+  const guard = lockableFs(path.join(home, '.js-harness'));
+  const options = (at) => ({ transcript, sessionId: SESSION, home, now: () => at, tmpdir, fileSystem: guard.fileSystem });
+  // the first call is under the pause and writes the compaction point it was seen to have, armed, into the home
+  const transcript = write(home, 't.jsonl', [boundary(COMPACTION), reply(UNDER)]);
+  assert.equal(pauseNotice(options(NOW)), null);
+  assert.equal(stateOf(home).armed, true);
+  guard.lock();
+  write(home, 't.jsonl', [boundary(COMPACTION), reply(OVER)]);
+  assert.ok(pauseNotice(options(NOW + 1000)), 'the crossing tells, and its disarmed state can only be kept in the temp folder');
+  assert.equal(pauseNotice(options(NOW + 2000)), null, 'the next call reads the temp folder, which is newer, and says nothing');
+}));
+
+test('a state with no stamp is the oldest: a stamped one in the temp folder is read before it', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  putState(statePath(home, SESSION), { compaction: null, armed: true, told: [] });
+  putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [], written: new Date(NOW).toISOString() });
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 1000, tmpdir }), null);
+}));
+
+test('equal stamps: the home\'s state is read, the first place winning the tie', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  const written = new Date(NOW).toISOString();
+  putState(statePath(home, SESSION), { compaction: null, armed: true, told: [], written });
+  putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [], written });
+  const transcript = write(home, 't.jsonl', [reply(OVER)]);
+  assert.ok(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW + 1000, tmpdir }));
+}));
+
+// --- toldBetween: was the session told in a stretch ---
+
+const at = (minutes) => new Date(NOW + minutes * 60 * 1000).toISOString();
+const told = (minutes, tokens) => ({ at: at(minutes), tokens });
+
+test('toldBetween: no state in either place is not known, and nothing is written', inHome((home) => {
+  const { writes, fileSystem } = watchedFs();
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, tmpdir: path.join(home, 'tmp'), fileSystem }), { known: false, at: null, tokens: null });
+  assert.deepEqual(writes, []);
+}));
+
+test('toldBetween: with three entries, the bounds take the middle one, and an entry exactly at a bound is outside', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  putState(statePath(home, SESSION), { compaction: null, armed: false, told: [told(1, PAUSE + 1000), told(2, PAUSE + 2000), told(3, PAUSE + 3000)] });
+  const { writes, fileSystem } = watchedFs();
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, after: at(1), before: at(3), tmpdir, fileSystem }), { known: true, at: at(2), tokens: PAUSE + 2000 });
+  assert.deepEqual(writes, []);
+}));
+
+test('toldBetween: open bounds take the last entry, and an entry whose at is not a string is passed over', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  putState(statePath(home, SESSION), { compaction: null, armed: false, told: [told(1, PAUSE + 1000), told(2, PAUSE + 2000), { at: 5, tokens: 1 }] });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, tmpdir }), { known: true, at: at(2), tokens: PAUSE + 2000 });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, after: at(1), tmpdir }), { known: true, at: at(2), tokens: PAUSE + 2000 });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, before: at(1), tmpdir }), { known: true, at: null, tokens: null });
+}));
+
+test('toldBetween: a stretch with no entry in it is known, with null at and tokens', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  putState(statePath(home, SESSION), { compaction: null, armed: false, told: [told(1, PAUSE + 1000)] });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, after: at(5), before: at(9), tmpdir }), { known: true, at: null, tokens: null });
+}));
+
+test('toldBetween: a session id that is not of the shape of one, or a home that cannot be read, is not known and does not throw', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  const notAFolder = path.join(home, 'not-a-folder');
+  fs.writeFileSync(notAFolder, 'a file, not a folder');
+  assert.deepEqual(toldBetween({ home, sessionId: '../x', tmpdir }), { known: false, at: null, tokens: null });
+  assert.deepEqual(toldBetween({ home: notAFolder, sessionId: SESSION, tmpdir }), { known: false, at: null, tokens: null });
+  assert.deepEqual(toldBetween({ sessionId: SESSION, tmpdir }), { known: false, at: null, tokens: null });
+}));
+
+test('toldBetween: a told that is not an array holds no entry, and the state is still known', inHome((home) => {
+  putState(statePath(home, SESSION), { compaction: null, armed: false, told: 'not a list' });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, tmpdir: path.join(home, 'tmp') }), { known: true, at: null, tokens: null });
+}));
+
+test('toldBetween: it reads the newer place, so a stamped state in the temp folder beats an older home', inHome((home) => {
+  const tmpdir = path.join(home, 'tmp');
+  putState(statePath(home, SESSION), { compaction: null, armed: false, told: [told(1, PAUSE + 1000)], written: at(1) });
+  putState(path.join(tmpdir, `js-harness-pause-${SESSION}.json`), { compaction: null, armed: false, told: [told(2, PAUSE + 2000)], written: at(2) });
+  assert.deepEqual(toldBetween({ home, sessionId: SESSION, tmpdir }), { known: true, at: at(2), tokens: PAUSE + 2000 });
 }));
