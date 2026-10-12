@@ -1110,6 +1110,114 @@ before T16c; the kinds of work that are not rules, each with its reason; what co
 said under "Not guaranteed" and in the list's head; the hash of an installed copy; T13 and B4;
 who is told what; and that this is a third part with a task of its own.
 
+### What ran, against the rules with no short name (T16b, third part: the checking half of B3)
+Designed on 2026-10-12 and read by one reader that did not write it, whose changes are the last
+paragraph. Built on `feat/rules-held`, stacked on `feat/rules-rewire`. It adds one block to
+`js-harness rules applied`.
+
+**The problem.** Three declared rules say what runs, and nothing compares them with what ran:
+`session-model` and `session-effort` (what a session runs on) and `subagent-effort` (the effort
+of every sub-agent). `rules applied` answers another question, what a short name gives on each
+engine. B3 of `docs/model-effort.md` asks for this one: "the level a task really ran at is read
+from the session's records and a row of `check` compares it with the table, as INFO", and names
+the case that matters most: a sub-agent call that passes no effort takes the session's, so a
+session at another level silently lowers its reviewers.
+
+**What exists.** `readRecords` gives, for the last seven days, the last answer of each session
+and the first answer of each launch, with the model, the effort, the engine, the time and the
+file; `appliedOf` keeps or skips each entry and takes the rules in force. So the comparison
+needs no new read. Two things it does not have yet: `appliedOf` drops the effort of an entry it
+keeps, and the reader gives a launch the effort its meta file holds before the one its answer
+records.
+
+**The decisions.**
+
+1. One more key of what `appliedOf` returns, `held`, and one more block of `appliedLines`: not
+   a second command and not a second reader.
+
+2. Which rule is held to which field is said by the command, `bin/rules.mjs`, in three literal
+   reads: `ruleOf('session-model')` for the model of a session, `ruleOf('session-effort')` for
+   its effort, `ruleOf('subagent-effort')` for the effort of a launch. So `rules check` lists
+   the command as the reader of the three rules and refuses an id that is renamed or retired;
+   the pure module still imports nothing and is passed the three as
+   `{ id, of, field }`. One of them that is not among the rules in force (left out, in a project
+   that is not this repository) has no item.
+
+3. What ran is what the answer records. A launch's effort is the one its first answer holds,
+   not the one its meta file holds: the first is what the engine ran, the second what the call
+   asked for, and a call clamped by the engine would otherwise print as agreeing. The reader
+   changes for that. A record with no effort is counted apart, never as a difference.
+
+4. It is not a list of breaches. The folder holds records that are no rule's: a headless run
+   another tool started, an agent type that sets its own level, gentle-ai's reviewers. So each
+   other value is shown with what it came from, the entry point for a session and the agent
+   type for a launch, with its count, the day of the last and the file of the last on a line of
+   its own. The words are "agree" and the other value; nothing says "breach".
+
+5. It is information: it never changes the exit. B3 says INFO; the command is outside the gate
+   because its answer depends on the machine and the day; and no case here is free of a false
+   red, since the records do not say which sessions are work sessions. One case is not left
+   silent: a launch that passed a declared short name is this repository's own, so when such a
+   launch ran at another effort than `subagent-effort` says, a line "To the lead" says how
+   many, with the exit unchanged.
+
+6. The last lines say what they are about. `PASS` names the short names; a last line counts
+   the records that ran at another value than a rule of the block says, so that a pass above a
+   difference is not read as "all agrees". The closing note says only that a Codex review
+   holds its own model and effort.
+
+7. The last answer of a session, or the first of a launch, can be one the engine wrote itself
+   (`<synthetic>`): the reader steps past those to an answer a model gave, and gives the
+   synthetic one only when the read holds no other.
+
+A sub-agent's model with no short name passed is not held to a rule: the records do not say
+whether a launch wrote code or reviewed. The block "Launches that passed no model" shows them.
+
+**The lines**, after the three counted blocks and before "Left out", only when a rule of the
+three is in force:
+
+    What ran, against the rules with no short name (information, never a failure):
+      session-effort: high, since 2026-10-10
+        agree: 25 of 27 sessions
+        medium: 2 sessions on claude-desktop, the last on 2026-10-11
+          <file>
+      subagent-effort: high, since 2026-10-07
+        agree: 160 of 163 launches
+        no effort recorded: 2 launches
+        medium: 1 launch of general-purpose, the last on 2026-10-12
+          <file>
+
+**Tests first.** The reader: a launch whose meta file and answer hold two efforts gives the
+answer's; a launch with an effort only in its meta file gives none; a synthetic last answer
+after a real one, and a synthetic first answer before a real one; a transcript of synthetic
+answers only. `appliedOf`: all agree; another value by entry point and by agent type, most
+first; nothing to compare; an entry before `since`; a record with no effort; a dated model id
+agrees; a rule of the three not in force has no item; the exit is 0 with a difference; the
+count for the lead, only of launches that passed a declared short name. `appliedLines`: the
+block whole, its singular forms, the file on its own line, the last lines with and without a
+difference, no block when nothing is held. The command: the three rules are listed as read by
+`bin/rules.mjs`.
+
+**Not guaranteed.** A session's level in the middle of its life: only its last answer is read.
+Which sessions are work sessions of the project. A launch's kind of work. An engine that
+renames an effort level, or records it as something that is not a text: it prints as another
+value or as no effort. A rule's `since` is a day as he said it and a record's day is in
+universal time: an entry of the first hours can fall on the day before. Older than seven days,
+past the cap, or a host that keeps no records.
+
+**Cost.** One key and one block; the effort kept on an entry; two changes of the reader; three
+reads in the command; the last lines reworded.
+
+What the reader changed. Three things would have misled: the effort of a launch was the meta
+file's, so a clamped launch agreed; every other tool's record counted as a difference with no
+word of where it came from; and `PASS` or "Nothing compared" closed a block that showed
+differences. Taken as notes: `keep` drops the effort, so the cost was understated; a synthetic
+last answer hid its session; the renamed level and the two kinds of day under "Not
+guaranteed"; a line for the lead in the one case B3 names; the file on a line of its own, for
+a phone; zero compared, which read as a pass; and the home of the three ids, which as a table
+in the pure module no check could see, so they are literal reads in the command. Cut on its
+advice: a test of the table, and a promise about rows of `check` and `doctor`.
+
 ### `AGENTS.md`, rewritten
 The headings stay. What changes is "Working with Sebastián", which runs from line 48 to line 84
 of the file's 87 today. The content of the new section, in order; the wording is his to pass in the build

@@ -38,19 +38,19 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 ### session-effort
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
 ### session-model
 The model a session runs on: claude-opus-5-5.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/rules.mjs`.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model

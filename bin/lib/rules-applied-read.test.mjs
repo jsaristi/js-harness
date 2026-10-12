@@ -70,7 +70,7 @@ test('a folder that does not exist gives exists false and everything empty', () 
   });
 });
 
-test('a launch with a meta file gives every key, with the meta values and the file in forward slashes', () => {
+test('a launch with a meta file gives every key, with the meta alias and agentType, the answer effort, and the file in forward slashes', () => {
   const dir = project([
     { path: 'proj-a/subagents/agent-1.jsonl', text: assistant(), mtime: NOW - HOUR },
     {
@@ -84,7 +84,7 @@ test('a launch with a meta file gives every key, with the meta values and the fi
   assert.deepEqual(got.launches, [{
     alias: 'haiku',
     model: 'claude-haiku-5-5',
-    effort: 'low',
+    effort: 'high',
     agentType: 'Explore',
     entrypoint: 'cli',
     version: '2.1.0',
@@ -120,6 +120,24 @@ test('a launch whose meta has no effort takes the entry effort', () => {
   const [item] = readRecords(dir, { now: NOW }).launches;
   assert.equal(item.effort, 'high');
   assert.equal(item.alias, 'haiku');
+});
+
+test('a launch whose meta asks for high and whose answer says medium gives medium', () => {
+  const dir = project([
+    { path: 'proj-a/subagents/agent-1.jsonl', text: assistant({ effort: 'medium' }), mtime: NOW - HOUR },
+    { path: 'proj-a/subagents/agent-1.meta.json', text: JSON.stringify({ effort: 'high' }), mtime: NOW - HOUR },
+  ]);
+  const [item] = readRecords(dir, { now: NOW }).launches;
+  assert.equal(item.effort, 'medium');
+});
+
+test('a launch whose meta asks for high and whose answer has no effort gives null', () => {
+  const dir = project([
+    { path: 'proj-a/subagents/agent-1.jsonl', text: assistant({ effort: undefined }), mtime: NOW - HOUR },
+    { path: 'proj-a/subagents/agent-1.meta.json', text: JSON.stringify({ effort: 'high' }), mtime: NOW - HOUR },
+  ]);
+  const [item] = readRecords(dir, { now: NOW }).launches;
+  assert.equal(item.effort, null);
 });
 
 test('a meta whose model is a number gives alias null', () => {
@@ -307,4 +325,54 @@ test('an item holds only its keys, never the message content or the cwd of the e
   const dump = JSON.stringify(got);
   assert.ok(!dump.includes('do not keep this'));
   assert.ok(!dump.includes('/private/project'));
+});
+
+test('a session whose last line is a synthetic answer after a real one gives the real one', () => {
+  const dir = project([
+    {
+      path: 'sess-1.jsonl',
+      text: assistant({ message: { model: 'real' } }) + user() + assistant({ message: { model: '<synthetic>' } }),
+      mtime: NOW - HOUR,
+    },
+  ]);
+  const got = readRecords(dir, { now: NOW });
+  assert.equal(got.sessions.length, 1);
+  assert.equal(got.sessions[0].model, 'real');
+});
+
+test('a launch whose first answer is synthetic and whose second is real gives the real one', () => {
+  const dir = project([
+    {
+      path: 'proj-a/subagents/agent-1.jsonl',
+      text: assistant({ message: { model: '<synthetic>' } }) + assistant({ message: { model: 'real' } }),
+      mtime: NOW - HOUR,
+    },
+  ]);
+  const got = readRecords(dir, { now: NOW });
+  assert.equal(got.launches.length, 1);
+  assert.equal(got.launches[0].model, 'real');
+  assert.deepEqual(got.unreadable, []);
+});
+
+test('a session of synthetic answers only gives an item whose model is <synthetic>, and no unreadable', () => {
+  const dir = project([
+    {
+      path: 'sess-1.jsonl',
+      text: assistant({ message: { model: '<synthetic>' } }) + user() + assistant({ message: { model: '<synthetic>' } }),
+      mtime: NOW - HOUR,
+    },
+  ]);
+  const got = readRecords(dir, { now: NOW });
+  assert.equal(got.sessions.length, 1);
+  assert.equal(got.sessions[0].model, '<synthetic>');
+  assert.deepEqual(got.unreadable, []);
+});
+
+test('a session whose real answer is more than 64 KB before a synthetic last line gives the real one', () => {
+  const text = assistant({ message: { model: 'real' } }) + padding(100) + assistant({ message: { model: '<synthetic>' } });
+  assert.ok(Buffer.byteLength(text) > 64 * 1024);
+  const dir = project([{ path: 'sess-1.jsonl', text, mtime: NOW - HOUR }]);
+  const got = readRecords(dir, { now: NOW });
+  assert.equal(got.sessions.length, 1);
+  assert.equal(got.sessions[0].model, 'real');
 });
