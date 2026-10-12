@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem,
 } from './practice-lib.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
@@ -482,7 +483,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the ten steps of the feature document, under ids that stay', () => {
+test('the journey is the eleven steps of the feature document and the pause hook, under ids that stay', () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -493,6 +494,7 @@ test('the journey is the ten steps of the feature document, under ids that stay'
     'commit-refused',
     'project-uninstall',
     'global-uninstall',
+    'pause-hook',
     'real-home-after',
     'record',
   ]);
@@ -530,7 +532,7 @@ test('walkJourney runs every step in order, each with the context and the result
     seen.push({ id, sameContext: handed === ctx, before: handed.results.map((step) => step.id) });
     return `${id} done`;
   }]));
-  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: 10, failed: undefined, unreported: undefined });
+  assert.deepEqual(walkJourney({ steps, ctx }), { ok: true, passed: 11, failed: undefined, unreported: undefined });
   assert.deepEqual(ctx.results, IDS.map(done));
   // The record step reads the results of the steps before it while it runs: they are there by then.
   assert.deepEqual(seen, IDS.map((id, index) => ({ id, sameContext: true, before: IDS.slice(0, index) })));
@@ -545,10 +547,10 @@ test('walkJourney skips what follows a failed step, but for the comparison of th
 
 test('walkJourney says the run failed when a step that always runs fails', () => {
   const late = { results: [] };
-  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: 9, failed: 'real-home-after', unreported: undefined });
+  assert.deepEqual(walkJourney({ steps: stepsWith('real-home-after'), ctx: late }), { ok: false, passed: 10, failed: 'real-home-after', unreported: undefined });
   assert.deepEqual(late.results, IDS.map((id) => (id === 'real-home-after' ? broke(id) : done(id))), 'the record still runs');
 
-  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: 9, failed: 'record', unreported: undefined });
+  assert.deepEqual(walkJourney({ steps: stepsWith('record'), ctx: { results: [] } }), { ok: false, passed: 10, failed: 'record', unreported: undefined });
 
   // Two failures: the first one is the one named, and the steps that always run are still not skipped.
   const both = { results: [] };
@@ -579,6 +581,7 @@ test('walkJourney hands report the facts of the line of every step, in order', (
     ...IDS.slice(0, 6).map((id) => ({ status: 'PASS', id, title: titleOf(id), detail: `${id} done` })),
     { status: 'FAIL', id: 'project-uninstall', title: titleOf('project-uninstall'), detail: 'project-uninstall broke' },
     { status: 'SKIP', id: 'global-uninstall', title: titleOf('global-uninstall'), failed: 'project-uninstall' },
+    { status: 'SKIP', id: 'pause-hook', title: titleOf('pause-hook'), failed: 'project-uninstall' },
     { status: 'PASS', id: 'real-home-after', title: titleOf('real-home-after'), detail: 'real-home-after done' },
     { status: 'PASS', id: 'record', title: titleOf('record'), detail: 'record done' },
   ]);
@@ -618,9 +621,9 @@ test('walkJourney goes on when report throws, and says that a line could not be 
     if (calls === 2 || calls === 3) throw new Error(`write EPIPE ${calls}`);
   };
   // Every step still runs, the record included, and the steps are judged as they went; the first reason is kept.
-  assert.deepEqual(walkJourney({ steps: stepsWith(), ctx, report }), { ok: true, passed: 10, failed: undefined, unreported: 'write EPIPE 2' });
+  assert.deepEqual(walkJourney({ steps: stepsWith(), ctx, report }), { ok: true, passed: 11, failed: undefined, unreported: 'write EPIPE 2' });
   assert.deepEqual(ctx.results, IDS.map(done));
-  assert.equal(calls, 10);
+  assert.equal(calls, 11);
 });
 
 // ---- the record ------------------------------------------------------------------------------------------------------
@@ -660,7 +663,7 @@ test('a run is ok only when every step is ok and at least one ran', () => {
 });
 
 test('a run is ok only as the whole journey: every step of it, all ok', () => {
-  assert.equal(RUN.steps.length, 10);
+  assert.equal(RUN.steps.length, 11);
   assert.equal(okOf(RUN.steps), true);
   // A part of the journey that passed is not a run that passed: a step that was skipped is not in the line.
   assert.equal(okOf(RUN.steps.slice(0, 2)), false);
@@ -843,4 +846,80 @@ test('hostHooksProblem says so for a host file that is not one: no JSON, no hook
   }
   // An entry that is not one is shown as it is, never taken for a hook.
   assert.ok(hostHooksProblem('{"hooks":{"SessionStart":[null,7,{"hooks":"x"}]}}', SEEDED).endsWith('found: not an entry | not an entry | no command (no matcher)'));
+});
+
+// ---- the context pause, as the hook of the installed command meets it ------------------------------------------------
+
+test('pauseReplyLine is one line holding a reply with usage, as the host writes one into a transcript', () => {
+  const line = pauseReplyLine({ uuid: 'made-up-uuid', timestamp: '2026-10-12T10:00:00.000Z', tokens: 465000 });
+  assert.doesNotMatch(line, /[\r\n]/);
+  assert.deepEqual(JSON.parse(line), {
+    type: 'assistant',
+    uuid: 'made-up-uuid',
+    timestamp: '2026-10-12T10:00:00.000Z',
+    message: { model: 'made-up-model', role: 'assistant', usage: { input_tokens: 465000 } },
+  });
+});
+
+// The three runs of the pause command, as `{ status, stdout }` of the child: the first one passes the pause and
+// prints its notice, the second and the one outside a project print nothing.
+const PAUSE_NOTICE = JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: 'the context pause' } });
+const printed = (stdout) => ({ status: 0, stdout });
+const silent = printed('');
+const RIGHT_RUNS = { first: printed(`${PAUSE_NOTICE}\n`), second: silent, outside: silent };
+
+test('pauseHookProblem finds nothing wrong with the three runs the pause command should make', () => {
+  assert.equal(pauseHookProblem(RIGHT_RUNS), null);
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: printed(PAUSE_NOTICE) }), null, 'a notice with no line break at its end');
+});
+
+test('pauseHookProblem names a run that does not exit 0, whichever of the three it is', () => {
+  const named = { first: 'the first run', second: 'the second run', outside: 'the run outside a project' };
+  for (const [run, who] of Object.entries(named)) {
+    const problem = pauseHookProblem({ ...RIGHT_RUNS, [run]: { status: 1, stdout: '' } });
+    assert.equal(problem, `${who} exited 1, not 0`, run);
+  }
+});
+
+test('pauseHookProblem says the first run printed nothing, when the session was past the pause and its notice was due', () => {
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: silent }), 'the first run printed nothing, though the session was past the pause');
+});
+
+test('pauseHookProblem says the first run printed text that is not JSON, and shows it', () => {
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: printed('js-harness: this session is past the pause\n') }), 'the first run printed text that is not JSON: js-harness: this session is past the pause');
+});
+
+test('pauseHookProblem says the first run printed more than one line, though its notice is one', () => {
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: printed(`${PAUSE_NOTICE}\n${PAUSE_NOTICE}\n`) }), 'the first run printed more than one line, though its notice is one');
+});
+
+test('pauseHookProblem says the first run named another event than PostToolUse, and which', () => {
+  const stop = JSON.stringify({ hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'the context pause' } });
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: printed(`${stop}\n`) }), 'the first run names the event "Stop", not PostToolUse');
+});
+
+test('pauseHookProblem says the first run gave no additionalContext when it is empty or missing', () => {
+  const notice = (additionalContext) => printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext } })}\n`);
+  const named = 'the first run gives no additionalContext, or an empty one, so the session would be told nothing';
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: notice('') }), named);
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: notice('   ') }), named);
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, first: printed(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse' } })}\n`) }), named);
+});
+
+test('pauseHookProblem says the second run printed again, though the pause is said once, and shows it', () => {
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, second: printed(`${PAUSE_NOTICE}\n`) }), `the second run printed ${PAUSE_NOTICE}, though the pause is said once`);
+});
+
+test('pauseHookProblem says the run outside a project printed, though no harness.json is above its folder', () => {
+  assert.equal(pauseHookProblem({ ...RIGHT_RUNS, outside: printed(`${PAUSE_NOTICE}\n`) }), `the run outside a project printed ${PAUSE_NOTICE}, though no harness.json is above its folder`);
+});
+
+test('pauseHookInput is the JSON the host sends the pause command on standard input after a tool call', () => {
+  const input = JSON.parse(pauseHookInput({ sessionId: 'made-up-session', transcriptPath: '/made/up/transcript.jsonl', cwd: '/made/up/project' }));
+  assert.deepEqual(input, {
+    session_id: 'made-up-session',
+    transcript_path: '/made/up/transcript.jsonl',
+    cwd: '/made/up/project',
+    hook_event_name: 'PostToolUse',
+  });
 });
