@@ -928,6 +928,65 @@ session's transcript.
   `js-harness check --help`; `check` knows no such flag and started a gate, which waited
   for the lock; stopped at about 13:18 before it ran anything. Candidate: `check` and
   `gate` refuse a flag they do not know.
+- 2026-10-12 · **T9, the trial is pushed and Linux answered.** Reviews of `14a6026` in one
+  turn (14:16:40 to 14:17:53, `t9-review-turn.log`): gentle-ai approved and acknowledged
+  (lens risk, capture 24.3 s); Codex "correct", 119,953 input tokens (75,392 cached)
+  against a plan of 71,000, recorded for `3088960..14a6026`. Pushed at 14:18; run
+  38296748258 of "trial-gate" queued 14:18:15. **Linux (job 114969540949): not passed.**
+  3,846 tests, 3,707 pass, 7 fail, 132 skipped; the suite took 183.7 s, the job 3 min 24 s,
+  on `ubuntu-latest` with 2 logical processors, 8 GB, Node v24.21.0 (the log is
+  `t9-ubuntu.log` in the scratchpad, fetched with `gh api --allow-escape-sequences
+  repos/jsaristi/js-harness/actions/jobs/<id>/logs`, which answers while the run still
+  runs). The seven, by name: "a TOML literal string and a trailing comment are both read";
+  "a top-level model_instructions_file key before any table header is used, and TOML
+  backslash escapes are unescaped"; "a real listener of a trial port is found by number
+  and killed, and a connection is then refused"; "the probe stops what the trial left
+  listening on its engram port, by number, and leaves nothing behind"; "a report or a raw
+  directory that cannot be written refuses the run before anything is probed or spent";
+  "the command runs one trial per arm, minimal first, proves each wrote inside its sandbox
+  and nothing reached the real home, and exits 0"; "uninstallProject never follows a
+  symlink placed where a written file used to be". A finding, not fixed, no second push.
+  What it says: 184 s on two Linux processors against 735.6 s on his eight under Windows,
+  so what costs here is Windows starting processes and what scans them, not the tests'
+  work. Windows (job 114969540380) was still running at 14:37; a background wait prints
+  each job's result when the run ends or at 44 minutes. Told to the orchestrator at 14:37.
+  Still owed to it: Windows passed or not and its wall time, and what was billed
+  (`gh api repos/jsaristi/js-harness/actions/runs/38296748258/timing`).
+- 2026-10-12 · **T11, the merge hook is committed, `97703f9`** on `feat/gate-merge-hook`
+  (`hook-turn.log`: RED 14:19:25, the test that reads the hook file fails without it; GREEN
+  168 of 168 of `bin/check.test.mjs`; `PASS  tests` 14:32:58). The test with real git
+  passes with and without the repository's file, since it installs the hook itself: it
+  proves the gate under the merge hook's binding, not the file. gentle-ai due (high risk,
+  an executable hook), lenses risk and reliability, started and granted; its two captures
+  and Codex (plan 71,000) are `hook-review-turn.sh`, in the line. Then push and pull
+  request.
+- 2026-10-12 · **T13 measured** (`t13-turn.log`, 14:33:04, on `main`'s sources): `js-harness
+  rules check` 0.26 s; `bin/rules.test.mjs` 0.93 s; the context-text test of
+  `bin/sessions.test.mjs` 0.45 s; that file whole 3.6 s. Seconds, so by the orchestrator's
+  reading of his words of 2026-10-10 a documents-only commit runs them. To build: sensors a
+  project declares for a commit of documents alone (`harness.json`, beside `sensors`),
+  which the gate runs where it runs no other; this repository declares the three.
+- 2026-10-12 · **T12, the identical-tree tests** (`s4-turn.log`, 14:17:58): RED 3 of 3 files
+  fail without the sources; GREEN 213 of 214, the one red a fault of its test (the
+  stand-in gate's id was no hex, and the row's pattern asks for one), fixed, not run
+  again. Uncommitted, as ordered.
+- 2026-10-12 · **His word on the antivirus, 13:57** (the orchestrator's transcript, line
+  4481, type user, origin human, read by me): "Sí, ya las excluí", to the question whether
+  `D:\js-harness` and `D:\js-harness-worktrees` are excluded. Nobody can read the
+  exclusions without an administrator. The orchestrator asked one M1 on the tree of the
+  second (`fc70dc3`): `m1c-turn.sh`, in the line, prints wall, busy share, git and the
+  antivirus beside the second run's (735.6 s; `MsMpEng` 917 s). Report both to it; if the
+  antivirus did not move, say so plainly; what remains may be the tests' repositories
+  under Temp, which is outside what he excluded.
+- 2026-10-12 · **Asked by the orchestrator, to do with the next commit that touches
+  `bin/check.mjs`:** `check` and `gate` refuse a flag they do not know, exit 2, with a test
+  (the slip of 13:16 was the second of its kind that day).
+- 2026-10-12 · **Cut 2, what it would give, before it is built:** one `rev-parse` for the
+  four a run of the review command asks would take about 1,190 of the suite's 12,041 git
+  processes, near 160 of 5,500 busy processor-seconds, so about 20 s of wall on eight
+  processors 93% busy, and it changes the arguments most fakes of
+  `bin/codex-review.test.mjs` match. Small against the trial's fact. To say to the
+  orchestrator with the trial's Windows half; not built.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
