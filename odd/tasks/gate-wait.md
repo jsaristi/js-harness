@@ -1717,6 +1717,58 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   2.2 a second) this review put 178 to 251 processor-seconds above it, **45 to 63 s added
   to a gate at most, over the bound of 30 s**. T8's first number does not hold for a
   review in which Codex runs tests. Spent on Codex in the feature: 3,072,090 input tokens.
+- 2026-10-12 · **What a Codex review cost today against its plan, session by session**
+  (asked by the orchestrator for his next question; read from the reviews' own output in
+  the scratchpad, `s1-codex-out.log`, `hook-codex-out.log`, `hook2-codex-out.log`,
+  `t13c-codex-out.log`, `t14c-codex-out.log`; no new measure, nothing spent):
+
+  | session | changed lines | plan | spent | not cached | requests | spent a request | ran `node --test` |
+  |---|---|---|---|---|---|---|---|
+  | S1, part 1 of 3 | 287 | 320,000 | 513,922 | 96,258 | 10 | 51,392 | no |
+  | S1, part 2 of 3 | 397 | 450,000 | 277,741 | 97,901 | 7 | 39,677 | no |
+  | S1, part 3 of 3 | 390 | 440,000 | 857,405 | 81,469 | 15 | 57,160 | no |
+  | the merge hook | 57 | 71,000 | 180,267 | 39,339 | 7 | 25,752 | yes, once |
+  | the merge hook's test | 81 | 96,000 | 87,814 | 33,030 | 4 | 21,954 | no |
+  | T13 | 339 | 410,000 | 499,650 | 80,706 | 10 | 49,965 | no |
+  | T14 | 317 | 390,000 | 535,338 | 68,394 | 12 | 44,612 | yes, three times |
+
+  Five of seven over their plan, by 22% to 154%; two under. **My reading of what predicts
+  the spend: the number of requests, which Codex chooses, times what one request carries,
+  which the diff sets.** Every request sends the whole conversation so far again, so a
+  request costs about 22,000 to 26,000 input tokens on a diff of 60 to 80 lines and
+  40,000 to 57,000 on one of 290 to 400, nearly all of it read from the cache (62% to
+  90%). The plan puts about 1,230 input tokens on a changed line, which is what seven or
+  eight requests cost; today's reviews took 4 to 15, and nothing in the range says how
+  many Codex will take. Running tests is not what makes a review dear (T13 ran none and
+  was 22% over; the two that ran tests are at 7 and 12 requests, inside the spread): it
+  is what makes it heavy on the machine. **The part that is not cached moves far less**
+  (33,000 to 98,000, and it follows the diff's size), so a rate written on it, or a plan
+  that says "7 to 15 requests of about this size" as a range, would tell him more than
+  one figure does. Whether his plan counts a cached token as a whole one is not read.
+- 2026-10-12 · **T8: what the design does not answer, said before its code** (the
+  orchestrator's question). When a review runs outside the lock and Codex chooses to run
+  `node --test`, a second copy of tests runs beside a gate. M2's bound speaks of time
+  alone. **The design has no answer for the tests that need the machine to be theirs**
+  (the ones that already fail under load, the ones that take ports): two copies at once is
+  what the lock exists to prevent. What was read: the default prompt is Codex's own
+  sentence (`bin/codex-review.mjs:249`, `:363`), so nothing can be said to it there; this
+  command's own prompt (`--prompt own`, `bin/lib/codex-review-prompt.mjs`) names the
+  range and the command that shows it and says nothing of tests; the session is read-only
+  with no approvals (`bin/codex-review.mjs:295`), which did not stop `node --test` today.
+  The candidates, none built, in the order I would take them:
+  1. *Codex's review stays in the lock; gentle-ai's leaves it.* gentle-ai's reviewer has
+     no tools, so it cannot run a test, and its two measures are 2.3 s and 12 s. This is
+     the design's own branch for a number that does not hold, taken for one review alone.
+     It buys the wait of gentle-ai's reviews only, and none was due today.
+  2. *A sentence in the own prompt* telling Codex not to run the suite and why. Advice,
+     not a guard; and it makes `own` the prompt of every review outside the lock, which
+     is a different review than the default and was measured as such in another feature.
+  3. *A report, after the fact*: the review's run line already holds each command Codex
+     ran, so `codex-review` can say "this review ran tests" and the record can carry it.
+     It prevents nothing; it makes the case countable.
+  4. *The lowered priority* of the design: it bounds the time taken from a gate, not the
+     second copy.
+  Not read: whether Codex's sandbox can refuse a process by name.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
