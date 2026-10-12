@@ -2238,6 +2238,37 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     now also proves a whole number above 0, and the wait of the gate lock has its test back).
     NEXT: that commit through the gate; gentle-ai on `34c2dfc..` its head; then Codex, whose
     plan is asked again on the new head.
+  - That commit is `878e2e8` (the gate passed at 08:06). gentle-ai approved `34c2dfc..878e2e8`
+    (1,061 lines, medium, one lens) and the approval is acknowledged; its five notes go into
+    `feat/rules-held`, so that this branch does not move again for what a review calls later
+    work: a time with no zone is read in the machine's own zone; no test runs the path where
+    git names the project and the main checkout; an empty `CLAUDE_CONFIG_DIR` counts as set;
+    no test proves that an error of the form `applied` is said and exits 1; the reader has no
+    test of the cap of sessions and takes a `now` that is no number in silence.
+  - **Codex reviewed the whole range once** (`codex-review --base 47484bd --max-parts 7`, in a
+    turn of the gate, 08:51 to 09:41): `65578da..878e2e8`, 7 parts, 2,682 changed lines,
+    **1,769,808 input tokens** (1,365,888 cached) against a plan of about 2,560,000 and an
+    allowance of 3,218,400; 660 a changed line. Recorded. Six parts with no defect, one
+    finding of the second priority, taken and corrected by this session, inline, test first:
+    `fenceWalk` took a line that starts with a code span in three backticks for the opening
+    of a fence, so `rules check` reported a fence that was not there and `rules render`
+    refused a valid document. A line of backticks whose words hold another backtick opens
+    nothing now, as in Markdown. The correction is commit `88cde75` (the gate passed at
+    10:16). Codex reviewed it alone (`878e2e8..c6b04ab`, 21 changed lines, 129,139 input
+    tokens against a plan of about 71,000 and the floor of 300,000): correct, no defect;
+    recorded. gentle-ai's assessment of `878e2e8..c6b04ab`: medium, 51 lines, not due, under
+    the budget of a slice; it stays pending and is reviewed with the next commits, on
+    `feat/rules-held`. Codex on this branch in all: 1,898,947 input tokens for 2,703 changed
+    lines of code, 703 a line. NEXT: push and the pull request; the lead merges it.
+  - This session's own language server (`node tsserver.js`, pid 59656) spun one logical
+    processor from 01:48 to 08:53 and slowed every gate of the machine (the lead's figures:
+    842 s to about 945 s). The gate printed it at 07:50 and this session reported it as a
+    process whose owner it did not know, when one look at its parents would have said it was
+    its own: the lead said so at 08:51, the chain was checked in the process list
+    (59656, 39296, 59764, 54748, the ancestor of this session's own shell) and the process
+    stopped. It is the register's `language-server-load` again, with a sighting added; what would stop it is the
+    gate's load line naming the session a spinning process belongs to, which is the lead's to
+    place.
   - On `feat/rules-held`, stacked on that branch so that its reviews do not move: the block
     "What ran, against the rules with no short name", as its design section above says, which
     one reader on Opus 5.5 attacked before it was built (117,949 tokens; three things that
@@ -2251,14 +2282,35 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     delegated for the two modules, inline for the command. NEXT here: the merge through the
     gate, the command run once on the real records, then gentle-ai from `878e2e8` and Codex by
     its plan; its pull request opens on `feat/rules-rewire`'s, or on `main` once that merges.
+  - Pull request 73 (`feat/rules-rewire`) is merged: `main` is `3088960` (the lead's notice of
+    10:45, checked with git: `ddac8b7` is an ancestor of `origin/main`). `feat/rules-held`
+    took it, with one conflict in this document, both sides kept.
+    On this branch since: commit `80a3032` (the gate passed at 10:54) corrects the five notes
+    of gentle-ai's last slice, by one writer on Haiku 5.5 (133,441 tokens): a time is taken
+    only when it names its zone; `readRecords` refuses a `now` that is no number; an empty
+    `CLAUDE_CONFIG_DIR` is read as unset; two paths of the form `applied` have their tests
+    (git naming a project and a main checkout that is another folder; an error said on stderr
+    with exit 1), and so has the cap of sessions. Left unproved, and said: a picked file that
+    cannot be opened, which no test can make here without a file system passed in.
+    The command with the new block, run once on the real records in a turn of the gate
+    (09:44, exit 0): `session-model` 21 of 21 sessions on `claude-opus-5-5`; `session-effort`
+    20 of 21 at high and one that ended at medium on 2026-10-11 (the trial); `subagent-effort`
+    172 of 173 launches at high and one at low on 2026-10-07, the day the rule was said;
+    `opus` 52 of 52 and `haiku` 42 of 42 on claude-desktop 2.1.295.
+    This session's context stood at 86 percent when this was written.
+    NEXT: this merge through the gate; gentle-ai from the detached worktree
+    `rules-rewire-review` on `3088960..` this branch's head (it holds the correction `88cde75`
+    that was left pending, already on `main`, so the slice is what this branch adds); Codex
+    with `--base 3088960`, plan first, inside the rate without asking; then push and a pull
+    request on `main`.
 
 ## Next step
-In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:
-gentle-ai slice by slice, then Codex once on the whole range, inside the rate; then push and
-the pull request, which the push hook allows only with Codex's records. (2) The check of
-launches (T13 with the checking half of B3): it reads the list `readRecords` gives and holds
-the session rows and the sub-agents' effort, and says what each launch without a model ran
-on; designed before it is built, read by a reader that did not write it. (3) The rest of the
+In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
+through the gate, gentle-ai on what the branch adds, Codex by its plan, push and the pull
+request on `main`. That closes the checking half of B3 as a block of `rules applied`; the
+hook of C8 that refuses a launch (T13) stays his, and a row of `check` or `doctor` that calls
+the command waits for those files. (2) The third part of T16b is then checked off, with what
+it leaves named. (3) The rest of the
 second part of T16b when its files are free: the review's model and effort
 (`bin/codex-review.mjs`, after `feat/gate-wait`), the context pause
 (`bin/lib/sessions.mjs`). (4) T3e. (5) T1, which takes section D of the proposal. T2 and

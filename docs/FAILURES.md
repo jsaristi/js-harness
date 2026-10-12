@@ -400,6 +400,9 @@ loads it in lines under the load row"); that row tells of it and stops nothing.
   1.1 s of CPU per 2 s (claimed)
 - Seen: 2026-10-11 — relief file, line 224 — "THIRD SIGHTING": pid 7996 at a whole processor beside
   a gate of 1,188 s of 1,200; also odd/tasks/gate-log.md:597-609
+- Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, `## Progress`, the entry of the second part of
+  T16b — pid 59656 of the session of this feature spun one processor from 01:48 to 08:53; the gate
+  of 07:50 named it and the session reported it without looking at whose it was
 
 ### lock-folder-left
 The gate lock left an empty folder under his home after every run, and `uninstall` did not remove

@@ -282,6 +282,16 @@ test('openFence gives null when no fence is left open, and the line of the fence
   assert.equal(openFence('text\n~~~\ncode\n'), 2);
 });
 
+test('a line that starts with a code span in three backticks opens no fence, so its marks and the lines after it are read', () => {
+  // The words after a fence of backticks hold no backtick: a line that does is a code span written with three marks.
+  assert.equal(openFence('```inline``` text\nmore text\n'), null);
+  assert.equal(openFence('```js `x`\ncode\n'), null);
+  assert.equal(openFence('```js\ncode\n'), 1, 'a fence with a language still opens');
+  assert.equal(openFence('~~~ a `b` c\ncode\n'), 1, 'a fence of tildes may hold a backtick in its words');
+  const text = '```inline``` names `rule:gate-wait`\nand `rule:work-sessions` after it\n';
+  assert.deepEqual(namedRules([{ path: 'doc.md', text }]).map((item) => item.id), ['gate-wait', 'work-sessions']);
+});
+
 test('openFence keeps a four-mark fence open over a line of three, and closes it on a line of four', () => {
   assert.equal(openFence('````\n```\nstill open\n````\n'), null);
   assert.equal(openFence('````\n```\nstill open\n```\n'), 1);
