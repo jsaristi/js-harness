@@ -319,6 +319,9 @@ test('checkSensor on Windows points the module analysis cache of PowerShell into
   const envs = {};
   const during = {};
   try {
+    // Any spelling this process was given goes first: where names are case-sensitive it would stay beside the
+    // one set here as a second variable, and the sensor, rightly, would be handed both.
+    for (const key of Object.keys(process.env)) if (key.toLowerCase() === 'psmoduleanalysiscachepath') delete process.env[key];
     process.env.PSMODULEANALYSISCACHEPATH = 'C:\\real\\cache';
     for (const platform of ['win32', 'linux', 'darwin']) {
       const spawn = (_command, options) => {
