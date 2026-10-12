@@ -739,6 +739,10 @@ Decided by him, in this session's chat (its transcript `e5376fe9`, the line give
   of 2026-10-10 changes. At the pause a session always writes its state and tells him in its
   next reply, with the two blocks, and then goes on; that little is left is no longer a
   reason to say nothing. Point 9 states the rule so.
+- 2026-10-12 03:45, line 6158, "Sí, instalá el aviso de la pausa cuando esté en main": the
+  `PostToolUse` entry of part 1 is installed on this machine once it is built, reviewed and
+  on `main`; the lead installs it then, with no gate holding or waiting. It covers that
+  entry and no other.
 
 Taken by JH 7 for its reply check, as the lead relayed it on 2026-10-12 (claims of that
 session, not his word): a working reply with the two blocks is allowed only past the pause,
@@ -748,7 +752,7 @@ nudge is once for a stretch; the function and the mark are built here first and 
 check imports them. The value of the pause will be declared in its rules list and read from
 there by the constant of `bin/lib/sessions.mjs`: one number either way.
 
-His to decide, asked one at a time: installing the
+His to decide, asked one at a time (the first of this list is answered, above): installing the
 `PostToolUse` entry on this machine once it is built and tried; whether `install` writes it
 for every project that installs the harness; whether the second block goes once the resume
 hook is installed; and, still open from the sweep, whether the orchestrator is relieved or
@@ -1755,7 +1759,9 @@ summary.
    the commit, and Codex inside the rate (the larger of 300,000 input tokens a review and
    1,200 a changed line, by the plan's figure; over it, or a second run after a fall, waits
    for him: one line to the lead and the next task). The design is point 14.
-   a. `main` at `5f011cc` merged into this branch and that merge gated, before any code.
+   a. Done: `main` at `5f011cc` merged into this branch as `8f4e010` and gated (`PASS tests
+      npm run test passed`, 2026-10-12 04:13). `main` moved to `7411fe6` since (pull request
+      69); it is taken with the merge before the pull request, not before.
    b. The pause command (point 14, part 1): a module of its own that reads the end of a
       transcript, the mark for a stretch, the function JH 7's `Stop` check will import, and
       `js-harness resume --pause` for a `PostToolUse` input; never an exit but 0. No entry
@@ -1779,9 +1785,9 @@ summary.
 `AGENTS.md` is not edited by this feature. The entry of the resume hook is registered on this
 machine and does not work until the installed command is brought up to `main`, which the
 lead asks him.
-Waiting for him, each asked alone, once, and only when he is back and no work runs. Open and
-asked once at 03:05: whether the pause's entry is installed on this machine when it is on
-`main`. Not asked yet: whether `install` writes that entry for every project; whether the
+Waiting for him, each asked alone, once, and only when he is back and no work runs. Answered
+at 03:45: the pause's entry is installed on this machine when it is on `main`, by the lead.
+Not asked yet: whether `install` writes that entry for every project; whether the
 second block goes once the resume hook is installed; tests owed 1, 2, 3 and 6 and the three
 tries of point 14, each before it is run. The yardstick of "the last task" ("Open points",
 its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)
