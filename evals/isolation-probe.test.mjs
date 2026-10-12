@@ -8,8 +8,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assertWorkRoot, defaultWorkRoot } from './configs.mjs';
 import { findListeners, killByPort } from './ports.mjs';
-import { killByPath } from './runner.mjs';
-import { createReaper } from '../bin/lib/process-tree.testkit.mjs';
+import { killByPath, runProcess } from './runner.mjs';
+import { createReaper, sweptLater } from '../bin/lib/process-tree.testkit.mjs';
 import {
   DUMMY_API_KEY, PROBE_ENV_VARS, claudeMdMarkers, defaultTrees, diffSnapshots, formatSummary, leakHits, main, parseEnvLines, probeCommand, runIsolationProbe, scanFile,
   keyLeaks, snapshotTrees, splitByControl, startFakeApi,
@@ -17,6 +17,19 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_CLAUDE = path.join(here, 'fixtures', 'fake-claude.mjs');
+
+// The runs of this file are not about what a process leaves behind, so their sweep is put off: each run is
+// recorded and the search the real sweep makes is made once, when the file ends (`sweptLater`). A process a
+// run left behind therefore lives until then, and fails the file by name here.
+const later = sweptLater(runProcess);
+after(() => {
+  const left = later.check();
+  assert.deepEqual(
+    left,
+    [],
+    `processes outlived the run that started them: ${left.map(({ pid, name }) => `${name} (${pid})`).join(', ')}`,
+  );
+});
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-isoprobe-test-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -639,6 +652,7 @@ const probe = (machine, mode, extra = {}) => runIsolationProbe({
   runInit: noInit,
   adaptConfig: fakeClaude(mode, machine),
   sweep: () => ({ killed: [] }), // the real sweep costs about a second; the tests that are about it pass `sweep: undefined`
+  runProcess: later.runProcess, // recorded, and searched once at the end of the file (see `later`)
   killPort: () => ({ killed: [] }), // likewise the kill by port and the listing of engram processes: the tests about them pass their own
   listEngram: () => [],
   log: () => {},
@@ -897,7 +911,7 @@ function capture() {
   return { out, stdout: { write: (text) => { out.stdout += text; } }, stderr: { write: (text) => { out.stderr += text; } } };
 }
 const overridesFor = (machine, mode) => ({
-  nonce: FAKE_NONCE, realHome: machine.realHome, localAppData: machine.localAppData, tempDir: machine.tempDir, workRoot: machine.workRoot, checkWorkRoot: checkInScratch, runInit: noInit, adaptConfig: fakeClaude(mode, machine), killPort: () => ({ killed: [] }), listEngram: () => [],
+  nonce: FAKE_NONCE, realHome: machine.realHome, localAppData: machine.localAppData, tempDir: machine.tempDir, workRoot: machine.workRoot, checkWorkRoot: checkInScratch, runInit: noInit, adaptConfig: fakeClaude(mode, machine), killPort: () => ({ killed: [] }), listEngram: () => [], runProcess: later.runProcess,
 });
 
 test('the command writes the JSON report, prints the summary, and exits 0 on a pass and 1 on a failure', async () => {
@@ -1208,6 +1222,22 @@ test('a sweep that fails is a failure of the arm, and the sandbox is still remov
   assert.equal(report.ok, false);
   assert.ok(report.failures.some((failure) => /sweep/.test(failure) && /powershell is not here/.test(failure)), report.failures.join('\n'));
   assert.deepEqual(leftovers(machine), []);
+});
+
+test('the probe runs its arm agent through the run it is handed, and starts no process of its own', async () => {
+  const machine = fakeMachine();
+  const calls = [];
+  // The arm's agent is the only process the probe starts. The stand-in answers it with nothing: the probe reports
+  // what it reads, and the sandbox is removed all the same. Only the call is asserted, not the report.
+  const runProcess = async (options) => {
+    calls.push(options);
+    return { stdout: '', stderr: '', exitCode: 0, timedOut: false };
+  };
+  await probe(machine, 'ok', { arms: ['minimal'], runProcess });
+  assert.equal(calls.length, 1, 'one arm, one agent run');
+  assert.equal(calls[0].command, process.execPath);
+  assert.equal(calls[0].args[0], FAKE_CLAUDE);
+  assert.deepEqual(leftovers(machine), [], 'the sandbox was removed');
 });
 
 // ---- key-level diff of a JSON file (~/.claude.json) -----------------------------------------------------------

@@ -407,13 +407,18 @@ const GRADER_TIMEOUT_MS = 2 * 60 * 1000;
  * PATH and runs on the same version as the runner.
  *
  * TAP is asked for by the task's own `args` (`--test-reporter=tap`), not added here: the runner then
- * knows nothing about the grader beyond "prints a TAP summary", so a task may use any command. */
-export async function gradeWorkspace(task, workspace, { timeoutMs = GRADER_TIMEOUT_MS, signal } = {}) {
+ * knows nothing about the grader beyond "prints a TAP summary", so a task may use any command.
+ *
+ * The run is a parameter (`runProcess`, by default the real one) so that a caller can hand in another; nothing
+ * that ships does, and the tests of what a grader leaves behind hand in one that records it. */
+export async function gradeWorkspace(task, workspace, {
+  timeoutMs = GRADER_TIMEOUT_MS, signal, runProcess: start = runProcess,
+} = {}) {
   const graderDir = path.join(workspace, '.eval-grader');
   fs.rmSync(graderDir, { recursive: true, force: true });
   fs.cpSync(task.graderDir, graderDir, { recursive: true });
   const { command, args } = task.grader;
-  const run = await runProcess({
+  const run = await start({
     command: command === 'node' ? process.execPath : command,
     args,
     env: childEnv(),
@@ -623,6 +628,9 @@ export function removeDir(dir, label, log, sweepAgain) {
  * with: they now depend on the home, so the probe cannot run before the trial exists. It runs after
  * `prepare` and before the agent, outside `wallMs`.
  *
+ * `runProcess(options)` (by default the real one) runs the agent and then the grading of its trial: a caller can
+ * hand in another, to record what those runs leave behind, and nothing that ships does.
+ *
  * Two injectable clocks, because they answer different questions: `now()` is the wall-clock timestamp of
  * `startedAt`, and `clock()` is a monotonic stopwatch (milliseconds, default `performance.now()`) for
  * `wallMs`. A test that pins `now` to make a timestamp deterministic would otherwise also pin the
@@ -639,6 +647,7 @@ export async function runTrial({
   now = () => new Date(),
   clock = () => performance.now(),
   sweep = killByPath,
+  runProcess: start = runProcess,
   signal,
   log = (message) => console.error(message),
 }) {
@@ -670,7 +679,7 @@ export async function runTrial({
     const cliVersion = await readVersion(config, agent.env);
     if (signal?.aborted) return { status: 'interrupted' };
     const began = clock();
-    const run = await runProcess({
+    const run = await start({
       ...agent,
       env: childEnv(agent.env),
       cwd: workspace,
@@ -702,7 +711,7 @@ export async function runTrial({
     const reading = assertReading(read(run), config.name);
     if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
 
-    const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal });
+    const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal, runProcess: start });
     if (graderAborted) return { status: 'interrupted' };
     // Same reasoning as the agent's spawn failure above, for the hidden grader: stop, record nothing.
     if (graderSpawnError) return { status: 'stopped', reason: 'grader-spawn', message: graderSpawnError.message };
