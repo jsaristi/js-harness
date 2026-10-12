@@ -939,15 +939,39 @@ test('gate log leaves out a line with a field it cannot print, counts it on stde
 test('gate log prints nothing and says nothing for a line of a kind of event this version does not know', withHome(async (home) => {
   const at = '2026-10-11T07:01:00.000Z';
   const began = { v: 1, event: 'start', id: 'one', at, cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] };
-  const stopped = (id) => ({ v: 1, event: 'stopped', id, at, cwd: `C:\\work\\${id}`, command: 'check', pid: 100, reason: 'no sensor declared' });
+  const paused = (id) => ({ v: 1, event: 'paused', id, at, cwd: `C:\\work\\${id}`, command: 'check', pid: 100, reason: 'no sensor declared' });
   fs.mkdirSync(gateLogDir(home), { recursive: true });
   const write = (lines) => fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
 
-  write([stopped('two'), began, stopped('one'), stopped('three')]);
+  write([paused('two'), began, paused('one'), paused('three')]);
   assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`${when(at)}  no end (killed, or still running)  C:\\work\\one`], said: [] });
   // A log that holds nothing else holds no gate this version can say.
-  write([stopped('two')]);
+  write([paused('two')]);
   assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [`no gate in the log of ${gateLogDir(home)}`], said: [] });
+}));
+
+// A gate whose static row already failed stops before its sensors and writes one line of the kind `stopped`.
+// It ran nothing: shown as a start with no end it would read as a gate that was killed, and as a refusal as
+// one that found the lock held.
+test('gate log prints a gate that stopped before its sensors as what it was: when, for which rows and where', withHome(async (home) => {
+  const at = (minute) => `2026-10-11T07:${String(minute).padStart(2, '0')}:00.000Z`;
+  const events = [
+    { v: 1, event: 'start', id: 'one', at: at(1), cwd: 'C:\\work\\one', command: 'check', pid: 100, lock: 'own', waitedSeconds: 0, waitedFor: [] },
+    { v: 1, event: 'stopped', id: 'two', at: at(2), cwd: 'C:\\work\\two', command: 'check', pid: 101, rows: ['budget', 'contracts'] },
+    { v: 1, event: 'end', id: 'one', at: at(3), seconds: 120.4, result: 'pass', sensors: [] },
+    { v: 1, event: 'stopped', id: 'three', at: at(4), cwd: 'C:\\work\\three', command: 'check', pid: 102, rows: ['rules'] },
+  ];
+  for (const event of events) assert.deepEqual(appendGateEvent(home, event), { ok: true });
+  const lines = [
+    `${when(at(1))}  120 s  pass  C:\\work\\one`,
+    `${when(at(2))}  stopped before its sensors (budget, contracts)  C:\\work\\two`,
+    `${when(at(4))}  stopped before its sensors (rules)  C:\\work\\three`,
+  ];
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: lines, said: [] });
+  assert.deepEqual((await runGateLog(['log', '--home', home, '--last', '1'])).printed, lines.slice(2));
+  // A log that holds nothing else holds one gate, and says so.
+  fs.writeFileSync(path.join(gateLogDir(home), 'log.jsonl'), `${JSON.stringify(events[1])}\n`);
+  assert.deepEqual(await runGateLog(['log', '--home', home]), { code: 0, printed: [lines[1]], said: [] });
 }));
 
 test('gate log errors with usage on stderr and exits 2 for arguments it cannot take, and reads nothing', withHome(async (home) => {

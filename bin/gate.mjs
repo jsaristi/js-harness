@@ -136,7 +136,10 @@ function parseLogArgs(argv, env) {
 /** `js-harness gate log`: prints the last gates of the machine's gate log on stdout, one a line and the
  * newest last (`formatGates`), twenty or as many as `--last` says, and returns the exit code. It only
  * reads: no lock is taken and nothing runs, so it answers while a gate runs, and that gate is in its
- * answer as a start with no end. A home with no log is said in one line and is no error. Lines of the
+ * answer as a start with no end. A gate of `check` that stopped before its sensors, because a row it knew
+ * before them had failed, is a line of its own that says so and for which rows: it ran nothing, and is
+ * shown neither as a gate that ran nor as one that was refused or killed. A home with no log is said in
+ * one line and is no error. Lines of the
  * file that are no lines of this log are left out and counted on stderr, and so is a file that could not
  * be read, which is then exit 1: "could not look" is not "no gates". So that one line is said only of a log
  * that was read whole; the gates of a file that could be read are printed all the same. */
