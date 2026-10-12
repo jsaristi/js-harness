@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { beforeProgress, checkRules, findReads, namedRules, sentenceOf } from './rules-check.mjs';
+import { beforeProgress, checkRules, findReads, namedRules, openFence, sentenceOf } from './rules-check.mjs';
 import { RULES } from './rules-data.mjs';
 import { renderList, writeRules } from './rules.mjs';
 import { holdsPhrase } from './failures.mjs';
@@ -51,17 +51,17 @@ function build({ rules = declared(), sources = SOURCES, codeFiles = CODE, reader
 
 test('findReads finds the id of a call written with single quotes', () => {
   const reads = findReads([{ path: 'bin/a.mjs', text: "const gate = ruleValue('gate-wait', 'minutes');" }]);
-  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'gate-wait' }]);
+  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'gate-wait', by: 'ruleValue' }]);
 });
 
 test('findReads finds the id of a call written with double quotes', () => {
   const reads = findReads([{ path: 'bin/a.mjs', text: 'const gate = ruleValue("gate-wait", "minutes");' }]);
-  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'gate-wait' }]);
+  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'gate-wait', by: 'ruleValue' }]);
 });
 
 test('findReads finds a call with spaces after its parenthesis', () => {
   const reads = findReads([{ path: 'bin/a.mjs', text: "ruleValue(   'review-effort'  )" }]);
-  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'review-effort' }]);
+  assert.deepEqual(reads, [{ path: 'bin/a.mjs', id: 'review-effort', by: 'ruleValue' }]);
 });
 
 test('findReads keeps the calls of one file in text order, and the files in order', () => {
@@ -70,15 +70,24 @@ test('findReads keeps the calls of one file in text order, and the files in orde
     { path: 'bin/b.mjs', text: "ruleValue('gate-wait', 'minutes')" },
   ]);
   assert.deepEqual(reads, [
-    { path: 'bin/a.mjs', id: 'review-effort' },
-    { path: 'bin/a.mjs', id: 'gate-wait' },
-    { path: 'bin/b.mjs', id: 'gate-wait' },
+    { path: 'bin/a.mjs', id: 'review-effort', by: 'ruleValue' },
+    { path: 'bin/a.mjs', id: 'gate-wait', by: 'ruleValue' },
+    { path: 'bin/b.mjs', id: 'gate-wait', by: 'ruleValue' },
   ]);
 });
 
 test('findReads finds no call whose first argument is not a string literal', () => {
   const reads = findReads([{ path: 'bin/a.mjs', text: "ruleValue(id, 'minutes'); ruleValue(ids[0]); ruleValue(`gate-wait`)" }]);
   assert.deepEqual(reads, []);
+});
+
+test('findReads finds the three read functions, in single and in double quotes, and names the function of each read', () => {
+  const reads = findReads([{ path: 'bin/a.mjs', text: `ruleValue('alpha-value'); ruleHere("beta-value", 'minutes', null); ruleOf('gamma-value')` }]);
+  assert.deepEqual(reads, [
+    { path: 'bin/a.mjs', id: 'alpha-value', by: 'ruleValue' },
+    { path: 'bin/a.mjs', id: 'beta-value', by: 'ruleHere' },
+    { path: 'bin/a.mjs', id: 'gamma-value', by: 'ruleOf' },
+  ]);
 });
 
 test('sentenceOf gives the sentence at the start of a text', () => {
@@ -235,6 +244,43 @@ test('a read of an id declared nowhere, or of a rule with no value, is a finding
   ]);
 });
 
+test('a ruleValue call on a rule of scope repository is a finding, and a ruleHere or a ruleOf call on it is none', () => {
+  const rules = [{ ...declared()[0], scope: 'repository' }, declared()[1]];
+  const readers = { 'gate-wait': ['bin/x.mjs'] };
+  const findingsOf = (call) => checkRules(build({ rules, readers, codeFiles: [{ path: 'bin/x.mjs', text: call }] })).findings;
+  assert.deepEqual(findingsOf("ruleValue('gate-wait', 'minutes')"), [
+    'bin/x.mjs: reads rule "gate-wait" with ruleValue, and it is of this repository only: read it with ruleHere',
+  ]);
+  assert.deepEqual(findingsOf("ruleHere('gate-wait', 'minutes', null)"), []);
+  assert.deepEqual(findingsOf("ruleOf('gate-wait')"), []);
+});
+
+test('Read by lists a file that reads a rule only with ruleHere, and the check finds no fault in it', () => {
+  const codeFiles = [{ path: 'bin/lib/gate.mjs', text: "ruleHere('gate-wait', 'minutes', null)" }];
+  const result = checkRules(build({ codeFiles, readers: { 'gate-wait': ['bin/lib/gate.mjs'] } }));
+  assert.deepEqual(result.readers, { 'gate-wait': ['bin/lib/gate.mjs'] });
+  assert.deepEqual(result.findings, []);
+});
+
+test('openFence gives null when no fence is left open, and the line of the fence that no line closes', () => {
+  assert.equal(openFence('no fence here\n'), null);
+  assert.equal(openFence('```\ncode\n```\ntext\n'), null);
+  assert.equal(openFence('text\n```\ncode\n'), 2);
+  assert.equal(openFence('text\n~~~\ncode\n'), 2);
+});
+
+test('openFence keeps a four-mark fence open over a line of three, and closes it on a line of four', () => {
+  assert.equal(openFence('````\n```\nstill open\n````\n'), null);
+  assert.equal(openFence('````\n```\nstill open\n```\n'), 1);
+});
+
+test('checkRules gives a finding for a text whose fence is never closed, with the line that opens it', () => {
+  const result = checkRules({ ...build(), textFiles: [{ path: 'docs/NOTES.md', text: 'Intro.\n```\nnever closed\n' }] });
+  assert.deepEqual(result.findings, [
+    'docs/NOTES.md: the fence opened at line 2 is never closed, so the marks of rules after it are not read',
+  ]);
+});
+
 test('a mark of a rule declared nowhere or retired is a finding, with what replaces it', () => {
   const rules = [declared()[0], GONE, OLD, declared()[1]];
   const textFiles = [{ path: 'docs/NOTES.md', text: 'See `rule:no-such`, `rule:gone-rule` and `rule:old-wait`.' }];
@@ -340,10 +386,19 @@ test('a retired rule whose source is malformed is a finding, and a retired rule 
   assert.deepEqual(checkRules(build({ rules })).findings, []);
 });
 
+/** The module specifiers that a source imports, read over its whole text, so that an import written over several lines is read. */
+const importsOf = (source) => [...source.matchAll(/\bimport\b[^;'"]*?'([^']+)'/g)].map((match) => match[1]);
+
+test('importsOf reads a multi-line import and an import with no from', () => {
+  const source = "import {\n  one,\n  two\n} from './one.mjs';\nimport './two.mjs';\n";
+  assert.deepEqual(importsOf(source), ['./one.mjs', './two.mjs']);
+});
+
 test('rules-check.mjs imports no module that reads a rule: only rules-data.mjs and rules.mjs', () => {
   const source = readFileSync(new URL('./rules-check.mjs', import.meta.url), 'utf8');
-  const imports = [...source.matchAll(/^import\b[^\n]*?\bfrom '([^']+)';/gm)].map((match) => match[1]);
-  assert.deepEqual(imports, ['./rules-data.mjs', './rules.mjs']);
+  assert.deepEqual(importsOf(source), ['./rules-data.mjs', './rules.mjs']);
+  assert.equal(source.includes('import('), false);
+  assert.equal(source.includes('failures.mjs'), false);
 });
 
 test('a phrase is found as the failures register finds a control', () => {

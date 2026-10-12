@@ -2051,6 +2051,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     session's, so `review-model` and `review-effort` wait for `feat/gate-wait` on `main`.
   - This session's context stood at 90 percent, with him away: the cut was given once in its
     reply, and it goes on.
+  - The app compacted this session at about 05:00 on 2026-10-12; it resumed from this entry at
+    22 percent and sent the lead its line. Then the declarations, in one commit with the
+    writer's code: `alias` on the two sub-agent models (`opus`, `haiku`); `scope: "repository"`
+    on the seven rows the design names; the new rows `session-model` (`claude-opus-5-5`) and
+    `session-effort` (`high`), both of the repository, since 2026-10-10, from his line 990 of
+    `182ad401-…` read again with `sessions --quote`. The sources say that the id and the
+    aliases are this session's readings, and that the trial of medium is no rule. The list has
+    16 rules, hash `950f2423e296`; `rules check` passes. The head line of `docs/RULES.md` about
+    `rules applied` waits for the command (piece B). NEXT: the gate's answer on that commit,
+    then gentle-ai from `47484bd` and Codex with `--base 47484bd`, plan first.
 
 ## Next step
 In this order. (1) Piece A of the third part, as the last Progress entry says; piece 1 of the

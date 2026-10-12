@@ -2,17 +2,19 @@
 
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.
 
-Hash `aee76ff2804f`. In force: 14 (9 of Sebastián, 5 of the project). Retired: 0.
+Hash `950f2423e296`. In force: 16 (11 of Sebastián, 5 of the project). Retired: 0.
 
 ## Sebastián's
 
 ### codex-review-floor
 The most input tokens a Codex review may cost however small its commit: 300,000 input tokens a review.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### codex-review-rate
 The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
@@ -28,26 +30,45 @@ The one model a Codex review runs on: gpt-6.1-sol.
 
 ### reviewed-commit-lines
 About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
+### session-effort
+The effort a session runs at: high.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+
+### session-model
+The model a session runs on: claude-opus-5-5.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+
 ### subagent-effort
 The effort every sub-agent is launched with: high.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model
 The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
+- Passed on a call as `opus`.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
 
 ### subagent-writer-model
 The model of a sub-agent that writes scoped code, in this repository: claude-haiku-5-5.
+- Passed on a call as `haiku`.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
 
 ### work-sessions
 The most work sessions open at one time: 3 sessions.
+- Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-09. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 

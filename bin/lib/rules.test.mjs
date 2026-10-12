@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { OWNERS, readRules, renderList, rulesHash, ruleValue, writeRules } from './rules.mjs';
+import { OWNERS, readRules, renderList, rulesHash, ruleHere, ruleOf, ruleValue, writeRules } from './rules.mjs';
 import { RULES } from './rules-data.mjs';
 
 // Marks a field to leave out of a fixture, so one test can take one key away.
@@ -203,6 +203,43 @@ test('a path with its phrases is one body, and a rule in prose with no value rea
 
 // ── Fault 11: the value body ───────────────────────────────────────────────────────────────────
 
+// ── The alias and the scope (items 1 and 2) ─────────────────────────────────────────────────────
+
+test('an alias on a rule in prose or on a retired rule is refused: an alias goes with a value', () => {
+  assert.deepEqual(readRules([textRule('alpha-text', { alias: 'haiku' })]), ['rule "alpha-text": an alias goes with a value']);
+  assert.deepEqual(readRules([retiredRule('alpha-retired', { alias: 'haiku' })]), ['rule "alpha-retired": an alias goes with a value']);
+});
+
+test('an alias that is not one short lower-case word is refused on a value rule', () => {
+  for (const alias of ['Haiku', 'two words', '', 7, 'a'.repeat(33)]) {
+    assert.deepEqual(readRules([valueRule('alpha-value', { alias })]), [
+      'rule "alpha-value": the alias is one short lower-case word',
+    ], `alias ${String(alias)}`);
+  }
+});
+
+test('a good alias on a value rule reads with no fault, and one of 32 characters is still short enough', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { alias: 'haiku' })]), []);
+  assert.deepEqual(readRules([valueRule('alpha-value', { alias: 'a'.repeat(32) })]), []);
+});
+
+test('a scope that is not repository is refused by its value, and true is refused too', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { scope: 'project' })]), [
+    'rule "alpha-value": the scope is "project": it is repository, or it is absent',
+  ]);
+  assert.deepEqual(readRules([valueRule('alpha-value', { scope: true })]), [
+    'rule "alpha-value": the scope is "true": it is repository, or it is absent',
+  ]);
+});
+
+test('a scope of repository reads with no fault on a value rule, a rule in prose and a retired rule', () => {
+  assert.deepEqual(readRules([
+    valueRule('alpha-value', { scope: 'repository' }),
+    textRule('beta-text', { scope: 'repository' }),
+    retiredRule('gamma-retired', { scope: 'repository' }),
+  ]), []);
+});
+
 test('a value that is not a finite number and not a non-empty text is refused', () => {
   for (const value of [true, '', Infinity, null, NaN]) {
     assert.deepEqual(readRules([valueRule('alpha-value', { value, unit: MISSING })]), [
@@ -366,6 +403,13 @@ test('earlier values that are not a list of { value, until } are refused, on a v
   assert.deepEqual(readRules([retiredRule('alpha-value', { was: 'nope' })]), [
     'rule "alpha-value": an earlier value is written { value, until: YYYY-MM-DD }',
   ]);
+});
+
+test('earlier values that mix numbers and texts are refused, on a value rule and on a retired rule', () => {
+  const was = [{ value: 12, until: '2026-05-01' }, { value: 'twelve', until: '2026-01-01' }];
+  const mixed = 'the earlier values are all numbers or all texts';
+  assert.deepEqual(readRules([valueRule('alpha-value', { was })]), [`rule "alpha-value": ${mixed}`]);
+  assert.deepEqual(readRules([retiredRule('alpha-value', { was, unit: 'minutes' })]), [`rule "alpha-value": ${mixed}`]);
 });
 
 test('earlier values that are not newest first are refused, and equal days are allowed', () => {
@@ -561,6 +605,79 @@ test('a unit that differs from the declared unit throws, and a missing unit prin
 
 // ── The real data ──────────────────────────────────────────────────────────────────────────────
 
+// ── A rule of this repository only: ruleValue refuses it, ruleHere and ruleOf read it (items 3 to 5) ──
+
+test('ruleValue throws for a rule of scope repository: it is of this repository only', () => {
+  const list = [valueRule('alpha-value', { scope: 'repository' })];
+  assert.throws(() => ruleValue('alpha-value', 'characters', list), {
+    name: 'Error',
+    message: 'rule "alpha-value" is of this repository only: read it with ruleHere',
+  });
+});
+
+test('ruleHere gives the value of a rule with no scope, whatever the project holds', () => {
+  const list = [valueRule('alpha-value')];
+  for (const projectData of [undefined, null, 'anything at all']) {
+    assert.deepEqual(ruleHere('alpha-value', 'characters', projectData, list), { value: 12 }, `projectData ${String(projectData)}`);
+  }
+});
+
+test('ruleHere gives the value of a scoped rule when the project holds the same list, with either line ending', () => {
+  const list = [valueRule('alpha-value', { scope: 'repository' })];
+  const written = writeRules(list);
+  assert.deepEqual(ruleHere('alpha-value', 'characters', written, list), { value: 12 });
+  assert.deepEqual(ruleHere('alpha-value', 'characters', written.replace(/\n/g, '\r\n'), list), { value: 12 });
+});
+
+test('ruleHere says elsewhere for a scoped rule when the project holds no list, and behind when it holds another text', () => {
+  const list = [valueRule('alpha-value', { scope: 'repository' })];
+  assert.deepEqual(ruleHere('alpha-value', 'characters', null, list), { off: 'elsewhere' });
+  assert.deepEqual(ruleHere('alpha-value', 'characters', undefined, list), { off: 'elsewhere' });
+  assert.deepEqual(ruleHere('alpha-value', 'characters', 'an older list\n', list), { off: 'behind' });
+});
+
+test('ruleHere refuses as ruleValue does: an unknown id, a retired rule, a rule in prose and another unit', () => {
+  const list = [
+    valueRule('alpha-value', { scope: 'repository' }),
+    retiredRule('gamma-retired', { retired: '2026-10-01' }),
+    textRule('epsilon-text', { scope: 'repository' }),
+  ];
+  assert.throws(() => ruleHere('nowhere', undefined, undefined, list), {
+    message: 'no rule "nowhere" is declared (bin/lib/rules-data.mjs)',
+  });
+  assert.throws(() => ruleHere('gamma-retired', undefined, undefined, list), {
+    message: 'rule "gamma-retired" is retired since 2026-10-01: nothing reads it any more',
+  });
+  assert.throws(() => ruleHere('epsilon-text', undefined, undefined, list), {
+    message: 'rule "epsilon-text" is a rule in prose: it has no value to read',
+  });
+  assert.throws(() => ruleHere('alpha-value', 'minutes', undefined, list), {
+    message: 'rule "alpha-value" is in characters, and it was read as minutes',
+  });
+});
+
+test('ruleOf gives a copy that is equal to the declaration and is not the same object, and a change of the copy leaves the list as it was', () => {
+  const list = [valueRule('alpha-value', { was: [{ value: 9, until: '2026-01-01' }] })];
+  const copy = ruleOf('alpha-value', list);
+  assert.deepEqual(copy, list[0]);
+  assert.notEqual(copy, list[0]);
+  copy.value = 99;
+  copy.was[0].value = 98;
+  assert.equal(list[0].value, 12);
+  assert.equal(list[0].was[0].value, 9);
+});
+
+test('ruleOf throws for an unknown id and for a retired rule, and gives a rule in prose', () => {
+  const list = [retiredRule('gamma-retired', { retired: '2026-10-01' }), textRule('epsilon-text')];
+  assert.throws(() => ruleOf('nowhere', list), {
+    message: 'no rule "nowhere" is declared (bin/lib/rules-data.mjs)',
+  });
+  assert.throws(() => ruleOf('gamma-retired', list), {
+    message: 'rule "gamma-retired" is retired since 2026-10-01: nothing reads it any more',
+  });
+  assert.deepEqual(ruleOf('epsilon-text', list), list[1]);
+});
+
 test('the declared rules in rules-data.mjs read with no fault', () => {
   assert.deepEqual(readRules(RULES), []);
 });
@@ -601,6 +718,13 @@ test('writeRules orders the keys inside was and row, and keeps only the keys of 
   const [out] = parsed(writeRules([rule]));
   assert.deepEqual(Object.keys(out.was[0]), ['value', 'until']);
   assert.deepEqual(Object.keys(out.row), ['reports', 'since']);
+});
+
+test('writeRules keeps the alias and the scope, in the order the file gives its keys, and the text reads back as the list', () => {
+  const given = { alias: 'haiku', unit: 'characters', value: 12, scope: 'repository', since: '2026-10-11', subject: 'the test value of a thing', owner: 'project', id: 'alpha-value' };
+  const written = writeRules([given]);
+  assert.deepEqual(Object.keys(parsed(written)[0]), ['id', 'subject', 'owner', 'scope', 'since', 'value', 'unit', 'alias']);
+  assert.deepEqual(parsed(written), [given]);
 });
 
 test('writeRules drops a key the file does not hold', () => {
@@ -653,6 +777,12 @@ test('rulesHash is the same when a subject changes', () => {
 
 test('rulesHash is different when a value changes', () => {
   assert.notEqual(rulesHash([valueRule('alpha-value', { value: 13 })]), rulesHash([valueRule('alpha-value')]));
+});
+
+test('rulesHash moves with the alias and with the scope', () => {
+  const base = rulesHash([valueRule('alpha-value')]);
+  assert.notEqual(rulesHash([valueRule('alpha-value', { alias: 'haiku' })]), base);
+  assert.notEqual(rulesHash([valueRule('alpha-value', { scope: 'repository' })]), base);
 });
 
 test('rulesHash is different when a rule is retired', () => {
@@ -788,6 +918,49 @@ test('renderList shows a number as its own value: grouped in threes, and a very 
 test('renderList gives the earlier values of a retired rule with its unit, as a value with a unit', () => {
   const lines = renderList([retiredRule('alpha-retired', { was: [{ value: 60, until: '2026-10-01' }], unit: 'minutes' })]).split('\n');
   assert.ok(lines.includes('- Was: 60 minutes until 2026-10-01.'));
+});
+
+test('renderList prints the alias, the scope and the review day of a value rule, after its value and before its earlier values', () => {
+  const rule = valueRule('alpha-value', { alias: 'haiku', scope: 'repository', review: '2026-10-20', was: [{ value: 9, until: '2026-09-01' }] });
+  assert.equal(renderList([rule]), text(
+    '# Rules',
+    '',
+    NOTE,
+    '',
+    `Hash \`${rulesHash([rule])}\`. In force: 1 (0 of Sebastián, 1 of the project). Retired: 0.`,
+    '',
+    "## Sebastián's",
+    '',
+    'None.',
+    '',
+    "## The project's",
+    '',
+    '### alpha-value',
+    'The test value of a thing: 12 characters.',
+    '- Passed on a call as `haiku`.',
+    '- Of this repository only: not in force in a project that installs the harness.',
+    '- Looked at again on 2026-10-20.',
+    '- Was: 9 characters until 2026-09-01.',
+    '- Read by: none.',
+    '- Since 2026-10-11. Row: reports. Source: none recorded.',
+    '',
+    '## Retired',
+    '',
+    'None.',
+  ));
+});
+
+test('renderList prints the scope and the review day of a rule in prose, after its home and before its source line', () => {
+  const lines = renderList([textRule('gamma-text', { scope: 'repository', review: '2026-10-20' })]).split('\n');
+  const at = lines.indexOf('### gamma-text');
+  assert.deepEqual(lines.slice(at, at + 6), [
+    '### gamma-text',
+    'A rule in prose: its text was not found in `docs/FAILURES.md`.',
+    '- Home: `docs/FAILURES.md`.',
+    '- Of this repository only: not in force in a project that installs the harness.',
+    '- Looked at again on 2026-10-20.',
+    '- Since 2026-10-11. Row: reports. Source: none recorded.',
+  ]);
 });
 
 test('renderList shows a source it cannot read as not readable, and does not throw on it', () => {
