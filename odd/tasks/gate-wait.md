@@ -728,7 +728,7 @@ session's transcript.
   gated, the first reviewed by gentle-ai, none with a Codex record yet.
 - `feat/gate-wait-count` (worktree `D:\js-harness-worktrees\gate-wait-count`, off `main`
   at `47484bd`, not pushed) holds S2. This document stays on `feat/gate-wait` only.
-- The cut's turn was asked a third time at about 11:15 on 2026-10-12 (`t4-turn.sh`, log
+- The cut's turn was asked a third time at 11:10 on 2026-10-12 (by `date`, 11:11:04 just after) (`t4-turn.sh`, log
   `t4-turn.log`, the commit's gate in `t4-gate.log`, all in the scratchpad). First check
   whether `feat/gate-wait-count` moved past `c844f29` and whether `m1b-count.json` and
   `m1b-machine.json` exist: if the commit is there and they are not, M1 again is one
