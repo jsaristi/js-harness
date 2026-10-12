@@ -15,26 +15,33 @@ const TITLE_LENGTH = 60;
 // the window or the compaction point as a number, 2026-10-11), so each is a default a flag can replace.
 
 /** The window a context is a share of, in tokens: the 500,000 the desktop app reports for a session
- * (odd/tasks/session-channel.md, "Context"). It replaces the 480,000 the board worked out from one
- * percentage the app showed on 2026-10-06. It belongs to the model and the app, so it is a default
+ * (odd/tasks/session-channel.md, "Context"). It belongs to the model and the app, so it is a default
  * (`--context-window`), not a constant. */
 export const DEFAULT_CONTEXT_WINDOW = 500000;
 
-/** Where the host compacts a session by itself, as a share of the window: the app reports 93%, which is
- * 465,000 tokens. Six automatic compactions of this project's transcripts fired between 466,887 and
- * 468,151 tokens, just above it; a seventh fired at 524,781 (2026-10-09, host 2.1.293) in a session whose
- * reply before it was sent with 523,422, so the point is not the same for every session. That is why a
+/** Where the host compacts a session by itself, as a whole share of the window: the share the app
+ * reports. Six automatic compactions of this project's transcripts fired between 466,887 and 468,151
+ * tokens, just above it; a seventh fired at 524,781 (2026-10-09, host 2.1.293) in a session whose reply
+ * before it was sent with 523,422, so the point is not the same for every session. That is why a
  * transcript's own measure wins (`sessionFacts`, `contextCompaction`) and this is only what is said of a
- * session that has measured none (`--context-compaction`). */
+ * session that has measured none (`--context-compaction`).
+ *
+ * This line is the one home of the number: a message, a usage text, a comment or a document that says
+ * where the host compacts reads this constant or names it, and none writes the value again
+ * (bin/sessions.test.mjs holds the texts of this feature to that). */
 export const DEFAULT_CONTEXT_COMPACTION_PERCENT = 93;
 
-/** The pause, as a share of the window: the user's rule of 2026-10-10. No session stops, slows or
- * proposes a cut for a percentage; at 85% it pauses, writes its state in its feature document and judges
- * whether what is left fits before the compaction. It limits nothing: it is where the board says so and
- * where a watch wakes (`--context-pause`). */
-export const DEFAULT_CONTEXT_PAUSE_PERCENT = 85;
+/** The context pause, as a whole share of the window: the user's rule. No session stops, slows or
+ * proposes a cut for a percentage; at this share it pauses, writes its state in its feature document and
+ * judges whether what is left fits before the compaction. It limits nothing: it is where the board says
+ * so and where a watch wakes (`--context-pause`).
+ *
+ * This line is the one home of the number, as above: the rule changed more than once, and every text
+ * that had written its value kept the old one. So the rule is named ("the context pause") or read from
+ * here, and its value is written nowhere else. */
+export const DEFAULT_CONTEXT_PAUSE_PERCENT = 88;
 
-/** `percent` of `window`, in whole tokens: 93% of 500,000 is 465,000. */
+/** `percent` of `window`, in whole tokens: half of 500,000 is 250,000. */
 export function shareOf(window, percent) {
   return Math.round((window * percent) / 100);
 }
@@ -1300,17 +1307,41 @@ function notThePersons(entry) {
   return kind === 'human' ? null : `a user entry of origin ${JSON.stringify(kind)}`;
 }
 
+/** What an entry of type `attachment` is for a quote: `{ what: null, prompt, at }` for a message the
+ * person sent while the session worked, and `{ what }`, in words, for any other.
+ *
+ * The host does not write such a message as a `user` entry: it queues it and writes an attachment of
+ * type `queued_command`, with the text in `prompt`. It queues the same way a message from another
+ * session and the end of a task, so the type alone says nothing of whose it is. The person's is the one
+ * whose `origin.kind` is `human` and that the host marks as a turn of his (`humanTurn: true`), both
+ * inside the attachment: of 310 queued commands in this project's transcripts (2026-10-11) the 28 of
+ * origin `human` carry the mark and no other does. */
+function queuedMessageOf(entry) {
+  const attachment = entry.attachment;
+  if (!isObject(attachment)) return { what: 'an entry of type "attachment" that holds no attachment' };
+  if (attachment.type !== 'queued_command') return { what: `an attachment of type ${JSON.stringify(attachment.type ?? null)}: the host wrote it, not the person` };
+  const origin = isObject(attachment.origin) ? attachment.origin : {};
+  if (origin.kind === 'task-notification' || attachment.commandMode === 'task-notification') return { what: 'a queued task notification' };
+  if (origin.kind === undefined) return { what: 'a queued message that records no origin: it cannot be told whose it is' };
+  if (origin.kind === 'peer') return { what: `a queued message from another session (${JSON.stringify(origin.name ?? 'no name')})` };
+  if (origin.kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(origin.kind)}` };
+  if (attachment.humanTurn !== true) return { what: 'a queued message of origin "human" that the host does not mark as a turn of the person' };
+  if (typeof attachment.prompt !== 'string') return { what: 'a queued message of the person that holds no text to quote' };
+  return { what: null, prompt: attachment.prompt, at: attachment.timestamp };
+}
+
 /** The entry at line `line` (from 1) of a transcript's `text`, when it is what the person sent: `{
- * person: true, at, text, images, pastedOnly }`, with the time of the entry, its text as the transcript
- * has it (the text blocks of a list, one per line), how many images came with it, and whether it is only
- * pasted content: one or more pastes as the host wraps them (`PASTED_CONTENT`) and nothing typed before,
- * between or after them. Anything else is `{ person: false, what }`, `what` saying which entry it is, or
- * that there is none at that line.
+ * person: true, at, text, images, pastedOnly, queued }`, with the time of the entry, its text as the
+ * transcript has it (the text blocks of a list, one per line), how many images came with it, whether it
+ * is only pasted content: one or more pastes as the host wraps them (`PASTED_CONTENT`) and nothing typed
+ * before, between or after them; and whether he sent it while the session worked (`queued`), which the
+ * host writes as an attachment and not as a `user` entry (`queuedMessageOf`). Anything else is `{ person:
+ * false, what }`, `what` saying which entry it is, or that there is none at that line.
  *
  * It is what `sessions --quote` answers with, and what a session checks before it takes words carried
- * by another session as the user's: a user entry whose `origin.kind` is `human`, and no other. The
- * host marks a message from another session `peer`, a task's end `task-notification`, and writes no
- * origin on what it puts in itself. */
+ * by another session as the user's: a user entry whose `origin.kind` is `human`, or a queued message of
+ * that origin marked as his turn, and no other. The host marks a message from another session `peer`,
+ * a task's end `task-notification`, and writes no origin on what it puts in itself. */
 export function quoteOf(text, line) {
   const lines = text.split('\n');
   if (lines.at(-1) === '') lines.pop(); // what follows the last line break is not a line
@@ -1325,13 +1356,14 @@ export function quoteOf(text, line) {
     entry = null;
   }
   if (!isObject(entry)) return { person: false, what: 'not an entry: the line does not parse' };
-  const what = notThePersons(entry);
+  const queued = entry.type === 'attachment' ? queuedMessageOf(entry) : null;
+  const what = queued ? queued.what : notThePersons(entry);
   if (what !== null) return { person: false, what };
-  const content = entry.message?.content;
-  const blocks = blocksOf(entry);
+  const content = queued ? queued.prompt : entry.message?.content;
+  const blocks = queued ? [] : blocksOf(entry);
   const said = typeof content === 'string' ? content : blocks.filter(isText).map((block) => block.text).join('\n');
   const typed = said.replace(PASTED_CONTENT, '');
-  return { person: true, at: entry.timestamp ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '' };
+  return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
 }
 
 // ---- what changed between two boards ------------------------------------------------------------------
@@ -1351,9 +1383,11 @@ export function sameSession(one, other) {
   return typeof one === 'string' && typeof other === 'string' && (isSelf(one, other) || isSelf(other, one));
 }
 
-/** How a board says context sizes: `of(tokens)` is `342k tokens (68%)`, `pause` is `85% of the window
- * (425k)`. The percentage is the share of the board's context window, the number the desktop app shows;
- * the pause leads with it because that is how the rule is said and how it is set. */
+/** How a board says context sizes: `of(tokens)` is `342k tokens (68%)`, and `pause` is the board's pause
+ * as its share of the window with its tokens after it, `<share>% of the window (<tokens>k)`: the share
+ * of `DEFAULT_CONTEXT_PAUSE_PERCENT` unless the board was given another. The percentage is the share of
+ * the board's context window, the number the desktop app shows; the pause leads with it because that is
+ * how the rule is said and how it is set. */
 function contextSizes(board) {
   const window = board.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
   const pause = board.contextPause ?? shareOf(window, DEFAULT_CONTEXT_PAUSE_PERCENT);
@@ -1620,7 +1654,7 @@ function planChanges(before, after) {
  *
  * Everything else is left out on purpose, because it changes all the time and decides nothing: a session
  * that starts working, the age of a last entry or of a background file, the tail of a reply, a context
- * that grows below the limit, a piece of work that ends while others stay open, the counts of a worktree,
+ * that grows below the pause, a piece of work that ends while others stay open, the counts of a worktree,
  * a gate that starts alone, stands in line for the lock, takes it or ends, a box that is ticked or
  * unticked in a plan and the counts that follow from it. The roster is not compared either: it is the sessions again,
  * whose arrival is already said, and a title that changes is a handover the sessions do themselves. Nor

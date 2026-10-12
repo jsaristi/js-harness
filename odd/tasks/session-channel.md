@@ -2,9 +2,7 @@
 
 Locator: `odd/tasks/session-channel.md` · Engram mirror: `odd/session-channel/tasks` · Designed
 on branch `docs/channel-and-rules-design` by the session `JH 4 · diseño canal y reglas`
-(2026-10-10), together with `odd/tasks/rule-hierarchy.md`. Nothing is built here: the feature is
-built later, in a session of its own, on a branch of its own, once `feat/gate-lock` is merged
-(it changes `bin/sessions.mjs` and `bin/lib/sessions.mjs`, which this feature changes too).
+(2026-10-10), together with `odd/tasks/rule-hierarchy.md`.
 
 Built from 2026-10-11 by the session `JH 5 · canal entre sesiones`, which owns this document
 from then on (tasks, Progress, Next step). Worktree `D:\js-harness-worktrees\session-channel`,
@@ -28,7 +26,7 @@ messages and his hands. What the day showed, each in the orchestrator's relief f
 - An opening pasted with no line of his was not taken as his assignment, twice, the second time
   after 28 minutes of waiting (lines 129 and 175; the second is this design session's own
   opening).
-- The orchestrator was relieved more than once in the day, at 65%, 71% and about 85% of its
+- The orchestrator was relieved more than once in the day, each time at another share of its
   context (`odd/tasks/session-board.md`, the gaps judged on 2026-10-10; relief file, line 164),
   and sessions proposed a cut near 70% because of a mark that limits nothing (lines 124 to
   127). The roadmap names "relieved more than once in a working day" as the measure that would
@@ -49,6 +47,7 @@ does not return (lines 143 and 145).
 - `node --test bin/sessions.test.mjs` exits 0
 - `node --test bin/lib/sessions.test.mjs` exits 0
 - `node --test bin/js-harness.test.mjs` exits 0
+- `node --test bin/resume.test.mjs` exits 0
 - `node --test scripts/practice-lib.test.mjs` exits 0
 - The practice journey, with this feature's step in it, passes on the machine that builds it
   (here `node scripts/practice.mjs run --root D:\js-harness-practice`), and its record line is
@@ -59,19 +58,20 @@ does not return (lines 143 and 145).
   notice is on the board.
 
 ## In scope / Out of scope
-- In: new `bin/notify.mjs` and `bin/lib/channel.mjs`; `bin/sessions.mjs` and
+- In: new `bin/notify.mjs`, `bin/lib/channel.mjs` and `bin/resume.mjs`; `bin/sessions.mjs` and
   `bin/lib/sessions.mjs` (the roster, the channel section, the measures, what the reader takes
   from a transcript, the context figure); `bin/js-harness.mjs` (dispatcher); the orchestrator
   skill and one hook entry in `bin/lib/manifest.mjs`; a row in `bin/lib/stack.mjs`; a step in
-  `scripts/practice*.mjs`; `docs/ROADMAP.md`; and the two sentences of `AGENTS.md` about the
-  resume prompt of a cut, which become false the day T6 lands. The test files the contract
-  names (`bin/lib/channel.test.mjs`, `bin/notify.test.mjs`) do not exist yet: the build creates
-  them, and adds to "Done when" the test of each command it ships (`--address`, `--quote`,
-  `--measures`, the resume hook, the row `session-classes`).
+  `scripts/practice*.mjs`; `docs/ROADMAP.md`. The build adds to "Done when" the test of each
+  command it ships (`--address`, `--quote`, `--measures`, the resume hook, the row
+  `session-classes`).
 - Out: how a reply closes and the rest of "Working with Sebastián" — `odd/tasks/rule-hierarchy.md`
-  owns the rewrite of `AGENTS.md` and the reply check. The gate lock and the gate log — `feat/gate-lock`. A
-  second machine and several accounts — kept for later by him (roadmap, item 5 of the order).
-  Opening a session from a session — only its two tests are owed here.
+  owns the rewrite of `AGENTS.md` and the reply check, so this feature does not edit
+  `AGENTS.md`: its two sentences about the resume prompt of a cut, which the resume hook makes
+  false where it is installed, are proposed in point 9 and are that feature's to write. The
+  gate lock — `odd/tasks/gate-lock.md`. The gate log — `odd/tasks/gate-log.md`. A second
+  machine and several accounts — kept for later by him (roadmap, item 5 of the order). Opening
+  a session from a session — only its two tests are owed here.
 
 ## Constraints
 - The record is a file and the app's message is only the doorbell — because a message can be
@@ -127,8 +127,8 @@ The first pull request, branch `feat/session-roster`, holds T3, the roster of T4
 message goes to a role, and a command prints its current address) and which needs only titles.
 The second holds T1 and T2. The rest of T4 (the channel section, `--opening`, `--quote`, the
 watch that wakes on a notice, failures 7 and 8) needs the record and follows T1, in a pull
-request of its own before T5. Strategy: `stacked-to-main`, as above; Codex within 3 million
-input tokens for the feature.
+request of its own before T5. Strategy: `stacked-to-main`, as above; each Codex review within
+the rate of the Codex budget (point 11, the charter).
 
 ## Design
 
@@ -141,16 +141,13 @@ input tokens for the feature.
   session, a task notification), and for a peer the sender's name, session and permission mode
   and a message id; an outgoing `SendMessage` carries its `to` and the id returned; `user`
   entries carry `permissionMode`; a `custom-title` entry carries the title.
-- Two defects follow from the reader ignoring `origin`: a message from another session counts as
-  a prompt, so the session reads as working (`bin/lib/sessions.mjs:118`), and it can become the
-  session's fallback title (`:92`).
-  Corrected by the build on 2026-10-11, from a tally of keys and enum values over 48 real
-  transcripts (T3; no message text read into the repository): both claims are false. A message
-  from another session is a `user` entry with `isMeta: true` (185 of 185) and `origin.kind:
-  "peer"`, and the reader already skipped meta entries, so it never counted as his prompt and
-  never became a title. The defect that did exist is the opposite one: such a message starts a
-  turn (a reply follows every one; median 9 s, longest 99 s) and the session read as `waiting`
-  during it. Three shapes of a peer entry exist: another session (168: `name`, `fromSession`
+- What a message from another session is in a transcript, from a tally of keys and enum values
+  over 48 real transcripts (the build, T3, 2026-10-11; no message text read into the
+  repository): a `user` entry with `isMeta: true` (185 of 185) and `origin.kind: "peer"`. The
+  reader skipped meta entries before this feature, so such a message never counted as his
+  prompt and never became a title. The defect it did have: such a message starts a turn (a
+  reply follows every one; median 9 s, longest 99 s) and the session read as `waiting` during
+  it. Three shapes of a peer entry exist: another session (168: `name`, `fromSession`
   as `local_<uuid>`, `fromMode`, `msg_id`, sometimes `hopChain`), a sub-agent handing back (15:
   `handback`, `senderTaskId`) and one the host injects (2: `hostInjected`). An outgoing
   `SendMessage` carries `to` and `recipient_kind` (`name`, `session`, `agent`, or absent on
@@ -345,19 +342,37 @@ His decision of 2026-10-10 (relief file, line 149): an answer he gives in the or
 chat travels to the session that asked, with his exact words and the place where that session
 reads them in the orchestrator's transcript. Two things make it a check:
 
-- `js-harness sessions --quote <transcript> <line>` prints the entry only when it is a `user`
-  entry whose origin is a person, with its time; it exits 1 for a peer message, a task
-  notification or an assistant entry, and warns when the entry is only pasted content. The
-  receiving session runs it before it uses the words.
+- `js-harness sessions --quote <transcript> <line>` prints the entry only when the person sent
+  it, with its time; it exits 1 for a peer message, a task notification or an assistant entry,
+  and warns when the entry is only pasted content. The receiving session runs it before it
+  uses the words.
 - The notice of kind `answer` is in the record, so the board lists the answers that travelled
   and whether the receiver quoted the line.
 
-As built (T4b, 2026-10-11): `--quote` exits 0 only for an entry whose `origin.kind` is
-`human`; 1 for anything else, saying which (an entry with no `origin` counts as not his); 2
-when it cannot look. Pasted text is wrapped by the host in `<pasted_content id="…">` blocks:
-of 30 such entries in the real transcripts 22 are nothing else, and for those the command
-warns that nothing was typed with the paste. On the opening of the build session itself
-(`sessions --quote e5376fe9 6`) it exits 0 and warns.
+As built (T4b, T4c and T4d, 2026-10-11). What `--quote` takes as his, and nothing else:
+
+| The entry at the line | Exit | What it prints |
+|---|---|---|
+| A `user` entry whose `origin.kind` is `human` | 0 | the entry, "sent by the user" |
+| A message he sent while the session worked: an entry of type `attachment` whose `attachment` is a `queued_command` with `origin.kind: "human"` and `humanTurn: true` | 0 | its `prompt`, "sent by the user while the session was working (the host queued it)" |
+| Anything else: another session's message, a task notification, a meta or assistant entry, an entry with no `origin`, a queued command of another origin or with no `humanTurn`, any other attachment, no such line | 1 | which one it is, on standard error |
+| A transcript it cannot read, a start of an id that names several, a file that is not a transcript of the project's sessions folder | 2 | why it could not look |
+
+Pasted text is wrapped by the host in `<pasted_content id="…">` blocks: of 30 such entries in
+the real transcripts 22 are nothing else, and for those the command warns that nothing was
+typed with the paste, whichever of the two ways the entry was sent. On the opening of the build
+session itself (`sessions --quote e5376fe9 6`) it exits 0 and warns.
+
+Open, found with T4d and not built: the board's reader does not count a message he sent while
+a session worked as a prompt of his. Seen on 2026-10-11 in the 56 transcripts of this project
+(keys and values only): 310 queued commands, of which 28 are his, 52 another session's and 228
+task notifications, with 2 that record no origin. None of the 28 is also a `user` entry of its
+transcript (searched by the same text and by `source_uuid` as an entry's `uuid`: 0 and 0; the
+first search would have matched a `user` entry whose text is the prompt); 23 of them also sit
+in a `queue-operation` entry. The reader takes a queued command only for the end of a task
+(`notificationsOf`, `bin/lib/sessions.mjs`), so such a message starts no task for "the last
+task" and would not be counted by the measure of his answers (T9). Whether it should is a
+change of the reader, to decide before T9.
 
 A limit found in this session, to state plainly. A travelling answer carries information and a
 choice among options already put to him; it does not approve a pending question in a session
@@ -380,27 +395,50 @@ that neither the record nor a message can reach. Each sits under the three label
 other session under "where it goes", and says there that he types a line of his own with it.
 
 ### 9. Context
-His rule of 2026-10-10 (relief file, lines 126 and 127): no session stops, slows or proposes a
-cut for a percentage. At 85% it pauses, writes its state in its feature document (done, in
-flight, next step), and judges: little left, it finishes well; much left, the compaction is done
-there and the same task continues after it, from the document. What makes the rule act:
+His rule, the context pause (2026-10-10; relief file, lines 126 and 127): no session stops,
+slows or proposes a cut for a percentage. At the context pause it pauses, writes its state in
+its feature document (done, in flight, next step), and judges: little left, it finishes well;
+much left, the compaction is done there and the same task continues after it, from the
+document.
 
-- The board states the limit as room left before the host's compaction against what the
-  session's last task cost, not as a share of the window; the 73% mark leaves
-  (`bin/lib/sessions.mjs:13-21`). The window the board assumes (480,000) and the one the app
-  reports (500,000, compacting near 467,000) become one figure, read where it can be.
+The share of the window at which a session pauses has one home: the constant
+`DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`. Where the host compacts has its own
+beside it, `DEFAULT_CONTEXT_COMPACTION_PERCENT`. A text names the rule or reads the constant
+and never writes either value: a test of `bin/sessions.test.mjs` reads the sources of this
+feature and this document outside "Progress", and fails when one does, or when a value the
+rule left behind comes back. What makes the rule act:
+
+- The board states a context as the room left before the host's compaction against what the
+  session's last task cost, and says when a session is at the pause. The window is the one
+  the app reports, a default a flag replaces.
 - A `SessionStart` hook with the matcher `compact`, on both hosts: it prints the session's
   title, its opening file, its feature document and the instruction to read "Next step" and to
   repeat any open question. He then pastes no resume prompt, and a cut is the bare `/compact`.
   Like every hook the harness installs, it acts only in a project that opted in (a
   `harness.json` at its root) and prints nothing elsewhere.
-- The nudge at 85% rides on the reply check of the rule hierarchy (its `Stop` hook reads the
-  transcript the board reads). Until that feature ships, the board flags it and the orchestrator
-  tells the session once, as today.
+- The nudge at the context pause rides on the reply check of the rule hierarchy (its `Stop`
+  hook reads the transcript the board reads). Until that feature ships, the board flags it and
+  the orchestrator tells the session once, as today.
 - The orchestrator is relieved, not compacted; its own row is in the roster like any other.
 
-Proofs: the count of cuts proposed under 85% is zero; no task is reopened because a cut lost
-what it needed.
+Proofs: the count of cuts proposed under the context pause is zero; no task is reopened
+because a cut lost what it needed.
+
+As built (T5, T5b and T6, 2026-10-11).
+
+| What | Where | What it does |
+|---|---|---|
+| The three figures | `bin/lib/sessions.mjs`, "the context figures" | The window (`DEFAULT_CONTEXT_WINDOW`), the compaction and the pause, each a default a flag replaces: `--context-window`, `--context-compaction`, `--context-pause`. `--context-limit` is refused and names the two that replaced it. |
+| The point of a session | `sessionFacts`, `contextCompaction` | A session's own last automatic compaction (`compact_boundary` with `trigger: "auto"`, its `preTokens`) wins over the default, because the host does not compact every session at the same place. |
+| A row of the board | `renderBoard` | What the session holds, the room left before the host compacts and whether the session measured that point, what its last task cost and whether a task of that cost still fits, and that it is at the pause. |
+| The watch | `boardChanges` | Returns once when a session reaches the pause; a last task that no longer fits wakes nobody by itself. |
+| The resume hook | `bin/resume.mjs`, `js-harness resume --hook` | A `SessionStart` entry with the matcher `compact` that `install` writes for both hosts, records in the manifest and `uninstall` removes. In a project with a `harness.json` it prints the title, the stored opening, the feature document when the worktree of the session's last notice tells it, and the instruction to read "Next step" and "State for a resume" over the summary and to repeat any open question. It writes nothing and prints nothing on any error. |
+
+"The last task" is the growth of the context from one instruction (a person's prompt or paste,
+or another session's message) to the last reply before the next, summed across a compaction,
+and it is the last stretch that ended. Two limits: it cannot tell a task from a one-word
+answer, nor see a sub-agent's spend. Whether the largest stretch since the last compaction is
+the better yardstick is a product choice, his.
 
 ### 10. Permission classes
 Claude Code delivers a message only between sessions of the same class, unless
@@ -448,7 +486,7 @@ row ships.
 
 ### 11. The orchestrator skill, rewritten
 The installed skill describes a watchman; he decided a lead (2026-10-09) and changed its charter
-(2026-10-10). The rewrite, within about the size it has today, carries:
+(2026-10-10 and 2026-10-11). The rewrite, within about the size it has today, carries:
 
 - The lead: for every request, the need behind his words, where it falls in the map, the
   proposal, then the record. Before an opening, four answers in writing (does it touch what
@@ -459,14 +497,22 @@ The installed skill describes a watchman; he decided a lead (2026-10-09) and cha
   sessions; plan steps and notices; pushes and pull requests once the gate and both reviews are
   green; the merge of a pull request, documents or code, when the gate passed, both reviews are
   recorded with nothing blocking and it is clean; the go-ahead of a later stage inside a plan he
-  approved; a Codex review within the cost its plan prints, up to 3 million input tokens for a
-  feature unless he raised it for that feature (6.5 million for the gate lock, 2026-10-10);
+  approved; a Codex review within the rate of the Codex budget, which is a rate for each
+  changed line of a slice as `codex-review --plan` prints the cost, not a number for a feature,
+  and over which he is asked (the rule's home is the charter in `docs/ROADMAP.md`, "More
+  autonomy", with the rate itself in the lead's relief file until a command holds it);
   compaction left to the host, with the feature document as the record. This paragraph is the
-  charter of 2026-10-09 with his change of 2026-10-10 and nothing else: what it does not
+  charter of 2026-10-09 with his changes of 2026-10-10 and 2026-10-11: what it does not
   repeat stands as the roadmap and the relief file have it. His, asked one at a time: spend
   outside the plan; anything installed or changed on a machine; a product choice; what cannot be
   undone; a change of the plan or of its order; a new protocol. Before it calls something his,
-  it names which of the six.
+  it names which of the six. Taken out of that list by him on 2026-10-11 (relief file, line
+  236), so not asked: what the harness writes under the home's `.js-harness` and `uninstall`
+  removes; the removal of the worktree of a merged feature with nothing changed in it; and a
+  review tool that fails, after which the session goes on, repeats the review in a turn of
+  the gate lock and tells him afterwards, while a report outside this repository stays his.
+  The lead reads the update of the installed command at a boundary as covered by the same
+  words; that reading is the lead's.
 - It still never implements, never commits in a worktree and never answers for him; it writes
   the relief file and notices, through the command.
 - The handover of point 5, and the questions to the one before.
@@ -474,7 +520,8 @@ The installed skill describes a watchman; he decided a lead (2026-10-09) and cha
   plan change in its document before going on; it reports each mistake in five parts; a wait it
   hands to a session that cannot be reached names a process that ends.
 - What leaves the skill, because a check does it: reading `Gates` before a commit (the lock),
-  the 73% limit (point 9), "say whose prompt it is" (no prompts for other sessions).
+  the board's limit mark, which left (point 9), "say whose prompt it is" (no prompts for other
+  sessions).
 
 A sensor for the second entry-gate question, on the board: the files two branches both changed.
 
@@ -487,20 +534,15 @@ write anything. `js-harness sessions --measures` prints them over a window.
 |---|---|---|
 | Notices recorded, rung, held, carried by his paste, sent to no role | whether the channel works without him | the record; `SendMessage` and peer entries of the transcripts |
 | A bare yes of his, per session, and a yes that follows a paste | whether he is asked what is not his | `user` entries of origin person |
-| Time a session waited: for him, for the gate, for another session | where the day goes | turn ends and the next entry; the gate log of `feat/gate-lock` |
-| Cuts proposed under 85%; tasks reopened after a cut | whether the context rule holds | replies with the cut state and their tokens; feature documents |
+| Time a session waited: for him, for the gate, for another session | where the day goes | turn ends and the next entry; the gate log (`odd/tasks/gate-log.md`, read with `js-harness gate log`) |
+| Cuts proposed under the context pause; tasks reopened after a cut | whether the context rule holds | replies with the cut state and their tokens; feature documents |
 | The orchestrator's context per hour, reliefs per day, wakes with no news | whether one orchestrator lasts a day | its transcript; `relieved` lines |
 | Answers that travelled, and those quoted before use | whether his words are checked | `answer` lines; the quote command in the receiver's transcript |
 | Replies the reply check refused, per session | whether the rules of a reply are learned or only enforced | the hook's refusals in the transcripts, once the rule hierarchy ships it |
 
-The gate's own numbers (each run, its length, what ran beside it) belong to `feat/gate-lock`,
-where no gate log exists yet. The searches, by the survey's sub-agent on 2026-10-10: `git show
-feat/gate-lock:odd/tasks/gate-lock.md` filtered for "gate log", "gate-log", "log.jsonl" and
-"runs.jsonl", and `git grep` on the branch for "appendJsonLine", ".jsonl", "gate log" and
-"history" in `bin/lib/gate-lock.mjs` and `bin/gate.mjs`; either would have matched a log's
-file name or its writer; the other files of the branch were not searched. The finding was
-passed to its session through the orchestrator the same day. Rework and spend per feature are left for a
-later look: nothing decided today would use them.
+The gate's own numbers (each run, its length, what ran beside it) belong to the gate log,
+`odd/tasks/gate-log.md`. Rework and spend per feature are left for a later look: nothing
+decided today would use them.
 
 ### 13. Tests owed
 Each is run once by the build, with its result recorded in Progress.
@@ -544,12 +586,26 @@ reader, and that table names this feature as their owner.
   non-trivial files with their tests); T4b, the rest, after T1.
 - [x] T4c The nine findings of the two reviews of `ce8bdf7` (Progress, 2026-10-11), in one
   follow-up commit on `feat/session-board-channel` (route: delegated, the writer of T4b)
-- [x] T5 The context figure as room left against the last task's cost; the 73% mark removed
+- [x] T4d `sessions --quote` takes a message he sent while a session worked: a queued command
+  of origin `human` that the host marks as his turn, and no other attachment (route:
+  delegated, one writer, test first). Proof: `node --test bin/lib/sessions.test.mjs` and `node
+  --test bin/sessions.test.mjs` exit 0 with the tests of the queued message in them, and
+  `js-harness sessions --quote` on line 470 of the lead's transcript `130317af` exits 0 and
+  says "sent by the user while the session was working" (Progress, 2026-10-11)
+- [x] T5 The context figure as room left against the last task's cost; the board's limit mark
+  removed
+- [x] T5b The context pause takes its value from one constant, and no text of this feature
+  writes it or a value it had before (route: delegated, the writer of T4d, test first).
+  Proof: the two tests of `bin/sessions.test.mjs` that read the sources and this document
+  outside "Progress" pass, and `rg` for a share the rule left behind finds none in the four
+  sources (Progress, 2026-10-11)
 - [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
   installed on his word
 - [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
-- [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session
+- [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
+  It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
+  "JH 5", the two lists of `bin/lib/manifest.mjs`), which wait for it
 - [ ] T9 `--measures`
 - [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
@@ -557,6 +613,16 @@ reader, and that table names this feature as their owner.
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
   replaced by a pointer only after what it holds and this document does not (the reasoning of
   the lead, the advice on width, the two measures that reopen a decision) is moved here
+
+## Open points
+What is known to be open and is no task yet. "Next step" has what waits for him.
+
+| Open point | Where it is written | It waits for |
+|---|---|---|
+| Whether the board's reader counts a message he sent while a session worked as a prompt of his | point 7, "Open" | a decision before T9 |
+| The text of the orchestrator skill: twelve items of the sweep | `docs/sweep-2026-10-11.md`, "JH 5", the two lists of `bin/lib/manifest.mjs` | T8 |
+| Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | his answer, asked through the lead |
+| Whether installing the resume hook on this machine is still his to say (the sweep's A3 90) | "Ask me before" and T6, against the lead's reading of his words of 2026-10-11 | his answer, asked through the lead |
 
 ## Progress
 - 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
@@ -580,6 +646,9 @@ reader, and that table names this feature as their owner.
   the searches behind "no gate log". Not taken: a contract command for every later command;
   the build adds each test to "Done when" as it writes it, and naming files that do not exist
   yet would only add guesses.
+- 2026-10-10, a finding for `feat/gate-lock`, passed to the orchestrator with the closing
+  notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
+  their proof.
 - 2026-10-11, his answer to the question carried from the relief file's line 61, typed in the
   design session's chat: "Entonces la A pero quiero que sea lo mas automatico posible". A is
   decided; the reading of "as automatic as possible" and what it adds (the fix in the doctor
@@ -595,9 +664,6 @@ reader, and that table names this feature as their owner.
   was `main` with pull requests 53 and 54 in it, whose last gate another session reported at
   1,167 s, and another session's test runs may have started beside it. The commit waits for a
   gate in which documents alone run no sensor (`feat/gate-lock`, T7).
-- 2026-10-10, a finding for `feat/gate-lock`, passed to the orchestrator with the closing
-  notice: the branch has no gate log, and two of that day's failures (9 and 16) name one as
-  their proof.
 
 - 2026-10-11 05:01 local, the build opens. `feat/gate-lock` is on `main` (pull request 56,
   `8b82c38`), so nothing holds it. Session `JH 5 · canal entre sesiones`, worktree
@@ -831,153 +897,6 @@ reader, and that table names this feature as their owner.
   `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, `bin/js-harness.test.mjs` 27,
   `bin/lib/manifest.test.mjs` 90, `bin/install.test.mjs` 58, none failing; `sessions --quote`
   on a log file outside the sessions folder: exit 2, "not quoted".
-- 2026-10-11, the Codex cap of this feature is 7 million input tokens, not 3. His words, "Sí, 7
-  millones para cada una" (this feature and the gate log), read with `sessions --quote` in the
-  lead's transcript `a5471f0a-66fb-4c5b-8495-6e5fb17af777.jsonl`, line 1540.
-- 2026-10-11, Codex on `8654c79..82cd2c2`, recorded: 2,293,449 input tokens, six findings, all
-  P2, all of one kind: a session told apart by an exact id or by the first candidate met. Fixed
-  test first in `25cf031`: a send replayed by a restarted session is one message whatever each
-  copy knows of its outcome; a notice written under the start of a session id is that session's
-  own and wakes no watch of its; a session known as closed stays closed while the record cannot
-  be read; a gate in a folder two sessions share names both; an opening read with a prefix that
-  could not be checked records no reading; the author of an opening is left out by the same
-  prefix-aware match.
-- 2026-10-11, `16daf2c`: `origin/main` at `51a24db` (the gate log, pull request 60) merged into
-  this branch, since the lead merges this one second. The merge touched none of this slice's
-  files.
-- 2026-10-11 13:33 local, commit `25cf031`. Its gate: `INFO gate waited 2 min 25 s`, then `PASS
-  tests npm run test passed`. The app was restarted while the command waited (13:14 by the
-  lead's account), which left it with no session to report to; it finished on its own and was
-  found by its process. A mistake of the parent in that command: the Codex review was chained
-  after `git commit` with `;`, so it would have run whatever the commit did. It ran after a
-  commit that passed, which is luck and not the condition it should have had.
-- 2026-10-11 13:59 local, Codex on `16daf2c..25cf031`, recorded: 657,782 input tokens, one
-  finding (P2), a defect that `25cf031` brought in: copies of a send were matched by their
-  place, the n-th of a key in one transcript with the n-th in another, so a transcript that
-  holds only some of the sends of a key (a session resumed part way) put a send with one id in
-  the place of another and the board lost a real message when the shorter transcript was read
-  first. Fixed test first in the commit this entry is in: red `actual: ['m2']`, `expected:
-  ['m1', 'm2']`; green, `bin/lib/sessions.test.mjs` 184 pass. A call with an id is now the held
-  send with that id, or the first of its key with no id, never one with another id.
-  Codex for the feature: 812,689 + 257,052 + 1,710,534 + 2,293,449 + 657,782 = 5,731,506 of
-  7,000,000 input tokens; 1,268,494 left.
-- 2026-10-11 14:35 local, the first try at that commit did not land: its gate (`INFO gate waited
-  12 min 59 s`, `INFO load 4.7 of 8 logical processors busy before the sensors (59%), right
-  after another gate`) failed on one test of 3,281, in a file this change does not touch:
-  `evals/suite.test.mjs:748`, "an interrupt during a real trial against a hanging fake agent
-  leaves nothing of it", one process still alive after the interrupt (`alive: [false, true]`
-  against `[false, false]`). During that run, at 14:26, an untracked folder appeared in the
-  working tree, `Microsoft\Windows\PowerShell\ModuleAnalysisCache`: what PowerShell writes when
-  it is started with no `LOCALAPPDATA`; which test starts it so was not looked for. Removed, and
-  both told to the lead for the gate's session. The same tree was committed again without a
-  change.
-- 2026-10-11 15:23 local, commit `0543030`, the second try: `INFO gate waited 30 min 55 s`,
-  `INFO load 6.3 of 8 logical processors busy (79%)`, `PASS tests npm run test passed`; no
-  folder appeared this time.
-- 2026-10-11 16:06 to 16:47 local, the two reviews of the fixes, each inside the gate lock.
-  gentle-ai on `5d150ae..0543030` (645 lines, medium, one lens, lineage
-  `review-0ce42d85c88b57de`): the bound STATUS answered this time, the capture closed approved
-  in 93 s and was acknowledged (`authority burned`); one suggestion,
-  `R3-send-order-unproved`. Codex on `25cf031..0543030`, recorded: 233,435 input tokens, one
-  finding (P2), the same thing proved: taking the calls of a transcript key by key changed the
-  order of sends of one moment (three sends of one reply with the keys K, L, K came out first,
-  third, second), and the sort by time keeps that order, so the last message shown was not the
-  last sent. A defect `0543030` brought in, the second fix in a row to bring one: each was
-  tested for what it fixed and not for what it moved. Fixed test first in the commit this
-  entry is in: red `actual: ['m1', 'm3', 'm2']`; green, `bin/lib/sessions.test.mjs` 185 pass.
-  The sends are kept in the order of the calls, and a send a transcript adds goes before the
-  send its next call is; the test reads the order of the board in both orders of reading, with
-  a transcript that holds the first, the last and the last two, and with sends that have no
-  time. Codex for the feature: 5,964,941 of 7,000,000 input tokens; 1,035,059 left.
-  For the wait: no wait of this session ran out its 60 minutes, but four other gates took the
-  lock while this session's review waited 43 minutes, so the lock is not
-  taken in the order of arrival; every wait is now started with `--wait 180` (the lead's
-  request), and what follows a review (its capture, then Codex only if it approved) runs in
-  one turn (`after-chain.mjs` in the session's scratchpad).
-- 2026-10-11 17:43 local, commit `22fc9a1` (the order of the sends). Its gate: `INFO gate
-  waited 39 min 11 s`, `PASS tests npm run test passed`, one try. Codex on `0543030..22fc9a1`,
-  recorded at 17:49: "the patch is correct (confidence 0.93)", no finding, 232,141 input
-  tokens. gentle-ai: `review not due (under_budget)`, 144 lines since the boundary `0543030`.
-  Every code commit of the branch is covered by a Codex record, and `git merge-tree` of the
-  branch with `origin/main` at `906fc28` (pull request 64) exits 0. Codex for the feature:
-  6,197,082 of 7,000,000 input tokens; 802,918 left. The third slice alone took 3,416,807 of
-  them in four runs, three of them on fixes of its own fixes.
-- 2026-10-11, a defect of `sessions --quote`, found and not fixed in this slice: a message he
-  sends while a session works is written by the host as an entry of `type: "attachment"` whose
-  `attachment` is `{ type: "queued_command", prompt, origin: { kind: "human" }, humanTurn: true
-  }`, and `--quote` exits 1 for it ("not the user's words: … an entry of type attachment").
-  Seen on the lead's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470. Told to
-  the lead; fixed test first in the fourth slice, by the origin's kind and not by the type of
-  the attachment alone.
-- 2026-10-11, what the fourth slice takes besides T5 and T6, each by his words read at their
-  line or as a claim of the lead that is named so. (1) The context pause is 88%, the
-  compaction stays at 93%: "ejemos entonces la regla del 88% y la compactacion al queda en el
-  93% con eso le deja 5%", and in the same entry that old rules beside new ones are "super
-  prohibido" (the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1745,
-  read with `sessions --quote`; line 1666 of it, 90%, is replaced by it). So the number lives
-  in one constant that everything reads, the 85 and the 73 leave every text of this feature,
-  and a test fails if they return. The lead merges that slice only when the constant reads 88.
-  (2) `AGENTS.md` is not edited by this feature: its text is built in `docs/agents-build.md`
-  and he approves it (his words in the entry of line 470 above: "Sí, aprobado el protocolo
-  revisado."); the two sentences of this plan about the resume prompt stay in this document as
-  proposed text. (3) The sweep of JH 7, `docs/sweep-2026-10-11.md` on `main`: 42 items under
-  "JH 5", each a reader's claim, read at its place before it is corrected and checked off
-  there. (4) A fact for T6, the lead's: the host has a `PreCompact` hook (matchers `manual` and
-  `auto`; exit 2 blocks; its output does not enter the context).
-  `main` moved to `859b9a1` meanwhile (pull requests 61, 62 and 63); by the lead's `git
-  merge-tree` both branches of this feature merge clean with it.
-- 2026-10-11, the failure of gentle-ai (the bound STATUS of the fourth slice's review, on the
-  branch `feat/session-context`, whose copy of this document has the entry): his choice, read
-  with `sessions --quote` in the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
-  line 1250: "reporta la falla y dime que es lo que tengo que autorizar para que sigamos y
-  ademas para ver si realmente es necesaria mi intervencion". Looked up over open and closed
-  issues of `Gentleman-Programming/gentle-ai`: issue 5422 is open and is this defect on this
-  build (4.0.0 stable, Windows, Claude Code), with nine other occurrences and no published fix
-  (4.0.0 is the latest release). One comment added, observed evidence only, no label:
-  `https://github.com/Gentleman-Programming/gentle-ai/issues/5422#issuecomment-6112348939`.
-  The lineage `review-506a7846ef824265` stays open and is not touched; no substitute for the
-  `declined` invocation was run. Told to him: nothing is his to authorize; the fourth slice is
-  reviewed again as smaller candidates inside the gate lock, and if gentle-ai fails again the
-  slice goes with its gate and its Codex review, and its pull request says so.
-  The session's script now keeps the consent envelope of every START in a file.
-- 2026-10-11, two claims of the lead, neither his word. A standing instruction: a Codex review
-  that fails because the weekly use of his Codex plan is spent is told to the lead in one line
-  with the error's text, is not recorded as `--unavailable`, and work that needs no Codex goes
-  on (relief line 240). A proposal of JH 7, not built and not placed: a notice of kind
-  `failure`, so what the orchestrator sees reaches the failures register
-  (`odd/tasks/rule-hierarchy.md` on `feat/failures-register`) without a session reading the
-  relief file (relief line 242). It adds a kind to the record and a task to this plan, so it is
-  his to accept; it fits after the register is on `main`, before T12.
-
-## State for a resume (written 2026-10-11, before the session's context is compacted)
-Read this document's "Next step" and this section; the summary of a compaction is not the
-record. What exists, all local to this machine:
-- Worktree `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index. Branch
-  `feat/session-board-channel` at `ce8bdf7` plus what the entries after this one name; not
-  pushed, because its code has no Codex record and the cap forbids one (below).
-- On `origin/main` (`8654c79`): pull requests 58 (T3, T4a) and 59 (T1), merged by the lead.
-- Waiting for Sebastián: (1) whether the 7 million of Codex are enough for the rest (the
-  figures are in Progress); put to him when the third slice is delivered. (2) Tests owed 1, 2,
-  3 and 6, asked one at a time, each before it is run, never while work runs. (3) Whether the
-  resume hook is installed on this machine, and the yardstick of "the last task" (fourth slice).
-- This copy of the document is the third slice's. The fourth slice's copy, on
-  `feat/session-context`, has the entries of T5 and T6 and of the gentle-ai time-out; the two
-  are joined when this branch is merged into that one.
-- Scripts of this session, in its scratchpad
-  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\e5376fe9-d1cc-4288-b9e9-cf533ba35a5a\scratchpad\`:
-  `review-chain.mjs <repo> <base>` (assess, status, start with the granted choice, bound
-  status; prints the capture command), `capture-ack.mjs <repo> <out.json> "<capture command>"`
-  (runs the capture, prints the findings, acknowledges when approved), `codex-capped.mjs <repo>
-  <budget> <log> <estimates> -- <codex-review args>` (ends a Codex run at a part boundary when
-  the next part would pass the budget). They are conveniences: every step they run is the
-  command gentle-ai or `codex-review` returned, verbatim.
-- Before a gate: stop the `tsserver.js` processes whose parent chain ends in this session's
-  own `claude.exe` (failure 20); the app starts them again, so it is done before each commit.
-- Notices to the lead go by `SendMessage` to the title `JH ORQ · js-harness`: delivered,
-  waiting, closed. From this slice on, `js-harness notify` exists on `main` and records them;
-  the installed command on this machine is older until he has it updated.
-- Sub-agents: Opus 5.5 at effort high, one writer at a time, with the allowed edit surfaces in
-  the brief. Each writer so far stayed inside them.
 - 2026-10-11 09:32 local, commit `7a19710` (T4c). Its gate: `INFO gate waited 1 min 2 s`,
   then `PASS tests npm run test passed`; 09:13:07 to 09:32:03 in all, one try. gentle-ai:
   `review not due (under_budget)`, 313 lines, pending in the slice. Codex: not run (the cap);
@@ -1043,7 +962,6 @@ record. What exists, all local to this machine:
   `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, `scripts/practice-lib.test.mjs` 67,
   none failing; and `resume --hook` run in a folder with no `harness.json` printed 0 bytes,
   exit 0.
-
 - 2026-10-11 11:01 local, commit `9dd1622` (T5 and T6) on `feat/session-context`. Its gate:
   `INFO gate waited 26 min 23 s`, then `PASS tests npm run test passed`; 10:19:27 to 11:01:47
   in all, one try. The working tree is clean.
@@ -1066,16 +984,241 @@ record. What exists, all local to this machine:
   script printed only its summary), so its exact `declined` invocation is not at hand.
   Put to Sebastián in the session's chat, his to choose: report the failure to gentle-ai's
   repository and go on, go on without reporting, or stop here.
+- 2026-10-11, the Codex cap of this feature is 7 million input tokens, not 3. His words, "Sí, 7
+  millones para cada una" (this feature and the gate log), read with `sessions --quote` in the
+  lead's transcript `a5471f0a-66fb-4c5b-8495-6e5fb17af777.jsonl`, line 1540.
+- 2026-10-11, Codex on `8654c79..82cd2c2`, recorded: 2,293,449 input tokens, six findings, all
+  P2, all of one kind: a session told apart by an exact id or by the first candidate met. Fixed
+  test first in `25cf031`: a send replayed by a restarted session is one message whatever each
+  copy knows of its outcome; a notice written under the start of a session id is that session's
+  own and wakes no watch of its; a session known as closed stays closed while the record cannot
+  be read; a gate in a folder two sessions share names both; an opening read with a prefix that
+  could not be checked records no reading; the author of an opening is left out by the same
+  prefix-aware match.
+- 2026-10-11, `16daf2c`: `origin/main` at `51a24db` (the gate log, pull request 60) merged into
+  this branch, since the lead merges this one second. The merge touched none of this slice's
+  files.
+- 2026-10-11 13:33 local, commit `25cf031`. Its gate: `INFO gate waited 2 min 25 s`, then `PASS
+  tests npm run test passed`. The app was restarted while the command waited (13:14 by the
+  lead's account), which left it with no session to report to; it finished on its own and was
+  found by its process. A mistake of the parent in that command: the Codex review was chained
+  after `git commit` with `;`, so it would have run whatever the commit did. It ran after a
+  commit that passed, which is luck and not the condition it should have had.
+- 2026-10-11 13:59 local, Codex on `16daf2c..25cf031`, recorded: 657,782 input tokens, one
+  finding (P2), a defect that `25cf031` brought in: copies of a send were matched by their
+  place, the n-th of a key in one transcript with the n-th in another, so a transcript that
+  holds only some of the sends of a key (a session resumed part way) put a send with one id in
+  the place of another and the board lost a real message when the shorter transcript was read
+  first. Fixed test first in the commit this entry is in: red `actual: ['m2']`, `expected:
+  ['m1', 'm2']`; green, `bin/lib/sessions.test.mjs` 184 pass. A call with an id is now the held
+  send with that id, or the first of its key with no id, never one with another id.
+  Codex for the feature: 812,689 + 257,052 + 1,710,534 + 2,293,449 + 657,782 = 5,731,506 of
+  7,000,000 input tokens; 1,268,494 left.
+- 2026-10-11 14:35 local, the first try at that commit did not land: its gate (`INFO gate waited
+  12 min 59 s`, `INFO load 4.7 of 8 logical processors busy before the sensors (59%), right
+  after another gate`) failed on one test of 3,281, in a file this change does not touch:
+  `evals/suite.test.mjs:748`, "an interrupt during a real trial against a hanging fake agent
+  leaves nothing of it", one process still alive after the interrupt (`alive: [false, true]`
+  against `[false, false]`). During that run, at 14:26, an untracked folder appeared in the
+  working tree, `Microsoft\Windows\PowerShell\ModuleAnalysisCache`: what PowerShell writes when
+  it is started with no `LOCALAPPDATA`; which test starts it so was not looked for. Removed, and
+  both told to the lead for the gate's session. The same tree was committed again without a
+  change.
+- 2026-10-11, the failure of gentle-ai (the bound STATUS of the fourth slice's review, on the
+  branch `feat/session-context`, whose copy of this document has the entry): his choice, read
+  with `sessions --quote` in the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`,
+  line 1250: "reporta la falla y dime que es lo que tengo que autorizar para que sigamos y
+  ademas para ver si realmente es necesaria mi intervencion". Looked up over open and closed
+  issues of `Gentleman-Programming/gentle-ai`: issue 5422 is open and is this defect on this
+  build (4.0.0 stable, Windows, Claude Code), with nine other occurrences and no published fix
+  (4.0.0 is the latest release). One comment added, observed evidence only, no label:
+  `https://github.com/Gentleman-Programming/gentle-ai/issues/5422#issuecomment-6112348939`.
+  The lineage `review-506a7846ef824265` stays open and is not touched; no substitute for the
+  `declined` invocation was run. Told to him: nothing is his to authorize; the fourth slice is
+  reviewed again as smaller candidates inside the gate lock, and if gentle-ai fails again the
+  slice goes with its gate and its Codex review, and its pull request says so.
+  The session's script now keeps the consent envelope of every START in a file.
+- 2026-10-11, two claims of the lead, neither his word. A standing instruction: a Codex review
+  that fails because the weekly use of his Codex plan is spent is told to the lead in one line
+  with the error's text, is not recorded as `--unavailable`, and work that needs no Codex goes
+  on (relief line 240). A proposal of JH 7, not built and not placed: a notice of kind
+  `failure`, so what the orchestrator sees reaches the failures register
+  (`odd/tasks/rule-hierarchy.md` on `feat/failures-register`) without a session reading the
+  relief file (relief line 242). It adds a kind to the record and a task to this plan, so it is
+  his to accept; it fits after the register is on `main`, before T12.
+- 2026-10-11 15:23 local, commit `0543030`, the second try: `INFO gate waited 30 min 55 s`,
+  `INFO load 6.3 of 8 logical processors busy (79%)`, `PASS tests npm run test passed`; no
+  folder appeared this time.
+- 2026-10-11 16:06 to 16:47 local, the two reviews of the fixes, each inside the gate lock.
+  gentle-ai on `5d150ae..0543030` (645 lines, medium, one lens, lineage
+  `review-0ce42d85c88b57de`): the bound STATUS answered this time, the capture closed approved
+  in 93 s and was acknowledged (`authority burned`); one suggestion,
+  `R3-send-order-unproved`. Codex on `25cf031..0543030`, recorded: 233,435 input tokens, one
+  finding (P2), the same thing proved: taking the calls of a transcript key by key changed the
+  order of sends of one moment (three sends of one reply with the keys K, L, K came out first,
+  third, second), and the sort by time keeps that order, so the last message shown was not the
+  last sent. A defect `0543030` brought in, the second fix in a row to bring one: each was
+  tested for what it fixed and not for what it moved. Fixed test first in the commit this
+  entry is in: red `actual: ['m1', 'm3', 'm2']`; green, `bin/lib/sessions.test.mjs` 185 pass.
+  The sends are kept in the order of the calls, and a send a transcript adds goes before the
+  send its next call is; the test reads the order of the board in both orders of reading, with
+  a transcript that holds the first, the last and the last two, and with sends that have no
+  time. Codex for the feature: 5,964,941 of 7,000,000 input tokens; 1,035,059 left.
+  For the wait: no wait of this session ran out its 60 minutes, but four other gates took the
+  lock while this session's review waited 43 minutes, so the lock is not
+  taken in the order of arrival; every wait is now started with `--wait 180` (the lead's
+  request), and what follows a review (its capture, then Codex only if it approved) runs in
+  one turn (`after-chain.mjs` in the session's scratchpad).
+- 2026-10-11, a defect of `sessions --quote`, found and not fixed in this slice: a message he
+  sends while a session works is written by the host as an entry of `type: "attachment"` whose
+  `attachment` is `{ type: "queued_command", prompt, origin: { kind: "human" }, humanTurn: true
+  }`, and `--quote` exits 1 for it ("not the user's words: … an entry of type attachment").
+  Seen on the lead's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line 470. Told to
+  the lead; fixed test first in the fourth slice, by the origin's kind and not by the type of
+  the attachment alone.
+- 2026-10-11, what the fourth slice takes besides T5 and T6, each by his words read at their
+  line or as a claim of the lead that is named so. (1) The context pause is 88%, the
+  compaction stays at 93%: "ejemos entonces la regla del 88% y la compactacion al queda en el
+  93% con eso le deja 5%", and in the same entry that old rules beside new ones are "super
+  prohibido" (the lead's transcript `7d2ae675-4bf2-4657-aff5-cde2477a4bee.jsonl`, line 1745,
+  read with `sessions --quote`; line 1666 of it, 90%, is replaced by it). So the number lives
+  in one constant that everything reads, the 85 and the 73 leave every text of this feature,
+  and a test fails if they return. The lead merges that slice only when the constant reads 88.
+  (2) `AGENTS.md` is not edited by this feature: its text is built in `docs/agents-build.md`
+  and he approves it (his words in the entry of line 470 above: "Sí, aprobado el protocolo
+  revisado."); the two sentences of this plan about the resume prompt stay in this document as
+  proposed text. (3) The sweep of JH 7, `docs/sweep-2026-10-11.md` on `main`: 42 items under
+  "JH 5", each a reader's claim, read at its place before it is corrected and checked off
+  there. (4) A fact for T6, the lead's: the host has a `PreCompact` hook (matchers `manual` and
+  `auto`; exit 2 blocks; its output does not enter the context).
+  `main` moved to `859b9a1` meanwhile (pull requests 61, 62 and 63); by the lead's `git
+  merge-tree` both branches of this feature merge clean with it.
+- 2026-10-11 17:43 local, commit `22fc9a1` (the order of the sends). Its gate: `INFO gate
+  waited 39 min 11 s`, `PASS tests npm run test passed`, one try. Codex on `0543030..22fc9a1`,
+  recorded at 17:49: "the patch is correct (confidence 0.93)", no finding, 232,141 input
+  tokens. gentle-ai: `review not due (under_budget)`, 144 lines since the boundary `0543030`.
+  Every code commit of the branch is covered by a Codex record, and `git merge-tree` of the
+  branch with `origin/main` at `906fc28` (pull request 64) exits 0. Codex for the feature:
+  6,197,082 of 7,000,000 input tokens; 802,918 left. The third slice alone took 3,416,807 of
+  them in four runs, three of them on fixes of its own fixes.
+- 2026-10-11 18:59 local (clock read after the runs), T5b written by one delegated writer,
+  test first. The context pause is `DEFAULT_CONTEXT_PAUSE_PERCENT` of `bin/lib/sessions.mjs`,
+  with the value of his latest words (the entry of what the fourth slice takes, (1)), and no
+  other text of this feature writes it or the share where the host compacts: the comments of
+  the three figures, the usage of `sessions` (one new line says the two defaults, read from
+  the constants), the refusal of `--context-limit` (it names the two flags that replaced it
+  with their defaults, and nothing of the mark that left) and the design sections of this
+  document name the rule or the constant. `bin/resume.mjs` and the dispatcher's help wrote no
+  share and are unchanged in that. Two tests of `bin/sessions.test.mjs` hold it, reading the
+  four sources and this document outside "Progress": one fails when a share the rule left
+  behind is written there, or when the constant is one of them; the other when the pause's or
+  the compaction's own value is written anywhere but in its constant. The tests of the library
+  and of the command compute every figure of the pause and of the compaction from the
+  constants, so the next change of the rule moves one number.
+  Red, as the writer saw it. With the tests rewritten and the code untouched, three of the
+  command's failed: `the pause is still 85`; the refusal's old text; and four comment lines of
+  `bin/lib/sessions.mjs` that wrote a share. After the constant, the comments and the refusal,
+  the two guards still failed on ten lines of this document, and the refusal's test on the
+  usage line that did not exist; one test of the library ("the last task no longer fits…")
+  had its tokens written against the old pause, failed, and now computes them.
+  Green: `node --test bin/lib/sessions.test.mjs` 192 pass; `node --test bin/sessions.test.mjs`
+  197 pass, 1 skipped; `rg -n "\b(73|85)\s?%|\b(73|85) percent"` on the four sources: no match.
+  The roadmap's bullet of the context pause ("Context, his condition on that approval") names
+  the rule and its home. Not done here: the skill's text in `bin/lib/manifest.mjs`, which
+  still says "past the limit" (T8).
+- 2026-10-11 18:59 local, T4d, by the same writer, test first. `quoteOf` takes an entry of
+  type `attachment` as his when its `attachment` is a `queued_command` whose `origin.kind` is
+  `human` and whose `humanTurn` is `true`: it gives its `prompt`, and `--quote` says "sent by
+  the user while the session was working (the host queued it)". Any other attachment stays
+  exit 1 and is named: another session's with its name, a task notification, one with no
+  origin, one of origin `human` that is no turn of his, another type. The shape and its counts
+  are in point 7 ("Open"), from a tally of keys and values; the fixtures are made up.
+  Red: the library answered `an entry of type "attachment"` for a queued message (three tests
+  failed: the two new ones and the one that pins the keys of a result, which gains `queued`),
+  and the command printed "sent by the user:" with no word of the queue. Green: the counts of
+  the entry above; and `node bin/js-harness.mjs sessions --quote` on line 470 of the lead's
+  transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`: exit 0, first line "…, line 470,
+  2026-10-11T20:17:37.316Z, sent by the user while the session was working (the host queued
+  it):", then his text, nothing on standard error.
+  Chosen beyond the brief: a queued message of his whose `prompt` is not a string exits 1
+  ("holds no text to quote"; none of the 310 seen is so), and the usage of `sessions` and the
+  dispatcher's help say that a message sent while the session worked is taken. What the fix
+  moves: `quoteOf` is called only by `bin/sessions.mjs` (`rg quoteOf bin`), and the test files
+  of every caller of the library were run one at a time: `bin/notify.test.mjs` 94 pass,
+  `bin/lib/channel.test.mjs` 30, `bin/resume.test.mjs` 12, `bin/js-harness.test.mjs` 28.
+  Not built, written as open: whether the board's reader counts such a message as a prompt of
+  his ("Open points").
+- 2026-10-11, the items of the sweep that are this session's (`docs/sweep-2026-10-11.md`, "JH
+  5", 42), each read at its place before it was corrected: 28 checked off, none found wrong,
+  12 that wait for T8 (the text of the orchestrator skill, `bin/lib/manifest.mjs`, not edited
+  in this slice) and 2 that wait for his answer, asked through the lead (A3 89 and A3 90).
+  The eight about `bin/lib/sessions.mjs`, `bin/sessions.mjs` and the branch's constant are
+  settled by T5 and T5b; each quote was read at `51a24db`, the commit the sweep read, and
+  stands as its reader gave it. The comment of `bin/sessions.mjs` about the harness home no
+  longer says "as for `install` and `remote`": those two take an empty `JS_HARNESS_HOME` as
+  the home (`??`), and this command does not (`||`). In this document: the head no longer
+  says nothing is built; the test files of the contract exist; the gate lock and the gate log
+  are named by their documents; the superseded claims about a peer message are gone and the
+  corrected statement stands alone; points 9 and 12 name the context pause; the charter of
+  point 11 names the Codex budget by its rule and carries what he took out of his list.
+  The Codex budget is by rate since 2026-10-11 (relief file, line 236, read by the writer; his
+  words at line 1360 of the lead's transcript `7d2ae675`, read by the parent), so the cap of
+  7 million of the entry above no longer rules a review of this feature.
+- 2026-10-11, this document put in order after the two branches were joined. The entries that
+  sat in "State for a resume" and after it (from 09:32 to the review that stopped on a
+  time-out) are in "Progress" at their hour, and the finding of 2026-10-10 for the gate lock
+  is with its day. An entry with no hour stands where the commit that first held it had it:
+  the failure of gentle-ai and the two claims of the lead after 14:35 (`0543030`), the defect
+  of `--quote` and what the fourth slice takes before 17:43 (`22fc9a1`, begun at 16:50). No
+  entry's text changed: they were moved by line, with a check that the lines after the move
+  are the lines before it. "State for a resume" holds what is true now and points to "Next
+  step". One contradiction beside the sweep's was removed: "In scope" listed two sentences of
+  `AGENTS.md`, which this feature does not edit.
+
+## State for a resume
+Read "Next step" first: it says what is owed and in which order. This section is only what a
+session needs beside it to go on; the summary of a compaction is not the record.
+
+| Slice | Holds | Where it is |
+|---|---|---|
+| 1 | T3, T4a | `main`, pull request 58 |
+| 2 | T1 | `main`, pull request 59 |
+| 3 | T1b, T4b, T4c | `main`, pull request 65 |
+| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, with `main` merged in at `5af56c1`; T5 and T6 are gated at `9dd1622`, the rest is in the commit that holds this section |
+
+- The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
+- Reviews of the fourth slice: no entry of Progress records one that ended. The gentle-ai
+  lineage `review-506a7846ef824265` stays open and is not touched (Progress: the review that
+  stopped on a time-out, and his choice about it).
+- Open, and no task yet: the table of "Open points".
+- Scripts of this session, in its scratchpad
+  `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\e5376fe9-d1cc-4288-b9e9-cf533ba35a5a\scratchpad\`:
+  `review-chain.mjs <repo> <base>` (assess, status, start with the granted choice, bound
+  status; prints the capture command), `capture-ack.mjs <repo> <out.json> "<capture command>"`
+  (runs the capture, prints the findings, acknowledges when approved), `codex-capped.mjs <repo>
+  <budget> <log> <estimates> -- <codex-review args>` (ends a Codex run at a part boundary when
+  the next part would pass the budget). They are conveniences: every step they run is the
+  command gentle-ai or `codex-review` returned, verbatim.
+- Before a gate: stop the `tsserver.js` processes whose parent chain ends in this session's
+  own `claude.exe` (failure 20); the app starts them again, so it is done before each commit.
+- Notices to the lead go by `SendMessage` to the title `JH ORQ · js-harness`: delivered,
+  waiting, closed. `js-harness notify` is on `main` and records them; the installed command
+  on this machine is older until the lead updates it.
+- Sub-agents: one writer at a time, at effort high, with the allowed edit surfaces and the
+  tests of every caller of what it changes in the brief.
 
 ## Next step
 The third slice is on `main` (pull request 65, merged as `5af56c1`). This branch, the fourth
 slice, has `main` merged in at that commit, with T5 and T6 built and gated at `9dd1622`. Owed
 on this branch, in this order:
-1. T5b: the pause at the value of his latest words, from one constant, and no older value left
-   in a text of this feature.
-2. T4d: `sessions --quote` takes a message he sent while a session worked.
-3. The 42 items of the sweep under "JH 5" (`docs/sweep-2026-10-11.md`), each read at its place
-   first; those of the orchestrator skill wait for T8.
+1. Done, in the commit that holds this text (Progress, 2026-10-11 18:59). T5b: the pause at
+   the value of his latest words, from one constant, and no older value left in a text of
+   this feature.
+2. Done, in the same commit. T4d: `sessions --quote` takes a message he sent while a session
+   worked.
+3. Done for this slice, in the same commit. The 42 items of the sweep under "JH 5"
+   (`docs/sweep-2026-10-11.md`), each read at its place first: 28 checked off; the 12 of the
+   orchestrator skill wait for T8, and 2 wait for his answer, asked through the lead.
 4. The gate; the gentle-ai review as smaller candidates, inside the gate lock (the lineage
    `review-506a7846ef824265` stays open and is not touched); the Codex review within the rate
    of the Codex budget, its plan's figure sent to the lead before it runs.

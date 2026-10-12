@@ -10,7 +10,17 @@ const at = (minute) => `2026-01-01T10:${String(minute).padStart(2, '0')}:00.000Z
 const base = (minute) => ({ timestamp: at(minute), cwd: 'C:\\proj', gitBranch: 'main', isSidechain: false });
 const transcript = (...entries) => entries.map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry))).join('\n') + '\n';
 
-const prompt = (text, minute) => ({ type: 'user', ...base(minute), origin: { kind: 'human' }, message: { role: 'user', content: text } });
+// The context figures as the tests say them, each computed from the library's constant: the pause is the
+// user's rule and the compaction the host's, each has one home, and a test that wrote its value would be
+// a second one. `k` says tokens as the board does.
+const WINDOW = lib.DEFAULT_CONTEXT_WINDOW;
+const PAUSE = lib.shareOf(WINDOW, lib.DEFAULT_CONTEXT_PAUSE_PERCENT);
+const COMPACTION = lib.shareOf(WINDOW, lib.DEFAULT_CONTEXT_COMPACTION_PERCENT);
+const k = (tokens) => `${Math.round(tokens / 1000)}k`;
+const share = (tokens) => `${k(tokens)} tokens (${lib.percentOf(tokens, WINDOW)}%)`;
+const PAUSE_SAID = `${lib.DEFAULT_CONTEXT_PAUSE_PERCENT}% of the window (${k(PAUSE)})`;
+
+const prompt =(text, minute) => ({ type: 'user', ...base(minute), origin: { kind: 'human' }, message: { role: 'user', content: text } });
 const reply = (text, minute, stop = 'end_turn') => ({ type: 'assistant', ...base(minute), message: { role: 'assistant', stop_reason: stop, content: [{ type: 'text', text }] } });
 const thinking = (minute, stop = 'tool_use') => ({ type: 'assistant', ...base(minute), message: { role: 'assistant', stop_reason: stop, content: [{ type: 'thinking', thinking: 'x' }] } });
 const call = (id, name, input, minute) => ({ type: 'assistant', ...base(minute), message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name, input }] } });
@@ -442,19 +452,25 @@ test('after a compaction the context is what the harness says it left, until the
 
 // Session channel, T5: the three figures a statement about a context is made from are in one place. The
 // window is the app's, the compaction is where the host compacts by itself, and the pause is his rule.
-test('the context figures: the window the app reports, where the host compacts, and the pause', () => {
-  assert.deepEqual([lib.DEFAULT_CONTEXT_WINDOW, lib.DEFAULT_CONTEXT_COMPACTION_PERCENT, lib.DEFAULT_CONTEXT_PAUSE_PERCENT], [500000, 93, 85]);
-  assert.deepEqual([lib.shareOf(500000, 93), lib.shareOf(500000, 85), lib.shareOf(20000, 2.5)], [465000, 425000, 500]);
-  assert.equal(lib.DEFAULT_CONTEXT_LIMIT, undefined, 'the 73% mark left');
+test('the context figures: the window the app reports, where the host compacts, and the pause before it', () => {
+  assert.equal(lib.DEFAULT_CONTEXT_WINDOW, 500000);
+  // The two shares are not written here: each has one home, its constant. What a test holds them to is
+  // what they are to each other: both are whole shares of a window, and the pause comes before the
+  // compaction, or a session would be compacted before it wrote its state.
+  const [pause, compaction] = [lib.DEFAULT_CONTEXT_PAUSE_PERCENT, lib.DEFAULT_CONTEXT_COMPACTION_PERCENT];
+  assert.ok(Number.isInteger(pause) && Number.isInteger(compaction) && pause > 0 && pause < compaction && compaction <= 100, `pause ${pause}, compaction ${compaction}`);
+  assert.deepEqual([lib.shareOf(500000, 50), lib.shareOf(20000, 2.5), lib.shareOf(WINDOW, pause)], [250000, 500, PAUSE]);
+  assert.equal(lib.DEFAULT_CONTEXT_LIMIT, undefined, 'the limit mark left');
   assert.equal(lib.DEFAULT_CONTEXT_LIMIT_PERCENT, undefined);
 });
 
-test('a session is at the pause when its context is 85% of the window or more, and the pause can be set', () => {
+test('a session is at the pause when its context is the pause\'s share of the window or more, and the pause can be set', () => {
   const holding = (tokens) => transcript(prompt('go', 1), spoke(2, usage(0, tokens, 0)));
-  assert.equal(lib.sessionFacts(holding(424999)).atContextPause, false);
-  assert.equal(lib.sessionFacts(holding(425000)).atContextPause, true, 'at the pause is at it: the rule says "at 85%"');
-  assert.equal(lib.sessionFacts(holding(425000), { contextPause: 430000 }).atContextPause, false);
-  assert.equal(lib.sessionFacts(holding(17000), { contextWindow: 20000 }).atContextPause, true, 'the pause follows the window given');
+  assert.equal(lib.sessionFacts(holding(PAUSE - 1)).atContextPause, false);
+  assert.equal(lib.sessionFacts(holding(PAUSE)).atContextPause, true, 'at the pause is at it: the rule says "at", not "past"');
+  assert.equal(lib.sessionFacts(holding(PAUSE), { contextPause: PAUSE + 5000 }).atContextPause, false);
+  const small = lib.shareOf(20000, lib.DEFAULT_CONTEXT_PAUSE_PERCENT);
+  assert.deepEqual([small - 1, small].map((tokens) => lib.sessionFacts(holding(tokens), { contextWindow: 20000 }).atContextPause), [false, true], 'the pause follows the window given');
 });
 
 // T5b: the desktop app shows the context as a share of its window, and that is the number Sebastián reads.
@@ -472,10 +488,10 @@ const compaction = (minute, trigger, preTokens, postTokens, more = {}) => ({ typ
 
 test('the room left is counted to where the host compacts: the point this session measured, or the default', () => {
   const plain = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 400000, 0))));
-  assert.deepEqual(plain.contextCompaction, { tokens: 465000, measured: false, at: null });
-  assert.equal(plain.contextRoom, 65000);
+  assert.deepEqual(plain.contextCompaction, { tokens: COMPACTION, measured: false, at: null });
+  assert.equal(plain.contextRoom, COMPACTION - 400000);
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 400000, 0))), { contextCompactionDefault: 450000 }).contextRoom, 50000);
-  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 4000, 0))), { contextWindow: 20000 }).contextRoom, 14600, 'the default point follows the window given');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 4000, 0))), { contextWindow: 20000 }).contextRoom, lib.shareOf(20000, lib.DEFAULT_CONTEXT_COMPACTION_PERCENT) - 4000, 'the default point follows the window given');
 
   // An automatic compaction of this transcript says where the host compacts it: the latest one.
   const measured = lib.sessionFacts(transcript(
@@ -488,15 +504,15 @@ test('the room left is counted to where the host compacts: the point this sessio
 
   // A compaction the user asked for says nothing of where the host would have compacted.
   const manual = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 322000, 0)), compaction(3, 'manual', 322517, 15346), spoke(4, usage(0, 90000, 0))));
-  assert.deepEqual(manual.contextCompaction, { tokens: 465000, measured: false, at: null });
+  assert.deepEqual(manual.contextCompaction, { tokens: COMPACTION, measured: false, at: null });
   // A resumed session writes its earlier entries again: the latest compaction is the latest in time.
   const rewritten = lib.sessionFacts(transcript(compaction(5, 'auto', 466933, 12400, { uuid: 'c2' }), compaction(3, 'auto', 468151, 15700, { uuid: 'c1' }), spoke(6, usage(0, 400000, 0))));
   assert.equal(rewritten.contextCompaction.tokens, 466933);
   // Past the point (a session whose host compacts later than the figure says): the room is below zero, as it is.
-  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 470000, 0)))).contextRoom, -5000);
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, COMPACTION + 5000, 0)))).contextRoom, -5000);
   // With no context read there is no room to say, and the point is still the one known.
   const none = lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2)));
-  assert.deepEqual([none.contextRoom, none.contextCompaction.tokens], [null, 465000]);
+  assert.deepEqual([none.contextRoom, none.contextCompaction.tokens], [null, COMPACTION]);
 });
 
 // A task, for the board, is the work one instruction started: a prompt the person sent, or a message from
@@ -569,12 +585,14 @@ test('the last task: what crosses a compaction, what was written twice, and what
 
 test('the last task no longer fits when it cost more than the room left before the host compacts', () => {
   const session = (held) => transcript(prompt('first', 1), spoke(2, usage(0, held - 60000, 0)), spoke(3, usage(0, held, 0)));
-  assert.deepEqual([lib.sessionFacts(session(405000)).contextRoom, lib.sessionFacts(session(405000)).lastTaskFits], [60000, true], 'a task of exactly the room left fits');
-  assert.deepEqual([lib.sessionFacts(session(405001)).contextRoom, lib.sessionFacts(session(405001)).lastTaskFits], [59999, false]);
-  // The two facts are separate: below the pause and no longer fitting, at the pause and still fitting.
-  const small = lib.sessionFacts(transcript(prompt('first', 1), spoke(2, usage(0, 429000, 0)), spoke(3, usage(0, 430000, 0))));
+  const exact = COMPACTION - 60000; // what a session holds when the room left is exactly its last task
+  assert.deepEqual([lib.sessionFacts(session(exact)).contextRoom, lib.sessionFacts(session(exact)).lastTaskFits], [60000, true], 'a task of exactly the room left fits');
+  assert.deepEqual([lib.sessionFacts(session(exact + 1)).contextRoom, lib.sessionFacts(session(exact + 1)).lastTaskFits], [59999, false]);
+  // The two facts are separate: at the pause and still fitting (a task of 1,000 tokens), below the pause
+  // and no longer fitting (one of 60,000, which is more than the pause leaves before the compaction).
+  const small = lib.sessionFacts(transcript(prompt('first', 1), spoke(2, usage(0, PAUSE, 0)), spoke(3, usage(0, PAUSE + 1000, 0))));
   assert.deepEqual([small.atContextPause, small.lastTaskFits], [true, true]);
-  assert.deepEqual([lib.sessionFacts(session(410000)).atContextPause, lib.sessionFacts(session(410000)).lastTaskFits], [false, false]);
+  assert.deepEqual([lib.sessionFacts(session(PAUSE - 1)).atContextPause, lib.sessionFacts(session(PAUSE - 1)).lastTaskFits], [false, false]);
 });
 
 // R3-tool-result-without-recorded-call: a transcript can start after the call (a compaction, a lost line).
@@ -1154,7 +1172,7 @@ const A = 'aaaaaaaa-1111-4111-8111-111111111111';
 const B = 'bbbbbbbb-2222-4222-8222-222222222222';
 const seen = (id, state, more = {}) => ({ id, title: `title ${id[0]}`, state, turnEndedAt: state === 'working' ? null : before(600), lastEntryAt: before(600), context: { tokens: 100000, model: 'model-x', at: before(600) }, atContextPause: false, work: [], tail: ['a line'], ...more });
 const open = (id) => ({ tool: 'Bash', id, description: 'Run', ended: false, file: { path: 'x', modifiedAt: before(90) } });
-const boardOf = (parts = {}) => ({ hours: 12, contextPause: 425000, contextWindow: 500000, generatedAt: before(30), sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] }, ...parts });
+const boardOf = (parts = {}) => ({ hours: 12, contextPause: PAUSE, contextWindow: WINDOW, generatedAt: before(30), sessions: [], worktrees: { available: true, items: [] }, gates: { available: true, items: [] }, pullRequests: { available: true, items: [] }, ...parts });
 const changes = (was, is, options) => lib.boardChanges(boardOf(was), boardOf(is), options);
 
 test('boardChanges: a session that starts waiting, with what it was doing', () => {
@@ -1174,17 +1192,18 @@ test('boardChanges: a session that appears, one that leaves the window, one that
   assert.deepEqual(changes({ sessions: [seen(A, 'waiting'), seen(B, 'working')] }, { sessions: [seen(B, 'working')] }), ['session aaaaaaaa "title a" left the window of the last 12h']);
   // Session channel, T5: the watch wakes once when a session reaches the pause, with what the judgment
   // there needs: what it holds, the room left before the host compacts, and what its last task cost.
+  const held = PAUSE + 5499; // a little past the pause, with less room left than its last task took
   const big = {
-    context: { tokens: 430499, model: 'model-x', at: before(40) },
+    context: { tokens: held, model: 'model-x', at: before(40) },
     atContextPause: true,
-    contextCompaction: { tokens: 465000, measured: false, at: null },
-    contextRoom: 34501,
+    contextCompaction: { tokens: COMPACTION, measured: false, at: null },
+    contextRoom: COMPACTION - held,
     lastTask: { tokens: 62000, startedBy: 'person', startedAt: before(900), endedAt: before(40), compactions: 0 },
     lastTaskFits: false,
   };
-  const reached = 'session aaaaaaaa "title a" reached the context pause, 85% of the window (425k): context 430k tokens (86%), room 35k before the host compacts (465k), last task 62k, which no longer fits';
+  const reached = `session aaaaaaaa "title a" reached the context pause, ${PAUSE_SAID}: context ${share(held)}, room ${k(COMPACTION - held)} before the host compacts (${k(COMPACTION)}), last task 62k, which no longer fits`;
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', big)] }), [reached]);
-  assert.deepEqual(changes({ sessions: [seen(A, 'working', big)] }, { sessions: [seen(A, 'working', { ...big, context: { ...big.context, tokens: 440000 } })] }), [], 'already at the pause: said once');
+  assert.deepEqual(changes({ sessions: [seen(A, 'working', big)] }, { sessions: [seen(A, 'working', { ...big, context: { ...big.context, tokens: held + 9000 } })] }), [], 'already at the pause: said once');
   assert.deepEqual(changes({ sessions: [seen(A, 'working', { atContextPause: null })] }, { sessions: [seen(A, 'working', big)] }), [reached]);
   // A task that no longer fits is a fact of the row, not a second reason to wake: below the pause it wakes nobody.
   assert.deepEqual(changes({ sessions: [seen(A, 'working')] }, { sessions: [seen(A, 'working', { ...big, atContextPause: false })] }), []);
@@ -1849,34 +1868,37 @@ test('renderBoard names the latest timed end as the last one, and an untimed end
 test('renderBoard says the context held, the room left and the last task\'s cost, and when a session is at the pause', () => {
   const task = (tokens) => ({ tokens, startedBy: 'person', startedAt: before(900), endedAt: before(60), compactions: 0 });
   const point = (tokens, measured = false) => ({ tokens, measured, at: measured ? before(7200) : null });
-  const session = (id, tokens, more = {}) => ({ id, title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens, model: 'model-x', at: before(60) }, atContextPause: tokens >= 425000, contextCompaction: point(465000), contextRoom: 465000 - tokens, lastTask: task(62000), lastTaskFits: 465000 - tokens >= 62000, skippedLines: 0, work: [], tail: [], ...more });
+  const session = (id, tokens, more = {}) => ({ id, title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens, model: 'model-x', at: before(60) }, atContextPause: tokens >= PAUSE, contextCompaction: point(COMPACTION), contextRoom: COMPACTION - tokens, lastTask: task(62000), lastTaskFits: COMPACTION - tokens >= 62000, skippedLines: 0, work: [], tail: [], ...more });
+  // Four places a context can be in: a little past the pause, almost empty, below the pause with a point
+  // of its own, and past where the host compacts.
+  const [past, empty, below, over] = [PAUSE + 5499, 999, PAUSE - 15000, COMPACTION + 5200];
   const sessions = [
-    session('11111111-a', 430499),
-    session('22222222-b', 999, { self: true, lastTask: { unavailable: 'its first task has not ended' }, lastTaskFits: null }),
-    session('33333333-c', 410000, { contextCompaction: point(466933, true), contextRoom: 56933 }),
-    session('44444444-d', 470200, { lastTask: task(3400), lastTaskFits: false }),
+    session('11111111-a', past),
+    session('22222222-b', empty, { self: true, lastTask: { unavailable: 'its first task has not ended' }, lastTaskFits: null }),
+    session('33333333-c', below, { contextCompaction: point(466933, true), contextRoom: 466933 - below }),
+    session('44444444-d', over, { lastTask: task(3400), lastTaskFits: false }),
   ];
   const lines = lib.renderBoard({ ...BOARD, sessions }, { now: NOW });
   assert.deepEqual(lines.slice(2, 17), [
     '11111111  waiting  t  last entry 1m ago',
     '  cwd C:\\p  branch main',
-    '  context 430k tokens (86%)  room 35k before the host compacts (465k)  last task 62k, which no longer fits  at the pause: 85% of the window (425k)',
+    `  context ${share(past)}  room ${k(COMPACTION - past)} before the host compacts (${k(COMPACTION)})  last task 62k, which no longer fits  at the pause: ${PAUSE_SAID}`,
     '',
     '22222222  waiting  t  last entry 1m ago  (this session)',
     '  cwd C:\\p  branch main',
-    '  context 1k tokens (0%)  room 464k before the host compacts (465k)  last task not known: its first task has not ended',
+    `  context 1k tokens (0%)  room ${k(COMPACTION - empty)} before the host compacts (${k(COMPACTION)})  last task not known: its first task has not ended`,
     '',
     '33333333  waiting  t  last entry 1m ago',
     '  cwd C:\\p  branch main',
-    '  context 410k tokens (82%)  room 57k before the host compacts (467k, measured in this session)  last task 62k, which no longer fits',
+    `  context ${share(below)}  room ${k(466933 - below)} before the host compacts (467k, measured in this session)  last task 62k, which no longer fits`,
     '',
     '44444444  waiting  t  last entry 1m ago',
     '  cwd C:\\p  branch main',
-    '  context 470k tokens (94%)  no room: 5k past where the host compacts (465k)  last task 3k, which no longer fits  at the pause: 85% of the window (425k)',
+    `  context ${share(over)}  no room: 5k past where the host compacts (${k(COMPACTION)})  last task 3k, which no longer fits  at the pause: ${PAUSE_SAID}`,
   ]);
   // The pause given in tokens is said as its share of the window too, and the window can be another.
   const wide = lib.renderBoard({ ...BOARD, contextPause: 300000, contextWindow: 1000000, sessions: [{ ...sessions[0], atContextPause: true }] }, { now: NOW });
-  assert.equal(wide[4], '  context 430k tokens (43%)  room 35k before the host compacts (465k)  last task 62k, which no longer fits  at the pause: 30% of the window (300k)');
+  assert.equal(wide[4], `  context ${k(past)} tokens (${lib.percentOf(past, 1000000)}%)  room ${k(COMPACTION - past)} before the host compacts (${k(COMPACTION)})  last task 62k, which no longer fits  at the pause: 30% of the window (300k)`);
   // A board from before these facts were kept (a watch's first look after an update) says what it has.
   const older = lib.renderBoard({ ...BOARD, sessions: [{ id: '55555555-e', title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens: 100000, model: 'model-x', at: before(60) }, skippedLines: 0, work: [], tail: [] }] }, { now: NOW });
   assert.equal(older[4], '  context 100k tokens (20%)');
@@ -2436,7 +2458,7 @@ test('boardChanges: a session whose last word in the record is closed or relieve
   assert.deepEqual(said(waiting, again, opened), ['session bbbbbbbb "JH 2 · the board" finished another turn and is waiting']);
   // What a closed session does that is not waiting is still said: it works again, or reaches the pause.
   assert.deepEqual(changes({ sessions: [titled(A, 'waiting')] }, withRecord([titled(A, 'waiting'), working], opened, closed)), ['session bbbbbbbb "JH 2 · the board" appeared (working)']);
-  assert.deepEqual(said(working, titled(B, 'waiting', { atContextPause: true }), opened, closed), ['session bbbbbbbb "JH 2 · the board" reached the context pause, 85% of the window (425k): context 100k tokens (20%)']);
+  assert.deepEqual(said(working, titled(B, 'waiting', { atContextPause: true }), opened, closed), [`session bbbbbbbb "JH 2 · the board" reached the context pause, ${PAUSE_SAID}: context 100k tokens (20%)`]);
   // A notice of another session's ends nothing of this one.
   assert.deepEqual(said(working, waiting, noticeOf(300, { id: A, title: 'JH ORQ · proj' }, 'all', 'relieved', 'JH ORQ nueva · proj has the role now')), [waits]);
 });
@@ -2668,8 +2690,8 @@ test('quoteOf gives the entry at a line only when it is what the person sent, wi
     { ...prompt('', 7), message: { role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'mirá esto' }, { type: 'text', text: 'y esto' }] } },
   ];
   const text = transcript(...lines);
-  assert.deepEqual(lib.quoteOf(text, 2), { person: true, at: at(5), text: 'La A, pero lo más automático posible', images: 0, pastedOnly: false });
-  assert.deepEqual(lib.quoteOf(text, 4), { person: true, at: at(7), text: 'mirá esto\ny esto', images: 1, pastedOnly: false });
+  assert.deepEqual(lib.quoteOf(text, 2), { person: true, at: at(5), text: 'La A, pero lo más automático posible', images: 0, pastedOnly: false, queued: false });
+  assert.deepEqual(lib.quoteOf(text, 4), { person: true, at: at(7), text: 'mirá esto\ny esto', images: 1, pastedOnly: false, queued: false });
   // The same with the line endings of a Windows file.
   assert.equal(lib.quoteOf(text.replace(/\n/g, '\r\n'), 2).text, 'La A, pero lo más automático posible');
 });
@@ -2739,6 +2761,72 @@ test('quoteOf says when the person\'s entry is only pasted content: nothing type
   assert.equal(only('<pasted_content id="be4a">\nclosed by another\n</pasted_content id="7e90">'), false);
   // The text is given as the transcript has it, wrapper and all: the caller sees what was sent.
   assert.equal(lib.quoteOf(transcript(prompt(pasted('Sos JH 5.'), 1)), 1).text, pasted('Sos JH 5.'));
+});
+
+// T4d: what the person sends while the session works is not written as a `user` entry. The host queues it
+// and writes an entry of type `attachment` whose `attachment` is a `queued_command`. From a tally of this
+// project's transcripts (2026-10-11, 56 files, keys and values only, no text read), 310 such attachments:
+// 28 of the person (`commandMode: "prompt"`, `origin: { kind: "human" }`, `humanTurn: true`, the prompt a
+// string, no `isMeta`), none of which is also a `user` entry of the transcript; 52 from another session
+// (`origin.kind: "peer"` with the sender's `name`, `isMeta: true`); 228 task notifications (219 with that
+// origin, 9 with none); and 2 prompts with no origin. Only the 28 carry `humanTurn`.
+const queued = (minute, attachment = {}, more = {}) => ({
+  type: 'attachment',
+  ...base(minute),
+  attachment: { type: 'queued_command', prompt: 'made up while it worked', source_uuid: 's1', delivery_id: 'd1', commandMode: 'prompt', origin: { kind: 'human' }, timestamp: at(minute), humanTurn: true, ...attachment },
+  ...more,
+});
+
+test('quoteOf takes a message the person sent while the session worked: a queued command of origin human that the host marks as his turn', () => {
+  const text = transcript(reply('working', 1), queued(2), queued(3, { prompt: `${pasted('Sos JH 5.')}\n` }), queued(4, { prompt: `Dale:\n${pasted('Sos JH 5.')}` }), { ...queued(5), timestamp: undefined });
+  assert.deepEqual(lib.quoteOf(text, 2), { person: true, at: at(2), text: 'made up while it worked', images: 0, pastedOnly: false, queued: true });
+  // A paste alone is not his word there either, and one with a line typed before it is.
+  assert.deepEqual([lib.quoteOf(text, 3).pastedOnly, lib.quoteOf(text, 4).pastedOnly], [true, false]);
+  // The time is the entry's, and the attachment's own when the entry has none.
+  assert.equal(lib.quoteOf(text, 5).at, at(5));
+  assert.equal(lib.quoteOf(transcript({ ...queued(5, { timestamp: undefined }), timestamp: undefined }), 1).at, null);
+});
+
+test('quoteOf refuses every other attachment and says what it is: another origin, no turn of his, no text, another type', () => {
+  const lines = [
+    queued(1, { origin: { kind: 'peer', name: 'JH 1 · made up', from: 'local_1', body: 'made up' }, isMeta: true, humanTurn: undefined }),
+    queued(2, { commandMode: 'task-notification', origin: { kind: 'task-notification', producer: 'made up' }, humanTurn: undefined, prompt: notice({ task: 'b1', status: 'completed' }) }),
+    queued(3, { commandMode: 'task-notification', origin: undefined, humanTurn: undefined }),
+    queued(4, { origin: undefined, isMeta: true, humanTurn: undefined }),
+    queued(5, { humanTurn: undefined }),
+    queued(6, { humanTurn: false }),
+    queued(7, { humanTurn: 'true' }),
+    queued(8, { origin: 'human' }),
+    queued(9, { origin: { kind: 'something-new' } }),
+    queued(10, { prompt: [{ type: 'text', text: 'made up' }] }),
+    queued(11, { prompt: undefined }),
+    { type: 'attachment', ...base(12), attachment: { type: 'hook_success', stdout: 'made up', origin: { kind: 'human' }, humanTurn: true, prompt: 'made up' } },
+    { type: 'attachment', ...base(13), attachment: null },
+    { type: 'attachment', ...base(14) },
+    // The marks of a queued message on a `user` entry, or outside the attachment, make nothing his.
+    { type: 'attachment', ...base(15), origin: { kind: 'human' }, humanTurn: true, prompt: 'made up', attachment: { type: 'queued_command', prompt: 'made up' } },
+  ];
+  const text = transcript(...lines);
+  const said = lines.map((_, index) => lib.quoteOf(text, index + 1));
+  assert.deepEqual(said.map((quote) => quote.what), [
+    'a queued message from another session ("JH 1 · made up")',
+    'a queued task notification',
+    'a queued task notification',
+    'a queued message that records no origin: it cannot be told whose it is',
+    'a queued message of origin "human" that the host does not mark as a turn of the person',
+    'a queued message of origin "human" that the host does not mark as a turn of the person',
+    'a queued message of origin "human" that the host does not mark as a turn of the person',
+    'a queued message that records no origin: it cannot be told whose it is',
+    'a queued message of origin "something-new"',
+    'a queued message of the person that holds no text to quote',
+    'a queued message of the person that holds no text to quote',
+    'an attachment of type "hook_success": the host wrote it, not the person',
+    'an entry of type "attachment" that holds no attachment',
+    'an entry of type "attachment" that holds no attachment',
+    'a queued message that records no origin: it cannot be told whose it is',
+  ]);
+  for (const quote of said) assert.deepEqual(Object.keys(quote), ['person', 'what']);
+  assert.ok(said.every((quote) => quote.person === false));
 });
 
 // --- the project a folder belongs to ---

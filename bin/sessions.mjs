@@ -24,8 +24,10 @@
 // prints its last notices and the last messages between sessions, gives a session opened from the phone
 // the title of the opening it read, and a watch returns for a notice written to the orchestrator.
 // A session's row says the context it holds, the room left before the host compacts it and what its last
-// task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the pause, 85% of the
-// window, to judge whether what is left fits. A watch returns once when a session reaches the pause.
+// task cost (odd/tasks/session-channel.md, "Context"): what a session needs at the context pause to judge
+// whether what is left fits. A watch returns once when a session reaches the pause. The share of the window
+// the pause is, and the share where the host compacts, are each one constant of bin/lib/sessions.mjs
+// (`DEFAULT_CONTEXT_PAUSE_PERCENT`, `DEFAULT_CONTEXT_COMPACTION_PERCENT`): no text here writes either.
 // `--opening <title>` prints the opening stored for a session, and `--quote <transcript> <line>` the
 // entry at a line of a transcript only when the user sent it: the check a session runs before it takes
 // words another session carried as his.
@@ -43,6 +45,7 @@ const USAGE = [
   '                           [--context-window <tokens>] [--context-pause <tokens>|<n>%] [--context-compaction <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
   '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>] [--relief <path>]',
+  `         --context-pause is ${DEFAULT_CONTEXT_PAUSE_PERCENT}% of the context window by default, and --context-compaction ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`,
   '       js-harness sessions --address orchestrator|<number> [--hours <n>] [--self <session id>]',
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the title of the one other session that holds the role: exit 0 for one,',
@@ -56,6 +59,7 @@ const USAGE = [
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
   '         or no such line, saying which; 2 when it cannot look. It warns when the entry is only pasted content.',
+  '         a message the user sent while the session worked (the host queues it) is his too, and is said so',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
 ].join('\n');
 
@@ -138,9 +142,10 @@ function parseArgs(argv) {
     } else if (CONTEXT_MARKS.has(token)) {
       marks.set(token, requireValue(argv, i, token));
     } else if (token === '--context-limit') {
-      // The flag of the 73% mark. Taken for the pause it would move the pause to wherever an old command
-      // line put the mark; refused as unknown it would not say where to go.
-      throw new SessionsArgError('--context-limit left with the 73% mark: --context-pause sets where a session pauses (85% of the window), and --context-compaction where the host compacts it when the session has measured no point of its own (93%)');
+      // The flag of the limit mark the board had before the pause. Taken for the pause it would move the
+      // pause to wherever an old command line put the mark; refused as unknown it would not say where to
+      // go. The two defaults it names are read from their constants, like every share this command says.
+      throw new SessionsArgError(`--context-limit is gone, with the mark it set: --context-pause sets where a session pauses (by default ${DEFAULT_CONTEXT_PAUSE_PERCENT}% of the window), and --context-compaction where the host compacts a session that has measured no point of its own (by default ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%)`);
     } else if (token === '--address') {
       parsed.address = roleNamed(requireValue(argv, i, token));
       if (parsed.address === null) throw new SessionsArgError('--address takes a role: orchestrator (or ORQ), or the number of a work session');
@@ -361,9 +366,9 @@ export async function sessionsMain(
   const projectDir = path.join(claudeHome, 'projects', slug);
   const io = { readFile, readdir, stat, readFacts };
   // Where the session that orchestrates this project keeps its notes: one file per project under the
-  // harness home, which is JS_HARNESS_HOME or the user's home, as for `install` and `remote`. An empty
-  // JS_HARNESS_HOME is no home: joined as it is, it would put the file under the folder the command runs
-  // in. A relative `--relief` is read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
+  // harness home, which is JS_HARNESS_HOME or the user's home. An empty JS_HARNESS_HOME is no home here:
+  // joined as it is, it would put the file under the folder the command runs in. A relative `--relief` is
+  // read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(harnessHome, slug));
   // The machine's gate lock is under the same home, read through the same three functions as every other
@@ -594,7 +599,10 @@ export async function sessionsMain(
       return 1;
     }
     const images = quote.images === 0 ? '' : `, with ${quote.images} image${quote.images === 1 ? '' : 's'}`;
-    stdout(`${file}, line ${line}, ${quote.at ?? 'no time recorded'}, sent by the user${images}:`);
+    // A message he sent while the session worked is his too, and is said as that: the host wrote it as a
+    // queued command, not as an entry of his turn, and whoever reads the line sees which of the two it is.
+    const when = quote.queued ? ' while the session was working (the host queued it)' : '';
+    stdout(`${file}, line ${line}, ${quote.at ?? 'no time recorded'}, sent by the user${when}${images}:`);
     stdout(quote.text);
     if (quote.pastedOnly) stderr(`js-harness sessions: line ${line} is only pasted content: nothing was typed with it, and a paste alone is not his word`);
     return 0;
