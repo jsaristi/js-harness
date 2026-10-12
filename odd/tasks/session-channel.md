@@ -1738,26 +1738,52 @@ session needs beside it to go on; the summary of a compaction is not the record.
 
 ## Next step
 The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
-`feat/session-compaction`, cut from `main` at `78bbc80`; it holds documents only.
-1. T6b, his protocol for a compaction: the design is point 14, version 2, read by two
-   independent readers (Progress, 2026-10-12 02:56). Nothing of it is built. It waits for
-   his decisions, listed at the end of point 14 and asked one at a time in this chat; the
-   first two are answered (after each tool call; told and written at the pause, then go
-   on), and the build no longer waits for the rest. With his answers: the contract's "Done when" gains the commands of
-   point 14, then the build, test first, one narrow writer a task (Haiku 5.5 at effort high
-   for scoped code), in this order: the measure and the lines of the resume hook, which
-   change nothing on a machine; then the pause command and its entry.
-2. After T6b, in this order: T16, no session where he does not see it, design first; T7; T8,
-   with the twelve items of the sweep, the recap line and his two rules of 2026-10-12; T13
-   and the applying half of T14 once the table of JH 7 is on `main` (its `ruleHere`, `ruleOf`
-   and list of sub-agent launches are read in its worktree first, not copied), and T15,
-   which costs nothing, before them if it helps to order them; T9 to T12. The two
-   suggestions of gentle-ai in "Open points" go with the first code of these.
-`AGENTS.md` is not edited by this feature. The lead installs the resume hook on this machine
-when no gate holds or waits.
-Waiting for him, each asked alone and only when no work runs: the decisions of point 14;
-tests owed 1, 2, 3 and 6 and the three tries of point 14, each asked before it is run. The
-yardstick of "the last task" ("Open points", its first row) and whether the orchestrator is
-relieved or compacted (the sweep's A3 89) reach him through the lead. For the gate's
-session, through the lead: the lock should record the session id that holds it, so `Gates`
-names the session exactly (point 4, "As built").
+`feat/session-compaction`, cut from `main` at `78bbc80`, with documents only until the build
+below. He is away from 2026-10-12 03:38 for about eight hours (his words, the lead's
+transcript `65318fd5`, line 2381, read with `sessions --quote`, exit 0); by the lead's
+reading this session does not stop for him: it builds what his two answers decide and holds
+the rest.
+
+A session that comes back from a compaction, first of all: one line to the lead by
+`SendMessage` to "JH ORQ · js-harness" (title, hour by date, share of the context, what it
+resumes); then `git status`, `git log --oneline -5` and the list below, trusted over the
+summary.
+
+1. T6b, built in this order, test first, one narrow writer a task (Haiku 5.5 at effort high
+   for scoped code; a writer never commits and never waits for the gate), each task closed by
+   a commit through `node bin/js-harness.mjs gate --wait 180 -- git commit`, gentle-ai on
+   the commit, and Codex inside the rate (the larger of 300,000 input tokens a review and
+   1,200 a changed line, by the plan's figure; over it, or a second run after a fall, waits
+   for him: one line to the lead and the next task). The design is point 14.
+   a. `main` at `5f011cc` merged into this branch and that merge gated, before any code.
+   b. The pause command (point 14, part 1): a module of its own that reads the end of a
+      transcript, the mark for a stretch, the function JH 7's `Stop` check will import, and
+      `js-harness resume --pause` for a `PostToolUse` input; never an exit but 0. No entry
+      in `install` yet.
+   c. The resume hook's new lines (part 3) and the fact of a compaction recorded in the
+      channel's record (part 4, a), which the two readers have not read: a reader reads
+      part 4 before it is built.
+   d. The measure (told, kept, announced, for automatic compactions) in the sessions
+      library; `--measures` itself is T9.
+   e. The entry for `install` and the row of `doctor` that runs each entry's command: built
+      and tested, and held from `main` until he answers whether `install` writes it for
+      every project.
+   Not done here, each his: installing anything on this machine; the three tries of point
+   14, which open a session.
+2. After T6b, in this order: T16, design first; T7; T8, with the twelve items of the sweep,
+   the recap line, his two rules of 2026-10-12 and the four rules the lead found; T13 and the
+   applying half of T14 once the table of JH 7 is on `main` (its `ruleHere`, `ruleOf` and
+   list of sub-agent launches are read in its worktree first, not copied), and T15 before
+   them if it helps to order them; T9 to T12. The two suggestions of gentle-ai in "Open
+   points" go with the first code of these.
+`AGENTS.md` is not edited by this feature. The entry of the resume hook is registered on this
+machine and does not work until the installed command is brought up to `main`, which the
+lead asks him.
+Waiting for him, each asked alone, once, and only when he is back and no work runs. Open and
+asked once at 03:05: whether the pause's entry is installed on this machine when it is on
+`main`. Not asked yet: whether `install` writes that entry for every project; whether the
+second block goes once the resume hook is installed; tests owed 1, 2, 3 and 6 and the three
+tries of point 14, each before it is run. The yardstick of "the last task" ("Open points",
+its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)
+reach him through the lead. For the gate's session, through the lead: the lock should record
+the session id that holds it, so `Gates` names the session exactly (point 4, "As built").
