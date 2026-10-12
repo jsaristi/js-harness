@@ -94,7 +94,7 @@ high
 How the two permission classes meet on his machine was asked and answered on 2026-10-11: A
 ("Permission classes" below); the setting is a security setting, his alone, changed by him at
 the computer. Whether `install` may write that setting for him on an explicit flag (a product
-choice, and a change on a machine). Installing the resume hook on this machine. Whether notices are also pushed into a work session by a hook (option C below; it has
+choice, and a change on a machine). Whether notices are also pushed into a work session by a hook (option C below; it has
 the same exposure as A). Archiving or deleting any session. Any change to the charter.
 
 Three things already put to him and not answered, which this document does not settle:
@@ -600,12 +600,30 @@ reader, and that table names this feature as their owner.
   outside "Progress" pass, and `rg` for a share the rule left behind finds none in the four
   sources (Progress, 2026-10-11)
 - [x] T6 The resume hook: a `SessionStart` entry with the matcher `compact` for both hosts,
-  installed on his word
+  installed on this machine by the lead once the fourth slice is on `main`: his answer of
+  2026-10-11 (Progress, 22:03)
+- [ ] T6b The compaction protocol, so that a compaction never again arrives with nothing
+  saved (his words of 2026-10-11, Progress 22:03). Design first, read twice by independent
+  readers before it reaches him. Three parts: (1) at the pause a session writes its state to
+  the feature document and its very next reply to him carries the percentage and the two
+  blocks, whatever is left of the task; the board could print the resume prompt of a session.
+  (2) Something with no model in it before a compaction: whether the host has a hook event
+  that fires before one (the lead named `PreCompact`, with matchers for a manual and an
+  automatic one; not verified, to be read in the host's documentation), and if it has, a
+  command that writes what a session cannot rebuild (each worktree's branch, head and
+  changed files; the gate's holder and its line; the feature document's path and its last
+  state line) under the home's `.js-harness`, where the resume hook names it. (3) A check: the
+  count of automatic compactions in a transcript with no state written before them. Also
+  from the lead, to place here or in T8: `--quote` says so when an entry of the person is
+  only pasted text (`quoteOf` already returns `pastedOnly`); the contract's "Effort" section
+  as the home of a task's effort
 - [ ] T7 The row `session-classes` of `doctor`, with the exact fix in its line; and, on his
   word, the flag of `install` that writes the setting and records it
 - [ ] T8 The orchestrator skill rewritten: the lead, the charter, the handover, the work session.
   It closes the twelve items of the sweep about the skill's text (`docs/sweep-2026-10-11.md`,
-  "JH 5", the two lists of `bin/lib/manifest.mjs`), which wait for it
+  "JH 5", the two lists of `bin/lib/manifest.mjs`), which wait for it. Its text also carries
+  the recap line of T13 to T15: one line a session with its mode and why (B5 of the proposal
+  named there), since "siempre dime en que modo de esfuerzo debemos trabajar" is his
 - [ ] T9 `--measures`
 - [ ] T10 Practice journey: a step that records a notice in an installed project and reads it
   on the board
@@ -613,6 +631,26 @@ reader, and that table names this feature as their owner.
 - [ ] T12 The failures this feature owns closed with their proofs; the roadmap's section
   replaced by a pointer only after what it holds and this document does not (the reasoning of
   the lead, the advice on width, the two measures that reopen a decision) is moved here
+- [ ] T13 Effort by task, not by document (B2 of the proposal "Model and effort by kind of
+  work", version 2; his "Sí, que entre al plan" of 2026-10-11, Progress 22:25). Today a
+  contract holds one `## Effort` for a whole feature (`bin/lib/contract.mjs:25-32`) and a
+  feature has design tasks and build tasks. Each task of the checklist names its kind of
+  work; its effort and the model of its writer follow from the table, whose home is the
+  rules list of JH 7 and not this feature; `js-harness contract goal` prints them. It waits
+  for that table to be on `main`
+- [ ] T14 The effort applied and checked (B3). High is the default; a lower level ends with
+  its task, and a design question inside such a task goes back to high first. With a lead in
+  the desktop app, the lead sets the session's effort with the app's tool, from the session's
+  next turn. Without one (an installed project, the terminal, Codex) the shipped
+  session-start hook and `contract goal` print the mode the task calls for, and nothing is
+  forced. In both, a row of `check`, INFO, compares the level a task ran at, and the model
+  and effort of its sub-agents, with the table, read from the sessions' records. For the
+  design, found by the lead's reader and not for this feature to change: `js-harness remote`
+  starts a session with no model or effort (`bin/lib/remote.mjs:88`), so one opened from the
+  phone takes the default of his settings
+- [ ] T15 A count of a day's sub-agents by kind (writer, explorer, reviewer, verifier), model
+  and tokens, read from their records (C1): it costs nothing to run, and it decides what is
+  measured next and the working rule on fewer launches
 
 ## Open points
 What is known to be open and is no task yet. "Next step" has what waits for him.
@@ -622,7 +660,6 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
 | Whether the board's reader counts a message he sent while a session worked as a prompt of his | point 7, "Open" | a decision before T9 |
 | The text of the orchestrator skill: twelve items of the sweep | `docs/sweep-2026-10-11.md`, "JH 5", the two lists of `bin/lib/manifest.mjs` | T8 |
 | Whether the orchestrator is relieved or compacted (the sweep's A3 89) | point 9, its last bullet, against "compaction left to the host" in point 11 | his answer, asked through the lead |
-| Whether installing the resume hook on this machine is still his to say (the sweep's A3 90) | "Ask me before" and T6, against the lead's reading of his words of 2026-10-11 | his answer, asked through the lead |
 
 ## Progress
 - 2026-10-10, T0. Designed with `odd/tasks/rule-hierarchy.md`, whose Progress holds what was
@@ -1254,6 +1291,40 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   start. For him, with the yardstick of "the last task": a message that arrives seconds before
   a task ends now cuts it (in one real transcript the last task goes from 177,585 tokens to
   4,925), so "the last finished stretch" leans towards "it fits".
+- 2026-10-11 21:07 to 22:12 local, the round of fixes gated, merged with `main` and reviewed.
+  `850f55d` holds the round (gate PASS 21:07). `main` had moved to `40ccb45` (pull request 66),
+  so it was merged in as `0ee3540` and the merged tree gated (PASS 21:49), which is what the
+  lead asks of a slice before he merges it. The practice journey ran once on `0ee3540`, inside
+  the same turn at the gate: "10 of 10 steps passed; real home: unchanged".
+  The Codex review of the round did not start from the merge: with HEAD on a merge of `main`,
+  `codex-review --base origin/main` plans the whole slice again (seven parts where the round
+  is two), since every commit of the slice is in the range. A commit is therefore reviewed
+  from a detached checkout of it, with the commit before it as the base, and the branch is
+  checked out again when the run ends (`turn-codex-at.sh` in this session's scratchpad).
+  So run, `303d9ea..850f55d` cost 761,468 input tokens in two parts and left two findings,
+  both P2: a queued message of a sub-agent that carries `senderTaskId` and no `handback` is
+  counted as another session's instruction and gives a wrong task cost (the oddity a writer
+  had left written down above); and the list the hook prints when one title names several
+  openings collapses the blanks in the titles it shows, so a title read from that list can
+  ask for the wrong opening. Codex for the slice: 2,909,637 input tokens over 2,586 changed
+  lines, 1,125 a line, under the rate; for the feature: 9,106,719.
+- 2026-10-11 22:03 local, a compaction taken on purpose. At 89% of its context this session
+  wrote its state to a file in its scratchpad and to memory, and its next reply to him carried
+  the percentage and the two blocks; he sent them, and the work went on from the files. His
+  words that ask for this as a protocol reached this session through the lead and were read
+  at their lines with `sessions --quote`, exit 0 (the lead's transcript `130317af`, lines 2594
+  and 2671); they are task T6b. Line 2671 also answers the sweep's A3 90: yes, the resume
+  hook is installed, by the lead, when this slice is on `main`.
+- 2026-10-11 22:25 local, three tasks more, from the lead. His words, read at their line with
+  `sessions --quote`, exit 0 (the lead's transcript `130317af`, line 2891, 22:15): "Sí, que
+  entre al plan". What he answered is the lead's record (its relief file, line 302): that the
+  mechanism for model and effort by kind of work, and the measurements that cost nothing,
+  enter the plan as tasks of this session and of JH 7; a measurement that spends is asked of
+  him one at a time. The proposal, version 2 after two independent readers, was read whole
+  here (190 lines, in the lead's scratchpad until JH 7 commits it to the repository; it is
+  cited from there once it exists). This feature's part is T13 (its B2), T14 (B3), the recap
+  line in T8 (B5) and T15 (C1). They are built after the fourth slice is delivered and jump
+  nothing.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1264,12 +1335,13 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 1 | T3, T4a | `main`, pull request 58 |
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
-| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, with `main` merged in at `5af56c1`; T5 and T6 are gated at `9dd1622`, the rest is in the commit that holds this section |
+| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, with `main` merged in at `40ccb45` (the merge `0ee3540`, gated); the two fixes of the last Codex run are the code commit after the one that holds this section |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
 - Reviews of the fourth slice: gentle-ai approved it as two candidates and Codex reviewed
-  `5af56c1..303d9ea` (Progress, 19:22 to 19:55); the round of fixes after them is one commit
-  more, which owes its own Codex review. The gentle-ai lineage `review-506a7846ef824265` stays
+  `5af56c1..303d9ea` (Progress, 19:22 to 19:55) and the round of fixes `303d9ea..850f55d`
+  (Progress, 21:07 to 22:12). A commit made after a merge of `main` is reviewed by Codex with
+  the commit before it as the base, never with `origin/main`. The gentle-ai lineage `review-506a7846ef824265` stays
   open and is not touched (Progress: the review that stopped on a time-out, and his choice
   about it).
 - Open, and no task yet: the table of "Open points".
@@ -1286,30 +1358,40 @@ session needs beside it to go on; the summary of a compaction is not the record.
 - Notices to the lead go by `SendMessage` to the title `JH ORQ · js-harness`: delivered,
   waiting, closed. `js-harness notify` is on `main` and records them; the installed command
   on this machine is older until the lead updates it.
-- Sub-agents: one writer at a time, at effort high, with the allowed edit surfaces and the
-  tests of every caller of what it changes in the brief.
+- Sub-agents: one writer at a time, with one narrow task, the allowed edit surfaces and the
+  tests of every caller of what it changes in the brief; it never commits and never waits for
+  the gate. A writer of scoped code runs on Haiku 5.5 at effort high (`model: "haiku"` on the
+  call; the two of 2026-10-11 22:20 ran on `claude-haiku-5-5`, read in the first one's
+  record); one that explores, reviews or verifies runs on Opus 5.5 at high.
+- The gate has a line. A turn is asked with `js-harness gate --wait 180 -- <command>`, and the
+  lead says by hand whose turn comes first when several wait.
+- This session's state before a compaction is also in its scratchpad,
+  `STATE-before-compaction.md`: this section and "Next step" are the record, that file is
+  what was true at the minute it was written.
 
 ## Next step
-The third slice is on `main` (pull request 65, merged as `5af56c1`). This branch, the fourth
-slice, has `main` merged in at that commit, with T5 and T6 built and gated at `9dd1622`. Owed
-on this branch, in this order:
-1. Done, in the commit that holds this text (Progress, 2026-10-11 18:59). T5b: the pause at
-   the value of his latest words, from one constant, and no older value left in a text of
-   this feature.
-2. Done, in the same commit. T4d: `sessions --quote` takes a message he sent while a session
-   worked.
-3. Done for this slice, in the same commit. The 42 items of the sweep under "JH 5"
-   (`docs/sweep-2026-10-11.md`), each read at its place first: 28 checked off; the 12 of the
-   orchestrator skill wait for T8, and 2 wait for his answer, asked through the lead.
-4. Done (Progress, 19:22 to 19:55): the gate, the gentle-ai review as two candidates, the
-   Codex review within the rate. Their findings are fixed in the commit that holds this text
-   (Progress, 19:57 to 20:42). Owed for that commit: its gate, its Codex review, its gentle-ai
-   assessment; and the practice journey run once through the gate lock, since this slice
-   changes what the journey expects of the hook entries and nothing has run it.
-5. The fourth pull request and the notice to the lead, who merges it only when the constant of
-   the pause reads the value of his latest words.
-The resume hook is installed only on his word, and `AGENTS.md` is not edited by this feature.
-Waiting for him, none blocking the build: tests owed 1, 2, 3 and 6, each asked before it is
-run; the yardstick of "the last task". For the gate's session, through
-the lead: the lock should record the session id that holds it, so `Gates` names the session
-exactly (point 4, "As built").
+The first three slices are on `main` (pull requests 58, 59 and 65). This branch is the fourth:
+T5, T6, T5b, T4d and this session's items of the sweep, built, gated, merged with `main` at
+`40ccb45`, reviewed by gentle-ai and twice by Codex, with the practice journey run once on the
+merged tree (Progress, 2026-10-11 21:07 to 22:12). Owed on this branch, in this order:
+1. The two fixes of the last Codex run (Progress, 22:12) are written, test first, each by one
+   narrow writer, and read by the parent: `node --test bin/lib/sessions.test.mjs` 201 pass,
+   `node --test bin/resume.test.mjs` 21 pass. They are the code commit after the one that
+   holds this text. Owed for that commit: its turn at the gate, which the lead orders by hand
+   among the sessions that wait; its Codex review with the commit before it as the base, run
+   only when the plan's figure keeps the slice within the rate; its gentle-ai assessment.
+2. A commit of documents with what those reviews said, then the push.
+3. The fourth pull request and the notice to the lead, who merges it only when its head has
+   today's `main` merged in and a gate ran on that tree, and when the constant of the pause
+   reads the value of his latest words. The lead installs the resume hook on this machine
+   once the slice is on `main`.
+After the fourth slice, in this order: T6b, his protocol for a compaction, design first; T7;
+T8, with the twelve items of the sweep and the recap line; T13 and T14 once the table of JH 7
+is on `main`, and T15, which costs nothing, before them if it helps to order them; T9 to T12.
+`AGENTS.md` is not edited by this feature.
+Waiting for him, none blocking the build, each asked alone and only when no work runs: the
+yardstick of "the last task" (Progress, 19:57 to 20:42, its last lines); tests owed 1, 2, 3
+and 6, each asked before it is run; whether the orchestrator is relieved or compacted (the
+sweep's A3 89), through the lead. For the gate's session, through the lead: the lock should
+record the session id that holds it, so `Gates` names the session exactly (point 4, "As
+built").
