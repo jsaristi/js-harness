@@ -99,8 +99,10 @@ export function sentenceOf(text, phrase) {
 /** The walk of the fences of `text`: `{ walked, open }`. `walked` holds each line with whether it lies outside a fenced
  * block, `{ line, outside }`; `open` is the number, from 1, of the line that opens a fence which no later line closes,
  * or `null`. A fence opens on a line that starts with three or more backticks or tildes, and closes on the next line
- * that starts with the same character as many times or more, so a longer fence can hold a shorter one. The lines that
- * open and close a fence are not outside. */
+ * that starts with the same character as many times or more, so a longer fence can hold a shorter one. A line of
+ * backticks whose words hold another backtick opens nothing: it is a code span written with three marks, and taking it
+ * for a fence would hide every mark after it and report a fence that is not there. The lines that open and close a
+ * fence are not outside. */
 function fenceWalk(text) {
   const walked = [];
   let fence = null;
@@ -108,11 +110,12 @@ function fenceWalk(text) {
   const lines = text.split('\n');
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    const run = FENCE_RUN.exec(line.trim());
+    const trimmed = line.trim();
+    const run = FENCE_RUN.exec(trimmed);
     if (fence !== null) {
       if (run !== null && run[1][0] === fence[0] && run[1].length >= fence.length) fence = null;
       walked.push({ line, outside: false });
-    } else if (run !== null) {
+    } else if (run !== null && !(run[1][0] === '`' && trimmed.slice(run[1].length).includes('`'))) {
       fence = run[1];
       opened = index + 1;
       walked.push({ line, outside: false });

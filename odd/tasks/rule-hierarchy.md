@@ -2130,6 +2130,32 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     now also proves a whole number above 0, and the wait of the gate lock has its test back).
     NEXT: that commit through the gate; gentle-ai on `34c2dfc..` its head; then Codex, whose
     plan is asked again on the new head.
+  - That commit is `878e2e8` (the gate passed at 08:06). gentle-ai approved `34c2dfc..878e2e8`
+    (1,061 lines, medium, one lens) and the approval is acknowledged; its five notes go into
+    `feat/rules-held`, so that this branch does not move again for what a review calls later
+    work: a time with no zone is read in the machine's own zone; no test runs the path where
+    git names the project and the main checkout; an empty `CLAUDE_CONFIG_DIR` counts as set;
+    no test proves that an error of the form `applied` is said and exits 1; the reader has no
+    test of the cap of sessions and takes a `now` that is no number in silence.
+  - **Codex reviewed the whole range once** (`codex-review --base 47484bd --max-parts 7`, in a
+    turn of the gate, 08:51 to 09:41): `65578da..878e2e8`, 7 parts, 2,682 changed lines,
+    **1,769,808 input tokens** (1,365,888 cached) against a plan of about 2,560,000 and an
+    allowance of 3,218,400; 660 a changed line. Recorded. Six parts with no defect, one
+    finding of the second priority, taken and corrected by this session, inline, test first:
+    `fenceWalk` took a line that starts with a code span in three backticks for the opening
+    of a fence, so `rules check` reported a fence that was not there and `rules render`
+    refused a valid document. A line of backticks whose words hold another backtick opens
+    nothing now, as in Markdown. NEXT: that correction through the gate, Codex on it alone
+    (`--base 878e2e8`, by its plan, under the floor), then push and the pull request.
+  - This session's own language server (`node tsserver.js`, pid 59656) spun one logical
+    processor from 01:48 to 08:53 and slowed every gate of the machine (the lead's figures:
+    842 s to about 945 s). The gate printed it at 07:50 and this session reported it as a
+    process whose owner it did not know, when one look at its parents would have said it was
+    its own: the lead said so at 08:51, the chain was checked in the process list
+    (59656, 39296, 59764, 54748, the ancestor of this session's own shell) and the process
+    stopped. It is the register's `hidden-load-slows-gates` again; what would stop it is the
+    gate's load line naming the session a spinning process belongs to, which is the lead's to
+    place.
 
 ## Next step
 In this order. (1) The reviews of `feat/rules-rewire` as the last Progress entry says:
