@@ -145,7 +145,8 @@ function queuedCommandOf(entry) {
  * a task for the board (`sessionFacts`, `lastTask`). The person's is a prompt (`promptText`) or anything
  * else the host marks as sent by a person, which is a paste with nothing typed beside it (`origin.kind:
  * "human"`; 24 of the 583 such entries of this project's transcripts start with a tag, 2026-10-11). A
- * session's is a message from another session. A subagent's hand-back, what the host puts in, a task
+ * session's is a message from another session, which the app may deliver for one (`peerMessageOf`). A subagent's
+ * hand-back, what the app puts in, a task
  * notification and the result of a tool are part of the work an instruction started, not a new one.
  *
  * An instruction that arrives while the session works is a queued command (`queuedCommandOf`) and no
@@ -155,7 +156,7 @@ function instructionBy(entry) {
   if (entry.isSidechain) return null;
   const queued = queuedCommandOf(entry);
   if (queued) {
-    if (queued.kind === 'peer') return peerSender(queued.origin) === 'session' ? 'session' : null;
+    if (queued.kind === 'peer') return peerMessageOf(entry).from === 'session' ? 'session' : null;
     return queued.kind === 'human' && !queued.attachment.isMeta ? 'person' : null;
   }
   if (entry.type !== 'user') return null;
@@ -166,27 +167,71 @@ function instructionBy(entry) {
 
 /** Whether `entry` is a message that did not come from the person: a user entry whose `origin.kind` is
  * `peer`. That is how the host writes what another session sent, what a subagent hands back to its
- * parent and what the app itself put in. It marks every one of them `isMeta` (185 of 185 in this
+ * parent and what the app itself put in, which includes a message the app delivers for a session (`peerSender`).
+ * It marks every one of them `isMeta` (185 of 185 in this
  * project's transcripts, 2026-10-11), which is what keeps such a message from being read as a prompt
  * somebody typed (`promptText`), and so from ever being a session's title. */
 const isPeerMessage = (entry) => entry.type === 'user' && isObject(entry.origin) && entry.origin.kind === 'peer';
 
-/** Who sent what an origin of kind `peer` marks: `'subagent'` for a hand-back, `'host'` for a message the
- * app put in, and `'session'`, another session, for every other. A hand-back is an origin with `handback:
- * true` or one that names the sub-agent by `senderTaskId`, a string, which no origin of another session
- * carries. In this project's transcripts (262 transcripts, 2026-10-11), of the origins of kind `peer`: 280
- * from another session carry `fromSession`, `name` and `msg_id` and no `senderTaskId`; 19 hand-backs carry
- * `handback: true` with `senderTaskId`; and 1 queued command carries `senderTaskId` and `name` with no
- * `handback`, which the rule reads as a hand-back. The origin says it the same way on a `user` entry and
- * inside a queued command. */
-const peerSender = (origin) => (origin.handback === true || typeof origin.senderTaskId === 'string' ? 'subagent' : origin.hostInjected === true ? 'host' : 'session');
+/** The opening of a message the app delivers for a session: the sentence the desktop app's own tool puts before
+ * its wrapper, then the wrapper's opening tag, whose attributes `attributeOf` reads. */
+const DELIVERED_OPENING = /^\s*Another Claude session sent a message:\s*<cross-session-message(\s[^>]*)>/;
+const XML_ENTITIES = { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'" };
+
+/** The value of attribute `name` in the attributes of an opening tag, with its XML entities decoded in one
+ * pass (so `&amp;quot;` reads as `&quot;`), or `undefined` when the tag has no such attribute. */
+const attributeOf = (attributes, name) => {
+  const value = new RegExp(`\\s${name}="([^"]*)"`).exec(attributes)?.[1];
+  return value === undefined ? undefined : value.replace(/&(quot|amp|lt|gt|apos);/g, (_, entity) => XML_ENTITIES[entity]);
+};
+
+/** The sender a message the app delivers for a session names in its wrapper, `{ name }` (the title, `null` when the
+ * wrapper gives none), for a text that begins with that wrapper and gives a `from`. `null` for any other text: the
+ * app's own message, which no session is known to have sent. */
+function deliveredBy(text) {
+  const opening = DELIVERED_OPENING.exec(text);
+  if (opening === null || attributeOf(opening[1], 'from') === undefined) return null;
+  return { name: attributeOf(opening[1], 'name') || null };
+}
+
+/** The text of the entry that holds a peer message: a queued command's `prompt`, or a `user` entry's content as
+ * `quoteEntry` reads it (the string, or its text blocks joined), `''` when it has none. */
+function peerTextOf(entry) {
+  if (entry.type === 'attachment') return typeof entry.attachment.prompt === 'string' ? entry.attachment.prompt : '';
+  const content = entry.message?.content;
+  return typeof content === 'string' ? content : blocksOf(entry).filter(isText).map((block) => block.text).join('\n');
+}
+
+/** Who sent what an origin of kind `peer` marks, given the text of its entry: `'subagent'` for a hand-back,
+ * `'host'` for a message the app put in, and `'session'`, another session, for every other.
+ *
+ * A hand-back is an origin with `handback: true` or one that names the sub-agent by `senderTaskId`, a string,
+ * which no origin of another session carries. In this project's transcripts (262 transcripts, 2026-10-11), of
+ * the origins of kind `peer`: 280 from another session carry `fromSession`, `name` and `msg_id` and no
+ * `senderTaskId`; 19 hand-backs carry `handback: true` with `senderTaskId`; and 1 queued command carries
+ * `senderTaskId` and `name` with no `handback`, which the rule reads as a hand-back.
+ *
+ * A message the app delivers for a session is an origin with `hostInjected: true` whose text begins with the
+ * wrapper that names the sender (`deliveredBy`), and it is `'session'`. Counted on 2026-10-12 over this
+ * project's 57 transcripts, each entry once by its `uuid`: 147 origins carry `hostInjected: true` (144 on `user`
+ * entries, 3 in queued commands), and the text of all 147 begins with that wrapper. Read as the app's own, an
+ * instruction of an orchestrator started no task and its sender was lost. Each of these origins says the same on
+ * a `user` entry and inside a queued command, and so does its text. */
+const peerSender = (origin, text) => {
+  if (origin.handback === true || typeof origin.senderTaskId === 'string') return 'subagent';
+  if (origin.hostInjected !== true) return 'session';
+  return deliveredBy(text) === null ? 'host' : 'session';
+};
 
 /** The peer message `entry` holds as the board keeps it, `{ at, from, name, session, mode, id }`, or `null`
  * for an entry that holds none. `from` is `'session'` for another session, which gives its title in
  * `name`, its own id in `session` (the app's, which is not the name of a transcript), the permission mode
  * it runs in and the id of the message; `'subagent'` for a hand-back, and `'host'` for a message the app
- * put in, which give less. What they do not give is `null`. The text of the message is not kept: the
- * board says who wrote to whom, and the transcript has the rest.
+ * put in, which give less. A message the app delivers for a session is `'session'` too: its title is the one its
+ * wrapper names (`deliveredBy`), its `session` is the origin's `from`, and it has no `id`, since the host gives
+ * none (147 such origins in this project's transcripts on 2026-10-12, counted at `peerSender`). What they do not
+ * give is `null`. The text is read only to tell such a message apart, and is not kept:
+ * the board says who wrote to whom, and the transcript has the rest.
  *
  * A message that arrives between two turns is a `user` entry (`isPeerMessage`), and one that arrives
  * while the session works is a queued command (`queuedCommandOf`) with the same origin inside the
@@ -200,7 +245,13 @@ function peerMessageOf(entry) {
   const origin = queued === null ? (isPeerMessage(entry) ? entry.origin : null) : queued.kind === 'peer' ? queued.origin : null;
   if (origin === null) return null;
   const given = (value) => (typeof value === 'string' ? value : null);
-  return { at: entry.timestamp ?? queued?.attachment.timestamp ?? null, from: peerSender(origin), name: given(origin.name), session: given(origin.fromSession), mode: given(origin.fromMode), id: given(origin.msg_id) };
+  const at = entry.timestamp ?? queued?.attachment.timestamp ?? null;
+  const text = peerTextOf(entry);
+  const from = peerSender(origin, text);
+  // A message the app delivers for a session names its sender in the wrapper, and the origin's `from` is that session.
+  const delivered = origin.hostInjected === true && from === 'session' ? deliveredBy(text) : null;
+  if (delivered !== null) return { at, from, name: delivered.name, session: given(origin.from), mode: given(origin.fromMode), id: null };
+  return { at, from, name: given(origin.name), session: given(origin.fromSession), mode: given(origin.fromMode), id: given(origin.msg_id) };
 }
 
 /** A peer message in words, for the answer that an entry is not what the person sent: who it is from, by
@@ -363,6 +414,13 @@ function end(work, at, status) {
  * the session held at its own latest automatic compaction, with its time, when the transcript records one
  * (`compactionOf`), and otherwise `contextCompactionDefault` (tokens), with `measured: false`. The
  * session's own measure wins because the point is the host's and has not been the same for every session.
+ *
+ * `lastCompaction` is the session's newest compaction of any kind, `{ uuid, at, automatic, before }`, or `null`
+ * when the transcript records none (`compactionOf`): what a watch tells when the host or the person compacts
+ * the session. The newest is the one with the latest time, never the last in the file: the host writes a
+ * boundary again with its `uuid` and time, and an older one again when it continues a session, so a copy
+ * changes nothing. `uuid` is `null` for an entry that has none.
+ *
  * `contextRoom` is what is left before it, in tokens: below zero for a session already past the point,
  * `null` with no context.
  *
@@ -408,6 +466,7 @@ export function sessionFacts(
   let stretch = null; // the work the last instruction started
   let finished = null; // the stretch before it
   let measured = null; // the session's latest automatic compaction, `{ tokens, at }`
+  let lastCompaction = null; // the session's newest compaction of any kind, `{ uuid, at, automatic, before }`
   const calls = new Map(); // tool_use id -> the tool_use block, the entry that holds it and that entry's index
   const workByCall = new Map(); // tool_use id -> work
   const endsByTask = new Map(); // task id -> the latest end that closed nothing, and the index of its entry
@@ -435,6 +494,12 @@ export function sessionFacts(
     if (typeof entry.uuid === 'string') written.add(entry.uuid);
     if (!repeated) {
       const compaction = compactionOf(entry);
+      // The newest by its time, not by its place: a resumed session writes an older boundary again after the
+      // newer one, and an equal time keeps the later entry, as `measured` does. A side chain's is a sub-agent's
+      // own, as `boundariesOf` reads it: the session was not compacted by it.
+      if (compaction && !entry.isSidechain && (lastCompaction === null || (compaction.at ?? '') >= (lastCompaction.at ?? ''))) {
+        lastCompaction = { uuid: typeof entry.uuid === 'string' ? entry.uuid : null, at: compaction.at, automatic: compaction.automatic, before: compaction.before };
+      }
       const sentWith = compaction ? null : contextOf(entry);
       const by = compaction || sentWith ? null : instructionBy(entry);
       // A reply answers the instruction before it even when it records no usage: counted by the replies
@@ -588,6 +653,7 @@ export function sessionFacts(
     contextPercent: context === null ? null : percentOf(context.tokens, contextWindow),
     atContextPause: context === null ? null : context.tokens >= contextPause,
     contextCompaction: compactsAt,
+    lastCompaction,
     contextRoom: room,
     lastTask,
     lastTaskFits: room === null || lastTask.unavailable !== undefined ? null : lastTask.tokens <= room,
@@ -806,7 +872,7 @@ export function parsePsList(stdout) {
 const GATE_PATTERN = /(?:"(?:([^"]*)[\\/])?bin[\\/]check\.mjs"|(?<=^|\s)(?:(\S*)[\\/])?bin[\\/]check\.mjs(?=\s|$))/;
 
 /** A path as two spellings of it compare: forward slashes, no trailing one, and no case on a drive path. */
-function comparable(somePath) {
+export function comparable(somePath) {
   const flat = somePath.replace(/\\/g, '/').replace(/\/+$/, '');
   return /^[A-Za-z]:/.test(flat) ? flat.toLowerCase() : flat;
 }
@@ -1411,19 +1477,33 @@ function queuedMessageOf(entry) {
  * that origin marked as his turn, and no other. The host marks a message from another session `peer`,
  * a task's end `task-notification`, and writes no origin on what it puts in itself. */
 export function quoteOf(text, line) {
+  const found = entryAt(text, line);
+  return found.what === undefined ? quoteEntry(found.entry) : { person: false, what: found.what };
+}
+
+/** The entry at line `line` (from 1) of a transcript's `text`, as `{ entry }`, or `{ what }` in words when there
+ * is none to read there: no such line, an empty line, a line that does not parse or is not an object. `quoteOf`
+ * and `replyOf` both read a line this way, so a line means the same to each. */
+function entryAt(text, line) {
   const lines = text.split('\n');
   if (lines.at(-1) === '') lines.pop(); // what follows the last line break is not a line
   // A whole number only: 1.5 is inside the range and names no line.
-  if (!(Number.isSafeInteger(line) && line >= 1 && line <= lines.length)) return { person: false, what: `no line of the transcript, which has ${lines.length} line${lines.length === 1 ? '' : 's'}` };
+  if (!(Number.isSafeInteger(line) && line >= 1 && line <= lines.length)) return { what: `no line of the transcript, which has ${lines.length} line${lines.length === 1 ? '' : 's'}` };
   const written = lines[line - 1];
-  if (written.trim() === '') return { person: false, what: 'an empty line' };
+  if (written.trim() === '') return { what: 'an empty line' };
   let entry;
   try {
     entry = JSON.parse(written);
   } catch {
     entry = null;
   }
-  if (!isObject(entry)) return { person: false, what: 'not an entry: the line does not parse' };
+  if (!isObject(entry)) return { what: 'not an entry: the line does not parse' };
+  return { entry };
+}
+
+/** What `quoteOf` gives for one parsed entry: the person's words, or `{ person: false, what }`. The stretch before
+ * a compaction asks the same question of each entry (`compactionStretch`), so whose words an entry is has one rule. */
+function quoteEntry(entry) {
   const queued = entry.type === 'attachment' ? queuedMessageOf(entry) : null;
   const what = queued ? queued.what : notThePersons(entry);
   if (what !== null) return { person: false, what };
@@ -1432,6 +1512,244 @@ export function quoteOf(text, line) {
   const said = typeof content === 'string' ? content : blocks.filter(isText).map((block) => block.text).join('\n');
   const typed = said.replace(PASTED_CONTENT, '');
   return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
+}
+
+/** What an entry is when it is not a reply of the session, in words, or `null` for the session's own reply. The
+ * person's entries say so; anything else says what it is, in the words `notThePersons` and `queuedMessageOf` use. */
+function notTheSessions(entry) {
+  if (entry.isSidechain) return entry.type === 'assistant' ? 'a reply of a side chain' : 'an entry of a side chain';
+  if (entry.type === 'assistant') return isOwnReply(entry) ? null : 'a reply the harness wrote itself, not the session';
+  const what = entry.type === 'attachment' ? queuedMessageOf(entry).what : notThePersons(entry);
+  return what ?? "the person's entry";
+}
+
+/** The session's own reply at line `line` (from 1) of a transcript's `text`, read as `quoteOf` reads the person's
+ * words: `{ reply: true, at, text }`, its text blocks joined by a blank line, or `{ reply: false, what }` in words.
+ * A reply that holds no text block (only tool calls, or thinking) has no words to give, and says so. */
+export function replyOf(text, line) {
+  const found = entryAt(text, line);
+  if (found.what !== undefined) return { reply: false, what: found.what };
+  const what = notTheSessions(found.entry);
+  if (what !== null) return { reply: false, what };
+  const said = blocksOf(found.entry).filter(isText);
+  if (said.length === 0) return { reply: false, what: 'a reply with no text block: only tool calls and thinking' };
+  return { reply: true, at: found.entry.timestamp ?? null, text: said.map((block) => block.text).join('\n\n') };
+}
+
+// ---- the stretch before a compaction ------------------------------------------------------------------------
+//
+// A session the host compacted is told what its transcript still holds of the work before the compaction:
+// where the person wrote, where other sessions wrote, where the session last answered and which files it
+// wrote. That is read here from the text alone: no file system, and no line of the transcript is taken twice.
+
+/** An entry's time as the transcript holds it, a string, or `null` for anything else. */
+const timeOf = (value) => (typeof value === 'string' ? value : null);
+
+/** The entries of `text` as the stretch reads them, `{ line, entry, at, uuid }`, in file order. The host copies
+ * entries: a boundary, and sometimes over a thousand old entries with an older boundary at their head, are
+ * written again later in the same file with the same `uuid` and `timestamp`, so file order is not time order.
+ * An entry is counted once, at the line of its first appearance: a line whose `uuid` was seen before is skipped,
+ * and an entry with no `uuid` is always counted. An entry's time is its own `timestamp`, else its attachment's,
+ * else the time of the counted entry before it, `null` when there is none. A line that does not parse, or is not
+ * an object, is skipped as `parseTranscript` skips it. */
+function firstAppearances(text) {
+  const seen = new Set();
+  const counted = [];
+  let previous = null;
+  for (const [index, written] of text.split('\n').entries()) {
+    if (written.trim() === '') continue;
+    let entry;
+    try {
+      entry = JSON.parse(written);
+    } catch {
+      continue;
+    }
+    if (!isObject(entry)) continue;
+    const uuid = typeof entry.uuid === 'string' ? entry.uuid : null;
+    if (uuid !== null) {
+      if (seen.has(uuid)) continue;
+      seen.add(uuid);
+    }
+    const at = timeOf(entry.timestamp) ?? timeOf(entry.attachment?.timestamp) ?? previous;
+    counted.push({ line: index + 1, entry, at, uuid });
+    previous = at;
+  }
+  return counted;
+}
+
+/** Oldest first by `at`, a null time first. Entries of one time keep their order in the file, as the sort is stable. */
+function oldestFirst(one, other) {
+  const [a, b] = [one.at ?? '', other.at ?? ''];
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/** Whether an entry at `at` lies inside `stretch`: after its `after` and before its `before`, a bound that is `null`
+ * being open. An entry with no time lies in no stretch that has a bound. */
+function within(at, { after, before }) {
+  return (after === null || (at !== null && at > after)) && (before === null || (at !== null && at < before));
+}
+
+/** Whether `text` holds a compact block: a fenced code block whose whole content, trimmed, is `/compact`. */
+export function holdsCompactBlock(text) {
+  const lines = text.split('\n').map((line) => line.trim());
+  for (let open = 0; open < lines.length; open += 1) {
+    if (!/^```[\w+#.-]*$/.test(lines[open])) continue;
+    // The block ends at the next bare fence; a fence that closes a block is never an opening one.
+    const close = lines.indexOf('```', open + 1);
+    if (close === -1) return false;
+    const content = lines.slice(open + 1, close).filter((line) => line !== '');
+    if (content.length === 1 && content[0] === '/compact') return true;
+    open = close;
+  }
+  return false;
+}
+
+/** The compactions of `counted` once each, oldest first, as `{ uuid, at, automatic, before, line }`. */
+function boundariesOf(counted) {
+  return counted
+    .filter(({ entry }) => !entry.isSidechain)
+    .flatMap(({ line, entry, at, uuid }) => {
+      const compaction = compactionOf(entry);
+      return compaction === null ? [] : [{ uuid, at, automatic: compaction.automatic, before: compaction.before, line }];
+    })
+    .sort(oldestFirst);
+}
+
+/** The Edit and Write calls the session made in `counted`, oldest first, as `{ line, at, path }`. */
+function writesOf(counted) {
+  return counted
+    .filter(({ entry }) => isOwnReply(entry))
+    .flatMap(({ line, entry, at }) =>
+      blocksOf(entry)
+        .filter((block) => block.type === 'tool_use' && (block.name === 'Edit' || block.name === 'Write') && typeof block.input?.file_path === 'string' && block.input.file_path !== '')
+        .map((block) => ({ line, at, path: block.input.file_path })),
+    )
+    .sort(oldestFirst);
+}
+
+/** A feature document: `odd/tasks/<name>.md`, under any folder, with either slash. */
+const FEATURE_DOCUMENT = /(?:^|[\\/])odd[\\/]tasks[\\/][^\\/]+\.md$/;
+
+/** The path of the last feature document that `wrote` holds written before `at`, or `null`. */
+function documentBefore(wrote, at) {
+  const found = wrote.filter((write) => write.at !== null && at !== null && write.at < at && FEATURE_DOCUMENT.test(write.path));
+  return found.at(-1)?.path ?? null;
+}
+
+/** What a transcript holds of the stretch of work before its newest compaction, `{ boundaries, current, stretch,
+ * person, sessions, lastReply, wrote }`:
+ * - `boundaries`: every compaction of the file once, oldest first, as `{ uuid, at, automatic, before, line }`;
+ * - `current`: the compaction the session has just come back from, one of `boundaries`, or `null` when the session
+ *   has replied since the newest one (the compaction that just happened is not written yet) or there is none;
+ * - `stretch`: `{ after, before, inThisFile }`, the times the stretch lies between (`null` where it is open), and
+ *   whether the stretch holds a reply of the session, which a file the host continued does not;
+ * - `person`: `{ line, at }` of each entry of the stretch that `quoteOf` gives as the person's words;
+ * - `sessions`: `{ line, at, name }` of each message of another session in the stretch, not a hand-back or the host's;
+ * - `lastReply`: `{ line, at }` of the session's last reply in the stretch that holds a text block, or `null`;
+ * - `wrote`: `{ line, at, path }` of every Edit or Write call the session made in the whole file, oldest first.
+ * A side chain never counts. */
+export function compactionStretch(text) {
+  const counted = firstAppearances(text);
+  const boundaries = boundariesOf(counted);
+  const last = boundaries.at(-1);
+  let current = null;
+  let stretch = { after: null, before: null };
+  if (last !== undefined) {
+    const replied = counted.some(({ entry, at }) => isOwnReply(entry) && at !== null && last.at !== null && at > last.at);
+    if (replied) {
+      stretch = { after: last.at, before: null };
+    } else {
+      current = last;
+      stretch = { after: boundaries.at(-2)?.at ?? null, before: last.at };
+    }
+  }
+  const inStretch = counted.filter(({ entry, at }) => !entry.isSidechain && within(at, stretch));
+  const replies = inStretch.filter(({ entry }) => isOwnReply(entry) && blocksOf(entry).some(isText)).sort(oldestFirst);
+  const lastReply = replies.at(-1);
+  return {
+    boundaries,
+    current,
+    stretch: { ...stretch, inThisFile: inStretch.some(({ entry }) => isOwnReply(entry)) },
+    person: inStretch.filter(({ entry }) => quoteEntry(entry).person).map(({ line, at }) => ({ line, at })),
+    sessions: inStretch.flatMap(({ line, entry, at }) => {
+      const message = peerMessageOf(entry);
+      return message?.from === 'session' ? [{ line, at, name: message.name }] : [];
+    }),
+    lastReply: lastReply === undefined ? null : { line: lastReply.line, at: lastReply.at },
+    wrote: writesOf(counted),
+  };
+}
+
+const NOT_TOLD = { known: false, at: null };
+const NOT_KEPT = { known: false, kept: null };
+
+/** What the reader of the pause's state answered for the stretch from `after` to `at`, `{ known, at }`. A reader that
+ * throws, or answers without `known`, knows nothing: its fact is not judged, and nothing is thrown. */
+function toldOf(reader, after, at) {
+  let answer;
+  try {
+    answer = reader(after, at);
+  } catch {
+    return NOT_TOLD;
+  }
+  const known = isObject(answer) && answer.known === true;
+  return { known, at: known && typeof answer.at === 'string' ? answer.at : null };
+}
+
+/** What the reader of the feature document's state answered, `{ known, kept }`, read as `toldOf` reads the pause's. */
+function keptOf(reader, query) {
+  let answer;
+  try {
+    answer = reader(query);
+  } catch {
+    return NOT_KEPT;
+  }
+  const known = isObject(answer) && answer.known === true;
+  return { known, kept: known && typeof answer.kept === 'boolean' ? answer.kept : null };
+}
+
+/** The first reply of the session in the stretch from `after` to `before` that is at or after `toldAt`, the time the
+ * pause was told, and holds the compact block, as `{ line, at }`, or `null` when no reply does. */
+function announcedOf(counted, { after, before, toldAt }) {
+  const found = counted
+    .filter(({ entry, at }) => isOwnReply(entry) && at !== null && at >= toldAt && within(at, { after, before }))
+    .filter(({ entry }) => blocksOf(entry).some((block) => isText(block) && holdsCompactBlock(block.text)))
+    .sort(oldestFirst);
+  return found.length === 0 ? null : { line: found[0].line, at: found[0].at };
+}
+
+/** Each compaction of `text` once, oldest first, with what the transcript holds of the stretch before it:
+ * `{ uuid, at, automatic, before, line, after, inThisFile, told, document, kept, announced, verdict }`. The readers
+ * are asked only for a compaction the host made that the file holds a reply of the session for, at most once each. */
+export function compactionMeasures(text, { told = () => NOT_TOLD, kept = () => NOT_KEPT } = {}) {
+  const counted = firstAppearances(text);
+  const boundaries = boundariesOf(counted);
+  const wrote = writesOf(counted);
+  return boundaries.map((boundary, index) => {
+    const { uuid, at, automatic, before, line } = boundary;
+    const after = boundaries[index - 1]?.at ?? null;
+    const stretch = { after, before: at };
+    const inThisFile = counted.some(({ entry, at: when }) => isOwnReply(entry) && within(when, stretch));
+    const document = documentBefore(wrote, at);
+    const item = { uuid, at, automatic, before, line, after, inThisFile, told: NOT_TOLD, document, kept: NOT_KEPT, announced: null, verdict: null };
+    if (!automatic || !inThisFile) return item;
+    const toldState = toldOf(told, after, at);
+    const keptState = toldState.at === null || document === null ? NOT_KEPT : keptOf(kept, { document, after: toldState.at, before: at });
+    const announced = toldState.at === null ? null : announcedOf(counted, { after, before: at, toldAt: toldState.at });
+    const verdicts = {
+      told: toldState.known ? toldState.at !== null : null,
+      kept: keptState.kept,
+      announced: toldState.at === null ? null : announced !== null,
+    };
+    return {
+      ...item,
+      told: toldState,
+      kept: keptState,
+      announced,
+      verdict: { ...verdicts, missing: ['told', 'kept', 'announced'].filter((name) => verdicts[name] === false) },
+    };
+  });
 }
 
 // ---- what changed between two boards ------------------------------------------------------------------
@@ -1486,6 +1804,23 @@ const sessionLabel = (session) => `session ${session.id.slice(0, 8)} ${JSON.stri
 const pieces = (count) => `${count} piece${count === 1 ? '' : 's'} of work`;
 const byKey = (items, key) => new Map(items.map((item) => [item[key], item]));
 
+/** Whether `now`, a session's last compaction, is one the earlier look did not have (`lastCompaction` of
+ * `sessionFacts`): another `uuid`, or, where either has none, another time. `null` is no compaction. */
+function isNewCompaction(was, now) {
+  if (was === null) return true;
+  return was.uuid !== null && now.uuid !== null ? was.uuid !== now.uuid : was.at !== now.at;
+}
+
+/** What a watch says of a compaction the session gained: who asked for it, how long ago it was (`ago`, as the
+ * board says the age of an entry, from the time the board was read) and what the session held before it when
+ * the transcript says. */
+function compactionLine(session, sizes, readAt) {
+  const compaction = session.lastCompaction;
+  const who = compaction.automatic ? 'by the host' : "at the user's request";
+  const held = Number.isFinite(compaction.before) ? `: it held ${sizes.of(compaction.before)} before it` : '';
+  return `${sessionLabel(session)} was compacted ${who} ${ago(compaction.at, readAt)}${held}`;
+}
+
 function sessionChanges(before, after, self) {
   const lines = [];
   const earlier = byKey(before.sessions, 'id');
@@ -1513,6 +1848,11 @@ function sessionChanges(before, after, self) {
     } else if (session.state === 'waiting' && session.turnEndedAt !== was.turnEndedAt) {
       // Waiting at both looks, but not at the same point: it was given something and finished it.
       lines.push(`${sessionLabel(session)} finished another turn and is waiting`);
+    }
+    // Once, when the host or the person compacted it since the last look. A board from before the field was
+    // kept has none to compare with (`undefined`), so nothing is said of the compactions it already had.
+    if (was && was.lastCompaction !== undefined && session.lastCompaction && isNewCompaction(was.lastCompaction, session.lastCompaction)) {
+      lines.push(compactionLine(session, sizes, Date.parse(after.generatedAt)));
     }
     // Once, when it reaches the pause: what it does there is its own judgment, and the line carries what
     // that judgment needs. A last task that no longer fits is said in it and wakes nobody by itself.
@@ -1794,17 +2134,23 @@ function counted(value, label) {
   return value?.unavailable ? `${label} unavailable: ${value.unavailable}` : `${value} ${label}`;
 }
 
-function workLine(work, now) {
+/** How the board names a piece of work: its tool, its id (`(no id yet)` until the result gives one), its kind and whether it
+ * is a resumed one, and its description in quotes, as `workLine` and the hook's in-flight line print it. */
+export function workNameOf(work) {
   const id = work.id ?? '(no id yet)';
   // `resumed` says the subagent was sent a follow-up and is running again, not a second subagent.
   const labels = [work.kind, work.resumed ? 'resumed' : null].filter(Boolean);
   const kind = labels.length > 0 ? ` (${labels.join(', ')})` : '';
+  return `${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}`;
+}
+
+function workLine(work, now) {
   const file = work.file?.modifiedAt ? `file written ${ago(work.file.modifiedAt, now)}` : `file unavailable: ${work.file?.unavailable ?? 'not looked up'}`;
-  return `    ${work.tool} ${id}${kind} ${JSON.stringify(work.description ?? '')}  launched ${ago(work.launchedAt, now)}  ${file}`;
+  return `    ${workNameOf(work)}  launched ${ago(work.launchedAt, now)}  ${file}`;
 }
 
 /** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */
-const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
+export const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
 
 /** A count of tokens above zero, in thousands: `under 1k` for one that rounds to none. `0k` of a room
  * would say a session has none left when it has some, and `0k past` that it is at the point when it is

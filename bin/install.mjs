@@ -16,11 +16,7 @@ import {
   invalidHarnessJsonMessage,
 } from './lib/project.mjs';
 
-function parseHome(argv, env) {
-  const i = argv.indexOf('--home');
-  return i !== -1 ? argv[i + 1] : (env.JS_HARNESS_HOME ?? os.homedir());
-}
-
+const INSTALL_USAGE = 'Usage: js-harness install [--home <path>]';
 const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
@@ -30,6 +26,20 @@ function requireScopeValue(argv, i, flag) {
   const value = argv[i + 1];
   if (value === undefined || value.startsWith('--')) throw new ScopeArgError(`${flag} requires a value`);
   return value;
+}
+
+/** The home `install` writes under: `--home <path>`, else `JS_HARNESS_HOME`, else the user's home. Strict like the
+ * parsing below: a word it does not know, or a `--home` with no path after it, is an error. It once took such a word
+ * as nothing at all, so `js-harness install --help`, typed to read its flags, installed under the real home. */
+function parseInstallArgs(argv, env) {
+  let home;
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token !== '--home') throw new ScopeArgError(`unknown flag: ${token}`);
+    home = requireScopeValue(argv, i, token);
+    i++;
+  }
+  return home ?? env.JS_HARNESS_HOME ?? os.homedir();
 }
 
 /** The flags `uninstall` and `sync` share. Strict like `init`'s parsing (an unknown flag or a missing
@@ -161,7 +171,14 @@ function writtenCount(manifest) {
 }
 
 export async function installMain(argv, env = process.env, deps = {}) {
-  const home = parseHome(argv, env);
+  let home;
+  try {
+    home = parseInstallArgs(argv, env);
+  } catch (err) {
+    if (!(err instanceof ScopeArgError)) throw err;
+    console.error(`${err.message}\n\n${INSTALL_USAGE}`);
+    return 2;
+  }
   const version = currentVersion();
   const manifest = install(home, version, deps);
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
