@@ -1583,6 +1583,21 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   it.** The pre-push check: 2 code commits since `origin/main`, both covered. Told to the
   orchestrator at 16:43. The first of gentle-ai's two notes is closed; the second stays
   (the shipped hook file is tied to the tests by its `exec` line).
+- 2026-10-12 · **Pull request 75 is merged** (the orchestrator, 16:44:14; checked by me:
+  `origin/main` is `af20747` and holds `f116d83`). Its worktree and local branch are
+  removed. From `main` on, a merge git commits by itself runs the gate.
+- 2026-10-12 · **T13 has its Codex record, `main` in it and its pull request, 77**
+  (`t13c-turn.log`, 16:43:43 to 16:58:51): https://github.com/jsaristi/js-harness/pull/77,
+  head `1382092`, a merge of `origin/main` `af20747` gated on the merged tree (`PASS
+  tests` at 16:58:51). Codex: "the patch is correct" (0.88), no finding, recorded for
+  `3088960..9c0c8e9`. **It spent 499,650 input tokens (418,944 cached) in 10 requests
+  against a plan of 410,000**: 22% over its plan and 17% over the rate with its margin
+  (427,140), run once. The second sample of the day where the estimate was under (S1: 36%
+  over); told to the orchestrator for its estimator queue. **M2 for Codex, measured by
+  process for the first time** (`t13c-codex-machine.json`): the review took 67.1 s and the
+  machine was 37% busy during it, 201 of 537 processor-seconds (`MsMpEng` 49, `claude`
+  25, `node` 13). T8 has its figure: a Codex review beside a gate adds about a third of a
+  machine for a minute. Spent on Codex in the feature so far: 2,536,752 input tokens.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
