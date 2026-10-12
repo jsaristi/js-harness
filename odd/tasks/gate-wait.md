@@ -467,101 +467,140 @@ key; the listing is read with `ls-files`, which writes no object, not `write-tre
 computed before the `end` line; a gate that runs no sensor leaves a line; the merge hook is added; and
 the gain is stated, smaller than the first draft implied.
 
-### Two roads to a gate on Linux (compared; nothing built, nothing designed)
-Asked by the orchestrator at 14:35 and 14:43 on 2026-10-12, after the trial. Written before
-any design; it goes to independent readers before anything of it reaches him.
+### Roads to a shorter wait for the gate (compared; nothing built, nothing designed)
+Asked by the orchestrator at 14:35 and 14:43 on 2026-10-12, after the trial. Second
+version, after two independent readers (their file: `two-roads-review.md` in the
+orchestrator's scratchpad; what each changed is under "What the readers changed"). It does
+not reach him as it is: it is the ground for one question, which is his.
 
-**What is measured.** The suite, whole: 735.6 s and 830.2 s on his machine (i5-1035G1,
-8 threads, 20 GB, Windows 10 LTSC 19044; 93% busy, 12,041 git processes); 183.7 s on
-GitHub's Linux runner with 2 processors (job 3 min 24 s, red by 7); 1,258.2 s on GitHub's
-Windows runner with 2 processors (job 21 min 24 s, red by 124). And the line itself, from
-`js-harness gate log --last 2000` without the gates nested in a turn: on 2026-10-12 up to
-14:50, 53 gates of 300 s or more took 50,925 s, so the lock was held about 95% of the day,
-and the sessions waited 131,289 s for it, summed (36.5 hours). The wait is the larger
-cost, not the 12 minutes.
+**What is measured** (each read by me from the log or table named).
+- One whole run of the suite: 735.6 s and 830.2 s on his machine for the same tree
+  (`m1b`, `m1c`: i5-1035G1, 8 threads, 20 GB, Windows 10 LTSC 19044, 93% busy), so 95 s
+  is the noise of a day; 183.7 s on GitHub's Linux runner, 1,258.2 s on its Windows
+  runner, 2 processors each. Both of GitHub's ran `npm test` alone, never `check`, and
+  both are red (7 and 124); the two local runs are red by 5 under the counting tool, by
+  its own variables.
+- **GitHub's runs are serial** (`t9-ubuntu.log`: the tests' own times sum to 178 s of
+  184 s; `t9-windows.log`: 1,254 s of 1,258 s; Node runs one file at a time on two
+  processors). His machine runs about six files at once, and there the tests' own times
+  sum to 4,519 s (`m1b-tests.log`). So the same work is 178 s on Linux, 1,254 s on a
+  Windows nobody else loads, and 4,519 s on his: Windows costs seven times Linux, and his
+  machine pays 3.6 times more again for running it together, beside an antivirus that
+  takes 917 to 1,171 processor-seconds a run.
+- **The work is process starts** (`m1b-count.json`): 12,041 git processes, 1,517 s
+  summed, 0.13 s each; and 1,681 other child processes, 4,668 s summed, 2.8 s each, which
+  the earlier entries never named. They are Node: the fake agent of the eval runner,
+  nested `node --test` runs, version probes. Three files own 3,278 s of them
+  (`evals/task-proof`, `evals/runner`, `evals/isolation-probe`), and the four longest
+  files are the wall: `evals/runner` 735 s, `bin/codex-review` 691 s, `evals/task-proof`
+  612 s, `evals/isolation-probe` 528 s; the fifth is 267 s.
+- What Linux does not run: 132 tests, which sum to 345 s of the 4,519 s on his machine
+  (7.6%); `bin/remote.test.mjs` alone is 130 s inside a whole run. A minute or two, not
+  seconds.
+- The line (`js-harness gate log --last 2000`, nested gates left out, 2026-10-12 up to
+  14:50): 53 gates of 300 s or more held the lock 50,925 s of about 53,400, and the
+  sessions waited 131,289 s for it, summed (36.5 hours). By reader 1's count, not redone
+  by me, 46 of the 53 are suite runs (the rest hold Codex reviews), and 25 came from this
+  feature's own worktrees and measurements.
 
-**What neither road proves.** A pass on Linux is not a pass of this project: 132 tests
-are skipped off Windows by design (97 are the whole `js-harness remote` command; the rest
-are the sweep of trial processes, `killTree`, arguments through `cmd.exe`, paths that
-differ by case), and tests that do run on both still meet a different system there:
-checkouts with CRLF (`core.autocrlf`), `.cmd` shims, files that cannot be removed while
-held, hooks run by Git for Windows' `sh`. The harness's first host is his Windows. So a
-Windows run stays on either road; the question is how often. Both roads also need the
-suite green on Linux first: of the 7, four are faults of tests, one a small defect
-(`evals/paths.mjs:6`), two one possible defect (`evals/ports.mjs:168-169`); not sized.
+**What he already said.** At 01:48 that day the orchestrator offered five ways (its
+transcript `65318fd5`, line 1342); the first was "correr la batería completa una sola vez
+por entrega, no en cada guardado", with only the tests of what was touched at each commit,
+and it said that this one "cambia cuándo se detecta un error: más tarde". His answer (line
+1384, a queued message of his own): "hagamos mas rapido la bateria osea la opcion 3". At
+12:26 (line 3913) he said yes to the list that holds the trial, no repeated control, less
+work in the suite and the reviews outside the lock; "no verification is lost" is the
+orchestrator's wording of that list, not his sentence.
 
-**Road A · Linux on his own machine (WSL 2).**
-- Needs from him: a change of his machine, which is his to decide and his hand to make:
-  the Windows features turned on by an administrator, a restart, virtualization on in the
-  firmware, a distribution installed. Today `wsl.exe -l -q` lists nothing and `--status`
-  answers the usage text; no docker or podman is on the path. LTSC has no Store; whether
-  the feature or Microsoft's installer is the way on 19044 is not checked.
-- To build: the gate hands Linux the tree it gates. The working tree cannot be read in
-  place (the Windows disk is slow from inside, and its files are CRLF), so a tree object
-  written from the working tree is fetched into a clone that lives in the Linux disk, and
-  the result comes back. Node and git installed there, and kept at the versions of here.
-- Leaves unproven, and cannot be measured before he changes the machine: the time on his
-  8 threads (GitHub's 2 gave 184 s; less is likely, not known); whether the antivirus
-  leaves the Linux disk alone; the virtual machine's memory (half of 20 GB by default)
-  beside four or five sessions; whether two gates may run at once there.
-- No spend, no network, nothing leaves the machine. But it ties the fast gate to a feature
-  of the machine: a project where the harness is installed may not have it, so the local
-  Windows gate stays the default and this is an option of a host.
+**The one thing every road here turns on.** The wait is the number of whole Windows runs
+times their length, one at a time. A road shortens it by making the Windows run cheaper,
+or by running it less often. Running it less often is the trade he passed over at 01:48,
+whatever runs at the commit in its place. Linux does not escape that: it makes the trade
+safer, not different.
 
-**Road B · GitHub's Linux runner.**
-- Needs from him: no setting changed while the run is inside the minutes his account
-  includes. Two decisions, both his: that a tree not yet committed is pushed to a ref of
-  its own in his private repository for each gate (`gh repo view`: private), and what
-  happens when the included minutes end. At today's rate, 53 whole runs by 14:50 are about
-  180 runner minutes a day: 2,000 a month (the figure of the Free plan, not read from his
-  account: the token has no `user` scope) last about 11 such days. Past that it is spend
-  (the orchestrator's unverified price, near 2 cents a run: about 12 dollars a month at
-  this rate) or the gate falls back to the local one.
-- To build: the gate writes a commit from the working tree, pushes it to its ref, waits
-  for the workflow's run and reads its result, removes the ref; a fallback to the local
-  gate when GitHub or the network does not answer. The token already holds `repo` and
-  `workflow`.
-- What it gives beyond the time of one run: the Linux half needs no lock, so gates of
-  several sessions run at once and the 36.5 hours waited go, not only 736 s to about
-  204 s.
-- Leaves unproven: how long a run waits for a runner (not read apart in the trial); how
-  the minutes are counted (the timing answered 0 for both systems, and whether a Windows
-  minute counts double is not settled); how many jobs may run at once on his plan; a
-  commit that waits minutes on the network.
+**Road 1 · A cheaper run on Windows. No trade, no decision of his.** Fewer process starts
+in the four files that are the wall. What is known: the first cut (`fc70dc3`) took git
+from 15,467 processes to 12,041, and what it gave in wall cannot be told from the day's
+noise; cut 2 (one `rev-parse` for four, about 1,190 processes) is about 20 s by its count
+and would change most fakes of `bin/codex-review.test.mjs`. The children that are not git
+are the larger half and were never looked at: 847 of them in two eval files. Whether the
+eval tests can do with fewer real processes is not read. The antivirus is the other
+part: his exclusion did not lower it, and M1d (the tests' temp folder inside the excluded
+place, in the line) says whether a temp root of the gate is worth building; node and git
+are not excluded as processes (the orchestrator's record, its relief line 398). The
+trial bounds this road: a Windows that nothing else loads still needs 1,254 s of work.
+So it can take minutes off a run, not make it a different size.
 
-**Does the Windows half stay on his machine? Yes.** GitHub's Windows is 1.7 times slower
-than his machine for this suite, on a quarter of the threads, and red by 124 (123 from
-one cause, a temp path with a short name; the suite's fix, each fixture's root made
-canonical once with `fs.realpathSync.native`, is a cost only if Windows ever runs off his
-machine). At 21 minutes a run the included minutes pay about 90 runs a month, about 46 if
-a Windows minute counts double.
+**Road 2 · The trade he passed over, as it was offered: no Linux.** A commit runs the
+tests of what it touched; the whole suite runs once a delivery. No machine change, no
+spend, nothing leaves the machine. It needs a rule for "what it touched" that he can
+trust, which is a design, and it loses at the commit everything the touched tests do not
+reach. Named so that the comparison is whole; not proposed.
 
-**How often Windows must run for a Linux gate to be trusted.** Three settings, by what a
-Windows-only break costs when found:
-- Each commit with code: today's gate. Nothing is gained.
-- Each push: the pre-push hook already refuses a branch whose code no Codex record covers;
-  it would also ask that the pushed tree passed the Windows suite, proven by the gate
-  log's record of that tree (the key of T12 is that proof). A Windows-only break is found
-  up to one slice late, before any pull request, and costs one more commit. Whole runs on
-  Windows fall from one a code commit to one a push.
-- Each pull request, or before the merge: the break is found after both reviews read the
-  code, so the reviews, Codex's tokens with them, are paid twice.
-  The one I would propose is each push, with the tests that exist only on Windows also run
-  at each commit if they are seconds (their time alone is not measured). It changes his
-  condition of line 3860, "no verification is lost": it would hold at the push and no
-  longer at the commit. That is a product choice and his.
+**Road 3 · The same trade with Linux at the commit.** The whole suite runs on Linux at
+each commit with code, the whole Windows suite less often. What is lost at the commit is
+then only what Windows does differently: the 132 tests and the system itself (CRLF
+checkouts, `.cmd` shims, files held open, hooks under Git for Windows' `sh`). That is a
+far smaller loss than road 2's, on a harness whose first host is Windows. Both ways to
+get the Linux run need the 7 fixed first (four are faults of tests, one a small defect,
+`evals/paths.mjs:6`, two one possible defect, `evals/ports.mjs:168-169`; not sized).
+- **3a · Linux on his machine (WSL 2).** His hand and his decision: by Microsoft's page
+  as reader 2 quotes it, build 19041 or later, PowerShell as administrator, a restart;
+  `wsl.exe -l -q` lists nothing today and there is no docker. Whether the install
+  completes on LTSC without the Store is not known. The clone and the temp folder must
+  live on the Linux disk (the Windows disk is slow from inside, and its files are CRLF),
+  so the gate hands over a tree object written from the working tree. The virtual
+  machine takes half of 20 GB by default, and free memory was 5.8 to 7 GB with the
+  sessions open (reader 2, from this document and the orchestrator's record): tight. It runs on the same eight threads, so it keeps a lock
+  and the wait shrinks to the Linux run's length; it does not go. How long that is on
+  his machine cannot be measured before he changes it; 184 s serial on two processors
+  is the only fact. No spend, no network. A feature of one host: an installed project
+  gets nothing from it unless its machine has it.
+- **3b · GitHub's Linux runner.** Three things of his, not two: a workflow file on
+  `main` (there is no `.github` there, and "Ask me before" of this document names it);
+  that a tree not yet committed is pushed to a ref in his private repository at each
+  gate; and spend. The gate's own push meets the pre-push hook, which checks every
+  pushed ref for a Codex record whatever its name: a way past it is a way round that
+  rule and needs a design. By the gate log, 46 to 53 runs a day, each billed 4 minutes
+  (204 s rounded up a job, by GitHub's pricing page as reader 1 quotes it): about 200
+  minutes a day, so 2,000 included minutes last 9 to 11 days like this one, and a month
+  of them is about 21 to 26 dollars at 0.006 a minute; more if gates freed from the
+  lock run more often. Whether it stops or bills at the quota depends on a payment
+  method on file, which was not read, as his plan and minutes used were not; the timing
+  endpoint's zero is no evidence. The Linux half needs no lock, so those gates run
+  together; the Windows half and the Codex reviews still hold the lock, so the wait
+  shrinks and does not go (reader 1: 20 pushes that day, about 4.8 hours of lock at one
+  Windows run a push). Reader 1 reads 20 jobs at once on the Free plan and about 7 s of
+  queue in the trial. What ships is his too: built into `check`, it would push an
+  installed project's uncommitted trees and spend its owner's minutes; the roadmap's
+  standing plan is GitHub on every pull request, and it leaves "whether `init` also
+  writes the workflow" to him.
+- **Named, not compared:** a runner of his own on another machine (GitHub does not bill
+  its minutes), a rented Linux machine, and Cloudflare, his question of about 12:30,
+  which by the orchestrator's unverified reading has no CI product: each is road 3 with the Linux run somewhere else, and each
+  needs hardware or spend that is his. The roadmap puts a second machine after the gate
+  on GitHub.
 
-**A third road needs neither: a cheaper suite on Windows.** What is known: cut 2 (one
-`rev-parse` for four) is about 20 s of 736, with most fakes of `bin/codex-review.test.mjs`
-to change; the antivirus did not fall after his exclusion, and the run with the tests'
-temp folder inside the excluded place (M1d, asked at 14:50) says whether that half is
-worth building. The trial's fact bounds it: the same work takes 184 s on two Linux
-processors, so no cut of ours brings Windows near.
+**The Windows half stays on his machine.** GitHub's Windows needs 1,254 s of work for a
+run and is red by 124 (123 from a temp path with a short name; the suite's fix is a cost
+only if Windows ever runs elsewhere); at 21 minutes a run the included minutes pay about
+90 runs a month, about 46 if a Windows minute counts double.
 
-**Mine, for the readers to attack:** B can be tried with nothing from him but the two
-decisions, and ends by itself in about 11 days at this rate; A costs nothing a month and
-cannot be measured before his machine changes. Neither is worth building before the 7 are
-fixed and the Windows-only tests are timed alone.
+**How often, and what a late Windows break costs.** Codex reviews before the push and the
+pre-push hook refuses code no record covers, so a Windows break found at the push, or at
+the pull request, is found after both reviews: its fix is a new commit that needs a new
+record. To pay the reviews once, the Windows run has to come before them, once a slice,
+when the slice is ready for review; nothing enforces that point today, and the commits
+inside the slice are never proven on Windows one by one. T12's key is no proof for it as
+built: it is made from the hook's index and working tree, and a push hands over a commit.
+
+**Mine, for the orchestrator.** Nothing here is ready to build. Road 1 is the only one
+that needs nothing from him, and its evidence so far is weak: one cut inside the noise.
+Every other road is the trade he passed over at 01:48. So the question that would go to
+him is one, and it is whether to reopen that trade now that road 3 loses 7.6% of the
+suite's time at the commit and not everything untouched; 3a or 3b is a second question
+only after a yes. Before it is asked: M1d's result, and one cheap reading of what the
+1,681 children are for, since a road 1 that halves them may be enough without any trade.
 
 ## What the readers changed
 The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
@@ -596,6 +635,35 @@ session's transcript.
   cutting): "Done when" now can. A gate keyed by tree and a merge of documents alone:
   under "Brought to him". Not taken: a census of every turn of the night (three that ended
   `exit 1` and one `exit 5`): it explains the past and moves nothing here.
+
+**The comparison of the roads, 2026-10-12** (two readers of the orchestrator's, on `7ee36d1`;
+their file is `two-roads-review.md` in its scratchpad; each claim I build on was checked
+by me against the log or table named in the section).
+- Reader 1, the numbers. Taken: the wait "goes" was wrong, since the Windows half and
+  Codex keep the lock, so it shrinks; a Windows break found at the push is paid after both
+  reviews, as at the pull request, so the section now says the Windows run must come
+  before the reviews of a slice and that nothing enforces it; "12 dollars a month" was the
+  value of the included minutes, and the figure is 21 to 26 with each job rounded up to a
+  minute; T12's key is no proof at a push; the Linux run was serial (checked: 178 s of
+  tests in 184 s) and what Linux skips is 345 s of 4,519 s on his machine (checked), so
+  "seconds" was wrong; GitHub ran `npm test`, never `check`; the local runs are red by 5
+  under the counting tool. Taken as its claim, not redone: 46 suite runs among the 53
+  gates, 20 pushes that day, 20 jobs at once, 7 s of queue.
+- Reader 2, what was missing. Taken: "Windows at each push" is the trade he passed over at
+  01:48 (checked: line 1384 of `65318fd5` is his queued message, "hagamos mas rapido la
+  bateria osea la opcion 3", to the five ways of line 1342), so the section is now built
+  on that and compares the road that makes the trade with no Linux; GitHub's road needs a
+  workflow on `main`, a third thing of his, and meets the pre-push hook; Cloudflare, a
+  runner of his own and a rented machine are named; WSL's install, memory and where the
+  files live; what an installed project would get; the children that are not git
+  (checked in `m1b-count.json`: 1,681 of them, 4,668 s summed, against the reader's 1,662
+  and 3,630 s, which I could not find); "no verification is lost" is the orchestrator's
+  wording, not his.
+- Rejected: nothing of substance. Not taken up: Dev Drive (it needs Windows 11, so it is
+  no road here) and GitHub's keeping of a deleted ref's objects (a design question of
+  3b, which is not being designed).
+- What the revision says that neither reader did: every road but the cheaper Windows run
+  is that one trade, so one question would go to him, not a choice among five roads.
 
 ## Tasks
 - [x] T1 · The design read twice by readers that did not write it; their findings taken or
@@ -1215,6 +1283,18 @@ session's transcript.
   for real and timed, then the commit, whose hook runs the whole gate. Applied dry and
   restored before it was asked: 321 lines added, 22 removed, in four files. Then both
   reviews, its push and its pull request.
+- 2026-10-12 · **The comparison is rewritten after the double review** (the orchestrator's
+  message of 15:05; its two readers' file read once). The section is now "Roads to a
+  shorter wait for the gate". Checked by me before it was built on: his words of 01:48
+  (line 1384 of the orchestrator's transcript, a queued message, origin human); the serial
+  runs of GitHub (the tests' times summed from `t9-ubuntu.log` and `t9-windows.log`); the
+  4,519 s the tests sum to on his machine and the 345 s of what Linux skips
+  (`m1b-tests.log`); the 1,681 children that are not git and the files that own them
+  (`m1b-count.json`, `timeLine`). What it comes to: the suite's work is process starts,
+  seven times dearer on Windows than on Linux and 3.6 times dearer again on his loaded
+  machine; and every road but a cheaper Windows run is the trade he passed over at 01:48,
+  so one question would go to him. Owed before it is asked: M1d, and a reading of what
+  the 1,681 children are for.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
