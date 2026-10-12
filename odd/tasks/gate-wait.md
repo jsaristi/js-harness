@@ -2,7 +2,7 @@
 
 Locator: `odd/tasks/gate-wait.md` · Engram mirror: `odd/gate-wait/tasks` · Branch:
 `feat/gate-wait`, in the linked worktree `D:/js-harness-worktrees/gate-wait`, cut from `main`
-at `5f011cc` · Session: `JH 8 · turno y corte temprano del gate`, orchestrator
+at `7411fe6` (first at `5f011cc`; replayed before any push) · Session: `JH 8 · turno y corte temprano del gate`, orchestrator
 `JH ORQ · js-harness`
 
 State 2026-10-12: opened by this session after `odd/tasks/gate-turn.md` closed (pull requests
@@ -10,7 +10,7 @@ State 2026-10-12: opened by this session after `odd/tasks/gate-turn.md` closed (
 (the orchestrator's transcript `65318fd5-80e7-4bb8-92b5-06737140185b.jsonl`, line 2381, an
 attachment of kind `queued_command` and human origin, read here): nothing is asked of him;
 what is his goes to the orchestrator in one line. The design below is the second version: two
-readers that did not write the first (`bfb2009`) read it, one to attack it and one to look
+readers that did not write the first (`335ce6f`) read it, one to attack it and one to look
 for what it left out and for his earlier words, and "What the readers changed" says what
 moved.
 
@@ -106,8 +106,9 @@ GitHub says whether the gate can also run there and what a month of it would cos
 - Codex inside the rate (the larger of 300,000 input tokens and 1,200 a changed line, by
   `codex-review --plan`); no loop of tries; a second run after a fall waits for him, through
   the orchestrator. Forecast for the feature, an estimate: five reviews at the floor, about
-  1.5 million input tokens before any correction; the orchestrator was asked whether its
-  bound of 3 million a feature stands.
+  1.5 million input tokens before any correction. No total for a feature stands, by the
+  orchestrator's answer of 2026-10-12 (its relief file, lines 236 and 305): each review
+  inside the rate, and the running total written in Progress.
 - The trial on GitHub runs only once it is written here, with its source, that it is free.
 - Zero dependencies and every operating system, because `check` and `codex-review` ship to
   any project. Anything that ships is judged twice: here, and in a project that installed
@@ -356,7 +357,7 @@ its own pull request to `main`:
 - The trial (T9): one commit on its own branch, never merged, and this document.
 
 ## What the readers changed
-The first version is `bfb2009`. Two read-only readers, 2026-10-12; their reports are in this
+The first version is `335ce6f`. Two read-only readers, 2026-10-12; their reports are in this
 session's transcript.
 - **The attack** (14 findings, six of them holes). Taken: a review beside a gate reads a
   head that can move, so the head is pinned (T6, new). M2 measured a review at normal
@@ -401,6 +402,13 @@ session's transcript.
 - [ ] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first.
 - [ ] T6 · The head a review reads is pinned, and two records at once. Route: delegated,
       tests first.
+- [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
+      does; and `codex-review` says so when its base is itself a code commit with no
+      record, since a base is outside its range. From "JH 7" through the orchestrator
+      (2026-10-12, a claim, to be read in the code before it is built): its row said "no
+      Codex review record for 1 of N code commits" for hours without the name, and the
+      commit was the branch's first, which it had given as `--base`. Route: delegated,
+      tests first, in S1 after T6.
 - [ ] T7 · M2: what a review spends against its number, and one review beside one gate.
       Route: inline, with the reviews of S1.
 - [ ] T8 · If M2 holds: the texts. Route: delegated, one writer.
@@ -410,7 +418,7 @@ session's transcript.
       the closing notice.
 
 ## Progress
-- 2026-10-12 · Opened (`bfb2009`). The map of the code is a read-only sub-agent's (72 test
+- 2026-10-12 · Opened (`335ce6f`). The map of the code is a read-only sub-agent's (72 test
   files, where the sensor runs, where a review's parts loop, what the gate log holds, what
   assumes Windows), spot-checked here at `odd/tasks/gate-lock.md:872-916` and `:1086-1102`
   and at `odd/tasks/gate-log.md:496-540`. What GitHub includes and charges and what his
@@ -427,16 +435,37 @@ session's transcript.
   (a document is a Markdown file, so a workflow is code); `bin/check.mjs:237-263` (commits
   of documents). Sub-agents so far: 545,270 tokens (the map 120,428, the readers 197,318
   and 227,524).
+- 2026-10-12 · Pull request 69 merged (`7411fe6`), so `gate-turn` is closed and the counting
+  tool is free. This branch, never pushed and two commits of this document, was replayed on
+  that `main` (no merge, no gate).
+- 2026-10-12 · T5, two writers on Haiku 5.5, one piece each (route: delegated; 107,642 and
+  268,366 tokens): the key and the readers of a kept part in
+  `bin/lib/codex-review-runs.mjs`, then the reuse in the loop of `bin/codex-review.mjs`,
+  with `--fresh`. Both diffs read here; one line hardened by hand (`partKey(null)`).
+  Decided while it was built, and why: a range reviewed in one session keeps nothing (its
+  line stays the one it was); a caller that asked for the result of every attempt
+  (`onResult`, the comparisons of `evals/`) reuses nothing; nine older tests that run one
+  range twice in one repository now say `--fresh`, their assertions untouched.
+  One turn of the lock (`t5-turn.log`, taken 04:29:03). RED against the two sources as
+  they were: the test file of the run log fails whole, and of the command's tests the five
+  that prove the new behaviour fail (the range run again from its last part, the totals,
+  a run whose parts were all kept, the kept answer in the line, the error that says what
+  is kept); the others of the nineteen are guards that pass before and after. GREEN: the
+  run log's 36 pass; of the command's 247, 245 pass and two fail, both faults of the
+  tests: the usage sentence asserted in a second place, and a second run that did not name
+  the platform the first had, so its key differed, which is the key doing its work. Both
+  corrected by hand; nothing was committed in that turn. The next turn runs it all again.
 
 ## Next
-T5 while pull request 69 is not on `main`: the writer's piece is the key and the stored
-answer in `bin/lib/codex-review-runs.mjs` with its tests, then the reuse in the loop of
-`bin/codex-review.mjs`. When 69 is merged: `main` merged in here, then T2.
+The turn of T5 again (`t5-turn.sh` in the scratchpad: RED, GREEN, the commit with its
+gate). Then T6 and T6b by writers, then both reviews of S1, which are also M2's (T7).
+T2 can start beside them: its files are free.
 
 ## Resume here
-- No code is written yet. The branch holds this document alone, two commits.
-- `odd/tasks/gate-turn.md` holds the feature before this one; its last entry is on
-  `fix/count-git-launch` until pull request 69 merges.
+- `feat/gate-wait` is not pushed. It holds this document; T5 is in the working tree of
+  four files (`bin/codex-review.mjs`, `bin/lib/codex-review-runs.mjs` and their tests)
+  until its turn commits it.
+- `odd/tasks/gate-turn.md` on `main` holds the feature before this one, closed.
 - Every test run and commit with code goes through the lock: `node
   D:/js-harness/bin/js-harness.mjs gate --wait 180 -- <command>`, in the background, from
   this session and never from a sub-agent; a turn is one command, and a script handed to it
