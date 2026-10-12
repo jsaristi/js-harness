@@ -17,7 +17,7 @@ description: Install, update, and check js-harness (v${version}) status and comm
 
 js-harness commands:
 - \`js-harness status --global\` — installed version, manifest version, and latest available, for the machine.
-- \`js-harness install\` — write this skill and record a manifest under the home.
+- \`js-harness install\` — write the skills and the session-start hook entries, and record a manifest under the home.
 - \`js-harness sync --global\` — re-write installed files for the running version.
 - \`js-harness update\` — check whether a newer release exists.
 - \`js-harness upgrade\` — install the newer release, then sync.
@@ -390,8 +390,10 @@ function writeManifest(home, manifest) {
  *  - `uninstall` finds no component and no entry to remove, removes the optional files and the scheduled tasks
  *    (`recordScheduledTask`, kept the same way in `tasks`) and then the manifest;
  *  - `remote` (`bin/remote.mjs`) reads only `optional` and `tasks`, and when `start --at-login` fails halfway
- *    puts back its own two records and nothing else (`putOptionalRecordBack`, `putTaskRecordBack`).
- * Nothing else reads the machine manifest (`rg -n "readManifest|manifest\.version" bin`, 2026-10-06). */
+ *    puts back its own two records and nothing else (`putOptionalRecordBack`, `putTaskRecordBack`);
+ *  - `doctor` (`recordedLaunchers` in `bin/lib/stack.mjs`) reads only `optional`, for the login launchers.
+ * Nothing else reads the machine manifest (`rg -n "readManifest|installedVersion" bin`, the tests left out,
+ * 2026-10-11). */
 export function recordOptionalFile(home, file, content) {
   const record = { path: file, sha256: sha256(content) };
   return keepRecord(home, 'optional', record, (entry) => entry.path === file);

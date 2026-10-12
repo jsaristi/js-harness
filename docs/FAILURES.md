@@ -120,6 +120,8 @@ check said or before its answer was read.
   assessment's answer was read; also relief file, line 144
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:430-441 — a review command printed that the lock was held
   and went on
+- Seen: 2026-10-11 — relief file, line 286 — the line that records "merged" was written by the command
+  whose merge was refused; corrected in line 287 (the orchestrator's own report, not read here)
 - Control: owed — odd/tasks/rule-hierarchy.md — "The skill `js-harness-protocols`, six sections"
 
 ### checked-not-read
@@ -132,6 +134,9 @@ session's claim.
   by the orchestrator
 - Seen: 2026-10-11 — relief file, line 224 — JH 6 said a language server was not its own without
   walking its parents; also odd/tasks/gate-log.md:597-600
+- Seen: 2026-10-11 — relief file, line 290 — a transcript line cited as his words from a text search,
+  without reading the entry's type: it was a queue entry with the same text (the orchestrator's own
+  report)
 - Control: owed — odd/tasks/rule-hierarchy.md — "The honesty audit (C9): the transcript reader read
   first"
 
@@ -219,6 +224,8 @@ A session's context reached a level nobody had looked at.
   inside a task that could not close
 - Seen: 2026-10-10 — relief file, line 155 — the orchestrator went from 63 to 79 percent with its
   own context "read too seldom"
+- Seen: 2026-10-11 — relief file, lines 276 to 285 — the orchestrator passed the pause, judged four
+  times that little was left, and the host compacted it with no word to him (its own report)
 - Control: check — bin/sessions.test.mjs — "and whether it is past --context-limit" — since
   2026-10-09
 
@@ -624,6 +631,8 @@ an untracked path makes the review assessment answer "unassessable".
   unassessable (claimed); untracked new files did the same at line 139
 - Seen: 2026-10-11 — odd/tasks/rule-hierarchy.md, Progress — a gate killed at its bound left
   `Microsoft/` in the worktree `failures-register`, and the review row could not assess for it
+- Seen: 2026-10-11 — relief file, line 292 — in a worktree of JH 5 during a gate; which test starts
+  PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
 
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his

@@ -299,9 +299,8 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
 }
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
- * file loads on every turn — see "T2 design"), titled with the project's own folder name, with the
- * same sections this repo's own AGENTS.md carries. Placeholder prompts are left in angle brackets
- * for the project to fill in. */
+ * file loads on every turn — see "T2 design"), titled with the project's own folder name. Placeholder
+ * prompts are left in angle brackets for the project to fill in. */
 export function agentsTemplate(root) {
   const name = path.basename(path.resolve(root));
   return `<!-- Written by \`js-harness init\`. This file loads on every turn: keep it short. -->

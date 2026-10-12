@@ -57,7 +57,7 @@ fourteen matters two places say different things; each is listed, with the text 
   do not exist yet: the build creates them, and adds to "Done when" the test of each other
   check as it writes it (C4, C5, C6, the protocols skill, the eval's proof).
 - Out: the orchestrator skill, the notices, the roster, the opening of a session and the context
-  hooks — they are `odd/tasks/session-channel.md`, built first. gentle-ai's managed block and
+  hooks — they are `odd/tasks/session-channel.md`. gentle-ai's managed block and
   the global `CLAUDE.md` — not this repository's text (F2); what they already say is not
   repeated. The gate lock (`feat/gate-lock`) — it is the check for the gate rules and is only
   pointed to.
@@ -77,10 +77,11 @@ fourteen matters two places say different things; each is listed, with the text 
   install step.
 - The wording of each line of `AGENTS.md`, and each thing shipped, passes by Sebastián in the
   build session — because he accepted the content and the direction, not the final text
-  (`docs/ROADMAP.md`, "Rule hierarchy (planned)").
-- Not built while the session channel is being built — because both edit
-  `bin/lib/manifest.mjs` and `docs/ROADMAP.md`, and the channel changes two sentences of
-  `AGENTS.md` (the resume prompt of a cut) that T8 here rewrites with the rest.
+  (`docs/ROADMAP.md`, "Rule hierarchy").
+- T2, T7, T8 and T9 are not built while the session channel is being built — because they edit
+  `bin/lib/manifest.mjs` and `docs/ROADMAP.md`, which the channel edits too, and the channel
+  changes two sentences of `AGENTS.md` (the resume prompt of a cut) that T8 here rewrites with
+  the rest. The other tasks wait for nothing of the channel (Progress, 2026-10-11).
 
 ## Effort
 high
@@ -211,7 +212,7 @@ file exists.
 per capability with problem, requirement, reason, proof command, what was discarded, and a
 "today" line. The row fails when a capability has no proof command, when a file its "today" line
 names does not exist, or when a command of the dispatcher, a hook the manifest installs, or a
-file written outside the repository is claimed by no capability. It is built first: its list of
+file written outside the repository is claimed by no capability. It is built after T3: its list of
 capabilities is the second half of this survey, taken on 2026-10-10 and held in Progress.
 
 **C4 A writing command refuses a flag it does not know.** Incident: `install --help` was run to
@@ -645,7 +646,11 @@ session:
    of done: a rule is not recorded until it has its place in a check, a line here or a protocol.
 2. What is his, the six items: spend outside the plan; anything installed or changed on a
    machine; a product choice; what cannot be undone; a change of the plan or of its order; a new
-   protocol. Asked one at a time, never while work runs, naming the item. Everything else is
+   protocol. Narrowed on 2026-10-11 (the relief file's line 236, as the sweep reads it; T8
+   drafts the line from both): what the harness writes under the home's `.js-harness` and
+   `uninstall` removes is not asked; the lead removes the worktrees of merged features and
+   updates the installed command at a boundary; a review tool that fails is not his, and only
+   a report of it outside stays his. Asked one at a time, never while work runs, naming the item. Everything else is
    decided, its cost said, and the work goes on: commit, reviews and the next task chained with
    no report between them, and never idle on an open question.
 3. His wording is the need, not the specification: an answer to a proposal of his says the need
@@ -725,7 +730,7 @@ The seven of the roadmap, each as something read and not judged.
 | No rule living only in memory | `js-harness doctor`: no `memory-rules` gap |
 | `AGENTS.md` within its budget | row `budget` of `check` |
 | The honesty eval passes and the line moves the score | the eval's report, with and without the line |
-| No repeated mistake | row `failures`: no closed entry reopened; the counts of the board |
+| No repeated mistake | `js-harness failures check --settled` exits 0; the entries `seen again` |
 | No protocol without its incident | a test over the protocols skill: every section opens with a dated incident |
 
 ### Contradictions the build resolves
@@ -733,8 +738,9 @@ The fourteen the survey found; each names the text that wins. The first four are
 `docs/ROADMAP.md` by the design session's own pull request; the rest by the build, and T11 is
 done when each of the fourteen reads one way in every place that states it.
 
-1. Context limit: nothing stops for a percentage and a session pauses at 85% (his decision,
-   2026-10-10) wins over the 73% of the roadmap, of the board (`bin/lib/sessions.mjs:20`) and of
+1. Context limit: nothing stops for a percentage and a session pauses at the context pause (his
+   decision; the number is the board's, "One home for every rule") wins over the 73% of the
+   roadmap, of the board (`bin/lib/sessions.mjs:20`) and of
    the orchestrator skill.
 2. Merging code: the lead merges it when the gate passed, both reviews are recorded with nothing
    blocking and the pull request is clean (his decision, 2026-10-10) wins over "his, for now" in
@@ -820,7 +826,7 @@ board), GL the gate lock, MF a machine fact that stays in memory, DROP stale.
 | 36 | Merge only on his explicit go | MEM | DROP |
 | 37 | Announce when a stretch or a session finishes and where to return | MEM, RM | C1, CH (notice `closed`) |
 | 38 | The context percentage in every recap | MEM, RM | P2, until the board shows it |
-| 39 | Never stop for the percentage; at 85% pause, write the state, finish or compact | MEM, REL | CH, C1 (nudge) |
+| 39 | Never stop for the percentage; at the context pause, write the state, finish or compact | MEM, REL | CH, C1 (nudge) |
 | 40 | Cut at a task's end; do not start a task that will not fit | RM, MEM, REL | P2, CH |
 | 41 | The charter: what the orchestrator does alone | RM, MEM, REL | CH |
 | 42 | The lead merges code and gives the go-ahead of later stages | REL | CH |
@@ -868,9 +874,11 @@ board), GL the gate lock, MF a machine fact that stays in memory, DROP stale.
 
 ## Failures of 2026-10-10
 The list the orchestrators kept that day (relief file, lines 143, 144, 167, 172 and 175), as the
-seed of `docs/FAILURES.md`. None has its proof yet, so all are open. Owner: RH this feature, CH
-the session channel, GL `feat/gate-lock`. A proof marked "owed" is not designed here: its owner
-names it, and the entry stays open until it does.
+seed of `docs/FAILURES.md`. It is the list as it stood that day and is not kept up: the register
+holds each of these with the state the command computes, its control and the task that owes
+one, and `js-harness failures` is where they are read. The table stays because this document
+cites its numbers. Owner, as designed that day: RH this feature, CH the session channel, GL
+`feat/gate-lock` (failures 9 and 16 name a gate log that `odd/tasks/gate-log.md` builds).
 
 | # | What happened | Owner | Control | Proof |
 |---|---|---|---|---|
@@ -879,7 +887,7 @@ names it, and the entry stays open until it does.
 | 3 | A block he had not used was referred to by its hour | CH | no block for another session; a notice is a record | notices carried by his paste, counted by the board: 0 in the stretch of its "Done when" |
 | 4 | An opening pasted with no line of his cost one more yes | CH | the opening is a file, his line is typed | count of a yes after a paste is 0 |
 | 5 | A finished feature sat six hours: a phone session could not be reached | CH | the notice is a record the board reads | a practice step: a notice read with no message sent |
-| 6 | The 73% mark and the cut near 70 | CH | the limit as room left; the pause at 85% | count of cuts proposed under 85% is 0 |
+| 6 | The 73% mark and the cut near 70 | CH | the limit as room left; the pause | count of cuts proposed under the pause is 0 |
 | 7 | A wait process could not be attributed from the board | CH (T4) | the board prints each wait with its session | a test of the board, fixture with two waits |
 | 8 | Stopped tasks and archived sessions printed as live | CH (T4) | the roster; a stopped task reads as stopped | a test of the board |
 | 9 | "No gate runs" said twice while one ran unseen | GL | a gate log, one line per run | the log; none exists on the branch yet, so the proof is owed by its session |
@@ -967,7 +975,7 @@ names it, and the entry stays open until it does.
     feature documents, 83 places, pull request 62 (commit `119adbc`); four more are left
     unchecked in the list with their reason, and the six of `odd/tasks/codex-parity.md` wait
     for that document's branch
-  - [ ] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
+  - [x] T17c This session's places in this document (13) and in code (7: `bin/codex-review.mjs`,
     `bin/install.mjs`, `bin/js-harness.mjs`, `bin/lib/codex-review-parts.mjs`,
     `bin/lib/manifest.mjs`, `bin/lib/project.mjs`), the code through the gate and both reviews
   - [x] T17d One entry of the register for the failure itself, with the sweep as a sighting
@@ -1330,15 +1338,39 @@ names it, and the entry stays open until it does.
   `lock.mjs`, `own-tsservers.ps1`). Spent on the slice: two reader and writer sub-agents before
   the afternoon, one reader of the protocol (111,898 tokens), four Codex runs (1,385,676 input
   tokens).
+- 2026-10-11, T17c, on `fix/sweep-code-places`, cut from `main` at `40ccb45` after pull request
+  66 was merged (route: delegated for the code, one writer with a narrow piece that returned
+  its work unstaged, 133,677 tokens; inline for this document, one file whose places the list
+  names). Six of the seven code places are corrected. The message a review that did not stand
+  ends with (`WAYS_ON` of `bin/codex-review.mjs`) now sends to a rerun in a turn of the gate
+  lock and keeps the skip for a machine where Codex cannot run; two expectations of
+  `bin/codex-review.test.mjs` pin it word for word and were changed with it, so the test was
+  not seen failing first: the old sentence was the expectation. `bin/install.mjs:213` is not
+  corrected: it is a choice (tag the releases, or print another command), passed to the
+  orchestrator. The sentence of the `js-harness` skill in `bin/lib/manifest.mjs` changed, so an
+  installed copy differs from the source until `js-harness sync --global` runs: the lead's, at
+  a boundary. Of this document's thirteen places, four were already right on `main` after
+  the merge (the header, the nudge of C1, and two that name the Next step) and nine are
+  corrected here, with the citation of the roadmap's old title. One another way than the list
+  asks: the table "Failures of 2026-10-10" is kept as the list of
+  that day, with the sentence that called every entry open replaced by a pointer to the
+  register, because this document cites the table's numbers in five places. The register gains
+  one sighting under `chained-step-not-conditional`, the orchestrator's own report.
+- 2026-10-11, T17c closed. Commit `1374a2b`: the gate passed on its first run (22:07, after an
+  hour waiting for its turn). gentle-ai on `40ccb45..1374a2b`: risk medium, 146 changed lines,
+  review not due (under budget), so it is assessed with the next slice. Codex on
+  `40ccb45..f45176a`: "the patch is correct", no finding, 70,550 input tokens for 36 changed
+  lines of code. That is over 1,200 a line, and it waited for his answer: on that day he
+  confirmed a floor, up to 300,000 input tokens a review however small the commit, or 1,200 a
+  changed line, whichever is more (the orchestrator's transcript
+  `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, his answer at line 2963, read by this session,
+  to the question at line 2958, not read). `f45176a` adds three sightings the orchestrator
+  reported. The parent task stays open: four places of T17b are left with their reason and
+  the six of `odd/tasks/codex-parity.md` wait for that document's branch.
 
 ## Next step
-In this order. (1) The pull request of the register (T3) is open: the lead merges it when it
-has read it. Until then the 219 lines that follow `6c687ab` plus the last two corrections
-are under the budget of a gentle-ai review and are assessed with the next slice, from the
-merge commit `9e7c226` as its base. (2) T17c, in a branch of its own from `main` once the
-register is merged: its code places read again on the new `main`, which changed four of the
-seven files; the orchestrator is told before `bin/lib/manifest.mjs` is touched. One writer,
-a narrow piece, and this session commits through the lock. (3) T16b: how a rule is declared,
-designed and read by a reader that did not write it before it is built. (4) T3e. (5) T1. T2
+In this order. (1) The pull request of T17c is open: the lead merges it. (2) T16b, on
+`feat/rules-list`: its design and its first slice are there; its Progress is written on that
+branch once this one is on `main`. (3) T3e. (4) T1. T2
 and T8 wait for him: before T2 the first item of "Ask me before" is asked, and the host facts
 of "What the hosts allow" that T2 rests on are confirmed with a logging hook.
