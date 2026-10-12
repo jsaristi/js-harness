@@ -38,12 +38,14 @@
 import { PART_MAX_CHANGED_LINES } from './codex-review-parts.mjs';
 import { runPart, runSession, runSessionModel } from './codex-review-runs.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
+import { ruleValue } from './rules.mjs';
 
 // How many parts a run starts without being told to; `--max-parts <n>` names another count (T3 of
 // odd/tasks/codex-review-cost.md). At the 400 changed lines of a part, six parts are a range of up to about
 // 2,400, which a slice reviewed when it closes stays under: a run over it is most often a branch that was
-// not reviewed slice by slice, and the run this bound exists for was 28 parts.
-export const MAX_PARTS_WITHOUT_FLAG = 6;
+// not reviewed slice by slice, and the run this bound exists for was 28 parts. The count is the declared
+// rule's (`review-parts-unflagged` in ./rules-data.mjs); the figures above are of the day it was set.
+export const MAX_PARTS_WITHOUT_FLAG = ruleValue('review-parts-unflagged', 'parts');
 
 // How many measured parts on the model and at the effort of the review it takes for the estimate to rest
 // on those alone. Under it every measured part counts, at whatever effort, and the plan says so: an

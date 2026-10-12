@@ -5,9 +5,10 @@
 import { RULES } from './rules-data.mjs';
 import { isDay, readRules, renderList, writeRules } from './rules.mjs';
 
-// A read of a rule by a literal id. A call whose first argument is not a string literal is not found: the
-// pattern cannot know what a variable holds, so such a call is not guaranteed to be seen.
-const READ_PATTERN = /ruleValue\(\s*(['"])([^'"]*)\1/g;
+// A read of a rule by a literal id, by one of the three functions that read a rule. A call whose first argument
+// is not a string literal is not found: the pattern cannot know what a variable holds, so such a call is not
+// guaranteed to be seen.
+const READ_PATTERN = /\b(ruleValue|ruleHere|ruleOf)\(\s*(['"])([^'"]*)\2/g;
 // A mark that names a rule in code marks, on one line of a text.
 const NAME_PATTERN = /`rule:([a-z][a-z0-9-]*)`/g;
 // The run of backticks or tildes at the start of a trimmed line, three or more long: the mark that opens a fence.
@@ -59,12 +60,13 @@ const isWords = (source) => isPlain(source)
   && isText(source.accepted)
   && isChecked(source.checked);
 
-/** Every read of a rule in the code files, in file order then text order: `{ path, id }`. A read is found
- * only when its first argument is a string literal, so a read through a variable is not guaranteed to be listed. */
+/** Every read of a rule in the code files, in file order then text order: `{ path, id, by }`, where `by` is the name
+ * of the function that reads it. A read is found only when its first argument is a string literal, so a read through
+ * a variable is not guaranteed to be listed. */
 export function findReads(codeFiles) {
   const reads = [];
   for (const { path, text } of codeFiles) {
-    for (const match of text.matchAll(READ_PATTERN)) reads.push({ path, id: match[2] });
+    for (const match of text.matchAll(READ_PATTERN)) reads.push({ path, id: match[3], by: match[1] });
   }
   return reads;
 }
@@ -94,25 +96,40 @@ export function sentenceOf(text, phrase) {
   return body.slice(start, stop);
 }
 
-/** Each line of `text` with whether it lies outside a fenced block: `{ line, outside }`. A fence opens on a line that
- * starts with three or more backticks or tildes, and closes on the next line that starts with the same character as
- * many times or more, so a longer fence can hold a shorter one. The lines that open and close a fence are not outside. */
+/** The walk of the fences of `text`: `{ walked, open }`. `walked` holds each line with whether it lies outside a fenced
+ * block, `{ line, outside }`; `open` is the number, from 1, of the line that opens a fence which no later line closes,
+ * or `null`. A fence opens on a line that starts with three or more backticks or tildes, and closes on the next line
+ * that starts with the same character as many times or more, so a longer fence can hold a shorter one. A line of
+ * backticks whose words hold another backtick opens nothing: it is a code span written with three marks, and taking it
+ * for a fence would hide every mark after it and report a fence that is not there. The lines that open and close a
+ * fence are not outside. */
 function fenceWalk(text) {
   const walked = [];
   let fence = null;
-  for (const line of text.split('\n')) {
-    const run = FENCE_RUN.exec(line.trim());
+  let opened = 0;
+  const lines = text.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    const run = FENCE_RUN.exec(trimmed);
     if (fence !== null) {
       if (run !== null && run[1][0] === fence[0] && run[1].length >= fence.length) fence = null;
       walked.push({ line, outside: false });
-    } else if (run !== null) {
+    } else if (run !== null && !(run[1][0] === '`' && trimmed.slice(run[1].length).includes('`'))) {
       fence = run[1];
+      opened = index + 1;
       walked.push({ line, outside: false });
     } else {
       walked.push({ line, outside: true });
     }
   }
-  return walked;
+  return { walked, open: fence === null ? null : opened };
+}
+
+/** The number, from 1, of the line that opens a fence which no later line closes in `text`, or `null` when every fence
+ * is closed. The marks after such a line are not read, so a caller reports it. */
+export function openFence(text) {
+  return fenceWalk(text).open;
 }
 
 /** Every `rule:<id>` mark in code marks, on a line that is not inside a fenced block: `{ path, id }`. The lines that
@@ -120,7 +137,7 @@ function fenceWalk(text) {
 export function namedRules(textFiles) {
   const named = [];
   for (const { path, text } of textFiles) {
-    for (const { line, outside } of fenceWalk(text)) {
+    for (const { line, outside } of fenceWalk(text).walked) {
       if (outside) for (const match of line.matchAll(NAME_PATTERN)) named.push({ path, id: match[1] });
     }
   }
@@ -132,7 +149,7 @@ export function namedRules(textFiles) {
  * `## Progress`, with a trailing `\r` allowed and nothing else. */
 export function beforeProgress(text) {
   let offset = 0;
-  for (const { line, outside } of fenceWalk(text)) {
+  for (const { line, outside } of fenceWalk(text).walked) {
     if (outside && PROGRESS_LINE.test(line)) return text.slice(0, offset);
     offset += line.length + 1;
   }
@@ -213,12 +230,20 @@ export function checkRules(input) {
     }
   }
 
-  // The reads of a rule in code: each one names a rule with a value.
+  // The reads of a rule in code: each one names a rule with a value, except ruleOf, which gives a declaration of any
+  // live rule. A ruleValue read of a rule of this repository only is a finding: that rule is read with ruleHere.
   const reads = findReads(codeFiles);
-  for (const { path, id } of reads) {
+  for (const { path, id, by } of reads) {
     const rule = rules.find((item) => item.id === id);
-    if (rule === undefined) findings.push(`${path}: reads rule "${id}", which is declared nowhere`);
-    else if (!Object.hasOwn(rule, 'value')) findings.push(`${path}: reads rule "${id}", which has no value`);
+    if (rule === undefined) {
+      findings.push(`${path}: reads rule "${id}", which is declared nowhere`);
+      continue;
+    }
+    if (by !== 'ruleOf' && !Object.hasOwn(rule, 'value')) findings.push(`${path}: reads rule "${id}", which has no value`);
+    if (by === 'ruleOf' && Object.hasOwn(rule, 'retired')) findings.push(`${path}: reads rule "${id}" with ruleOf, and it is retired`);
+    if (by === 'ruleValue' && rule.scope === 'repository' && !Object.hasOwn(rule, 'retired')) {
+      findings.push(`${path}: reads rule "${id}" with ruleValue, and it is of this repository only: read it with ruleHere`);
+    }
   }
   const readers = {};
   for (const { path, id } of reads) {
@@ -240,6 +265,12 @@ export function checkRules(input) {
         ? `${path}: names rule "${id}", retired on ${rule.retired}: read ${successors.join(', ')} instead`
         : `${path}: names rule "${id}", retired on ${rule.retired}, which no rule replaces`);
     }
+  }
+
+  // The fences left open: the marks after one are not read, so the text is named rather than read short.
+  for (const { path, text } of textFiles) {
+    const line = openFence(text);
+    if (line !== null) findings.push(`${path}: the fence opened at line ${line} is never closed, so the marks of rules after it are not read`);
   }
 
   // The generated data file: it is the shape writeRules gives for the declarations.

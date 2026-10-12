@@ -8,6 +8,7 @@ export const RULES = [
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-11",
     "value": 300000,
     "unit": "input tokens a review"
@@ -16,6 +17,7 @@ export const RULES = [
     "id": "codex-review-rate",
     "subject": "the most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
     "unit": "input tokens a changed line"
@@ -81,14 +83,32 @@ export const RULES = [
     "id": "reviewed-commit-lines",
     "subject": "about how many changed lines a commit that will be reviewed stays under",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-11",
     "value": 1200,
     "unit": "changed lines"
   },
   {
+    "id": "session-effort",
+    "subject": "the effort a session runs at",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-10",
+    "value": "high"
+  },
+  {
+    "id": "session-model",
+    "subject": "the model a session runs on",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-10",
+    "value": "claude-opus-5-5"
+  },
+  {
     "id": "subagent-effort",
     "subject": "the effort every sub-agent is launched with",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-07",
     "value": "high"
   },
@@ -96,20 +116,25 @@ export const RULES = [
     "id": "subagent-reader-model",
     "subject": "the model of a sub-agent that explores, reviews or verifies",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-10",
-    "value": "claude-opus-5-5"
+    "value": "claude-opus-5-5",
+    "alias": "opus"
   },
   {
     "id": "subagent-writer-model",
     "subject": "the model of a sub-agent that writes scoped code, in this repository",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-11",
-    "value": "claude-haiku-5-5"
+    "value": "claude-haiku-5-5",
+    "alias": "haiku"
   },
   {
     "id": "work-sessions",
     "subject": "the most work sessions open at one time",
     "owner": "sebastian",
+    "scope": "repository",
     "since": "2026-10-09",
     "value": 3,
     "unit": "sessions"

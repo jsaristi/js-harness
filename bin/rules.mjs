@@ -1,22 +1,34 @@
 #!/usr/bin/env node
 // `rules`: the declared rules of the harness (bin/lib/rules-data.mjs), each with its value or its home, and the
 // check that holds the list to the files around it. `rules` lists them, `rules <id>` prints one with its source
-// and the code that reads it, `rules check` reports what is wrong, and `rules render` writes docs/RULES.md. This
-// file is the command: it reads every file under the package, never under the working directory, and writes one
-// file, docs/RULES.md, only when asked to render. The checks are in bin/lib/rules-check.mjs. Zero dependencies.
+// and the code that reads it, `rules check` reports what is wrong, `rules render` writes docs/RULES.md, and
+// `rules applied` compares what each short name gave in the session records with its rule. Every form but
+// `applied` reads only under the package: it never reads the working directory, and writes one file,
+// docs/RULES.md, only when asked to render. `applied` reads the records Claude Code keeps for the project it is run
+// in, and that project's own bin/lib/rules-data.mjs, and writes nothing. The checks are in bin/lib/rules-check.mjs.
+// Zero dependencies.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
 import { beforeProgress, checkRules } from './lib/rules-check.mjs';
-import { renderList, rulesHash } from './lib/rules.mjs';
+import { renderList, rulesHash, ruleHere } from './lib/rules.mjs';
+import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
+import { readRecords } from './lib/rules-applied-read.mjs';
+import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage: js-harness rules [<id> | check | render]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
 const LIST_FINDINGS = ['docs/RULES.md is missing:', 'docs/RULES.md is not what the declarations render:'];
+// The days of session records `applied` counts: the last seven, as of now.
+const APPLIED_DAYS = 7;
+// The most recent launches and sessions of each kind that `applied` reads; the older ones are left out, and said so.
+const APPLIED_MAX_FILES = 500;
 
 class RulesArgError extends Error {}
 
@@ -28,7 +40,7 @@ function parseArgs(argv) {
     words.push(token);
   }
   const [word] = words;
-  if (word === 'check' || word === 'render') return { command: word };
+  if (word === 'check' || word === 'render' || word === 'applied') return { command: word };
   return word === undefined ? { command: 'list' } : { command: 'id', id: word };
 }
 
@@ -182,10 +194,80 @@ function renderLists(root, { sources, findings, readers, sentences }, stdout, st
   return 0;
 }
 
-/** `js-harness rules` and its forms: the listing, `<id>`, `check` and `render`. It returns the exit code: 0 when the
- * form succeeds, 1 when a rule is not declared, the list has a finding, or a file is unreadable or not the sources, and 2 with the
- * usage on stderr for an argument it does not know. Every file is read under `root`, which defaults to the package. */
-export async function rulesMain(argv, { root = PACKAGE_ROOT, stdout = console.log, stderr = console.error } = {}) {
+/** The project folder `cwd` is in, as git names its top, or `cwd` itself when git gives no top (no repository, or no git). */
+function projectOf(run, cwd) {
+  const result = run('git', ['rev-parse', '--show-toplevel'], { cwd });
+  if (result.error || result.status !== 0) return cwd;
+  const [top] = String(result.stdout ?? '').split(/\r?\n/).filter((line) => line.trim() !== '');
+  return top === undefined ? cwd : path.resolve(top);
+}
+
+/** The rules `applied` reads as in force in the project whose rules-data.mjs text is `projectData` (null when there is none),
+ * in list order, and how many scoped rules are left out and why: `{ rules, leftOut: { elsewhere, behind } }`. A rule in
+ * prose has no value and a retired rule is gone, so neither is in force. */
+function rulesInForce(projectData) {
+  const rules = [];
+  const leftOut = { elsewhere: 0, behind: 0 };
+  for (const rule of RULES) {
+    if (!Object.hasOwn(rule, 'value') || Object.hasOwn(rule, 'retired')) continue;
+    if (rule.scope === undefined) {
+      rules.push(rule);
+      continue;
+    }
+    const here = ruleHere(rule.id, rule.unit, projectData);
+    if (Object.hasOwn(here, 'value')) rules.push(rule);
+    else leftOut[here.off] += 1;
+  }
+  return { rules, leftOut };
+}
+
+/** Writes the lines of `js-harness rules applied` for the project `cwd` is in, and gives its exit code: each declared
+ * alias against the launches and sessions the records of that project hold, over the last APPLIED_DAYS days. The records
+ * are those of the main checkout, under `env.CLAUDE_CONFIG_DIR` or else the user's `.claude`; the rules are those of the
+ * project's own rules-data.mjs. Nothing is written. The exit is 1 when a short name gives another model than its rule
+ * declares on the engine in use, and 0 otherwise, and when no record folder is there. */
+function appliedForm({ cwd, env, homedir, now, run }, stdout) {
+  const project = projectOf(run, cwd);
+  const main = mainCheckout(run, cwd);
+  const recordsDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', projectSlug(main));
+  const { rules, leftOut } = rulesInForce(readOptional(project, 'bin/lib/rules-data.mjs'));
+  const at = now();
+  const records = readRecords(recordsDir, { now: at, days: APPLIED_DAYS, maxFiles: APPLIED_MAX_FILES });
+  const today = new Date(at).toISOString().slice(0, 10);
+  const result = appliedOf(rules, records.launches, records.sessions, { today, days: APPLIED_DAYS });
+  const lines = appliedLines(result, {
+    project,
+    main,
+    recordsDir,
+    exists: records.exists,
+    files: records.files,
+    capped: records.capped,
+    unreadable: records.unreadable,
+    days: APPLIED_DAYS,
+    maxFiles: APPLIED_MAX_FILES,
+    leftOut,
+  });
+  for (const line of lines) stdout(line);
+  return records.exists ? result.exit : 0;
+}
+
+/** `js-harness rules` and its forms: the listing, `<id>`, `check`, `render` and `applied`. It returns the exit code: 0 when
+ * the form succeeds, 1 when a rule is not declared, the list has a finding, a file is unreadable or not the sources, or
+ * `applied` finds a short name that gives another model than its rule declares, and 2 with the usage on stderr for an
+ * argument it does not know. Every form but `applied` reads its files under `root`, which defaults to the package.
+ * `applied` reads under `cwd` (the working directory by default): the records of that project and its own rules file.
+ * `env`, `homedir`, `now` and `run` (what `spawnSync` gives) are what `applied` takes from outside, so a test can keep it
+ * away from the real records. */
+export async function rulesMain(argv, {
+  root = PACKAGE_ROOT,
+  stdout = console.log,
+  stderr = console.error,
+  cwd = process.cwd(),
+  env = process.env,
+  homedir = os.homedir,
+  now = Date.now,
+  run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }),
+} = {}) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -196,6 +278,16 @@ export async function rulesMain(argv, { root = PACKAGE_ROOT, stdout = console.lo
 
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
   if (parsed.command === 'list') return listRules(stdout);
+
+  // `applied` reads no document of the package, so it runs before the package is read at all.
+  if (parsed.command === 'applied') {
+    try {
+      return appliedForm({ cwd, env, homedir, now, run }, stdout);
+    } catch (err) {
+      stderr(err.message);
+      return 1;
+    }
+  }
 
   let read;
   let result;

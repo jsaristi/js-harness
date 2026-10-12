@@ -10,8 +10,8 @@ export const OWNERS = ['sebastian', 'project'];
 
 // Every key a declaration may hold. Any other key is refused by name.
 const KEYS = new Set([
-  'id', 'subject', 'owner', 'since',
-  'value', 'unit', 'flag', 'was',
+  'id', 'subject', 'owner', 'scope', 'since',
+  'value', 'unit', 'flag', 'alias', 'was',
   'path', 'phrases',
   'retired', 'successors',
   'patterns', 'row', 'failure', 'differs', 'review',
@@ -20,6 +20,10 @@ const KEYS = new Set([
 const ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/;
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const FLAG_PATTERN = /^--[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+// The short name a host takes where the id cannot be passed: one lower-case word of at most 32 characters.
+const ALIAS_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
+// The one scope a rule can have: it is in force only in the repository that declares it.
+const REPOSITORY_SCOPE = 'repository';
 const DIGIT = /\d/;
 
 /** True for a plain object: not null, not an array, and not a text, a number or a list. */
@@ -149,10 +153,13 @@ function wasFaults(was) {
     return ['an earlier value is written { value, until: YYYY-MM-DD }'];
   }
   const items = Array.from(was);
-  for (let i = 1; i < items.length; i += 1) {
-    if (items[i].until > items[i - 1].until) return ['the earlier values are not newest first'];
-  }
-  return [];
+  const faults = [];
+  // A history is one kind of value throughout: a number with its unit, or a text, never both in one list.
+  const numbers = items.some((item) => typeof item.value === 'number');
+  const texts = items.some((item) => typeof item.value === 'string');
+  if (numbers && texts) faults.push('the earlier values are all numbers or all texts');
+  if (items.some((item, i) => i > 0 && item.until > items[i - 1].until)) faults.push('the earlier values are not newest first');
+  return faults;
 }
 
 /** The faults of the optional keys, in the order they are read. Each one is checked only when present. */
@@ -190,6 +197,9 @@ function ruleFaults(rule, { minPhrase, declared }) {
   }
   if (rule.owner === undefined) faults.push('the owner is missing: it is sebastian or project');
   else if (!OWNERS.includes(rule.owner)) faults.push(`the owner is "${show(rule.owner)}": it is sebastian or project`);
+  if (rule.scope !== undefined && rule.scope !== REPOSITORY_SCOPE) {
+    faults.push(`the scope is "${show(rule.scope)}": it is repository, or it is absent`);
+  }
   if (!isDay(rule.since)) faults.push('since is not a day written YYYY-MM-DD');
 
   const bodies = [];
@@ -208,6 +218,10 @@ function ruleFaults(rule, { minPhrase, declared }) {
     if (!isText(rule.unit)) faults.push('a retired rule whose earlier values are numbers keeps its unit');
   } else if (rule.unit !== undefined && (body === 'text' || body === 'retired')) faults.push('a unit goes with a value');
   if (rule.flag !== undefined && body !== 'value') faults.push('a flag goes with a value');
+  if (rule.alias !== undefined) {
+    if (body === 'text' || body === 'retired') faults.push('an alias goes with a value');
+    else if (!(typeof rule.alias === 'string' && ALIAS_PATTERN.test(rule.alias))) faults.push('the alias is one short lower-case word');
+  }
   if (rule.successors !== undefined && (body === 'value' || body === 'text')) faults.push('successors go with a retired rule');
   if (rule.was !== undefined && body === 'text') faults.push('earlier values go with a value or a retired rule');
   if (rule.was !== undefined && (body === 'value' || body === 'retired')) faults.push(...wasFaults(rule.was));
@@ -267,10 +281,9 @@ export function readRules(list, { minPhrase, declared = RULES } = {}) {
   return faults;
 }
 
-/** The value of the rule `id`, for the code that needs it. It refuses a rule that is not there, one
- * that is retired, one in prose, and a read in another unit, because each would give a wrong number
- * without a word. It does not check the list: `readRules` does that. */
-export function ruleValue(id, unit, list = RULES) {
+/** The declaration of the live rule `id` in `list`, which every read goes through. It refuses a rule that is not
+ * there and a retired rule, because each would give a wrong answer without a word. */
+function liveRule(id, list) {
   const rule = list.find((item) => item.id === id);
   if (!rule) throw new Error(`no rule "${id}" is declared (bin/lib/rules-data.mjs)`);
   if (Object.hasOwn(rule, 'retired')) {
@@ -280,14 +293,57 @@ export function ruleValue(id, unit, list = RULES) {
     }
     throw new Error(`rule "${id}" is retired since ${rule.retired}: read ${successors.join(', ')} instead`);
   }
+  return rule;
+}
+
+/** Throws when `rule` cannot give its value in `unit`: a rule in prose has no value, and a value is read only in the
+ * unit it is declared in, because a number without its unit is a wrong number without a word. */
+function checkUnit(rule, id, unit) {
   if (!Object.hasOwn(rule, 'value')) throw new Error(`rule "${id}" is a rule in prose: it has no value to read`);
   if (rule.unit !== unit) {
     const declared = rule.unit === undefined ? 'no unit' : rule.unit;
     const asked = unit === undefined ? 'no unit' : unit;
     throw new Error(`rule "${id}" is in ${declared}, and it was read as ${asked}`);
   }
+}
+
+/** The value of the rule `id`, for the code that needs it. It refuses a rule that is not there, one
+ * that is retired, one of this repository only (read it with `ruleHere`), one in prose, and a read in
+ * another unit. It does not check the list: `readRules` does that. */
+export function ruleValue(id, unit, list = RULES) {
+  const rule = liveRule(id, list);
+  if (rule.scope === REPOSITORY_SCOPE) throw new Error(`rule "${id}" is of this repository only: read it with ruleHere`);
+  checkUnit(rule, id, unit);
   return rule.value;
 }
+
+/** The value of the rule `id` for code that ships, read where the project is known: `projectData` is the text
+ * of the project's rules-data.mjs, or nothing. A rule with no scope gives `{ value }` whatever `projectData` is.
+ * A rule of scope `repository` gives `{ value }` only when `projectData` is the list the running copy holds (line
+ * endings aside). `{ off: 'elsewhere' }` means a project that does not declare the rules, one that installs the
+ * harness. `{ off: 'behind' }` means a copy of the harness whose list is not the project's. It refuses as `ruleValue`
+ * does for an unknown id, a retired rule, a rule in prose and another unit. It throws for a `projectData` of a rule of
+ * scope `repository` that is neither a text nor nothing, because that is a caller's mistake and not a stale copy. */
+export function ruleHere(id, unit, projectData, list = RULES) {
+  const rule = liveRule(id, list);
+  checkUnit(rule, id, unit);
+  if (rule.scope === undefined) return { value: rule.value };
+  if (projectData !== null && projectData !== undefined && typeof projectData !== 'string') {
+    throw new Error(`rule "${id}": ruleHere takes the text of the project's rules file, or nothing`);
+  }
+  if (projectData === null || projectData === undefined) return { off: 'elsewhere' };
+  if (typeof projectData === 'string' && lineFeeds(projectData) === lineFeeds(writeRules(list))) return { value: rule.value };
+  return { off: 'behind' };
+}
+
+/** A copy of the declaration of the live rule `id`, so that a caller cannot change the list it is read from.
+ * It refuses an unknown id and a retired rule as `ruleValue` does, and nothing else. */
+export function ruleOf(id, list = RULES) {
+  return structuredClone(liveRule(id, list));
+}
+
+/** `text` with each `\r\n` read as `\n`, so that a file from Windows compares as one from Unix. */
+const lineFeeds = (text) => text.replace(/\r\n/g, '\n');
 
 // The first lines of rules-data.mjs, which writeRules gives first, so that the file keeps its own words.
 const HEADER = [
@@ -300,12 +356,14 @@ const HEADER = [
 
 // The keys of a declaration in the order the file writes them.
 const FILE_KEYS = [
-  'id', 'subject', 'owner', 'since', 'value', 'unit', 'flag', 'was',
+  'id', 'subject', 'owner', 'scope', 'since', 'value', 'unit', 'flag', 'alias', 'was',
   'path', 'phrases', 'retired', 'successors', 'patterns', 'row', 'failure', 'differs', 'review',
 ];
 // The keys that say what a rule says, in the order the hash reads them.
-const HASH_KEYS = ['id', 'value', 'unit', 'flag', 'path', 'phrases', 'retired', 'successors'];
+const HASH_KEYS = ['id', 'scope', 'value', 'unit', 'flag', 'alias', 'path', 'phrases', 'retired', 'successors'];
 
+// The last line of that paragraph: where the engine version and the day of a check are read, since the list holds neither.
+const LIST_NOTE = 'The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.';
 // The paragraph that docs/RULES.md gives under its title.
 const RENDER_NOTE = 'Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed in its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), and this is the one text that shows a value. Until the command that changes a rule exists, the declarations are written by hand.';
 
@@ -403,10 +461,18 @@ const sinceLine = (rule, sources) => `- Since ${rule.since}. Row: ${rowText(rule
 /** The line of a rule's earlier values, each with the rule's unit, in the order the rule gives them. */
 const wasLine = (rule) => `- Was: ${rule.was.map((item) => `${amount(item.value, rule.unit)} until ${item.until}`).join('; ')}.`;
 
-/** The block of a rule with a value: its subject and value, its earlier values when it has any, the rules that read it, and its source. */
+/** The lines a rule shows after its first line, each only when the rule has its field: the alias it is passed as on a
+ * call, its scope, and the day it is looked at again. */
+const fieldLines = (rule) => [
+  ...(rule.alias === undefined ? [] : [`- Passed on a call as ${code(rule.alias)}.`]),
+  ...(rule.scope === undefined ? [] : ['- Of this repository only: not in force in a project that installs the harness.']),
+  ...(rule.review === undefined ? [] : [`- Looked at again on ${rule.review}.`]),
+];
+
+/** The block of a rule with a value: its subject and value, its field lines, its earlier values when it has any, the rules that read it, and its source. */
 function valueBlock(rule, { sources, readers }) {
   const override = rule.flag === undefined ? '' : ` The flag ${code(rule.flag)} overrides it for one run.`;
-  const lines = [`### ${rule.id}`, `${upper(rule.subject)}: ${amount(rule.value, rule.unit)}.${override}`];
+  const lines = [`### ${rule.id}`, `${upper(rule.subject)}: ${amount(rule.value, rule.unit)}.${override}`, ...fieldLines(rule)];
   if ((rule.was ?? []).length > 0) lines.push(wasLine(rule));
   lines.push(`- Read by: ${readBy(lookup(readers, rule.id))}.`);
   lines.push(sinceLine(rule, sources));
@@ -420,7 +486,7 @@ function proseBlock(rule, { sources, sentences }) {
   const first = sentence === undefined
     ? `${subject}: its text was not found in ${code(rule.path)}.`
     : `${subject}: "${sentence}"`;
-  return [`### ${rule.id}`, first, `- Home: ${code(rule.path)}.`, sinceLine(rule, sources)].join('\n');
+  return [`### ${rule.id}`, first, `- Home: ${code(rule.path)}.`, ...fieldLines(rule), sinceLine(rule, sources)].join('\n');
 }
 
 /** The block of a retired rule: the day it was retired, the rules that replace it, and its earlier values and source. */
@@ -452,7 +518,7 @@ export function renderList(list, { sources = {}, readers = {}, sentences = {} } 
     : proseBlock(rule, { sources, sentences }));
   return [
     '# Rules',
-    RENDER_NOTE,
+    `${RENDER_NOTE}\n${LIST_NOTE}`,
     `Hash ${code(rulesHash(list))}. In force: ${shown(inForce.length)} (${shown(sebastian.length)} of Sebastián, ${shown(project.length)} of the project). Retired: ${shown(retired.length)}.`,
     section("## Sebastián's", sebastian.map(block)),
     section("## The project's", project.map(block)),

@@ -110,6 +110,40 @@
       "by": "session"
     }
   },
+  "session-effort": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "de resto ahora que estamos diseñando el harness o cuando vayamos a tratar cosas de planificacion debe ser minimo opues 5.5 alto o fable 5.5 alto (que aun no ha salido), ningun otro modelo hasta la fecha",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 990
+      }
+    ],
+    "reading": "A session of this repository runs at high effort: his \"alto\" beside each model. His later line (session 130317af-a818-419c-a3de-3a21335db0a8, line 2037, of 2026-10-11) opened a trial of medium on closed-scope builds; that trial is a measurement recorded in odd/tasks/rule-hierarchy.md and docs/model-effort.md, not a rule, and it was closed on 2026-10-12. Levels above high are not named by these words.",
+    "accepted": "Not put to him as a reading: it is this session's, and his to correct.",
+    "checked": {
+      "date": "2026-10-12",
+      "by": "session"
+    }
+  },
+  "session-model": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "de resto ahora que estamos diseñando el harness o cuando vayamos a tratar cosas de planificacion debe ser minimo opues 5.5 alto o fable 5.5 alto (que aun no ha salido), ningun otro modelo hasta la fecha",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 990
+      }
+    ],
+    "reading": "A session of this repository (design, a protocol, verification, review, orchestrating, a build) runs on Opus 5.5, which the session records name claude-opus-5-5. His words also allow Fable 5.5 at high once it exists: the rule changes with his words when it does. That his \"opues 5.5\" is that id is this session's reading, from its own records, and his to correct. What the harness turns on by default in a project that installs it is not decided by these words.",
+    "accepted": "Not put to him as a reading: it is this session's, and his to correct.",
+    "checked": {
+      "date": "2026-10-12",
+      "by": "session"
+    }
+  },
   "subagent-effort": {
     "kind": "words",
     "quotes": [
@@ -137,7 +171,7 @@
         "line": 990
       }
     ],
-    "reading": "A sub-agent that explores, reviews or verifies runs on Opus 5.5, which the session records name claude-opus-5-5. His words also allow Fable 5.5 at high once it exists: the rule changes with his words when it does. That \"the rest\" means those sub-agents is the orchestrator's reading (its relief file, line 148). That his \"opus 5.5\" is that id is this session's reading, from the records of its own sub-agents, and his to correct.",
+    "reading": "A sub-agent that explores, reviews or verifies runs on Opus 5.5, which the session records name claude-opus-5-5. His words also allow Fable 5.5 at high once it exists: the rule changes with his words when it does. That \"the rest\" means those sub-agents is the orchestrator's reading (its relief file, line 148). That his \"opus 5.5\" is that id is this session's reading, from the records of its own sub-agents, and his to correct. The alias `opus` is how the project applies the rule where a call takes only a short name: it is this session's, from what the name gave on engine 2.1.295, and changes with a reading, not with his words.",
     "accepted": "Not put to him as a reading: it is the orchestrator's, and his to correct.",
     "checked": {
       "date": "2026-10-11",
@@ -160,7 +194,7 @@
         "line": 2037
       }
     ],
-    "reading": "In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on the call. The second quotation approves the orchestrator's decision that says so (its relief file, line 285, not read by this session); what the harness turns on by default for a project is not decided by it. That his \"haiku\" is the id claude-haiku-5-5 is this session's reading, from the records of its own writers on engine 2.1.295, and his to correct.",
+    "reading": "In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on the call. The second quotation approves the orchestrator's decision that says so (its relief file, line 285, not read by this session); what the harness turns on by default for a project is not decided by it. That his \"haiku\" is the id claude-haiku-5-5 is this session's reading, from the records of its own writers on engine 2.1.295, and his to correct. The alias `haiku` is how the project applies the rule where a call takes only a short name: it is this session's, from what the name gave on engine 2.1.295 (it gave Haiku 4.5 on 2.1.292 and before), and changes with a reading, not with his words.",
     "accepted": "The orchestrator's message of 2026-10-11 gives his second quotation as the approval of that decision.",
     "checked": {
       "date": "2026-10-11",
