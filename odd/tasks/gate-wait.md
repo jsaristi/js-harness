@@ -402,7 +402,7 @@ session's transcript.
 - [x] T5 · A review in parts keeps the parts that passed. Route: delegated, tests first. Evidence: `1841b96`; the entries of T5 in Progress.
 - [x] T5b · The four notes gentle-ai left on T5 (Progress; `8bae23f`). Route: delegated, one writer,
       tests first.
-- [ ] T6 · The head a review reads is pinned, and two records at once. Route: delegated,
+- [ ] T6 · The head a review reads is pinned (done, `3e0b456`), and two records at once (open). Route: delegated,
       tests first.
 - [ ] T6b · The row of a commit names the commits no record covers, as the row of a push
       does; and `codex-review` says so when its base is itself a code commit with no
@@ -495,10 +495,20 @@ session's transcript.
   was found to make the reader of the run log throw at that one place, so the new test
   proves that a log that cannot be read is read as empty and every part is asked; the
   `catch` beside it stays without a test. Sub-agents so far: 1,052,797 tokens.
+- 2026-10-12 · T6, one writer on Haiku 5.5 (147,113 tokens), commit `3e0b456`. One turn
+  (`t6-turn.log`, taken 06:40:12): RED, the three new tests fail against the command as it
+  was (a commit made while Codex reviews, an edit made while it reviews, the end of the
+  range asked by the commit and never by the word `HEAD`); GREEN, 252 of 252; the gate
+  passed on the commit (`PASS  tests`, 06:57:36). gentle-ai's row: medium risk, 95 lines,
+  review not due (under the budget). Two things it leaves, said plainly: under the default
+  prompt Codex itself diffs against the live `HEAD` inside its session, which the command
+  cannot pin, so a commit made meanwhile may be read; the record is still refused. And
+  "two records at once" (`bin/lib/codex-reviews.mjs:75`) was not looked at: it stays in T6
+  as open. Sub-agents so far: 1,199,910 tokens.
 
 ## Next
-T6 (the head pinned) and T6b (the row of a commit names its commits), one writer each, and
-one turn for the two: RED, GREEN, commits. Then gentle-ai on what follows `1841b96`.
+What is left of T6 (two records appended at once) and T6b (the row of a commit names its
+commits), one writer each. Then gentle-ai on what follows `1841b96`.
 Codex on the slice when he has answered; its run is also M2's number 1 for Codex, under
 `measure-busy.mjs`. T2 can start beside them: its files are free.
 
