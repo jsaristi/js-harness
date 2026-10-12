@@ -2412,6 +2412,27 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `evals/codex-isolation-probe.test.mjs:301`, `HOMEDRIVE`), by JH 8's classification.
     NEXT: this branch's commit through the gate; Codex by its plan; push and its pull request
     once 78 is merged. Then the pause percent as a declared rule.
+  - Pull request 78 was merged at 17:28 (`main` at `e90e0a4`). This branch's commit is
+    `2f81a63`: its turn of the gate (17:40:04 to 17:54:23) first moved the branch forward to
+    `origin/main`, a fast-forward under the uncommitted changes, then committed, so the one
+    gate ran on a tree that holds `main`. gentle-ai assessed `e90e0a4..2f81a63` as medium and
+    not due. Codex reviewed it and found the patch correct; the review is recorded (156,971
+    input tokens, 113,152 cached, against a plan of about 80,000 and the floor of 300,000).
+    Candidates, not taken, owed until a run on Linux can prove them (JH 8's classification,
+    `odd/tasks/gate-wait.md` of `feat/gate-wait` at ea02144; the lead's word of 17:36, a
+    claim): `bin/lib/payload.test.mjs:197` and `:212` feed a Windows absolute path, which
+    `path.isAbsolute` rightly calls relative on Linux; `evals/codex-isolation-probe.test.mjs:301`
+    asks for `HOMEDRIVE`, set on Windows alone (`evals/configs.mjs:144`).
+    `command-run-for-help`, read on `main`: its sightings inside the harness have their
+    refusal, `install` (`bin/install.test.mjs`, pull request 76), `check`
+    (`bin/check.test.mjs`, pull request 77) and `gate` (`bin/gate.mjs:109` and `:129`). Its
+    control stays owed for what its sentence says of every command: one test at the
+    dispatcher that each command of `js-harness` refuses a word it does not know. Not assigned.
+    The pause percent is built on its own branch, `feat/rules-context-pause` (commit
+    `ca83a3d`, the gate passed at 18:08), and its entry is written there after this branch is
+    merged, so the two do not meet in this document.
+    NEXT: push and this branch's pull request; then the context pause's Codex result, its
+    entry here, its push and pull request.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`
