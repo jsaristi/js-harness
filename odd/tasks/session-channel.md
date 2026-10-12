@@ -555,14 +555,15 @@ Each is run once by the build, with its result recorded in Progress.
 5. After a rename, does the old title stop resolving as an address?
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
-### 14. A compaction that loses nothing (T6b; design, version 1, before its two readers)
+### 14. A compaction that loses nothing (T6b; design, version 2, after its two readers)
 
 The problem behind his words. On 2026-10-11 the orchestrator went from the pause to the host's
-compaction inside one long stretch of work: nothing was written first, he was given no block,
-and the summary was all that came back. His words ask for three things: what matters is saved
-before a compaction, always; he is given the prompt that recovers it; and it does not happen
-again. The first two were a rule a session keeps by remembering it, which is what failed. So
-the design has a part that needs no memory and a measure that says whether the rule held.
+compaction inside one long stretch of work: he was given no block, and the summary was all
+that came back. His words ask for three things: what matters is saved before a compaction,
+always; he is given the prompt that recovers it; and it does not happen again. The first two
+were a rule a session keeps by remembering it, which is what failed. So the design is, in
+this order, something that tells a session it is at the pause while it works, with no model
+in it; what a session reads when it comes back; and a measure that says whether it held.
 
 His words on the subject, searched over the project's transcripts on 2026-10-12 by a read-only
 reader, each read at its line with `sessions --quote`, exit 0 (transcript and line; the dates
@@ -598,105 +599,121 @@ are local):
 
 Where they pull apart, and what this design does with it. "Termine bien" and "miramos si
 falta poco" against "siempre … antes de compactar": the incident was a session that judged
-"little is left" four times until the host compacted, so the judgement stays (a session
-still finishes what is nearly done) and stops being a reason for silence: the state is
-written and he is told at the pause, and the work goes on after that reply. "Auto compactar y
-mandar el siguiente prompt" against two blocks he pastes: once the snapshot and the resume
-hook are in place a compaction the host makes by itself loses nothing and needs no paste,
-which is the automatic path he asked for first; the blocks stay for the cut a session asks
-him for, until he says otherwise.
+"little is left" until the host compacted, so the judgement stays (a session still finishes
+what is nearly done) and stops being a reason for silence: the state is written and he is
+told at the pause, and the work goes on after that reply. This changes his rule of
+2026-10-10, so it is his to confirm. "Auto compactar y mandar el siguiente prompt" against
+two blocks he pastes: once a session is told in time and reads its files when it comes back,
+a compaction the host makes by itself loses nothing and needs no paste, which is the
+automatic path he asked for first; the blocks stay for the cut a session asks him for, until
+he says otherwise.
 
-What a session cannot rebuild from its summary, and where each is kept:
+What the transcripts say (57 of this project, read 2026-10-12 by this session and again by
+the reader that attacked version 1): 39 compactions, each counted once by its `uuid` (the
+host copies a boundary into the file a session continues in, one of them five times); 13
+automatic. Three of the 13 had no turn end between the pause and the compaction, so nothing
+that acts only at a reply could have warned them. In none of the 13 did an `Edit` or `Write`
+call touch a feature document or the roadmap after the pause: where state was written there,
+a shell command wrote it. Twenty of the 26 compactions he asked for happened under the
+pause.
 
-| What | Kept by | Read back by |
-|---|---|---|
-| What is done, in flight and next | the session, in "Next step" and "State for a resume" of its feature document, committed | the session, sent there by the resume hook |
-| His exact words since the last compaction | the transcript; the snapshot lists the lines of his entries, never their text | `sessions --quote` at those lines |
-| Each worktree's branch, head and changed files | the snapshot | the resume hook's line |
-| Work in flight outside the conversation: the gate's holder and line, background commands the session started | the snapshot | the resume hook's line |
-| Questions open for him | the session's feature document; the resume hook already says to repeat them | the session |
+Three parts.
 
-Four parts.
+1. The session is told at the pause, inside a turn. A `PostToolUse` entry runs `js-harness
+   resume --pause` after each tool call. The hook's input carries `transcript_path`; the
+   command reads the end of that file only, takes the context from the last reply's usage as
+   the board does, and compares it with the pause, against the session's own compaction point
+   when it has measured one. Under the pause it prints nothing. At the first call past it,
+   and once for each stretch between two compactions (a mark beside the channel's record,
+   named by the session id and the `uuid` of the last boundary), it returns
+   `additionalContext`, which the host adds beside the tool's result: the share, the room
+   left, and the rule of part 2 in one sentence, naming the file its state goes to. It acts
+   only in a project with a `harness.json`, ignores a sub-agent's calls (`agent_id`), is
+   given two seconds, and can never block: the entry's command ends in a guard that turns any
+   exit into 0, since an older installed command answers 2 to a flag it does not know and 2
+   is what blocks. What it costs, measured here: a node start that reads the end of an 11 MB
+   transcript takes 130 ms, 210 ms through the dispatcher as it is today; so a module of its
+   own, and about 0.15 s added to each tool call. The reply check of the rule hierarchy (JH
+   7, a `Stop` hook) keeps the turn end: it uses the same function and the same mark, so a
+   session is told once, by whichever comes first.
+2. The rule, in one text. Told that it is at the pause, a session writes its state where the
+   resume hook will send it (its feature document, committed; the relief file for the
+   orchestrator), and its next reply to him says the share and carries the two blocks; then
+   it goes on with the task, and he compacts when he reads it or the host does. The blocks
+   are given once for a stretch and not repeated while he is away. When the worktree cannot
+   be written because a run in flight holds it, the session waits for the run and then
+   writes: no second home for state. The text ships in the orchestrator skill (T8) and in the
+   proposed text for `AGENTS.md`, and point 9 is rewritten to it; it is not a memory note.
+   For the reply check of JH 7 this is one more shape of a reply: working, past the pause,
+   with the two blocks. Its document refuses that shape today and its nudge is once for a
+   session, not once for a stretch: told to the lead, theirs to change.
+3. What a session reads when it comes back. No snapshot is taken before a compaction: the
+   transcript keeps everything that came before the boundary, and git and the gate are the
+   same a few seconds later, so the resume hook, which already runs then and whose output
+   does reach the context, reads them itself. To its lines it adds, each from the transcript
+   or from git and none from a model: whether this compaction was automatic, whether the
+   session had been told, and whether a state was written after that (when not: "say so to
+   the user in your next reply", first); the lines where he wrote, where another session
+   wrote and where the session last answered him, since the compaction before, to be read
+   with `sessions --quote` and a twin of it for the session's own replies; the work in flight
+   the board already knows (background commands and sub-agents with no end yet, a turn at the
+   gate); the branch, the head and the changed files of the session's own worktree, with
+   `--no-optional-locks`; and, for the orchestrator, its relief file in place of a feature
+   document. When the stretch before the boundary is in another file, because the host
+   continued the session in a new one, it says so and reads no other session's. One overall deadline inside the fifteen seconds it is given; what it could not
+   read it says as not known. A `PreCompact` entry is left out: the event exists on both
+   hosts by their pages, no transcript sampled here records one run, and nothing above needs
+   it.
 
-1. The rule, in one text. At the pause a session writes its state to its feature document and
-   commits it, and its very next reply to him says the share of the context and carries the two
-   blocks, whatever is left of the task; then it goes on with the task, and he compacts when
-   he reads it or the host does. "Little is left, so it finishes first and says nothing" is
-   removed from point 9: it is what let a compaction arrive unannounced. The blocks are given
-   once: a session does not repeat them while he is away. The text ships in the orchestrator
-   skill (T8) and in the proposed text for `AGENTS.md`; it is not a memory note.
-2. The snapshot, with no model in it. A `PreCompact` entry (both matchers, both hosts) runs
-   `js-harness resume --snapshot`. It reads the hook's input (`session_id`, `transcript_path`,
-   `cwd`, `trigger`) and writes one file, `<home>/.js-harness/channel/<project>/snapshots/<session
-   id>.json`, replaced at each compaction: the time and the trigger; the session's title; for
-   each worktree of the project, its branch, its head and the paths git lists as changed
-   (capped); the gate's holder and the turns that wait; the feature document the resume hook
-   would name, when it was last written and whether it has changes not committed; the lines
-   of the transcript where he wrote since the last compaction; and whether the transcript
-   shows the state written since the context passed the pause (part 4's test). It acts only in
-   a project with a `harness.json`, always exits 0, prints nothing, never blocks (exit 2 from
-   this event stops a compaction, and an automatic one is then skipped), and is given fifteen
-   seconds. `install` writes the entry and records it; `uninstall` removes it and the folder.
-3. The resume hook reads the snapshot. After a compaction it already prints the title, the
-   opening and the feature document. It adds: where the snapshot is and how old; the changed
-   files and the turn at the gate it found; "his words since the compaction before this one
-   are at lines …, read them with `sessions --quote`"; and, when the compaction was automatic
-   and no state had been written, that plainly, first: "this compaction was automatic and the
-   state was not written before it: say so to the user in your next reply".
-4. The measure, read from the transcripts alone, so it also judges what ran before any hook.
-   For each compaction, counted once (the host copies a boundary into the file a session
-   continues in, and a file can hold the same one three times), two facts about the stretch
-   between the last moment the context was under the pause and the compaction. Kept: a tool
-   call wrote a home of state (a feature document under `odd/tasks/`, the roadmap, the
-   orchestrator's relief file, or the state file of part 2). Announced: a reply to him holds
-   the block of the bare `/compact`. `sessions --measures` (T9) prints the compactions by
-   trigger with how many were not kept and how many not announced; the board marks a session
-   whose last compaction was either. The proof he is owed is a command: the count of automatic
-   compactions not kept, and of those not announced, since the day this ships, is zero.
-   A trial of "kept" over this project's 57 transcripts (2026-10-12, a script of this session,
-   the pause of each session put at its own compaction point times the ratio of the two
-   constants): 39 compactions, 13 automatic of which 7 not kept, 26 asked for of which 6 not
-   kept. Two things the trial showed are in the definition above: the copies, and that the
-   orchestrator's state is not under `odd/tasks/`. A third is open: this session's own state
-   of 2026-10-11 22:03 went to a file in its scratchpad, because a review in flight held the
-   worktree at another commit; the trial reads that compaction as not kept, and it is right:
-   no hook and no other session can find that file.
+The measure, the proof he is owed. For each automatic compaction, judged once and in the file
+that holds the stretch before it, three facts: told (the mark of part 1 is older than the
+boundary), kept (the state's home has a commit, or the relief file a line, between the mark
+and the boundary: the file is measured, not the tool call), announced (a reply to him after
+the mark holds the block of the bare `/compact`). A compaction he asked for is counted and
+gets no verdict. `sessions --measures` (T9) prints them; the board marks a session whose last
+automatic compaction misses one, which wakes the lead once. The proof is a command: since the
+day part 1 is installed, which the document records, the automatic compactions that miss a
+fact are zero. It covers Claude Code: the reader has no Codex transcript, and a Codex session
+gets part 3 with git and the gate only. "Announced" is one pattern and a session could print
+it in every reply; it is kept because the reply check refuses a block out of place.
 
-2b. A state when the worktree cannot be written (a run in flight holds it at another commit,
-   or the session has no feature document). `js-harness resume --state` reads a text on its
-   standard input and writes it beside the snapshot, `…/snapshots/<session id>.state.md`;
-   the resume hook names it and says the feature document does not hold it yet. It is the
-   one exception to "the feature document and the roadmap are the handoff, and nothing else
-   is", it lasts until the session can write the document, and the readers are asked whether
-   it earns its place or whether "wait for the run and then write" is enough.
+Tried before anything is built, each a test owed and his to allow, since each opens a
+session in a folder made for it: that `additionalContext` of a `PostToolUse` hook reaches
+the model in the desktop app and in the terminal; that the entry's guard holds against a
+command that answers 2; what the session id of a continued transcript is when the resume
+hook runs.
 
-The resume prompt. With the resume hook installed, the second block does no work a file does
-not do: the hook's lines are that prompt. His words ask for the prompt to be given ("me das
-un prompt para recuperar la informacion"), so the two blocks stay as they are until he says
-the hook replaces the second; the board prints the resume prompt of a session
-(`sessions --resume-prompt <title>`), built from the same files as the hook's lines, so no
-session composes it by hand and it never differs from what the hook will say. One thing the
-search showed about such a prompt: he sends it, so `sessions --quote` answers that it is his
-and warns of nothing, though a session wrote every word. A prompt this command printed can be
-told from his own words by its first line, and `--quote` should say so.
+Cut from version 1: the snapshot before a compaction and its folder, `resume --state`,
+`sessions --resume-prompt`, the list of every worktree. Noted for `--quote` and not built
+here: a resume prompt a session wrote and he sent reads as his words.
 
-What this does not do. Nothing here knows the share of the context from inside a hook: no
-hook's input carries it, so the pause stays the session's own look, the board's row and the
-watch that wakes the lead. The nudge at the pause stays where point 9 put it, the reply check
-of the rule hierarchy (JH 7), which reads the transcript at each reply; this design gives it
-one more fact to say (that the state is not written yet). A compaction the host makes while a
-session works cannot be delayed without blocking it, and blocking is not offered: a session
-that cannot compact stops.
+What each reader changed. The one that attacked: the measure of version 1 read the incident
+as kept or every compaction as not kept, depending on how a write was recognised, so it now
+measures the file and gives a verdict only to automatic compactions; nothing in version 1
+acted before a compaction inside a long turn, which is part 1; copies of a boundary are told
+by `uuid`; the snapshot described the project and not the session and could run past its
+time, and with the next point it is gone; `resume --state` was the cheapest way to game the
+measure. The one that looked for what was missing: the same gap inside a long turn; an older
+installed command answering 2 to a hook, which blocks a compaction; that what is lost is the
+session's own last replies and the messages of other sessions, which the transcript still
+holds; the orchestrator's path through its relief file; the work in flight; the shape of the
+pause reply in JH 7's check; and the decisions below, which version 1 did not list as his.
 
-His to decide (asked one at a time, after the two readers): whether the snapshot entry is
-installed on this machine with the resume hook (a change on his machine); whether the second
-block goes once the hook is installed.
+His to decide, asked one at a time: whether a session is told after each tool call, at 0.15 s
+a call, or only at the end of a reply, which costs nothing and misses the long turn; the
+change of the rule of 2026-10-10 (told and written at the pause, then go on); installing the
+`PostToolUse` entry on this machine once it is built and tried; whether `install` writes it
+for every project that installs the harness; whether the second block goes once the resume
+hook is installed; and, still open from the sweep, whether the orchestrator is relieved or
+compacted.
 
-Done when (to be added to the contract): `node --test bin/resume.test.mjs` with the tests of
-the snapshot and of the hook's new lines; `node --test bin/lib/sessions.test.mjs` with the
-tests of a kept and a not kept compaction; `node --test bin/install.test.mjs` with the entry
-written and removed; the practice journey with a step that runs the snapshot on a made-up
-hook input in an installed project and reads it back through the resume hook.
+Done when (to be added to the contract with the first code): `node --test
+bin/resume.test.mjs` with the tests of the pause command (silent under the pause, once for a
+stretch, never an exit but 0, a sub-agent ignored) and of the hook's new lines; `node --test
+bin/lib/sessions.test.mjs` with the three facts of a compaction and the copies of a
+boundary; `node --test bin/install.test.mjs` with the entry written, guarded and removed; the
+practice journey with a step that feeds the pause command a made-up transcript past the pause
+in an installed project.
 
 ## Failures this feature owns
 From the list of 2026-10-10 in `odd/tasks/rule-hierarchy.md` ("Failures of 2026-10-10"): 3, 4,
@@ -1601,6 +1618,23 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   clean and is `ae1f51b`, gated by the merge commit's own check inside the same turn (`PASS
   tests npm run test passed`, 02:33:18). Every code commit of the branch has its Codex record
   (`codex-review  5 code commits since origin/main, all covered`).
+- 2026-10-12 02:42 local, the fourth slice is on `main`: pull request 70 merged as `78bbc80`
+  (read with `gh pr view 70`: MERGED, 07:42 UTC). From the lead, claims of its own: it
+  installs the resume hook when no gate holds or waits; the check of T14 and task 13 of the
+  rule hierarchy are one check and JH 7's, and this feature keeps the effort by task (T13),
+  the applying half of T14 and the recap line; it brings the yardstick of "the last task" to
+  him in its turn. Branch `feat/session-compaction` is cut from that `main`.
+- 2026-10-12 02:56 local, T6b, the design read twice and rewritten (point 14). Before it was written, a
+  read-only reader searched the project's transcripts for his own words on compaction: 28
+  entries, each read at its line with `sessions --quote`, exit 0; the ones the design rests
+  on are quoted in point 14. Version 1 (commit `9725562`) went to two independent readers
+  that were given the document and the code and not its author's conclusion: one to attack
+  it, one to find what was missing. The first would not have built it: its measure read the
+  incident as kept or everything as not kept, and nothing in it acted before a compaction
+  inside a long turn. Version 2 replaces it; what each reader changed is its own paragraph
+  there. Measured here for it: a node start that reads the end of an 11 MB transcript takes
+  130 ms, 210 ms through the dispatcher. Nothing is built: six decisions are his, asked one
+  at a time, and three tries are tests owed.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1611,7 +1645,7 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 1 | T3, T4a | `main`, pull request 58 |
 | 2 | T1 | `main`, pull request 59 |
 | 3 | T1b, T4b, T4c | `main`, pull request 65 |
-| 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, pull request 70; its last code commit is `398c3c5`, and `main` is merged in at `1d5cf68` (the merge `ae1f51b`, gated) |
+| 4 | T5, T6, T5b, T4d, the sweep's items of this session | `main`, pull request 70 |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
 - Reviews of the fourth slice: gentle-ai approved it as two candidates and Codex reviewed
@@ -1650,25 +1684,27 @@ session needs beside it to go on; the summary of a compaction is not the record.
   what was true at the minute it was written.
 
 ## Next step
-The first three slices are on `main` (pull requests 58, 59 and 65). This branch is the fourth:
-T5, T6, T5b, T4d, this session's items of the sweep and the fixes of its reviews. It is
-built, every code commit gated and covered by a Codex record, reviewed by gentle-ai, with the
-practice journey run once, and `main` merged in at `1d5cf68` and gated as `ae1f51b` (Progress,
-2026-10-12 00:19 to 02:33). Owed, in this order:
-1. Pull request 70 is open and the lead has its notice (2026-10-12 02:36). He merges it only when its
-   head has today's `main` merged in and a gate ran on that tree, and when the constant of the
-   pause reads the value of his latest words. If `main` moves before he merges, it is merged
-   in again and that merge gated. The lead installs the resume hook on this machine once the
-   slice is on `main`.
-2. After the fourth slice, in this order: T6b, his protocol for a compaction, design first
-   (what the hosts allow is in Progress, 2026-10-11 23:20); T16, no session where he does not
-   see it, design first; T7; T8, with the twelve items of the sweep, the recap line and his
-   two rules of 2026-10-12; T13 and T14 once the table of JH 7 is on `main`, and T15, which
-   costs nothing, before them if it helps to order them; T9 to T12. The two suggestions of
-   gentle-ai in "Open points" go with the first code of these.
-`AGENTS.md` is not edited by this feature.
-Waiting for him, none blocking the build, each asked alone and only when no work runs: the
-yardstick of "the last task" ("Open points", its first row); tests owed 1, 2, 3 and 6, each
-asked before it is run; whether the orchestrator is relieved or compacted (the sweep's A3
-89), through the lead. For the gate's session, through the lead: the lock should record the
-session id that holds it, so `Gates` names the session exactly (point 4, "As built").
+The four slices built so far are on `main` (pull requests 58, 59, 65 and 70). The branch is
+`feat/session-compaction`, cut from `main` at `78bbc80`; it holds documents only.
+1. T6b, his protocol for a compaction: the design is point 14, version 2, read by two
+   independent readers (Progress, 2026-10-12 02:56). Nothing of it is built. It waits for
+   his decisions, listed at the end of point 14 and asked one at a time in this chat; the
+   first asked is whether a session is told at the pause after each tool call or only at
+   the end of a reply. With his answers: the contract's "Done when" gains the commands of
+   point 14, then the build, test first, one narrow writer a task (Haiku 5.5 at effort high
+   for scoped code), in this order: the measure and the lines of the resume hook, which
+   change nothing on a machine; then the pause command and its entry.
+2. After T6b, in this order: T16, no session where he does not see it, design first; T7; T8,
+   with the twelve items of the sweep, the recap line and his two rules of 2026-10-12; T13
+   and the applying half of T14 once the table of JH 7 is on `main` (its `ruleHere`, `ruleOf`
+   and list of sub-agent launches are read in its worktree first, not copied), and T15,
+   which costs nothing, before them if it helps to order them; T9 to T12. The two
+   suggestions of gentle-ai in "Open points" go with the first code of these.
+`AGENTS.md` is not edited by this feature. The lead installs the resume hook on this machine
+when no gate holds or waits.
+Waiting for him, each asked alone and only when no work runs: the decisions of point 14;
+tests owed 1, 2, 3 and 6 and the three tries of point 14, each asked before it is run. The
+yardstick of "the last task" ("Open points", its first row) and whether the orchestrator is
+relieved or compacted (the sweep's A3 89) reach him through the lead. For the gate's
+session, through the lead: the lock should record the session id that holds it, so `Gates`
+names the session exactly (point 4, "As built").
