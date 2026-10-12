@@ -356,8 +356,8 @@ One read-only reader, 279,605 tokens, twelve holes and ten omissions; spot-check
       the manifest and of the help changed with T3 (`d133965`). `docs/ROADMAP.md` (the lock's section, near its line 726); the text of
       `bin/lib/manifest.mjs:25-26` and `:98` and the help of `check` and `gate` where they
       describe a wait; the pointer in "Next" of `odd/tasks/gate-lock.md`.
-- [ ] T8 · Close: both reviews of each slice with code, push, pull requests, the closing
-      notice.
+- [x] T8 · Close: both reviews of each slice with code, push, pull requests, the closing
+      notice. Evidence: the entry of 2026-10-12 03:58.
 - [x] T9 · Placed here by the orchestrator, last in order (2026-10-11): two findings of
       Codex left open on `scripts/count-git.mjs`, which says "missing" where nothing is
       missing (a child started through a shell by a synchronous call; two launches whose
@@ -892,22 +892,31 @@ S2 is T4 with T5. S3 is T6.
   mecanismo que cuando lo haga te informe". It is in this session's memory.
 - 2026-10-12 03:25 · `feat/gate-turn` is pushed and pull request 71 is open on the commit
   before this one; its head contains `main` (`78bbc80`).
+- 2026-10-12 03:58 · The close, written on `fix/count-git-launch`, the last branch of this
+  feature. Pull request 71 was merged by the orchestrator (`5f011cc`, 08:27:20Z by `gh`),
+  so the line of the gate lock and this document are on `main`. Then `main` merged into
+  `fix/count-git-launch`, `1930679`, clean, and the whole gate passed on that tree in one
+  turn of the lock (`t9-merge2-turn.log`: taken 03:44:16, the commit made 03:58:47);
+  `check --push` passes: "1 code commit since origin/main, all covered by a Codex review
+  record". Pull request 69 holds it. T8 is done with this entry: every slice with code had
+  both reviews (the stop, the line in two slices, T9 under gentle-ai's budget), three pull
+  requests (68, 71, 69), and the orchestrator has the notice.
+  What this feature leaves to the next one, `odd/tasks/gate-wait.md` on `feat/gate-wait`:
+  a review in parts that keeps the parts that passed; reviews that no longer hold the
+  lock, after a measurement; a shorter suite; one trial of the gate on GitHub.
 
 ## Next
-For `feat/gate-turn`: pull request 71 is open; the orchestrator merges it. For
-`fix/count-git-launch` (pull request 69): once that merge is on `main`, `main` merged in
-again and one turn of the lock for the gate on the merged tree, then the push and a line
-to the orchestrator. Then T8, the closing notice, and the cut. After the cut, the new
-feature above, which also takes the finding on `codex-review` and its parts.
+Nothing of this feature is left to build. The orchestrator merges pull request 69. The
+session goes on with `odd/tasks/gate-wait.md`.
 
-## Resume here (state at 2026-10-12 03:25 by this machine's clock)
-- `main` is `78bbc80` (pull request 70). `feat/gate-stop` reached it as pull request 68.
-- `feat/gate-turn`, this worktree, is at the commit that holds this entry, on top of the
-  merge `8eb7aaa`, which contains `main`. Every code commit has its Codex record, the
-  merge `be68d7c` among them, and `check --push` passes. Both reviews of gentle-ai are
-  approved and acknowledged; T3d, after them, is under the budget.
-- `fix/count-git-launch`, worktree `D:/js-harness-worktrees/count-git`: `1cb3904`, pushed,
-  pull request 69 open; it does not contain `78bbc80` yet.
+## Resume here (state at 2026-10-12 03:58 by this machine's clock)
+- `main` is `5f011cc` (pull request 71). `feat/gate-stop` reached it as pull request 68,
+  `feat/gate-turn` as 71.
+- `fix/count-git-launch`, worktree `D:/js-harness-worktrees/count-git`, is at the commit
+  that holds this entry, on top of the merge `1930679`, which contains `main`; pull
+  request 69 is open on it and is the orchestrator's to merge.
+- The feature that follows is `odd/tasks/gate-wait.md`, branch `feat/gate-wait`, worktree
+  `D:/js-harness-worktrees/gate-wait`.
 - No Codex call is made on a range already paid for, and none with a loop of tries: the
   rate was passed once that way (the entry of 03:23).
 - Every test run, commit with code and review goes through the lock: `node
