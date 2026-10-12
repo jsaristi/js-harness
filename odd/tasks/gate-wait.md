@@ -1598,6 +1598,42 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   machine was 37% busy during it, 201 of 537 processor-seconds (`MsMpEng` 49, `claude`
   25, `node` 13). T8 has its figure: a Codex review beside a gate adds about a third of a
   machine for a minute. Spent on Codex in the feature so far: 2,536,752 input tokens.
+- 2026-10-12 · **Pull request 77 is merged** (the orchestrator, 17:00:44; checked by me:
+  `origin/main` is `6785ec7` and holds `1382092`); T13's worktree and local branch are
+  removed. And what it said I still owed is not owed: `gate` already refuses an argument
+  it does not know, with tests, on `main` (`bin/gate.mjs:109`, `:129`;
+  `bin/gate.test.mjs:375-376`, `:1023-1024`).
+- 2026-10-12 · **T14 is committed, `e3e6b2d`, and the count is the one expected: 427
+  fewer** (`t14-turn.log`, 16:58:57 to 17:12:26; `feat/gate-wait-eval-sweep`).
+  RED a 16:58:57: without the deferred look the testkit's tests do not load. RED b
+  16:59:04: against the shipping code as it was, the four tests "an entry calls the run it
+  was handed" fail, 4 of 4. GREEN: the testkit's tests 59 of 59; the four eval files
+  under the counting tool, 328 of 329 pass and one is skipped, in 227 s. **Children that
+  are not git, by file, before (the same in four whole runs) and after (`t14-count.json`):**
+
+  | file | before | after | tests' summed time, whole run of M1b | the four files alone, after |
+  |---|---|---|---|---|
+  | `evals/runner.test.mjs` | 501 | 331 | 734 s | 224 s |
+  | `evals/task-proof.test.mjs` | 346 | 176 | 611 s | 64 s |
+  | `evals/isolation-probe.test.mjs` | 210 | 123 | 524 s | 195 s |
+  | `evals/tasks.test.mjs` (untouched) | 99 | 99 | 69 s | 88 s |
+  | in all | 1,156 | 729 | 1,939 s | 571 s |
+
+  The count does not depend on the machine's load and is the proof; the two time columns
+  are not one measure (a whole run against four files alone) and are there to be read
+  with that said. **No removal race showed:** no line of the run names EBUSY, EPERM or
+  ENOTEMPTY, and no file's last look found a process left behind. **The whole suite, in
+  the commit's own gate: 554 s** (gate log, 17:03:09, load 2.6 of 8), against 824 s for T13's merged
+  tree (gate log, 16:45:05, read by me), 771 s and 737 s for the two gates of the hook's
+  turn (the orchestrator's reading of the same log) and 705 s to 830 s for the runs of M1: about 180 s to 270 s
+  less, well outside the 95 s two runs of one tree differ by. One run; the next gates of
+  `main` after the merge are the second reading. The commit's review row: medium risk,
+  317 lines, not due (under budget).
+  **In the line as `t14c-turn.sh`:** Codex on that commit, once, measured (plan read at
+  17:13: 317 changed lines, about 390,000 input tokens, over the rate of 380,400 by 2.5%
+  and inside its margin, 399,420; the day's two samples say the spend may be a fifth to a
+  third more), then the merge of `main` (`6785ec7`, clean by `git merge-tree`) gated by
+  the pre-commit hook. Then push, pull request, the orchestrator.
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
