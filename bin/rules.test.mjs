@@ -332,6 +332,25 @@ test('applied holds what a launch ran at to subagent-effort, as information that
   });
 });
 
+test('applied holds the last answer of a session to session-model and session-effort, as information that does not fail', async () => {
+  await withHome(LIST, async (project, home) => {
+    const records = recordsOf(project, home);
+    fs.mkdirSync(records, { recursive: true });
+    const file = path.join(records, 'session-x.jsonl');
+    const entry = { type: 'assistant', version: '2.1.200', entrypoint: 'cli', effort: 'medium', timestamp: new Date(NOW).toISOString(), message: { model: 'claude-opus-5-5' } };
+    fs.writeFileSync(file, `${JSON.stringify(entry)}\n`, 'utf8');
+    fs.utimesSync(file, NOW / 1000, NOW / 1000);
+    const { code, out } = await applied(project, home);
+    const day = new Date(NOW).toISOString().slice(0, 10);
+    assert.equal(code, 0, out.join('\n'));
+    assert.ok(out.includes('  session-model: claude-opus-5-5, since 2026-10-10'), out.join('\n'));
+    assert.ok(out.includes('    agree: 1 of 1 session'), out.join('\n'));
+    assert.ok(out.includes('  session-effort: high, since 2026-10-10'), out.join('\n'));
+    assert.ok(out.includes(`    medium: 1 session on cli, the last on ${day}`), out.join('\n'));
+    assert.ok(out.includes('      session-x.jsonl'), out.join('\n'));
+  });
+});
+
 test('applied in a project that does not declare the rules holds nothing to them', async () => {
   await withHome({}, async (project, home) => {
     launch(recordsOf(project, home), 'claude-haiku-5-5', 'medium');

@@ -8,8 +8,8 @@
 const MS_PER_DAY = 86400000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_SUFFIX = /-\d{8}$/;
-// A time that names its zone (a Z or an offset), so its day is the same on every machine; a text without one is no time.
-const ZONED_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+// A time that names its zone (a Z or an offset written with its colon, as the date-time format writes it), so its day is the same on every machine; a text without one is no time.
+const ZONED_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const SYNTHETIC = '<synthetic>';
 
 /** Gives true when a value is a text that is not blank. */

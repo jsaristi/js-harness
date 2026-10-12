@@ -267,6 +267,15 @@ machine for nothing.
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
 
+### documents-commit-skips-suite
+A commit of declared documents alone runs no sensor, and the suite reads those documents: such a
+commit can break a test, pass its own gate, and fail the next gate with code in any session.
+- Class: rule-not-acting
+- Seen: 2026-10-12 — relief file, line 407 — found by reading and not by a gate that broke (JH 8,
+  claimed): the skip is `bin/check.mjs:279-287`, and `bin/rules.test.mjs:480` runs `rules check`
+  on the real `docs/RULES.md` and `docs/rule-sources.json` (`bin/rules.mjs:24-25`); until the gate
+  runs the readers of a staged document, `rules check` is run by hand after such a commit
+
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
 - Class: tool

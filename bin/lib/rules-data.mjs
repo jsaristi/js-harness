@@ -14,6 +14,15 @@ export const RULES = [
     "unit": "input tokens a review"
   },
   {
+    "id": "codex-review-margin",
+    "subject": "how far over its allowance the plan of a Codex review may read and still count as inside it",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-12",
+    "value": 5,
+    "unit": "percent of the allowance"
+  },
+  {
     "id": "codex-review-rate",
     "subject": "the most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor",
     "owner": "sebastian",

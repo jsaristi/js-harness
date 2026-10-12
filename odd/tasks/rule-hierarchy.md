@@ -2320,6 +2320,30 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     order: one writer for the three notes (one commit through the gate); the margin as a new
     rule in the same commit or the next; Codex with `--base 3088960`, plan first; push and a
     pull request on `main`.
+  - After the compaction (2026-10-12, back at 13:10, context at 23 percent). The three notes
+    are corrected by one writer on Haiku 5.5 (126,930 tokens, 117 s), in the commit after
+    `b156d7e`: (1) a test shows a held model rule never counts `none`, since `keep` skips an
+    entry with no text model before the comparison (it passed at once: it pins what was true,
+    and the line `no model recorded` stays, unreachable for a model and reachable for an
+    effort); (2) `ZONED_TIME` takes an offset only with its colon, test first (it failed on
+    `skipped.noTime`, 0 for 1), and the older zone test that kept `+0200` as a good form now
+    writes `+02:00`; (3) a test of the command writes one session record and sees
+    `session-model` agree and `session-effort` name its other value, exit 0 (it passed at
+    once). The three rule test files after it: 81, 33 and 161 tests, none failing.
+    The margin is declared: `codex-review-margin`, 5 percent of the allowance, his, of this
+    repository only, since 2026-10-12. Its source is his line 3800 of transcript `65318fd5-…`
+    ("listo la A …", read with `sessions --quote`) and the option it answers at line 3736, an
+    assistant entry read directly: "un estimado hasta 5 % arriba del tope cuenta como dentro".
+    Nothing reads the rule yet: `codex-review --plan` is open in `feat/gate-wait`, so its
+    reader joins the rest of the second part of T16b. The list has 17 rules, hash
+    `1ccb54f9013d`; `rules check` passes.
+    The register gets `documents-commit-skips-suite` (the lead's notice of 13:07, relief file
+    line 407): a commit of declared documents alone runs no sensor while the suite reads them.
+    Until the gate covers it, `rules check` is run by hand after a commit of documents that
+    touches `docs/RULES.md` or `docs/rule-sources.json`.
+    NEXT: this commit through the gate; gentle-ai assessed from `8a73dde`; Codex with
+    `--base 3088960`, plan first, run when the plan is at most 1.05 times the allowance; push
+    and a pull request on `main`.
 
 ## Next step
 In this order. (1) `feat/rules-held` as the last Progress entry says: its merge of `main`

@@ -249,10 +249,20 @@ test('a time with no zone, a day alone or a text with a named zone is skipped as
     launch({ at: 'Oct 12 2026 10:00 GMT', file: 'named-zone.jsonl' }),
     launch({ at: '2026-10-12T10:00:00Z', file: 'z.jsonl' }),
     launch({ at: '2026-10-12T10:00:00.123Z', file: 'fraction.jsonl' }),
-    launch({ at: '2026-10-12T10:00:00+0200', file: 'offset.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00+02:00', file: 'offset.jsonl' }),
   ]);
   assert.equal(out.skipped.noTime, 3);
   assert.equal(out.read.launches, 3);
+});
+
+test('an offset without its colon is skipped as noTime, and an offset with its colon is kept', () => {
+  const out = run([rule()], [
+    launch({ at: '2026-10-12T10:00:00+0200', file: 'offset-no-colon.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00+02:00', file: 'offset-colon.jsonl' }),
+    launch({ at: '2026-10-12T10:00:00Z', file: 'z.jsonl' }),
+  ]);
+  assert.equal(out.skipped.noTime, 1);
+  assert.equal(out.read.launches, 2);
 });
 
 test('an entry that is not an object is counted under no version and does not throw', () => {
@@ -1006,6 +1016,17 @@ test('held: an entry with no effort, a launch or a session, is counted in none',
     [2, 1, 1, []],
     [3, 1, 2, []],
   ]);
+});
+
+test('held: a session whose model is no text is skipped as synthetic, so no held model counts none', () => {
+  const out = run([rule({ id: 'session-model' })], [], [
+    session(),
+    session({ model: null, file: 'no-model.jsonl' }),
+  ], { held: [{ id: 'session-model', of: 'sessions', field: 'model' }] });
+  assert.equal(out.held[0].compared, 1);
+  assert.equal(out.held[0].agree, 1);
+  assert.equal(out.held[0].none, 0);
+  assert.equal(out.skipped.synthetic, 1);
 });
 
 test('held: an entry before since is not taken', () => {
