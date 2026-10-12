@@ -2,8 +2,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Whether anything is at `target`, a link (even a dangling one) included. */
-export const exists = (target) => fs.lstatSync(target, { throwIfNoEntry: false }) !== undefined;
+/** Whether anything is at `target`, a link (even a dangling one) included. A path below a file is not
+ * there: Linux refuses to look below a file (`ENOTDIR`) where Windows says there is no entry, and a caller
+ * says its own refusal for a path that is not there. Any other error of the system is thrown. `io` is the
+ * file system, passed by a test. */
+export function exists(target, io = fs) {
+  try {
+    return io.lstatSync(target, { throwIfNoEntry: false }) !== undefined;
+  } catch (err) {
+    if (err.code === 'ENOTDIR') return false;
+    throw err;
+  }
+}
 
 /** `target` as the file system resolves it: its deepest existing ancestor through `realpathSync` (so a
  * junction or symlink anywhere on the way is followed), with the part that does not exist yet put back
