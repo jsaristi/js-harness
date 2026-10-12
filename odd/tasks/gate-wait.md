@@ -1571,6 +1571,18 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   commit with its gate (message `t14-msg.txt`). Exit 20: a test failed with a folder that
   could not be removed or copied, the orchestrator's stop: bring it with its count, add no
   retry. Exit 7: the green failed otherwise; 9: the whole gate failed.
+- 2026-10-12 · **Pull request 75 holds `main` and the failing-merge test; head `f116d83`,
+  pushed at 16:43** (`hook2-turn.log`, 16:17:08 to 16:43:08). RED 16:17:11, against a hook
+  of a merge that runs no gate: 2 of 3 fail, the new test and the one that was there.
+  GREEN 16:17:17: 3 of 3. The commit, `513cc57` `test(hooks): a merge whose gate fails is
+  not committed`, whole gate PASS at 16:30:13. gentle-ai: medium risk, not due (under
+  budget). Codex: "the patch is correct" (0.91), 87,814 input tokens (54,784 cached)
+  against a plan of 96,000, recorded for `97703f9..513cc57`. Then `git merge origin/main`
+  (`03d6d20`, pull request 76 had been merged meanwhile), **gated by this branch's own
+  merge hook: `PASS  tests` at 16:43:08, the first merge of this repository to go through
+  it.** The pre-push check: 2 code commits since `origin/main`, both covered. Told to the
+  orchestrator at 16:43. The first of gentle-ai's two notes is closed; the second stays
+  (the shipped hook file is tied to the tests by its `exec` line).
 
 ## Next
 **His decisions of 2026-10-12, after he came back (each relayed by the orchestrator; his
