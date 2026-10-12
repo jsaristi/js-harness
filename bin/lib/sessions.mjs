@@ -125,14 +125,40 @@ function oneLine(text) {
   return flat.length > TITLE_LENGTH ? `${flat.slice(0, TITLE_LENGTH)}…` : flat;
 }
 
+/** The command the host queued while the session worked and wrote as `entry`, `{ attachment, origin, kind
+ * }`, or `null` for an entry that holds none. The host does not write what arrives mid-turn as a `user`
+ * entry: it writes an entry of type `attachment` whose attachment is a `queued_command`, with the text in
+ * `prompt` and the marks a `user` entry carries on itself (`origin`, `isMeta`) inside the attachment. It
+ * queues the same way a prompt of the person, a message from another session and the end of a task, so
+ * the type alone says nothing of whose it is: `kind` does. It is `'task-notification'` for the end of a
+ * task, which the host says in the origin or, on the ones that record no origin, in `commandMode`; and
+ * the origin's own kind for anything else, `undefined` when it records none. */
+function queuedCommandOf(entry) {
+  const attachment = entry.attachment;
+  if (entry.type !== 'attachment' || !isObject(attachment) || attachment.type !== 'queued_command') return null;
+  const origin = isObject(attachment.origin) ? attachment.origin : {};
+  const notification = origin.kind === 'task-notification' || attachment.commandMode === 'task-notification';
+  return { attachment, origin, kind: notification ? 'task-notification' : origin.kind };
+}
+
 /** Who gave the instruction `entry` is, `'person'` or `'session'`, or `null` when it is none: what starts
  * a task for the board (`sessionFacts`, `lastTask`). The person's is a prompt (`promptText`) or anything
  * else the host marks as sent by a person, which is a paste with nothing typed beside it (`origin.kind:
  * "human"`; 24 of the 583 such entries of this project's transcripts start with a tag, 2026-10-11). A
  * session's is a message from another session. A subagent's hand-back, what the host puts in, a task
- * notification and the result of a tool are part of the work an instruction started, not a new one. */
+ * notification and the result of a tool are part of the work an instruction started, not a new one.
+ *
+ * An instruction that arrives while the session works is a queued command (`queuedCommandOf`) and no
+ * `user` entry: it is told by the same origins, read where the attachment keeps them. Read as no
+ * instruction, it left the work after it with the task before, which then cost more than it did. */
 function instructionBy(entry) {
-  if (entry.type !== 'user' || entry.isSidechain) return null;
+  if (entry.isSidechain) return null;
+  const queued = queuedCommandOf(entry);
+  if (queued) {
+    if (queued.kind === 'peer') return peerSender(queued.origin) === 'session' ? 'session' : null;
+    return queued.kind === 'human' && !queued.attachment.isMeta ? 'person' : null;
+  }
+  if (entry.type !== 'user') return null;
   if (isPeerMessage(entry)) return peerMessageOf(entry).from === 'session' ? 'session' : null;
   if (promptText(entry) !== null) return 'person';
   return !entry.isMeta && isObject(entry.origin) && entry.origin.kind === 'human' ? 'person' : null;
@@ -145,16 +171,40 @@ function instructionBy(entry) {
  * somebody typed (`promptText`), and so from ever being a session's title. */
 const isPeerMessage = (entry) => entry.type === 'user' && isObject(entry.origin) && entry.origin.kind === 'peer';
 
-/** A peer message as the board keeps it: `{ at, from, name, session, mode, id }`. `from` is `'session'`
- * for another session, which gives its title in `name`, its own id in `session` (the app's, which is not
- * the name of a transcript), the permission mode it runs in and the id of the message; `'subagent'` for a
- * hand-back, and `'host'` for a message the app put in, which give less. What they do not give is `null`.
- * The text of the message is not kept: the board says who wrote to whom, and the transcript has the rest. */
+/** Who sent what an origin of kind `peer` marks: `'subagent'` for a hand-back, `'host'` for a message the
+ * app put in, and `'session'`, another session, for every other. The origin says it the same way on a
+ * `user` entry and inside a queued command (4 of the 49 queued commands of origin `peer` in this
+ * project's transcripts are hand-backs, 2026-10-11). */
+const peerSender = (origin) => (origin.handback === true ? 'subagent' : origin.hostInjected === true ? 'host' : 'session');
+
+/** The peer message `entry` holds as the board keeps it, `{ at, from, name, session, mode, id }`, or `null`
+ * for an entry that holds none. `from` is `'session'` for another session, which gives its title in
+ * `name`, its own id in `session` (the app's, which is not the name of a transcript), the permission mode
+ * it runs in and the id of the message; `'subagent'` for a hand-back, and `'host'` for a message the app
+ * put in, which give less. What they do not give is `null`. The text of the message is not kept: the
+ * board says who wrote to whom, and the transcript has the rest.
+ *
+ * A message that arrives between two turns is a `user` entry (`isPeerMessage`), and one that arrives
+ * while the session works is a queued command (`queuedCommandOf`) with the same origin inside the
+ * attachment: both are read here, so a message is the same whichever way it came. Read from `user`
+ * entries only, the board said of a message that it was not seen to arrive when its receiver's
+ * transcript held it (46 queued commands of this project's transcripts name such a message, and none of
+ * them is also a `user` entry, 2026-10-11). A queued message has its time on the entry, and on the
+ * attachment when the entry has none. */
 function peerMessageOf(entry) {
-  const { origin } = entry;
+  const queued = queuedCommandOf(entry);
+  const origin = queued === null ? (isPeerMessage(entry) ? entry.origin : null) : queued.kind === 'peer' ? queued.origin : null;
+  if (origin === null) return null;
   const given = (value) => (typeof value === 'string' ? value : null);
-  const from = origin.handback === true ? 'subagent' : origin.hostInjected === true ? 'host' : 'session';
-  return { at: entry.timestamp ?? null, from, name: given(origin.name), session: given(origin.fromSession), mode: given(origin.fromMode), id: given(origin.msg_id) };
+  return { at: entry.timestamp ?? queued?.attachment.timestamp ?? null, from: peerSender(origin), name: given(origin.name), session: given(origin.fromSession), mode: given(origin.fromMode), id: given(origin.msg_id) };
+}
+
+/** A peer message in words, for the answer that an entry is not what the person sent: who it is from, by
+ * the one rule that tells them (`peerSender`), and whether it was queued while the session worked. */
+function peerInWords(message, { queued = false } = {}) {
+  if (message.from === 'subagent') return queued ? 'a queued hand-back of a subagent' : 'what a subagent handed back';
+  const lead = queued ? 'a queued message' : 'a message';
+  return message.from === 'host' ? `${lead} the app put in` : `${lead} from another session (${JSON.stringify(message.name ?? 'no name')})`;
 }
 
 /** What one entry says about the turn: `'working'` (a tool call, a tool result, a prompt, a notification
@@ -186,13 +236,18 @@ function turnOf(entry) {
   return blocks.some((block) => isText(block) && block.text.startsWith('[Request interrupted')) ? 'ended' : 'working';
 }
 
+/** Whether `entry` is a reply of the session itself: an assistant entry that is no side chain's and that
+ * the harness did not write in the session's place (model `<synthetic>`). It is what answers an
+ * instruction (`sessionFacts`, `lastTask`), whether or not it records what it was sent with (`contextOf`). */
+const isOwnReply = (entry) => entry.type === 'assistant' && !entry.isSidechain && isObject(entry.message) && entry.message.model !== '<synthetic>';
+
 /** The context a reply was sent with, `{ tokens, model, at }`: its input tokens plus what it read from
  * and wrote to the prompt cache, which together are everything the model was given for that reply (the
  * harness's own count at a compaction is within half a percent of it). `null` for an entry that is not
  * the session's own reply with usage: a side chain, a message the harness wrote itself (model
  * `<synthetic>`, all zeros), an entry with no usage. */
 function contextOf(entry) {
-  if (entry.type !== 'assistant' || entry.isSidechain || !isObject(entry.message) || entry.message.model === '<synthetic>') return null;
+  if (!isOwnReply(entry)) return null;
   const usage = entry.message.usage;
   if (!isObject(usage) || !Number.isFinite(usage.input_tokens)) return null;
   const counted = (value) => (Number.isFinite(value) ? value : 0);
@@ -308,11 +363,13 @@ function end(work, at, status) {
  * `null` with no context.
  *
  * `lastTask` is what the last task cost (`taskOf`). A task is the work one instruction started
- * (`instructionBy`: a prompt of the person, or a message from another session) up to the next one, and
- * an instruction that arrives before the one before it was answered joins it. The last one is the last
- * that ended: the stretch the session just finished when it waits, and the one before while it works on
- * a stretch or has work open, whose cost nobody knows yet. `lastTaskFits` says whether a task of that
- * cost still fits in `contextRoom`, and is `null` when either is not known. What a transcript cannot
+ * (`instructionBy`: a prompt of the person, or a message from another session, also when it was sent
+ * while the session worked) up to the next one, and an instruction that arrives before the one before it
+ * was answered joins it. A reply of the session answers it (`isOwnReply`), with or without its usage: a
+ * task whose replies record none has ended all the same, and its cost is not known. The last one is the
+ * last that ended: the stretch the session just finished when it waits, and the one before while it
+ * works on a stretch or has work open, whose cost nobody knows yet. `lastTaskFits` says whether a task of
+ * that cost still fits in `contextRoom`, and is `null` when either is not known. What a transcript cannot
  * show: which instruction was a whole task and which a one-word answer in the middle of one (each starts
  * a stretch), what a subagent spent in a context of its own, and what the next task will cost.
  *
@@ -323,7 +380,8 @@ function end(work, at, status) {
  * `null` when none does: the host delivers a message only between sessions of one class, so it says
  * which sessions can ring each other.
  *
- * `received` is every peer message the transcript holds (`peerMessageOf`), in the order written, and
+ * `received` is every peer message the transcript holds (`peerMessageOf`), whether it arrived between
+ * two turns or while the session worked, in the order written, and
  * `sent` every `SendMessage` call to another session, as `{ at, to, toKind, id, failed, summary }`: the
  * address it was sent to, as the call gives it (a title, or a session's own address), the kind of
  * recipient the call names (`name`, `session`, or `null` from a host that named none), the id the host
@@ -375,6 +433,9 @@ export function sessionFacts(
       const compaction = compactionOf(entry);
       const sentWith = compaction ? null : contextOf(entry);
       const by = compaction || sentWith ? null : instructionBy(entry);
+      // A reply answers the instruction before it even when it records no usage: counted by the replies
+      // with usage, such a task stayed open, and the next instruction joined a task that had ended.
+      if (stretch && isOwnReply(entry)) stretch.answered = true;
       if (compaction) {
         if (compaction.automatic && compaction.before !== null && (measured === null || (compaction.at ?? '') >= (measured.at ?? ''))) measured = { tokens: compaction.before, at: compaction.at };
         if (stretch && (compaction.before === null || compaction.after === null)) stretch.blind = true;
@@ -393,9 +454,10 @@ export function sessionFacts(
           stretch.replies += 1;
         }
         held = sentWith.tokens;
-      } else if (by && !(stretch && stretch.replies === 0)) {
+      } else if (by && !(stretch && !stretch.answered)) {
         finished = stretch;
-        stretch = { by, startedAt: entry.timestamp ?? null, base: held, grown: 0, last: held, endedAt: null, replies: 0, compactions: 0, blind: false };
+        // A queued instruction has its time on the entry, and on the attachment when the entry has none.
+        stretch = { by, startedAt: entry.timestamp ?? entry.attachment?.timestamp ?? null, base: held, grown: 0, last: held, endedAt: null, answered: false, replies: 0, compactions: 0, blind: false };
       }
     }
     if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') customTitle = entry.customTitle;
@@ -403,8 +465,8 @@ export function sessionFacts(
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
     if (typeof entry.gitBranch === 'string') gitBranch = entry.gitBranch;
     if (entry.type === 'user' && typeof entry.permissionMode === 'string') permissionMode = entry.permissionMode;
-    if (isPeerMessage(entry) && !entry.isSidechain) {
-      const message = peerMessageOf(entry);
+    const message = entry.isSidechain ? null : peerMessageOf(entry);
+    if (message !== null) {
       // A message with no id of its own (a hand-back, one from the host) is told by the entry that holds it.
       const key = message.id !== null ? `message ${message.id}` : `entry ${typeof entry.uuid === 'string' ? entry.uuid : index}`;
       if (!received.has(key)) received.set(key, message);
@@ -1295,10 +1357,7 @@ function notThePersons(entry) {
   if (blocksOf(entry).some((block) => block.type === 'tool_result')) return 'the result of a tool call';
   if (entry.isCompactSummary) return 'a compaction summary';
   if (entry.isSidechain) return 'an entry of a side chain';
-  if (isPeerMessage(entry)) {
-    const message = peerMessageOf(entry);
-    return message.from === 'subagent' ? 'what a subagent handed back' : message.from === 'host' ? 'a message the app put in' : `a message from another session (${JSON.stringify(message.name ?? 'no name')})`;
-  }
+  if (isPeerMessage(entry)) return peerInWords(peerMessageOf(entry));
   const kind = isObject(entry.origin) ? entry.origin.kind : undefined;
   if (kind === 'task-notification') return 'a task notification';
   if (entry.isMeta) return 'a meta entry: the host wrote it, not the person';
@@ -1312,19 +1371,24 @@ function notThePersons(entry) {
  *
  * The host does not write such a message as a `user` entry: it queues it and writes an attachment of
  * type `queued_command`, with the text in `prompt`. It queues the same way a message from another
- * session and the end of a task, so the type alone says nothing of whose it is. The person's is the one
- * whose `origin.kind` is `human` and that the host marks as a turn of his (`humanTurn: true`), both
- * inside the attachment: of 310 queued commands in this project's transcripts (2026-10-11) the 28 of
- * origin `human` carry the mark and no other does. */
+ * session and the end of a task, so the type alone says nothing of whose it is (`queuedCommandOf`, which
+ * the task accounting reads too). The person's is the one whose `origin.kind` is `human` and that the
+ * host marks as a turn of his (`humanTurn: true`), both inside the attachment: of 310 queued commands in
+ * this project's transcripts (2026-10-11) the 28 of origin `human` carry the mark and no other does. A
+ * quote asks for the mark and for text to give; a task starts without them (`instructionBy`).
+ *
+ * One of origin `peer` is named by who sent it, as a `user` entry of that origin is (`peerInWords`):
+ * called a message from another session whatever it was, a subagent's hand-back was given a sender it
+ * never had. */
 function queuedMessageOf(entry) {
-  const attachment = entry.attachment;
-  if (!isObject(attachment)) return { what: 'an entry of type "attachment" that holds no attachment' };
-  if (attachment.type !== 'queued_command') return { what: `an attachment of type ${JSON.stringify(attachment.type ?? null)}: the host wrote it, not the person` };
-  const origin = isObject(attachment.origin) ? attachment.origin : {};
-  if (origin.kind === 'task-notification' || attachment.commandMode === 'task-notification') return { what: 'a queued task notification' };
-  if (origin.kind === undefined) return { what: 'a queued message that records no origin: it cannot be told whose it is' };
-  if (origin.kind === 'peer') return { what: `a queued message from another session (${JSON.stringify(origin.name ?? 'no name')})` };
-  if (origin.kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(origin.kind)}` };
+  if (!isObject(entry.attachment)) return { what: 'an entry of type "attachment" that holds no attachment' };
+  const queued = queuedCommandOf(entry);
+  if (queued === null) return { what: `an attachment of type ${JSON.stringify(entry.attachment.type ?? null)}: the host wrote it, not the person` };
+  const { attachment, kind } = queued;
+  if (kind === 'task-notification') return { what: 'a queued task notification' };
+  if (kind === undefined) return { what: 'a queued message that records no origin: it cannot be told whose it is' };
+  if (kind === 'peer') return { what: peerInWords(peerMessageOf(entry), { queued: true }) };
+  if (kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(kind)}` };
   if (attachment.humanTurn !== true) return { what: 'a queued message of origin "human" that the host does not mark as a turn of the person' };
   if (typeof attachment.prompt !== 'string') return { what: 'a queued message of the person that holds no text to quote' };
   return { what: null, prompt: attachment.prompt, at: attachment.timestamp };
@@ -1404,7 +1468,9 @@ function contextPieces(session, sizes) {
   const point = session.contextCompaction;
   if (point && Number.isFinite(session.contextRoom)) {
     const where = `(${thousands(point.tokens)}${point.measured ? ', measured in this session' : ''})`;
-    pieces.push(session.contextRoom > 0 ? `room ${thousands(session.contextRoom)} before the host compacts ${where}` : `no room: ${thousands(-session.contextRoom)} past where the host compacts ${where}`);
+    const room = session.contextRoom;
+    if (room > 0) pieces.push(`room ${someThousands(room)} before the host compacts ${where}`);
+    else pieces.push(`no room: ${room === 0 ? 'at the point' : `${someThousands(-room)} past`} where the host compacts ${where}`);
   }
   const task = session.lastTask;
   if (task?.unavailable) pieces.push(`last task not known: ${task.unavailable}`);
@@ -1735,6 +1801,11 @@ function workLine(work, now) {
 
 /** `275k` for 275,400 tokens: the board is read at a glance, and the exact count is in `--json`. */
 const thousands = (tokens) => `${Math.round(tokens / 1000)}k`;
+
+/** A count of tokens above zero, in thousands: `under 1k` for one that rounds to none. `0k` of a room
+ * would say a session has none left when it has some, and `0k past` that it is at the point when it is
+ * past it; a session exactly at the point is said so in words (`contextPieces`). */
+const someThousands = (tokens) => (Math.round(tokens / 1000) === 0 ? 'under 1k' : thousands(tokens));
 
 function contextText(session, sizes) {
   const context = session.context ?? { unavailable: 'not read' };

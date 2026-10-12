@@ -583,6 +583,28 @@ test('the last task: what crosses a compaction, what was written twice, and what
   assert.equal(lib.sessionFacts(transcript(prompt('first', 1), reply('no usage', 2))).lastTaskFits, null);
 });
 
+// Review of 5af56c1..303d9ea, finding 2: whether an instruction was answered was read from the count of
+// replies with usage, so a reply that records none left its task open and the next instruction joined it.
+test('a reply answers its instruction whether or not it records its token usage: the next instruction starts a task', () => {
+  const opening = [prompt('first', 1), spoke(2, usage(0, 100000, 0)), prompt('second', 3), reply('no usage', 4), prompt('third', 5), spoke(6, usage(0, 150000, 0), { stop: 'tool_use' })];
+  // While the third task works, the last one is the second, and nothing says what it cost: the first is not it.
+  const working = lib.sessionFacts(transcript(...opening));
+  assert.equal(working.state, 'working');
+  assert.deepEqual(working.lastTask, { unavailable: 'no reply of its last task records its token usage' });
+  assert.equal(working.lastTaskFits, null);
+  // When the third ends it starts at its own instruction. Its cost is counted from the last size the
+  // transcript records, the one before the second, so it holds whatever the reply without usage added.
+  const ended = lib.sessionFacts(transcript(...opening, spoke(7, usage(0, 180000, 0))));
+  assert.deepEqual(ended.lastTask, { tokens: 80000, startedBy: 'person', startedAt: at(5), endedAt: at(7), compactions: 0 });
+
+  // What is not the session's own reply answers nothing: a message the harness wrote in its place and a
+  // side chain's leave the instruction open, and the one after it joins it.
+  const synthetic = spoke(4, usage(0, 0, 0), { model: '<synthetic>' });
+  const side = { ...reply('in a side chain', 4), isSidechain: true };
+  const open = lib.sessionFacts(transcript(prompt('first', 1), spoke(2, usage(0, 100000, 0)), prompt('second', 3), synthetic, side, prompt('again', 5), spoke(6, usage(0, 150000, 0))));
+  assert.deepEqual(open.lastTask, { tokens: 50000, startedBy: 'person', startedAt: at(3), endedAt: at(6), compactions: 0 });
+});
+
 test('the last task no longer fits when it cost more than the room left before the host compacts', () => {
   const session = (held) => transcript(prompt('first', 1), spoke(2, usage(0, held - 60000, 0)), spoke(3, usage(0, held, 0)));
   const exact = COMPACTION - 60000; // what a session holds when the room left is exactly its last task
@@ -1904,6 +1926,26 @@ test('renderBoard says the context held, the room left and the last task\'s cost
   assert.equal(older[4], '  context 100k tokens (20%)');
 });
 
+// The room is said in thousands, and rounding must not make the row say what is not so: `room 0k` of a
+// session that has some, `0k past` of one that is past the point, or `0k past` of one exactly at it.
+test('renderBoard says a room at, just short of and just past where the host compacts without a 0k that is not zero', () => {
+  const session = (room) => ({ id: '66666666-f', title: 't', state: 'waiting', lastEntryAt: before(60), cwd: 'C:\\p', gitBranch: 'main', context: { tokens: COMPACTION - room, model: 'model-x', at: before(60) }, atContextPause: false, contextCompaction: { tokens: COMPACTION, measured: false, at: null }, contextRoom: room, lastTask: { unavailable: 'its first task has not ended' }, lastTaskFits: null, skippedLines: 0, work: [], tail: [] });
+  // The piece of the row between what the session holds and its last task.
+  const said = (room) => lib.renderBoard({ ...BOARD, sessions: [session(room)] }, { now: NOW })[4].split('  ')[2];
+  const where = `the host compacts (${k(COMPACTION)})`;
+  assert.deepEqual([1000, 500, 499, 1, 0, -1, -499, -500, -1000].map(said), [
+    `room 1k before ${where}`,
+    `room 1k before ${where}`,
+    `room under 1k before ${where}`,
+    `room under 1k before ${where}`,
+    `no room: at the point where ${where}`,
+    `no room: under 1k past where ${where}`,
+    `no room: under 1k past where ${where}`,
+    `no room: 1k past where ${where}`,
+    `no room: 1k past where ${where}`,
+  ]);
+});
+
 // T5 B: a worktree's feature plans are printed under it.
 test('renderBoard prints under a worktree the plans of its branch: steps, what is pending and the start of the next step', () => {
   const tree = (path, plans) => ({ path, head: '1111111111111111111111111111111111111111', branch: 'feat/x', bare: false, aheadOfMain: 1, aheadOfUpstream: 'no upstream', changed: 0, plans });
@@ -2827,6 +2869,175 @@ test('quoteOf refuses every other attachment and says what it is: another origin
   ]);
   for (const quote of said) assert.deepEqual(Object.keys(quote), ['person', 'what']);
   assert.ok(said.every((quote) => quote.person === false));
+});
+
+// Review of 5af56c1..303d9ea, finding 1: the task accounting read `user` entries only, so an instruction
+// sent while the session worked started no task and the work after it stayed with the task before. From
+// a tally of this project's transcripts (2026-10-11, 56 files, keys only, each entry once): 25 queued
+// commands of the person and 49 of origin `peer`, 4 of which a subagent handed back (`handback: true`);
+// none of the 74 comes after a reply that closed its turn, and a reply follows every one. The test sits
+// here, with the shape of a queued command, and belongs to the tests of the last task.
+test('a queued instruction of the person or of another session starts a task, as a user entry of its origin does', () => {
+  const fromSession = { origin: { kind: 'peer', name: 'JH 1 · made up', from: 'local_1', body: 'made up' }, isMeta: true, humanTurn: undefined };
+  const held = COMPACTION - 35000; // what the session ends with: 35k of room before the host compacts
+  const worked = (...sent) => [prompt('first', 1), spoke(2, usage(0, held - 80000, 0), { stop: 'tool_use' }), spoke(3, usage(0, held - 20000, 0), { stop: 'tool_use' }), ...sent];
+  const session = (...sent) => lib.sessionFacts(transcript(...worked(...sent), spoke(5, usage(0, held, 0))));
+
+  // With nothing sent in between it is one task of 80k, which no longer fits.
+  const plain = session();
+  assert.deepEqual([plain.lastTask.tokens, plain.lastTaskFits], [80000, false]);
+  // What he sent while it worked ends that task there and starts one: 20k, which fits.
+  const his = session(queued(4));
+  assert.deepEqual(his.lastTask, { tokens: 20000, startedBy: 'person', startedAt: at(4), endedAt: at(5), compactions: 0 });
+  assert.equal(his.lastTaskFits, true, '35k of room, 20k of task');
+  const theirs = session(queued(4, fromSession));
+  assert.deepEqual(theirs.lastTask, { tokens: 20000, startedBy: 'session', startedAt: at(4), endedAt: at(5), compactions: 0 });
+  // The time is the entry's, and the attachment's own when the entry has none.
+  assert.equal(session({ ...queued(4), timestamp: undefined }).lastTask.startedAt, at(4));
+  // Until its reply is written the session works on it, and the last task is the one it ended.
+  const unanswered = lib.sessionFacts(transcript(...worked(queued(4))));
+  assert.deepEqual([unanswered.state, unanswered.lastTask], ['working', { tokens: 60000, startedBy: 'person', startedAt: at(1), endedAt: at(3), compactions: 0 }]);
+
+  // It moves the task accounting and nothing else: the state of the row, the end of its turn, the
+  // messages it received and every other fact are the ones of the transcript without it. One from
+  // another session is also a message the session received, and moves nothing more than that.
+  const rest = ({ lastTask, lastTaskFits, ...others }) => others;
+  assert.deepEqual(rest(his), rest(plain));
+  assert.deepEqual(rest({ ...theirs, received: [] }), rest(plain));
+  assert.deepEqual(theirs.received, [{ at: at(4), from: 'session', name: 'JH 1 · made up', session: null, mode: null, id: null }]);
+
+  // Nothing else that is queued, or attached, is an instruction of anyone: the end of a task (said in
+  // either of its two places, and before any origin), what a subagent hands back, what the app puts in,
+  // a message that records no origin or one not known, a meta one, a side chain's, another attachment.
+  const notInstructions = [
+    queued(4, { commandMode: 'task-notification', origin: { kind: 'task-notification', producer: 'made up' }, humanTurn: undefined, prompt: notice({ task: 'b1', status: 'completed' }) }),
+    queued(4, { commandMode: 'task-notification', origin: undefined, humanTurn: undefined }),
+    queued(4, { commandMode: 'task-notification' }),
+    queued(4, { ...fromSession, origin: { ...fromSession.origin, handback: true } }),
+    queued(4, { ...fromSession, origin: { ...fromSession.origin, hostInjected: true } }),
+    queued(4, { origin: undefined, isMeta: true, humanTurn: undefined }),
+    queued(4, { origin: 'human' }),
+    queued(4, { origin: { kind: 'something-new' } }),
+    queued(4, { isMeta: true }),
+    queued(4, {}, { isSidechain: true }),
+    { type: 'attachment', ...base(4), attachment: { type: 'hook_success', stdout: 'made up', origin: { kind: 'human' }, humanTurn: true, prompt: 'made up' } },
+    { type: 'attachment', ...base(4), origin: { kind: 'human' }, humanTurn: true, prompt: 'made up', attachment: null },
+  ];
+  for (const [index, entry] of notInstructions.entries()) assert.equal(session(entry).lastTask.tokens, 80000, `entry ${index} starts no task`);
+
+  // A queued end of a task is still read as the end of its work, and starts no task.
+  const ended = lib.sessionFacts(transcript(prompt('first', 1), spoke(2, usage(0, held - 80000, 0), { stop: 'tool_use' }), ...backgroundBash('toolu_1', 'b1', 3), notInstructions[0], spoke(5, usage(0, held, 0))));
+  assert.deepEqual([ended.work.map((item) => item.status), ended.state, ended.lastTask.tokens], [['completed'], 'waiting', 80000]);
+});
+
+// A message of another session that arrives while the session works is a queued command as well, and the
+// list of what a session received read `user` entries only: the board then said of such a message that
+// it was not seen to arrive, with the receiver's transcript holding it. From a tally of this project's
+// transcripts (2026-10-11, 56 files, keys only): 52 queued commands of origin `peer`, each with the origin
+// a `user` entry carries on itself inside the attachment and the same time on the entry and on the
+// attachment. 46 give the sender's `name`, `fromSession`, `fromMode` and `msg_id`, 4 are hand-backs of a
+// subagent and 2 name no message. None has the id of a `user` entry of any transcript, so the two shapes
+// of one message are a case no transcript shows; 3 are entries a resumed session wrote again.
+const queuedPeer = (minute, origin = {}, more = {}) => queued(minute, { origin: { ...peer(minute).origin, ...origin }, isMeta: true, humanTurn: undefined }, more);
+const queuedHandback = (minute, more = {}) => queued(minute, { origin: handback(minute).origin, isMeta: true, humanTurn: undefined, delivery_id: undefined }, more);
+const queuedInjected = (minute, more = {}) => queued(minute, { origin: injected(minute).origin, isMeta: true, humanTurn: undefined }, more);
+
+test('sessionFacts lists a message that arrived while the session worked as it lists one that arrived between turns', () => {
+  const worked = (...arrived) => lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 1000, 0), { stop: 'tool_use' }), ...arrived, spoke(9, usage(0, 2000, 0))));
+  const second = { name: 'JH ORQ · made up', fromSession: 'local_sender-9', msg_id: 'msg-2', hopChain: ['x'] };
+  const facts = worked(queuedPeer(3), queuedPeer(4, second), queuedHandback(5), queuedInjected(6));
+  assert.deepEqual(facts.received, [
+    { at: at(3), from: 'session', name: 'JH 1 · made up', session: 'local_sender-1', mode: 'bypass', id: 'msg-1' },
+    { at: at(4), from: 'session', name: 'JH ORQ · made up', session: 'local_sender-9', mode: 'bypass', id: 'msg-2' },
+    { at: at(5), from: 'subagent', name: null, session: null, mode: null, id: null },
+    { at: at(6), from: 'host', name: null, session: null, mode: 'bypass', id: null },
+  ]);
+  // Each is the message its `user` entry would have been: the same fields, from the same origin.
+  const between = lib.sessionFacts(transcript(prompt('go', 1), peer(3), peer(4, second), handback(5), injected(6), reply('done', 9)));
+  assert.deepEqual(facts.received, between.received);
+  // The time is the entry's, and the attachment's own when the entry has none.
+  assert.deepEqual(worked({ ...queuedPeer(3), timestamp: undefined }).received.map((message) => message.at), [at(3)]);
+  assert.deepEqual(worked({ ...queuedPeer(3, {}, { timestamp: undefined }), attachment: { ...queuedPeer(3).attachment, timestamp: undefined } }).received.map((message) => message.at), [null]);
+
+  // One message is listed once: written in both shapes, written again by a resumed session, or both.
+  const once = worked(queuedPeer(3), peer(4), { ...queuedPeer(5, second), uuid: 'u-5' }, { ...queuedPeer(5, second), uuid: 'u-5' }, queuedPeer(6, second));
+  assert.deepEqual(once.received.map((message) => [message.id, message.at]), [['msg-1', at(3)], ['msg-2', at(5)]]);
+  // Two with no id of their own are told apart by the entry that holds each.
+  const twice = worked({ ...queuedHandback(3), uuid: 'u-1' }, { ...queuedHandback(4), uuid: 'u-2' }, { ...queuedHandback(3), uuid: 'u-1' });
+  assert.deepEqual(twice.received.map((message) => message.at), [at(3), at(4)]);
+
+  // Nothing else that is queued, or attached, is a message from anybody: what he sent, the end of a task
+  // (which the host says in either of two places, whatever origin stands beside it), a side chain's, an
+  // origin that is no object or of a kind not known, and the marks of a message outside a queued command.
+  const others = [
+    queued(3),
+    queued(3, { commandMode: 'task-notification', origin: { kind: 'task-notification', producer: 'made up' }, humanTurn: undefined, prompt: notice({ task: 'b1', status: 'completed' }) }),
+    queued(3, { commandMode: 'task-notification', origin: peer(3).origin, humanTurn: undefined }),
+    queuedPeer(3, {}, { isSidechain: true }),
+    queued(3, { origin: 'peer' }),
+    queued(3, { origin: { kind: 'something-new', msg_id: 'msg-1' } }),
+    { type: 'attachment', ...base(3), attachment: { type: 'hook_success', stdout: 'made up', origin: peer(3).origin } },
+    { type: 'attachment', ...base(3), origin: peer(3).origin, attachment: null },
+  ];
+  for (const [index, entry] of others.entries()) assert.deepEqual(worked(entry).received, [], `entry ${index} is no message`);
+});
+
+test('a message that arrived while the session worked moves the list of what it received and the task it starts, and nothing of the row', () => {
+  const worked = (...arrived) => lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(0, 1000, 0), { stop: 'tool_use' }), ...arrived, spoke(9, usage(0, 2000, 0))));
+  const rest = ({ received, lastTask, lastTaskFits, ...others }) => others;
+  assert.equal(worked(queuedPeer(3)).received.length, 1);
+  assert.deepEqual(rest(worked(queuedPeer(3))), rest(worked()));
+  // A hand-back and a message of the app start no task either: the list is all they move.
+  for (const arrived of [queuedHandback(3), queuedInjected(3)]) assert.deepEqual({ ...worked(arrived), received: [] }, worked());
+
+  // The state of the row is read from `user` and assistant entries, as before: a queued command says
+  // nothing of the turn. After a reply that ended it the row still waits, where a `user` entry of
+  // another session starts a turn. No transcript of the tally above holds a queued command there.
+  const idle = (...arrived) => lib.sessionFacts(transcript(prompt('go', 1), reply('done', 2), ...arrived));
+  assert.deepEqual([idle().state, idle().turnEndedAt], ['waiting', at(2)]);
+  assert.deepEqual([idle(queuedPeer(3)).state, idle(queuedPeer(3)).turnEndedAt], ['waiting', at(2)]);
+  assert.deepEqual(idle(queuedPeer(3)).received.map((message) => message.id), ['msg-1']);
+  // And while a tool runs it still works.
+  const running = (...arrived) => lib.sessionFacts(transcript(prompt('go', 1), call('toolu_1', 'Bash', { command: 'made up' }, 2), ...arrived));
+  assert.deepEqual([running().state, running(queuedPeer(3)).state], ['working', 'working']);
+});
+
+test('channelOf sees a message arrive that its receiver got while it worked, and takes no hand-back for one', () => {
+  const sender = lib.sessionFacts(transcript(prompt('go', 1), send('toolu_m1', { to: 'JH 2 · made up', recipient_kind: 'name' }, 2), result('toolu_m1', { success: true, msg_id: 'msg-1', display: 'made up', message: 'made up' }, 2)));
+  const board = (...arrived) => [
+    { id: A, ...sender },
+    { id: B, ...lib.sessionFacts(transcript(prompt('build', 1), spoke(2, usage(0, 1000, 0), { stop: 'tool_use' }), ...arrived, spoke(9, usage(0, 2000, 0)))) },
+  ];
+  const seen = (...arrived) => lib.channelOf(recordOf(), board(...arrived)).messages.map((message) => [message.id, message.state, message.to.session]);
+  assert.deepEqual(seen(), [['msg-1', 'not-seen', null]]);
+  assert.deepEqual(seen(queuedPeer(3)), [['msg-1', 'arrived', B]]);
+  assert.deepEqual(seen(peer(3)), [['msg-1', 'arrived', B]], 'as one that arrived between turns');
+  // What a subagent handed back or the app put in is no message of a session, whatever id it carries.
+  assert.deepEqual(seen(queuedPeer(3, { handback: true })), [['msg-1', 'not-seen', null]]);
+  assert.deepEqual(seen(queuedPeer(3, { hostInjected: true })), [['msg-1', 'not-seen', null]]);
+});
+
+// `sessions --quote` said of every queued command of origin `peer` that it was a message from another
+// session, the 4 hand-backs of the tally above among them (and with the name "no name", since a hand-back
+// gives none). It refused them, rightly; the reason now says what each is, by the rule a `user` entry is
+// told by (`peerSender`).
+test('quoteOf refuses a queued hand-back of a subagent and a queued message of the app, and names each as what it is', () => {
+  const origins = [{}, { handback: true }, { hostInjected: true }];
+  const text = transcript(...origins.map((origin, index) => peer(index + 1, origin)), ...origins.map((origin, index) => queuedPeer(index + 4, origin)), queuedHandback(7), queuedInjected(8), queuedPeer(9, { name: undefined }));
+  const said = Array.from({ length: 9 }, (_, index) => lib.quoteOf(text, index + 1));
+  assert.deepEqual(said.map((quote) => quote.what), [
+    'a message from another session ("JH 1 · made up")',
+    'what a subagent handed back',
+    'a message the app put in',
+    'a queued message from another session ("JH 1 · made up")',
+    'a queued hand-back of a subagent',
+    'a queued message the app put in',
+    'a queued hand-back of a subagent',
+    'a queued message the app put in',
+    'a queued message from another session ("no name")',
+  ]);
+  // None is the person's: `sessions --quote` exits 1 on each.
+  for (const quote of said) assert.deepEqual([quote.person, Object.keys(quote)], [false, ['person', 'what']]);
 });
 
 // --- the project a folder belongs to ---

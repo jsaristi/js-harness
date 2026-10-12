@@ -189,6 +189,16 @@ function parseArgs(argv) {
     parsed[mark.key] = contextMarkOf(marks.get(flag), parsed.contextWindow);
     if (!(parsed[mark.key] > 0)) throw new SessionsArgError(`${flag} takes a whole number of tokens above zero, or a percentage of the context window above zero and up to 100 (${mark.percent}%)`);
   }
+  // Each mark is valid alone; the pair is not when the pause is at the compaction or past it: the host
+  // would compact a session before it could pause, and a watch would wake for the pause after the fact.
+  // It is refused whichever flag, or default, gave either figure, and both are said in whole tokens,
+  // since two that differ can round to one share. The compaction checked is the one the board uses for a
+  // session that has measured none: a session's own point is read from its transcript (`sessionFacts`,
+  // bin/lib/sessions.mjs), is not known when the flags are parsed, and is no part of this check.
+  if (!(parsed.contextPause < parsed.contextCompactionDefault)) {
+    const figure = (tokens) => `${tokens} tokens (${percentOf(tokens, parsed.contextWindow)}% of the window)`;
+    throw new SessionsArgError(`--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(parsed.contextPause)} and the compaction ${figure(parsed.contextCompactionDefault)}`);
+  }
   return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 

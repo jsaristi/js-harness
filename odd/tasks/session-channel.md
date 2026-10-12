@@ -1174,6 +1174,86 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   are the lines before it. "State for a resume" holds what is true now and points to "Next
   step". One contradiction beside the sweep's was removed: "In scope" listed two sentences of
   `AGENTS.md`, which this feature does not edit.
+- 2026-10-11 18:18 to 18:35 local, the merges. The lead did not merge pull request 65 on git's
+  word: its head held `main` only up to `51a24db`, and no gate had run on its tree merged with
+  the day's `main`. So `906fc28` was merged into `feat/session-board-channel` (`1913d47`, clean)
+  and gated (`PASS tests`, load 2%), pushed, and merged by the lead as `5af56c1`. Then `5af56c1`
+  was merged into this branch (`f373a5e`): six conflicts, one a file, each resolved by a script
+  that fails unless both sides are as expected (`resolve-merge.mjs`, `resolve-scripts.mjs` in
+  the session's scratchpad): `sameSession` kept beside the context comment, the import of
+  `bin/sessions.mjs` joined, the three files of `scripts/` keeping both the hook entries and
+  the gate log's folder, and this document's "Next step" rewritten. Its gate: `PASS tests npm
+  run test passed`, 18:20 to 18:35, load 5%. A gate wait is started with `--wait 180`, and a
+  commit takes it as `js-harness gate --wait 180 -- git commit`, where `check` runs in the turn
+  it is in.
+- 2026-10-11 19:20 local, commit `303d9ea` (T5b, T4d, the sweep's items, this document in
+  order), written by one writer with four tasks in one brief: 176 tool calls and about 400,000
+  tokens, which is the size the lead's measure of the day says not to give a writer again.
+  Its gate: `PASS tests npm run test passed`, 19:03 to 19:20, load 47%.
+- 2026-10-11 19:22 to 19:55 local, the reviews of the slice, in one turn of the gate lock
+  (`review-two.mjs` in the session's scratchpad). gentle-ai, as two candidates against the
+  unreferenced boundary `7990fd5` (the tree of `main` with the eight files of the sessions half
+  as `303d9ea` has them): `5af56c1..7990fd5`, 976 lines, lineage `review-8ad69357a3b05410`,
+  approved in 155 s and acknowledged; `7990fd5..303d9ea`, 1,445 lines, lineage
+  `review-851154c44e39b8a7`, approved in 113 s and acknowledged. Neither is the target of the
+  lineage that stopped on a time-out, which stays open. Seven findings, none opening a
+  correction: two are effects of the split (a reviewer of one half cannot see the other's
+  files); a pause given at or above the compaction point is accepted; the room's wording at
+  its edges is unproved; a test writes `19k`, a value derived from a constant; the hook's
+  degraded paths assert only an exit code; the journey's new call sites are run by no test.
+  Codex on `5af56c1..303d9ea`, recorded: seven parts, 1,838 changed lines, 2,148,169 input
+  tokens, 1,169 a line against the rate of 1,200 (its plan's figure, 2,143,000, was sent to the
+  lead before the run). Five parts "correct"; four findings, all P2: a queued instruction
+  starts no task (`bin/lib/sessions.mjs`), which is the open point T4d had written down; a
+  reply with no readable usage leaves its task open for the next instruction; the hook
+  collapses blanks in a title before it looks an opening up; the command the hook prints
+  quotes a title with `JSON.stringify`, which no shell reads as written for `$` or a quote.
+  Codex for the feature so far: 8,345,251 input tokens.
+- 2026-10-11 19:57 to 20:42 local, the round of fixes: five writers, one at a time, one narrow
+  task each (33 to 45 tool calls, 136,000 to 160,000 tokens each), test first, none committing.
+  Read by the parent at 20:42: `bin/lib/sessions.test.mjs` 199 pass, `bin/sessions.test.mjs`
+  201 and 1 skipped, `bin/resume.test.mjs` 19, `bin/js-harness.test.mjs` 28,
+  `bin/notify.test.mjs` 94, `bin/lib/channel.test.mjs` 30, none failing; `sessions
+  --context-pause 95%` exits 2 with both figures.
+  (1) The task accounting. Red: a last task of 80,000 tokens where 20,000 was expected (the
+  reviewer's example), and the task before a usage-free one given as the last. A queued
+  instruction of the person or of another session starts a task as a `user` entry of that
+  origin does (`queuedCommandOf`, one rule with `--quote`); a task is answered by any reply of
+  the session, with or without usage. Over the 56 real transcripts: 53 with every fact the
+  same, 3 with another `lastTask` and the same `lastTaskFits`; `quoteOf` the same on 134,423
+  lines of 134,423.
+  (2) The hook, from Codex and gentle-ai. The title is used as given for every lookup and made
+  one line only where it is printed. The command is printed in single quotes only for a title
+  every shell reads alike (tried by hand on bash 5.3, PowerShell 5.1 and 7.6, through a `.cmd`
+  and a `.ps1` shim: single quotes are the one quoting they share; PowerShell 5.1 drops a
+  double quote inside them; a `.ps1` shim loses a lone `--`), and any other title gets words
+  and no command. The silence gentle-ai suspected does not happen (`readNotices` always gives
+  `readings`); the same path gave a false reason ("no opening read by it" for a record that
+  could not be read), fixed. The degraded paths now assert their lines.
+  (3) A message of another session that arrived while the session worked is in `received`
+  (it is written as a `queued_command` attachment, never also as a `user` entry in these
+  transcripts). Over the real transcripts the board's messages go from 170 arrived and 91 not
+  seen to 205 arrived and 56 not seen, of 263; 17 transcripts gain 49 entries, none loses
+  one, no other fact moves. `--quote` names a queued hand-back of a sub-agent as one.
+  (4) The three suggestions on the context figures. A pause not below the default compaction
+  point is a usage error with both figures; a room under 500 tokens was said `0k` and a
+  session exactly at the point `0k past`, now `under 1k` and `at the point where the host
+  compacts`; `19k` and the `6k` beside it are computed. Both test files pass with the two
+  constants changed for the trial (86 and 91, 72 and 80), then restored.
+  (5) The hook's "none" for what it could not look at: an opening whose file cannot be read is
+  "not known whether one is stored", a folder of documents that cannot be listed is "could not
+  be listed", and several openings named by one title are listed with no command that would
+  exit 2.
+  Left by the writers, each seen and none fixed here: the row of a session stays `waiting`
+  after a queued message of another session where a `user` entry makes it `working`; one
+  queued entry with `senderTaskId` and no `handback` is read as a session's; `context 0k
+  tokens` and `last task 0k` for counts under 500; a window so small that the two default
+  shares round to one token is refused with no flag given; the usage text does not state the
+  new refusal; `findOpenings` counts unreadable files and does not name them; a session whose
+  whole title is only `<code> <role>` cannot ask for its opening when another shares that
+  start. For him, with the yardstick of "the last task": a message that arrives seconds before
+  a task ends now cuts it (in one real transcript the last task goes from 177,585 tokens to
+  4,925), so "the last finished stretch" leans towards "it fits".
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
@@ -1187,9 +1267,11 @@ session needs beside it to go on; the summary of a compaction is not the record.
 | 4 | T5, T6, T5b, T4d, the sweep's items of this session | branch `feat/session-context`, with `main` merged in at `5af56c1`; T5 and T6 are gated at `9dd1622`, the rest is in the commit that holds this section |
 
 - The worktree is `D:\js-harness-worktrees\session-channel`, with its own `.codegraph` index.
-- Reviews of the fourth slice: no entry of Progress records one that ended. The gentle-ai
-  lineage `review-506a7846ef824265` stays open and is not touched (Progress: the review that
-  stopped on a time-out, and his choice about it).
+- Reviews of the fourth slice: gentle-ai approved it as two candidates and Codex reviewed
+  `5af56c1..303d9ea` (Progress, 19:22 to 19:55); the round of fixes after them is one commit
+  more, which owes its own Codex review. The gentle-ai lineage `review-506a7846ef824265` stays
+  open and is not touched (Progress: the review that stopped on a time-out, and his choice
+  about it).
 - Open, and no task yet: the table of "Open points".
 - Scripts of this session, in its scratchpad
   `C:\Users\Oficina\AppData\Local\Temp\claude\D--js-harness\e5376fe9-d1cc-4288-b9e9-cf533ba35a5a\scratchpad\`:
@@ -1219,9 +1301,11 @@ on this branch, in this order:
 3. Done for this slice, in the same commit. The 42 items of the sweep under "JH 5"
    (`docs/sweep-2026-10-11.md`), each read at its place first: 28 checked off; the 12 of the
    orchestrator skill wait for T8, and 2 wait for his answer, asked through the lead.
-4. The gate; the gentle-ai review as smaller candidates, inside the gate lock (the lineage
-   `review-506a7846ef824265` stays open and is not touched); the Codex review within the rate
-   of the Codex budget, its plan's figure sent to the lead before it runs.
+4. Done (Progress, 19:22 to 19:55): the gate, the gentle-ai review as two candidates, the
+   Codex review within the rate. Their findings are fixed in the commit that holds this text
+   (Progress, 19:57 to 20:42). Owed for that commit: its gate, its Codex review, its gentle-ai
+   assessment; and the practice journey run once through the gate lock, since this slice
+   changes what the journey expects of the hook entries and nothing has run it.
 5. The fourth pull request and the notice to the lead, who merges it only when the constant of
    the pause reads the value of his latest words.
 The resume hook is installed only on his word, and `AGENTS.md` is not edited by this feature.

@@ -165,6 +165,8 @@ const USAGE_ERRORS = [
   ['--context-compaction'], ['--context-compaction', '0'], ['--context-compaction', '1.5'], ['--context-compaction', 'big'], ['--context-compaction', HUGE],
   ['--context-compaction', '0%'], ['--context-compaction', '101%'], ['--context-compaction', '60%%'],
   ['--context-limit'], ['--context-limit', '50%'], ['--context-limit', '350000'],
+  // A pause that is not below the compaction: the whole window can never be, nor any pause above a compaction of one token.
+  ['--context-pause', '100%'], ['--context-compaction', '1'], ['--context-pause', '60%', '--context-compaction', '50%'],
   // T6: the relief file is a path like the others.
   ['--relief'], ['--relief', ''], ['--relief', '--json'],
   // Session channel, T4a: --address takes a role, and answers with a title: no board to watch or to give as data.
@@ -457,14 +459,53 @@ test('--context-pause and --context-compaction take tokens or a percentage of --
   const room = COMPACTION - 12400; // the first session holds 12,400 tokens
   assert.deepEqual(facts(await board('--context-pause', '2%')), [WINDOW, 10000, 2, COMPACTION, COMPACTION_PERCENT, 2, true, room]);
   assert.deepEqual(facts(await board('--context-pause', '12400')), [WINDOW, 12400, 2, COMPACTION, COMPACTION_PERCENT, 2, true, room], 'at the pause is at it');
-  assert.deepEqual(facts(await board('--context-pause', '100%')), [WINDOW, 500000, 100, COMPACTION, COMPACTION_PERCENT, 2, false, room]);
+  assert.deepEqual(facts(await board('--context-compaction', '100%')), [WINDOW, PAUSE, PAUSE_PERCENT, WINDOW, 100, 2, false, WINDOW - 12400], 'a share goes up to the whole window');
   const small = [shareOf(20000, PAUSE_PERCENT), shareOf(20000, COMPACTION_PERCENT)];
   assert.deepEqual(facts(await board('--context-window', '20000')), [20000, small[0], PAUSE_PERCENT, small[1], COMPACTION_PERCENT, 62, 12400 >= small[0], small[1] - 12400], 'the defaults are the two constants, as shares of the window given');
   assert.deepEqual(facts(await board('--context-window', '20000', '--context-pause', '50%', '--context-compaction', '80%')), [20000, 10000, 50, 16000, 80, 62, true, 3600]);
   assert.deepEqual(facts(await board('--context-compaction', '80%', '--context-pause', '50%', '--context-window', '20000')), [20000, 10000, 50, 16000, 80, 62, true, 3600]);
-  assert.deepEqual(facts(await board('--context-compaction', '400000')), [WINDOW, PAUSE, PAUSE_PERCENT, 400000, 80, 2, false, 387600]);
+  assert.deepEqual(facts(await board('--context-compaction', String(PAUSE + 1))), [WINDOW, PAUSE, PAUSE_PERCENT, PAUSE + 1, percentOf(PAUSE + 1, WINDOW), 2, false, PAUSE + 1 - 12400], 'in tokens, with the pause left at its default');
   const text = (await runSessions(machine, ['--context-pause', '50%', '--context-window', '20000'])).stdout.split('\n');
-  assert.ok(text.includes('  context 12k tokens (62%)  room 6k before the host compacts (19k)  last task not known: its first task has not ended  at the pause: 50% of the window (10k)'), text.join('\n'));
+  assert.ok(text.includes(`  context 12k tokens (62%)  room ${k(small[1] - 12400)} before the host compacts (${k(small[1])})  last task not known: its first task has not ended  at the pause: 50% of the window (10k)`), text.join('\n'));
+}));
+
+// A pause at or past the compaction is one no session reaches: the host compacts it first, and a watch
+// would wake for the pause after the fact. Each mark alone is a valid one, so it is the pair that is
+// refused, whichever of the two a flag gave and in whichever unit.
+test('a pause that is not below the compaction point the board will use is refused with both figures, whichever flag gave either and in either unit', withMachine(async (machine) => {
+  writeSessions(machine);
+  const figure = (tokens, window) => `${tokens} tokens (${percentOf(tokens, window)}% of the window)`;
+  const refusal = (pause, compaction, window = WINDOW) => `--context-pause must be below --context-compaction, where the host compacts a session before it could pause: the pause is ${figure(pause, window)} and the compaction ${figure(compaction, window)}`;
+  const refused = async (argv, pause, compaction, window) => {
+    const { code, stdout, stderr } = await runSessions(machine, argv);
+    assert.deepEqual([code, stdout, stderr.split('\n')[0]], [2, '', refusal(pause, compaction, window)], argv.join(' '));
+    assert.match(stderr, /Usage: js-harness sessions/);
+  };
+  const accepted = async (argv, pause, compaction) => {
+    const { code, stdout } = await runSessions(machine, ['--json', ...argv]);
+    assert.equal(code, 0, argv.join(' '));
+    assert.deepEqual([JSON.parse(stdout).contextPause, JSON.parse(stdout).contextCompactionDefault], [pause, compaction], argv.join(' '));
+  };
+  const above = shareOf(WINDOW, COMPACTION_PERCENT + 1);
+  const justBelow = shareOf(WINDOW, COMPACTION_PERCENT - 1);
+  // The pause given, against the default compaction: above it, equal to it, just below it.
+  await refused(['--context-pause', `${COMPACTION_PERCENT + 1}%`], above, COMPACTION);
+  await refused(['--context-pause', String(COMPACTION + 1)], COMPACTION + 1, COMPACTION);
+  await refused(['--context-pause', `${COMPACTION_PERCENT}%`], COMPACTION, COMPACTION);
+  await refused(['--context-pause', String(COMPACTION)], COMPACTION, COMPACTION);
+  await accepted(['--context-pause', `${COMPACTION_PERCENT - 1}%`], justBelow, COMPACTION);
+  await accepted(['--context-pause', String(COMPACTION - 1)], COMPACTION - 1, COMPACTION);
+  // The compaction given, lowered to the default pause or under it.
+  await refused(['--context-compaction', `${PAUSE_PERCENT - 1}%`], PAUSE, shareOf(WINDOW, PAUSE_PERCENT - 1));
+  await refused(['--context-compaction', String(PAUSE - 1)], PAUSE, PAUSE - 1);
+  await refused(['--context-compaction', `${PAUSE_PERCENT}%`], PAUSE, PAUSE);
+  await refused(['--context-compaction', String(PAUSE)], PAUSE, PAUSE);
+  await accepted(['--context-compaction', String(PAUSE + 1)], PAUSE, PAUSE + 1);
+  // Both given, in either order and in mixed units; a percentage is a share of the window given.
+  await refused(['--context-compaction', '50%', '--context-pause', '60%'], 300000, 250000);
+  await refused(['--context-pause', '18000', '--context-compaction', '90%', '--context-window', '20000'], 18000, 18000, 20000);
+  await refused(['--context-window', '20000', '--context-pause', '95%', '--context-compaction', '18999'], 19000, 18999, 20000);
+  await accepted(['--context-window', '20000', '--context-pause', '17999', '--context-compaction', '90%'], 17999, 18000);
 }));
 
 test('--context-limit, the flag of the limit mark that left, is refused with the two flags that replaced it and their defaults, read from the constants', withMachine(async (machine) => {
