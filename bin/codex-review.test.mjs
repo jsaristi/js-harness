@@ -954,6 +954,28 @@ test('an edit of a tracked file made while Codex reviews leaves no record: the t
   assert.equal(wrote(root), false);
 });
 
+test('a read of HEAD that fails after the review leaves no record: it is not known that Codex read the range alone', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  // Codex ends well, and then git cannot say what HEAD is: the tree is as it was, but the range is not known to be the one read.
+  const spawnAsync = fake.spawnAsync;
+  const spawn = fake.spawn;
+  let codexRan = false;
+  fake.spawnAsync = (command, args, opts) => {
+    const child = spawnAsync(command, args, opts);
+    codexRan = true;
+    return child;
+  };
+  fake.spawn = (command, args, opts) => {
+    if (codexRan && command === 'git' && args.includes('HEAD^{commit}')) return { status: 128, stdout: '', stderr: 'fatal: bad revision HEAD^{commit}' };
+    return spawn(command, args, opts);
+  };
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /Could not read HEAD and the state of the tree again/);
+  assert.equal(wrote(root), false);
+});
+
 test('the review asks git about the end of its range by the commit it resolved, never by the word HEAD', async () => {
   const { root, base, head } = makeRepo();
   const { deps, asked } = countingGit(fakeCodex(reviewed(root, base)));
@@ -5210,6 +5232,19 @@ test('--again takes the base as it was given, so it says nothing of the base and
   assert.deepEqual(result.out.split('\n'), planned(root, one, three, LAST_TWO));
   assert.deepEqual(basesSaid(result.out), []);
   nothing.untouched('a plan with --again from a base left out');
+});
+
+test('a skip from the first commit of a branch off the default branch says so too, and its record starts at that commit as given', async () => {
+  const { root, base, one, three } = makeSlicedRepo();
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  const fake = fakeCodex('');
+  const result = await run(['--base', one, '--unavailable', 'model rejected', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.ok(result.out.split('\n').includes(baseLeftOutSaid(namedOf(root, one))), result.out);
+  assert.equal(fake.calls.length, 0);
+  // The record starts at the base as it was given: it covers one..HEAD, and not the commit one itself.
+  assert.deepEqual(readCodexReviews(root), [skippedRecord(one, three, 'model rejected')]);
 });
 
 // --- one run asks git where its repository is once, and what it learned ends with it ---

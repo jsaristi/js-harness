@@ -111,12 +111,22 @@ const [lib, root, commonGitDir, dir, writer, count, base] = process.argv.slice(2
 const { appendCodexReview } = await import(lib);
 const wait = new Int32Array(new SharedArrayBuffer(4));
 fs.writeFileSync(dir + '/ready-' + writer, '');
-while (!fs.existsSync(dir + '/go')) Atomics.wait(wait, 0, 0, 5);
+const since = Date.now();
+while (!fs.existsSync(dir + '/go')) {
+  if (Date.now() - since > 120000) {
+    process.stderr.write('writer ' + writer + ': no go file after 120 seconds\\n');
+    process.exit(3);
+  }
+  Atomics.wait(wait, 0, 0, 5);
+}
 for (let place = 0; place < Number(count); place += 1) {
   appendCodexReview(root, { ...JSON.parse(base), writer: Number(writer), place, pad: 'x'.repeat(4000) }, { where: { commonGitDir } });
 }
 `;
 
+// What this test shows: four hundred appends made in the same moment stayed whole, and in order per writer, on this run.
+// What it cannot show: that an append can never tear. A tear needs the scheduler to interleave two writes, and a run may not.
+// It is here so that a change which makes an append more than one write has a test that can catch it.
 test('records appended in the same moment by several processes each stay one whole line, in the order each process wrote them', async () => {
   const root = makeRepo();
   const file = appendCodexReview(root, record);
@@ -132,7 +142,10 @@ test('records appended in the same moment by several processes each stay one who
     const child = spawn(process.execPath, [script, lib, root, commonGitDir, dir, String(writer), String(count), JSON.stringify(record)], { stdio: ['ignore', 'ignore', 'pipe'] });
     let err = '';
     child.stderr.on('data', (chunk) => (err += chunk));
-    ended.push(new Promise((resolve) => child.on('close', (code) => resolve({ writer, code, err }))));
+    ended.push(new Promise((resolve) => {
+      child.on('close', (code) => resolve({ writer, code, err }));
+      child.on('error', (error) => resolve({ writer, code: null, err: error.message }));
+    }));
   }
   // Every writer is up before any of them appends: a process that starts late would append alone.
   const allReady = () => Array.from({ length: writers }, (_, writer) => fs.existsSync(path.join(dir, `ready-${writer}`))).every(Boolean);
