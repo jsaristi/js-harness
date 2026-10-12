@@ -413,7 +413,7 @@ session's transcript.
       Codex review record for 1 of N code commits" for hours without the name, and the
       commit was the branch's first, which it had given as `--base`. Route: delegated,
       tests first, in S1 after T6.
-- [ ] T6c · The notes gentle-ai left on S1 (Progress): a test of the record refused when
+- [x] T6c · The notes gentle-ai left on S1 (Progress; `3b810a4`): a test of the record refused when
       `HEAD` or the tree cannot be read again; a deadline for the writers of the test of
       appends at once and an assertion for a spawn that fails, and its comment says what it
       can and cannot catch; the note on a base left out tested on a skip, not on a plan
@@ -680,6 +680,18 @@ session's transcript.
   four events of four, exit 1 with a failing file. Turn asked (`t4-turn.sh`): RED, GREEN,
   the commit with its gate, which is the first whole run through the runner, and M1 again
   through it (`m1b-*.json` in the scratchpad). Sub-agents so far: 2,271,573 tokens.
+  Its first turn (taken 10:16:12) failed at GREEN, 27 of 28, exit 6, nothing committed:
+  the writer's new test expected `pass 2` of a file with two top-level tests and one
+  nested, and the runner rightly says `pass 3`. The test was corrected and the turn asked
+  again.
+- 2026-10-12 · **T6c committed, `3b810a4`**, one writer on Haiku 5.5 (118,070 tokens),
+  tests alone: the record refused when `HEAD` cannot be read again after the review; the
+  note on a base left out, on a skip; a deadline of 120 s for the writers of the test of
+  appends at once, an assertion for a spawn that fails, and what that test can and cannot
+  show, said above it. One turn (`t6e-turn.log`, taken 10:16:38): the two new tests pass,
+  19 of 19 of the records' tests, `PASS  tests` at 10:31:47 (889 s). No RED: the tests
+  describe what the code does; none was proven by breaking the code. gentle-ai's row: 52
+  lines, under the budget. Sub-agents so far: 2,389,643 tokens.
 
 ## Next
 1. The turn of the first cut (`t4-turn.sh`, in `gate-wait-count`): read its log
@@ -688,7 +700,7 @@ session's transcript.
    wall time, the counts. Write it in Progress as it came out, plainly if it gave nothing.
 2. gentle-ai on S2 (`47484bd..` on `feat/gate-wait-count`, over the budget: due) and on the
    cut's commit: start, run the `granted` choice, capture in a turn of the lock.
-3. T6c, one writer, on `feat/gate-wait`.
+3. (T6c is done, `3b810a4`.)
 4. Cuts 2 and 3 of T3, each judged by a run; or say plainly that the session ended before.
 5. Codex on both slices when he has answered on the margin (S1's plan: 1,026 lines, about
    1,250,000 input tokens against a rate of 1,231,200, 1.5% over; told to the orchestrator).
