@@ -1989,6 +1989,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     notice of the day. The pause is now one constant on `main`
     (`bin/lib/sessions.mjs`); by "How a rule is declared" it is declared in the list and that
     file reads it, in the second part, told before the file is touched.
+  - The first push was refused, by the control that exists for it: the branch's first commit,
+    `859a797`, holds `docs/rule-sources.json`, which a review counts as code, and no record
+    covered it. This session's slip: it gave Codex `--base 859a797`, and a base is left out of
+    its range. The line `check` prints at every commit had said for hours that one code commit
+    had no record, without naming it, and this session took it for the correction still to be
+    reviewed. The fix is a review of that commit by itself (123 changed lines, about 150,000
+    input tokens by its plan, inside the allowance): it found nothing, at 137,431 input tokens,
+    and is recorded as `40ccb45..859a797`. Then the push. What would have told it
+    sooner: the line at a commit naming the commit, as the push row does; told to the
+    orchestrator for the owner of that row.
 
 ## Next step
 In this order. (1) The first part is delivered: the push of `feat/rules-list` and its pull
