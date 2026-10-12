@@ -2030,7 +2030,22 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     the scopes and the two session rows in `bin/lib/rules-data.mjs` with their sources (his
     line 990 read again), renders the list, and commits through the gate; then both reviews,
     Codex with `--base 47484bd`.
-  - This session's context stood at 88 percent, with him away: the cut was given once in its
+  - Piece A is written and NOT yet read or committed: the writer's changes stand uncommitted
+    in the worktree, in the four files (207,285 tokens; by its report, each alone:
+    `bin/lib/rules.test.mjs` 102 pass, `bin/lib/rules-check.test.mjs` 55, `bin/rules.test.mjs`
+    17, and `rules check` passes with the hash unmoved). Its calls where the specification was
+    silent, each to be judged when the diff is read: `ruleOf` of a rule in prose is no
+    finding; `ruleValue` on a rule in prose of scope `repository` gets both findings; the
+    three new lines of the list go right after the value line; mixed and unordered earlier
+    values give both faults; a `projectData` that is no text and not null is "behind"; the
+    reader of imports in the test would take a comment that holds the word import and a quote
+    for an import. The editor also marks `ALIAS_PATTERN` and `REPOSITORY_SCOPE` in
+    `bin/lib/rules.mjs` as never read: look at whether the faults use literals instead.
+    After that the lead's relay of the same hour frees more files for the rewiring:
+    `bin/lib/codex-review-parts.mjs`, `bin/lib/codex-review-plan.mjs`, `bin/lib/gate-lock.mjs`
+    and `bin/lib/gate-log.mjs` with their tests; `bin/codex-review.mjs` stays another
+    session's, so `review-model` and `review-effort` wait for `feat/gate-wait` on `main`.
+  - This session's context stood at 90 percent, with him away: the cut was given once in its
     reply, and it goes on.
 
 ## Next step
